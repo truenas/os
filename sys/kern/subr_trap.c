@@ -137,6 +137,9 @@ userret(struct thread *td, struct trapframe *frame)
 	 * Let the scheduler adjust our priority etc.
 	 */
 	sched_userret(td);
+#ifdef XEN
+	PT_UPDATES_FLUSH();
+#endif
 	KASSERT(td->td_locks == 0,
 	    ("userret: Returning with %d locks held.", td->td_locks));
 	KASSERT(td->td_vp_reserv == 0,
@@ -149,9 +152,6 @@ userret(struct thread *td, struct trapframe *frame)
 	    ("%s: Returning on td %p (pid %d, %s) with vnet %p set in %s",
 	    __func__, td, p->p_pid, td->td_name, curvnet,
 	    (td->td_vnet_lpush != NULL) ? td->td_vnet_lpush : "N/A"));
-#endif
-#ifdef XEN
-	PT_UPDATES_FLUSH();
 #endif
 #ifdef	RACCT
 	PROC_LOCK(p);
