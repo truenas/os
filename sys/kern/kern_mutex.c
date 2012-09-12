@@ -200,6 +200,10 @@ _mtx_lock_flags(struct mtx *m, int opts, const char *file, int line)
 
 	if (SCHEDULER_STOPPED())
 		return;
+
+	KASSERT(!TD_IS_IDLETHREAD(curthread),
+	    ("mtx_lock() by idle thread %p on sleep mutex %s @ %s:%d",
+	    curthread, m->lock_object.lo_name, file, line));
 	KASSERT(m->mtx_lock != MTX_DESTROYED,
 	    ("mtx_lock() of destroyed mutex @ %s:%d", file, line));
 	KASSERT(LOCK_CLASS(&m->lock_object) == &lock_class_mtx_sleep,
@@ -296,6 +300,9 @@ mtx_trylock_flags_(struct mtx *m, int opts, const char *file, int line)
 	if (SCHEDULER_STOPPED())
 		return (1);
 
+	KASSERT(!TD_IS_IDLETHREAD(curthread),
+	    ("mtx_trylock() by idle thread %p on sleep mutex %s @ %s:%d",
+	    curthread, m->lock_object.lo_name, file, line));
 	KASSERT(m->mtx_lock != MTX_DESTROYED,
 	    ("mtx_trylock() of destroyed mutex @ %s:%d", file, line));
 	KASSERT(LOCK_CLASS(&m->lock_object) == &lock_class_mtx_sleep,
