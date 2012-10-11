@@ -149,8 +149,6 @@ fstabscan(void)
 /* OLD_STYLE_FSTAB */
 		while ((cp = strsep(&p, " \t\n")) != NULL && *cp == '\0')
 			;
-		if (strunvis(cp, cp) < 0)
-			goto bad;
 		_fs_fstab.fs_spec = cp;
 		if (_fs_fstab.fs_spec == NULL || *_fs_fstab.fs_spec == '#')
 			continue;
@@ -158,8 +156,6 @@ fstabscan(void)
 			goto bad;
 		while ((cp = strsep(&p, " \t\n")) != NULL && *cp == '\0')
 			;
-		if (strunvis(cp, cp) < 0)
-			goto bad;
 		_fs_fstab.fs_file = cp;
 		if (_fs_fstab.fs_file == NULL)
 			goto bad;
