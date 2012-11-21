@@ -706,12 +706,14 @@ xptdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *
 			 * passthrough driver, but doesn't have one in his
 			 * kernel.
 			 */
+#if 0
 			if (base_periph_found == 1) {
 				printf("xptioctl: pass driver is not in the "
 				       "kernel\n");
 				printf("xptioctl: put \"device pass\" in "
 				       "your kernel config file\n");
 			}
+#endif
 		}
 		xpt_unlock_buses();
 		break;
