@@ -1216,6 +1216,7 @@ _mapping_add_new_device(struct mps_softc *sc,
 						phy_change->is_processed = 1;
 					} else {
 						phy_change->is_processed = 1;
+						if (bootverbose) {
 						printf("%s: failed to add the "
 						    "device with handle 0x%04x "
 						    "to persistent table "
@@ -1223,6 +1224,7 @@ _mapping_add_new_device(struct mps_softc *sc,
 						    "space available\n",
 						    __func__,
 						    phy_change->dev_handle);
+						}
 					}
 				} else {
 					et_entry->dpm_entry_num = dpm_idx;
@@ -1318,6 +1320,7 @@ _mapping_add_new_device(struct mps_softc *sc,
 					phy_change->is_processed = 1;
 				} else if (dpm_idx == MPS_DPM_BAD_IDX) {
 						phy_change->is_processed = 1;
+						if (bootverbose) {
 						printf("%s: failed to add the "
 						    "device with handle 0x%04x "
 						    "to persistent table "
@@ -1325,6 +1328,7 @@ _mapping_add_new_device(struct mps_softc *sc,
 						    "space available\n",
 						    __func__,
 						    phy_change->dev_handle);
+						}
 				}
 			}
 			mt_entry->init_complete = 1;
