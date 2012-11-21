@@ -1224,6 +1224,7 @@ _mapping_add_new_device(struct mps_softc *sc,
 						    "there is no free space "
 						    "available\n", __func__,
 						    phy_change->dev_handle);
+						}
 					}
 				} else {
 					et_entry->dpm_entry_num = dpm_idx;
@@ -1326,6 +1327,7 @@ _mapping_add_new_device(struct mps_softc *sc,
 						    "there is no free space "
 						    "available\n", __func__,
 						    phy_change->dev_handle);
+						}
 				}
 			}
 			mt_entry->init_complete = 1;
