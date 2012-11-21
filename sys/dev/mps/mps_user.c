@@ -536,11 +536,6 @@ mpi_pre_fw_upload(struct mps_command *cm, struct mps_usr_command *cmd)
 		return (EINVAL);
 
 	mpi_init_sge(cm, req, &req->SGL);
-	if (cmd->len == 0) {
-		/* Perhaps just asking what the size of the fw is? */
-		return (0);
-	}
-
 	bzero(&tc, sizeof tc);
 
 	/*
@@ -555,6 +550,8 @@ mpi_pre_fw_upload(struct mps_command *cm, struct mps_usr_command *cmd)
 	 */
 	tc.ImageOffset = 0;
 	tc.ImageSize = cmd->len;
+
+	cm->cm_flags |= MPS_CM_FLAGS_DATAIN;
 
 	return (mps_push_sge(cm, &tc, sizeof tc, 0));
 }
@@ -694,13 +691,6 @@ mps_user_command(struct mps_softc *sc, struct mps_usr_command *cmd)
 	mps_dprint(sc, MPS_INFO, "mps_user_command: Function %02X  "
 	    "MsgFlags %02X\n", hdr->Function, hdr->MsgFlags );
 
-	err = mps_user_setup_request(cm, cmd);
-	if (err != 0) {
-		mps_printf(sc, "mps_user_command: unsupported function 0x%X\n",
-		    hdr->Function );
-		goto RetFreeUnlocked;
-	}
-
 	if (cmd->len > 0) {
 		buf = malloc(cmd->len, M_MPSUSER, M_WAITOK|M_ZERO);
 		if(!buf) {
@@ -718,8 +708,15 @@ mps_user_command(struct mps_softc *sc, struct mps_usr_command *cmd)
 	cm->cm_flags = MPS_CM_FLAGS_SGE_SIMPLE;
 	cm->cm_desc.Default.RequestFlags = MPI2_REQ_DESCRIPT_FLAGS_DEFAULT_TYPE;
 
+	err = mps_user_setup_request(cm, cmd);
+	if (err != 0) {
+		mps_printf(sc, "mps_user_command: unsupported function 0x%X\n",
+		    hdr->Function );
+		goto RetFreeUnlocked;
+	}
+
 	mps_lock(sc);
-	err = mps_wait_command(sc, cm, 30);
+	err = mps_wait_command(sc, cm, 60);
 
 	if (err) {
 		mps_printf(sc, "%s: invalid request: error %d\n",
@@ -728,7 +725,10 @@ mps_user_command(struct mps_softc *sc, struct mps_usr_command *cmd)
 	}
 
 	rpl = (MPI2_DEFAULT_REPLY *)cm->cm_reply;
-	sz = rpl->MsgLength * 4;
+	if (rpl != NULL)
+		sz = rpl->MsgLength * 4;
+	else
+		sz = 0;
 	
 	if (sz > cmd->rpl_len) {
 		mps_printf(sc,
