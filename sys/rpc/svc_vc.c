@@ -644,6 +644,19 @@ svc_vc_process_pending(SVCXPRT *xprt)
 	return (TRUE);
 }
 
+static enum xprt_stat
+svc_vc_backchannel_stat(SVCXPRT *xprt)
+{
+	struct cf_conn *cd;
+
+	cd = (struct cf_conn *)(xprt->xp_p1);
+
+	if (cd->mreq != NULL)
+		return (XPRT_MOREREQS);
+
+	return (XPRT_IDLE);
+}
+
 static bool_t
 svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
     struct sockaddr **addrp, struct mbuf **mp)
@@ -867,6 +880,65 @@ svc_vc_backchannel_reply(SVCXPRT *xprt, struct rpc_msg *msg,
 	 * Leave space for record mark.
 	 */
 	mrep = m_gethdr(M_WAITOK, MT_DATA);
+	mrep->m_data += sizeof(uint32_t);
+
+	xdrmbuf_create(&xdrs, mrep, XDR_ENCODE);
+
+	if (msg->rm_reply.rp_stat == MSG_ACCEPTED &&
+	    msg->rm_reply.rp_acpt.ar_stat == SUCCESS) {
+		if (!xdr_replymsg(&xdrs, msg))
+			stat = FALSE;
+		else
+			xdrmbuf_append(&xdrs, m);
+	} else {
+		stat = xdr_replymsg(&xdrs, msg);
+	}
+
+	if (stat) {
+		m_fixhdr(mrep);
+
+		/*
+		 * Prepend a record marker containing the reply length.
+		 */
+		M_PREPEND(mrep, sizeof(uint32_t), M_WAITOK);
+		*mtod(mrep, uint32_t *) =
+			htonl(0x80000000 | (mrep->m_pkthdr.len
+				- sizeof(uint32_t)));
+		sx_xlock(&xprt->xp_lock);
+		ct = (struct ct_data *)xprt->xp_p2;
+		if (ct != NULL)
+			error = sosend(ct->ct_socket, NULL, NULL, mrep, NULL,
+			    0, curthread);
+		else
+			error = EPIPE;
+		sx_xunlock(&xprt->xp_lock);
+		if (!error) {
+			stat = TRUE;
+		}
+	} else {
+		m_freem(mrep);
+	}
+
+	XDR_DESTROY(&xdrs);
+
+	return (stat);
+}
+
+static bool_t
+svc_vc_backchannel_reply(SVCXPRT *xprt, struct rpc_msg *msg,
+    struct sockaddr *addr, struct mbuf *m)
+{
+	struct ct_data *ct;
+	XDR xdrs;
+	struct mbuf *mrep;
+	bool_t stat = TRUE;
+	int error;
+
+	/*
+	 * Leave space for record mark.
+	 */
+	MGETHDR(mrep, M_WAITOK, MT_DATA);
+	mrep->m_len = 0;
 	mrep->m_data += sizeof(uint32_t);
 
 	xdrmbuf_create(&xdrs, mrep, XDR_ENCODE);
