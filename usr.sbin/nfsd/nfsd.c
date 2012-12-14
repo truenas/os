@@ -82,7 +82,7 @@ int	debug = 0;
 
 #define	NFSD_STABLERESTART	"/var/db/nfs-stablerestart"
 #define	NFSD_STABLEBACKUP	"/var/db/nfs-stablerestart.bak"
-#define	MAXNFSDCNT	256
+#define	MAXNFSDCNT	1024
 #define	DEFNFSDCNT	 4
 pid_t	children[MAXNFSDCNT];	/* PIDs of children */
 int	nfsdcnt;		/* number of children */
