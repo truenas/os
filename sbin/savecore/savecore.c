@@ -692,6 +692,23 @@ DoFile(const char *savedir, const char *device)
 		    savedir, linkname);
 	}
 
+	symlinks_remove();
+	if (symlink(infoname, "info.last") == -1) {
+		syslog(LOG_WARNING, "unable to create symlink %s/%s: %m",
+		    savedir, "info.last");
+	}
+	if (compress) {
+		snprintf(linkname, sizeof(linkname), "%s.last.gz",
+		    istextdump ? "textdump.tar" : "vmcore");
+	} else {
+		snprintf(linkname, sizeof(linkname), "%s.last",
+		    istextdump ? "textdump.tar" : "vmcore");
+	}
+	if (symlink(corename, linkname) == -1) {
+		syslog(LOG_WARNING, "unable to create symlink %s/%s: %m",
+		    savedir, linkname);
+	}
+
 	nsaved++;
 
 	if (verbose)
