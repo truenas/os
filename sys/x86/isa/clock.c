@@ -437,6 +437,8 @@ set_i8254_freq(int mode, uint32_t period)
 		outb(TIMER_CNTR0, new_count & 0xff);
 		outb(TIMER_CNTR0, new_count >> 8);
 		break;
+	default:
+		panic("set_i8254_freq: unknown operational mode");
 	}
 out:
 	mtx_unlock_spin(&clock_lock);
