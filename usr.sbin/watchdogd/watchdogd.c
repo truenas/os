@@ -687,6 +687,9 @@ parseargs(int argc, char *argv[])
 	int longindex;
 	int c;
 	const char *lopt;
+	char *p;
+	const char *lopt;
+	double a;
 
 	/*
 	 * if we end with a 'd' aka 'watchdogd' then we are the daemon program,
@@ -745,6 +748,29 @@ parseargs(int argc, char *argv[])
 			lopt = longopts[longindex].name;
 			if (!strcmp(lopt, "pretimeout")) {
 				pretimeout = fetchtimeout(0, lopt, optarg, 0);
+			} else if (!strcmp(lopt, "pretimeout-action")) {
+				pretimeout_act = timeout_act_str2int(lopt,
+				    optarg);
+			} else if (!strcmp(lopt, "softtimeout-action")) {
+				softtimeout_act = timeout_act_str2int(lopt,
+				    optarg);
+			} else {
+		/*		warnx("bad option at index %d: %s", optind,
+				    argv[optind]);
+				usage();
+				*/
+			}
+			break;
+		case 'T':
+			carp_thresh_seconds = fetchtimeout(c, "NULL", optarg);
+			break;
+		case 'w':
+			do_timedog = 1;
+			break;
+		case 0:
+			lopt = longopts[longindex].name;
+			if (!strcmp(lopt, "pretimeout")) {
+				pretimeout = fetchtimeout(0, lopt, optarg);
 			} else if (!strcmp(lopt, "pretimeout-action")) {
 				pretimeout_act = timeout_act_str2int(lopt,
 				    optarg);

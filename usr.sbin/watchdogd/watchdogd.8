@@ -100,7 +100,11 @@ that its script has run for too long.
 If unset
 .Ar script_timeout
 defaults to the value specified by the
+<<<<<<< HEAD
 .Fl s Ar sleep
+=======
+.Fl s Ar sleep 
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 option.
 .Pp
 Upon receiving the
@@ -115,7 +119,11 @@ will terminate.
 The
 .Nm
 utility recognizes the following runtime options:
+<<<<<<< HEAD
 .Bl -tag -width 30m
+=======
+.Bl -tag -width ".Fl -softtimeout-action Ar action  "
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 .It Fl I Ar file
 Write the process ID of the
 .Nm
@@ -126,18 +134,22 @@ When this option is specified,
 .Nm
 will not fork into the background at startup.
 .Pp
+<<<<<<< HEAD
 .It Fl S
 Do not send a message to the system logger when the watchdog command takes
 longer than expected to execute.
 The default behaviour is to log a warning via the system logger with the
 LOG_DAEMON facility, and to output a warning to standard error.
 .Pp
+=======
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 .It Fl w
 Complain when the watchdog script takes too long.
 This flag will cause watchdogd to complain when the amount of time to
 execute the watchdog script exceeds the threshold of 'sleep' option.
 .Pp
 .It Fl -pretimeout Ar timeout
+<<<<<<< HEAD
 Set a "pretimeout" watchdog.
 At "timeout" seconds before the watchdog will fire attempt an action.
 The action is set by the --pretimeout-action flag.
@@ -147,18 +159,35 @@ The default is just to log a message (WD_SOFT_LOG) via
 .It Fl -pretimeout-action Ar action
 Set the timeout action for the pretimeout.
 See the section
+=======
+Set a "pretimeout" watchdog.  At "timeout" seconds before the watchdog
+will fire attempt an action.  The action is set by the --pretimeout-action
+flag.  The default is just to log a message (WD_SOFT_LOG) via
+.Xr log 9 .
+.Pp
+.It Fl -pretimeout-action Ar action
+Set the timeout action for the pretimeout.  See the section 
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 .Sx Timeout Actions .
 .Pp
 .It Fl -softtimeout
 Instead of arming the various hardware watchdogs, only use a basic software
+<<<<<<< HEAD
 watchdog.
 The default action is just to
+=======
+watchdog.  The default action is just to
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 .Xr log 9
 a message (WD_SOFT_LOG).
 .Pp
 .It Fl -softtimeout-action Ar action
+<<<<<<< HEAD
 Set the timeout action for the softtimeout.
 See the section
+=======
+Set the timeout action for the softtimeout.  See the section 
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 .Sx Timeout Actions .
 .Pp
 .El
@@ -185,7 +214,11 @@ Log a message using
 when the timeout is reached.
 .Pp
 .It Ar printf
+<<<<<<< HEAD
 call the kernel
+=======
+call the kernel 
+>>>>>>> watchdogd(8) and watchdog(4) enhancements.
 .Xr printf 9
 to display a message to the console and
 .Xr dmesg 8
