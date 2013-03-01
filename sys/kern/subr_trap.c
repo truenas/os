@@ -138,7 +138,9 @@ userret(struct thread *td, struct trapframe *frame)
 	 */
 	sched_userret(td);
 	KASSERT(td->td_locks == 0,
-	    ("userret: Returning with %d locks held.", td->td_locks));
+	    ("userret: Returning with %d locks held", td->td_locks));
+	KASSERT(td->td_no_sleeping == 0,
+	    ("userret: Returning with sleep disabled"));
 	KASSERT(td->td_vp_reserv == 0,
 	    ("userret: Returning while holding vnode reservation"));
 	KASSERT((td->td_flags & TDF_SBDRY) == 0,
