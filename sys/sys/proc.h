@@ -793,8 +793,11 @@ extern pid_t pid_max;
 #define	THREAD_NO_SLEEPING()		((curthread)->td_no_sleeping++)
 
 #define	THREAD_SLEEPING_OK()		((curthread)->td_no_sleeping--)
+<<<<<<< HEAD
 
 #define	THREAD_CAN_SLEEP()		((curthread)->td_no_sleeping == 0)
+=======
+>>>>>>> Replace the TDP_NOSLEEPING flag with a counter so that the
 
 #define	PIDHASH(pid)	(&pidhashtbl[(pid) & pidhash])
 extern LIST_HEAD(pidhashhead, proc) *pidhashtbl;
