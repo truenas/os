@@ -173,7 +173,8 @@ void	_rw_assert(const struct rwlock *rw, int what, const char *file, int line);
 		rw_runlock(rw);						\
 } while (0)
 #define	rw_sleep(chan, rw, pri, wmesg, timo)				\
-	_sleep((chan), &(rw)->lock_object, (pri), (wmesg), (timo))
+	_sleep((chan), &(rw)->lock_object, (pri), (wmesg),		\
+	    tick_sbt * (timo), 0, C_HARDCLOCK)
 
 #define	rw_initialized(rw)	lock_initalized(&(rw)->lock_object)
 
