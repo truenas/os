@@ -178,6 +178,7 @@ CRUNCH_BUILDOPTS_dhclient= -DRELEASE_CRUNCH -Dlint
 CRUNCH_SRCDIRS+= usr.bin
 
 CRUNCH_PROGS_usr.bin= head mt nc sed tail tee
+CRUNCH_PROGS_usr.bin+= awk cmp cut dirname find grep mktemp sort tr uname xargs
 
 CRUNCH_PROGS_usr.bin+= gzip
 CRUNCH_ALIAS_gzip= gunzip gzcat zcat
@@ -205,12 +206,17 @@ CRUNCH_ALIAS_vi= ex
 CRUNCH_PROGS_usr.bin+= id
 CRUNCH_ALIAS_id= groups whoami
 
+#CRUNCH_SRCDIR_dialog= ${.CURDIR}/../../gnu/usr.bin/dialog
+#CRUNCH_LIBS+= -ldialog -lncurses
+CRUNCH_SRCDIR_sort= ${.CURDIR}/../../gnu/usr.bin/sort
+
 ##################################################################
 # Programs from stock /usr/sbin
 #
 CRUNCH_SRCDIRS+= usr.sbin
 
 CRUNCH_PROGS_usr.sbin= chroot
+CRUNCH_PROGS_usr.sbin+= diskinfo vidcontrol
 
 CRUNCH_PROGS_usr.sbin+= chown
 CRUNCH_ALIAS_chown= chgrp
