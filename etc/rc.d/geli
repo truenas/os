@@ -43,6 +43,11 @@ geli_start()
 {
 	devices=`geli_make_list`
 
+	if [ ! -e /data/freenas-v1.db ]; then
+		UMOUNTDATA=yes
+		mount -o rdonly /data
+	fi
+
 	if [ -z "${geli_tries}" ]; then
 		if [ -n "${geli_attach_attempts}" ]; then
 			# Compatibility with rc.d/gbde.
@@ -53,7 +58,7 @@ geli_start()
 	fi
 
 	for provider in ${devices}; do
-		provider_=`ltr ${provider} '/' '_'`
+		provider_=`ltr ${provider} '/-' '_'`
 
 		eval "flags=\${geli_${provider_}_flags}"
 		if [ -z "${flags}" ]; then
@@ -72,6 +77,10 @@ geli_start()
 			done
 		fi
 	done
+
+	if [ "${UMOUNTDATA}" = "yes" ]; then
+		umount /data
+	fi
 }
 
 geli_stop()
