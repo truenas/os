@@ -1129,6 +1129,23 @@ lagg_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		break;
 
 	case SIOCSIFCAP:
+		LAGG_WLOCK(sc);
+		/* Set caps on ports too */
+		SLIST_FOREACH(lp, &sc->sc_ports, lp_entries) {
+			if (lp->lp_ioctl == NULL) {
+				error = EINVAL;
+				break;
+			}
+			error = (*lp->lp_ioctl)(lp->lp_ifp, cmd, data);
+			if (error) {
+				break;
+			}
+		}
+		if (error == 0)
+			lagg_capabilities(sc);
+		LAGG_WUNLOCK(sc);
+		break;
+
 	case SIOCSIFMTU:
 		/* Do not allow the MTU or caps to be directly changed */
 		error = EINVAL;
