@@ -666,7 +666,7 @@ create kernelsbuf 256 allot
 
 	\ Print the frame caption at (x,y)
 	str_loader_menu_title getenv dup -1 = if
-		drop s" Welcome to FreeBSD"
+		drop s" Welcome to FreeNAS"
 	then
 	TRUE ( use default alignment )
 	s" loader_menu_title_align" getenv dup -1 <> if
