@@ -417,7 +417,7 @@ create init_text8 255 allot
 
 	\ Print the frame caption at (x,y)
 	s" loader_menu_title" getenv dup -1 = if
-		drop s" Welcome to FreeBSD"
+		drop s" Welcome to FreeNAS"
 	then
 	24 over 2 / - 9 at-xy type 
 
