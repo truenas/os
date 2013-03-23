@@ -461,7 +461,7 @@ send_again:
 	/*
 	 * Try to get a place in the congestion window.
 	 */
-	while (cu->cu_sent >= cu->cu_cwnd) {
+	while (cu->cu_threads > 1 && cu->cu_sent >= cu->cu_cwnd) {
 		cu->cu_cwnd_wait = TRUE;
 		error = msleep(&cu->cu_cwnd_wait, &cs->cs_lock,
 		    cu->cu_waitflag, "rpccwnd", 0);
