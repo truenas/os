@@ -187,7 +187,6 @@ static uma_zone_t cfi_lun_zone;
 static uma_zone_t cfi_metatask_zone;
 
 static struct cfi_softc fetd_internal_softc;
-extern int ctl_disable;
 
 int cfi_init(void);
 void cfi_shutdown(void) __unused;
@@ -241,10 +240,6 @@ cfi_init(void)
 	fe = &softc->fe;
 
 	retval = 0;
-
-	/* If we're disabled, don't initialize */
-	if (ctl_disable != 0)
-		return (0);
 
 	if (sizeof(struct cfi_lun_io) > CTL_PORT_PRIV_SIZE) {
 		printf("%s: size of struct cfi_lun_io %zd > "
