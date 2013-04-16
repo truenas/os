@@ -4606,7 +4606,7 @@ zfs_jail(zfs_handle_t *zhp, int jailid, int attach)
 		    dgettext(TEXT_DOMAIN, "cannot jail '%s'"), zhp->zfs_name);
 	} else {
 		(void) snprintf(errbuf, sizeof (errbuf),
-		    dgettext(TEXT_DOMAIN, "cannot jail '%s'"), zhp->zfs_name);
+		    dgettext(TEXT_DOMAIN, "cannot unjail '%s'"), zhp->zfs_name);
 	}
 
 	switch (zhp->zfs_type) {
