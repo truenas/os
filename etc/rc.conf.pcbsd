@@ -8,8 +8,8 @@
 # WARNING - WARNING - WARNING - WARNING - WARNING - WARNING
 ###########################################################
 
+# Defaults for TrueOS servers
 if [ -e "/etc/defaults/trueos" ] ; then
-  # Defaults for TrueOS servers
 
   # FSCK Enhancements
   fsck_y_enable="YES"
@@ -34,8 +34,10 @@ if [ -e "/etc/defaults/trueos" ] ; then
   firewall_enable="YES"
   firewall_type="open"
 
-else
-  # Defaults for PC-BSD desktops
+fi
+
+# Defaults for PC-BSD desktops
+if [ -e "/etc/defaults/pcbsd" ] ; then
 
   background_dhclient="YES" 
   hostname="pcbsd"
