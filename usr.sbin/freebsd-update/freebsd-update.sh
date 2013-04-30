@@ -25,13 +25,14 @@
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# $FreeBSD$
+# $FreeBSD: releng/9.1/usr.sbin/freebsd-update/freebsd-update.sh 226811 2011-10-26 20:01:43Z cperciva $
 
 #### Usage function -- called from command-line handling code.
 
 # Usage instructions.  Options not listed:
-# --debug	-- don't filter output from utilities
-# --no-stats	-- don't show progress statistics while fetching files
+# --debug		-- don't filter output from utilities
+# --non-interactive	-- run in non-interactive mode
+# --no-stats		-- don't show progress statistics while fetching files
 usage () {
 	cat <<EOF
 usage: `basename $0` [options] command ... [path]
@@ -440,6 +441,10 @@ parse_cmdline () {
 		-v)
 			if [ $# -eq 1 ]; then usage; fi; shift
 			config_VerboseLevel $1 || usage
+			;;
+
+		--non-interactive)
+			NON_INTERACTIVE=yes
 			;;
 
 		# Aliases for "-v debug" and "-v nostats"
@@ -1022,6 +1027,7 @@ fetch_progress () {
 
 # Function for asking the user if everything is ok
 continuep () {
+ 	if [ "$NON_INTERACTIVE" = "yes" ] ; then return; fi
 	while read -p "Does this look reasonable (y/n)? " CONTINUE; do
 		case "${CONTINUE}" in
 		y*)
@@ -2255,7 +2261,7 @@ upgrade_oldall_to_oldnew () {
 }
 
 # Helper for upgrade_merge: Return zero true iff the two files differ only
-# in the contents of their $FreeBSD$ tags.
+# in the contents of their $FreeBSD: releng/9.1/usr.sbin/freebsd-update/freebsd-update.sh 226811 2011-10-26 20:01:43Z cperciva $ tags.
 samef () {
 	X=`sed -E 's/\\$FreeBSD.*\\$/\$FreeBSD\$/' < $1 | ${SHA256}`
 	Y=`sed -E 's/\\$FreeBSD.*\\$/\$FreeBSD\$/' < $2 | ${SHA256}`
@@ -2351,10 +2357,19 @@ upgrade_merge () {
 		# Ask the user to handle any files which didn't merge.
 		while read F; do
 			# If the installed file differs from the version in
-			# the old release only due to $FreeBSD$ tag expansion
+			# the old release only due to $FreeBSD: releng/9.1/usr.sbin/freebsd-update/freebsd-update.sh 226811 2011-10-26 20:01:43Z cperciva $ tag expansion
 			# then just use the version in the new release.
 			if samef merge/old/${F} merge/${OLDRELNUM}/${F}; then
 				cp merge/${RELNUM}/${F} merge/new/${F}
+				continue
+			fi
+
+ 			if [ "$NON_INTERACTIVE" = "yes" ] ; then
+				cat <<-EOF
+The following file could not be merged automatically: ${F}
+Defaulting to the old copy.
+				EOF
+				cp merge/old/${F} merge/new/${F}
 				continue
 			fi
 
@@ -2373,14 +2388,14 @@ manually...
 		# of merging files.
 		while read F; do
 			# Skip files which haven't changed except possibly
-			# in their $FreeBSD$ tags.
+			# in their $FreeBSD: releng/9.1/usr.sbin/freebsd-update/freebsd-update.sh 226811 2011-10-26 20:01:43Z cperciva $ tags.
 			if [ -f merge/old/${F} ] && [ -f merge/new/${F} ] &&
 			    samef merge/old/${F} merge/new/${F}; then
 				continue
 			fi
 
 			# Skip files where the installed file differs from
-			# the old file only due to $FreeBSD$ tags.
+			# the old file only due to $FreeBSD: releng/9.1/usr.sbin/freebsd-update/freebsd-update.sh 226811 2011-10-26 20:01:43Z cperciva $ tags.
 			if [ -f merge/old/${F} ] &&
 			    [ -f merge/${OLDRELNUM}/${F} ] &&
 			    samef merge/old/${F} merge/${OLDRELNUM}/${F}; then
@@ -2803,6 +2818,9 @@ install_files () {
 		# Do we need to ask for a reboot now?
 		if [ -f $1/kernelfirst ] &&
 		    [ -s INDEX-OLD -o -s INDEX-NEW ]; then
+			if [ "$NON_INTERACTIVE" = "yes" ] ; then
+				touch /var/.freebsd-update-finish
+			fi
 			cat <<-EOF
 
 Kernel updates have been installed.  Please reboot and run
@@ -3241,6 +3259,12 @@ fi
 export LC_ALL=C
 
 get_params $@
+
+# Set PAGER to /bin/cat if non-interactive
+if [ "$NON_INTERACTIVE" = "yes" ] ; then
+	PAGER=/bin/cat
+fi
+
 for COMMAND in ${COMMANDS}; do
 	cmd_${COMMAND}
 done
