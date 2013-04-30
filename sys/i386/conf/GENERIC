@@ -68,6 +68,7 @@ options 	MAC			# TrustedBSD MAC Framework
 options 	INCLUDE_CONFIG_FILE     # Include this file in kernel
 options 	KDB			# Kernel debugger related code
 options 	KDB_TRACE		# Print a stack trace for a panic
+options		VIMAGE			# Enable virtual-networking for jails
 
 # To make an SMP kernel, the next two lines are needed
 options 	SMP			# Symmetric MultiProcessor Kernel
