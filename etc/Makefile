@@ -36,6 +36,7 @@ BIN1=	crontab \
 	protocols \
 	rc \
 	rc.bsdextended \
+	rc.delay \
 	rc.firewall \
 	rc.initdiskless \
 	rc.sendmail \
