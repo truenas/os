@@ -22,7 +22,7 @@
 \ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 \ SUCH DAMAGE.
 \ 
-\ $FreeBSD$
+\ $FreeBSD: releng/9.1/sys/boot/forth/brand.4th 222417 2011-05-28 08:50:38Z julian $
 
 marker task-brand.4th
 
@@ -35,13 +35,13 @@ variable brandY
 
 : fbsd-logo ( x y -- ) \ "FreeBSD" [wide] logo in B/W (7 rows x 42 columns)
 
-	2dup at-xy ."  ______              _     _   __    _____  " 1+
-	2dup at-xy ." |  ____|            | \   | | /  \  /  ___|" 1+
-	2dup at-xy ." | |___ _ __ ____ ___|  \  | |/ /\ \|  (__" 1+
-	2dup at-xy ." |  ___| '__/ _ |/ _ \ |\\ | | |__| |\___ \" 1+
-	2dup at-xy ." | |   | | |  __/  __/ | \\| |  __  |____) |" 1+
-	2dup at-xy ." | |   | | |    |    | |  \  | |  | |      |" 1+
-	     at-xy ." |_|   |_|  \___|\___|_|   \_|_|  |_|_____/"
+	2dup at-xy ."  _______                   ____    _____" 1+
+	2dup at-xy ." |__   __|                 / __ \  / ____|" 1+
+	2dup at-xy ."    | | _ __  _   _   ___ | |  | || (___" 1+
+	2dup at-xy ."    | || '__|| | | | / _ \| |  | | \___ \" 1+
+	2dup at-xy ."    | || |   | |_| ||  __/| |__| | ____) |" 1+
+	2dup at-xy ."    |_||_|    \__,_| \___| \____/ |_____/" 1+
+	     at-xy ." "
 
 	\ Put the cursor back at the bottom
 	0 25 at-xy

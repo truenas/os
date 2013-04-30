@@ -24,7 +24,7 @@
 \ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 \ SUCH DAMAGE.
 \ 
-\ $FreeBSD$
+\ $FreeBSD: releng/9.1/sys/boot/forth/beastie.4th 222417 2011-05-28 08:50:38Z julian $
 
 marker task-beastie.4th
 
@@ -90,7 +90,7 @@ variable logoY
 	0 25 at-xy
 ;
 
-: fbsdbw-logo ( x y -- ) \ "FreeNAS" logo in B/W (13 rows x 21 columns)
+: fbsdbw-logo ( x y -- ) \ "FreeBSD" logo in B/W (13 rows x 21 columns)
 
 	\ We used to use the beastie himself as our default... until the
 	\ eventual complaint derided his reign of the advanced boot-menu.
@@ -112,13 +112,13 @@ variable logoY
 	2dup at-xy ." |  __|| | |  __/  __/" 1+
 	2dup at-xy ." | |   | | |    |    |" 1+
 	2dup at-xy ." |_|   |_|  \___|\___|" 1+
-	2dup at-xy ."  _     _   __    _____" 1+
-	2dup at-xy ." | \   | | /  \  /  ___|" 1+
-	2dup at-xy ." |  \  | |/ /\ \|  (__" 1+
-	2dup at-xy ." | |\\ | | |__| |\___ \" 1+
-	2dup at-xy ." | | \\| |  __  |____) |" 1+
-	2dup at-xy ." | |  \  | |  | |      |" 1+
-	     at-xy ." |_|   \_|_|  |_|_____/"
+	2dup at-xy ."  ____   _____ _____" 1+
+	2dup at-xy ." |  _ \ / ____|  __ \" 1+
+	2dup at-xy ." | |_) | (___ | |  | |" 1+
+	2dup at-xy ." |  _ < \___ \| |  | |" 1+
+	2dup at-xy ." | |_) |____) | |__| |" 1+
+	2dup at-xy ." |     |      |      |" 1+
+	     at-xy ." |____/|_____/|_____/"
 
 	\ Put the cursor back at the bottom
 	0 25 at-xy
@@ -128,21 +128,21 @@ variable logoY
 
 	3 + \ beastie adjustment (see `fbsdbw-logo' comments above)
 
-	2dup at-xy ."  [31m```                        [31;1m`[31m" 1+
-	2dup at-xy ." s` `.....---...[31;1m....--.```   -/[31m" 1+
-	2dup at-xy ." +o   .--`         [31;1m/y:`      +.[31m" 1+
-	2dup at-xy ."  yo`:.            [31;1m:o      `+-[31m" 1+
-	2dup at-xy ."   y/               [31;1m-/`   -o/[31m" 1+
-	2dup at-xy ."  .-                  [31;1m::/sy+:.[31m" 1+
-	2dup at-xy ."  /                     [31;1m`--  /[31m" 1+
-	2dup at-xy ." `:                          [31;1m:`[31m" 1+
-	2dup at-xy ." `:                          [31;1m:`[31m" 1+
-	2dup at-xy ."  /                          [31;1m/[31m" 1+
-	2dup at-xy ."  .-                        [31;1m-.[31m" 1+
-	2dup at-xy ."   --                      [31;1m-.[31m" 1+
-	2dup at-xy ."    `:`                  [31;1m`:`" 1+
-	2dup at-xy ."      [31;1m.--             `--." 1+
-	     at-xy ."         .---.....----.[37m"
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	     at-xy ." "
 
  	\ Put the cursor back at the bottom
  	0 25 at-xy
@@ -152,21 +152,21 @@ variable logoY
 
 	3 + \ beastie adjustment (see `fbsdbw-logo' comments above)
 
-	2dup at-xy ."  ```                        `" 1+
-	2dup at-xy ." s` `.....---.......--.```   -/" 1+
-	2dup at-xy ." +o   .--`         /y:`      +." 1+
-	2dup at-xy ."  yo`:.            :o      `+-" 1+
-	2dup at-xy ."   y/               -/`   -o/" 1+
-	2dup at-xy ."  .-                  ::/sy+:." 1+
-	2dup at-xy ."  /                     `--  /" 1+
-	2dup at-xy ." `:                          :`" 1+
-	2dup at-xy ." `:                          :`" 1+
-	2dup at-xy ."  /                          /" 1+
-	2dup at-xy ."  .-                        -." 1+
-	2dup at-xy ."   --                      -." 1+
-	2dup at-xy ."    `:`                  `:`" 1+
-	2dup at-xy ."      .--             `--." 1+
-	     at-xy ."         .---.....----."
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	2dup at-xy ." " 1+
+	     at-xy ." "
 
  	\ Put the cursor back at the bottom
  	0 25 at-xy
@@ -181,7 +181,7 @@ variable logoY
 \ 	NAME        DESCRIPTION
 \ 	beastie     Color ``Helper Daemon'' mascot (19 rows x 34 columns)
 \ 	beastiebw   B/W ``Helper Daemon'' mascot (19 rows x 34 columns)
-\ 	fbsdbw      "FreeNAS" logo in B/W (13 rows x 21 columns)
+\ 	fbsdbw      "FreeBSD" logo in B/W (13 rows x 21 columns)
 \ 	orb         Color ``Orb'' mascot (15 rows x 30 columns)
 \ 	orbbw       B/W ``Orb'' mascot (15 rows x 32 columns) (default)
 \ 
