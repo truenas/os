@@ -1,4 +1,4 @@
-# $FreeBSD$
+# $FreeBSD: src/etc/profile,v 1.14 2004/06/06 11:46:27 schweikh Exp $
 #
 # System-wide .profile file for sh(1).
 #
@@ -12,7 +12,16 @@
 # You should also read the setlocale(3) man page for information
 # on how to achieve more precise control of locale settings.
 #
-# Check system messages
-# msgs -q
+# Read system messages
+# msgs -f
 # Allow terminal messages
 # mesg y
+if [ -z "$LANG" -o "$LANG" = "C" ] ; then
+  LANG="en_US.UTF-8"; export LANG
+fi
+#LC_CTYPE="en_US.UTF-8"; export LC_CTYPE
+#LC_COLLATE="POSIX"; export LC_COLLATE
+EDITOR=ee;      export EDITOR
+PAGER=less;     export PAGER
+BLOCKSIZE=K;    export BLOCKSIZE
+
