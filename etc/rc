@@ -96,22 +96,69 @@ done
 
 unset files local_rc
 
-# Now that disks are mounted, for each dir in $local_startup
-# search for init scripts that use the new rc.d semantics.
-#
-case ${local_startup} in
-[Nn][Oo] | '') ;;
-*)	find_local_scripts_new ;;
-esac
+# Check if we are needing to finish up a freebsd-update
+if [ -e "/var/.freebsd-update-finish" ] ; then
+   TERM="cons25" ; export TERM
+   clear
+   echo "Installing FreeBSD updates... Please wait..."
+   /usr/sbin/freebsd-update --non-interactive install
+   if [ -e "/usr/local/bin/pc-softwaremanager" ] ; then
+     /usr/local/bin/pc-extractoverlay desktop
+   else
+     /usr/local/bin/pc-extractoverlay server
+   fi
+   echo "Press ENTER to continue"
+   read tmp
+fi
 
-files=`rcorder ${skip} /etc/rc.d/* ${local_rc} 2>/dev/null`
-for _rc_elem in ${files}; do
+if [ "$fastboot_enable" = "YES" ]; then
+  # We are fast-booting
+
+  # List of rc.d scripts we will start before login
+  preLoad="/etc/rc.d/hostname /etc/rc.d/random /etc/rc.d/adjkerntz /etc/rc.d/cleanvar /etc/rc.d/hostid /etc/rc.d/ldconfig /etc/rc.d/zfs /etc/rc.d/zvol /etc/rc.d/cleartmp $fastboot_earlyrc "
+
+  # Start loopback device
+  /etc/rc.d/netif start lo0
+
+  # Run the early scripts now
+  for i in $preLoad
+  do
+    run_rc_script ${i} ${_boot}
+  done
+
+  # Check for USB mouse to start
+  mChk="ums0 ums1"
+  for i in $mChk
+  do
+    if [ -e "/dev/$i" ] ; then
+       /etc/rc.d/moused start $i
+    fi
+  done
+
+  # Start the delayed services after the login is up
+  (sleep 5; nice /bin/sh /etc/rc.delay "$_rc_elem_done$preLoad")&
+else
+  # Performing a normal startup
+
+  # Now that disks are mounted, for each dir in $local_startup
+  # search for init scripts that use the new rc.d semantics.
+  #
+
+  case ${local_startup} in
+  [Nn][Oo] | '') ;;
+  *)	find_local_scripts_new ;;
+  esac
+
+  files=`rcorder ${skip} /etc/rc.d/* ${local_rc} 2>/dev/null`
+  for _rc_elem in ${files}; do
 	case "$_rc_elem_done" in
 	*" $_rc_elem "*)	continue ;;
 	esac
 
 	run_rc_script ${_rc_elem} ${_boot}
-done
+  done
+
+fi
 
 echo ''
 date

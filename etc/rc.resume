@@ -24,7 +24,7 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-# $FreeBSD$
+# $FreeBSD: releng/9.1/etc/rc.resume 232083 2012-02-23 22:10:49Z jkim $
 #
 
 # sample run command file for APM Resume Event
@@ -54,9 +54,15 @@ fi
 
 # wpa_supplicant(8) doesn't seem to reassociate during resume.  Uncomment
 # the following to signal it to reassociate.
-# /usr/sbin/wpa_cli reassociate
+ifconfig | grep -q 'wlan[0-9]:' 
+if [ $? -eq 0 ] ; then
+  /usr/sbin/wpa_cli reassociate
+fi
 
 /usr/bin/logger -t $subsystem resumed at `/bin/date +'%Y%m%d %H:%M:%S'`
 /bin/sync && /bin/sync && /bin/sync
+
+# Restart moused to fix suspend
+/etc/rc.d/moused restart
 
 exit 0
