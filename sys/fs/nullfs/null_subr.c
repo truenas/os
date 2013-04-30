@@ -252,6 +252,8 @@ null_nodeget(mp, lowervp, vpp)
 	xp->null_vnode = vp;
 	xp->null_lowervp = lowervp;
 	vp->v_type = lowervp->v_type;
+        if (vp->v_type == VSOCK || vp->v_type == VFIFO)
+            vp->v_un = lowervp->v_un;
 	vp->v_data = xp;
 	vp->v_vnlock = lowervp->v_vnlock;
 	error = insmntque1(vp, mp, null_insmntque_dtr, xp);
