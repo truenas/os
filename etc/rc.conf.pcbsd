@@ -34,6 +34,10 @@ if [ -e "/etc/defaults/trueos" ] ; then
   firewall_enable="YES"
   firewall_type="open"
 
+  # Build linker.hints files with kldxref(8)
+  # Overwrite old linker.hints at boot
+  kldxref_enable="YES"
+  kldxref_clobber="YES"
 fi
 
 # Defaults for PC-BSD desktops
@@ -160,4 +164,8 @@ if [ -e "/etc/defaults/pcbsd" ] ; then
   firewall_enable="YES"
   firewall_type="open"
 
+  # Build linker.hints files with kldxref(8)
+  # Overwrite old linker.hints at boot
+  kldxref_enable="YES"
+  kldxref_clobber="YES"
 fi
