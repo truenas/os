@@ -348,7 +348,12 @@ txg_rele_to_sync(txg_handle_t *th)
 	th->th_cpu = NULL;	/* defensive */
 }
 
-static void
+/*
+ * XXX: Ideally this function should be static, but in order to force compiler
+ * to not inline it and make visible from Dtrace dynamic tracking we expose
+ * it forcefully.
+ */
+void
 txg_quiesce(dsl_pool_t *dp, uint64_t txg)
 {
 	tx_state_t *tx = &dp->dp_tx;
