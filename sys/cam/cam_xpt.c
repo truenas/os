@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/malloc.h>
 #include <sys/kernel.h>
+#include <sys/ktr.h>
 #include <sys/time.h>
 #include <sys/conf.h>
 #include <sys/fcntl.h>
@@ -164,6 +165,8 @@ static struct mtx cam_simq_lock;
 
 /* Pointers to software interrupt handlers */
 static void *cambio_ih;
+static struct callout cambio_to;
+static int cambio_lost = 0;
 
 struct cam_periph *xpt_periph;
 
@@ -247,6 +250,7 @@ static void	 xptaction(struct cam_sim *sim, union ccb *work_ccb);
 static void	 xptpoll(struct cam_sim *sim);
 static void	 camisr(void *);
 static void	 camisr_runqueue(void *);
+static void	 camisr_to(void *);
 static dev_match_ret	xptbusmatch(struct dev_match_pattern *patterns,
 				    u_int num_patterns, struct cam_eb *bus);
 static dev_match_ret	xptdevicematch(struct dev_match_pattern *patterns,
@@ -980,6 +984,8 @@ xpt_init(void *dummy)
 	mtx_unlock(&xsoftc.xpt_lock);
 	/* Install our software interrupt handlers */
 	swi_add(NULL, "cambio", camisr, NULL, SWI_CAMBIO, INTR_MPSAFE, &cambio_ih);
+	callout_init(&cambio_to, 1);
+	callout_reset(&cambio_to, hz, camisr_to, NULL);
 	/*
 	 * Register a callback for when interrupts are enabled.
 	 */
@@ -4441,6 +4447,8 @@ xpt_done(union ccb *done_ccb)
 		    CAM_SIM_BATCH)) == 0) {
 			mtx_lock(&cam_simq_lock);
 			first = TAILQ_EMPTY(&cam_simq);
+			CTR4(KTR_INTR, "%s: Enqueue SIM %s%d first=%d",
+			    __func__, sim->sim_name, sim->unit_number, first);
 			TAILQ_INSERT_TAIL(&cam_simq, sim, links);
 			mtx_unlock(&cam_simq_lock);
 			sim->flags |= CAM_SIM_ON_DONEQ;
@@ -5085,6 +5093,7 @@ camisr(void *dummy)
 	struct cam_sim *sim;
 
 	mtx_lock(&cam_simq_lock);
+	cambio_lost = 0;
 	TAILQ_INIT(&queue);
 	while (!TAILQ_EMPTY(&cam_simq)) {
 		TAILQ_CONCAT(&queue, &cam_simq, links);
@@ -5100,6 +5109,25 @@ camisr(void *dummy)
 		mtx_lock(&cam_simq_lock);
 	}
 	mtx_unlock(&cam_simq_lock);
+}
+
+static void
+camisr_to(void *dummy)
+{
+
+	mtx_lock(&cam_simq_lock);
+	if (!TAILQ_EMPTY(&cam_simq) && (++cambio_lost > 1)) {
+		mtx_unlock(&cam_simq_lock);
+#ifdef KTR
+		CTR2(KTR_INTR, "%s: Lost cambio swi (%d)!!!",
+		    __func__, cambio_lost);
+		ktr_mask &= ~KTR_INTR;
+#endif
+		printf("Lost cambio swi (%d)!!!\n", cambio_lost);
+		swi_sched(cambio_ih, 0);
+	} else
+		mtx_unlock(&cam_simq_lock);
+	callout_reset(&cambio_to, hz, camisr_to, NULL);
 }
 
 static void
