@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/malloc.h>
 #include <sys/kernel.h>
+#include <sys/ktr.h>
 #include <sys/time.h>
 #include <sys/conf.h>
 #include <sys/fcntl.h>
@@ -5142,6 +5143,15 @@ xpt_unlock_buses(void)
 struct mtx *
 xpt_path_mtx(struct cam_path *path)
 {
+	cam_simq_t queue;
+	struct cam_sim *sim;
+
+	mtx_lock(&cam_simq_lock);
+	cambio_lost = 0;
+	TAILQ_INIT(&queue);
+	while (!TAILQ_EMPTY(&cam_simq)) {
+		TAILQ_CONCAT(&queue, &cam_simq, links);
+		mtx_unlock(&cam_simq_lock);
 
 	return (&path->device->device_mtx);
 }
