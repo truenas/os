@@ -23,6 +23,8 @@
  * All rights reserved.
  *
  * Portions Copyright (c) 2012 Martin Matuska <mm@FreeBSD.org>
+ *
+ * Portions Copyright (c) 2013 iXsystems, Inc.
  */
 
 #include <sys/zfs_context.h>
@@ -57,6 +59,16 @@ TUNABLE_INT("vfs.zfs.vdev.bio_flush_disable", &vdev_geom_bio_flush_disable);
 SYSCTL_DECL(_vfs_zfs_vdev);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, bio_flush_disable, CTLFLAG_RW,
     &vdev_geom_bio_flush_disable, 0, "Disable BIO_FLUSH");
+
+/*
+ * Don't use larger ashift even when driver reports one via GEOM
+ * stripesize.
+ */
+static int vdev_larger_asfhit_disable = 0;
+TUNABLE_INT("vfs.zfs.vdev.larger_ashift_disable", &vdev_larger_asfhit_disable);
+SYSCTL_DECL(_vfs_zfs_vdev);
+SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_disable, CTLFLAG_RW,
+    &vdev_larger_asfhit_disable, 0, "Disable BIO_FLUSH");
 
 static void
 vdev_geom_orphan(struct g_consumer *cp)
@@ -660,7 +672,10 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	/*
 	 * Determine the device's minimum transfer size.
 	 */
-	*ashift = highbit(MAX(pp->sectorsize, SPA_MINBLOCKSIZE)) - 1;
+	if (pp->stripesize > pp->sectorsize && !vdev_larger_asfhit_disable)
+		*ashift = highbit(MAX(pp->stripesize, SPA_MINBLOCKSIZE)) - 1;
+	else
+		*ashift = highbit(MAX(pp->sectorsize, SPA_MINBLOCKSIZE)) - 1;
 
 	/*
 	 * Clear the nowritecache bit, so that on a vdev_reopen() we will
