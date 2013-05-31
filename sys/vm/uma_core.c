@@ -1559,6 +1559,7 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 	uma_zone_t zone = mem;
 	uma_zone_t z;
 	uma_keg_t keg;
+	int i, exp;
 
 	bzero(zone, size);
 	zone->uz_name = arg->name;
