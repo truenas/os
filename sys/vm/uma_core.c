@@ -182,6 +182,9 @@ struct uma_bucket_zone {
 #define	BUCKET_MAX	128
 
 struct uma_bucket_zone bucket_zones[] = {
+	{ NULL, "2 Buckets", 2},
+	{ NULL, "4 Buckets", 4},
+	{ NULL, "8 Buckets", 8},
 	{ NULL, "16 Bucket", 16 },
 	{ NULL, "32 Bucket", 32 },
 	{ NULL, "64 Bucket", 64 },
@@ -189,7 +192,7 @@ struct uma_bucket_zone bucket_zones[] = {
 	{ NULL, NULL, 0}
 };
 
-#define	BUCKET_SHIFT	4
+#define	BUCKET_SHIFT	1
 #define	BUCKET_ZONES	((BUCKET_MAX >> BUCKET_SHIFT) + 1)
 
 /*
@@ -1411,6 +1414,7 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 	uma_zone_t zone = mem;
 	uma_zone_t z;
 	uma_keg_t keg;
+	int i, exp;
 
 	bzero(zone, size);
 	zone->uz_name = arg->name;
@@ -1483,12 +1487,25 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 		return (0);
 	}
 
-	if (keg->uk_flags & UMA_ZONE_MAXBUCKET)
-		zone->uz_count = BUCKET_MAX;
-	else if (keg->uk_ipers <= BUCKET_MAX)
-		zone->uz_count = keg->uk_ipers;
+	/*
+	 * Put a cap on the maximum number of items a per-CPU cache
+	 * can hold. This way I can avoid KVA exaustion.
+	 */
+	if (zone->uz_size <= PAGE_SIZE) {
+		exp = zone->uz_size >> 6;
+		zone->uz_countcap = (exp >= 1) ? exp : 1;
+	} else {
+		exp = fls(1 << 17) - fls(zone->uz_size);
+		zone->uz_countcap = (exp > 0) ? 1 << ((uint16_t)exp + 1) : 1;
+	}
+	zone->uz_countcap--;
+	for (i = 1; i <= 16; i *= 2)
+		zone->uz_countcap |= zone->uz_countcap >> i;
+	zone->uz_countcap++;
+	if (keg->uk_ipers & UMA_ZONE_MAXBUCKET)
+		zone->uz_count = zone->uz_countcap;
 	else
-		zone->uz_count = BUCKET_MAX;
+		zone->uz_count = 1;
 	return (0);
 }
 
@@ -2100,7 +2117,7 @@ zalloc_start:
 	critical_exit();
 
 	/* Bump up our uz_count so we get here less */
-	if (zone->uz_count < BUCKET_MAX)
+	if (zone->uz_count < zone->uz_countcap)
 		zone->uz_count++;
 
 	/*
