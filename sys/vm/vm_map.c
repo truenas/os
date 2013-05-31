@@ -81,6 +81,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/shm.h>
+#include <sys/types.h>
+#include <sys/sbuf.h>
 
 #include <vm/vm.h>
 #include <vm/vm_param.h>
@@ -4009,6 +4011,34 @@ vm_map_lookup_done(vm_map_t map, vm_map_entry_t entry)
 	 */
 	vm_map_unlock_read(map);
 }
+
+static int
+vm_map_printentries(SYSCTL_HANDLER_ARGS)
+{
+	vm_map_t map;
+	vm_map_entry_t entry;
+	struct sbuf *sb;
+	u_int entrynum;
+	int error;
+
+	error = sysctl_wire_old_buffer(req, 0);
+	if (error != 0)
+		return error;
+	sb = sbuf_new_for_sysctl(NULL, NULL, 256, req);
+	map = kmem_map;
+	vm_map_lock(map);
+	for (entry = map->header.next, entrynum = 0; entry != &map->header;
+	    entry = entry->next, entrynum++)
+		sbuf_printf(sb, "%u %lu %lu \n", entrynum, entry->start,
+		    entry->end);
+	vm_map_unlock(map);
+	sbuf_finish(sb);
+	sbuf_delete(sb);
+	return (0);
+}
+
+SYSCTL_PROC(_vm, OID_AUTO, map_printentries, CTLTYPE_STRING | CTLFLAG_RD |
+    CTLFLAG_MPSAFE, 0, 0, vm_map_printentries, "A", "Print kmem map entries");
 
 #include "opt_ddb.h"
 #ifdef DDB
