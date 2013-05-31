@@ -251,6 +251,7 @@ null_nodeget(mp, lowervp, vpp)
 
 	xp->null_vnode = vp;
 	xp->null_lowervp = lowervp;
+	xp->null_flags = 0;
 	vp->v_type = lowervp->v_type;
         if (vp->v_type == VSOCK || vp->v_type == VFIFO)
             vp->v_un = lowervp->v_un;

@@ -213,8 +213,7 @@ retry:
 		msleep(object, VM_OBJECT_MTX(object), PDROP | PVM, "vadead", 0);
 	}
 
-	if (vp->v_usecount == 0)
-		panic("vnode_pager_alloc: no vnode reference");
+	KASSERT(vp->v_usecount != 0, ("vnode_pager_alloc: no vnode reference"));
 
 	if (object == NULL) {
 		/*
@@ -381,6 +380,12 @@ vnode_pager_setsize(vp, nsize)
 		return;
 /* 	ASSERT_VOP_ELOCKED(vp, "vnode_pager_setsize and not locked vnode"); */
 	VM_OBJECT_LOCK(object);
+	if (object->type == OBJT_DEAD) {
+		VM_OBJECT_UNLOCK(object);
+		return;
+	}
+	KASSERT(object->type == OBJT_VNODE,
+	    ("not vnode-backed object %p", object));
 	if (nsize == object->un_pager.vnp.vnp_size) {
 		/*
 		 * Hasn't changed size
@@ -903,7 +908,7 @@ vnode_pager_generic_getpages(vp, m, bytecount, reqpage)
 	}
 
 	bp = getpbuf(&vnode_pbuf_freecnt);
-	kva = (vm_offset_t) bp->b_data;
+	kva = (vm_offset_t)bp->b_data;
 
 	/*
 	 * and map the pages to be read into the kva

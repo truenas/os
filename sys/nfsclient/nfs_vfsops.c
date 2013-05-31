@@ -146,7 +146,7 @@ static struct vfsops nfs_vfsops = {
 	.vfs_unmount =		nfs_unmount,
 	.vfs_sysctl =		nfs_sysctl,
 };
-VFS_SET(nfs_vfsops, oldnfs, VFCF_NETWORK);
+VFS_SET(nfs_vfsops, oldnfs, VFCF_NETWORK | VFCF_SBDRY);
 
 /* So that loader and kldload(2) can find us, wherever we are.. */
 MODULE_VERSION(oldnfs, 1);
@@ -1362,7 +1362,7 @@ static int
 nfs_unmount(struct mount *mp, int mntflags)
 {
 	struct nfsmount *nmp;
-	int error, flags = 0;
+	int error, flags = 0, i;
 
 	if (mntflags & MNT_FORCE)
 		flags |= FORCECLOSE;
@@ -1387,6 +1387,14 @@ nfs_unmount(struct mount *mp, int mntflags)
 	/*
 	 * We are now committed to the unmount.
 	 */
+	/* Make sure no nfsiods are assigned to this mount. */
+	mtx_lock(&nfs_iod_mtx);
+	for (i = 0; i < NFS_MAXASYNCDAEMON; i++)
+		if (nfs_iodmount[i] == nmp) {
+			nfs_iodwant[i] = NFSIOD_AVAILABLE;
+			nfs_iodmount[i] = NULL;
+		}
+	mtx_unlock(&nfs_iod_mtx);
 	nfs_disconnect(nmp);
 	free(nmp->nm_nam, M_SONAME);
 

@@ -484,6 +484,8 @@ int	buf_dirty_count_severe(void);
 void	bremfree(struct buf *);
 void	bremfreef(struct buf *);	/* XXX Force bremfree, only for nfs. */
 int	bread(struct vnode *, daddr_t, int, struct ucred *, struct buf **);
+int     bread_gb(struct vnode *, daddr_t, int, struct ucred *,
+	    int gbflags, struct buf **);
 void	breada(struct vnode *, daddr_t *, int *, int, struct ucred *);
 int	breadn(struct vnode *, daddr_t, int, daddr_t *, int *, int,
 	    struct ucred *, struct buf **);
@@ -514,6 +516,10 @@ int	cluster_read(struct vnode *, u_quad_t, daddr_t, long,
 	    struct ucred *, long, int, struct buf **);
 int	cluster_wbuild(struct vnode *, long, daddr_t, int);
 void	cluster_write(struct vnode *, struct buf *, u_quad_t, int);
+int	cluster_read_gb(struct vnode *, u_quad_t, daddr_t, long,
+	    struct ucred *, long, int, int, struct buf **);
+int	cluster_wbuild_gb(struct vnode *, long, daddr_t, int, int);
+void	cluster_write_gb(struct vnode *, struct buf *, u_quad_t, int, int);
 void	vfs_bio_set_valid(struct buf *, int base, int size);
 void	vfs_bio_clrbuf(struct buf *);
 void	vfs_busy_pages(struct buf *, int clear_modify);

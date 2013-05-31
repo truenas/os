@@ -120,6 +120,7 @@ MLINKS+=getcap.3 cgetcap.3 getcap.3 cgetclose.3 getcap.3 cgetent.3 \
 	getcap.3 cgetnum.3 getcap.3 cgetset.3 getcap.3 cgetstr.3 \
 	getcap.3 cgetustr.3
 MLINKS+=getcwd.3 getwd.3
+MLINKS+=getcontext.3 getcontextx.3
 MLINKS+=getcontext.3 setcontext.3
 MLINKS+=getdomainname.3 setdomainname.3
 MLINKS+=getfsent.3 endfsent.3 getfsent.3 getfsfile.3 getfsent.3 getfsspec.3 \
@@ -193,6 +194,21 @@ MLINKS+=tcsetattr.3 cfgetispeed.3 tcsetattr.3 cfgetospeed.3 \
 	tcsetattr.3 cfsetspeed.3 tcsetattr.3 tcgetattr.3
 MLINKS+=ttyname.3 isatty.3 ttyname.3 ttyname_r.3
 MLINKS+=tzset.3 tzsetwall.3
-MLINKS+=unvis.3 strunvis.3 unvis.3 strunvisx.3
-MLINKS+=vis.3 strvis.3 vis.3 strvisx.3
+MLINKS+=unvis.3 strunvis.3 \
+	unvis.3 strunvisx.3
+MLINKS+=vis.3 nvis.3 \
+	vis.3 snvis.3 \
+	vis.3 strenvisx.3 \
+	vis.3 strnunvis.3 \
+	vis.3 strnunvisx.3 \
+	vis.3 strnvis.3 \
+	vis.3 strnvisx.3 \
+	vis.3 strsenvisx.3 \
+	vis.3 strsnvis.3 \
+	vis.3 strsnvisx.3 \
+	vis.3 strsvis.3 \
+	vis.3 strsvisx.3 \
+	vis.3 strvis.3 \
+	vis.3 strvisx.3 \
+	vis.3 svis.3
 MLINKS+=wordexp.3 wordfree.3

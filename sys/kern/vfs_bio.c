@@ -833,6 +833,18 @@ breada(struct vnode * vp, daddr_t * rablkno, int * rabsize,
 }
 
 /*
+ * Operates like bread, but with getblk flags.
+ */
+int
+bread_gb(struct vnode * vp, daddr_t blkno, int cnt, struct ucred * cred,
+    int gbflags, struct buf **bpp)
+{
+
+	return (breadn_flags(vp, blkno, cnt, NULL, NULL, 0,
+		    cred, gbflags, bpp));
+}
+
+/*
  * Operates like bread, but also starts asynchronous I/O on
  * read-ahead blocks.
  */
@@ -855,9 +867,8 @@ breadn(struct vnode * vp, daddr_t blkno, int size,
  * getblk(). Also starts asynchronous I/O on read-ahead blocks.
  */
 int
-breadn_flags(struct vnode * vp, daddr_t blkno, int size,
-    daddr_t * rablkno, int *rabsize, int cnt,
-    struct ucred * cred, int flags, struct buf **bpp)
+breadn_flags(struct vnode *vp, daddr_t blkno, int size, daddr_t *rablkno,
+    int *rabsize, int cnt, struct ucred *cred, int flags, struct buf **bpp)
 {
 	struct buf *bp;
 	int rv = 0, readwait = 0;
@@ -1831,7 +1842,7 @@ vfs_bio_awrite(struct buf *bp)
 		if (ncl != 1) {
 			BUF_UNLOCK(bp);
 			nwritten = cluster_wbuild(vp, size, lblkno - j, ncl);
-			return nwritten;
+			return (nwritten);
 		}
 	}
 	bremfree(bp);
@@ -1844,7 +1855,7 @@ vfs_bio_awrite(struct buf *bp)
 	nwritten = bp->b_bufsize;
 	(void) bwrite(bp);
 
-	return nwritten;
+	return (nwritten);
 }
 
 /*
@@ -2678,7 +2689,7 @@ vfs_setdirty_locked_object(struct buf *bp)
  *	prior to issuing the READ.  biodone() will *not* clear B_INVAL.
  */
 struct buf *
-getblk(struct vnode * vp, daddr_t blkno, int size, int slpflag, int slptimeo,
+getblk(struct vnode *vp, daddr_t blkno, int size, int slpflag, int slptimeo,
     int flags)
 {
 	struct buf *bp;
@@ -2752,9 +2763,8 @@ loop:
 		BO_UNLOCK(bo);
 
 		/*
-		 * check for size inconsistancies for non-VMIO case.
+		 * check for size inconsistencies for non-VMIO case.
 		 */
-
 		if (bp->b_bcount != size) {
 			if ((bp->b_flags & B_VMIO) == 0 ||
 			    (size > bp->b_kvasize)) {
@@ -3317,11 +3327,34 @@ void
 dev_strategy(struct cdev *dev, struct buf *bp)
 {
 	struct cdevsw *csw;
-	struct bio *bip;
 	int ref;
 
-	if ((!bp->b_iocmd) || (bp->b_iocmd & (bp->b_iocmd - 1)))
-		panic("b_iocmd botch");
+	KASSERT(dev->si_refcount > 0,
+	    ("dev_strategy on un-referenced struct cdev *(%s) %p",
+	    devtoname(dev), dev));
+
+	csw = dev_refthread(dev, &ref);
+	dev_strategy_csw(dev, csw, bp);
+	dev_relthread(dev, ref);
+}
+
+void
+dev_strategy_csw(struct cdev *dev, struct cdevsw *csw, struct buf *bp)
+{
+	struct bio *bip;
+
+	KASSERT(bp->b_iocmd == BIO_READ || bp->b_iocmd == BIO_WRITE,
+	    ("b_iocmd botch"));
+	KASSERT(((dev->si_flags & SI_ETERNAL) != 0 && csw != NULL) ||
+	    dev->si_threadcount > 0,
+	    ("dev_strategy_csw threadcount cdev *(%s) %p", devtoname(dev),
+	    dev));
+	if (csw == NULL) {
+		bp->b_error = ENXIO;
+		bp->b_ioflags = BIO_ERROR;
+		bufdone(bp);
+		return;
+	}
 	for (;;) {
 		bip = g_new_bio();
 		if (bip != NULL)
@@ -3337,19 +3370,7 @@ dev_strategy(struct cdev *dev, struct buf *bp)
 	bip->bio_done = bufdonebio;
 	bip->bio_caller2 = bp;
 	bip->bio_dev = dev;
-	KASSERT(dev->si_refcount > 0,
-	    ("dev_strategy on un-referenced struct cdev *(%s)",
-	    devtoname(dev)));
-	csw = dev_refthread(dev, &ref);
-	if (csw == NULL) {
-		g_destroy_bio(bip);
-		bp->b_error = ENXIO;
-		bp->b_ioflags = BIO_ERROR;
-		bufdone(bp);
-		return;
-	}
 	(*csw->d_strategy)(bip);
-	dev_relthread(dev, ref);
 }
 
 /*

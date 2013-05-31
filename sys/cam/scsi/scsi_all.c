@@ -698,10 +698,7 @@ const struct sense_key_table_entry sense_key_table[] =
 {
 	{ SSD_KEY_NO_SENSE, SS_NOP, "NO SENSE" },
 	{ SSD_KEY_RECOVERED_ERROR, SS_NOP|SSQ_PRINT_SENSE, "RECOVERED ERROR" },
-	{
-	  SSD_KEY_NOT_READY, SS_TUR|SSQ_MANY|SSQ_DECREMENT_COUNT|EBUSY,
-	  "NOT READY"
-	},
+	{ SSD_KEY_NOT_READY, SS_RDEF, "NOT READY" },
 	{ SSD_KEY_MEDIUM_ERROR, SS_RDEF, "MEDIUM ERROR" },
 	{ SSD_KEY_HARDWARE_ERROR, SS_RDEF, "HARDWARE FAILURE" },
 	{ SSD_KEY_ILLEGAL_REQUEST, SS_FATAL|EINVAL, "ILLEGAL REQUEST" },
@@ -876,7 +873,7 @@ static struct asc_table_entry asc_table[] = {
 	{ SST(0x03, 0x02, SS_RDEF,
 	    "Excessive write errors") },
 	/* DTLPWROMAEBKVF */
-	{ SST(0x04, 0x00, SS_TUR | SSQ_MANY | SSQ_DECREMENT_COUNT | EIO,
+	{ SST(0x04, 0x00, SS_RDEF,
 	    "Logical unit not ready, cause not reportable") },
 	/* DTLPWROMAEBKVF */
 	{ SST(0x04, 0x01, SS_TUR | SSQ_MANY | SSQ_DECREMENT_COUNT | EBUSY,
@@ -3071,16 +3068,15 @@ scsi_error_action(struct ccb_scsiio *csio, struct scsi_inquiry_data *inq_data,
 					  SSQ_PRINT_SENSE;
 			}
 		}
-		if ((action & SS_MASK) >= SS_START &&
-		    (sense_flags & SF_NO_RECOVERY)) {
-			action &= ~SS_MASK;
-			action |= SS_FAIL;
-		} else if ((action & SS_MASK) == SS_RETRY &&
-		    (sense_flags & SF_NO_RETRY)) {
-			action &= ~SS_MASK;
-			action |= SS_FAIL;
-		}
-
+	}
+	if ((action & SS_MASK) >= SS_START &&
+	    (sense_flags & SF_NO_RECOVERY)) {
+		action &= ~SS_MASK;
+		action |= SS_FAIL;
+	} else if ((action & SS_MASK) == SS_RETRY &&
+	    (sense_flags & SF_NO_RETRY)) {
+		action &= ~SS_MASK;
+		action |= SS_FAIL;
 	}
 	if ((sense_flags & SF_PRINT_ALWAYS) != 0)
 		action |= SSQ_PRINT_SENSE;
