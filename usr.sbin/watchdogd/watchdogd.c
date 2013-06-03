@@ -689,7 +689,6 @@ parseargs(int argc, char *argv[])
 	const char *lopt;
 	char *p;
 	const char *lopt;
-	double a;
 
 	/*
 	 * if we end with a 'd' aka 'watchdogd' then we are the daemon program,
