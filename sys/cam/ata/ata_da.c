@@ -118,10 +118,10 @@ struct disk_params {
 };
 
 #define TRIM_MAX_BLOCKS	8
-#define TRIM_MAX_RANGES	(TRIM_MAX_BLOCKS * 64)
+#define TRIM_MAX_RANGES	(TRIM_MAX_BLOCKS * ATA_DSM_BLK_RANGES)
 #define TRIM_MAX_BIOS	(TRIM_MAX_RANGES * 4)
 struct trim_request {
-	uint8_t		data[TRIM_MAX_RANGES * 8];
+	uint8_t		data[TRIM_MAX_RANGES * ATA_DSM_RANGE_SIZE];
 	struct bio	*bps[TRIM_MAX_BIOS];
 };
 
@@ -131,6 +131,7 @@ struct ada_softc {
 	ada_state state;
 	ada_flags flags;	
 	ada_quirks quirks;
+	int	 sort_io_queue;
 	int	 ordered_tag_count;
 	int	 outstanding_cmds;
 	int	 trim_max_ranges;
@@ -485,6 +486,8 @@ static void		adaresume(void *arg);
 		 softc->read_ahead : ada_read_ahead)
 #define	ADA_WC	(softc->write_cache >= 0 ? \
 		 softc->write_cache : ada_write_cache)
+#define	ADA_SIO	(softc->sort_io_queue >= 0 ? \
+		 softc->sort_io_queue : cam_sort_io_queues)
 
 /*
  * Most platforms map firmware geometry to actual, but some don't.  If
@@ -695,10 +698,17 @@ adastrategy(struct bio *bp)
 	 * Place it in the queue of disk activities for this disk
 	 */
 	if (bp->bio_cmd == BIO_DELETE &&
-	    (softc->flags & ADA_FLAG_CAN_TRIM))
-		bioq_disksort(&softc->trim_queue, bp);
-	else
-		bioq_disksort(&softc->bio_queue, bp);
+	    (softc->flags & ADA_FLAG_CAN_TRIM)) {
+		if (ADA_SIO)
+		    bioq_disksort(&softc->trim_queue, bp);
+		else
+		    bioq_insert_tail(&softc->trim_queue, bp);
+	} else {
+		if (ADA_SIO)
+		    bioq_disksort(&softc->bio_queue, bp);
+		else
+		    bioq_insert_tail(&softc->bio_queue, bp);
+	}
 
 	/*
 	 * Schedule ourselves for performing the work.
@@ -1045,6 +1055,10 @@ adasysctlinit(void *context, int pending)
 	SYSCTL_ADD_INT(&softc->sysctl_ctx, SYSCTL_CHILDREN(softc->sysctl_tree),
 		OID_AUTO, "write_cache", CTLFLAG_RW | CTLFLAG_MPSAFE,
 		&softc->write_cache, 0, "Enable disk write cache.");
+	SYSCTL_ADD_INT(&softc->sysctl_ctx, SYSCTL_CHILDREN(softc->sysctl_tree),
+		OID_AUTO, "sort_io_queue", CTLFLAG_RW | CTLFLAG_MPSAFE,
+		&softc->sort_io_queue, 0,
+		"Sort IO queue to try and optimise disk access patterns");
 #ifdef ADA_TEST_FAILURE
 	/*
 	 * Add a 'door bell' sysctl which allows one to set it from userland
@@ -1134,8 +1148,8 @@ adaregister(struct cam_periph *periph, void *arg)
 		softc->trim_max_ranges = TRIM_MAX_RANGES;
 		if (cgd->ident_data.max_dsm_blocks != 0) {
 			softc->trim_max_ranges =
-			    min(cgd->ident_data.max_dsm_blocks * 64,
-				softc->trim_max_ranges);
+			    min(cgd->ident_data.max_dsm_blocks *
+				ATA_DSM_BLK_RANGES, softc->trim_max_ranges);
 		}
 	}
 	if (cgd->ident_data.support.command2 & ATA_SUPPORT_CFA)
@@ -1180,6 +1194,11 @@ adaregister(struct cam_periph *periph, void *arg)
 	snprintf(announce_buf, sizeof(announce_buf),
 	    "kern.cam.ada.%d.write_cache", periph->unit_number);
 	TUNABLE_INT_FETCH(announce_buf, &softc->write_cache);
+	/* Disable queue sorting for non-rotational media by default. */
+	if (cgd->ident_data.media_rotation_rate == 1)
+		softc->sort_io_queue = 0;
+	else
+		softc->sort_io_queue = -1;
 	adagetparams(periph, cgd);
 	softc->disk = disk_alloc();
 	softc->disk->d_devstat = devstat_new_entry(periph->periph_name,
@@ -1210,10 +1229,12 @@ adaregister(struct cam_periph *periph, void *arg)
 	softc->disk->d_flags = 0;
 	if (softc->flags & ADA_FLAG_CAN_FLUSHCACHE)
 		softc->disk->d_flags |= DISKFLAG_CANFLUSHCACHE;
-	if ((softc->flags & ADA_FLAG_CAN_TRIM) ||
-	    ((softc->flags & ADA_FLAG_CAN_CFA) &&
-	    !(softc->flags & ADA_FLAG_CAN_48BIT)))
+	if (softc->flags & ADA_FLAG_CAN_TRIM) {
 		softc->disk->d_flags |= DISKFLAG_CANDELETE;
+	} else if ((softc->flags & ADA_FLAG_CAN_CFA) &&
+	    !(softc->flags & ADA_FLAG_CAN_48BIT)) {
+		softc->disk->d_flags |= DISKFLAG_CANDELETE;
+	}
 	strlcpy(softc->disk->d_descr, cgd->ident_data.model,
 	    MIN(sizeof(softc->disk->d_descr), sizeof(cgd->ident_data.model)));
 	strlcpy(softc->disk->d_ident, cgd->ident_data.serial,
@@ -1380,9 +1401,9 @@ adastart(struct cam_periph *periph, union ccb *start_ccb)
 
 				/* Try to extend the previous range. */
 				if (lba == lastlba) {
-					c = min(count, 0xffff - lastcount);
+					c = min(count, ATA_DSM_RANGE_MAX - lastcount);
 					lastcount += c;
-					off = (ranges - 1) * 8;
+					off = (ranges - 1) * ATA_DSM_RANGE_SIZE;
 					req->data[off + 6] = lastcount & 0xff;
 					req->data[off + 7] =
 					    (lastcount >> 8) & 0xff;
@@ -1391,8 +1412,8 @@ adastart(struct cam_periph *periph, union ccb *start_ccb)
 				}
 
 				while (count > 0) {
-					c = min(count, 0xffff);
-					off = ranges * 8;
+					c = min(count, ATA_DSM_RANGE_MAX);
+					off = ranges * ATA_DSM_RANGE_SIZE;
 					req->data[off + 0] = lba & 0xff;
 					req->data[off + 1] = (lba >> 8) & 0xff;
 					req->data[off + 2] = (lba >> 16) & 0xff;
@@ -1405,6 +1426,11 @@ adastart(struct cam_periph *periph, union ccb *start_ccb)
 					count -= c;
 					lastcount = c;
 					ranges++;
+					/*
+					 * Its the caller's responsibility to ensure the
+					 * request will fit so we don't need to check for
+					 * overrun here
+					 */
 				}
 				lastlba = lba;
 				req->bps[bps++] = bp1;
@@ -1412,7 +1438,8 @@ adastart(struct cam_periph *periph, union ccb *start_ccb)
 				if (bps >= TRIM_MAX_BIOS ||
 				    bp1 == NULL ||
 				    bp1->bio_bcount / softc->params.secsize >
-				    (softc->trim_max_ranges - ranges) * 0xffff)
+				    (softc->trim_max_ranges - ranges) *
+				    ATA_DSM_RANGE_MAX)
 					break;
 			} while (1);
 			cam_fill_ataio(ataio,
@@ -1421,10 +1448,12 @@ adastart(struct cam_periph *periph, union ccb *start_ccb)
 			    CAM_DIR_OUT,
 			    0,
 			    req->data,
-			    ((ranges + 63) / 64) * 512,
+			    ((ranges + ATA_DSM_BLK_RANGES - 1) /
+			        ATA_DSM_BLK_RANGES) * ATA_DSM_BLK_SIZE,
 			    ada_default_timeout * 1000);
 			ata_48bit_cmd(ataio, ATA_DATA_SET_MANAGEMENT,
-			    ATA_DSM_TRIM, 0, (ranges + 63) / 64);
+			    ATA_DSM_TRIM, 0, (ranges + ATA_DSM_BLK_RANGES -
+			    1) / ATA_DSM_BLK_RANGES);
 			start_ccb->ccb_h.ccb_state = ADA_CCB_TRIM;
 			goto out;
 		}
