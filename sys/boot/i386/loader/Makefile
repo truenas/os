@@ -11,6 +11,11 @@ NEWVERSWHAT?=	"bootstrap loader" x86
 # architecture-specific loader code
 SRCS=		main.c conf.c vers.c
 
+# Put LOADER_VGAEFFECTS_SUPPORT=yes in /etc/make.conf for Boot Banner support
+.if defined(LOADER_VGAEFFECTS_SUPPORT)
+CFLAGS+=	-DLOADER_VGAEFFECTS_SUPPORT
+.endif
+
 # Put LOADER_FIREWIRE_SUPPORT=yes in /etc/make.conf for FireWire/dcons support
 .if defined(LOADER_FIREWIRE_SUPPORT)
 CFLAGS+=	-DLOADER_FIREWIRE_SUPPORT
@@ -101,6 +106,11 @@ FILES+=	loader.help loader.4th support.4th loader.conf
 FILES+= screen.4th frames.4th beastie.4th pcbsd.4th
 FILES+= brand.4th check-password.4th color.4th delay.4th
 FILES+= menu.4th menu-commands.4th shortcuts.4th version.4th
+# Add LOADER_VGAEFFECTS_SUPPORT=yes in /etc/make.conf
+.if defined(LOADER_VGAEFFECTS_SUPPORT)
+FILES+=	vgaeffects.4th
+.endif
+
 FILESDIR_loader.conf=	/boot/defaults
 
 .if !exists(${DESTDIR}/boot/loader.rc)

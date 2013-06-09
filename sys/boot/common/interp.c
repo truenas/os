@@ -90,7 +90,7 @@ perform(int argc, char *argv[])
  * Interactive mode
  */
 void
-interact(void)
+interact(const char *loader_rc_path)
 {
     static char	input[256];			/* big enough? */
 #ifndef BOOT_FORTH
@@ -105,7 +105,7 @@ interact(void)
     /*
      * Read our default configuration
      */
-    if (include("/boot/loader.rc") != CMD_OK)
+    if (include(loader_rc_path) != CMD_OK)
 	include("/boot/boot.conf");
     printf("\n");
     /*

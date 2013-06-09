@@ -11,6 +11,7 @@ CFLAGS+=	-ffreestanding
 CFLAGS+=	-march=i386
 CFLAGS+=	-mpreferred-stack-boundary=2
 CFLAGS+=	-mno-mmx -mno-3dnow -mno-sse -mno-sse2 -mno-sse3 -msoft-float
+CFLAGS+=        -DLOADER_VGAEFFECTS
 .endif
 .if ${MACHINE_CPUARCH} == "powerpc" || ${MACHINE_CPUARCH} == "arm"
 CFLAGS+=	-msoft-float

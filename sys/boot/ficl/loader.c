@@ -643,6 +643,16 @@ static void ficlDictIncrease(FICL_VM *pVM)
 }
 
 
+/******************* Additional words for VGA output ******************/
+#ifdef __i386__
+#ifdef LOADER_VGAEFFECTS
+#include "i386/vga_effects.c"
+#endif
+#endif
+
+
+
+
 /**************************************************************************
                         f i c l C o m p i l e P l a t f o r m
 ** Build FreeBSD platform extensions into the system dictionary
@@ -680,6 +690,11 @@ void ficlCompilePlatform(FICL_SYSTEM *pSys)
 #ifdef __i386__
     dictAppendWord(dp, "outb",      ficlOutb,       FW_DEFAULT);
     dictAppendWord(dp, "inb",       ficlInb,        FW_DEFAULT);
+
+#ifdef LOADER_VGAEFFECTS
+    vga_ficlAddWords(pSys);
+#endif
+
 #endif
 #ifdef HAVE_PNP
     dictAppendWord(dp, "pnpdevices",ficlPnpdevices, FW_DEFAULT);
@@ -702,6 +717,7 @@ void ficlCompilePlatform(FICL_SYSTEM *pSys)
     ficlSetEnv(pSys, "arch-ia64",         FICL_FALSE);
     ficlSetEnv(pSys, "arch-powerpc",      FICL_TRUE);
 #endif
+
 
     return;
 }

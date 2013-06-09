@@ -45,6 +45,10 @@ __FBSDID("$FreeBSD$");
 #include "libi386/libi386.h"
 #include "btxv86.h"
 
+#ifdef LOADER_VGAEFFECTS_SUPPORT
+#include "vgaeffects.c"
+#endif
+
 #ifdef LOADER_ZFS_SUPPORT
 #include "../zfs/libzfs.h"
 #endif
@@ -64,8 +68,8 @@ static struct bootinfo	*initial_bootinfo;
 struct arch_switch	archsw;		/* MI/MD interface boundary */
 
 static void		extract_currdev(void);
-static int		isa_inb(int port);
-static void		isa_outb(int port, int value);
+int     		isa_inb(int port);
+void        	isa_outb(int port, int value);
 void			exit(int code);
 #ifdef LOADER_ZFS_SUPPORT
 static void		i386_zfs_probe(void);
@@ -80,10 +84,34 @@ extern char end[];
 static void *heap_top;
 static void *heap_bottom;
 
+
+/* Detect state of either Shift key */
+static int
+IsShiftpressed()
+{
+v86.ctl = 0;
+v86.eax = 0x0200; /* ah=2 */
+v86.addr=0x16;
+v86int();
+
+return(v86.eax&3)? 1:0;
+
+}
+
+
 int
 main(void)
 {
     int			i;
+
+    /* Show banner as early as possible */
+#ifdef LOADER_VGAEFFECTS_SUPPORT
+    vga_init();
+    if(!IsShiftpressed()) vga_showbanner();
+    else vga_slideupandexit();
+#endif
+
+
 
     /* Pick up arguments */
     kargs = (void *)__args;
@@ -192,7 +220,9 @@ main(void)
     
     bios_getsmap();
 
-    interact();			/* doesn't return */
+    /* Allow booting from alternate "safe" emergency_loader.rc */
+    if(IsShiftpressed()) interact("/boot/emergency_loader.rc");
+    else interact("/boot/loader.rc");			/* doesn't return */
 
     /* if we ever get here, it is an error */
     return (1);
@@ -354,14 +384,14 @@ command_lszfs(int argc, char *argv[])
 #endif
 
 /* ISA bus access functions for PnP. */
-static int
+int
 isa_inb(int port)
 {
 
     return (inb(port));
 }
 
-static void
+void
 isa_outb(int port, int value)
 {
 
