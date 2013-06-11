@@ -349,11 +349,16 @@ txg_rele_to_sync(txg_handle_t *th)
 }
 
 /*
+ * Blocks until all transactions in the group are committed.
+ *
+ * On return, the transaction group has reached a stable state in which it can
+ * then be passed off to the syncing context.
+ *
  * XXX: Ideally this function should be static, but in order to force compiler
  * to not inline it and make visible from Dtrace dynamic tracking we expose
  * it forcefully.
  */
-void
+static void
 txg_quiesce(dsl_pool_t *dp, uint64_t txg)
 {
 	tx_state_t *tx = &dp->dp_tx;
@@ -402,6 +407,9 @@ txg_do_callbacks(void *arg)
 
 /*
  * Dispatch the commit callbacks registered on this txg to worker threads.
+ *
+ * If no callbacks are registered for a given TXG, nothing happens.
+ * This function creates a taskq for the associated pool, if needed.
  */
 static void
 txg_dispatch_callbacks(dsl_pool_t *dp, uint64_t txg)
@@ -412,7 +420,10 @@ txg_dispatch_callbacks(dsl_pool_t *dp, uint64_t txg)
 
 	for (c = 0; c < max_ncpus; c++) {
 		tx_cpu_t *tc = &tx->tx_cpu[c];
-		/* No need to lock tx_cpu_t at this point */
+		/*
+		 * No need to lock tx_cpu_t at this point, since this can
+		 * only be called once a txg has been synced.
+		 */
 
 		int g = txg & TXG_MASK;
 
