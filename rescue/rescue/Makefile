@@ -118,7 +118,7 @@ CRUNCH_PROGS_sbin+= zpool
 # crunchgen does not like C++ programs; this should be fixed someday
 # CRUNCH_PROGS+= devd
 
-CRUNCH_LIBS+= -lalias -lcam -lcurses -ldevstat -lipsec
+CRUNCH_LIBS+= -lalias -lcam -lncursesw -ldevstat -lipsec
 .if ${MK_IPX} != "no"
 CRUNCH_LIBS+= -lipx
 .endif
@@ -206,8 +206,10 @@ CRUNCH_ALIAS_vi= ex
 CRUNCH_PROGS_usr.bin+= id
 CRUNCH_ALIAS_id= groups whoami
 
-#CRUNCH_SRCDIR_dialog= ${.CURDIR}/../../gnu/usr.bin/dialog
-#CRUNCH_LIBS+= -ldialog -lncurses
+CRUNCH_PROGS_usr.bin+= dialog
+CRUNCH_SRCDIR_dialog= ${.CURDIR}/../../gnu/usr.bin/dialog
+CRUNCH_LIBS+= -ldialog -lm -lncursesw -ltermlibw -ltinfow
+
 CRUNCH_SRCDIR_sort= ${.CURDIR}/../../gnu/usr.bin/sort
 
 ##################################################################
