@@ -359,6 +359,12 @@ txg_rele_to_sync(txg_handle_t *th)
  * to not inline it and make visible from Dtrace dynamic tracking we expose
  * it forcefully.
  */
+/*
+ * Blocks until all transactions in the group are committed.
+ *
+ * On return, the transaction group has reached a stable state in which it can
+ * then be passed off to the syncing context.
+ */
 void
 txg_quiesce(dsl_pool_t *dp, uint64_t txg)
 {
