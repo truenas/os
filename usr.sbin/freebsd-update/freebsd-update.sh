@@ -91,6 +91,9 @@ CONFIGOPTIONS="KEYPRINT WORKDIR SERVERNAME MAILTO ALLOWADD ALLOWDELETE
     BASEDIR VERBOSELEVEL TARGETRELEASE STRICTCOMPONENTS MERGECHANGES
     IDSIGNOREPATHS BACKUPKERNEL BACKUPKERNELDIR BACKUPKERNELSYMBOLFILES"
 
+# Set to force updates on specific files that we don't want changed
+FORCEUPDATES="/etc/rc.conf.pcbsd /etc/rc /boot/loader.conf.pcbsd"
+
 # Set all the configuration options to "".
 nullconfig () {
 	for X in ${CONFIGOPTIONS}; do
@@ -1575,6 +1578,13 @@ fetch_filter_unmodified_notpresent () {
 	comm -13 $1 $2 |
 	    cut -f 1,2,7 -d '|' |
 	    fgrep '|-|' >> mlines
+
+	# If we have items to force updates on, remove from mlines
+	for fUp in $FORCEUPDATES
+	do
+		grep -v "^${fUp}|f|" mlines > mlines.tmp
+		mv mlines.tmp mlines
+	done
 
 	# Remove lines from $1, $2, and $3
 	for X in $1 $2 $3; do
