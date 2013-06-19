@@ -21,6 +21,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013 by Delphix. All rights reserved.
+ * Copyright (c) 2013 Steven Hartland. All rights reserved.
  */
 
 #include <sys/dsl_pool.h>
@@ -78,10 +79,11 @@ SYSCTL_UQUAD(_vfs_zfs, OID_AUTO, write_limit_max, CTLFLAG_RDTUN,
     &zfs_write_limit_max, 0, "Maximum data payload per txg");
 TUNABLE_QUAD("vfs.zfs.write_limit_inflated", &zfs_write_limit_inflated);
 SYSCTL_UQUAD(_vfs_zfs, OID_AUTO, write_limit_inflated, CTLFLAG_RDTUN,
-    &zfs_write_limit_inflated, 0, "");
+    &zfs_write_limit_inflated, 0, "Maximum size of the dynamic write limit");
 TUNABLE_QUAD("vfs.zfs.write_limit_override", &zfs_write_limit_override);
 SYSCTL_UQUAD(_vfs_zfs, OID_AUTO, write_limit_override, CTLFLAG_RDTUN,
-    &zfs_write_limit_override, 0, "");
+    &zfs_write_limit_override, 0,
+    "Force a txg if dirty buffers exceed this value (bytes)");
 
 int
 dsl_pool_open_special_dir(dsl_pool_t *dp, const char *name, dsl_dir_t **ddp)
@@ -855,23 +857,34 @@ dsl_pool_clean_tmp_userrefs(dsl_pool_t *dp)
 	zap_cursor_t zc;
 	objset_t *mos = dp->dp_meta_objset;
 	uint64_t zapobj = dp->dp_tmp_userrefs_obj;
+	nvlist_t *holds;
 
 	if (zapobj == 0)
 		return;
 	ASSERT(spa_version(dp->dp_spa) >= SPA_VERSION_USERREFS);
 
+	holds = fnvlist_alloc();
+
 	for (zap_cursor_init(&zc, mos, zapobj);
 	    zap_cursor_retrieve(&zc, &za) == 0;
 	    zap_cursor_advance(&zc)) {
 		char *htag;
-		uint64_t dsobj;
+		nvlist_t *tags;
 
 		htag = strchr(za.za_name, '-');
 		*htag = '\0';
 		++htag;
-		dsobj = strtonum(za.za_name, NULL);
-		dsl_dataset_user_release_tmp(dp, dsobj, htag);
+		if (nvlist_lookup_nvlist(holds, za.za_name, &tags) != 0) {
+			tags = fnvlist_alloc();
+			fnvlist_add_boolean(tags, htag);
+			fnvlist_add_nvlist(holds, za.za_name, tags);
+			fnvlist_free(tags);
+		} else {
+			fnvlist_add_boolean(tags, htag);
+		}
 	}
+	dsl_dataset_user_release_tmp(dp, holds);
+	fnvlist_free(holds);
 	zap_cursor_fini(&zc);
 }
 

@@ -43,6 +43,7 @@
 #include <sys/arc.h>
 #include <sys/zil.h>
 #include <sys/dsl_scan.h>
+#include <sys/trim_map.h>
 
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_NODE(_vfs_zfs, OID_AUTO, vdev, CTLFLAG_RW, 0, "ZFS VDEV");
@@ -962,9 +963,11 @@ vdev_probe_done(zio_t *zio)
 }
 
 /*
- * Determine whether this device is accessible by reading and writing
- * to several known locations: the pad regions of each vdev label
- * but the first (which we leave alone in case it contains a VTOC).
+ * Determine whether this device is accessible.
+ *
+ * Read and write to several known locations: the pad regions of each
+ * vdev label but the first, which we leave alone in case it contains
+ * a VTOC.
  */
 zio_t *
 vdev_probe(vdev_t *vd, zio_t *zio)
@@ -1195,6 +1198,11 @@ vdev_open(vdev_t *vd)
 	 */
 	if (vd->vdev_ishole || vd->vdev_ops == &vdev_missing_ops)
 		return (0);
+
+	if (vd->vdev_ops->vdev_op_leaf) {
+		vd->vdev_notrim = B_FALSE;
+		trim_map_create(vd);
+	}
 
 	for (int c = 0; c < vd->vdev_children; c++) {
 		if (vd->vdev_child[c]->vdev_state != VDEV_STATE_HEALTHY) {
@@ -1440,6 +1448,9 @@ vdev_close(vdev_t *vd)
 	vd->vdev_ops->vdev_op_close(vd);
 
 	vdev_cache_purge(vd);
+
+	if (vd->vdev_ops->vdev_op_leaf)
+		trim_map_destroy(vd);
 
 	/*
 	 * We record the previous state before we close it, so that if we are
@@ -2181,10 +2192,12 @@ vdev_degrade(spa_t *spa, uint64_t guid, vdev_aux_t aux)
 }
 
 /*
- * Online the given vdev.  If 'unspare' is set, it implies two things.  First,
- * any attached spare device should be detached when the device finishes
- * resilvering.  Second, the online should be treated like a 'test' online case,
- * so no FMA events are generated if the device fails to open.
+ * Online the given vdev.
+ *
+ * If 'ZFS_ONLINE_UNSPARE' is set, it implies two things.  First, any attached
+ * spare device should be detached when the device finishes resilvering.
+ * Second, the online should be treated like a 'test' online case, so no FMA
+ * events are generated if the device fails to open.
  */
 int
 vdev_online(spa_t *spa, uint64_t guid, uint64_t flags, vdev_state_t *newstate)
