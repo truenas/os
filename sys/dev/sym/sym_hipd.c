@@ -3430,7 +3430,6 @@ sym_getsync(hcb_p np, u_char dt, u_char sfac, u_char *divp, u_char *fakp)
 	/*
 	 *  Check against our hardware limits, or bugs :).
 	 */
-	if (fak < 0)	{fak = 0; ret = -1;}
 	if (fak > 2)	{fak = 2; ret = -1;}
 
 	/*
@@ -7861,51 +7860,14 @@ sym_setup_data_and_start(hcb_p np, struct ccb_scsiio *csio, ccb_p cp)
 		return;
 	}
 
-	if (!(ccb_h->flags & CAM_SCATTER_VALID)) {
-		/* Single buffer */
-		if (!(ccb_h->flags & CAM_DATA_PHYS)) {
-			/* Buffer is virtual */
-			cp->dmamapped = (dir == CAM_DIR_IN) ?
-						SYM_DMA_READ : SYM_DMA_WRITE;
-			retv = bus_dmamap_load(np->data_dmat, cp->dmamap,
-					       csio->data_ptr, csio->dxfer_len,
-					       sym_execute_ccb, cp, 0);
-			if (retv == EINPROGRESS) {
-				cp->host_status	= HS_WAIT;
-				xpt_freeze_simq(np->sim, 1);
-				csio->ccb_h.status |= CAM_RELEASE_SIMQ;
-			}
-		} else {
-			/* Buffer is physical */
-			struct bus_dma_segment seg;
-
-			seg.ds_addr = (bus_addr_t) csio->data_ptr;
-			sym_execute_ccb(cp, &seg, 1, 0);
-		}
-	} else {
-		/* Scatter/gather list */
-		struct bus_dma_segment *segs;
-
-		if ((ccb_h->flags & CAM_SG_LIST_PHYS) != 0) {
-			/* The SG list pointer is physical */
-			sym_set_cam_status(cp->cam_ccb, CAM_REQ_INVALID);
-			goto out_abort;
-		}
-
-		if (!(ccb_h->flags & CAM_DATA_PHYS)) {
-			/* SG buffer pointers are virtual */
-			sym_set_cam_status(cp->cam_ccb, CAM_REQ_INVALID);
-			goto out_abort;
-		}
-
-		/* SG buffer pointers are physical */
-		segs  = (struct bus_dma_segment *)csio->data_ptr;
-		sym_execute_ccb(cp, segs, csio->sglist_cnt, 0);
+	cp->dmamapped = (dir == CAM_DIR_IN) ?  SYM_DMA_READ : SYM_DMA_WRITE;
+	retv = bus_dmamap_load_ccb(np->data_dmat, cp->dmamap,
+			       (union ccb *)csio, sym_execute_ccb, cp, 0);
+	if (retv == EINPROGRESS) {
+		cp->host_status	= HS_WAIT;
+		xpt_freeze_simq(np->sim, 1);
+		csio->ccb_h.status |= CAM_RELEASE_SIMQ;
 	}
-	return;
-out_abort:
-	sym_xpt_done(np, (union ccb *) csio, cp);
-	sym_free_ccb(np, cp);
 }
 
 /*
@@ -8091,7 +8053,7 @@ static void sym_action2(struct cam_sim *sim, union ccb *ccb)
 		if ((np->features & FE_WIDE) != 0)
 			cpi->hba_inquiry |= PI_WIDE_16;
 		cpi->target_sprt = 0;
-		cpi->hba_misc = 0;
+		cpi->hba_misc = PIM_UNMAPPED;
 		if (np->usrflags & SYM_SCAN_TARGETS_HILO)
 			cpi->hba_misc |= PIM_SCANHILO;
 		if (np->usrflags & SYM_AVOID_BUS_RESET)
