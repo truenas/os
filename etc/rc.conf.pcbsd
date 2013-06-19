@@ -23,9 +23,6 @@ if [ -e "/etc/defaults/trueos" ] ; then
   # Load the following kernel modules
   kld_list="libiconv libmchain msdosfs_iconv sem ntfs ntfs_iconv udf udf_iconv ext2fs pefs xfs reiserfs smbfs fdescfs linsysfs"
 
-  # Enable FSC
-  fscd_enable="YES"
-
   # Enable ntpd
   ntpd_enable="YES"
   ntpd_sync_on_start="YES"
@@ -149,9 +146,6 @@ if [ -e "/etc/defaults/pcbsd" ] ; then
 
   # Enable fail2ban
   fail2ban_enable="YES"
-
-  # Enable FSC
-  fscd_enable="YES"
 
   # Enable uhidd
   uhidd_enable="YES"
