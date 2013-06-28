@@ -1,0 +1,466 @@
+.\" Copyright (c) 2005-2008 Pawel Jakub Dawidek <pjd@FreeBSD.org>
+.\" Copyright (c) 2009 Gleb Kurtsou
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $FreeBSD$
+.\"
+.Dd December 1, 2009
+.Dt PEFS 8
+.Os
+.Sh NAME
+.Nm pefs
+.Nd configure pefs file systems
+.Sh SYNOPSIS
+.Nm
+.Cm mount
+.Op Fl o Ar options
+.Op Ar from filesystem
+.Nm
+.Cm unmount
+.Op Fl fv
+.Ar filesystem
+.Pp
+.Nm
+.Cm addkey
+.Op Fl cCpv
+.Op Fl a Ar alg
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Ar filesystem
+.Nm
+.Cm delkey
+.Op Fl cCpv
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Ar filesystem
+.Nm
+.Cm flushkeys
+.Ar filesystem
+.Nm
+.Cm getkey
+.Op Fl t
+.Ar file
+.Nm
+.Cm setkey
+.Op Fl cCpvx
+.Op Fl a Ar alg
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Ar directory
+.Nm
+.Cm showkeys
+.Op Fl t
+.Ar filesystem
+.Pp
+.Nm
+.Cm addchain
+.Op Fl fpPvZ
+.Op Fl a Ar alg
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Op Fl A Ar alg
+.Op Fl I Ar iterations
+.Op Fl J Ar passfile
+.Op Fl K Ar keyfile
+.Ar filesystem
+.Nm
+.Cm delchain
+.Op Fl fFpv
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Ar filesystem
+.Nm
+.Cm randomchain
+.Op Fl fv
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Ar filesystem
+.Nm
+.Cm showchains
+.Op Fl fp
+.Op Fl i Ar iterations
+.Op Fl j Ar passfile
+.Op Fl k Ar keyfile
+.Ar filesystem
+.Pp
+.Nm
+.Cm showalgs
+.Sh DESCRIPTION
+The
+.Nm
+utility is the user interface for configuring stacked cryptographic file system.
+.Pp
+The following is a list of the most important file system features:
+.Bl -bullet -offset indent -compact
+.It
+Kernel level file system, no user level daemons needed.
+Transparently runs on top of existing file systems.
+.It
+Random per file tweak value used for encryption, which guaranties different
+cipher texts for the same encrypted files.
+.It
+Saves metadata only in encrypted file name, but not in file itself.
+.It
+Supports arbitrary number of keys per file system, default directory key,
+mixing files encrypted with different keys in same directory.
+.It
+Allows defining key chains, can be used to add/delete several keys by
+specifying only master key.
+.It
+Uses modern cryptographic algorithms: AES and Camellia in XTS mode,
+PKCS#5v2 and HKDF for key generation.
+.El
+.Pp
+First argument of
+.Nm
+utility indicates the command to be performed (see the
+.Sx COMMAND OPTIONS
+section for information on options):
+.Bl -tag -width indent
+.It Cm mount
+Mount file system.
+Encryption keys should be specified separately after mounting the file system.
+If no agrumnt specified prints all mounted
+.Nm
+file systems.
+See
+.Xr mount 8
+for more information.
+.It Cm unmount Ar filesystem
+Unmount
+.Ar filesystem .
+.Fl f
+and
+.Fl v
+options can be specified to force unmount or enable verbose mode respectively.
+See
+.Xr umount 8
+for more information.
+.It Cm addkey Ar filesystem
+Add key to the
+.Ar filesystem
+.It Cm delkey Ar filesystem
+Delete key from
+.Ar filesystem .
+Command doesn't accept
+.Fl a Ar alg
+argument because the key fingerprint generated from the key doesn't depend on
+encryption algorithm.
+.It Cm getkey Ar file
+Print fingerprint of the key used by
+.Ar file .
+.It Cm flushkeys Ar filesystem
+Delete all keys from
+.Ar filesystem .
+After the command all opened files would become unavailable.
+.It Cm setkey Ar directory
+Change default key for the
+.Ar directory .
+Default key is used as a new key for files and directories created in the
+.Ar directory .
+Technically just a rename takes place on underlaying file system.
+Keys for entries in the
+.Ar directory
+are not changed and no data is re-encrypted with new key.
+.Fl x
+option can be used to add a new key to file system if it isn't found.
+.It Cm showkeys Ar filesystem
+Print fingerprints if all active keys.
+.It Cm addchain Ar filesystem
+Add a new key chain element.
+Element consists of parent and child keys.
+Parent key is defined by
+.Fl a , Fl i
+and
+.Fl p
+options and child key by equivalent
+.Fl A , Fl I
+and
+.Fl P
+options.
+Element consisting only of a parent key can be constructed by specifying
+.Fl Z
+option.
+.Fl f
+option disables file system type checks making manipulation on key chains
+possible without mounting
+.Nm
+file system.
+See
+.Sx KEY CHAINS
+section for more information.
+.It Cm delchain Ar filesystem
+Delete key chain element defined by parent key.
+Use
+.Fl F
+option to delete all elements from the chain.
+.It Cm randomchain Ar filesystem
+Create random key chain elements.
+Minimum and maximum number of elements is controlled by
+.Fl n Ar min
+and
+.Fl N Ar max
+options.
+The command can be used to add false elements into key chain database, which
+would complicate analysis of key usage patterns by attacker.
+It can also be used be achieve some approximation of deniable encryption.
+.It Cm showchains Ar filesystem
+Print all elements of the key chain staring with given parent key.
+.It Cm showalgs
+Print list of all supported algorithms.
+.El
+.Pp
+.Ss COMMAND OPTIONS
+The following options are available when invoking
+.Nm :
+.Bl -tag -width indent
+.It Fl a Ar alg
+Encryption algorithm to use.
+Use
+.Cm showalgs
+command to get list of supported algorithms.
+The default algorithm is AES-128.
+.It Fl A Ar alg
+Specifies algorithm for the secondary/child key.
+.It Fl c
+Forces key chain lookup.
+Error returned if chain is not found for the key.
+By default lookup errors are silently ignored.
+.It Fl C
+Disables key chain lookup.
+By default if chain is found, keys it consists of are also used for operation.
+.It Fl i Ar iterations
+Number of
+.Ar iterations
+to use with PKCS#5v2.
+If this option is not specified default value of 50000 is used.
+.It Fl I Ar iterations
+Specifies number of
+.Ar iterations
+for the secondary/child key.
+.It Fl j Ar passfile
+Specifies a file which contains the passphrase.
+If
+.Ar passfile
+is given as -, standard input will be used.
+Only the first line (excluding new-line character) is taken from the given
+file.
+This argument can be specified multiple times, which has the effect of
+reassembling a single passphrase split across multiple files.
+Cannot be combined with the
+.Fl p
+option.
+.It Fl J Ar passfile
+Specifies a file which contains the passphrase for secondary/child key.
+Cannot be combined with
+.Fl P
+option.
+.It Fl f
+Forces operation.
+Use to force
+.Cm unmount
+or to disable file system type check for key chain commands.
+.It Fl F
+Used with
+.Cm delchain
+command to delete all elements from a key chain.
+.It Fl k Ar keyfile
+Specifies a file which contains part of the key.
+If
+.Ar keyfile
+is given as -, standard input will be used.
+.It Fl K Ar keyfile
+Specifies a file which contains part of the secondary/child key.
+.It Fl o Ar options
+Mount options passed to
+.Xr mount 8
+utility.
+.It Fl p
+Do not ask for passphrase.
+.It Fl P
+Do not ask for passphrase for secondary/child key.
+.It Fl t
+Test-only mode.
+Do not perform actual operation but check if it can be performed.
+Usable for scripting.
+.It Fl v
+Verbose mode.
+.It Fl x
+Used with
+.Cm setkey
+command.
+Forces adding of the key if it is not specified for the file system.
+.It Fl Z
+Create chain with zero child key.
+Can be useful for
+.Cm addkey Fl c
+command to verify the key before adding it.
+.El
+.Pp
+.Ss KEY CHAINS
+Key chain consists of one or several elements.
+Each element is defined by a
+.Em parent key
+and a
+.Em child key .
+All elements are stored encrypted in a database file.
+.Pp
+Parent key fingerprint is used as an index to access child key in database.
+Chaining is achieved by reusing child key fingerprint as next index.
+.Pp
+.Ss CONFIGURATION FILE
+In addition to command line options some options can be specified in per file
+system configuration file:
+.Em <filesystem>/.pefs.conf .
+.Em .pefs.conf
+is not a regular file, but a symbolic link.
+.Dq Li Name
+of the file referenced by the link consists of a list of options separated by
+colon.
+Supported option list is the following:
+.Bd -literal -offset indent
+.Em algorithm:iterations
+.Ed
+.Pp
+Note that key chain database entries already contain algorithm used, and
+expected use of the configuration file is to specify
+.Em iterations
+option for
+.Xr pam_pefs 8
+or default
+.Em algorithm ,
+if one adds/removes keys often without using key chain database.
+.Pp
+.Sh SYSCTL VARIABLES
+The following
+.Xr sysctl 8
+variables can be used to control the behavior of
+.Nm
+file systems or monitor
+them.
+.Bl -tag -width indent
+.It Va vfs.pefs.nodes
+Number of active nodes.
+Unlike
+.Xr nullfs 8
+.Nm
+doesn't recycle vnodes as early as possible, but expects kernel to recycle
+vnodes when necessary.
+.It Va vfs.pefs.dircache.enable
+Enable directory content caching.
+Content caching can only be enabled for file systems that are known to properly
+propagate changes to upper levels, and it's permanently disabled for the rest.
+When disabled directory cache subsystem is still used as a file name decryption
+cache for all underlying file systems.
+.It Va vfs.pefs.dircache.entries
+Number of entries in directory cache.
+Directory cache is mainly used as a file name decryption cache, but can also be
+used to cache directory content if underlying file system is known to propagate
+changes to upper levels properly.
+.It Va vfs.pefs.dircache.buckets
+Number of dircache hash table buckets.
+Value can be set as a kernel environment variable by specifying it in
+.Ar /boot/loader.conf
+file, or using
+.Xr kenv 1
+utility
+before loading
+.Nm
+kernel module.
+.El
+.Sh EXAMPLES
+Encrypting a directory:
+.Bd -literal -offset indent
+% mkdir ~/Private
+% pefs mount ~/Private ~/Private
+% pefs addkey ~/Private
+Enter passphrase:
+\&...
+% pefs unmount ~/Private
+.Ed
+.Pp
+In such setup one has to manually check if passphrase valid, because
+.Nm
+would accept any key for a file system.
+Key chaining can be used to verify keys:
+.Bd -literal -offset indent
+% mkdir ~/Private
+% pefs addchain -fZ ~/Private
+Enter parent key passphrase:
+Reenter parent key passphrase:
+% pefs mount ~/Private ~/Private
+% pefs addkey -c ~/Private
+Enter passphrase:
+\&...
+% pefs unmount ~/Private
+.Ed
+.Pp
+In the example key chain database file (~/Private/.pefs.db) is created on
+unencrypted underlying file.
+And
+.Cm addkey Fl c
+is used to force key verification.
+Key chain database file is not encrypted by
+.Nm ,
+but it's is internally encrypted by the utility and there should be no risk.
+.Pp
+Set default number of PKCS#5v2 iterations to 100000 for home directory not
+changing default algorithm:
+.Bd -literal -offset indent
+# make sure ~/ is not encrypted
+% ln -s :100000 ~/.pefs.conf
+.Ed
+.Pp
+.Sh DATA AUTHENTICATION
+.Nm
+provides no data integrity checking.
+Thus it's strongly advised to use additional data integrity checking tools.
+.Sh FILES
+.Bl -tag -width <filesystem>/.pefs.conf -compact
+.It Pa <filesystem>/.pefs.conf
+Configuration file (symbolic link).
+.It Pa <filesystem>/.pefs.db
+Key chain database file.
+.El
+.Sh SEE ALSO
+.Xr kenv 1 ,
+.Xr crypto 4 ,
+.Xr nullfs 5 ,
+.Xr geli 8 ,
+.Xr mount 8 ,
+.Xr sysctl 8
+.Xr umount 8
+.Sh HISTORY
+The
+.Nm
+utility appeared in
+.Fx x.0 .
+.Sh AUTHORS
+.An Gleb Kurtsou Aq gk@FreeBSD.org
