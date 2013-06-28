@@ -83,9 +83,6 @@ options		IPFIREWALL_NAT
 options		DUMMYNET
 options		LIBALIAS
 
-# We want to include the config for debugging purposes
-options		INCLUDE_CONFIG_FILE
-
 # Make an SMP-capable kernel by default
 options 	SMP			# Symmetric MultiProcessor Kernel
 
