@@ -44,11 +44,13 @@
 #include <sys/mount.h>
 #include <sys/vnode.h>
 
+#include <fs/ext2fs/fs.h>
 #include <fs/ext2fs/inode.h>
 #include <fs/ext2fs/ext2fs.h>
-#include <fs/ext2fs/fs.h>
+#include <fs/ext2fs/ext2_dinode.h>
 #include <fs/ext2fs/ext2_extern.h>
 #include <fs/ext2fs/ext2_mount.h>
+
 /*
  * Balloc defines the structure of filesystem storage
  * by allocating the physical blocks on a device given
@@ -152,7 +154,7 @@ ext2_balloc(struct inode *ip, int32_t lbn, int size, struct ucred *cred,
 	pref = 0;
 	if ((error = ext2_getlbns(vp, lbn, indirs, &num)) != 0)
 		return (error);
-#ifdef DIAGNOSTIC
+#ifdef INVARIANTS
 	if (num < 1)
 		panic ("ext2_balloc: ext2_getlbns returned indirect block");
 #endif
