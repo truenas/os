@@ -194,7 +194,7 @@ struct tcpcb {
 	int	t_rttlow;		/* smallest observerved RTT */
 	u_int32_t	rfbuf_ts;	/* recv buffer autoscaling timestamp */
 	int	rfbuf_cnt;		/* recv buffer autoscaling byte count */
-	struct toe_usrreqs *t_tu;	/* offload operations vector */
+	struct toedev	*tod;		/* toedev handling this connection */
 	int	t_sndrexmitpack;	/* retransmit packets sent */
 	int	t_rcvoopack;		/* out-of-order packets received */
 	void	*t_toe;			/* TOE pcb pointer */
@@ -208,7 +208,9 @@ struct tcpcb {
 	u_int	t_keepintvl;		/* interval between keepalives */
 	u_int	t_keepcnt;		/* number of keepalives before close */
 
-	uint32_t t_ispare[8];		/* 5 UTO, 3 TBD */
+	u_int	t_tsomax;		/* tso burst length limit */
+
+	uint32_t t_ispare[7];		/* 5 UTO, 2 TBD */
 	void	*t_pspare2[4];		/* 4 TBD */
 	uint64_t _pad[6];		/* 6 TBD (1-2 CC/RTT?) */
 };
@@ -322,6 +324,15 @@ struct hc_metrics_lite {	/* must stay in sync with hc_metrics */
 	u_long	rmx_cwnd;	/* congestion window */
 	u_long	rmx_sendpipe;   /* outbound delay-bandwidth product */
 	u_long	rmx_recvpipe;   /* inbound delay-bandwidth product */
+};
+
+/*
+ * Used by tcp_maxmtu() to communicate interface specific features
+ * and limits at the time of connection setup.
+ */
+struct tcp_ifcap {
+	int	ifcap;
+	u_int	tsomax;
 };
 
 #ifndef _NETINET_IN_PCB_H_
@@ -611,9 +622,10 @@ VNET_DECLARE(int, tcp_mssdflt);	/* XXX */
 VNET_DECLARE(int, tcp_minmss);
 VNET_DECLARE(int, tcp_delack_enabled);
 VNET_DECLARE(int, tcp_do_rfc3390);
+VNET_DECLARE(int, tcp_do_initcwnd10);
+VNET_DECLARE(int, tcp_sendspace);
+VNET_DECLARE(int, tcp_recvspace);
 VNET_DECLARE(int, path_mtu_discovery);
-VNET_DECLARE(int, ss_fltsz);
-VNET_DECLARE(int, ss_fltsz_local);
 VNET_DECLARE(int, tcp_do_rfc3465);
 VNET_DECLARE(int, tcp_abc_l_var);
 #define	V_tcb			VNET(tcb)
@@ -623,9 +635,10 @@ VNET_DECLARE(int, tcp_abc_l_var);
 #define	V_tcp_minmss		VNET(tcp_minmss)
 #define	V_tcp_delack_enabled	VNET(tcp_delack_enabled)
 #define	V_tcp_do_rfc3390	VNET(tcp_do_rfc3390)
+#define	V_tcp_do_initcwnd10	VNET(tcp_do_initcwnd10)
+#define	V_tcp_sendspace		VNET(tcp_sendspace)
+#define	V_tcp_recvspace		VNET(tcp_recvspace)
 #define	V_path_mtu_discovery	VNET(path_mtu_discovery)
-#define	V_ss_fltsz		VNET(ss_fltsz)
-#define	V_ss_fltsz_local	VNET(ss_fltsz_local)
 #define	V_tcp_do_rfc3465	VNET(tcp_do_rfc3465)
 #define	V_tcp_abc_l_var		VNET(tcp_abc_l_var)
 
@@ -673,10 +686,10 @@ void	 tcp_reass_flush(struct tcpcb *);
 void	 tcp_reass_destroy(void);
 #endif
 void	 tcp_input(struct mbuf *, int);
-u_long	 tcp_maxmtu(struct in_conninfo *, int *);
-u_long	 tcp_maxmtu6(struct in_conninfo *, int *);
+u_long	 tcp_maxmtu(struct in_conninfo *, struct tcp_ifcap *);
+u_long	 tcp_maxmtu6(struct in_conninfo *, struct tcp_ifcap *);
 void	 tcp_mss_update(struct tcpcb *, int, int, struct hc_metrics_lite *,
-	    int *);
+	    struct tcp_ifcap *);
 void	 tcp_mss(struct tcpcb *, int);
 int	 tcp_mssopt(struct in_conninfo *);
 struct inpcb *
@@ -722,8 +735,6 @@ void	 tcp_hc_updatemtu(struct in_conninfo *, u_long);
 void	 tcp_hc_update(struct in_conninfo *, struct hc_metrics_lite *);
 
 extern	struct pr_usrreqs tcp_usrreqs;
-extern	u_long tcp_sendspace;
-extern	u_long tcp_recvspace;
 tcp_seq tcp_new_isn(struct tcpcb *);
 
 void	 tcp_sack_doack(struct tcpcb *, struct tcpopt *, tcp_seq);

@@ -85,7 +85,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet/tcp_timer.h>
 #include <netinet/tcp_var.h>
 #include <netinet/tcp_syncache.h>
-#include <netinet/tcp_offload.h>
 #ifdef INET6
 #include <netinet6/tcp6_var.h>
 #endif
@@ -95,6 +94,9 @@ __FBSDID("$FreeBSD$");
 #endif
 #ifdef INET6
 #include <netinet6/ip6protosw.h>
+#endif
+#ifdef TCP_OFFLOAD
+#include <netinet/tcp_offload.h>
 #endif
 
 #ifdef IPSEC
@@ -172,7 +174,7 @@ SYSCTL_VNET_PROC(_net_inet_tcp, TCPCTL_V6MSSDFLT, v6mssdflt,
 VNET_DEFINE(int, tcp_minmss) = TCP_MINMSS;
 SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, minmss, CTLFLAG_RW,
      &VNET_NAME(tcp_minmss), 0,
-    "Minmum TCP Maximum Segment Size");
+    "Minimum TCP Maximum Segment Size");
 
 VNET_DEFINE(int, tcp_do_rfc1323) = 1;
 SYSCTL_VNET_INT(_net_inet_tcp, TCPCTL_DO_RFC1323, rfc1323, CTLFLAG_RW,
@@ -824,7 +826,7 @@ tcp_drop(struct tcpcb *tp, int errno)
 
 	if (TCPS_HAVERCVDSYN(tp->t_state)) {
 		tp->t_state = TCPS_CLOSED;
-		(void) tcp_output_reset(tp);
+		(void) tcp_output(tp);
 		TCPSTAT_INC(tcps_drops);
 	} else
 		TCPSTAT_INC(tcps_conndrops);
@@ -924,8 +926,12 @@ tcp_discardcb(struct tcpcb *tp)
 
 	/* free the reassembly queue, if any */
 	tcp_reass_flush(tp);
+
+#ifdef TCP_OFFLOAD
 	/* Disconnect offload device, if any. */
-	tcp_offload_detach(tp);
+	if (tp->t_flags & TF_TOE)
+		tcp_offload_detach(tp);
+#endif
 		
 	tcp_free_sackholes(tp);
 
@@ -954,9 +960,10 @@ tcp_close(struct tcpcb *tp)
 	INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 	INP_WLOCK_ASSERT(inp);
 
-	/* Notify any offload devices of listener close */
+#ifdef TCP_OFFLOAD
 	if (tp->t_state == TCPS_LISTEN)
-		tcp_offload_listen_close(tp);
+		tcp_offload_listen_stop(tp);
+#endif
 	in_pcbdrop(inp);
 	TCPSTAT_INC(tcps_closed);
 	KASSERT(inp->inp_socket != NULL, ("tcp_close: inp_socket NULL"));
@@ -1695,7 +1702,7 @@ tcp_mtudisc(struct inpcb *inp, int mtuoffer)
 	tp->snd_recover = tp->snd_max;
 	if (tp->t_flags & TF_SACK_PERMIT)
 		EXIT_FASTRECOVERY(tp->t_flags);
-	tcp_output_send(tp);
+	tcp_output(tp);
 	return (inp);
 }
 
@@ -1707,7 +1714,7 @@ tcp_mtudisc(struct inpcb *inp, int mtuoffer)
  * tcp_mss_update to get the peer/interface MTU.
  */
 u_long
-tcp_maxmtu(struct in_conninfo *inc, int *flags)
+tcp_maxmtu(struct in_conninfo *inc, struct tcp_ifcap *cap)
 {
 	struct route sro;
 	struct sockaddr_in *dst;
@@ -1732,10 +1739,11 @@ tcp_maxmtu(struct in_conninfo *inc, int *flags)
 			maxmtu = min(sro.ro_rt->rt_rmx.rmx_mtu, ifp->if_mtu);
 
 		/* Report additional interface capabilities. */
-		if (flags != NULL) {
+		if (cap != NULL) {
 			if (ifp->if_capenable & IFCAP_TSO4 &&
 			    ifp->if_hwassist & CSUM_TSO)
-				*flags |= CSUM_TSO;
+				cap->ifcap |= CSUM_TSO;
+				cap->tsomax = ifp->if_hw_tsomax;
 		}
 		RTFREE(sro.ro_rt);
 	}
@@ -1745,7 +1753,7 @@ tcp_maxmtu(struct in_conninfo *inc, int *flags)
 
 #ifdef INET6
 u_long
-tcp_maxmtu6(struct in_conninfo *inc, int *flags)
+tcp_maxmtu6(struct in_conninfo *inc, struct tcp_ifcap *cap)
 {
 	struct route_in6 sro6;
 	struct ifnet *ifp;
@@ -1769,10 +1777,11 @@ tcp_maxmtu6(struct in_conninfo *inc, int *flags)
 				     IN6_LINKMTU(sro6.ro_rt->rt_ifp));
 
 		/* Report additional interface capabilities. */
-		if (flags != NULL) {
+		if (cap != NULL) {
 			if (ifp->if_capenable & IFCAP_TSO6 &&
 			    ifp->if_hwassist & CSUM_TSO)
-				*flags |= CSUM_TSO;
+				cap->ifcap |= CSUM_TSO;
+				cap->tsomax = ifp->if_hw_tsomax;
 		}
 		RTFREE(sro6.ro_rt);
 	}

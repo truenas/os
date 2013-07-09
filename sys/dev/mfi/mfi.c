@@ -1628,6 +1628,11 @@ mfi_decode_evt(struct mfi_softc *sc, struct mfi_evt_detail *detail)
 				sx_xunlock(&sc->mfi_config_lock);
 			}
 		}
+		if (sc->mfi_cam_rescan_cb != NULL &&
+		    (detail->code == MR_EVT_PD_INSERTED ||
+		    detail->code == MR_EVT_PD_REMOVED)) {
+			sc->mfi_cam_rescan_cb(sc, detail->args.pd.device_id);
+		}
 		break;
 	}
 }
@@ -3768,12 +3773,15 @@ mfi_timeout(void *data)
 				MFI_PRINT_CMD(cm);
 				MFI_VALIDATE_CMD(sc, cm);
 				/*
-				 * Fail the command instead of leaving it on
-				 * the queue where it could remain stuck forever
+				 * While commands can get stuck forever we do
+				 * not fail them as there is no way to tell if
+				 * the controller has actually processed them
+				 * or not.
+				 *
+				 * In addition its very likely that force
+				 * failing a command here would cause a panic
+				 * e.g. in UFS.
 				 */
-				mfi_remove_busy(cm);
-				cm->cm_error = ETIMEDOUT;
-				mfi_complete(sc, cm);
 				timedout++;
 			}
 		}

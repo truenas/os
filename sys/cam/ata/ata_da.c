@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/eventhandler.h>
 #include <sys/malloc.h>
 #include <sys/cons.h>
+#include <sys/proc.h>
 #include <sys/reboot.h>
 #include <geom/geom_disk.h>
 #endif /* _KERNEL */
@@ -1238,10 +1239,15 @@ adaregister(struct cam_periph *periph, void *arg)
 		softc->disk->d_flags |= DISKFLAG_CANFLUSHCACHE;
 	if (softc->flags & ADA_FLAG_CAN_TRIM) {
 		softc->disk->d_flags |= DISKFLAG_CANDELETE;
+		softc->disk->d_delmaxsize = softc->params.secsize *
+					    ATA_DSM_RANGE_MAX *
+					    softc->trim_max_ranges;
 	} else if ((softc->flags & ADA_FLAG_CAN_CFA) &&
 	    !(softc->flags & ADA_FLAG_CAN_48BIT)) {
 		softc->disk->d_flags |= DISKFLAG_CANDELETE;
-	}
+		softc->disk->d_delmaxsize = 256 * softc->params.secsize;
+	} else
+		softc->disk->d_delmaxsize = maxio;
 	if ((cpi.hba_misc & PIM_UNMAPPED) != 0)
 		softc->disk->d_flags |= DISKFLAG_UNMAPPED_BIO;
 	strlcpy(softc->disk->d_descr, cgd->ident_data.model,
@@ -1932,11 +1938,16 @@ adaflush(void)
 	int error;
 
 	CAM_PERIPH_FOREACH(periph, &adadriver) {
-		/* If we paniced with lock held - not recurse here. */
-		if (cam_periph_owned(periph))
-			continue;
-		cam_periph_lock(periph);
 		softc = (struct ada_softc *)periph->softc;
+		if (SCHEDULER_STOPPED()) {
+			/* If we paniced with the lock held, do not recurse. */
+			if (!cam_periph_owned(periph) &&
+			    (softc->flags & ADA_FLAG_OPEN)) {
+				adadump(softc->disk, NULL, 0, 0, 0);
+			}
+			continue;
+		}
+		cam_periph_lock(periph);
 		/*
 		 * We only sync the cache if the drive is still open, and
 		 * if the drive is capable of it..

@@ -186,7 +186,8 @@ sctp_abort_notification(struct sctp_tcb *, uint8_t, uint16_t,
 /* We abort responding to an IP packet for some reason */
 void
 sctp_abort_association(struct sctp_inpcb *, struct sctp_tcb *, struct mbuf *,
-    int, struct sctphdr *, struct mbuf *,
+    int, struct sockaddr *, struct sockaddr *,
+    struct sctphdr *, struct mbuf *,
     uint8_t, uint32_t,
     uint32_t, uint16_t);
 
@@ -201,8 +202,9 @@ sctp_abort_an_association(struct sctp_inpcb *, struct sctp_tcb *,
 );
 
 void 
-sctp_handle_ootb(struct mbuf *, int, int, struct sctphdr *,
-    struct sctp_inpcb *,
+sctp_handle_ootb(struct mbuf *, int, int,
+    struct sockaddr *, struct sockaddr *,
+    struct sctphdr *, struct sctp_inpcb *,
     uint8_t, uint32_t,
     uint32_t, uint16_t);
 
@@ -241,7 +243,6 @@ struct sockaddr_in6 *
 int sctp_cmpaddr(struct sockaddr *, struct sockaddr *);
 
 void sctp_print_address(struct sockaddr *);
-void sctp_print_address_pkt(struct ip *, struct sctphdr *);
 
 int
 sctp_release_pr_sctp_chunk(struct sctp_tcb *, struct sctp_tmit_chunk *,
@@ -322,12 +323,8 @@ do { \
 } while (0)
 
 /* functions to start/stop udp tunneling */
-/* XXX: Remove the #ifdef after tunneling over IPv6 works also on FreeBSD. */
-#ifdef INET
 void sctp_over_udp_stop(void);
 int sctp_over_udp_start(void);
-
-#endif
 
 int
 sctp_soreceive(struct socket *so, struct sockaddr **psa,

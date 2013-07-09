@@ -75,6 +75,9 @@ __FBSDID("$FreeBSD$");
 #ifdef TCPDEBUG
 #include <netinet/tcp_debug.h>
 #endif
+#ifdef TCP_OFFLOAD
+#include <netinet/tcp_offload.h>
+#endif
 
 #ifdef IPSEC
 #include <netipsec/ipsec.h>
@@ -89,21 +92,16 @@ SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, path_mtu_discovery, CTLFLAG_RW,
 	&VNET_NAME(path_mtu_discovery), 1,
 	"Enable Path MTU Discovery");
 
-VNET_DEFINE(int, ss_fltsz) = 1;
-SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, slowstart_flightsize, CTLFLAG_RW,
-	&VNET_NAME(ss_fltsz), 1,
-	"Slow start flight size");
-
-VNET_DEFINE(int, ss_fltsz_local) = 4;
-SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, local_slowstart_flightsize,
-	CTLFLAG_RW, &VNET_NAME(ss_fltsz_local), 1,
-	"Slow start flight size for local networks");
-
 VNET_DEFINE(int, tcp_do_tso) = 1;
 #define	V_tcp_do_tso		VNET(tcp_do_tso)
 SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, tso, CTLFLAG_RW,
 	&VNET_NAME(tcp_do_tso), 0,
 	"Enable TCP Segmentation Offload");
+
+VNET_DEFINE(int, tcp_sendspace) = 1024*32;
+#define	V_tcp_sendspace	VNET(tcp_sendspace)
+SYSCTL_VNET_INT(_net_inet_tcp, TCPCTL_SENDSPACE, sendspace, CTLFLAG_RW,
+	&VNET_NAME(tcp_sendspace), 0, "Initial send socket buffer size");
 
 VNET_DEFINE(int, tcp_do_autosndbuf) = 1;
 #define	V_tcp_do_autosndbuf	VNET(tcp_do_autosndbuf)
@@ -195,6 +193,11 @@ tcp_output(struct tcpcb *tp)
 #endif
 
 	INP_WLOCK_ASSERT(tp->t_inpcb);
+
+#ifdef TCP_OFFLOAD
+	if (tp->t_flags & TF_TOE)
+		return (tcp_offload_output(tp));
+#endif
 
 	/*
 	 * Determine length of data that should be transmitted,
@@ -542,19 +545,39 @@ after_sack_rexmit:
 	}
 
 	/*
-	 * Compare available window to amount of window
-	 * known to peer (as advertised window less
-	 * next expected input).  If the difference is at least two
-	 * max size segments, or at least 50% of the maximum possible
-	 * window, then want to send a window update to peer.
-	 * Skip this if the connection is in T/TCP half-open state.
-	 * Don't send pure window updates when the peer has closed
-	 * the connection and won't ever send more data.
+	 * Sending of standalone window updates.
+	 *
+	 * Window updates are important when we close our window due to a
+	 * full socket buffer and are opening it again after the application
+	 * reads data from it.  Once the window has opened again and the
+	 * remote end starts to send again the ACK clock takes over and
+	 * provides the most current window information.
+	 *
+	 * We must avoid the silly window syndrome whereas every read
+	 * from the receive buffer, no matter how small, causes a window
+	 * update to be sent.  We also should avoid sending a flurry of
+	 * window updates when the socket buffer had queued a lot of data
+	 * and the application is doing small reads.
+	 *
+	 * Prevent a flurry of pointless window updates by only sending
+	 * an update when we can increase the advertized window by more
+	 * than 1/4th of the socket buffer capacity.  When the buffer is
+	 * getting full or is very small be more aggressive and send an
+	 * update whenever we can increase by two mss sized segments.
+	 * In all other situations the ACK's to new incoming data will
+	 * carry further window increases.
+	 *
+	 * Don't send an independent window update if a delayed
+	 * ACK is pending (it will get piggy-backed on it) or the
+	 * remote side already has done a half-close and won't send
+	 * more data.  Skip this if the connection is in T/TCP
+	 * half-open state.
 	 */
 	if (recwin > 0 && !(tp->t_flags & TF_NEEDSYN) &&
+	    !(tp->t_flags & TF_DELACK) &&
 	    !TCPS_HAVERCVDFIN(tp->t_state)) {
 		/*
-		 * "adv" is the amount we can increase the window,
+		 * "adv" is the amount we could increase the window,
 		 * taking into account that we are limited by
 		 * TCP_MAXWIN << tp->rcv_scale.
 		 */
@@ -574,9 +597,11 @@ after_sack_rexmit:
 		 */
 		if (oldwin >> tp->rcv_scale == (adv + oldwin) >> tp->rcv_scale)
 			goto dontupdate;
-		if (adv >= (long) (2 * tp->t_maxseg))
-			goto send;
-		if (2 * adv >= (long) so->so_rcv.sb_hiwat)
+
+		if (adv >= (long)(2 * tp->t_maxseg) &&
+		    (adv >= (long)(so->so_rcv.sb_hiwat / 4) ||
+		     recwin <= (long)(so->so_rcv.sb_hiwat / 8) ||
+		     so->so_rcv.sb_hiwat <= 8 * tp->t_maxseg))
 			goto send;
 	}
 dontupdate:
@@ -744,12 +769,13 @@ send:
 			    ("%s: TSO can't do IP options", __func__));
 
 			/*
-			 * Limit a burst to IP_MAXPACKET minus IP,
+			 * Limit a burst to t_tsomax minus IP,
 			 * TCP and options length to keep ip->ip_len
-			 * from overflowing.
+			 * from overflowing or exceeding the maximum
+			 * length allowed by the network interface.
 			 */
-			if (len > IP_MAXPACKET - hdrlen) {
-				len = IP_MAXPACKET - hdrlen;
+			if (len > tp->t_tsomax - hdrlen) {
+				len = tp->t_tsomax - hdrlen;
 				sendalot = 1;
 			}
 

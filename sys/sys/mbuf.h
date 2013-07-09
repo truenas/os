@@ -279,7 +279,7 @@ struct mbuf {
 #define	CSUM_IP			0x0001		/* will csum IP */
 #define	CSUM_TCP		0x0002		/* will csum TCP */
 #define	CSUM_UDP		0x0004		/* will csum UDP */
-#define	CSUM_IP_FRAGS		0x0008		/* will csum IP fragments */
+#define	CSUM_IP_FRAGS		0x0008		/* removed, left for compat */
 #define	CSUM_FRAGMENT		0x0010		/* will do IP fragmentation */
 #define	CSUM_TSO		0x0020		/* will do TSO */
 #define	CSUM_SCTP		0x0040		/* will csum SCTP */
@@ -350,8 +350,8 @@ struct mbstat {
  * Flags specifying how an allocation should be made.
  *
  * The flag to use is as follows:
- * - M_DONTWAIT or M_NOWAIT from an interrupt handler to not block allocation.
- * - M_WAIT or M_WAITOK from wherever it is safe to block.
+ * - M_NOWAIT (M_DONTWAIT) from an interrupt handler to not block allocation.
+ * - M_WAITOK (M_WAIT) from wherever it is safe to block.
  *
  * M_DONTWAIT/M_NOWAIT means that we will not block the thread explicitly and
  * if we cannot allocate immediately we may return NULL, whereas

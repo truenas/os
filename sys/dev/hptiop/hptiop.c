@@ -90,7 +90,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/hptiop/hptiop.h>
 
 static const char driver_name[] = "hptiop";
-static const char driver_version[] = "v1.8";
+static const char driver_version[] = "v1.9";
 
 static devclass_t hptiop_devclass;
 
@@ -1437,7 +1437,7 @@ static int  hptiop_rescan_bus(struct hpt_iop_hba * hba)
 
 	if ((ccb = xpt_alloc_ccb()) == NULL)
 		return(ENOMEM);
-	if (xpt_create_path(&ccb->ccb_h.path, xpt_periph, cam_sim_path(hba->sim),
+	if (xpt_create_path(&ccb->ccb_h.path, NULL, cam_sim_path(hba->sim),
 		CAM_TARGET_WILDCARD, CAM_LUN_WILDCARD) != CAM_REQ_CMP) {
 		xpt_free_ccb(ccb);
 		return(EIO);
@@ -1869,8 +1869,12 @@ static int hptiop_probe(device_t dev)
 
 	switch (id) {
 		case 0x4520:
+		case 0x4521:
 		case 0x4522:
 			sas = 1;
+		case 0x3620:
+		case 0x3622:
+		case 0x3640:
 			ops = &hptiop_mvfrey_ops;
 			break;
 		case 0x4210:

@@ -81,6 +81,7 @@ sctp_init_sysctls()
 	SCTP_BASE_SYSCTL(sctp_path_rtx_max_default) = SCTPCTL_PATH_RTX_MAX_DEFAULT;
 	SCTP_BASE_SYSCTL(sctp_path_pf_threshold) = SCTPCTL_PATH_PF_THRESHOLD_DEFAULT;
 	SCTP_BASE_SYSCTL(sctp_add_more_threshold) = SCTPCTL_ADD_MORE_ON_OUTPUT_DEFAULT;
+	SCTP_BASE_SYSCTL(sctp_nr_incoming_streams_default) = SCTPCTL_INCOMING_STREAMS_DEFAULT;
 	SCTP_BASE_SYSCTL(sctp_nr_outgoing_streams_default) = SCTPCTL_OUTGOING_STREAMS_DEFAULT;
 	SCTP_BASE_SYSCTL(sctp_cmt_on_off) = SCTPCTL_CMT_ON_OFF_DEFAULT;
 	/* EY */
@@ -197,29 +198,29 @@ copy_out_local_addresses(struct sctp_inpcb *inp, struct sctp_tcb *stcb, struct s
 	/* Turn on all the appropriate scope */
 	if (stcb) {
 		/* use association specific values */
-		loopback_scope = stcb->asoc.loopback_scope;
-		ipv4_local_scope = stcb->asoc.ipv4_local_scope;
-		local_scope = stcb->asoc.local_scope;
-		site_scope = stcb->asoc.site_scope;
+		loopback_scope = stcb->asoc.scope.loopback_scope;
+		ipv4_local_scope = stcb->asoc.scope.ipv4_local_scope;
+		local_scope = stcb->asoc.scope.local_scope;
+		site_scope = stcb->asoc.scope.site_scope;
+		ipv4_addr_legal = stcb->asoc.scope.ipv4_addr_legal;
+		ipv6_addr_legal = stcb->asoc.scope.ipv6_addr_legal;
 	} else {
-		/* use generic values for endpoints */
+		/* Use generic values for endpoints. */
 		loopback_scope = 1;
 		ipv4_local_scope = 1;
 		local_scope = 1;
 		site_scope = 1;
-	}
-
-	/* use only address families of interest */
-	if (inp->sctp_flags & SCTP_PCB_FLAGS_BOUND_V6) {
-		ipv6_addr_legal = 1;
-		if (SCTP_IPV6_V6ONLY(inp)) {
-			ipv4_addr_legal = 0;
+		if (inp->sctp_flags & SCTP_PCB_FLAGS_BOUND_V6) {
+			ipv6_addr_legal = 1;
+			if (SCTP_IPV6_V6ONLY(inp)) {
+				ipv4_addr_legal = 0;
+			} else {
+				ipv4_addr_legal = 1;
+			}
 		} else {
+			ipv6_addr_legal = 0;
 			ipv4_addr_legal = 1;
 		}
-	} else {
-		ipv4_addr_legal = 1;
-		ipv6_addr_legal = 0;
 	}
 
 	/* neither Mac OS X nor FreeBSD support mulitple routing functions */
@@ -549,8 +550,6 @@ skip:
 	if ((var) < (min)) { (var) = (min); } \
 	else if ((var) > (max)) { (var) = (max); }
 
-/* XXX: Remove the #if after tunneling over IPv6 works also on FreeBSD. */
-#if !defined(__FreeBSD__) || defined(INET)
 static int
 sysctl_sctp_udp_tunneling_check(SYSCTL_HANDLER_ARGS)
 {
@@ -581,8 +580,6 @@ sysctl_sctp_udp_tunneling_check(SYSCTL_HANDLER_ARGS)
 out:
 	return (error);
 }
-
-#endif
 
 
 static int
@@ -627,6 +624,7 @@ sysctl_sctp_check(SYSCTL_HANDLER_ARGS)
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_path_rtx_max_default), SCTPCTL_PATH_RTX_MAX_MIN, SCTPCTL_PATH_RTX_MAX_MAX);
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_path_pf_threshold), SCTPCTL_PATH_PF_THRESHOLD_MIN, SCTPCTL_PATH_PF_THRESHOLD_MAX);
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_add_more_threshold), SCTPCTL_ADD_MORE_ON_OUTPUT_MIN, SCTPCTL_ADD_MORE_ON_OUTPUT_MAX);
+		RANGECHK(SCTP_BASE_SYSCTL(sctp_nr_incoming_streams_default), SCTPCTL_INCOMING_STREAMS_MIN, SCTPCTL_INCOMING_STREAMS_MAX);
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_nr_outgoing_streams_default), SCTPCTL_OUTGOING_STREAMS_MIN, SCTPCTL_OUTGOING_STREAMS_MAX);
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_cmt_on_off), SCTPCTL_CMT_ON_OFF_MIN, SCTPCTL_CMT_ON_OFF_MAX);
 		/* EY */
@@ -665,7 +663,7 @@ sysctl_sctp_check(SYSCTL_HANDLER_ARGS)
 #ifdef SCTP_DEBUG
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_debug_on), SCTPCTL_DEBUG_MIN, SCTPCTL_DEBUG_MAX);
 #endif
-#if defined (__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
+#if defined(__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
 		RANGECHK(SCTP_BASE_SYSCTL(sctp_output_unlocked), SCTPCTL_OUTPUT_UNLOCKED_MIN, SCTPCTL_OUTPUT_UNLOCKED_MAX);
 #endif
 	}
@@ -969,6 +967,10 @@ SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, add_more_on_output, CTLTYPE_UINT | CT
     &SCTP_BASE_SYSCTL(sctp_add_more_threshold), 0, sysctl_sctp_check, "IU",
     SCTPCTL_ADD_MORE_ON_OUTPUT_DESC);
 
+SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, incoming_streams, CTLTYPE_UINT | CTLFLAG_RW,
+    &SCTP_BASE_SYSCTL(sctp_nr_incoming_streams_default), 0, sysctl_sctp_check, "IU",
+    SCTPCTL_INCOMING_STREAMS_DESC);
+
 SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, outgoing_streams, CTLTYPE_UINT | CTLFLAG_RW,
     &SCTP_BASE_SYSCTL(sctp_nr_outgoing_streams_default), 0, sysctl_sctp_check, "IU",
     SCTPCTL_OUTGOING_STREAMS_DESC);
@@ -1067,12 +1069,9 @@ SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, clear_trace, CTLTYPE_UINT | CTLFLAG_R
     "Clear SCTP Logging buffer");
 #endif
 
-/* XXX: Remove the #if after tunneling over IPv6 works also on FreeBSD. */
-#if !defined(__FreeBSD__) || defined(INET)
 SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, udp_tunneling_port, CTLTYPE_UINT | CTLFLAG_RW,
     &SCTP_BASE_SYSCTL(sctp_udp_tunneling_port), 0, sysctl_sctp_udp_tunneling_check, "IU",
     SCTPCTL_UDP_TUNNELING_PORT_DESC);
-#endif
 
 SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, enable_sack_immediately, CTLTYPE_UINT | CTLFLAG_RW,
     &SCTP_BASE_SYSCTL(sctp_enable_sack_immediately), 0, sysctl_sctp_check, "IU",
@@ -1125,7 +1124,7 @@ SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, debug, CTLTYPE_UINT | CTLFLAG_RW,
 #endif
 
 
-#if defined (__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
+#if defined(__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
 SYSCTL_VNET_PROC(_net_inet_sctp, OID_AUTO, output_unlocked, CTLTYPE_UINT | CTLFLAG_RW,
     &SCTP_BASE_SYSCTL(sctp_output_unlocked), 0, sysctl_sctp_check, "IU",
     SCTPCTL_OUTPUT_UNLOCKED_DESC);

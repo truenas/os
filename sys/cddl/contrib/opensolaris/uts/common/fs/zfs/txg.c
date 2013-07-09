@@ -353,10 +353,6 @@ txg_rele_to_sync(txg_handle_t *th)
  *
  * On return, the transaction group has reached a stable state in which it can
  * then be passed off to the syncing context.
- *
- * XXX: Ideally this function should be static, but in order to force compiler
- * to not inline it and make visible from Dtrace dynamic tracking we expose
- * it forcefully.
  */
 static void
 txg_quiesce(dsl_pool_t *dp, uint64_t txg)

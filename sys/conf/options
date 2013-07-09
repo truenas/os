@@ -31,6 +31,7 @@
 # opt_<name-of-option-in-lower-case>.h
 
 AAC_DEBUG		opt_aac.h
+AACRAID_DEBUG		opt_aacraid.h
 AHC_ALLOW_MEMIO		opt_aic7xxx.h
 AHC_TMODE_ENABLE	opt_aic7xxx.h
 AHC_DUMP_EEPROM		opt_aic7xxx.h
@@ -433,7 +434,7 @@ RADIX_MPATH		opt_mpath.h
 ROUTETABLES		opt_route.h
 SLIP_IFF_OPTS		opt_slip.h
 TCPDEBUG
-TCP_OFFLOAD_DISABLE	opt_inet.h #Disable code to dispatch tcp offloading
+TCP_OFFLOAD		opt_inet.h # Enable code to dispatch TCP offloading
 TCP_SIGNATURE		opt_inet.h
 VLAN_ARRAY		opt_vlan.h
 XBONEHACK

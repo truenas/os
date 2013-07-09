@@ -30,6 +30,7 @@ options 	SCHED_ULE		# ULE scheduler
 options 	PREEMPTION		# Enable kernel thread preemption
 options 	INET			# InterNETworking
 options 	INET6			# IPv6 communications protocols
+options 	TCP_OFFLOAD		# TCP offload
 options 	SCTP			# Stream Control Transmission Protocol
 options 	FFS			# Berkeley Fast Filesystem
 options 	SOFTUPDATES		# Enable FFS soft updates support
@@ -150,6 +151,7 @@ device		asr		# DPT SmartRAID V, VI and Adaptec SCSI RAID
 device		ciss		# Compaq Smart RAID 5*
 device		dpt		# DPT Smartcache III, IV - See NOTES for options
 device		hptmv		# Highpoint RocketRAID 182x
+device		hptnr		# Highpoint DC7280, R750
 device		hptrr		# Highpoint RocketRAID 17xx, 22xx, 23xx, 25xx
 device		hpt27xx		# Highpoint RocketRAID 27xx
 device		iir		# Intel Integrated RAID
@@ -161,6 +163,7 @@ device		tws		# LSI 3ware 9750 SATA+SAS 6Gb/s RAID controller
 # RAID controllers
 device		aac		# Adaptec FSA RAID
 device		aacp		# SCSI passthrough for aac (requires CAM)
+device		aacraid		# Adaptec by PMC RAID
 device		ida		# Compaq Smart RAID
 device		mfi		# LSI MegaRAID SAS
 device		mlx		# Mylex DAC960 family

@@ -59,6 +59,7 @@ __FBSDID("$FreeBSD$");
 #define	_WANT_FILE
 #include <sys/file.h>
 #include <sys/conf.h>
+#include <sys/ksem.h>
 #include <sys/mman.h>
 #define	_KERNEL
 #include <sys/mount.h>
@@ -129,6 +130,10 @@ static int	procstat_get_pts_info_sysctl(struct filestat *fst,
     struct ptsstat *pts, char *errbuf);
 static int	procstat_get_pts_info_kvm(kvm_t *kd, struct filestat *fst,
     struct ptsstat *pts, char *errbuf);
+static int	procstat_get_sem_info_sysctl(struct filestat *fst,
+    struct semstat *sem, char *errbuf);
+static int	procstat_get_sem_info_kvm(kvm_t *kd, struct filestat *fst,
+    struct semstat *sem, char *errbuf);
 static int	procstat_get_shm_info_sysctl(struct filestat *fst,
     struct shmstat *shm, char *errbuf);
 static int	procstat_get_shm_info_kvm(kvm_t *kd, struct filestat *fst,
@@ -560,6 +565,10 @@ procstat_getfiles_kvm(struct procstat *procstat, struct kinfo_proc *kp, int mmap
 			data = file.f_data;
 			break;
 #endif
+		case DTYPE_SEM:
+			type = PS_FST_TYPE_SEM;
+			data = file.f_data;
+			break;
 		case DTYPE_SHM:
 			type = PS_FST_TYPE_SHM;
 			data = file.f_data;
@@ -893,7 +902,8 @@ procstat_get_pipe_info(struct procstat *procstat, struct filestat *fst,
 		return (procstat_get_pipe_info_sysctl(fst, ps, errbuf));
 	} else {
 		warnx("unknown access method: %d", procstat->type);
-		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 		return (1);
 	}
 }
@@ -922,7 +932,8 @@ procstat_get_pipe_info_kvm(kvm_t *kd, struct filestat *fst,
 	return (0);
 
 fail:
-	snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+	if (errbuf != NULL)
+		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 	return (1);
 }
 
@@ -958,7 +969,8 @@ procstat_get_pts_info(struct procstat *procstat, struct filestat *fst,
 		return (procstat_get_pts_info_sysctl(fst, pts, errbuf));
 	} else {
 		warnx("unknown access method: %d", procstat->type);
-		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 		return (1);
 	}
 }
@@ -986,7 +998,8 @@ procstat_get_pts_info_kvm(kvm_t *kd, struct filestat *fst,
 	return (0);
 
 fail:
-	snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+	if (errbuf != NULL)
+		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 	return (1);
 }
 
@@ -1008,6 +1021,89 @@ procstat_get_pts_info_sysctl(struct filestat *fst, struct ptsstat *pts,
 }
 
 int
+procstat_get_sem_info(struct procstat *procstat, struct filestat *fst,
+    struct semstat *sem, char *errbuf)
+{
+
+	assert(sem);
+	if (procstat->type == PROCSTAT_KVM) {
+		return (procstat_get_sem_info_kvm(procstat->kd, fst, sem,
+		    errbuf));
+	} else if (procstat->type == PROCSTAT_SYSCTL ||
+	    procstat->type == PROCSTAT_CORE) {
+		return (procstat_get_sem_info_sysctl(fst, sem, errbuf));
+	} else {
+		warnx("unknown access method: %d", procstat->type);
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+		return (1);
+	}
+}
+
+static int
+procstat_get_sem_info_kvm(kvm_t *kd, struct filestat *fst,
+    struct semstat *sem, char *errbuf)
+{
+	struct ksem ksem;
+	void *ksemp;
+	char *path;
+	int i;
+
+	assert(kd);
+	assert(sem);
+	assert(fst);
+	bzero(sem, sizeof(*sem));
+	ksemp = fst->fs_typedep;
+	if (ksemp == NULL)
+		goto fail;
+	if (!kvm_read_all(kd, (unsigned long)ksemp, &ksem,
+	    sizeof(struct ksem))) {
+		warnx("can't read ksem at %p", (void *)ksemp);
+		goto fail;
+	}
+	sem->mode = S_IFREG | ksem.ks_mode;
+	sem->value = ksem.ks_value;
+	if (fst->fs_path == NULL && ksem.ks_path != NULL) {
+		path = malloc(MAXPATHLEN);
+		for (i = 0; i < MAXPATHLEN - 1; i++) {
+			if (!kvm_read_all(kd, (unsigned long)ksem.ks_path + i,
+			    path + i, 1))
+				break;
+			if (path[i] == '\0')
+				break;
+		}
+		path[i] = '\0';
+		if (i == 0)
+			free(path);
+		else
+			fst->fs_path = path;
+	}
+	return (0);
+
+fail:
+	if (errbuf != NULL)
+		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+	return (1);
+}
+
+static int
+procstat_get_sem_info_sysctl(struct filestat *fst, struct semstat *sem,
+    char *errbuf __unused)
+{
+	struct kinfo_file *kif;
+
+	assert(sem);
+	assert(fst);
+	bzero(sem, sizeof(*sem));
+	kif = fst->fs_typedep;
+	if (kif == NULL)
+		return (0);
+	sem->value = kif->kf_un.kf_sem.kf_sem_value;
+	sem->mode = kif->kf_un.kf_sem.kf_sem_mode;
+	return (0);
+}
+
+int
 procstat_get_shm_info(struct procstat *procstat, struct filestat *fst,
     struct shmstat *shm, char *errbuf)
 {
@@ -1021,7 +1117,8 @@ procstat_get_shm_info(struct procstat *procstat, struct filestat *fst,
 		return (procstat_get_shm_info_sysctl(fst, shm, errbuf));
 	} else {
 		warnx("unknown access method: %d", procstat->type);
-		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 		return (1);
 	}
 }
@@ -1067,7 +1164,8 @@ procstat_get_shm_info_kvm(kvm_t *kd, struct filestat *fst,
 	return (0);
 
 fail:
-	snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+	if (errbuf != NULL)
+		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 	return (1);
 }
 
@@ -1102,7 +1200,8 @@ procstat_get_vnode_info(struct procstat *procstat, struct filestat *fst,
 		return (procstat_get_vnode_info_sysctl(fst, vn, errbuf));
 	} else {
 		warnx("unknown access method: %d", procstat->type);
-		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 		return (1);
 	}
 }
@@ -1174,7 +1273,8 @@ procstat_get_vnode_info_kvm(kvm_t *kd, struct filestat *fst,
 			break;
 		}
 	if (i == NTYPES) {
-		snprintf(errbuf, _POSIX2_LINE_MAX, "?(%s)", tagstr);
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "?(%s)", tagstr);
 		return (1);
 	}
 	vn->vn_mntdir = getmnton(kd, vnode.v_mount);
@@ -1188,7 +1288,8 @@ procstat_get_vnode_info_kvm(kvm_t *kd, struct filestat *fst,
 	return (0);
 
 fail:
-	snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+	if (errbuf != NULL)
+		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 	return (1);
 }
 
@@ -1269,7 +1370,10 @@ procstat_get_vnode_info_sysctl(struct filestat *fst, struct vnstat *vn,
 	if (vntype == PS_FST_VTYPE_VNON || vntype == PS_FST_VTYPE_VBAD)
 		return (0);
 	if ((status & KF_ATTR_VALID) == 0) {
-		snprintf(errbuf, _POSIX2_LINE_MAX, "? (no info available)");
+		if (errbuf != NULL) {
+			snprintf(errbuf, _POSIX2_LINE_MAX,
+			    "? (no info available)");
+		}
 		return (1);
 	}
 	if (path && *path) {
@@ -1310,7 +1414,8 @@ procstat_get_socket_info(struct procstat *procstat, struct filestat *fst,
 		return (procstat_get_socket_info_sysctl(fst, sock, errbuf));
 	} else {
 		warnx("unknown access method: %d", procstat->type);
-		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+		if (errbuf != NULL)
+			snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 		return (1);
 	}
 }
@@ -1408,7 +1513,8 @@ procstat_get_socket_info_kvm(kvm_t *kd, struct filestat *fst,
 	return (0);
 
 fail:
-	snprintf(errbuf, _POSIX2_LINE_MAX, "error");
+	if (errbuf != NULL)
+		snprintf(errbuf, _POSIX2_LINE_MAX, "error");
 	return (1);
 }
 

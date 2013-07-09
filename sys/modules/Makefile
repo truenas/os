@@ -9,6 +9,7 @@ SUBDIR=	\
 	${_3dfx} \
 	${_3dfx_linux} \
 	${_aac} \
+	${_aacraid} \
 	accf_data \
 	accf_dns \
 	accf_http \
@@ -117,6 +118,7 @@ SUBDIR=	\
 	${_hpt27xx} \
 	${_hptiop} \
 	${_hptmv} \
+	${_hptnr} \
 	${_hptrr} \
 	hwpmc \
 	${_i2c} \
@@ -239,7 +241,9 @@ SUBDIR=	\
 	ntfs \
 	ntfs_iconv \
 	nullfs \
+	${_nvd} \
 	${_nve} \
+	${_nvme} \
 	${_nvram} \
 	${_nwfs} \
 	${_nxge} \
@@ -312,6 +316,7 @@ SUBDIR=	\
 	${_ti} \
 	tl \
 	tmpfs \
+	${_toecore} \
 	${_tpm} \
 	trm \
 	${_twa} \
@@ -394,6 +399,7 @@ _if_gre=	if_gre
 .if (${MK_INET_SUPPORT} != "no" || ${MK_INET6_SUPPORT} != "no") || \
 	defined(ALL_MODULES)
 _if_carp=	if_carp
+_toecore=	toecore
 .endif
 
 .if ${MK_IPFILTER} != "no" || defined(ALL_MODULES)
@@ -529,6 +535,7 @@ _zfs=		zfs
 .endif
 .if ${MACHINE} == "i386"
 _aac=		aac
+_aacraid=	aacraid
 _acpi=		acpi
 .if ${MK_CRYPT} != "no" || defined(ALL_MODULES)
 _aesni=		aesni
@@ -555,6 +562,7 @@ _hpt27xx=	hpt27xx
 _hptiop=	hptiop
 .if ${MK_SOURCELESS_HOST} != "no"
 _hptmv=		hptmv
+_hptnr=		hptnr
 _hptrr=		hptrr
 .endif
 _ichwd=		ichwd
@@ -579,9 +587,11 @@ _ixgb=		ixgb
 _ixgbe=		ixgbe
 _mly=		mly
 _nfe=		nfe
+_nvd=		nvd
 .if ${MK_SOURCELESS_HOST} != "no"
 _nve=		nve
 .endif
+_nvme=		nvme
 _nvram=		nvram
 _nxge=		nxge
 _tpm=		tpm
@@ -608,6 +618,7 @@ _snc=		snc
 
 .if ${MACHINE_CPUARCH} == "amd64"
 _aac=		aac
+_aacraid=	aacraid
 _aout=		aout
 _acpi=		acpi
 .if ${MK_CRYPT} != "no" || defined(ALL_MODULES)
@@ -647,6 +658,7 @@ _hpt27xx=	hpt27xx
 _hptiop=	hptiop
 .if ${MK_SOURCELESS_HOST} != "no"
 _hptmv=		hptmv
+_hptnr=		hptnr
 _hptrr=		hptrr
 .endif
 _i2c=		i2c
@@ -686,9 +698,11 @@ _mthca=		mthca
 .endif
 _ndis=		ndis
 _nfe=		nfe
+_nvd=		nvd
 .if ${MK_SOURCELESS_HOST} != "no"
 _nve=		nve
 .endif
+_nvme=		nvme
 _nvram=		nvram
 _nxge=		nxge
 .if ${MK_CDDL} != "no" || defined(ALL_MODULES)
@@ -729,6 +743,7 @@ _zfs=		zfs
 
 .if ${MACHINE_CPUARCH} == "ia64"
 _aac=		aac
+_aacraid=	aacraid
 _aic=		aic
 _an=		an
 _arcnet=	arcnet
