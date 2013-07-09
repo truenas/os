@@ -1362,7 +1362,6 @@ unlocked_vmobj:
 	cause = ret = 0;
 	m = NULL;
 
-
 	if (i915_intr_pf) {
 		ret = i915_mutex_lock_interruptible(dev);
 		if (ret != 0) {
@@ -1426,9 +1425,7 @@ unlocked_vmobj:
 	}
 	m->valid = VM_PAGE_BITS_ALL;
 	*mres = m;
-	vm_page_lock(m);
 	vm_page_insert(m, vm_obj, OFF_TO_IDX(offset));
-	vm_page_unlock(m);
 	vm_page_busy(m);
 
 	CTR4(KTR_DRM, "fault %p %jx %x phys %x", gem_obj, offset, prot,

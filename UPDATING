@@ -11,6 +11,55 @@ handbook:
 Items affecting the ports and packages system can be found in
 /usr/ports/UPDATING.  Please read that file before running portupgrade.
 
+20130618:
+        Fix a bug that allowed a tracing process (e.g. gdb) to write
+        to a memory-mapped file in the traced process's address space
+        even if neither the traced process nor the tracing process had
+        write access to that file.
+
+20130605:
+	Added ZFS TRIM support which is enabled by default. To disable
+	ZFS TRIM support set vfs.zfs.trim.enabled=0 in loader.conf.
+
+	Creating new ZFS pools and adding new devices to existing pools
+	first performs a full device level TRIM which can take a significant
+	amount of time. The sysctl vfs.zfs.vdev.trim_on_init can be set to 0
+	to disable this behaviour.
+
+	ZFS TRIM requires the underlying device support BIO_DELETE which
+	is currently provided by methods such as ATA TRIM and SCSI UNMAP
+	via CAM, which are typically supported by SSD's.
+
+	Stats for ZFS TRIM can be monitored by looking at the sysctl's
+	under kstat.zfs.misc.zio_trim.
+
+20130524:
+	`list' command has been added to hastctl(8).  For now, it is full
+	equivalent of `status' command.
+	WARNING: in the near future the output of hastctl's status command
+	will change to more terse format.  If you use `hastctl status'
+	for parsing in your scripts, switch to `hastctl list'.
+
+20130430:
+	The mergemaster command now uses the default MAKEOBJDIRPREFIX
+	rather than creating it's own in the temporary directory in
+	order allow access to bootstrapped versions of tools such as
+	install and mtree.  When upgrading from version of FreeBSD where
+	the install command does not support -l, you will need to
+	install a new mergemaster command if mergemaster -p is required.
+	This can be accomplished with the command (cd src/usr.sbin/mergemaster
+	&& make install).
+
+	Due to the use of the new -l option to install(1) during build
+	and install, you must take care not to directly set the INSTALL
+	make variable in your /etc/make.conf, /etc/src.conf, or on the
+	command line.  If you wish to use the -C flag for all installs
+	you may be able to add INSTALL+=-C to /etc/make.conf or
+	/etc/src.conf.
+
+20130429:
+	Fix a bug that allows NFS clients to issue READDIR on files.
+
 20130315:
 	The install(1) option -M has changed meaning and now takes an
 	argument that is a file or path to append logs to.  In the
@@ -48,8 +97,8 @@ Items affecting the ports and packages system can be found in
 	pools. The first two read-only compatible "feature flags" for ZFS
 	pools are "com.delphix:async_destroy" and "com.delphix:empty_bpobj".
 	For more information read the new zpool-features(7) manual page.
-        Please refer to the "ZFS notes" section of this file for information
-        on upgrading boot ZFS pools.
+	Please refer to the "ZFS notes" section of this file for information
+	on upgrading boot ZFS pools.
 
 20121114:
 	The commit introducing bsd.compiler.mk breaks the traditional
@@ -1532,7 +1581,7 @@ COMMON ITEMS:
 	step.  It never hurts to do it all the time.  You may need to
 	install a new mergemaster (cd src/usr.sbin/mergemaster && make
 	install) after the buildworld before this step if you last updated
-	from current before 20020224 or from -stable before 20020408.
+	from [78]-stable or 9-stable before 20130430.
 
 	[6] This only deletes old files and directories. Old libraries
 	can be deleted by "make delete-old-libs", but you have to make

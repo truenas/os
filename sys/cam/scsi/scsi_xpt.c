@@ -556,7 +556,6 @@ static const int scsi_quirk_table_size =
 static cam_status	proberegister(struct cam_periph *periph,
 				      void *arg);
 static void	 probeschedule(struct cam_periph *probe_periph);
-static int	 device_has_vpd(struct cam_ed *device, uint8_t page_id);
 static void	 probestart(struct cam_periph *periph, union ccb *start_ccb);
 static void	 proberequestdefaultnegotiation(struct cam_periph *periph);
 static int       proberequestbackoff(struct cam_periph *periph,
@@ -706,21 +705,6 @@ probeschedule(struct cam_periph *periph)
 		softc->flags &= ~PROBE_NO_ANNOUNCE;
 
 	xpt_schedule(periph, CAM_PRIORITY_XPT);
-}
-
-static int
-device_has_vpd(struct cam_ed *device, uint8_t page_id)
-{
-	int i, num_pages;
-	struct scsi_vpd_supported_pages *vpds;
-
-	vpds = (struct scsi_vpd_supported_pages *)device->supported_vpds;
-	num_pages = device->supported_vpds_len - SVPD_SUPPORTED_PAGES_HDR_LEN;
-	for (i = 0;i < num_pages;i++)
-		if (vpds->page_list[i] == page_id)
-			return 1;
-
-	return 0;
 }
 
 static void
@@ -910,11 +894,9 @@ again:
 	case PROBE_DEVICE_ID:
 	{
 		struct scsi_vpd_device_id *devid;
-		struct cam_ed *device;
 
 		devid = NULL;
-		device = periph->path->device;
-		if (device_has_vpd(device, SVPD_DEVICE_ID))
+		if (scsi_vpd_supported_page(periph, SVPD_DEVICE_ID))
 			devid = malloc(SVPD_DEVICE_ID_MAX_SIZE, M_CAMXPT,
 			    M_NOWAIT | M_ZERO);
 
@@ -952,7 +934,7 @@ again:
 			device->serial_num_len = 0;
 		}
 
-		if (device_has_vpd(device, SVPD_UNIT_SERIAL_NUMBER))
+		if (scsi_vpd_supported_page(periph, SVPD_UNIT_SERIAL_NUMBER))
 			serial_buf = (struct scsi_vpd_unit_serial_number *)
 				malloc(sizeof(*serial_buf), M_CAMXPT,
 				    M_NOWAIT|M_ZERO);
@@ -2306,7 +2288,6 @@ scsi_alloc_device(struct cam_eb *bus, struct cam_et *target, lun_id_t lun_id)
 	struct cam_path path;
 	struct scsi_quirk_entry *quirk;
 	struct cam_ed *device;
-	struct cam_ed *cur_device;
 
 	device = xpt_alloc_device(bus, target, lun_id);
 	if (device == NULL)
@@ -2335,16 +2316,6 @@ scsi_alloc_device(struct cam_eb *bus, struct cam_et *target, lun_id_t lun_id)
 	 * do.
 	 */
 	bus->sim->max_ccbs += device->ccbq.devq_openings;
-	/* Insertion sort into our target's device list */
-	cur_device = TAILQ_FIRST(&target->ed_entries);
-	while (cur_device != NULL && cur_device->lun_id < lun_id)
-		cur_device = TAILQ_NEXT(cur_device, links);
-	if (cur_device != NULL) {
-		TAILQ_INSERT_BEFORE(cur_device, device, links);
-	} else {
-		TAILQ_INSERT_TAIL(&target->ed_entries, device, links);
-	}
-	target->generation++;
 	if (lun_id != CAM_LUN_WILDCARD) {
 		xpt_compile_path(&path,
 				 NULL,

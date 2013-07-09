@@ -39,9 +39,7 @@ CFLAGS+= ${DEBUG_FLAGS}
 .if ${MK_CTF} != "no" && ${DEBUG_FLAGS:M-g} != ""
 CTFFLAGS+= -g
 .endif
-.endif
-
-.if !defined(DEBUG_FLAGS)
+.else
 STRIP?=	-s
 .endif
 
@@ -173,14 +171,13 @@ SOLINKOPTS+=	-Wl,--fatal-warnings -Wl,--warn-shared-textrel
 .endif
 
 .if target(beforelinking)
-${SHLIB_NAME}: ${SOBJS} beforelinking
-.else
-${SHLIB_NAME}: ${SOBJS}
+${SHLIB_NAME}: beforelinking
 .endif
+${SHLIB_NAME}: ${SOBJS}
 	@${ECHO} building shared library ${SHLIB_NAME}
 	@rm -f ${.TARGET} ${SHLIB_LINK}
 .if defined(SHLIB_LINK)
-	@ln -fs ${.TARGET} ${SHLIB_LINK}
+	@${INSTALL_SYMLINK} ${SHLIB_NAME} ${SHLIB_LINK}
 .endif
 .if !defined(NM)
 	@${CC} ${LDFLAGS} ${SSP_CFLAGS} ${SOLINKOPTS} \
@@ -273,16 +270,21 @@ _libinstall:
 .if defined(SHLIB_LINK)
 # ${_SHLIBDIRPREFIX} and ${_LDSCRIPTROOT} are both needed when cross-building
 # and when building 32 bits library shims.  ${_SHLIBDIRPREFIX} is the directory
-# prefix where shared objects will be installed.  ${_LDSCRIPTROOT} is the
-# directory prefix that will be used in generated ld(1) scripts.  They cannot
-# be coalesced because of the way ld(1) handles the sysroot prefix (used in the
-# cross-toolchain):
-# - 64 bits libs are located under sysroot, so ${_LDSCRIPTROOT} must be empty.
+# prefix where shared objects will be installed by the install target.
+#
+# ${_LDSCRIPTROOT} is the directory prefix that will be used when generating
+# ld(1) scripts.  The crosstools' ld is configured to lookup libraries in an
+# alternative directory which is called "sysroot", so during buildworld binaries
+# won't be linked against the running system libraries but against the ones of
+# the current source tree.  ${_LDSCRIPTROOT} behavior is twisted because of
+# the location where we store them:
+# - 64 bits libs are located under sysroot, so ${_LDSCRIPTROOT} must be empty
+#   because ld(1) will manage to find them from sysroot;
 # - 32 bits shims are not, so ${_LDSCRIPTROOT} is used to specify their full
-#   path.  Note that ld(1) scripts are generated both during buildworld and
-#   installworld; in the later case ${_LDSCRIPTROOT} must be obviously empty.
-# On the other hand, the use of ${_SHLIBDIRPREFIX} is more consistent since it
-# does not involve the logic of a tool we do not own.
+#   path, outside of sysroot.
+# Note that ld(1) scripts are generated both during buildworld and
+# installworld; in the later case ${_LDSCRIPTROOT} must be obviously empty
+# because on the target system, libraries are meant to be looked up from /.
 .if defined(SHLIB_LDSCRIPT) && !empty(SHLIB_LDSCRIPT) && exists(${.CURDIR}/${SHLIB_LDSCRIPT})
 	sed -e 's,@@SHLIB@@,${_LDSCRIPTROOT}${SHLIBDIR}/${SHLIB_NAME},g' \
 	    -e 's,@@LIBDIR@@,${_LDSCRIPTROOT}${LIBDIR},g' \
@@ -291,9 +293,9 @@ _libinstall:
 	    ${_INSTALLFLAGS} lib${LIB}.ld ${DESTDIR}${LIBDIR}/${SHLIB_LINK}
 .else
 .if ${SHLIBDIR} == ${LIBDIR}
-	ln -fs ${SHLIB_NAME} ${DESTDIR}${LIBDIR}/${SHLIB_LINK}
+	${INSTALL_SYMLINK} ${SHLIB_NAME} ${DESTDIR}${LIBDIR}/${SHLIB_LINK}
 .else
-	ln -fs ${_SHLIBDIRPREFIX}${SHLIBDIR}/${SHLIB_NAME} \
+	${INSTALL_SYMLINK} ${_SHLIBDIRPREFIX}${SHLIBDIR}/${SHLIB_NAME} \
 	    ${DESTDIR}${LIBDIR}/${SHLIB_LINK}
 .if exists(${DESTDIR}${LIBDIR}/${SHLIB_NAME})
 	-chflags noschg ${DESTDIR}${LIBDIR}/${SHLIB_NAME}

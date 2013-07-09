@@ -348,7 +348,7 @@ namei(struct nameidata *ndp)
 		auio.uio_offset = 0;
 		auio.uio_rw = UIO_READ;
 		auio.uio_segflg = UIO_SYSSPACE;
-		auio.uio_td = (struct thread *)0;
+		auio.uio_td = td;
 		auio.uio_resid = MAXPATHLEN;
 		error = VOP_READLINK(ndp->ni_vp, &auio, cnp->cn_cred);
 		if (error) {
@@ -714,6 +714,10 @@ unionlookup:
 	    VOP_ISLOCKED(dp) == LK_SHARED &&
 	    (cnp->cn_flags & ISLASTCN) && (cnp->cn_flags & LOCKPARENT))
 		vn_lock(dp, LK_UPGRADE|LK_RETRY);
+	if ((dp->v_iflag & VI_DOOMED) != 0) {
+		error = ENOENT;
+		goto bad;
+	}
 	/*
 	 * If we're looking up the last component and we need an exclusive
 	 * lock, adjust our lkflags.

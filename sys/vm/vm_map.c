@@ -3160,6 +3160,22 @@ vmspace_fork(struct vmspace *vm1, vm_ooffset_t *fork_charge)
 				object->charge = old_entry->end - old_entry->start;
 				old_entry->cred = NULL;
 			}
+
+			/*
+			 * Assert the correct state of the vnode
+			 * v_writecount while the object is locked, to
+			 * not relock it later for the assertion
+			 * correctness.
+			 */
+			if (old_entry->eflags & MAP_ENTRY_VN_WRITECNT &&
+			    object->type == OBJT_VNODE) {
+				KASSERT(((struct vnode *)object->handle)->
+				    v_writecount > 0,
+				    ("vmspace_fork: v_writecount %p", object));
+				KASSERT(object->un_pager.vnp.writemappings > 0,
+				    ("vmspace_fork: vnp.writecount %p",
+				    object));
+			}
 			VM_OBJECT_UNLOCK(object);
 
 			/*
@@ -3171,12 +3187,6 @@ vmspace_fork(struct vmspace *vm1, vm_ooffset_t *fork_charge)
 			    MAP_ENTRY_IN_TRANSITION);
 			new_entry->wired_count = 0;
 			if (new_entry->eflags & MAP_ENTRY_VN_WRITECNT) {
-				object = new_entry->object.vm_object;
-				KASSERT(((struct vnode *)object->handle)->
-				    v_writecount > 0,
-				    ("vmspace_fork: v_writecount"));
-				KASSERT(object->un_pager.vnp.writemappings > 0,
-				    ("vmspace_fork: vnp.writecount"));
 				vnode_pager_update_writecount(object,
 				    new_entry->start, new_entry->end);
 			}
@@ -3786,6 +3796,12 @@ RetryLookup:;
 	if ((entry->eflags & MAP_ENTRY_USER_WIRED) &&
 	    (entry->eflags & MAP_ENTRY_COW) &&
 	    (fault_type & VM_PROT_WRITE)) {
+		vm_map_unlock_read(map);
+		return (KERN_PROTECTION_FAILURE);
+	}
+	if ((fault_typea & VM_PROT_COPY) != 0 &&
+	    (entry->max_protection & VM_PROT_WRITE) == 0 &&
+	    (entry->eflags & MAP_ENTRY_COW) == 0) {
 		vm_map_unlock_read(map);
 		return (KERN_PROTECTION_FAILURE);
 	}

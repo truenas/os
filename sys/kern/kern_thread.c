@@ -623,7 +623,6 @@ thread_single(int mode)
 	p = td->td_proc;
 	mtx_assert(&Giant, MA_NOTOWNED);
 	PROC_LOCK_ASSERT(p, MA_OWNED);
-	KASSERT((td != NULL), ("curthread is NULL"));
 
 	if ((p->p_flag & P_HADTHREADS) == 0)
 		return (0);
@@ -795,6 +794,17 @@ thread_suspend_check(int return_instead)
 		if (P_SHOULDSTOP(p) == P_STOPPED_SINGLE &&
 		    (p->p_flag & P_SINGLE_BOUNDARY) && return_instead)
 			return (ERESTART);
+
+		/*
+		 * Ignore suspend requests for stop signals if they
+		 * are deferred.
+		 */
+		if (P_SHOULDSTOP(p) == P_STOPPED_SIG &&
+		    td->td_flags & TDF_SBDRY) {
+			KASSERT(return_instead,
+			    ("TDF_SBDRY set for unsafe thread_suspend_check"));
+			return (0);
+		}
 
 		/*
 		 * If the process is waiting for us to exit,

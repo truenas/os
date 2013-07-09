@@ -1412,6 +1412,7 @@ OLD_FILES+=usr/share/man/man8/fdcontrol.8.gz
 OLD_FILES+=etc/freebsd-update.conf
 OLD_FILES+=usr/sbin/freebsd-update
 OLD_FILES+=usr/share/examples/etc/freebsd-update.conf
+OLD_FILES+=usr/share/man/man5/freebsd-update.conf.5.gz
 OLD_FILES+=usr/share/man/man8/freebsd-update.8.gz
 .endif
 
@@ -3415,7 +3416,6 @@ OLD_FILES+=usr/share/man/man8/rtquery.8.gz
 
 .if ${MK_SENDMAIL} == no
 OLD_FILES+=etc/periodic/daily/150.clean-hoststat
-OLD_FILES+=etc/periodic/daily/210.backup-aliases
 OLD_FILES+=etc/periodic/daily/440.status-mailq
 OLD_FILES+=etc/periodic/daily/460.status-mail-rejects
 OLD_FILES+=etc/periodic/daily/500.queuerun

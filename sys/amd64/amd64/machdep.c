@@ -938,7 +938,7 @@ exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
 	
 	pcb->pcb_fsbase = 0;
 	pcb->pcb_gsbase = 0;
-	clear_pcb_flags(pcb, PCB_32BIT | PCB_GS32BIT);
+	clear_pcb_flags(pcb, PCB_32BIT);
 	pcb->pcb_initial_fpucw = __INITIAL_FPUCW__;
 	set_pcb_flags(pcb, PCB_FULL_IRET);
 
@@ -2244,7 +2244,7 @@ get_fpcontext(struct thread *td, mcontext_t *mcp, char *xfpusave,
 	size_t max_len, len;
 
 	mcp->mc_ownedfp = fpugetregs(td);
-	bcopy(get_pcb_user_save_td(td), &mcp->mc_fpstate,
+	bcopy(get_pcb_user_save_td(td), &mcp->mc_fpstate[0],
 	    sizeof(mcp->mc_fpstate));
 	mcp->mc_fpformat = fpuformat();
 	if (!use_xsave || xfpusave_len == 0)

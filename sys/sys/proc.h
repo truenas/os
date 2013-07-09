@@ -593,6 +593,7 @@ struct proc {
 	 */
 	LIST_ENTRY(proc) p_orphan;	/* (e) List of orphan processes. */
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
+	u_char		p_throttled;	/* (c) Flag for racct pcpu throttling */
 };
 
 #define	p_session	p_pgrp->pg_session
@@ -883,6 +884,7 @@ struct	pargs *pargs_alloc(int len);
 void	pargs_drop(struct pargs *pa);
 void	pargs_hold(struct pargs *pa);
 int	proc_getargv(struct thread *td, struct proc *p, struct sbuf *sb);
+int	proc_getauxv(struct thread *td, struct proc *p, struct sbuf *sb);
 int	proc_getenvv(struct thread *td, struct proc *p, struct sbuf *sb);
 void	procinit(void);
 void	proc_linkup0(struct proc *p, struct thread *td);

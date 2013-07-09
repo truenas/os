@@ -127,7 +127,13 @@ MAKEPATH=	${MAKEOBJDIRPREFIX}${.CURDIR}/make.${MACHINE}
 BINMAKE= \
 	`if [ -x ${MAKEPATH}/make ]; then echo ${MAKEPATH}/make; else echo ${MAKE}; fi` \
 	-m ${.CURDIR}/share/mk
+
+.if defined(.PARSEDIR)
+# don't pass -J to fmake
+_MAKE=	PATH=${PATH} MAKEFLAGS="${MAKEFLAGS:N-J:N1*,1*}" ${BINMAKE} -f Makefile.inc1 TARGET=${_TARGET} TARGET_ARCH=${_TARGET_ARCH}
+.else
 _MAKE=	PATH=${PATH} ${BINMAKE} -f Makefile.inc1 TARGET=${_TARGET} TARGET_ARCH=${_TARGET_ARCH}
+.endif
 
 # Guess machine architecture from machine type, and vice versa.
 .if !defined(TARGET_ARCH) && defined(TARGET)
@@ -216,7 +222,7 @@ ${TGTS}:
 .MAIN:	all
 
 STARTTIME!= LC_ALL=C date
-CHECK_TIME!= find ${.CURDIR}/sys/sys/param.h -mtime -0s
+CHECK_TIME!= find ${.CURDIR}/sys/sys/param.h -mtime -0s ; echo
 .if !empty(CHECK_TIME)
 .error check your date/time: ${STARTTIME}
 .endif
@@ -356,7 +362,7 @@ MAKEFAIL=tee -a ${FAILFILE}
 MAKEFAIL=cat
 .endif
 
-universe: universe_prologue
+universe: universe_prologue upgrade_checks
 universe_prologue:
 	@echo "--------------------------------------------------------------"
 	@echo ">>> make universe started on ${STARTTIME}"
@@ -366,7 +372,7 @@ universe_prologue:
 .endif
 .for target in ${TARGETS}
 universe: universe_${target}
-.ORDER: universe_prologue universe_${target} universe_epilogue
+.ORDER: universe_prologue upgrade_checks universe_${target}_prologue universe_${target} universe_epilogue
 universe_${target}: universe_${target}_prologue
 universe_${target}_prologue:
 	@echo ">> ${target} started on `LC_ALL=C date`"

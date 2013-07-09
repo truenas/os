@@ -47,8 +47,8 @@
 
 #include <fs/ext2fs/inode.h>
 #include <fs/ext2fs/ext2fs.h>
-#include <fs/ext2fs/ext2_mount.h>
 #include <fs/ext2fs/ext2_extern.h>
+#include <fs/ext2fs/ext2_mount.h>
 
 /*
  * Bmap converts the logical block number of a file to its physical block
@@ -172,7 +172,7 @@ ext2_bmaparray(struct vnode *vp, int32_t bn, int32_t *bnp, int *runp, int *runb)
 
 		bp = getblk(vp, metalbn, bsize, 0, 0, 0);
 		if ((bp->b_flags & B_CACHE) == 0) {
-#ifdef DIAGNOSTIC
+#ifdef INVARIANTS
 			if (!daddr)
 				panic("ext2_bmaparray: indirect block not in cache");
 #endif

@@ -221,6 +221,9 @@ struct spa {
 	spa_proc_state_t spa_proc_state;	/* see definition */
 	struct proc	*spa_proc;		/* "zpool-poolname" process */
 	uint64_t	spa_did;		/* if procp != p0, did of t1 */
+	kthread_t	*spa_trim_thread;	/* thread sending TRIM I/Os */
+	kmutex_t	spa_trim_lock;		/* protects spa_trim_cv */
+	kcondvar_t	spa_trim_cv;		/* used to notify TRIM thread */
 	boolean_t	spa_autoreplace;	/* autoreplace set in open */
 	int		spa_vdev_locks;		/* locks grabbed */
 	uint64_t	spa_creation_version;	/* version at pool creation */
@@ -238,8 +241,9 @@ struct spa {
 	uint64_t	spa_deadman_calls;	/* number of deadman calls */
 	uint64_t	spa_sync_starttime;	/* starting time fo spa_sync */
 	uint64_t	spa_deadman_synctime;	/* deadman expiration timer */
+	hrtime_t	spa_ccw_fail_time;	/* Conf cache write fail time */
 	/*
-	 * spa_refcnt & spa_config_lock must be the last elements
+	 * spa_refcount & spa_config_lock must be the last elements
 	 * because refcount_t changes size based on compilation options.
 	 * In order for the MDB module to function correctly, the other
 	 * fields must remain in the same location.

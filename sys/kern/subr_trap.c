@@ -141,6 +141,8 @@ userret(struct thread *td, struct trapframe *frame)
 	    ("userret: Returning with %d locks held.", td->td_locks));
 	KASSERT(td->td_vp_reserv == 0,
 	    ("userret: Returning while holding vnode reservation"));
+	KASSERT((td->td_flags & TDF_SBDRY) == 0,
+	    ("userret: Returning with stop signals deferred"));
 #ifdef VIMAGE
 	/* Unfortunately td_vnet_lpush needs VNET_DEBUG. */
 	VNET_ASSERT(curvnet == NULL,
@@ -150,6 +152,12 @@ userret(struct thread *td, struct trapframe *frame)
 #endif
 #ifdef XEN
 	PT_UPDATES_FLUSH();
+#endif
+#ifdef	RACCT
+	PROC_LOCK(p);
+	while (p->p_throttled == 1)
+		msleep(p->p_racct, &p->p_mtx, 0, "racct", 0);
+	PROC_UNLOCK(p);
 #endif
 }
 

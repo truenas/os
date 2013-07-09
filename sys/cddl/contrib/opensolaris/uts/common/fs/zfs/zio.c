@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012 by Delphix. All rights reserved.
+ * Copyright (c) 2013 by Delphix. All rights reserved.
  */
 
 #include <sys/zfs_context.h>
@@ -35,6 +35,7 @@
 #include <sys/dmu_objset.h>
 #include <sys/arc.h>
 #include <sys/ddt.h>
+#include <sys/trim_map.h>
 
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_NODE(_vfs_zfs, OID_AUTO, zio, CTLFLAG_RW, 0, "ZFS ZIO");
@@ -42,6 +43,19 @@ static int zio_use_uma = 0;
 TUNABLE_INT("vfs.zfs.zio.use_uma", &zio_use_uma);
 SYSCTL_INT(_vfs_zfs_zio, OID_AUTO, use_uma, CTLFLAG_RDTUN, &zio_use_uma, 0,
     "Use uma(9) for ZIO allocations");
+
+zio_trim_stats_t zio_trim_stats = {
+	{ "bytes",		KSTAT_DATA_UINT64,
+	  "Number of bytes successfully TRIMmed" },
+	{ "success",		KSTAT_DATA_UINT64,
+	  "Number of successful TRIM requests" },
+	{ "unsupported",	KSTAT_DATA_UINT64,
+	  "Number of TRIM requests that failed because TRIM is not supported" },
+	{ "failed",		KSTAT_DATA_UINT64,
+	  "Number of TRIM requests that failed for reasons other than not supported" },
+};
+
+static kstat_t *zio_trim_ksp;
 
 /*
  * ==========================================================================
@@ -61,6 +75,7 @@ uint8_t zio_priority_table[ZIO_PRIORITY_TABLE_SIZE] = {
 	10,	/* ZIO_PRIORITY_RESILVER	*/
 	20,	/* ZIO_PRIORITY_SCRUB		*/
 	2,	/* ZIO_PRIORITY_DDT_PREFETCH	*/
+	30,	/* ZIO_PRIORITY_TRIM		*/
 };
 
 /*
@@ -135,6 +150,8 @@ zio_init(void)
 	    sizeof (zio_t), 0, NULL, NULL, NULL, NULL, NULL, 0);
 	zio_link_cache = kmem_cache_create("zio_link_cache",
 	    sizeof (zio_link_t), 0, NULL, NULL, NULL, NULL, NULL, 0);
+	if (!zio_use_uma)
+		goto out;
 
 	/*
 	 * For small buffers, we want a cache for each multiple of
@@ -198,6 +215,7 @@ zio_init(void)
 		if (zio_data_buf_cache[c - 1] == NULL)
 			zio_data_buf_cache[c - 1] = zio_data_buf_cache[c];
 	}
+out:
 
 	/*
 	 * The zio write taskqs have 1 thread per cpu, allow 1/2 of the taskqs
@@ -209,6 +227,16 @@ zio_init(void)
 		zfs_mg_alloc_failures = 8;
 
 	zio_inject_init();
+
+	zio_trim_ksp = kstat_create("zfs", 0, "zio_trim", "misc",
+	    KSTAT_TYPE_NAMED,
+	    sizeof(zio_trim_stats) / sizeof(kstat_named_t),
+	    KSTAT_FLAG_VIRTUAL);
+
+	if (zio_trim_ksp != NULL) {
+		zio_trim_ksp->ks_data = &zio_trim_stats;
+		kstat_install(zio_trim_ksp);
+	}
 }
 
 void
@@ -236,6 +264,11 @@ zio_fini(void)
 	kmem_cache_destroy(zio_cache);
 
 	zio_inject_fini();
+
+	if (zio_trim_ksp != NULL) {
+		kstat_delete(zio_trim_ksp);
+		zio_trim_ksp = NULL;
+	}
 }
 
 /*
@@ -372,7 +405,7 @@ zio_decompress(zio_t *zio, void *data, uint64_t size)
 	if (zio->io_error == 0 &&
 	    zio_decompress_data(BP_GET_COMPRESS(zio->io_bp),
 	    zio->io_data, data, zio->io_size, size) != 0)
-		zio->io_error = EIO;
+		zio->io_error = SET_ERROR(EIO);
 }
 
 /*
@@ -543,7 +576,7 @@ zio_create(zio_t *pio, spa_t *spa, uint64_t txg, const blkptr_t *bp,
 {
 	zio_t *zio;
 
-	ASSERT3U(size, <=, SPA_MAXBLOCKSIZE);
+	ASSERT3U(type == ZIO_TYPE_FREE || size, <=, SPA_MAXBLOCKSIZE);
 	ASSERT(P2PHASE(size, SPA_MINBLOCKSIZE) == 0);
 	ASSERT(P2PHASE(offset, SPA_MINBLOCKSIZE) == 0);
 
@@ -724,12 +757,13 @@ zio_write_override(zio_t *zio, blkptr_t *bp, int copies, boolean_t nopwrite)
 void
 zio_free(spa_t *spa, uint64_t txg, const blkptr_t *bp)
 {
+	metaslab_check_free(spa, bp);
 	bplist_append(&spa->spa_free_bplist[txg & TXG_MASK], bp);
 }
 
 zio_t *
 zio_free_sync(zio_t *pio, spa_t *spa, uint64_t txg, const blkptr_t *bp,
-    enum zio_flag flags)
+    uint64_t size, enum zio_flag flags)
 {
 	zio_t *zio;
 
@@ -740,7 +774,10 @@ zio_free_sync(zio_t *pio, spa_t *spa, uint64_t txg, const blkptr_t *bp,
 	ASSERT(spa_syncing_txg(spa) == txg);
 	ASSERT(spa_sync_pass(spa) < zfs_sync_pass_deferred_free);
 
-	zio = zio_create(pio, spa, txg, bp, NULL, BP_GET_PSIZE(bp),
+	metaslab_check_free(spa, bp);
+	arc_freed(spa, bp);
+
+	zio = zio_create(pio, spa, txg, bp, NULL, size,
 	    NULL, NULL, ZIO_TYPE_FREE, ZIO_PRIORITY_FREE, flags,
 	    NULL, 0, NULL, ZIO_STAGE_OPEN, ZIO_FREE_PIPELINE);
 
@@ -777,15 +814,16 @@ zio_claim(zio_t *pio, spa_t *spa, uint64_t txg, const blkptr_t *bp,
 }
 
 zio_t *
-zio_ioctl(zio_t *pio, spa_t *spa, vdev_t *vd, int cmd,
-    zio_done_func_t *done, void *private, int priority, enum zio_flag flags)
+zio_ioctl(zio_t *pio, spa_t *spa, vdev_t *vd, int cmd, uint64_t offset,
+    uint64_t size, zio_done_func_t *done, void *private, int priority,
+    enum zio_flag flags)
 {
 	zio_t *zio;
 	int c;
 
 	if (vd->vdev_children == 0) {
-		zio = zio_create(pio, spa, 0, NULL, NULL, 0, done, private,
-		    ZIO_TYPE_IOCTL, priority, flags, vd, 0, NULL,
+		zio = zio_create(pio, spa, 0, NULL, NULL, size, done, private,
+		    ZIO_TYPE_IOCTL, priority, flags, vd, offset, NULL,
 		    ZIO_STAGE_OPEN, ZIO_IOCTL_PIPELINE);
 
 		zio->io_cmd = cmd;
@@ -794,7 +832,7 @@ zio_ioctl(zio_t *pio, spa_t *spa, vdev_t *vd, int cmd,
 
 		for (c = 0; c < vd->vdev_children; c++)
 			zio_nowait(zio_ioctl(zio, spa, vd->vdev_child[c], cmd,
-			    done, private, priority, flags));
+			    offset, size, done, private, priority, flags));
 	}
 
 	return (zio);
@@ -919,9 +957,20 @@ zio_vdev_delegated_io(vdev_t *vd, uint64_t offset, void *data, uint64_t size,
 void
 zio_flush(zio_t *zio, vdev_t *vd)
 {
-	zio_nowait(zio_ioctl(zio, zio->io_spa, vd, DKIOCFLUSHWRITECACHE,
+	zio_nowait(zio_ioctl(zio, zio->io_spa, vd, DKIOCFLUSHWRITECACHE, 0, 0,
 	    NULL, NULL, ZIO_PRIORITY_NOW,
 	    ZIO_FLAG_CANFAIL | ZIO_FLAG_DONT_PROPAGATE | ZIO_FLAG_DONT_RETRY));
+}
+
+zio_t *
+zio_trim(zio_t *zio, spa_t *spa, vdev_t *vd, uint64_t offset, uint64_t size)
+{
+
+	ASSERT(vd->vdev_ops->vdev_op_leaf);
+
+	return zio_ioctl(zio, spa, vd, DKIOCTRIM, offset, size,
+	    NULL, NULL, ZIO_PRIORITY_TRIM,
+	    ZIO_FLAG_CANFAIL | ZIO_FLAG_DONT_PROPAGATE | ZIO_FLAG_DONT_RETRY);
 }
 
 void
@@ -1202,13 +1251,16 @@ zio_interrupt(zio_t *zio)
 
 /*
  * Execute the I/O pipeline until one of the following occurs:
- * (1) the I/O completes; (2) the pipeline stalls waiting for
- * dependent child I/Os; (3) the I/O issues, so we're waiting
- * for an I/O completion interrupt; (4) the I/O is delegated by
- * vdev-level caching or aggregation; (5) the I/O is deferred
- * due to vdev-level queueing; (6) the I/O is handed off to
- * another thread.  In all cases, the pipeline stops whenever
- * there's no CPU work; it never burns a thread in cv_wait().
+ *
+ *	(1) the I/O completes
+ *	(2) the pipeline stalls waiting for dependent child I/Os
+ *	(3) the I/O issues, so we're waiting for an I/O completion interrupt
+ *	(4) the I/O is delegated by vdev-level caching or aggregation
+ *	(5) the I/O is deferred due to vdev-level queueing
+ *	(6) the I/O is handed off to another thread.
+ *
+ * In all cases, the pipeline stops whenever there's no CPU work; it never
+ * burns a thread in cv_wait().
  *
  * There's no locking on io_stage because there's no legitimate way
  * for multiple threads to be attempting to process the same I/O.
@@ -1546,6 +1598,7 @@ zio_t *
 zio_free_gang(zio_t *pio, blkptr_t *bp, zio_gang_node_t *gn, void *data)
 {
 	return (zio_free_sync(pio, pio->io_spa, pio->io_txg, bp,
+	    BP_IS_GANG(bp) ? SPA_GANGBLOCKSIZE : BP_GET_PSIZE(bp),
 	    ZIO_GANG_CHILD_FLAGS(pio)));
 }
 
@@ -1678,7 +1731,7 @@ zio_gang_tree_issue(zio_t *pio, zio_gang_node_t *gn, blkptr_t *bp, void *data)
 		}
 	}
 
-	if (gn == gio->io_gang_tree)
+	if (gn == gio->io_gang_tree && gio->io_data != NULL)
 		ASSERT3P((char *)gio->io_data + gio->io_size, ==, data);
 
 	if (zio != pio)
@@ -2030,8 +2083,8 @@ zio_ddt_collision(zio_t *zio, ddt_t *ddt, ddt_entry_t *dde)
 				if (arc_buf_size(abuf) != zio->io_orig_size ||
 				    bcmp(abuf->b_data, zio->io_orig_data,
 				    zio->io_orig_size) != 0)
-					error = EEXIST;
-				VERIFY(arc_buf_remove_ref(abuf, &abuf) == 1);
+					error = SET_ERROR(EEXIST);
+				VERIFY(arc_buf_remove_ref(abuf, &abuf));
 			}
 
 			ddt_enter(ddt);
@@ -2400,7 +2453,7 @@ zio_free_zil(spa_t *spa, uint64_t txg, blkptr_t *bp)
 
 /*
  * ==========================================================================
- * Read and write to physical devices
+ * Read, write and delete to physical devices
  * ==========================================================================
  */
 static int
@@ -2421,6 +2474,11 @@ zio_vdev_io_start(zio_t *zio)
 		 * The mirror_ops handle multiple DVAs in a single BP.
 		 */
 		return (vdev_mirror_ops.vdev_op_io_start(zio));
+	}
+
+	if (vd->vdev_ops->vdev_op_leaf && zio->io_type == ZIO_TYPE_FREE) {
+		trim_map_free(vd, zio->io_offset, zio->io_size, zio->io_txg);
+		return (ZIO_PIPELINE_CONTINUE);
 	}
 
 	/*
@@ -2447,18 +2505,22 @@ zio_vdev_io_start(zio_t *zio)
 
 	if (P2PHASE(zio->io_size, align) != 0) {
 		uint64_t asize = P2ROUNDUP(zio->io_size, align);
-		char *abuf = zio_buf_alloc(asize);
+		char *abuf = NULL;
+		if (zio->io_type == ZIO_TYPE_READ ||
+		    zio->io_type == ZIO_TYPE_WRITE)
+			abuf = zio_buf_alloc(asize);
 		ASSERT(vd == vd->vdev_top);
 		if (zio->io_type == ZIO_TYPE_WRITE) {
 			bcopy(zio->io_data, abuf, zio->io_size);
 			bzero(abuf + zio->io_size, asize - zio->io_size);
 		}
-		zio_push_transform(zio, abuf, asize, asize, zio_subblock);
+		zio_push_transform(zio, abuf, asize, abuf ? asize : 0,
+		    zio_subblock);
 	}
 
 	ASSERT(P2PHASE(zio->io_offset, align) == 0);
 	ASSERT(P2PHASE(zio->io_size, align) == 0);
-	VERIFY(zio->io_type != ZIO_TYPE_WRITE || spa_writeable(spa));
+	VERIFY(zio->io_type == ZIO_TYPE_READ || spa_writeable(spa));
 
 	/*
 	 * If this is a repair I/O, and there's no self-healing involved --
@@ -2492,10 +2554,21 @@ zio_vdev_io_start(zio_t *zio)
 			return (ZIO_PIPELINE_STOP);
 
 		if (!vdev_accessible(vd, zio)) {
-			zio->io_error = ENXIO;
+			zio->io_error = SET_ERROR(ENXIO);
 			zio_interrupt(zio);
 			return (ZIO_PIPELINE_STOP);
 		}
+	}
+
+	/*
+	 * Note that we ignore repair writes for TRIM because they can conflict
+	 * with normal writes. This isn't an issue because, by definition, we
+	 * only repair blocks that aren't freed.
+	 */
+	if (vd->vdev_ops->vdev_op_leaf && zio->io_type == ZIO_TYPE_WRITE &&
+	    !(zio->io_flags & ZIO_FLAG_IO_REPAIR)) {
+		if (!trim_map_write_start(zio))
+			return (ZIO_PIPELINE_STOP);
 	}
 
 	return (vd->vdev_ops->vdev_op_io_start(zio));
@@ -2511,9 +2584,15 @@ zio_vdev_io_done(zio_t *zio)
 	if (zio_wait_for_children(zio, ZIO_CHILD_VDEV, ZIO_WAIT_DONE))
 		return (ZIO_PIPELINE_STOP);
 
-	ASSERT(zio->io_type == ZIO_TYPE_READ || zio->io_type == ZIO_TYPE_WRITE);
+	ASSERT(zio->io_type == ZIO_TYPE_READ ||
+	    zio->io_type == ZIO_TYPE_WRITE || zio->io_type == ZIO_TYPE_FREE);
 
-	if (vd != NULL && vd->vdev_ops->vdev_op_leaf) {
+	if (vd != NULL && vd->vdev_ops->vdev_op_leaf &&
+	    (zio->io_type == ZIO_TYPE_READ || zio->io_type == ZIO_TYPE_WRITE)) {
+
+		if (zio->io_type == ZIO_TYPE_WRITE &&
+		    !(zio->io_flags & ZIO_FLAG_IO_REPAIR))
+			trim_map_write_done(zio);
 
 		vdev_queue_io_done(zio);
 
@@ -2529,7 +2608,7 @@ zio_vdev_io_done(zio_t *zio)
 
 		if (zio->io_error) {
 			if (!vdev_accessible(vd, zio)) {
-				zio->io_error = ENXIO;
+				zio->io_error = SET_ERROR(ENXIO);
 			} else {
 				unexpected_error = B_TRUE;
 			}
@@ -2589,6 +2668,20 @@ zio_vdev_io_assess(zio_t *zio)
 	if (zio_injection_enabled && zio->io_error == 0)
 		zio->io_error = zio_handle_fault_injection(zio, EIO);
 
+	if (zio->io_type == ZIO_TYPE_IOCTL && zio->io_cmd == DKIOCTRIM)
+		switch (zio->io_error) {
+		case 0:
+			ZIO_TRIM_STAT_INCR(bytes, zio->io_size);
+			ZIO_TRIM_STAT_BUMP(success);
+			break;
+		case EOPNOTSUPP:
+			ZIO_TRIM_STAT_BUMP(unsupported);
+			break;
+		default:
+			ZIO_TRIM_STAT_BUMP(failed);
+			break;
+		}
+
 	/*
 	 * If the I/O failed, determine whether we should attempt to retry it.
 	 *
@@ -2614,15 +2707,16 @@ zio_vdev_io_assess(zio_t *zio)
 	 */
 	if (zio->io_error && vd != NULL && vd->vdev_ops->vdev_op_leaf &&
 	    !vdev_accessible(vd, zio))
-		zio->io_error = ENXIO;
+		zio->io_error = SET_ERROR(ENXIO);
 
 	/*
 	 * If we can't write to an interior vdev (mirror or RAID-Z),
 	 * set vdev_cant_write so that we stop trying to allocate from it.
 	 */
 	if (zio->io_error == ENXIO && zio->io_type == ZIO_TYPE_WRITE &&
-	    vd != NULL && !vd->vdev_ops->vdev_op_leaf)
+	    vd != NULL && !vd->vdev_ops->vdev_op_leaf) {
 		vd->vdev_cant_write = B_TRUE;
+	}
 
 	if (zio->io_error)
 		zio->io_pipeline = ZIO_INTERLOCK_PIPELINE;

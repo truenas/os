@@ -594,7 +594,7 @@ add_dyn_rule(struct ipfw_flow_id *id, int i, u_int8_t dyn_type, struct ip_fw *ru
 	r->expire = time_uptime + V_dyn_syn_lifetime;
 	r->rule = rule;
 	r->dyn_type = dyn_type;
-	r->pcnt = r->bcnt = 0;
+	IPFW_ZERO_DYN_COUNTER(r);
 	r->count = 0;
 
 	r->bucket = i;
@@ -696,8 +696,7 @@ ipfw_install_state(struct ip_fw *rule, ipfw_insn_limit *cmd,
 		uint16_t limit_mask = cmd->limit_mask;
 		int pindex;
 
-		conn_limit = (cmd->conn_limit == IP_FW_TABLEARG) ?
-		    tablearg : cmd->conn_limit;
+		conn_limit = IP_FW_ARG_TABLEARG(cmd->conn_limit);
 		  
 		DEB(
 		if (cmd->conn_limit == IP_FW_TABLEARG)

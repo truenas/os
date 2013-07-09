@@ -1575,6 +1575,8 @@ nfsrvd_readdir(struct nfsrv_descript *nd, int isdgram,
 			nd->nd_repstat = NFSERR_BAD_COOKIE;
 #endif
 	}
+	if (!nd->nd_repstat && vp->v_type != VDIR)
+		nd->nd_repstat = NFSERR_NOTDIR;
 	if (nd->nd_repstat == 0 && cnt == 0) {
 		if (nd->nd_flag & ND_NFSV2)
 			/* NFSv2 does not have NFSERR_TOOSMALL */
@@ -2705,9 +2707,11 @@ nfsd_fhtovp(struct nfsrv_descript *nd, struct nfsrvfh *nfp, int lktype,
 		goto out;
 	}
 
-	if (startwrite)
+	if (startwrite) {
 		vn_start_write(NULL, mpp, V_WAIT);
-
+		if (lktype == LK_SHARED && !(MNT_SHARED_WRITES(mp)))
+			lktype = LK_EXCLUSIVE;
+	}
 	nd->nd_repstat = nfsvno_fhtovp(mp, fhp, nd->nd_nam, lktype, vpp, exp,
 	    &credanon);
 	vfs_unbusy(mp);

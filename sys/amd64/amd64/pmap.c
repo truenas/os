@@ -4245,6 +4245,8 @@ pmap_copy_page(vm_page_t msrc, vm_page_t mdst)
 	pagecopy((void *)src, (void *)dst);
 }
 
+int unmapped_buf_allowed = 1;
+
 void
 pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
     vm_offset_t b_offset, int xfersize)
@@ -5542,5 +5544,17 @@ DB_SHOW_COMMAND(pte, pmap_print_pte)
 	}
 	pte = pmap_pde_to_pte(pde, va);
 	db_printf(" pte %#016lx\n", *pte);
+}
+
+DB_SHOW_COMMAND(phys2dmap, pmap_phys2dmap)
+{
+	vm_paddr_t a;
+
+	if (have_addr) {
+		a = (vm_paddr_t)addr;
+		db_printf("0x%jx\n", (uintmax_t)PHYS_TO_DMAP(a));
+	} else {
+		db_printf("show phys2dmap addr\n");
+	}
 }
 #endif

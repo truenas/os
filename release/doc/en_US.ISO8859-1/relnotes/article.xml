@@ -1,10 +1,8 @@
-<?xml version="1.0" encoding="iso-8859-1" standalone="no"?>
-<!DOCTYPE article PUBLIC "-//FreeBSD//DTD DocBook XML V4.2-Based Extension//EN" [
-<!ENTITY % entities PUBLIC "-//FreeBSD//ENTITIES DocBook FreeBSD Entity Set//EN">
-%entities;
-
-<!ENTITY % release PUBLIC "-//FreeBSD//ENTITIES Release Specification//EN">
-%release;
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE article PUBLIC "-//FreeBSD//DTD DocBook XML V4.5-Based Extension//EN"
+        "../../../share/xml/freebsd45.dtd" [
+<!ENTITY % release PUBLIC "-//FreeBSD//ENTITIES Release Specification//EN" "release.ent">
+ %release;
 ]>
 
 <article>
@@ -1184,6 +1182,9 @@
 
       <para revision="237998"><application>OpenSSL</application> has
 	been updated to version 0.9.8x.</para>
+
+      <para revision="249865">The <application>sendmail</application>
+	(&man.sendmail.8;) utility has been updated to version 8.14.7.</para>
 
       <para revision="236192">The <application>tcpdump</application>
 	(&man.tcpdump.1;) utility has been updated to version 4.2.1.</para>

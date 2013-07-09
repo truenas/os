@@ -398,6 +398,7 @@ struct ata_request {
 #define         ATA_R_THREAD            0x00000800
 #define         ATA_R_DIRECT            0x00001000
 #define         ATA_R_NEEDRESULT        0x00002000
+#define         ATA_R_DATA_IN_CCB       0x00004000
 
 #define         ATA_R_ATAPI16           0x00010000
 #define         ATA_R_ATAPI_INTR        0x00020000
@@ -579,9 +580,11 @@ struct ata_channel {
 #define         ATA_ACTIVE              0x0001
 #define         ATA_STALL_QUEUE         0x0002
 
+#ifndef ATA_CAM
     struct mtx                  queue_mtx;      /* queue lock */
     TAILQ_HEAD(, ata_request)   ata_queue;      /* head of ATA queue */
     struct ata_request          *freezepoint;   /* composite freezepoint */
+#endif
     struct ata_request          *running;       /* currently running request */
     struct task			conntask;	/* PHY events handling task */
 #ifdef ATA_CAM
@@ -620,25 +623,24 @@ int ata_resume(device_t dev);
 void ata_interrupt(void *data);
 int ata_device_ioctl(device_t dev, u_long cmd, caddr_t data);
 int ata_getparam(struct ata_device *atadev, int init);
-int ata_identify(device_t dev);
 void ata_default_registers(device_t dev);
-void ata_modify_if_48bit(struct ata_request *request);
 void ata_udelay(int interval);
 const char *ata_unit2str(struct ata_device *atadev);
+const char *ata_cmd2str(struct ata_request *request);
 const char *ata_mode2str(int mode);
-int ata_str2mode(const char *str);
+void ata_setmode(device_t dev);
+void ata_print_cable(device_t dev, u_int8_t *who);
 const char *ata_satarev2str(int rev);
 int ata_atapi(device_t dev, int target);
+void ata_timeout(struct ata_request *);
+#ifndef ATA_CAM
+int ata_identify(device_t dev);
+void ata_modify_if_48bit(struct ata_request *request);
 int ata_pmode(struct ata_params *ap);
 int ata_wmode(struct ata_params *ap);
 int ata_umode(struct ata_params *ap);
 int ata_limit_mode(device_t dev, int mode, int maxmode);
-void ata_setmode(device_t dev);
-void ata_print_cable(device_t dev, u_int8_t *who);
 int ata_check_80pin(device_t dev, int mode);
-#ifdef ATA_CAM
-void ata_cam_begin_transaction(device_t dev, union ccb *ccb);
-void ata_cam_end_transaction(device_t dev, struct ata_request *request);
 #endif
 
 /* ata-queue.c: */
@@ -647,11 +649,9 @@ int ata_atapicmd(device_t dev, u_int8_t *ccb, caddr_t data, int count, int flags
 void ata_queue_request(struct ata_request *request);
 void ata_start(device_t dev);
 void ata_finish(struct ata_request *request);
-void ata_timeout(struct ata_request *);
 void ata_catch_inflight(device_t dev);
 void ata_fail_requests(device_t dev);
 void ata_drop_requests(device_t dev);
-const char *ata_cmd2str(struct ata_request *request);
 
 /* ata-lowlevel.c: */
 void ata_generic_hw(device_t dev);

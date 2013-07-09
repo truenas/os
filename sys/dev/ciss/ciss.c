@@ -1868,7 +1868,7 @@ ciss_accept_media(struct ciss_softc *sc, struct ciss_ldrive *ld)
 
     ldrive = CISS_LUN_TO_TARGET(ld->cl_address.logical.lun);
 
-    debug(0, "bringing logical drive %d back online");
+    debug(0, "bringing logical drive %d back online", ldrive);
 
     /*
      * Build a CISS BMIC command to bring the drive back online.
@@ -2697,9 +2697,14 @@ ciss_map_request(struct ciss_request *cr)
 		    BUS_DMASYNC_PREWRITE);
 
     if (cr->cr_data != NULL) {
-	error = bus_dmamap_load(sc->ciss_buffer_dmat, cr->cr_datamap,
-				cr->cr_data, cr->cr_length,
-				ciss_request_map_helper, cr, 0);
+	if (cr->cr_flags & CISS_REQ_CCB)
+		error = bus_dmamap_load_ccb(sc->ciss_buffer_dmat,
+					cr->cr_datamap, cr->cr_data,
+					ciss_request_map_helper, cr, 0);
+	else
+		error = bus_dmamap_load(sc->ciss_buffer_dmat, cr->cr_datamap,
+					cr->cr_data, cr->cr_length,
+					ciss_request_map_helper, cr, 0);
 	if (error != 0)
 	    return (error);
     } else {
@@ -3065,18 +3070,6 @@ ciss_cam_action_io(struct cam_sim *sim, struct ccb_scsiio *csio)
 	csio->ccb_h.status = CAM_REQ_CMP_ERR;
     }
 
-    /* if there is data transfer, it must be to/from a virtual address */
-    if ((csio->ccb_h.flags & CAM_DIR_MASK) != CAM_DIR_NONE) {
-	if (csio->ccb_h.flags & CAM_DATA_PHYS) {		/* we can't map it */
-	    debug(3, "  data pointer is to physical address");
-	    csio->ccb_h.status = CAM_REQ_CMP_ERR;
-	}
-	if (csio->ccb_h.flags & CAM_SCATTER_VALID) {	/* we want to do the s/g setup */
-	    debug(3, "  data has premature s/g setup");
-	    csio->ccb_h.status = CAM_REQ_CMP_ERR;
-	}
-    }
-
     /* abandon aborted ccbs or those that have failed validation */
     if ((csio->ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_INPROG) {
 	debug(3, "abandoning CCB due to abort/validation failure");
@@ -3103,7 +3096,7 @@ ciss_cam_action_io(struct cam_sim *sim, struct ccb_scsiio *csio)
      * Build the command.
      */
     cc = cr->cr_cc;
-    cr->cr_data = csio->data_ptr;
+    cr->cr_data = csio;
     cr->cr_length = csio->dxfer_len;
     cr->cr_complete = ciss_cam_complete;
     cr->cr_private = csio;
@@ -3121,12 +3114,13 @@ ciss_cam_action_io(struct cam_sim *sim, struct ccb_scsiio *csio)
     cc->cdb.type = CISS_CDB_TYPE_COMMAND;
     cc->cdb.attribute = CISS_CDB_ATTRIBUTE_SIMPLE;	/* XXX ordered tags? */
     if ((csio->ccb_h.flags & CAM_DIR_MASK) == CAM_DIR_OUT) {
-	cr->cr_flags = CISS_REQ_DATAOUT;
+	cr->cr_flags = CISS_REQ_DATAOUT | CISS_REQ_CCB;
 	cc->cdb.direction = CISS_CDB_DIRECTION_WRITE;
     } else if ((csio->ccb_h.flags & CAM_DIR_MASK) == CAM_DIR_IN) {
-	cr->cr_flags = CISS_REQ_DATAIN;
+	cr->cr_flags = CISS_REQ_DATAIN | CISS_REQ_CCB;
 	cc->cdb.direction = CISS_CDB_DIRECTION_READ;
     } else {
+	cr->cr_data = NULL;
 	cr->cr_flags = 0;
 	cc->cdb.direction = CISS_CDB_DIRECTION_NONE;
     }
@@ -3206,6 +3200,19 @@ ciss_cam_emulate(struct ciss_softc *sc, struct ccb_scsiio *csio)
 	    xpt_done((union ccb *)csio);
 	    return(1);
 	}
+    }
+
+    /* 
+     * A CISS target can only ever have one lun per target. REPORT_LUNS requires
+     * at least one LUN field to be pre created for us, so snag it and fill in
+     * the least significant byte indicating 1 LUN here.  Emulate the command
+     * return to shut up warning on console of a CDB error.  swb 
+     */
+    if (opcode == REPORT_LUNS && csio->dxfer_len > 0) {
+       csio->data_ptr[3] = 8;
+       csio->ccb_h.status |= CAM_REQ_CMP;
+       xpt_done((union ccb *)csio);
+       return(1);
     }
 
     return(0);
@@ -3352,9 +3359,14 @@ ciss_cam_complete_fixup(struct ciss_softc *sc, struct ccb_scsiio *csio)
 
 	cl = &sc->ciss_logical[bus][target];
 
-	padstr(inq->vendor, "COMPAQ", 8);
-	padstr(inq->product, ciss_name_ldrive_org(cl->cl_ldrive->fault_tolerance), 8);
-	padstr(inq->revision, ciss_name_ldrive_status(cl->cl_lstatus->status), 16);
+	padstr(inq->vendor, "COMPAQ",
+	       SID_VENDOR_SIZE);
+	padstr(inq->product,
+	       ciss_name_ldrive_org(cl->cl_ldrive->fault_tolerance),
+	       SID_PRODUCT_SIZE);
+	padstr(inq->revision,
+	       ciss_name_ldrive_status(cl->cl_lstatus->status),
+	       SID_REVISION_SIZE);
     }
 }
 
@@ -3965,7 +3977,8 @@ static void
 ciss_notify_logical(struct ciss_softc *sc, struct ciss_notify *cn)
 {
     struct ciss_ldrive	*ld;
-    int			ostatus, bus, target;
+    int			bus, target;
+    int			rescan_ld;
 
     debug_called(2);
 
@@ -3988,7 +4001,6 @@ ciss_notify_logical(struct ciss_softc *sc, struct ciss_notify *cn)
 	    /*
 	     * Update our idea of the drive's status.
 	     */
-	    ostatus = ciss_decode_ldrive_status(cn->data.logical_status.previous_state);
 	    ld->cl_status = ciss_decode_ldrive_status(cn->data.logical_status.new_state);
 	    if (ld->cl_lstatus != NULL)
 		ld->cl_lstatus->status = cn->data.logical_status.new_state;
@@ -3996,7 +4008,9 @@ ciss_notify_logical(struct ciss_softc *sc, struct ciss_notify *cn)
 	    /*
 	     * Have CAM rescan the drive if its status has changed.
 	     */
-	    if (ostatus != ld->cl_status) {
+            rescan_ld = (cn->data.logical_status.previous_state !=
+                         cn->data.logical_status.new_state) ? 1 : 0;
+	    if (rescan_ld) {
 		ld->cl_update = 1;
 		ciss_notify_rescan_logical(sc);
 	    }
@@ -4307,6 +4321,9 @@ ciss_print_ldrive(struct ciss_softc *sc, struct ciss_ldrive *ld)
 }
 
 #ifdef CISS_DEBUG
+#include "opt_ddb.h"
+#ifdef DDB
+#include <ddb/ddb.h>
 /************************************************************************
  * Print information about the controller/driver.
  */
@@ -4341,8 +4358,7 @@ ciss_print_adapter(struct ciss_softc *sc)
 }
 
 /* DDB hook */
-static void
-ciss_print0(void)
+DB_COMMAND(ciss_prt, db_ciss_prt)
 {
     struct ciss_softc	*sc;
 
@@ -4353,6 +4369,7 @@ ciss_print0(void)
 	ciss_print_adapter(sc);
     }
 }
+#endif
 #endif
 
 /************************************************************************

@@ -902,11 +902,6 @@ vm_page_splay(vm_pindex_t pindex, vm_page_t root)
  *
  *	Inserts the given mem entry into the object and object list.
  *
- *	The pagetables are not updated but will presumably fault the page
- *	in if necessary, or if a kernel page the caller will at some point
- *	enter the page into the kernel's pmap.  We are not allowed to sleep
- *	here so we *can't* do this anyway.
- *
  *	The object must be locked.
  */
 void
@@ -975,8 +970,6 @@ vm_page_insert(vm_page_t m, vm_object_t object, vm_pindex_t pindex)
  *	Removes the given mem entry from the object/offset-page
  *	table and the object page list, but do not invalidate/terminate
  *	the backing store.
- *
- *	The underlying pmap entry (if any) is NOT removed here.
  *
  *	The object must be locked.  The page must be locked if it is managed.
  */
@@ -2914,5 +2907,28 @@ DB_SHOW_COMMAND(pageq, vm_page_print_pageq_info)
 	db_printf("PQ_ACTIVE: %d, PQ_INACTIVE: %d\n",
 		*vm_page_queues[PQ_ACTIVE].cnt,
 		*vm_page_queues[PQ_INACTIVE].cnt);
+}
+
+DB_SHOW_COMMAND(pginfo, vm_page_print_pginfo)
+{
+	vm_page_t m;
+	boolean_t phys;
+
+	if (!have_addr) {
+		db_printf("show pginfo addr\n");
+		return;
+	}
+
+	phys = strchr(modif, 'p') != NULL;
+	if (phys)
+		m = PHYS_TO_VM_PAGE(addr);
+	else
+		m = (vm_page_t)addr;
+	db_printf(
+    "page %p obj %p pidx 0x%jx phys 0x%jx q %d hold %d wire %d\n"
+    "  af 0x%x of 0x%x f 0x%x act %d busy %d valid 0x%x dirty 0x%x\n",
+	    m, m->object, (uintmax_t)m->pindex, (uintmax_t)m->phys_addr,
+	    m->queue, m->hold_count, m->wire_count, m->aflags, m->oflags,
+	    m->flags, m->act_count, m->busy, m->valid, m->dirty);
 }
 #endif /* DDB */

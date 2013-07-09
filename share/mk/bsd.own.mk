@@ -181,6 +181,15 @@ NLSMODE?=	${NOBINMODE}
 
 INCLUDEDIR?=	/usr/include
 
+#
+# install(1) parameters.
+#
+HRDLINK?=	-l h
+SYMLINK?=	-l s
+
+INSTALL_LINK?=		${INSTALL} ${HRDLINK}
+INSTALL_SYMLINK?=	${INSTALL} ${SYMLINK}
+
 # Common variables
 .if !defined(DEBUG_FLAGS)
 STRIP?=		-s
@@ -643,7 +652,7 @@ MK_${vv:H}:=	${MK_${vv:T}}
 
 .if ${MK_CTF} != "no"
 CTFCONVERT_CMD=	${CTFCONVERT} ${CTFFLAGS} ${.TARGET}
-.elif ${MAKE_VERSION} >= 9201210220
+.elif defined(.PARSEDIR) || ${MAKE_VERSION} >= 9201210220
 CTFCONVERT_CMD=
 .else
 CTFCONVERT_CMD=	@:
