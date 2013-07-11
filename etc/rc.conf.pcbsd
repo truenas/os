@@ -105,8 +105,8 @@ if [ -e "/etc/defaults/pcbsd" ] ; then
   # Enable pbid
   pbid_enable="YES"
 
-  # Enable the gdm display manager
-  gdm_enable="YES"
+  # Enable the pcdm display manager
+  pcdm_enable="YES"
 
   # Enable BlueTooth
   hcsecd_enable="YES"
@@ -139,7 +139,7 @@ if [ -e "/etc/defaults/pcbsd" ] ; then
 
   # Enable fast-booting
   fastboot_enable="YES"
-  fastboot_earlyrc="/etc/rc.d/moused /usr/local/etc/rc.d/pefs /usr/local/etc/rc.d/dbus /usr/local/etc/rc.d/hald /usr/local/etc/rc.d/gdm"
+  fastboot_earlyrc="/etc/rc.d/moused /usr/local/etc/rc.d/pefs /usr/local/etc/rc.d/dbus /usr/local/etc/rc.d/hald /usr/local/etc/rc.d/pcdm"
 
   # Enable the Warden
   warden_enable="YES"
