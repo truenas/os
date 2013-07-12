@@ -90,12 +90,8 @@ typedef enum {
 	DA_FLAG_SCTX_INIT	= 0x200,
 	DA_FLAG_CAN_RC16	= 0x400,
 	DA_FLAG_PROBED		= 0x800,
-<<<<<<< HEAD
 	DA_FLAG_DIRTY		= 0x1000,
 	DA_FLAG_ANNOUNCED	= 0x2000
-=======
-	DA_FLAG_DIRTY		= 0x1000
->>>>>>> Synchronize device cache on close only if there were some write operations.
 } da_flags;
 
 typedef enum {
@@ -1288,10 +1284,7 @@ daclose(struct disk *dp)
 {
 	struct	cam_periph *periph;
 	struct	da_softc *softc;
-<<<<<<< HEAD
 	union	ccb *ccb;
-=======
->>>>>>> Synchronize device cache on close only if there were some write operations.
 	int error;
 
 	periph = (struct cam_periph *)dp->d_drv1;
@@ -1300,7 +1293,6 @@ daclose(struct disk *dp)
 	CAM_DEBUG(periph->path, CAM_DEBUG_TRACE | CAM_DEBUG_PERIPH,
 	    ("daclose\n"));
 
-<<<<<<< HEAD
 	if (cam_periph_hold(periph, PRIBIO) == 0) {
 
 		/* Flush disk cache. */
@@ -1324,30 +1316,6 @@ daclose(struct disk *dp)
 		if ((softc->flags & DA_FLAG_PACK_REMOVABLE) != 0 &&
 		    (softc->quirks & DA_Q_NO_PREVENT) == 0)
 			daprevent(periph, PR_ALLOW);
-=======
-	if ((softc->flags & DA_FLAG_DIRTY) != 0 &&
-	    (softc->quirks & DA_Q_NO_SYNC_CACHE) == 0 &&
-	    (softc->flags & DA_FLAG_PACK_INVALID) == 0) {
-		union	ccb *ccb;
-
-		ccb = cam_periph_getccb(periph, CAM_PRIORITY_NORMAL);
-
-		scsi_synchronize_cache(&ccb->csio,
-				       /*retries*/1,
-				       /*cbfcnp*/dadone,
-				       MSG_SIMPLE_Q_TAG,
-				       /*begin_lba*/0,/* Cover the whole disk */
-				       /*lb_count*/0,
-				       SSD_FULL_SIZE,
-				       5 * 60 * 1000);
-
-		error = cam_periph_runccb(ccb, daerror, /*cam_flags*/0,
-				  /*sense_flags*/SF_RETRY_UA | SF_QUIET_IR,
-				  softc->disk->d_devstat);
-		if (error == 0)
-			softc->flags &= ~DA_FLAG_DIRTY;
-		xpt_release_ccb(ccb);
->>>>>>> Synchronize device cache on close only if there were some write operations.
 
 		cam_periph_unhold(periph);
 	}
