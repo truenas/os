@@ -627,6 +627,8 @@ fetchupgrade_check_params () {
 
 	# Figure out what directory contains the running kernel
 	BOOTFILE=`sysctl -n kern.bootfile`
+	# KPM - 07-18-2013 - If we boot from GRUB kern.bootfile may not be accurate
+	if [ "$BOOTFILE" = "/kernel" ] ; then BOOTFILE="/boot/kernel/kernel"; fi
 	KERNELDIR=${BOOTFILE%/kernel}
 	if ! [ -d ${KERNELDIR} ]; then
 		echo "Cannot identify running kernel"
@@ -759,6 +761,8 @@ install_check_params () {
 
 	# Figure out what directory contains the running kernel
 	BOOTFILE=`sysctl -n kern.bootfile`
+	# KPM - 07-18-2013 - If we boot from GRUB kern.bootfile may not be accurate
+	if [ "$BOOTFILE" = "/kernel" ] ; then BOOTFILE="/boot/kernel/kernel"; fi
 	KERNELDIR=${BOOTFILE%/kernel}
 	if ! [ -d ${KERNELDIR} ]; then
 		echo "Cannot identify running kernel"
@@ -853,6 +857,8 @@ IDS_check_params () {
 
 	# Figure out what directory contains the running kernel
 	BOOTFILE=`sysctl -n kern.bootfile`
+	# KPM - 07-18-2013 - If we boot from GRUB kern.bootfile may not be accurate
+	if [ "$BOOTFILE" = "/kernel" ] ; then BOOTFILE="/boot/kernel/kernel"; fi
 	KERNELDIR=${BOOTFILE%/kernel}
 	if ! [ -d ${KERNELDIR} ]; then
 		echo "Cannot identify running kernel"
