@@ -2401,7 +2401,7 @@ bge_blockinit(struct bge_softc *sc)
 	DELAY(40);
 
 	/* Set misc. local control, enable interrupts on attentions */
-	CSR_WRITE_4(sc, BGE_MISC_LOCAL_CTL, BGE_MLC_INTR_ONATTN);
+	BGE_SETBIT(sc, BGE_MISC_LOCAL_CTL, BGE_MLC_INTR_ONATTN);
 
 #ifdef notdef
 	/* Assert GPIO pins for PHY reset */
@@ -3911,9 +3911,9 @@ bge_detach(device_t dev)
 	if (sc->bge_tq)
 		taskqueue_drain(sc->bge_tq, &sc->bge_intr_task);
 
-	if (sc->bge_flags & BGE_FLAG_TBI) {
+	if (sc->bge_flags & BGE_FLAG_TBI)
 		ifmedia_removeall(&sc->bge_ifmedia);
-	} else {
+	else if (sc->bge_miibus != NULL) {
 		bus_generic_detach(dev);
 		device_delete_child(dev, sc->bge_miibus);
 	}
@@ -5296,7 +5296,7 @@ bge_start_locked(struct ifnet *ifp)
 		/*
 		 * Set a timeout in case the chip goes out to lunch.
 		 */
-		sc->bge_timer = 5;
+		sc->bge_timer = BGE_TX_TIMEOUT;
 	}
 }
 
@@ -5453,7 +5453,7 @@ bge_init_locked(struct bge_softc *sc)
 	 * this number of frames, it will drop subsequent incoming
 	 * frames until the MBUF High Watermark is reached.
 	 */
-	if (sc->bge_asicrev == BGE_ASICREV_BCM57765)
+	if (BGE_IS_57765_PLUS(sc))
 		CSR_WRITE_4(sc, BGE_MAX_RX_FRAME_LOWAT, 1);
 	else
 		CSR_WRITE_4(sc, BGE_MAX_RX_FRAME_LOWAT, 2);
@@ -5801,11 +5801,39 @@ static void
 bge_watchdog(struct bge_softc *sc)
 {
 	struct ifnet *ifp;
+	uint32_t status;
 
 	BGE_LOCK_ASSERT(sc);
 
 	if (sc->bge_timer == 0 || --sc->bge_timer)
 		return;
+
+	/* If pause frames are active then don't reset the hardware. */
+	if ((CSR_READ_4(sc, BGE_RX_MODE) & BGE_RXMODE_FLOWCTL_ENABLE) != 0) {
+		status = CSR_READ_4(sc, BGE_RX_STS);
+		if ((status & BGE_RXSTAT_REMOTE_XOFFED) != 0) {
+			/*
+			 * If link partner has us in XOFF state then wait for
+			 * the condition to clear.
+			 */
+			CSR_WRITE_4(sc, BGE_RX_STS, status);
+			sc->bge_timer = BGE_TX_TIMEOUT;
+			return;
+		} else if ((status & BGE_RXSTAT_RCVD_XOFF) != 0 &&
+		    (status & BGE_RXSTAT_RCVD_XON) != 0) {
+			/*
+			 * If link partner has us in XOFF state then wait for
+			 * the condition to clear.
+			 */
+			CSR_WRITE_4(sc, BGE_RX_STS, status);
+			sc->bge_timer = BGE_TX_TIMEOUT;
+			return;
+		}
+		/*
+		 * Any other condition is unexpected and the controller
+		 * should be reset.
+		 */
+	}
 
 	ifp = sc->bge_ifp;
 
