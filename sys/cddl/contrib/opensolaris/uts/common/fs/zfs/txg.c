@@ -358,7 +358,7 @@ txg_rele_to_sync(txg_handle_t *th)
  * to not inline it and make visible from Dtrace dynamic tracking we expose
  * it forcefully.
  */
-static void
+void
 txg_quiesce(dsl_pool_t *dp, uint64_t txg)
 {
 	tx_state_t *tx = &dp->dp_tx;
