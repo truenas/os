@@ -1598,6 +1598,9 @@ igb_msix_que(void *arg)
 #endif
 	IGB_TX_UNLOCK(txr);
 
+	if (!(adapter->ifp->if_drv_flags & IFF_DRV_RUNNING))
+		return;
+
 	more_rx = igb_rxeof(que, adapter->rx_process_limit, NULL);
 
 	if (adapter->enable_aim == FALSE)
