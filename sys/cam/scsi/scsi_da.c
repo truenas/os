@@ -519,6 +519,7 @@ static struct da_quirk_entry da_quirk_table[] =
 		{T_DIRECT, SIP_MEDIA_REMOVABLE, "TOSHIBA", "TransMemory",
 		"*"}, /*quirks*/ DA_Q_NO_SYNC_CACHE
 	},
+#if 0
 	{
 		/*
 		 * PNY USB Flash keys
@@ -527,6 +528,7 @@ static struct da_quirk_entry da_quirk_table[] =
 		{T_DIRECT, SIP_MEDIA_REMOVABLE, "*" , "USB DISK*",
 		"*"}, /*quirks*/ DA_Q_NO_SYNC_CACHE
 	},
+#endif
 	{
 		/*
 		 * Genesys 6-in-1 Card Reader
@@ -2766,6 +2768,28 @@ cmd6workaround(union ccb *ccb)
 		bioq_insert_tail(&softc->delete_queue,
 		    (struct bio *)ccb->ccb_h.ccb_bp);
 		ccb->ccb_h.ccb_bp = NULL;
+		return (0);
+	}
+
+	/* Detect unsupported PREVENT ALLOW MEDIUM REMOVAL. */
+	if ((ccb->ccb_h.flags & CAM_CDB_POINTER) == 0 &&
+	    (*cdb == PREVENT_ALLOW) &&
+	    (softc->quirks & DA_Q_NO_PREVENT) == 0) {
+		if (bootverbose)
+			xpt_print(ccb->ccb_h.path,
+			    "PREVENT ALLOW MEDIUM REMOVAL not supported.\n");
+		softc->quirks |= DA_Q_NO_PREVENT;
+		return (0);
+	}
+
+	/* Detect unsupported SYNCHRONIZE CACHE(10). */
+	if ((ccb->ccb_h.flags & CAM_CDB_POINTER) == 0 &&
+	    (*cdb == SYNCHRONIZE_CACHE) &&
+	    (softc->quirks & DA_Q_NO_SYNC_CACHE) == 0) {
+		if (bootverbose)
+			xpt_print(ccb->ccb_h.path,
+			    "SYNCHRONIZE CACHE(10) not supported.\n");
+		softc->quirks |= DA_Q_NO_SYNC_CACHE;
 		return (0);
 	}
 
