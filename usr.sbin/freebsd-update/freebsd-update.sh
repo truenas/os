@@ -1701,6 +1701,23 @@ fetch_filter_uptodate () {
 
 	mv $1.tmp $1
 	mv $2.tmp $2
+
+	# KPM 8-2-2013
+	# Kludge work-around, check lines in $1 again
+	# strip out matches in $2 with grep -v
+	# This fixes an issue with hard-linked files which may be missing
+	# field | 8
+	while read line
+	do
+	   cat ${2} | grep -q "^${line}"
+	   if [ $? -eq 0 ] ; then
+	        cat ${2} | grep -v "^${line}" > $2.tmp
+	   	mv ${2}.tmp ${2}
+	   else
+		echo $line >> $1.tmp
+	   fi
+	done < $1
+	mv $1.tmp $1
 }
 
 # Fetch any "clean" old versions of files we need for merging changes.
