@@ -1709,15 +1709,16 @@ fetch_filter_uptodate () {
 	# field | 8
 	while read line
 	do
-	   cat ${2} | grep -q "^${line}"
+	   cat $2 | grep -q -F "${line}"
 	   if [ $? -eq 0 ] ; then
-	        cat ${2} | grep -v "^${line}" > $2.tmp
-	   	mv ${2}.tmp ${2}
+	        cat $2 | grep -v -F "${line}" > $2.tmp
+	   	mv $2.tmp $2
+		touch $1.tmp
 	   else
 		echo $line >> $1.tmp
 	   fi
 	done < $1
-	mv $1.tmp $1
+	if [ -e "$1.tmp" ]; then mv $1.tmp $1; fi
 }
 
 # Fetch any "clean" old versions of files we need for merging changes.
