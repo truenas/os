@@ -761,7 +761,8 @@ parseargs(int argc, char *argv[])
 			}
 			break;
 		case 'T':
-			carp_thresh_seconds = fetchtimeout(c, "NULL", optarg);
+			carp_thresh_seconds =
+			    fetchtimeout(c, "NULL", optarg, 0);
 			break;
 		case 'w':
 			do_timedog = 1;
@@ -769,7 +770,7 @@ parseargs(int argc, char *argv[])
 		case 0:
 			lopt = longopts[longindex].name;
 			if (!strcmp(lopt, "pretimeout")) {
-				pretimeout = fetchtimeout(0, lopt, optarg);
+				pretimeout = fetchtimeout(0, lopt, optarg, 0);
 			} else if (!strcmp(lopt, "pretimeout-action")) {
 				pretimeout_act = timeout_act_str2int(lopt,
 				    optarg);
