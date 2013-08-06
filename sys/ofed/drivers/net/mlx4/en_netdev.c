@@ -945,6 +945,10 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	mlx4_en_do_stop_port(dev);
 	mutex_unlock(&mdev->state_lock);
 
+	mutex_lock(&mdev->state_lock);
+	mlx4_en_stop_port(dev);
+	mutex_unlock(&mdev->state_lock);
+
 	cancel_delayed_work(&priv->stats_task);
 	/* flush any pending task for this netdev */
 	flush_workqueue(mdev->workqueue);
@@ -1119,6 +1123,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
 		break;
 	case SIOCSIFFLAGS:
+		mutex_lock(&mdev->state_lock);
 		if (dev->if_flags & IFF_UP) {
 			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
 				mlx4_en_start_port(dev);
@@ -1141,10 +1146,13 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
                                 }
 			}
 		}
+		mutex_unlock(&mdev->state_lock);
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
+		mutex_lock(&mdev->state_lock);
 		mlx4_en_set_multicast(dev);
+		mutex_unlock(&mdev->state_lock);
 		break;
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:

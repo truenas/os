@@ -105,6 +105,10 @@ sysctl_handle_attr(SYSCTL_HANDLER_ARGS)
 			/* Trim trailing newline. */
 			buf[len] = '\0';
 		}
+
+		/* Trim trailing newline. */
+		len--;
+		buf[len] = '\0';
 	}
 
 	/* Leave one trailing byte to append a newline. */
