@@ -32,7 +32,7 @@
 
 TYPE="FreeBSD"
 REVISION="9"
-BRANCH="STABLE-p7"
+BRANCH="STABLE-p8"
 if [ "X${BRANCH_OVERRIDE}" != "X" ]; then
 	BRANCH=${BRANCH_OVERRIDE}
 fi
@@ -121,7 +121,12 @@ if [ -n "$git_cmd" ] ; then
 	else
 		svn=`$git_cmd log | fgrep 'git-svn-id:' | head -1 | \
 		     sed -n 's/^.*@\([0-9][0-9]*\).*$/\1/p'`
-		if [ -n $svn ] ; then
+		if [ -z "$svn" ] ; then
+			svn=`$git_cmd log --format='format:%N' | \
+			     grep '^svn ' | head -1 | \
+			     sed -n 's/^.*revision=\([0-9][0-9]*\).*$/\1/p'`
+		fi
+		if [ -n "$svn" ] ; then
 			svn=" r${svn}"
 			git="+${git}"
 		else
