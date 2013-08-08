@@ -5612,13 +5612,6 @@ spa_vdev_resilver_done_hunt(vdev_t *vd)
 			return (oldvd);
 	}
 
-	if (vd->vdev_resilvering && vdev_dtl_empty(vd, DTL_MISSING) &&
-	    vdev_dtl_empty(vd, DTL_OUTAGE)) {
-		ASSERT(vd->vdev_ops->vdev_op_leaf);
-		vd->vdev_resilvering = B_FALSE;
-		vdev_config_dirty(vd->vdev_top);
-	}
-
 	/*
 	 * Check for a completed replacement.  We always consider the first
 	 * vdev in the list to be the oldest vdev, and the last one to be
