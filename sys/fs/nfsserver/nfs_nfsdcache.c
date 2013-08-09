@@ -461,6 +461,8 @@ nfsrvd_updatecache(struct nfsrv_descript *nd)
 	mbuf_t m;
 	struct mtx *mutex;
 
+	if (nfsrc_tcphighwater > nfsrc_floodlevel)
+		nfsrc_floodlevel = nfsrc_tcphighwater;
 	rp = nd->nd_rp;
 	if (!rp)
 		panic("nfsrvd_updatecache null rp");
