@@ -3549,3 +3549,20 @@ mpssas_portenable_complete(struct mps_softc *sc, struct mps_command *cm)
 	mpssas_startup_decrement(sassc);
 }
 
+int
+mpssas_check_id(struct mpssas_softc *sassc, int id)
+{
+	struct mps_softc *sc = sassc->sc;
+	char *ids;
+	char *name;
+
+	ids = &sc->exclude_ids[0];
+	while((name = strsep(&ids, ",")) != NULL) {
+		if (name[0] == '\0')
+			continue;
+		if (strtol(name, NULL, 0) == (long)id)
+			return (1);
+	}
+
+	return (0);
+}
