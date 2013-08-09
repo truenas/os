@@ -41,7 +41,7 @@
 #define	NFSRVCACHE_MAX_SIZE	2048
 #define	NFSRVCACHE_MIN_SIZE	  64
 
-#define	NFSRVCACHE_HASHSIZE	20
+#define	NFSRVCACHE_HASHSIZE	500
 
 struct nfsrvcache {
 	LIST_ENTRY(nfsrvcache) rc_hash;		/* Hash chain */

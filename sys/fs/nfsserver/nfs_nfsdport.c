@@ -60,7 +60,8 @@ extern SVCPOOL	*nfsrvd_pool;
 extern struct nfsv4lock nfsd_suspend_lock;
 struct vfsoptlist nfsv4root_opt, nfsv4root_newopt;
 NFSDLOCKMUTEX;
-struct mtx nfs_cache_mutex;
+struct mtx nfsrc_tcpmtx[NFSRVCACHE_HASHSIZE];
+struct mtx nfsrc_udpmtx;
 struct mtx nfs_v4root_mutex;
 struct nfsrvfh nfs_rootfh, nfs_pubfh;
 int nfs_pubfhset = 0, nfs_rootfhset = 0;
@@ -3291,7 +3292,7 @@ extern int (*nfsd_call_nfsd)(struct thread *, struct nfssvc_args *);
 static int
 nfsd_modevent(module_t mod, int type, void *data)
 {
-	int error = 0;
+	int error = 0, i;
 	static int loaded = 0;
 
 	switch (type) {
@@ -3299,7 +3300,10 @@ nfsd_modevent(module_t mod, int type, void *data)
 		if (loaded)
 			goto out;
 		newnfs_portinit();
-		mtx_init(&nfs_cache_mutex, "nfs_cache_mutex", NULL, MTX_DEF);
+		for (i = 0; i < NFSRVCACHE_HASHSIZE; i++)
+			mtx_init(&nfsrc_tcpmtx[i], "nfs_tcpcache_mutex", NULL,
+			    MTX_DEF);
+		mtx_init(&nfsrc_udpmtx, "nfs_udpcache_mutex", NULL, MTX_DEF);
 		mtx_init(&nfs_v4root_mutex, "nfs_v4root_mutex", NULL, MTX_DEF);
 		mtx_init(&nfsv4root_mnt.mnt_mtx, "struct mount mtx", NULL,
 		    MTX_DEF);
@@ -3343,7 +3347,9 @@ nfsd_modevent(module_t mod, int type, void *data)
 			svcpool_destroy(nfsrvd_pool);
 
 		/* and get rid of the locks */
-		mtx_destroy(&nfs_cache_mutex);
+		for (i = 0; i < NFSRVCACHE_HASHSIZE; i++)
+			mtx_destroy(&nfsrc_tcpmtx[i]);
+		mtx_destroy(&nfsrc_udpmtx);
 		mtx_destroy(&nfs_v4root_mutex);
 		mtx_destroy(&nfsv4root_mnt.mnt_mtx);
 		lockdestroy(&nfsv4root_mnt.mnt_explock);
