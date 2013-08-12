@@ -161,6 +161,52 @@ create kernelsbuf 256 allot
 : menu_caption[x][y] ( N M -- C-ADDR/U ) s" menu_caption[x][y]" 16 +c! 13 +c! ;
 : ansi_caption[x][y] ( N M -- C-ADDR/U ) s" ansi_caption[x][y]" 16 +c! 13 +c! ;
 
+: +c! ( N C-ADDR/U K -- C-ADDR/U )
+	3 pick 3 pick	( n c-addr/u k -- n c-addr/u k n c-addr )
+	rot + c!	( n c-addr/u k n c-addr -- n c-addr/u )
+	rot drop	( n c-addr/u -- c-addr/u )
+;
+
+: menukeyN      ( N -- ADDR )   s" menukeyN"       7 +c! evaluate ;
+: init_stateN   ( N -- ADDR )   s" init_stateN"   10 +c! evaluate ;
+: toggle_stateN ( N -- ADDR )   s" toggle_stateN" 12 +c! evaluate ;
+: cycle_stateN  ( N -- ADDR )   s" cycle_stateN"  11 +c! evaluate ;
+: init_textN    ( N -- C-ADDR ) s" init_textN"     9 +c! evaluate ;
+
+: str_loader_menu_frame       ( -- C-ADDR/U ) s" loader_menu_frame" ;
+: str_loader_menu_title       ( -- C-ADDR/U ) s" loader_menu_title" ;
+: str_loader_menu_title_align ( -- C-ADDR/U ) s" loader_menu_title_align" ;
+: str_loader_menu_x           ( -- C-ADDR/U ) s" loader_menu_x" ;
+: str_loader_menu_y           ( -- C-ADDR/U ) s" loader_menu_y" ;
+: str_loader_menu_timeout_x   ( -- C-ADDR/U ) s" loader_menu_timeout_x" ;
+: str_loader_menu_timeout_y   ( -- C-ADDR/U ) s" loader_menu_timeout_y" ;
+: str_menu_init               ( -- C-ADDR/U ) s" menu_init" ;
+: str_menu_timeout_command    ( -- C-ADDR/U ) s" menu_timeout_command" ;
+: str_menu_reboot             ( -- C-ADDR/U ) s" menu_reboot" ;
+: str_menu_acpi               ( -- C-ADDR/U ) s" menu_acpi" ;
+: str_menu_options            ( -- C-ADDR/U ) s" menu_options" ;
+: str_menu_optionstext        ( -- C-ADDR/U ) s" menu_optionstext" ;
+
+: str_menu_init[x]          ( -- C-ADDR/U ) s" menu_init[x]" ;
+: str_menu_command[x]       ( -- C-ADDR/U ) s" menu_command[x]" ;
+: str_menu_caption[x]       ( -- C-ADDR/U ) s" menu_caption[x]" ;
+: str_ansi_caption[x]       ( -- C-ADDR/U ) s" ansi_caption[x]" ;
+: str_menu_keycode[x]       ( -- C-ADDR/U ) s" menu_keycode[x]" ;
+: str_toggled_text[x]       ( -- C-ADDR/U ) s" toggled_text[x]" ;
+: str_toggled_ansi[x]       ( -- C-ADDR/U ) s" toggled_ansi[x]" ;
+: str_menu_caption[x][y]    ( -- C-ADDR/U ) s" menu_caption[x][y]" ;
+: str_ansi_caption[x][y]    ( -- C-ADDR/U ) s" ansi_caption[x][y]" ;
+
+: menu_init[x]       ( N -- C-ADDR/U )   str_menu_init[x]       10 +c! ;
+: menu_command[x]    ( N -- C-ADDR/U )   str_menu_command[x]    13 +c! ;
+: menu_caption[x]    ( N -- C-ADDR/U )   str_menu_caption[x]    13 +c! ;
+: ansi_caption[x]    ( N -- C-ADDR/U )   str_ansi_caption[x]    13 +c! ;
+: menu_keycode[x]    ( N -- C-ADDR/U )   str_menu_keycode[x]    13 +c! ;
+: toggled_text[x]    ( N -- C-ADDR/U )   str_toggled_text[x]    13 +c! ;
+: toggled_ansi[x]    ( N -- C-ADDR/U )   str_toggled_ansi[x]    13 +c! ;
+: menu_caption[x][y] ( N M -- C-ADDR/U ) str_menu_caption[x][y] 16 +c! 13 +c! ;
+: ansi_caption[x][y] ( N M -- C-ADDR/U ) str_ansi_caption[x][y] 16 +c! 13 +c! ;
+
 : arch-i386? ( -- BOOL ) \ Returns TRUE (-1) on i386, FALSE (0) otherwise.
 	s" arch-i386" environment? dup if
 		drop
@@ -412,15 +458,15 @@ create kernelsbuf 256 allot
 		acpipresent? if
 			acpienabled? if
 				loader_color? if
-					s" toggled_ansi[x]"
+					str_toggled_ansi[x]
 				else
-					s" toggled_text[x]"
+					str_toggled_text[x]
 				then
 			else
 				loader_color? if
-					s" ansi_caption[x]"
+					str_ansi_caption[x]
 				else
-					s" menu_caption[x]"
+					str_menu_caption[x]
 				then
 			then
 		else
@@ -619,7 +665,7 @@ create kernelsbuf 256 allot
 : menu-create ( -- )
 
 	\ Print the frame caption at (x,y)
-	s" loader_menu_title" getenv dup -1 = if
+	str_loader_menu_title getenv dup -1 = if
 		drop s" Welcome to FreeBSD"
 	then
 	TRUE ( use default alignment )
@@ -670,7 +716,7 @@ create kernelsbuf 256 allot
 	\ Initialize the ACPI option status.
 	\ 
 	0 menuacpi !
-	s" menu_acpi" getenv -1 <> if
+	str_menu_acpi getenv -1 <> if
 		c@ dup 48 > over 57 < and if ( '1' <= c1 <= '8' )
 			menuacpi !
 			arch-i386? if acpipresent? if
@@ -730,7 +776,7 @@ create kernelsbuf 256 allot
 	\ Initialize the menu_options visual separator.
 	\ 
 	0 menuoptions !
-	s" menu_options" getenv -1 <> if
+	str_menu_options getenv -1 <> if
 		c@ dup 48 > over 57 < and if ( '1' <= c1 <= '8' )
 			menuoptions !
 		else
@@ -750,7 +796,7 @@ create kernelsbuf 256 allot
 		\ If the "Options:" separator, print it.
 		dup menuoptions @ = if
 			\ Optionally add a reboot option to the menu
-			s" menu_reboot" getenv -1 <> if
+			str_menu_reboot getenv -1 <> if
 				drop
 				s" Reboot" printmenuitem menureboot !
 				true menurebootadded !
@@ -819,7 +865,7 @@ create kernelsbuf 256 allot
 
 	\ Optionally add a reboot option to the menu
 	menurebootadded @ true <> if
-		s" menu_reboot" getenv -1 <> if
+		str_menu_reboot getenv -1 <> if
 			drop       \ no need for the value
 			s" Reboot" \ menu caption (required by printmenuitem)
 
@@ -1020,7 +1066,7 @@ create kernelsbuf 256 allot
 	0 menu_timeout_enabled ! \ start with automatic timeout disabled
 
 	\ check indication that automatic execution after delay is requested
-	s" menu_timeout_command" getenv -1 <> if ( Addr C -1 -- | Addr )
+	str_menu_timeout_command getenv -1 <> if ( Addr C -1 -- | Addr )
 		drop ( just testing existence right now: Addr -- )
 
 		\ initialize state variables
@@ -1056,7 +1102,7 @@ create kernelsbuf 256 allot
 
 		menu_timeout_enabled @ 1 = if
 			\ read custom column position (if set)
-			s" loader_menu_timeout_x" getenv dup -1 = if
+			str_loader_menu_timeout_x getenv dup -1 = if
 				drop \ no custom column position
 				menu_timeout_default_x \ use default setting
 			else
@@ -1068,7 +1114,7 @@ create kernelsbuf 256 allot
 			menu_timeout_x ! ( store value on stack from above )
         
 			\ read custom row position (if set)
-			s" loader_menu_timeout_y" getenv dup -1 = if
+			str_loader_menu_timeout_y getenv dup -1 = if
 				drop \ no custom row position
 				menu_timeout_default_y \ use default setting
 			else

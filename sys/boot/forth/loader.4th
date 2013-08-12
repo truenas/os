@@ -80,6 +80,12 @@ only forth also support-functions also builtins definitions
 : boot
   0= if ( interpreted ) get_arguments then
 
+  loader_color? if
+    ." [37;44mBooting...[0m" cr
+  else
+    ." Booting..." cr
+  then
+
   \ Unload only if a path was passed
   dup if
     >r over r> swap
