@@ -11,6 +11,10 @@ CFLAGS+=	-ffreestanding
 CFLAGS+=	-march=i386
 CFLAGS+=	-mpreferred-stack-boundary=2
 CFLAGS+=	-mno-mmx -mno-3dnow -mno-sse -mno-sse2 -mno-sse3 -msoft-float
+# Put LOADER_VGAEFFECTS_SUPPORT=yes in /etc/make.conf for Boot Banner support
+.if defined(LOADER_VGAEFFECTS_SUPPORT)
+CFLAGS+=        -DLOADER_VGAEFFECTS
+.endif
 .endif
 .if ${MACHINE_CPUARCH} == "powerpc" || ${MACHINE_CPUARCH} == "arm"
 CFLAGS+=	-msoft-float

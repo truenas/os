@@ -2,7 +2,7 @@
 
 .include <bsd.own.mk>
 
-SUBDIR=		mbr pmbr boot0 boot0sio btx boot2 cdboot gptboot kgzldr \
+SUBDIR=		mbr pmbr boot0 boot0sio boot0quiet btx boot2 cdboot gptboot kgzldr \
 		libi386 libfirewire loader
 SUBDIR+=	pmbr-datadisk
 

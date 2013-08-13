@@ -19,6 +19,9 @@
 
 /* build options: */
 #ifdef SIO		/* use serial console on COM1.	*/
+#ifdef QUIET
+#error The QUIET option cannot be used with console I/O.
+#endif
 #endif
 
 #ifdef PXE		/* enable PXE/INT18 booting with F6 */
@@ -251,6 +254,18 @@ save_curdrive:	movb %dl, (%bp)			# Save drive number
 		movw $drive, %si
 		call putkey
 #endif
+
+#ifdef QUIET
+		mov $0x2,%ah
+		int $0x16
+		andb $4,%al
+		jnz domenu
+		movb $0xff,_MNUOPT(%bp)
+		jmp use_default
+
+domenu:
+#endif
+
 		callw putn			# Print a newline
 	/*
 	 * Start out with a pointer to the 4th byte of the first table entry
@@ -346,28 +361,39 @@ start_input:
 	/*
 	 * Actual Start of input loop.  Take note of time
 	 */
+#ifndef QUIET
 		xorb %ah,%ah			# BIOS: Get
 		int $0x1a			#  system time
 		movw %dx,%di			# Ticks when
 		addw _TICKS(%bp),%di		#  timeout
+#endif
+
 read_key:
 	/*
 	 * Busy loop, looking for keystrokes but keeping one eye on the time.
 	 */
 #ifndef SIO
+#ifndef QUIET
 		movb $0x1,%ah			# BIOS: Check
 		int $0x16			#  for keypress
+#endif /* QUIET */
 #else /* SIO */
 		movb $0x03,%ah			# BIOS: Read COM
 		call bioscom
 		testb $0x01,%ah			# Check line status
 						# (bit 1 indicates input)
 #endif /* SIO */
+
+#ifndef QUIET
 		jnz got_key 			# Have input
 		xorb %ah,%ah			# BIOS: int 0x1a, 00
 		int $0x1a			#  get system time
 		cmpw %di,%dx			# Timeout?
 		jb read_key			# No
+#else
+		jmp got_key
+
+#endif /* QUIET */
 
 	/*
 	 * Timed out or default selection

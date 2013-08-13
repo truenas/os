@@ -234,7 +234,7 @@ bf_init(void)
     char create_buf[41];	/* 31 characters-long builtins */
     int fd;
    
-    bf_sys = ficlInitSystem(10000);	/* Default dictionary ~4000 cells */
+    bf_sys = ficlInitSystem(20000);	/* Default dictionary ~4000 cells */
     bf_vm = ficlNewVM(bf_sys);
 
     /* Put all private definitions in a "builtins" vocabulary */

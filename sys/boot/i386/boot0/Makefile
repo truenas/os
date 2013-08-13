@@ -15,6 +15,7 @@ SRCS=	${PROG}.S
 #	-DCHECK_DRIVE	enable checking drive number
 #	-DONLY_F_KEYS	accept only Fx keys in console
 #	-DTEST		print drive number on entry
+#       -DQUIET         don't print anything on screen, skip menu unless Ctrl key is pressed
 #
 OPTS ?= -DVOLUME_SERIAL -DPXE
 CFLAGS += ${OPTS}
