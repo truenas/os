@@ -3297,7 +3297,7 @@ extern int (*nfsd_call_nfsd)(struct thread *, struct nfssvc_args *);
 static int
 nfsd_modevent(module_t mod, int type, void *data)
 {
-	int error = 0;
+	int error = 0, i;
 	static int loaded = 0;
 
 	switch (type) {
