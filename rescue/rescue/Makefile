@@ -53,7 +53,7 @@ CRUNCH_PROGS_bin= cat chflags chio chmod cp date dd df echo 	\
 	 ed expr getfacl hostname kenv kill ln ls mkdir mv	\
 	 pkill ps pwd realpath rm rmdir setfacl sh stty sync test
 CRUNCH_PROGS_bin+=sleep
-CRUNCH_LIBS+= -lcrypt -ledit -lkvm -ll -ltermcapw -lutil
+CRUNCH_LIBS+= -lcrypt -ledit -lkvm -ll -ltermcap -lutil
 CRUNCH_BUILDTOOLS+= bin/sh usr.bin/awk
 
 # Additional options for specific programs
@@ -119,7 +119,7 @@ CRUNCH_PROGS_sbin+= zpool
 # crunchgen does not like C++ programs; this should be fixed someday
 # CRUNCH_PROGS+= devd
 
-CRUNCH_LIBS+= -lalias -lcam -lncursesw -ldevstat -lipsec
+CRUNCH_LIBS+= -lalias -lcam -lcurses -ldevstat -lipsec
 .if ${MK_IPX} != "no"
 CRUNCH_LIBS+= -lipx
 .endif
