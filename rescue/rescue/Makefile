@@ -118,7 +118,7 @@ CRUNCH_PROGS_sbin+= zpool
 # crunchgen does not like C++ programs; this should be fixed someday
 # CRUNCH_PROGS+= devd
 
-CRUNCH_LIBS+= -lalias -lcam -lncursesw -ldevstat -lipsec
+CRUNCH_LIBS+= -lalias -lcam -lcurses -ldevstat -lipsec
 .if ${MK_IPX} != "no"
 CRUNCH_LIBS+= -lipx
 .endif
