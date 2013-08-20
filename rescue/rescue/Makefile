@@ -211,10 +211,6 @@ CRUNCH_ALIAS_vi= ex
 CRUNCH_PROGS_usr.bin+= id
 CRUNCH_ALIAS_id= groups whoami
 
-CRUNCH_PROGS_usr.bin+= dialog
-CRUNCH_SRCDIR_dialog= ${.CURDIR}/../../gnu/usr.bin/dialog
-CRUNCH_LIBS+= -ldialog -lm -lncursesw -ltermlibw -ltinfow
-
 CRUNCH_SRCDIR_sort= ${.CURDIR}/../../gnu/usr.bin/sort
 
 ##################################################################
