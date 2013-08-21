@@ -1352,9 +1352,7 @@ vdev_open(vdev_t *vd)
 		vd->vdev_max_asize = max_asize;
 	} else {
 		/*
-		 * Detect if the alignment requirement has increased.
-		 * We don't want to make the pool unavailable, just
-		 * issue a warning instead.
+		 * Make sure the alignment requirement hasn't increased.
 		 */
 		if (vd->vdev_ashift > vd->vdev_top->vdev_ashift &&
 		    vd->vdev_ops->vdev_op_leaf) {
