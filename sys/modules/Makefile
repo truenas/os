@@ -156,7 +156,7 @@ SUBDIR=	\
 	${_ipw} \
 	${_ipwfw} \
 	${_isci} \
-	iscsi \
+	iscsi_initiator \
 	isp \
 	${_ispfw} \
 	${_iwi} \
