@@ -901,8 +901,13 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 			struct ctl_lun *lun;
 			struct ctl_page_index *page_index;
 			struct copan_aps_subpage *current_sp;
+			uint32_t targ_lun;
 
-			lun = ctl_softc->ctl_luns[msg_info.hdr.nexus.targ_lun];
+			targ_lun = msg_info.hdr.nexus.targ_lun;
+			if (msg_info.hdr.nexus.lun_map_fn != NULL)
+				targ_lun = msg_info.hdr.nexus.lun_map_fn(msg_info.hdr.nexus.lun_map_arg, targ_lun);
+
+			lun = ctl_softc->ctl_luns[targ_lun];
 			page_index = &lun->mode_pages.index[index_to_aps_page];
 			current_sp = (struct copan_aps_subpage *)
 				     (page_index->page_data +
@@ -1104,7 +1109,8 @@ ctl_init(void)
 		ctl_pool_free(other_pool);
 		return (error);
 	}
-	printf("ctl: CAM Target Layer loaded\n");
+	if (bootverbose)
+		printf("ctl: CAM Target Layer loaded\n");
 
 	/*
 	 * Initialize the initiator and portname mappings
@@ -1198,7 +1204,8 @@ ctl_shutdown(void)
 	free(control_softc, M_DEVBUF);
 	control_softc = NULL;
 
-	printf("ctl: CAM Target Layer unloaded\n");
+	if (bootverbose)
+		printf("ctl: CAM Target Layer unloaded\n");
 }
 
 static int
@@ -1682,12 +1689,16 @@ ctl_serialize_other_sc_cmd(struct ctl_scsiio *ctsio, int have_lock)
 	union ctl_ha_msg msg_info;
 	struct ctl_lun *lun;
 	int retval = 0;
+	uint32_t targ_lun;
 
 	ctl_softc = control_softc;
 	if (have_lock == 0)
 		mtx_lock(&ctl_softc->ctl_lock);
 
-	lun = ctl_softc->ctl_luns[ctsio->io_hdr.nexus.targ_lun];
+	targ_lun = ctsio->io_hdr.nexus.targ_lun;
+	if (ctsio->io_hdr.nexus.lun_map_fn != NULL)
+		targ_lun = ctsio->io_hdr.nexus.lun_map_fn(ctsio->io_hdr.nexus.lun_map_arg, targ_lun);
+	lun = ctl_softc->ctl_luns[targ_lun];
 	if (lun==NULL)
 	{
 		/*
@@ -2984,6 +2995,7 @@ ctl_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 		struct sbuf *sb;
 		struct ctl_lun *lun;
 		struct ctl_lun_list *list;
+		struct ctl_be_lun_option *opt;
 
 		list = (struct ctl_lun_list *)addr;
 
@@ -3101,17 +3113,16 @@ ctl_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 			if (retval != 0)
 				break;
 
-			if (lun->backend->lun_info == NULL) {
-				retval = sbuf_printf(sb, "</lun>\n");
+			if (lun->backend->lun_info != NULL) {
+				retval = lun->backend->lun_info(lun->be_lun->be_lun, sb);
 				if (retval != 0)
 					break;
-				continue;
 			}
-
-			retval =lun->backend->lun_info(lun->be_lun->be_lun, sb);
-
-			if (retval != 0)
-				break;
+			STAILQ_FOREACH(opt, &lun->be_lun->options, links) {
+				retval = sbuf_printf(sb, "<%s>%s</%s>", opt->name, opt->value, opt->name);
+				if (retval != 0)
+					break;
+			}
 
 			retval = sbuf_printf(sb, "</lun>\n");
 
@@ -4433,9 +4444,14 @@ ctl_free_lun(struct ctl_lun *lun)
 	 */
 	for (io = (union ctl_io *)STAILQ_FIRST(&softc->rtr_queue); io != NULL;
 	     io = next_io) {
+		uint32_t targ_lun;
+
 		next_io = (union ctl_io *)STAILQ_NEXT(&io->io_hdr, links);
+		targ_lun = io->io_hdr.nexus.targ_lun;
+		if (io->io_hdr.nexus.lun_map_fn != NULL)
+			targ_lun = io->io_hdr.nexus.lun_map_fn(io->io_hdr.nexus.lun_map_arg, targ_lun);
 		if ((io->io_hdr.nexus.targ_target.id == lun->target.id)
-		 && (io->io_hdr.nexus.targ_lun == lun->lun))
+		 && (targ_lun == lun->lun))
 			STAILQ_REMOVE(&softc->rtr_queue, &io->io_hdr,
 				      ctl_io_hdr, links);
 	}
@@ -8251,12 +8267,16 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 	struct ctl_lun *lun;
 	struct ctl_softc *softc;
 	int i;
+	uint32_t targ_lun;
 
 	softc = control_softc;
 
 	mtx_lock(&softc->ctl_lock);
 
-	lun = softc->ctl_luns[msg->hdr.nexus.targ_lun];
+	targ_lun = msg->hdr.nexus.targ_lun;
+	if (msg->hdr.nexus.lun_map_fn != NULL)
+		targ_lun = msg->hdr.nexus.lun_map_fn(msg->hdr.nexus.lun_map_arg, targ_lun);
+	lun = softc->ctl_luns[targ_lun];
 	switch(msg->pr.pr_info.action) {
 	case CTL_PR_REG_KEY:
 		if (!lun->per_res[msg->pr.pr_info.residx].registered) {
@@ -8605,7 +8625,7 @@ ctl_report_luns(struct ctl_scsiio *ctsio)
 	int num_luns, retval;
 	uint32_t alloc_len, lun_datalen;
 	int num_filled, well_known;
-	uint32_t initidx;
+	uint32_t initidx, targ_lun_id, lun_id;
 
 	retval = CTL_RETVAL_COMPLETE;
 	well_known = 0;
@@ -8666,63 +8686,47 @@ ctl_report_luns(struct ctl_scsiio *ctsio)
 	lun_data = (struct scsi_report_luns_data *)ctsio->kern_data_ptr;
 	ctsio->kern_sg_entries = 0;
 
-	if (lun_datalen < alloc_len) {
-		ctsio->residual = alloc_len - lun_datalen;
-		ctsio->kern_data_len = lun_datalen;
-		ctsio->kern_total_len = lun_datalen;
-	} else {
-		ctsio->residual = 0;
-		ctsio->kern_data_len = alloc_len;
-		ctsio->kern_total_len = alloc_len;
-	}
-	ctsio->kern_data_resid = 0;
-	ctsio->kern_rel_offset = 0;
-	ctsio->kern_sg_entries = 0;
-
 	initidx = ctl_get_initindex(&ctsio->io_hdr.nexus);
 
-	/*
-	 * We set this to the actual data length, regardless of how much
-	 * space we actually have to return results.  If the user looks at
-	 * this value, he'll know whether or not he allocated enough space
-	 * and reissue the command if necessary.  We don't support well
-	 * known logical units, so if the user asks for that, return none.
-	 */
-	scsi_ulto4b(lun_datalen - 8, lun_data->length);
-
 	mtx_lock(&control_softc->ctl_lock);
-	for (num_filled = 0, lun = STAILQ_FIRST(&control_softc->lun_list);
-	     (lun != NULL) && (num_filled < num_luns);
-	     lun = STAILQ_NEXT(lun, links)) {
+	for (targ_lun_id = 0, num_filled = 0; targ_lun_id < CTL_MAX_LUNS && num_filled < num_luns; targ_lun_id++) {
+		lun_id = targ_lun_id;
+		if (ctsio->io_hdr.nexus.lun_map_fn != NULL)
+			lun_id = ctsio->io_hdr.nexus.lun_map_fn(ctsio->io_hdr.nexus.lun_map_arg, lun_id);
+		if (lun_id >= CTL_MAX_LUNS)
+			continue;
+		lun = control_softc->ctl_luns[lun_id];
+		if (lun == NULL)
+			continue;
 
-		if (lun->lun <= 0xff) {
+		if (targ_lun_id <= 0xff) {
 			/*
 			 * Peripheral addressing method, bus number 0.
 			 */
 			lun_data->luns[num_filled].lundata[0] =
 				RPL_LUNDATA_ATYP_PERIPH;
-			lun_data->luns[num_filled].lundata[1] = lun->lun;
+			lun_data->luns[num_filled].lundata[1] = targ_lun_id;
 			num_filled++;
-		} else if (lun->lun <= 0x3fff) {
+		} else if (targ_lun_id <= 0x3fff) {
 			/*
 			 * Flat addressing method.
 			 */
 			lun_data->luns[num_filled].lundata[0] =
 				RPL_LUNDATA_ATYP_FLAT |
-				(lun->lun & RPL_LUNDATA_FLAT_LUN_MASK);
+				(targ_lun_id & RPL_LUNDATA_FLAT_LUN_MASK);
 #ifdef OLDCTLHEADERS
 				(SRLD_ADDR_FLAT << SRLD_ADDR_SHIFT) |
-				(lun->lun & SRLD_BUS_LUN_MASK);
+				(targ_lun_id & SRLD_BUS_LUN_MASK);
 #endif
 			lun_data->luns[num_filled].lundata[1] =
 #ifdef OLDCTLHEADERS
-				lun->lun >> SRLD_BUS_LUN_BITS;
+				targ_lun_id >> SRLD_BUS_LUN_BITS;
 #endif
-				lun->lun >> RPL_LUNDATA_FLAT_LUN_BITS;
+				targ_lun_id >> RPL_LUNDATA_FLAT_LUN_BITS;
 			num_filled++;
 		} else {
 			printf("ctl_report_luns: bogus LUN number %jd, "
-			       "skipping\n", (intmax_t)lun->lun);
+			       "skipping\n", (intmax_t)targ_lun_id);
 		}
 		/*
 		 * According to SPC-3, rev 14 section 6.21:
@@ -8745,6 +8749,35 @@ ctl_report_luns(struct ctl_scsiio *ctsio)
 				~CTL_UA_LUN_CHANGE;
 	}
 	mtx_unlock(&control_softc->ctl_lock);
+
+	/*
+	 * It's quite possible that we've returned fewer LUNs than we allocated
+	 * space for.  Trim it.
+	 */
+	lun_datalen = sizeof(*lun_data) +
+		(num_filled * sizeof(struct scsi_report_luns_lundata));
+
+	if (lun_datalen < alloc_len) {
+		ctsio->residual = alloc_len - lun_datalen;
+		ctsio->kern_data_len = lun_datalen;
+		ctsio->kern_total_len = lun_datalen;
+	} else {
+		ctsio->residual = 0;
+		ctsio->kern_data_len = alloc_len;
+		ctsio->kern_total_len = alloc_len;
+	}
+	ctsio->kern_data_resid = 0;
+	ctsio->kern_rel_offset = 0;
+	ctsio->kern_sg_entries = 0;
+
+	/*
+	 * We set this to the actual data length, regardless of how much
+	 * space we actually have to return results.  If the user looks at
+	 * this value, he'll know whether or not he allocated enough space
+	 * and reissue the command if necessary.  We don't support well
+	 * known logical units, so if the user asks for that, return none.
+	 */
+	scsi_ulto4b(lun_datalen - 8, lun_data->length);
 
 	/*
 	 * We can only return SCSI_STATUS_CHECK_COND when we can't satisfy
@@ -9081,6 +9114,14 @@ ctl_inquiry_evpd_devid(struct ctl_scsiio *ctsio, int alloc_len)
 	int devid_len;
 
 	ctl_softc = control_softc;
+
+	mtx_lock(&ctl_softc->ctl_lock);
+	fe = ctl_softc->ctl_ports[ctl_port_idx(ctsio->io_hdr.nexus.targ_port)];
+	mtx_unlock(&ctl_softc->ctl_lock);
+
+	if (fe->devid != NULL)
+		return ((fe->devid)(ctsio, alloc_len));
+
 	lun = (struct ctl_lun *)ctsio->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
 
 	devid_len = sizeof(struct scsi_vpd_device_id) +
@@ -9133,8 +9174,6 @@ ctl_inquiry_evpd_devid(struct ctl_scsiio *ctsio, int alloc_len)
 	scsi_ulto2b(devid_len - 4, devid_ptr->length);
 
 	mtx_lock(&ctl_softc->ctl_lock);
-
-	fe = ctl_softc->ctl_ports[ctl_port_idx(ctsio->io_hdr.nexus.targ_port)];
 
 	/*
 	 * For Fibre channel,
@@ -10354,7 +10393,7 @@ ctl_scsiio_precheck(struct ctl_softc *ctl_softc, struct ctl_scsiio *ctsio)
 	struct ctl_lun *lun;
 	struct ctl_cmd_entry *entry;
 	uint8_t opcode;
-	uint32_t initidx;
+	uint32_t initidx, targ_lun;
 	int retval;
 
 	retval = 0;
@@ -10365,9 +10404,12 @@ ctl_scsiio_precheck(struct ctl_softc *ctl_softc, struct ctl_scsiio *ctsio)
 
 	mtx_lock(&ctl_softc->ctl_lock);
 
-	if ((ctsio->io_hdr.nexus.targ_lun < CTL_MAX_LUNS)
-	 && (ctl_softc->ctl_luns[ctsio->io_hdr.nexus.targ_lun] != NULL)) {
-		lun = ctl_softc->ctl_luns[ctsio->io_hdr.nexus.targ_lun];
+	targ_lun = ctsio->io_hdr.nexus.targ_lun;
+	if (ctsio->io_hdr.nexus.lun_map_fn != NULL)
+		targ_lun = ctsio->io_hdr.nexus.lun_map_fn(ctsio->io_hdr.nexus.lun_map_arg, targ_lun);
+	if ((targ_lun < CTL_MAX_LUNS)
+	 && (ctl_softc->ctl_luns[targ_lun] != NULL)) {
+		lun = ctl_softc->ctl_luns[targ_lun];
 		/*
 		 * If the LUN is invalid, pretend that it doesn't exist.
 		 * It will go away as soon as all pending I/O has been
@@ -10407,6 +10449,7 @@ ctl_scsiio_precheck(struct ctl_softc *ctl_softc, struct ctl_scsiio *ctsio)
 		ctl_set_unsupported_lun(ctsio);
 		mtx_unlock(&ctl_softc->ctl_lock);
 		ctl_done((union ctl_io *)ctsio);
+		CTL_DEBUG_PRINT(("ctl_scsiio_precheck: bailing out due to invalid LUN\n"));
 		goto bailout;
 	} else {
 		/*
@@ -10773,6 +10816,7 @@ ctl_abort_task(union ctl_io *io)
 	char printbuf[128];
 #endif
 	int found;
+	uint32_t targ_lun;
 
 	ctl_softc = control_softc;
 	found = 0;
@@ -10780,9 +10824,12 @@ ctl_abort_task(union ctl_io *io)
 	/*
 	 * Look up the LUN.
 	 */
-	if ((io->io_hdr.nexus.targ_lun < CTL_MAX_LUNS)
-	 && (ctl_softc->ctl_luns[io->io_hdr.nexus.targ_lun] != NULL))
-		lun = ctl_softc->ctl_luns[io->io_hdr.nexus.targ_lun];
+	targ_lun = io->io_hdr.nexus.targ_lun;
+	if (io->io_hdr.nexus.lun_map_fn != NULL)
+		targ_lun = io->io_hdr.nexus.lun_map_fn(io->io_hdr.nexus.lun_map_arg, targ_lun);
+	if ((targ_lun < CTL_MAX_LUNS)
+	 && (ctl_softc->ctl_luns[targ_lun] != NULL))
+		lun = ctl_softc->ctl_luns[targ_lun];
 	else
 		goto bailout;
 
@@ -10972,6 +11019,8 @@ ctl_run_task_queue(struct ctl_softc *ctl_softc)
 				int retval;
 
 				targ_lun = io->io_hdr.nexus.targ_lun;
+				if (io->io_hdr.nexus.lun_map_fn != NULL)
+					targ_lun = io->io_hdr.nexus.lun_map_fn(io->io_hdr.nexus.lun_map_arg, targ_lun);
 
 				if ((targ_lun < CTL_MAX_LUNS)
 				 && (ctl_softc->ctl_luns[targ_lun] != NULL))
@@ -11046,7 +11095,7 @@ ctl_run_task_queue(struct ctl_softc *ctl_softc)
 			       (uintmax_t)io->io_hdr.nexus.initid.id,
 			       io->io_hdr.nexus.targ_port,
 			       (uintmax_t)io->io_hdr.nexus.targ_target.id,
-			       io->io_hdr.nexus.targ_lun,
+			       io->io_hdr.nexus.targ_lun /* XXX */,
 			       (io->io_hdr.io_type == CTL_IO_TASK) ?
 			       io->taskio.tag_num : io->scsiio.tag_num);
 			STAILQ_REMOVE(&ctl_softc->task_queue, &io->io_hdr,
@@ -11070,10 +11119,14 @@ ctl_handle_isc(union ctl_io *io)
 	int free_io;
 	struct ctl_lun *lun;
 	struct ctl_softc *ctl_softc;
+	uint32_t targ_lun;
 
 	ctl_softc = control_softc;
 
-	lun = ctl_softc->ctl_luns[io->io_hdr.nexus.targ_lun];
+	targ_lun = io->io_hdr.nexus.targ_lun;
+	if (io->io_hdr.nexus.lun_map_fn != NULL)
+		targ_lun = io->io_hdr.nexus.lun_map_fn(io->io_hdr.nexus.lun_map_arg, targ_lun);
+	lun = ctl_softc->ctl_luns[targ_lun];
 
 	switch (io->io_hdr.msg_type) {
 	case CTL_MSG_SERIALIZE:
@@ -12632,7 +12685,7 @@ ctl_queue_sense(union ctl_io *io)
 {
 	struct ctl_lun *lun;
 	struct ctl_softc *ctl_softc;
-	uint32_t initidx;
+	uint32_t initidx, targ_lun;
 
 	ctl_softc = control_softc;
 
@@ -12651,9 +12704,12 @@ ctl_queue_sense(union ctl_io *io)
 	 * If we don't have a LUN for this, just toss the sense
 	 * information.
 	 */
-	if ((io->io_hdr.nexus.targ_lun < CTL_MAX_LUNS)
-	 && (ctl_softc->ctl_luns[io->io_hdr.nexus.targ_lun] != NULL))
-		lun = ctl_softc->ctl_luns[io->io_hdr.nexus.targ_lun];
+	targ_lun = io->io_hdr.nexus.targ_lun;
+	if (io->io_hdr.nexus.lun_map_fn != NULL)
+		targ_lun = io->io_hdr.nexus.lun_map_fn(io->io_hdr.nexus.lun_map_arg, targ_lun);
+	if ((targ_lun < CTL_MAX_LUNS)
+	 && (ctl_softc->ctl_luns[targ_lun] != NULL))
+		lun = ctl_softc->ctl_luns[targ_lun];
 	else
 		goto bailout;
 
@@ -13053,6 +13109,8 @@ static ctl_ha_comp_status
 ctl_isc_start(struct ctl_ha_component *c, ctl_ha_state state)
 {
 	ctl_ha_comp_status ret = CTL_HA_COMP_STATUS_OK;
+
+	printf("%s: go\n", __func__);
 
 	// UNKNOWN->HA or UNKNOWN->SINGLE (bootstrap)
 	if (c->state == CTL_HA_STATE_UNKNOWN ) {
