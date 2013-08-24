@@ -2377,6 +2377,7 @@ retry_space:
 			vm_offset_t pgoff;
 			struct mbuf *m0;
 
+			VM_OBJECT_LOCK(obj);
 			/*
 			 * Calculate the amount to transfer.
 			 * Not to exceed a page, the EOF,
@@ -2390,6 +2391,7 @@ retry_space:
 			xfsize = omin(PAGE_SIZE - pgoff, rem);
 			xfsize = omin(space - loopbytes, xfsize);
 			if (xfsize <= 0) {
+				VM_OBJECT_UNLOCK(obj);
 				done = 1;		/* all data sent */
 				break;
 			}
