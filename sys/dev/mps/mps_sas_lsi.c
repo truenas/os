@@ -669,6 +669,7 @@ mpssas_add_device(struct mps_softc *sc, u16 handle, u8 linkrate){
 		error = ENXIO;
 		goto out;
 	}
+<<<<<<< HEAD
 
 	if (mpssas_check_id(sassc, id) != 0) {
 		device_printf(sc->mps_dev, "Excluding target id %d\n", id);
@@ -676,6 +677,8 @@ mpssas_add_device(struct mps_softc *sc, u16 handle, u8 linkrate){
 		goto out;
 	}
 
+=======
+>>>>>>> MFC mps(4) driver changes 253460, 253549, 253550 and 254615.
 	mps_dprint(sc, MPS_MAPPING, "SAS Address from SAS device page0 = %jx\n",
 	    sas_address);
 	targ = &sassc->targets[id];
@@ -707,7 +710,12 @@ mpssas_add_device(struct mps_softc *sc, u16 handle, u8 linkrate){
 	    mps_describe_table(mps_linkrate_names, targ->linkrate),
 	    targ->handle, targ->encl_handle, targ->encl_slot);
 
+<<<<<<< HEAD
 #if __FreeBSD_version < 1000039
+=======
+#if ((__FreeBSD_version >= 1000000) && (__FreeBSD_version < 1000039)) || \
+    (__FreeBSD_version < 902502)
+>>>>>>> MFC mps(4) driver changes 253460, 253549, 253550 and 254615.
 	if ((sassc->flags & MPSSAS_IN_STARTUP) == 0)
 #endif
 		mpssas_rescan_target(sc, targ);
