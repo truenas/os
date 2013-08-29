@@ -134,7 +134,7 @@ variable logoY
 
 	\ Move the menu to the center of the screen
 	s" set loader_menu_x=26" evaluate
-	s" set loader_menu_y=13" evaluate
+	s" set loader_menu_y=12" evaluate
 	s" set loader_menu_timeout_x=21" evaluate
 	s" set loader_menu_timeout_y=24" evaluate
 
