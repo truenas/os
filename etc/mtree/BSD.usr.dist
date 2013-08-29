@@ -134,6 +134,22 @@
             usermgmt
             ..
         ..
+        bsdconfig
+            media
+            ..
+            networking
+            ..
+            packages
+            ..
+            password
+            ..
+            startup
+            ..
+            timezone
+            ..
+            usermgmt
+            ..
+        ..
         calendar
             de_AT.ISO_8859-15
             ..
