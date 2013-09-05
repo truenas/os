@@ -36,6 +36,9 @@
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_NODE(_vfs_zfs, OID_AUTO, metaslab, CTLFLAG_RW, 0, "ZFS metaslab");
 
+SYSCTL_DECL(_vfs_zfs);
+SYSCTL_NODE(_vfs_zfs, OID_AUTO, metaslab, CTLFLAG_RW, 0, "ZFS metaslab");
+
 /*
  * Allow allocations to switch to gang blocks quickly. We do this to
  * avoid having to load lots of space_maps in a given txg. There are,
