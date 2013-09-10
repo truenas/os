@@ -385,6 +385,9 @@ txg_quiesce(dsl_pool_t *dp, uint64_t txg)
 	DTRACE_PROBE2(txg__quiescing, dsl_pool_t *, dp, uint64_t, txg);
 	DTRACE_PROBE2(txg__opened, dsl_pool_t *, dp, uint64_t, tx->tx_open_txg);
 
+	DTRACE_PROBE2(txg__quiescing, dsl_pool_t *, dp, uint64_t, txg);
+	DTRACE_PROBE2(txg__opened, dsl_pool_t *, dp, uint64_t, tx->tx_open_txg);
+
 	/*
 	 * Now that we've incremented tx_open_txg, we can let threads
 	 * enter the next transaction group.
