@@ -67,6 +67,8 @@
         ssl
         ..
         zfs
+            cases
+            ..
         ..
     ..
     lib
