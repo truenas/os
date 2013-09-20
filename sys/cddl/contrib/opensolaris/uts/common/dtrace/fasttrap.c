@@ -2271,6 +2271,13 @@ fasttrap_load(void)
 	mutex_init(&fasttrap_count_mtx, "fasttrap count mtx", MUTEX_DEFAULT,
 	    NULL);
 
+	ret = kproc_create(fasttrap_pid_cleanup_cb, NULL,
+	    &fasttrap_cleanup_proc, 0, 0, "ftcleanup");
+	if (ret != 0) {
+		destroy_dev(fasttrap_cdev);
+		return (ret);
+	}
+
 #if defined(sun)
 	fasttrap_max = ddi_getprop(DDI_DEV_T_ANY, devi, DDI_PROP_DONTPASS,
 	    "fasttrap-max-probes", FASTTRAP_MAX_DEFAULT);
