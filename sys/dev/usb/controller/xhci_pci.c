@@ -166,6 +166,25 @@ xhci_pci_port_route(device_t self, uint32_t set, uint32_t clear)
 }
 
 static int
+xhci_pci_port_route(device_t self, uint32_t set, uint32_t clear)
+{
+	uint32_t temp;
+
+	temp = pci_read_config(self, PCI_XHCI_INTEL_USB3_PSSEN, 4) |
+	    pci_read_config(self, PCI_XHCI_INTEL_XUSB2PR, 4);
+
+	temp |= set;
+	temp &= ~clear;
+
+	pci_write_config(self, PCI_XHCI_INTEL_USB3_PSSEN, temp, 4);
+	pci_write_config(self, PCI_XHCI_INTEL_XUSB2PR, temp, 4);
+
+	device_printf(self, "Port routing mask set to 0x%08x\n", temp);
+
+	return (0);
+}
+
+static int
 xhci_pci_attach(device_t self)
 {
 	struct xhci_softc *sc = device_get_softc(self);
