@@ -94,6 +94,11 @@ SYSCTL_INT(_vfs_zfs, OID_AUTO, check_hostid, CTLFLAG_RW, &check_hostid, 0,
  */
 static int zfs_ccw_retry_interval = 300;
 
+TUNABLE_INT("vfs.zfs.ccw_retry_interval", &zfs_ccw_retry_interval);
+SYSCTL_INT(_vfs_zfs, OID_AUTO, ccw_retry_interval, CTLFLAG_RW,
+    &zfs_ccw_retry_interval, 0,
+    "Configuration cache file write, retry after failure, interval (seconds)");
+
 typedef enum zti_modes {
 	zti_mode_fixed,			/* value is # of threads (min 1) */
 	zti_mode_online_percent,	/* value is % of online CPUs */
@@ -5709,6 +5714,8 @@ spa_async_remove(spa_t *spa, vdev_t *vd)
 		vd->vdev_stat.vs_checksum_errors = 0;
 
 		vdev_state_dirty(vd->vdev_top);
+		/* Tell userspace that the vdev is gone. */
+		zfs_post_remove(spa, vd);
 	}
 
 	for (int c = 0; c < vd->vdev_children; c++)
@@ -5732,7 +5739,6 @@ spa_async_autoexpand(spa_t *spa, vdev_t *vd)
 {
 	sysevent_id_t eid;
 	nvlist_t *attr;
-	char *physpath;
 
 	if (!spa->spa_autoexpand)
 		return;
@@ -5742,20 +5748,16 @@ spa_async_autoexpand(spa_t *spa, vdev_t *vd)
 		spa_async_autoexpand(spa, cvd);
 	}
 
-	if (!vd->vdev_ops->vdev_op_leaf || vd->vdev_physpath == NULL)
+	if (!vd->vdev_ops->vdev_op_leaf || vd->vdev_path == NULL)
 		return;
 
-	physpath = kmem_zalloc(MAXPATHLEN, KM_SLEEP);
-	(void) snprintf(physpath, MAXPATHLEN, "/devices%s", vd->vdev_physpath);
-
 	VERIFY(nvlist_alloc(&attr, NV_UNIQUE_NAME, KM_SLEEP) == 0);
-	VERIFY(nvlist_add_string(attr, DEV_PHYS_PATH, physpath) == 0);
+	VERIFY(nvlist_add_string(attr, DEV_PATH, vd->vdev_path) == 0);
 
 	(void) ddi_log_sysevent(zfs_dip, SUNW_VENDOR, EC_DEV_STATUS,
 	    ESC_ZFS_VDEV_AUTOEXPAND, attr, &eid, DDI_SLEEP);
 
 	nvlist_free(attr);
-	kmem_free(physpath, MAXPATHLEN);
 }
 
 static void
