@@ -4029,8 +4029,8 @@ vm_map_printentries(SYSCTL_HANDLER_ARGS)
 	vm_map_lock(map);
 	for (entry = map->header.next, entrynum = 0; entry != &map->header;
 	    entry = entry->next, entrynum++)
-		sbuf_printf(sb, "%u %lu %lu \n", entrynum, entry->start,
-		    entry->end);
+		sbuf_printf(sb, "%u %lu %lu \n", entrynum,
+		    (unsigned long)entry->start, (unsigned long)entry->end);
 	vm_map_unlock(map);
 	sbuf_finish(sb);
 	sbuf_delete(sb);
