@@ -2514,7 +2514,6 @@ xpt_action_default(union ccb *start_ccb)
 			xpt_run_devq(devq);
 		mtx_unlock(&devq->send_mtx);
 		break;
-	}
 	case XPT_CALC_GEOMETRY:
 		/* Filter out garbage */
 		if (start_ccb->ccg.block_size == 0
