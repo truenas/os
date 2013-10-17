@@ -53,10 +53,4 @@ typedef struct _cpuset cpuset_t;
 #define	CPUSET_FSET		BITSET_FSET(_NCPUWORDS)
 #define	CPUSET_T_INITIALIZER	BITSET_T_INITIALIZER
 
-#define	CPUSET_FSET							\
-	[ 0 ... (_NCPUWORDS - 1) ] = (-1L)
-
-#define	CPUSET_T_INITIALIZER(x)						\
-	{ .__bits = { x } }
-
 #endif /* !_SYS__CPUSET_H_ */
