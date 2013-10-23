@@ -42,9 +42,11 @@
  * Virtual device vector for GEOM.
  */
 
+static g_attrchanged_t vdev_geom_attrchanged;
 struct g_class zfs_vdev_class = {
 	.name = "ZFS::VDEV",
 	.version = G_VERSION,
+	.attrchanged = vdev_geom_attrchanged,
 };
 
 DECLARE_GEOM_CLASS(zfs_vdev_class, zfs_vdev);
@@ -71,6 +73,34 @@ SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
     &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
 
 #define	ZFSVOL_CLASS_NAME	"ZFS::ZVOL"
+
+static void
+vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
+{ 
+	int error;
+	uint16_t rate;
+
+	error = g_getattr("GEOM::rotation_rate", cp, &rate);
+	if (error == 0)
+		vd->vdev_rotation_rate = rate;
+	else
+		vd->vdev_rotation_rate = VDEV_RATE_UNKNOWN;
+}
+
+static void
+vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
+{
+	vdev_t *vd;
+
+	vd = cp->private;
+	if (vd == NULL)
+		return;
+
+	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
+		vdev_geom_set_rotation_rate(vd, cp);
+		return;
+	}
+}
 
 static void
 vdev_geom_orphan(struct g_consumer *cp)
@@ -708,6 +738,11 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	bufsize = sizeof("/dev/") + strlen(pp->name);
 	vd->vdev_physpath = kmem_alloc(bufsize, KM_SLEEP);
 	snprintf(vd->vdev_physpath, bufsize, "/dev/%s", pp->name);
+
+	/*
+	 * Determine the device's rotation rate.
+	 */
+	vdev_geom_set_rotation_rate(vd, cp);
 
 	return (0);
 }
