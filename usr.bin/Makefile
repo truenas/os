@@ -66,6 +66,7 @@ SUBDIR=	alias \
 	id \
 	ipcrm \
 	ipcs \
+	iscsictl \
 	join \
 	jot \
 	kdump \
