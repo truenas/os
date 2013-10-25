@@ -18,6 +18,7 @@ SUBDIR=	adduser \
 	crashinfo \
 	cron \
 	ctladm \
+	ctld \
 	daemon \
 	dconschat \
 	devinfo \
@@ -35,6 +36,7 @@ SUBDIR=	adduser \
 	ifmcstat \
 	inetd \
 	iostat \
+	iscsid \
 	kldxref \
 	mailwrapper \
 	makefs \

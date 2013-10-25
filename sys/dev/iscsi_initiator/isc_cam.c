@@ -53,8 +53,8 @@ __FBSDID("$FreeBSD$");
 #include <cam/cam_xpt_sim.h>
 #include <cam/cam_periph.h>
 
-#include <dev/iscsi/initiator/iscsi.h>
-#include <dev/iscsi/initiator/iscsivar.h>
+#include <dev/iscsi_initiator/iscsi.h>
+#include <dev/iscsi_initiator/iscsivar.h>
 
 static void
 _inq(struct cam_sim *sim, union ccb *ccb)
@@ -150,7 +150,7 @@ ic_scan(isc_session_t *sp)
      sp->flags |= ISC_SCANWAIT;
 
      CAM_LOCK(sp);
-     if(xpt_create_path(&sp->cam_path, NULL, cam_sim_path(sp->cam_sim),
+     if(xpt_create_path(&sp->cam_path, xpt_periph, cam_sim_path(sp->cam_sim),
 			0, CAM_LUN_WILDCARD) != CAM_REQ_CMP) {
 	  xdebug("can't create cam path");
 	  CAM_UNLOCK(sp);
