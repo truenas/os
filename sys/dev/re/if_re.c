@@ -1470,6 +1470,7 @@ re_attach(device_t dev)
 		sc->rl_flags |= RL_FLAG_EARLYOFF;
 		/* FALLTHROUGH */
 	case RL_HWREV_8411:
+	case RL_HWREV_8411B:
 		sc->rl_flags |= RL_FLAG_PHYWAKE | RL_FLAG_PAR |
 		    RL_FLAG_DESCV2 | RL_FLAG_MACSTAT | RL_FLAG_CMDSTOP |
 		    RL_FLAG_AUTOPAD | RL_FLAG_JUMBOV2 |
