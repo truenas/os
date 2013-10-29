@@ -1466,6 +1466,7 @@ re_attach(device_t dev)
 		    RL_FLAG_WOL_MANLINK;
 		break;
 	case RL_HWREV_8168E_VL:
+	case RL_HWREV_8168EP:
 	case RL_HWREV_8168F:
 		sc->rl_flags |= RL_FLAG_EARLYOFF;
 		/* FALLTHROUGH */
