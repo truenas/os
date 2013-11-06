@@ -102,6 +102,19 @@ void aesni_encrypt_xts(int rounds, const void *data_schedule,
 void aesni_decrypt_xts(int rounds, const void *data_schedule,
     const void *tweak_schedule, size_t len, const uint8_t *from, uint8_t *to,
     const uint8_t iv[AES_BLOCK_LEN]);
+void aesni_decrypt_cbc(int rounds, const void *key_schedule /*__aligned(16)*/,
+    size_t len, uint8_t *buf, const uint8_t iv[AES_BLOCK_LEN]);
+void aesni_encrypt_ecb(int rounds, const void *key_schedule /*__aligned(16)*/,
+    size_t len, const uint8_t *from, uint8_t *to);
+void aesni_decrypt_ecb(int rounds, const void *key_schedule /*__aligned(16)*/,
+    size_t len, const uint8_t *from, uint8_t *to);
+
+void aesni_encrypt_xts(int rounds, const void *data_schedule /*__aligned(16)*/,
+    const void *tweak_schedule /*__aligned(16)*/, size_t len,
+    const uint8_t *from, uint8_t *to, const uint8_t iv[AES_BLOCK_LEN]);
+void aesni_decrypt_xts(int rounds, const void *data_schedule /*__aligned(16)*/,
+    const void *tweak_schedule /*__aligned(16)*/, size_t len,
+    const uint8_t *from, uint8_t *to, const uint8_t iv[AES_BLOCK_LEN]);
 
 int aesni_cipher_setup(struct aesni_session *ses,
     struct cryptoini *encini);
