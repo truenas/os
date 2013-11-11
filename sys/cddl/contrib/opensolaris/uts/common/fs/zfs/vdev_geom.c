@@ -73,15 +73,6 @@ SYSCTL_DECL(_vfs_zfs_vdev);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_disable, CTLFLAG_RW,
     &vdev_larger_ashift_disable, 0, "Disable detection of larger ashift");
 
-/*
- * Increase minimal ashift to 12 to ease future upgrades.
- */
-static int vdev_larger_ashift_minimal = 1;
-TUNABLE_INT("vfs.zfs.vdev.larger_ashift_minimal", &vdev_larger_ashift_minimal);
-SYSCTL_DECL(_vfs_zfs_vdev);
-SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
-    &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
-
 static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
