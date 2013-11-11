@@ -73,15 +73,6 @@ SYSCTL_DECL(_vfs_zfs_vdev);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_disable, CTLFLAG_RW,
     &vdev_larger_ashift_disable, 0, "Disable detection of larger ashift");
 
-/*
- * Increase minimal ashift to 12 to ease future upgrades.
- */
-static int vdev_larger_ashift_minimal = 1;
-TUNABLE_INT("vfs.zfs.vdev.larger_ashift_minimal", &vdev_larger_ashift_minimal);
-SYSCTL_DECL(_vfs_zfs_vdev);
-SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
-    &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
-
 static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
@@ -778,9 +769,9 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	 * Determine the device's minimum transfer size.
 	 */
 	if (pp->stripesize > pp->sectorsize && !vdev_larger_ashift_disable)
-		*ashift = highbit(MAX(pp->stripesize, (vdev_larger_ashift_minimal? 4096: SPA_MINBLOCKSIZE))) - 1;
+		*ashift = highbit(MAX(pp->stripesize, SPA_MINBLOCKSIZE)) - 1;
 	else
-		*ashift = highbit(MAX(pp->sectorsize, (vdev_larger_ashift_minimal? 4096: SPA_MINBLOCKSIZE))) - 1;
+		*ashift = highbit(MAX(pp->sectorsize, SPA_MINBLOCKSIZE)) - 1;
 
 	/*
 	 * Clear the nowritecache settings, so that on a vdev_reopen()
