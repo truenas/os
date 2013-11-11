@@ -23,8 +23,6 @@
  * All rights reserved.
  *
  * Portions Copyright (c) 2012 Martin Matuska <mm@FreeBSD.org>
- *
- * Portions Copyright (c) 2013 iXsystems, Inc.
  */
 
 #include <sys/zfs_context.h>
@@ -62,16 +60,6 @@ static int vdev_geom_bio_delete_disable = 0;
 TUNABLE_INT("vfs.zfs.vdev.bio_delete_disable", &vdev_geom_bio_delete_disable);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, bio_delete_disable, CTLFLAG_RW,
     &vdev_geom_bio_delete_disable, 0, "Disable BIO_DELETE");
-
-/*
- * Don't use larger ashift even when driver reports one via GEOM
- * stripesize.
- */
-static int vdev_larger_asfhit_disable = 0;
-TUNABLE_INT("vfs.zfs.vdev.larger_ashift_disable", &vdev_larger_asfhit_disable);
-SYSCTL_DECL(_vfs_zfs_vdev);
-SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_disable, CTLFLAG_RW,
-    &vdev_larger_asfhit_disable, 0, "Disable BIO_FLUSH");
 
 static void
 vdev_geom_orphan(struct g_consumer *cp)
