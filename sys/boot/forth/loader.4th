@@ -136,6 +136,7 @@ include /boot/check-password.4th
   s" /boot/defaults/loader.conf" initialize
   include_conf_files
   include_nextboot_file
+  s" /boot/loader.rc.local" include-if-exists
   \ Will *NOT* try to load kernel and modules if no configuration file
   \ was succesfully loaded!
   any_conf_read? if

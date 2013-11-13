@@ -87,5 +87,14 @@ variable brandY
 		2drop exit
 	then
 
+        \ if it refers to a raw symbol then run that function
+        sfind if
+            brandX @ brandY @
+            2 roll
+            execute
+        else            
+            drop
+        then
+
 	2drop
 ;

@@ -861,6 +861,53 @@ only forth also support-functions definitions
   throw
 ;
 
+\ Does the file exist?
+: file-exists? ( c-addr/u -- bool )
+  O_RDONLY fopen \ open file
+  dup \ save a copy to not leak the fd for fclose below.
+  -1 <> if
+    fclose true
+  else
+    drop false
+  then
+;
+
+\ returns an 'allocated' c-addr/u that must be free'd
+\ which prepends 'include' to the string to be passed to 
+\ 'evaluate'
+\ ( 'foo' -- 'include foo' )
+: prepend-include ( c-addr/u -- c-addr/u' )
+
+  \ get the length of the string and add to it
+  dup 9 + ( len -- len len+9 )
+  \ allocate that many bytes of strorage for a string
+  allocate if ENOMEM throw then
+  \ and set the length to 0
+  0
+
+  \ now copy "include" into it
+  s" include " strcat
+  \ grab the original string up so we can strcat
+  2swap
+  strcat
+;
+
+\ Source file as code if it exists.
+: include-if-exists ( c-addr/u -- )
+  \ if file does not exist then stop
+  2dup file-exists? false = if
+    2drop
+    exit
+  then
+  prepend-include
+
+  \ save the returned string so we can free it
+  \ then evaluate the string (" include file")
+  2dup evaluate
+  \ free the allocation
+  drop free
+;
+
 : print_line line_buffer strtype cr ;
 
 : print_syntax_error

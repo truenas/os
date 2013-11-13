@@ -111,6 +111,10 @@ set optionsmenu_keycode[6]=118
 set optionsansi_caption[6]="[1mV[37merbose..... [34;1mOff[37m"
 set optionstoggled_ansi[6]="[1mV[37merbose..... [32;7mOn[0;37m"
 
+also support-functions
+\ Load in any local forth files
+s" /boot/menu.rc.local" include-if-exists
+
 \ Enable automatic booting (add ``autoboot_delay=N'' to loader.conf(5) to
 \ customize the timeout; default is 10-seconds)
 \ 
