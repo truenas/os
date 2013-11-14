@@ -63,12 +63,13 @@ check_diff() {
     cp ${tmpf} ${LOG}/${label}.today || rc=3
   fi
 
-  if ! cmp -s ${LOG}/${label}.today ${tmpf} >/dev/null; then
+  diff=$(diff ${daily_status_security_diff_flags} ${LOG}/${label}.today \
+    ${tmpf} | eval "${filter}")
+  if [ -n "${diff}" ]; then
     [ $rc -lt 1 ] && rc=1
     echo ""
     echo "${msg}"
-    diff ${daily_status_security_diff_flags} ${LOG}/${label}.today \
-	${tmpf} | eval "${filter}"
+    echo "${diff}"
     mv ${LOG}/${label}.today ${LOG}/${label}.yesterday || rc=3
     mv ${tmpf} ${LOG}/${label}.today || rc=3
   fi
