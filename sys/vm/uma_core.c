@@ -179,24 +179,25 @@ struct uma_bucket_zone {
 	int		ubz_entries;
 };
 
-#define	BUCKET_MAX	128
+/*
+ * Compute the actual number of bucket entries to pack them in power
+ * of two sizes for more efficient space utilization.
+ */
+#define	BUCKET_SIZE(n)						\
+    (((sizeof(void *) * (n)) - sizeof(struct uma_bucket)) / sizeof(void *))
+
+#define	BUCKET_MAX	BUCKET_SIZE(128)
 
 struct uma_bucket_zone bucket_zones[] = {
-	{ NULL, "16 Bucket", 16 },
-	{ NULL, "32 Bucket", 32 },
-	{ NULL, "64 Bucket", 64 },
-	{ NULL, "128 Bucket", 128 },
+	{ NULL, "6 Bucket", BUCKET_SIZE(6) },
+	{ NULL, "8 Bucket", BUCKET_SIZE(8) },
+	{ NULL, "12 Bucket", BUCKET_SIZE(12) },
+	{ NULL, "16 Bucket", BUCKET_SIZE(16) },
+	{ NULL, "32 Bucket", BUCKET_SIZE(32) },
+	{ NULL, "64 Bucket", BUCKET_SIZE(64) },
+	{ NULL, "128 Bucket", BUCKET_SIZE(128) },
 	{ NULL, NULL, 0}
 };
-
-#define	BUCKET_SHIFT	4
-#define	BUCKET_ZONES	((BUCKET_MAX >> BUCKET_SHIFT) + 1)
-
-/*
- * bucket_size[] maps requested bucket sizes to zones that allocate a bucket
- * of approximately the right size.
- */
-static uint8_t bucket_size[BUCKET_ZONES];
 
 /*
  * Flags and enumerations to be passed to internal functions.
@@ -293,8 +294,6 @@ bucket_init(void)
 		ubz->ubz_zone = uma_zcreate(ubz->ubz_name, size,
 		    NULL, NULL, NULL, NULL, UMA_ALIGN_PTR,
 		    UMA_ZFLAG_INTERNAL | UMA_ZFLAG_BUCKET);
-		for (; i <= ubz->ubz_entries; i += (1 << BUCKET_SHIFT))
-			bucket_size[i >> BUCKET_SHIFT] = j;
 	}
 }
 
@@ -305,10 +304,13 @@ bucket_init(void)
 static struct uma_bucket_zone *
 bucket_zone_lookup(int entries)
 {
-	int idx;
+	struct uma_bucket_zone *ubz;
 
-	idx = howmany(entries, 1 << BUCKET_SHIFT);
-	return (&bucket_zones[bucket_size[idx]]);
+	for (ubz = &bucket_zones[0]; ubz->ubz_entries != 0; ubz++)
+		if (ubz->ubz_entries >= entries)
+			return (ubz);
+	ubz--;
+	return (ubz);
 }
 
 static uma_bucket_t
