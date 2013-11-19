@@ -1972,6 +1972,7 @@ uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 	uma_cache_t cache;
 	uma_bucket_t bucket;
 	int cpu;
+	int lockfail;
 
 	/* This is the fast path allocation */
 #ifdef UMA_DEBUG_ALLOC_1
@@ -2060,7 +2061,12 @@ zalloc_start:
 	 * the critical section.
 	 */
 	critical_exit();
-	ZONE_LOCK(zone);
+	lockfail = 0;
+	if (ZONE_TRYLOCK(zone) == 0) {
+		/* Record contention to size the buckets. */
+		ZONE_LOCK(zone);
+		lockfail = 1;
+	}
 	critical_enter();
 	cpu = curcpu;
 	cache = &zone->uz_cpu[cpu];
@@ -2106,7 +2112,7 @@ zalloc_start:
 	critical_exit();
 
 	/* Bump up our uz_count so we get here less */
-	if (zone->uz_count < BUCKET_MAX)
+	if (lockfail && zone->uz_count < BUCKET_MAX)
 		zone->uz_count++;
 
 	/*
@@ -2548,6 +2554,7 @@ uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 	uma_bucket_t bucket;
 	int bflags;
 	int cpu;
+	int lockfail;
 
 #ifdef UMA_DEBUG_ALLOC_1
 	printf("Freeing item %p to %s(%p)\n", item, zone->uz_name, zone);
@@ -2641,7 +2648,12 @@ zfree_start:
 	 * the critical section.
 	 */
 	critical_exit();
-	ZONE_LOCK(zone);
+	lockfail = 0;
+	if (ZONE_TRYLOCK(zone) == 0) {
+		/* Record contention to size the buckets. */
+		ZONE_LOCK(zone);
+		lockfail = 1;
+	}
 	critical_enter();
 	cpu = curcpu;
 	cache = &zone->uz_cpu[cpu];
@@ -2687,6 +2699,10 @@ zfree_start:
 	}
 	/* We are no longer associated with this CPU. */
 	critical_exit();
+
+	/* Bump up our uz_count so we get here less */
+	if (lockfail && zone->uz_count < BUCKET_MAX)
+		zone->uz_count++;
 
 	/* And the zone.. */
 	ZONE_UNLOCK(zone);

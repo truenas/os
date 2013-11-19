@@ -377,6 +377,7 @@ void uma_large_free(uma_slab_t slab);
 #define	KEG_LOCK(k)	mtx_lock(&(k)->uk_lock)
 #define	KEG_UNLOCK(k)	mtx_unlock(&(k)->uk_lock)
 #define	ZONE_LOCK(z)	mtx_lock((z)->uz_lock)
+#define	ZONE_TRYLOCK(z)	mtx_trylock((z)->uz_lock)
 #define ZONE_UNLOCK(z)	mtx_unlock((z)->uz_lock)
 
 /*
