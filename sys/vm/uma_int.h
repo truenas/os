@@ -329,7 +329,8 @@ struct uma_zone {
 	u_int64_t	uz_fails;	/* Total number of alloc failures */
 	u_int64_t	uz_sleeps;	/* Total number of alloc sleeps */
 	uint16_t	uz_fills;	/* Outstanding bucket fills */
-	uint16_t	uz_count;	/* Highest value ub_ptr can have */
+	uint16_t	uz_count;	/* Amount of items in full bucket */
+	uint16_t	uz_count_min;	/* Minimal amount of items there */
 
 	/*
 	 * This HAS to be the last item because we adjust the zone size

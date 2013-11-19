@@ -1426,6 +1426,7 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 	zone->uz_fails = 0;
 	zone->uz_sleeps = 0;
 	zone->uz_fills = zone->uz_count = 0;
+	zone->uz_count_min = 0;
 	zone->uz_flags = 0;
 	keg = arg->keg;
 
@@ -1491,6 +1492,7 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 		zone->uz_count = keg->uk_ipers;
 	else
 		zone->uz_count = BUCKET_MAX;
+	zone->uz_count_min = zone->uz_count;
 	return (0);
 }
 
@@ -2202,6 +2204,13 @@ zone_relock(uma_zone_t zone, uma_keg_t keg)
 		KEG_UNLOCK(keg);
 		ZONE_LOCK(zone);
 	}
+
+	/*
+	 * Shrink further bucket sizes.  Price of single zone lock collision
+	 * is probably lower then price of global cache drain.
+	 */
+	if (zone->uz_count > zone->uz_count_min)
+		zone->uz_count--;
 }
 
 static inline void
