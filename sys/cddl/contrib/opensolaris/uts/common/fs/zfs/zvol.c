@@ -2533,8 +2533,10 @@ zvol_create_snapshots(objset_t *os, const char *name)
 		}
 
 		if ((error = zvol_create_minor(sname)) != 0) {
+#if 0
 			printf("ZFS WARNING: Unable to create ZVOL %s (error=%d).\n",
 			    sname, error);
+#endif
 			break;
 		}
 	}
@@ -2555,8 +2557,10 @@ zvol_create_minors(const char *name)
 		return (0);
 
 	if ((error = dmu_objset_hold(name, FTAG, &os)) != 0) {
+#if 0
 		printf("ZFS WARNING: Unable to put hold on %s (error=%d).\n",
 		    name, error);
+#endif
 		return (error);
 	}
 	if (dmu_objset_type(os) == DMU_OST_ZVOL) {
@@ -2565,8 +2569,10 @@ zvol_create_minors(const char *name)
 		if ((error = zvol_create_minor(name)) == 0)
 			error = zvol_create_snapshots(os, name);
 		else {
+#if 0
 			printf("ZFS WARNING: Unable to create ZVOL %s (error=%d).\n",
 			    name, error);
+#endif
 		}
 		dsl_dataset_long_rele(os->os_dsl_dataset, FTAG);
 		dsl_dataset_rele(os->os_dsl_dataset, FTAG);
@@ -2601,8 +2607,10 @@ zvol_create_minors(const char *name)
 		dmu_objset_rele(os, FTAG);
 		(void)zvol_create_minors(osname);
 		if ((error = dmu_objset_hold(name, FTAG, &os)) != 0) {
+#if 0
 			printf("ZFS WARNING: Unable to put hold on %s (error=%d).\n",
 			    name, error);
+#endif
 			return (error);
 		}
 	}
