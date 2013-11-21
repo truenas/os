@@ -85,6 +85,8 @@ typedef struct progress_arg {
 	zfs_handle_t *pa_zhp;
 	int pa_fd;
 	boolean_t pa_parsable;
+	boolean_t pa_astitle;
+	uint64_t pa_size;
 } progress_arg_t;
 
 typedef struct dataref {
@@ -924,6 +926,7 @@ typedef struct send_dump_data {
 	uint64_t prevsnap_obj;
 	boolean_t seenfrom, seento, replicate, doall, fromorigin;
 	boolean_t verbose, dryrun, parsable, progress, embed_data, std_out;
+	boolean_t progressastitle;
 	boolean_t large_block;
 	int outfd;
 	boolean_t err;
@@ -1110,7 +1113,7 @@ send_progress_thread(void *arg)
 
 	(void) strlcpy(zc.zc_name, zhp->zfs_name, sizeof (zc.zc_name));
 
-	if (!pa->pa_parsable)
+	if (!pa->pa_parsable && !pa->pa_astitle)
 		(void) fprintf(stderr, "TIME        SENT   SNAPSHOT\n");
 
 	/*
@@ -1127,7 +1130,15 @@ send_progress_thread(void *arg)
 		tm = localtime(&t);
 		bytes = zc.zc_cookie;
 
-		if (pa->pa_parsable) {
+		if (pa->pa_astitle) {
+			int pct;
+			if (pa->pa_size > bytes)
+				pct = 100 * bytes / pa->pa_size;
+			else
+				pct = 100;
+			setproctitle("sending %s (%d%%: %llu/%llu)",
+			    zhp->zfs_name, pct, bytes, pa->pa_size);
+		} else if (pa->pa_parsable) {
 			(void) fprintf(stderr, "%02d:%02d:%02d\t%llu\t%s\n",
 			    tm->tm_hour, tm->tm_min, tm->tm_sec,
 			    bytes, zhp->zfs_name);
@@ -1196,6 +1207,7 @@ dump_snapshot(zfs_handle_t *zhp, void *arg)
 	boolean_t isfromsnap, istosnap, fromorigin;
 	boolean_t exclude = B_FALSE;
 	FILE *fout = sdd->std_out ? stdout : stderr;
+	uint64_t size = 0;
 
 	err = 0;
 	thissnap = strchr(zhp->zfs_name, '@') + 1;
@@ -1263,15 +1275,15 @@ dump_snapshot(zfs_handle_t *zhp, void *arg)
 	fromorigin = sdd->prevsnap[0] == '\0' &&
 	    (sdd->fromorigin || sdd->replicate);
 
-	if (sdd->verbose) {
-		uint64_t size = 0;
+	if (sdd->progress && sdd->dryrun) {
 		(void) estimate_ioctl(zhp, sdd->prevsnap_obj,
 		    fromorigin, &size);
-
+		sdd->size += size;
+	}
+	if (sdd->verbose) {
 		send_print_verbose(fout, zhp->zfs_name,
 		    sdd->prevsnap[0] ? sdd->prevsnap : NULL,
 		    size, sdd->parsable);
-		sdd->size += size;
 	}
 
 	if (!sdd->dryrun) {
@@ -1283,6 +1295,8 @@ dump_snapshot(zfs_handle_t *zhp, void *arg)
 			pa.pa_zhp = zhp;
 			pa.pa_fd = sdd->outfd;
 			pa.pa_parsable = sdd->parsable;
+			pa.pa_size = sdd->size;
+			pa.pa_astitle = sdd->progressastitle;
 
 			if ((err = pthread_create(&tid, NULL,
 			    send_progress_thread, &pa)) != 0) {
@@ -1571,6 +1585,7 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 	int error = 0;
 	char name[ZFS_MAX_DATASET_NAME_LEN];
 	enum lzc_send_flags lzc_flags = 0;
+	uint64_t size = 0;
 
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
 	    "cannot resume send"));
@@ -1634,11 +1649,12 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 		fromname = name;
 	}
 
-	if (flags->verbose) {
-		uint64_t size = 0;
+	if (flags->progress) {
 		error = lzc_send_space(zhp->zfs_name, fromname, &size);
 		if (error == 0)
 			size = MAX(0, (int64_t)(size - bytes));
+	}
+	if (flags->verbose) {
 		send_print_verbose(stderr, zhp->zfs_name, fromname,
 		    size, flags->parsable);
 	}
@@ -1654,6 +1670,8 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 			pa.pa_zhp = zhp;
 			pa.pa_fd = outfd;
 			pa.pa_parsable = flags->parsable;
+			pa.pa_size = size;
+			pa.pa_astitle = flags->progressastitle;
 
 			error = pthread_create(&tid, NULL,
 			    send_progress_thread, &pa);
@@ -1863,6 +1881,7 @@ zfs_send(zfs_handle_t *zhp, const char *fromsnap, const char *tosnap,
 	sdd.verbose = flags->verbose;
 	sdd.parsable = flags->parsable;
 	sdd.progress = flags->progress;
+	sdd.progressastitle = flags->progressastitle;
 	sdd.dryrun = flags->dryrun;
 	sdd.large_block = flags->largeblock;
 	sdd.embed_data = flags->embed_data;
@@ -1898,7 +1917,7 @@ zfs_send(zfs_handle_t *zhp, const char *fromsnap, const char *tosnap,
 		sdd.cleanup_fd = -1;
 		sdd.snapholds = NULL;
 	}
-	if (flags->verbose || sdd.snapholds != NULL) {
+	if (flags->progress || sdd.snapholds != NULL) {
 		/*
 		 * Do a verbose no-op dry run to get all the verbose output
 		 * or to gather snapshot hold's before generating any data,
