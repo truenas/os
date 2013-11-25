@@ -1233,6 +1233,18 @@ oce_wq_handler(void *arg)
 }
 
 
+#if __FreeBSD_version >= 1000000
+static __inline void
+drbr_stats_update(struct ifnet *ifp, int len, int mflags)
+{
+#ifndef NO_SLOW_STATS
+	ifp->if_obytes += len;
+	if (mflags & M_MCAST)
+		ifp->if_omcasts++;
+#endif
+}
+#endif
+
 static int 
 oce_multiq_transmit(struct ifnet *ifp, struct mbuf *m, struct oce_wq *wq)
 {
@@ -1722,6 +1734,10 @@ oce_attach_ifp(POCE_SOFTC sc)
 	
 	sc->ifp->if_capenable = sc->ifp->if_capabilities;
 	if_initbaudrate(sc->ifp, IF_Gbps(10));
+
+#if __FreeBSD_version >= 1000000
+	sc->ifp->if_hw_tsomax = OCE_MAX_TSO_SIZE;
+#endif
 
 #if __FreeBSD_version >= 1000000
 	sc->ifp->if_hw_tsomax = OCE_MAX_TSO_SIZE;
