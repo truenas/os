@@ -659,13 +659,21 @@ cache_drain_safe_cpu(uma_zone_t zone)
 	critical_enter();
 	cache = &zone->uz_cpu[curcpu];
 	if (cache->uc_allocbucket) {
-		LIST_INSERT_HEAD(&zone->uz_full_bucket, cache->uc_allocbucket,
-		    ub_link);
+		if (cache->uc_allocbucket->ub_cnt != 0)
+			LIST_INSERT_HEAD(&zone->uz_full_bucket,
+			    cache->uc_allocbucket, ub_link);
+		else
+			LIST_INSERT_HEAD(&zone->uz_free_bucket,
+			    cache->uc_allocbucket, ub_link);
 		cache->uc_allocbucket = NULL;
 	}
 	if (cache->uc_freebucket) {
-		LIST_INSERT_HEAD(&zone->uz_full_bucket, cache->uc_freebucket,
-		    ub_link);
+		if (cache->uc_freebucket->ub_cnt != 0)
+			LIST_INSERT_HEAD(&zone->uz_full_bucket,
+			    cache->uc_freebucket, ub_link);
+		else
+			LIST_INSERT_HEAD(&zone->uz_free_bucket,
+			    cache->uc_freebucket, ub_link);
 		cache->uc_freebucket = NULL;
 	}
 	critical_exit();
