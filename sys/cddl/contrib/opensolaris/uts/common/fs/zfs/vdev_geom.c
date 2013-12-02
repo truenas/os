@@ -61,6 +61,15 @@ TUNABLE_INT("vfs.zfs.vdev.bio_delete_disable", &vdev_geom_bio_delete_disable);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, bio_delete_disable, CTLFLAG_RW,
     &vdev_geom_bio_delete_disable, 0, "Disable BIO_DELETE");
 
+/*
+ * Increase minimal ashift to 12 to ease future upgrades.
+ */
+static int vdev_larger_ashift_minimal = 1;
+TUNABLE_INT("vfs.zfs.vdev.larger_ashift_minimal", &vdev_larger_ashift_minimal);
+SYSCTL_DECL(_vfs_zfs_vdev);
+SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
+    &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
+
 static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
@@ -766,7 +775,9 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	 */
 	*logical_ashift = highbit(MAX(pp->sectorsize, SPA_MINBLOCKSIZE)) - 1;
 	*physical_ashift = 0;
-	if (pp->stripesize)
+	if (vdev_larger_ashift_minimal && pp->stripesize < 4096) {
+		*physical_ashift = highbit(4096) - 1;
+	} else if (pp->stripesize)
 		*physical_ashift = highbit(pp->stripesize) - 1;
 
 	/*
