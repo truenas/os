@@ -900,8 +900,11 @@ carp_send_ad_all(void)
 		CARP_SCLOCK(sc);
 		if ((SC2IFP(sc)->if_flags & IFF_UP) &&
 		    (SC2IFP(sc)->if_drv_flags & IFF_DRV_RUNNING) &&
-		     sc->sc_state == MASTER)
+		     sc->sc_state == MASTER) {
+			CURVNET_SET(sc->sc_carpdev->if_vnet);
 			carp_send_ad_locked(sc);
+			CURVNET_RESTORE();
+		}
 		CARP_SCUNLOCK(sc);
 	}
 	mtx_unlock(&carp_mtx);
@@ -913,7 +916,9 @@ carp_send_ad(void *v)
 	struct carp_softc *sc = v;
 
 	CARP_SCLOCK(sc);
+	CURVNET_SET(sc->sc_carpdev->if_vnet);
 	carp_send_ad_locked(sc);
+	CURVNET_RESTORE();
 	CARP_SCUNLOCK(sc);
 }
 
@@ -1361,7 +1366,9 @@ carp_master_down(void *v)
 	struct carp_softc *sc = v;
 
 	CARP_SCLOCK(sc);
+	CURVNET_SET(sc->sc_carpdev->if_vnet);
 	carp_master_down_locked(sc);
+	CURVNET_RESTORE();
 	CARP_SCUNLOCK(sc);
 }
 
