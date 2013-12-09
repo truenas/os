@@ -1701,6 +1701,12 @@ show_import(nvlist_t *config)
 		    "resilvered.\n"));
 		break;
 
+	case ZPOOL_STATUS_NON_NATIVE_ASHIFT:
+		(void) printf(gettext("status: One or more devices were "
+		    "configured to use a non-native block size.\n"
+		    "\tExpect reduced performance.\n"));
+		break;
+
 	default:
 		/*
 		 * No other status can be seen when importing pools.
