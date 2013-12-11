@@ -940,7 +940,7 @@ carp_send_ad_locked(struct carp_softc *sc)
 		advskew = 255;
 	} else {
 		advbase = sc->sc_advbase;
-		advskew = 240;
+		advskew = sc->sc_advskew;
 		tv.tv_sec = advbase;
 		tv.tv_usec = advskew * 1000000 / 256;
 	}
