@@ -329,7 +329,7 @@ watchdog_loop(void)
 	struct timespec ts_start, ts_end;
 	struct stat sb;
 	long waited;
-	int error, failed;
+	int error, failed, retries = 0;
 
 	while (end_program != 2) {
 		failed = 0;
@@ -360,11 +360,17 @@ watchdog_loop(void)
 
 try_end:
 		if (end_program != 0) {
-			if (watchdog_onoff(0) == 0) {
+			error = watchdog_onoff(0);
+			if (error == 0) {
 				end_program = 2;
+			} else if (retries < 2) {
+				warnx("Could not stop the watchdog, retrying");
+				syslog(LOG_CRIT, "Could not stop the watchdog, retrying");
+				retries ++;
 			} else {
-				warnx("Could not stop the watchdog, not exitting");
-				end_program = 0;
+				warnx("Retry exhausted, existing anyway");
+				syslog(LOG_CRIT, "stop watchdog took too long");
+				end_program = 2;
 			}
 		}
 	}
@@ -497,7 +503,7 @@ struct act_tbl {
 	int at_value;
 };
 
-struct act_tbl act_tbl[] = {
+static const struct act_tbl act_tbl[] = {
 	{ "panic", WD_SOFT_PANIC },
 	{ "ddb", WD_SOFT_DDB },
 	{ "log", WD_SOFT_LOG },
