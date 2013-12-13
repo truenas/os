@@ -1792,6 +1792,16 @@ vlan_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		ifv->ifv_pcp = ifr->ifr_vlan_pcp;
 		vlan_tag_recalculate(ifv);
+	case SIOCSIFCAP:
+		VLAN_LOCK();
+		if (TRUNK(ifv) != NULL) {
+			p = PARENT(ifv);
+			VLAN_UNLOCK();
+			error = (*p->if_ioctl)(p, cmd, data);
+		} else {
+			VLAN_UNLOCK();
+			error = EINVAL;
+		}
 		break;
 
 	default:
