@@ -179,12 +179,6 @@ struct winbond_vendor_device_id {
 		.device_rev	= 0x73,
 		.descr		= "Winbond 83627DHG-P",   
 	},
-	{
-		.vendor_id	= 0x5ca3,
-		.device_id	= 0xc3,
-		.device_rev	= 0x33,
-		.descr		= "Nuvoton WPCM450RA0BX",   
-	},
 };
 
 static void
@@ -616,12 +610,9 @@ wb_probe_enable(device_t dev, int probe)
 		}
 
 		if (!found) {
-			if (probe && dev != NULL) {
-				device_set_desc(dev, "Unknown Winbond/Nuvoton model");
+			if (probe && dev != NULL)
 				device_printf(dev, "DevID 0x%02x DevRev 0x%02x, "
-				    "please report this.\n", dev_id, dev_rev);
-			}
-			found++;
+				    "will not attach, please report this.\n", dev_id, dev_rev);
 		}
 
 		if (probe && found && bootverbose && dev != NULL)
