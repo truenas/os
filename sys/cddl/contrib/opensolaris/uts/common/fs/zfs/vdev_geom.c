@@ -70,6 +70,8 @@ SYSCTL_DECL(_vfs_zfs_vdev);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
     &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
 
+#define	ZFSVOL_CLASS_NAME	"ZFS::ZVOL"
+
 static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
@@ -448,6 +450,8 @@ vdev_geom_attach_taster(struct g_consumer *cp, struct g_provider *pp)
 	int error;
 
 	if (pp->flags & G_PF_WITHER)
+		return (EINVAL);
+	if (strcmp(pp->geom->class->name, ZFSVOL_CLASS_NAME) == 0)
 		return (EINVAL);
 	g_attach(cp, pp);
 	error = g_access(cp, 1, 0, 0);
