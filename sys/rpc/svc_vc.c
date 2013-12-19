@@ -657,6 +657,78 @@ svc_vc_backchannel_stat(SVCXPRT *xprt)
 	return (XPRT_IDLE);
 }
 
+/*
+ * If we have an mbuf chain in cd->mpending, try to parse a record from it,
+ * leaving the result in cd->mreq. If we don't have a complete record, leave
+ * the partial result in cd->mreq and try to read more from the socket.
+ */
+static void
+svc_vc_process_pending(SVCXPRT *xprt)
+{
+	struct cf_conn *cd = (struct cf_conn *) xprt->xp_p1;
+	struct socket *so = xprt->xp_socket;
+	struct mbuf *m;
+
+	/*
+	 * If cd->resid is non-zero, we have part of the
+	 * record already, otherwise we are expecting a record
+	 * marker.
+	 */
+	if (!cd->resid && cd->mpending) {
+		/*
+		 * See if there is enough data buffered to
+		 * make up a record marker. Make sure we can
+		 * handle the case where the record marker is
+		 * split across more than one mbuf.
+		 */
+		size_t n = 0;
+		uint32_t header;
+
+		m = cd->mpending;
+		while (n < sizeof(uint32_t) && m) {
+			n += m->m_len;
+			m = m->m_next;
+		}
+		if (n < sizeof(uint32_t)) {
+			so->so_rcv.sb_lowat = sizeof(uint32_t) - n;
+			return;
+		}
+		m_copydata(cd->mpending, 0, sizeof(header),
+		    (char *)&header);
+		header = ntohl(header);
+		cd->eor = (header & 0x80000000) != 0;
+		cd->resid = header & 0x7fffffff;
+		m_adj(cd->mpending, sizeof(uint32_t));
+	}
+
+	/*
+	 * Start pulling off mbufs from cd->mpending
+	 * until we either have a complete record or
+	 * we run out of data. We use m_split to pull
+	 * data - it will pull as much as possible and
+	 * split the last mbuf if necessary.
+	 */
+	while (cd->mpending && cd->resid) {
+		m = cd->mpending;
+		if (cd->mpending->m_next
+		    || cd->mpending->m_len > cd->resid)
+			cd->mpending = m_split(cd->mpending,
+			    cd->resid, M_WAITOK);
+		else
+			cd->mpending = NULL;
+		if (cd->mreq)
+			m_last(cd->mreq)->m_next = m;
+		else
+			cd->mreq = m;
+		while (m) {
+			cd->resid -= m->m_len;
+			m = m->m_next;
+		}
+	}
+
+	so->so_rcv.sb_lowat = imax(1, imin(cd->resid, so->so_rcv.sb_hiwat / 2));
+}
+
 static bool_t
 svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
     struct sockaddr **addrp, struct mbuf **mp)
