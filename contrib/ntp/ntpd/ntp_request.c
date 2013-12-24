@@ -82,8 +82,7 @@ static	void	do_resaddflags	P((struct sockaddr_storage *, struct interface *, str
 static	void	do_ressubflags	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	do_unrestrict	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	do_restrict	P((struct sockaddr_storage *, struct interface *, struct req_pkt *, int));
-static	void	mon_getlist_0	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
-static	void	mon_getlist_1	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
+static	void	mon_getlist	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	reset_stats	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	reset_peer	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	do_key_reread	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
@@ -143,8 +142,8 @@ static	struct req_proc ntp_codes[] = {
 				sizeof(struct conf_restrict), do_ressubflags },
 	{ REQ_UNRESTRICT, AUTH, v4sizeof(struct conf_restrict),
 				sizeof(struct conf_restrict), do_unrestrict },
-	{ REQ_MON_GETLIST,	NOAUTH,	0, 0,	mon_getlist_0 },
-	{ REQ_MON_GETLIST_1,	NOAUTH,	0, 0,	mon_getlist_1 },
+	{ REQ_MON_GETLIST,	NOAUTH,	0, 0,	mon_getlist },
+	{ REQ_MON_GETLIST_1,	NOAUTH,	0, 0,	mon_getlist },
 	{ REQ_RESET_STATS, AUTH, sizeof(struct reset_flags), 0, reset_stats },
 	{ REQ_RESET_PEER,  AUTH, v4sizeof(struct conf_unpeer),
 				sizeof(struct conf_unpeer), reset_peer },
@@ -1904,7 +1903,7 @@ do_restrict(
  * mon_getlist - return monitor data
  */
 static void
-mon_getlist_0(
+mon_getlist(
 	struct sockaddr_storage *srcadr,
 	struct interface *inter,
 	struct req_pkt *inpkt
