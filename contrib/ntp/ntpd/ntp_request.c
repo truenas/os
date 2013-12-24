@@ -82,8 +82,7 @@ static	void	do_resaddflags	P((struct sockaddr_storage *, struct interface *, str
 static	void	do_ressubflags	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	do_unrestrict	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	do_restrict	P((struct sockaddr_storage *, struct interface *, struct req_pkt *, int));
-static	void	mon_getlist_0	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
-static	void	mon_getlist_1	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
+static	void	mon_getlist	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	reset_stats	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	reset_peer	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
 static	void	do_key_reread	P((struct sockaddr_storage *, struct interface *, struct req_pkt *));
@@ -143,8 +142,8 @@ static	struct req_proc ntp_codes[] = {
 				sizeof(struct conf_restrict), do_ressubflags },
 	{ REQ_UNRESTRICT, AUTH, v4sizeof(struct conf_restrict),
 				sizeof(struct conf_restrict), do_unrestrict },
-	{ REQ_MON_GETLIST,	NOAUTH,	0, 0,	mon_getlist_0 },
-	{ REQ_MON_GETLIST_1,	NOAUTH,	0, 0,	mon_getlist_1 },
+	{ REQ_MON_GETLIST,	NOAUTH,	0, 0,	mon_getlist },
+	{ REQ_MON_GETLIST_1,	NOAUTH,	0, 0,	mon_getlist },
 	{ REQ_RESET_STATS, AUTH, sizeof(struct reset_flags), 0, reset_stats },
 	{ REQ_RESET_PEER,  AUTH, v4sizeof(struct conf_unpeer),
 				sizeof(struct conf_unpeer), reset_peer },
@@ -1904,103 +1903,13 @@ do_restrict(
  * mon_getlist - return monitor data
  */
 static void
-mon_getlist_0(
+mon_getlist(
 	struct sockaddr_storage *srcadr,
 	struct interface *inter,
 	struct req_pkt *inpkt
 	)
 {
-	register struct info_monitor *im;
-	register struct mon_data *md;
-	extern struct mon_data mon_mru_list;
-	extern int mon_enabled;
-
-#ifdef DEBUG
-	if (debug > 2)
-	    printf("wants monitor 0 list\n");
-#endif
-	if (!mon_enabled) {
-		req_ack(srcadr, inter, inpkt, INFO_ERR_NODATA);
-		return;
-	}
-	im = (struct info_monitor *)prepare_pkt(srcadr, inter, inpkt,
-	    v6sizeof(struct info_monitor));
-	for (md = mon_mru_list.mru_next; md != &mon_mru_list && im != 0;
-	     md = md->mru_next) {
-		im->lasttime = htonl((u_int32)md->avg_interval);
-		im->firsttime = htonl((u_int32)(current_time - md->lasttime));
-		im->lastdrop = htonl((u_int32)md->drop_count);
-		im->count = htonl((u_int32)(md->count));
-		if (md->rmtadr.ss_family == AF_INET6) {
-			if (!client_v6_capable)
-				continue;
-			im->addr6 = GET_INADDR6(md->rmtadr);
-			im->v6_flag = 1;
-		} else {
-			im->addr = GET_INADDR(md->rmtadr);
-			if (client_v6_capable)
-				im->v6_flag = 0;
-		}
-		im->port = md->rmtport;
-		im->mode = md->mode;
-		im->version = md->version;
-		im = (struct info_monitor *)more_pkt();
-	}
-	flush_pkt();
-}
-
-/*
- * mon_getlist - return monitor data
- */
-static void
-mon_getlist_1(
-	struct sockaddr_storage *srcadr,
-	struct interface *inter,
-	struct req_pkt *inpkt
-	)
-{
-	register struct info_monitor_1 *im;
-	register struct mon_data *md;
-	extern struct mon_data mon_mru_list;
-	extern int mon_enabled;
-
-	if (!mon_enabled) {
-		req_ack(srcadr, inter, inpkt, INFO_ERR_NODATA);
-		return;
-	}
-	im = (struct info_monitor_1 *)prepare_pkt(srcadr, inter, inpkt,
-	    v6sizeof(struct info_monitor_1));
-	for (md = mon_mru_list.mru_next; md != &mon_mru_list && im != 0;
-	     md = md->mru_next) {
-		im->lasttime = htonl((u_int32)md->avg_interval);
-		im->firsttime = htonl((u_int32)(current_time - md->lasttime));
-		im->lastdrop = htonl((u_int32)md->drop_count);
-		im->count = htonl((u_int32)md->count);
-		if (md->rmtadr.ss_family == AF_INET6) {
-			if (!client_v6_capable)
-				continue;
-			im->addr6 = GET_INADDR6(md->rmtadr);
-			im->v6_flag = 1;
-			im->daddr6 = GET_INADDR6(md->interface->sin);
-		} else {
-			im->addr = GET_INADDR(md->rmtadr);
-			if (client_v6_capable)
-				im->v6_flag = 0;
-			im->daddr = (md->cast_flags == MDF_BCAST)  
-				? GET_INADDR(md->interface->bcast) 
-				: (md->cast_flags 
-				? (GET_INADDR(md->interface->sin)
-				? GET_INADDR(md->interface->sin)
-				: GET_INADDR(md->interface->bcast))
-				: 4);
-		}
-		im->flags = htonl(md->cast_flags);
-		im->port = md->rmtport;
-		im->mode = md->mode;
-		im->version = md->version;
-		im = (struct info_monitor_1 *)more_pkt();
-	}
-	flush_pkt();
+	req_ack(srcadr, inter, inpkt, INFO_ERR_NODATA);
 }
 
 /*
