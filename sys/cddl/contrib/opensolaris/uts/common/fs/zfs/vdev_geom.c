@@ -64,7 +64,7 @@ SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, bio_delete_disable, CTLFLAG_RW,
 /*
  * Increase minimal ashift to 12 to ease future upgrades.
  */
-static int vdev_larger_ashift_minimal = 1;
+static int vdev_larger_ashift_minimal = 0;
 TUNABLE_INT("vfs.zfs.vdev.larger_ashift_minimal", &vdev_larger_ashift_minimal);
 SYSCTL_DECL(_vfs_zfs_vdev);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
