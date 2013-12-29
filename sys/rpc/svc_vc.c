@@ -386,7 +386,7 @@ svc_vc_rendezvous_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 		 */
 		ACCEPT_LOCK();
 		if (TAILQ_EMPTY(&xprt->xp_socket->so_comp))
-			xprt_inactive(xprt);
+			xprt_inactive_self(xprt);
 		ACCEPT_UNLOCK();
 		sx_xunlock(&xprt->xp_lock);
 		return (FALSE);
@@ -399,7 +399,7 @@ svc_vc_rendezvous_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 			soupcall_clear(xprt->xp_socket, SO_RCV);
 		}
 		SOCKBUF_UNLOCK(&xprt->xp_socket->so_rcv);
-		xprt_inactive(xprt);
+		xprt_inactive_self(xprt);
 		sx_xunlock(&xprt->xp_lock);
 		return (FALSE);
 	}
@@ -668,7 +668,7 @@ svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 			if (cd->mreq == NULL || cd->resid != 0) {
 				SOCKBUF_LOCK(&so->so_rcv);
 				if (!soreadable(so))
-					xprt_inactive(xprt);
+					xprt_inactive_self(xprt);
 				SOCKBUF_UNLOCK(&so->so_rcv);
 			}
 
@@ -710,7 +710,7 @@ svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 			 */
 			SOCKBUF_LOCK(&so->so_rcv);
 			if (!soreadable(so))
-				xprt_inactive(xprt);
+				xprt_inactive_self(xprt);
 			SOCKBUF_UNLOCK(&so->so_rcv);
 			sx_xunlock(&xprt->xp_lock);
 			return (FALSE);
@@ -723,7 +723,7 @@ svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 				soupcall_clear(so, SO_RCV);
 			}
 			SOCKBUF_UNLOCK(&so->so_rcv);
-			xprt_inactive(xprt);
+			xprt_inactive_self(xprt);
 			cd->strm_stat = XPRT_DIED;
 			sx_xunlock(&xprt->xp_lock);
 			return (FALSE);
@@ -733,7 +733,7 @@ svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 			/*
 			 * EOF - the other end has closed the socket.
 			 */
-			xprt_inactive(xprt);
+			xprt_inactive_self(xprt);
 			cd->strm_stat = XPRT_DIED;
 			sx_xunlock(&xprt->xp_lock);
 			return (FALSE);
@@ -764,7 +764,7 @@ svc_vc_backchannel_recv(SVCXPRT *xprt, struct rpc_msg *msg,
 	mtx_lock(&ct->ct_lock);
 	m = cd->mreq;
 	if (m == NULL) {
-		xprt_inactive(xprt);
+		xprt_inactive_self(xprt);
 		mtx_unlock(&ct->ct_lock);
 		sx_xunlock(&xprt->xp_lock);
 		return (FALSE);
