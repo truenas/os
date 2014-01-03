@@ -543,6 +543,30 @@ __END_DECLS
 #endif
 
 /*
+ * Service connection loss registration
+ *
+ * svc_loss_reg(xprt, dispatch)
+ *	const SVCXPRT *xprt;
+ *	const void (*dispatch)();
+ */
+
+__BEGIN_DECLS
+extern bool_t	svc_loss_reg(SVCXPRT *, void (*)(SVCXPRT *));
+__END_DECLS
+
+/*
+ * Service connection loss un-registration
+ *
+ * svc_loss_unreg(xprt, dispatch)
+ *	const SVCXPRT *xprt;
+ *	const void (*dispatch)();
+ */
+
+__BEGIN_DECLS
+extern void	svc_loss_unreg(SVCPOOL *, void (*)(SVCXPRT *));
+__END_DECLS
+
+/*
  * Transport registration.
  *
  * xprt_register(xprt)
