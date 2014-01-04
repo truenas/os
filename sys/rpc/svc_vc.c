@@ -162,7 +162,6 @@ svc_vc_create(SVCPOOL *pool, struct socket *so, size_t sendsize,
 
 	xprt = svc_xprt_alloc();
 	sx_init(&xprt->xp_lock, "xprt->xp_lock");
-	sx_init(&xprt->xp_snd_lock, "xprt->xp_snd_lock");
 	xprt->xp_pool = pool;
 	xprt->xp_socket = so;
 	xprt->xp_p1 = NULL;
@@ -237,7 +236,6 @@ svc_vc_create_conn(SVCPOOL *pool, struct socket *so, struct sockaddr *raddr)
 
 	xprt = svc_xprt_alloc();
 	sx_init(&xprt->xp_lock, "xprt->xp_lock");
-	sx_init(&xprt->xp_snd_lock, "xprt->xp_snd_lock");
 	xprt->xp_pool = pool;
 	xprt->xp_socket = so;
 	xprt->xp_p1 = cd;
@@ -299,7 +297,6 @@ svc_vc_create_backchannel(SVCPOOL *pool)
 
 	xprt = svc_xprt_alloc();
 	sx_init(&xprt->xp_lock, "xprt->xp_lock");
-	sx_init(&xprt->xp_snd_lock, "xprt->xp_snd_lock");
 	xprt->xp_pool = pool;
 	xprt->xp_socket = NULL;
 	xprt->xp_p1 = cd;
@@ -1002,8 +999,8 @@ svc_vc_backchannel_reply(SVCXPRT *xprt, struct rpc_msg *msg,
 			if (seq)
 				*seq = xprt->xp_snd_cnt;
 			stat = TRUE;
-		}
-		sx_xunlock(&xprt->xp_snd_lock);
+		} else
+			atomic_subtract_32(&xprt->xp_snd_cnt, len);
 	} else {
 		m_freem(mrep);
 	}
