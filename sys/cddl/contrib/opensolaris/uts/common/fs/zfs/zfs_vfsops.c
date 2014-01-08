@@ -2199,7 +2199,7 @@ zfs_fhtovp(vfs_t *vfsp, fid_t *fidp, int flags, vnode_t **vpp)
 
 	*vpp = ZTOV(zp);
 	ZFS_EXIT(zfsvfs);
-	err = vn_lock(*vpp, flags | LK_RETRY);
+	err = vn_lock(*vpp, flags);
 	if (err == 0)
 		vnode_create_vobject(*vpp, zp->z_size, curthread);
 	else
