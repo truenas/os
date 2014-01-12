@@ -211,6 +211,7 @@ SUBDIR=	\
 	mmc \
 	mmcsd \
 	mps \
+	mpslsi3 \
 	mpt \
 	mqueue \
 	msdosfs \
