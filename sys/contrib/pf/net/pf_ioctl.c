@@ -1453,6 +1453,10 @@ pfioctl(dev_t dev, u_long cmd, caddr_t addr, int flags, struct proc *p)
 #endif
 	int			 error = 0;
 
+	/* XXX Block PF in VNETs to prevent crashes until it is fixed. */
+	if (!IS_DEFAULT_VNET(TD_TO_VNET(td)))
+		return (ENODEV);
+
 	CURVNET_SET(TD_TO_VNET(td));
 
 	/* XXX keep in sync with switch() below */
