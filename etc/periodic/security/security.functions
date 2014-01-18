@@ -65,9 +65,12 @@ check_diff() {
   fi
 
   if [ ! -f ${LOG}/${label}.today ]; then
-    rc=1
-    echo ""
-    echo "No ${LOG}/${label}.today"
+    case ${daily_status_security_diff_no_today_info:-"YES"} in
+      [Yy][Ee][Ss])
+      rc=1
+      echo ""
+      echo "No ${LOG}/${label}.today"
+    esac
     cp ${tmpf} ${LOG}/${label}.today || rc=3
   fi
 
