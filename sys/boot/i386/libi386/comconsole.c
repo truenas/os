@@ -314,6 +314,7 @@ comc_setup(int speed, int port)
     outb(comc_port + com_dlbl, COMC_BPS(speed) & 0xff);
     outb(comc_port + com_dlbh, COMC_BPS(speed) >> 8);
     outb(comc_port + com_cfcr, COMC_FMT);
+    outb(comc_port + com_ier, 0);
     outb(comc_port + com_mcr, MCR_RTS | MCR_DTR);
 
     tries = 0;
