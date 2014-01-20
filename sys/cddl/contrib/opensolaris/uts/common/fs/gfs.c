@@ -448,7 +448,6 @@ gfs_lookup_dot(vnode_t **vpp, vnode_t *dvp, vnode_t *pvp, const char *nm)
 			VN_HOLD(pvp);
 			*vpp = pvp;
 		}
-		vn_lock(*vpp, LK_EXCLUSIVE | LK_RETRY);
 		return (0);
 	}
 
@@ -485,6 +484,7 @@ gfs_file_create(size_t size, vnode_t *pvp, vfs_t *vfsp, vnodeops_t *ops)
 	fp = kmem_zalloc(size, KM_SLEEP);
 	error = getnewvnode("zfs", vfsp, ops, &vp);
 	ASSERT(error == 0);
+	VN_LOCK_ASHARE(vp);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	vp->v_data = (caddr_t)fp;
 
@@ -496,9 +496,9 @@ gfs_file_create(size_t size, vnode_t *pvp, vfs_t *vfsp, vnodeops_t *ops)
 	fp->gfs_size = size;
 	fp->gfs_type = GFS_FILE;
 
-	vp->v_vflag |= VV_FORCEINSMQ;
+	vp->v_vflag |= VV_FORCEINSMQ | VV_INSMQHEAD;
 	error = insmntque(vp, vfsp);
-	vp->v_vflag &= ~VV_FORCEINSMQ;
+	vp->v_vflag &= ~(VV_FORCEINSMQ | VV_INSMQHEAD);
 	KASSERT(error == 0, ("insmntque() failed: error %d", error));
 
 	/*
@@ -637,12 +637,7 @@ gfs_file_inactive(vnode_t *vp)
 	if (fp->gfs_parent == NULL || (vp->v_flag & V_XATTRDIR))
 		goto found;
 
-	/*
-	 * XXX cope with a FreeBSD-specific race wherein the parent's
-	 * snapshot data can be freed before the parent is
-	 */
-	if ((dp = fp->gfs_parent->v_data) == NULL)
-		return (NULL);
+	dp = fp->gfs_parent->v_data;
 
 	/*
 	 * First, see if this vnode is cached in the parent.
@@ -669,37 +664,44 @@ found:
 	if (vp->v_flag & V_XATTRDIR)
 		VI_LOCK(fp->gfs_parent);
 #endif
-	VI_LOCK(vp);
-	/*
-	 * Really remove this vnode
-	 */
-	data = vp->v_data;
-	if (ge != NULL) {
+	if (vp->v_count == 0 || vp->v_iflag & VI_DOOMED) {
 		/*
-		 * If this was a statically cached entry, simply set the
-		 * cached vnode to NULL.
+		 * Really remove this vnode
 		 */
-		ge->gfse_vnode = NULL;
-	}
-	VI_UNLOCK(vp);
+		data = vp->v_data;
+		if (ge != NULL) {
+			/*
+			 * If this was a statically cached entry, simply set the
+			 * cached vnode to NULL.
+			 */
+			ge->gfse_vnode = NULL;
+		}
+#ifdef TODO
+		if (vp->v_flag & V_XATTRDIR)
+			VI_UNLOCK(fp->gfs_parent);
+#endif
 
-	/*
-	 * Free vnode and release parent
-	 */
-	if (fp->gfs_parent) {
+		/*
+		 * Free vnode and release parent
+		 */
+		if (fp->gfs_parent) {
+			if (dp)
+				gfs_dir_unlock(dp);
+			VN_RELE(fp->gfs_parent);
+		} else {
+			ASSERT(vp->v_vfsp != NULL);
+			VFS_RELE(vp->v_vfsp);
+		}
+	} else {
+		data = NULL;
+#ifdef TODO
+		if (vp->v_flag & V_XATTRDIR)
+			VI_UNLOCK(fp->gfs_parent);
+#endif
 		if (dp)
 			gfs_dir_unlock(dp);
-		VOP_UNLOCK(vp, 0);
-		VN_RELE(fp->gfs_parent);
-		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-	} else {
-		ASSERT(vp->v_vfsp != NULL);
-		VFS_RELE(vp->v_vfsp);
 	}
-#ifdef TODO
-	if (vp->v_flag & V_XATTRDIR)
-		VI_UNLOCK(fp->gfs_parent);
-#endif
+
 	return (data);
 }
 
@@ -1230,16 +1232,15 @@ gfs_vop_inactive(ap)
 {
 	vnode_t *vp = ap->a_vp;
 	gfs_file_t *fp = vp->v_data;
+	void *data;
 
 	if (fp->gfs_type == GFS_DIR)
-		gfs_dir_inactive(vp);
+		data = gfs_dir_inactive(vp);
 	else
-		gfs_file_inactive(vp);
+		data = gfs_file_inactive(vp);
 
-	VI_LOCK(vp);
-	vp->v_data = NULL;
-	VI_UNLOCK(vp);
-	kmem_free(fp, fp->gfs_size);
+	if (data != NULL)
+		kmem_free(data, fp->gfs_size);
 
 	return (0);
 }
