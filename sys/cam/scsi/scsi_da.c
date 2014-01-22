@@ -2570,6 +2570,7 @@ da_delete_unmap(struct cam_periph *periph, union ccb *ccb, struct bio *bp)
 	struct bio *bp1;
 	uint8_t *buf = softc->unmap_buf;
 	uint64_t lba, lastlba = (uint64_t)-1;
+	uint64_t totalcount = 0;
 	uint64_t count;
 	uint32_t lastcount = 0, c;
 	uint32_t off, ranges = 0;
@@ -2603,6 +2604,7 @@ da_delete_unmap(struct cam_periph *periph, union ccb *ccb, struct bio *bp)
 			scsi_ulto4b(lastcount, &buf[off + 8]);
 			count -= c;
 			lba +=c;
+			totalcount += c;
 		}
 
 		while (count > 0) {
@@ -2610,29 +2612,27 @@ da_delete_unmap(struct cam_periph *periph, union ccb *ccb, struct bio *bp)
 			if (totalcount + c > softc->unmap_max_lba ||
 			    ranges >= softc->unmap_max_ranges) {
 				xpt_print(periph->path,
-				    "%s issuing short delete %d > %d\n",
+				    "%s issuing short delete %ld > %ld"
+				    "|| %d >= %d",
 				    da_delete_method_desc[softc->delete_method],
+				    totalcount + c, softc->unmap_max_lba,
 				    ranges, softc->unmap_max_ranges);
 				break;
 			}
-			c = min(count, softc->unmap_max_lba);
 			off = (ranges * UNMAP_RANGE_SIZE) + UNMAP_HEAD_SIZE;
 			scsi_u64to8b(lba, &buf[off + 0]);
 			scsi_ulto4b(c, &buf[off + 8]);
 			lba += c;
+			totalcount += c;
 			ranges++;
 			count -= c;
 			lastcount = c;
 		}
 		lastlba = lba;
 		bp1 = bioq_first(&softc->delete_queue);
-		/*
-		 * Assume no range extension on the next loop iteration to
-		 * avoid issuing a short delete.
-		 */
 		if (bp1 == NULL || ranges >= softc->unmap_max_ranges ||
-		    bp1->bio_bcount / softc->params.secsize >
-		    softc->unmap_max_lba * (softc->unmap_max_ranges - ranges))
+		    totalcount + bp1->bio_bcount /
+		    softc->params.secsize > softc->unmap_max_lba)
 			break;
 	} while (1);
 	scsi_ulto2b(ranges * 16 + 6, &buf[0]);
