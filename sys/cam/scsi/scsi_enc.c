@@ -434,6 +434,8 @@ enc_ioctl(struct cdev *dev, u_long cmd, caddr_t arg_addr, int flag,
 	case ENCIOC_GETELMSTAT:
 	case ENCIOC_GETELMDESC:
 	case ENCIOC_GETELMDEVNAMES:
+	case ENCIOC_GETENCNAME:
+	case ENCIOC_GETENCID:
 		break;
 	default:
 		if ((flag & FWRITE) == 0) {
@@ -488,6 +490,8 @@ enc_ioctl(struct cdev *dev, u_long cmd, caddr_t arg_addr, int flag,
 
 	case ENCIOC_GETSTRING:
 	case ENCIOC_SETSTRING:
+	case ENCIOC_GETENCNAME:
+	case ENCIOC_GETENCID:
 		if (enc->enc_vec.handle_string == NULL) {
 			error = EINVAL;
 			break;
