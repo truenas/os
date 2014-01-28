@@ -83,9 +83,8 @@ typedef enum {
 	DA_FLAG_NEW_PACK	= 0x002,
 	DA_FLAG_PACK_LOCKED	= 0x004,
 	DA_FLAG_PACK_REMOVABLE	= 0x008,
-	DA_FLAG_SAW_MEDIA	= 0x010,
 	DA_FLAG_NEED_OTAG	= 0x020,
-	DA_FLAG_WENT_IDLE	= 0x040,
+	DA_FLAG_WAS_OTAG	= 0x040,
 	DA_FLAG_RETRY_UA	= 0x080,
 	DA_FLAG_OPEN		= 0x100,
 	DA_FLAG_SCTX_INIT	= 0x200,
@@ -200,22 +199,20 @@ struct da_softc {
 	struct	 bio_queue_head bio_queue;
 	struct	 bio_queue_head delete_queue;
 	struct	 bio_queue_head delete_run_queue;
-	SLIST_ENTRY(da_softc) links;
 	LIST_HEAD(, ccb_hdr) pending_ccbs;
+	int	 tur;			/* TEST UNIT READY should be sent */
+	int	 refcount;		/* Active xpt_action() calls */
 	da_state state;
 	da_flags flags;	
 	da_quirks quirks;
 	int	 sort_io_queue;
 	int	 minimum_cmd_size;
 	int	 error_inject;
-	int	 ordered_tag_count;
-	int	 outstanding_cmds;
 	int	 trim_max_ranges;
 	int	 delete_running;
-	int	 tur;
 	int	 delete_available;	/* Delete methods possibly available */
 	uint32_t		unmap_max_ranges;
-	uint32_t		unmap_max_lba; /* Max LBAs in a single range */
+	uint32_t		unmap_max_lba; /* Max LBAs in UNMAP req */
 	uint64_t		ws_max_blks;
 	da_delete_methods	delete_method;
 	da_delete_func_t	*delete_func;
@@ -1009,6 +1006,14 @@ static struct da_quirk_entry da_quirk_table[] =
 	},
 	{
 		/*
+		 * Intel X25-M Series SSDs
+		 * 4k optimised & trim only works in 4k requests + 4k aligned
+		 */
+		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "INTEL SSDSA2M*", "*" },
+		/*quirks*/DA_Q_4K
+	},
+	{
+		/*
 		 * Kingston E100 Series SSDs
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
@@ -1021,6 +1026,22 @@ static struct da_quirk_entry da_quirk_table[] =
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
 		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "KINGSTON SH103S3*", "*" },
+		/*quirks*/DA_Q_4K
+	},
+	{
+		/*
+		 * Marvell SSDs (entry taken from OpenSolaris)
+		 * 4k optimised & trim only works in 4k requests + 4k aligned
+		 */
+		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "MARVELL SD88SA02*", "*" },
+		/*quirks*/DA_Q_4K
+	},
+	{
+		/*
+		 * OCZ Agility 2 SSDs
+		 * 4k optimised & trim only works in 4k requests + 4k aligned
+		 */
+		{ T_DIRECT, SIP_MEDIA_FIXED, "*", "OCZ-AGILITY2*", "*" },
 		/*quirks*/DA_Q_4K
 	},
 	{
@@ -1194,7 +1215,6 @@ daopen(struct disk *dp)
 {
 	struct cam_periph *periph;
 	struct da_softc *softc;
-	int unit;
 	int error;
 
 	periph = (struct cam_periph *)dp->d_drv1;
@@ -1209,18 +1229,10 @@ daopen(struct disk *dp)
 		return (error);
 	}
 
-	unit = periph->unit_number;
-	softc = (struct da_softc *)periph->softc;
-	softc->flags |= DA_FLAG_OPEN;
-
 	CAM_DEBUG(periph->path, CAM_DEBUG_TRACE | CAM_DEBUG_PERIPH,
 	    ("daopen\n"));
 
-	if ((softc->flags & DA_FLAG_PACK_INVALID) != 0) {
-		/* Invalidate our pack information. */
-		softc->flags &= ~DA_FLAG_PACK_INVALID;
-	}
-
+	softc = (struct da_softc *)periph->softc;
 	dareprobe(periph);
 
 	/* Wait for the disk size update.  */
@@ -1229,25 +1241,23 @@ daopen(struct disk *dp)
 	if (error != 0)
 		xpt_print(periph->path, "unable to retrieve capacity data\n");
 
-	if (periph->flags & CAM_PERIPH_INVALID ||
-	    softc->disk->d_sectorsize == 0 ||
-	    softc->disk->d_mediasize == 0)
+	if (periph->flags & CAM_PERIPH_INVALID)
 		error = ENXIO;
 
 	if (error == 0 && (softc->flags & DA_FLAG_PACK_REMOVABLE) != 0 &&
 	    (softc->quirks & DA_Q_NO_PREVENT) == 0)
 		daprevent(periph, PR_PREVENT);
 
-	if (error == 0)
-		softc->flags |= DA_FLAG_SAW_MEDIA;
+	if (error == 0) {
+		softc->flags &= ~DA_FLAG_PACK_INVALID;
+		softc->flags |= DA_FLAG_OPEN;
+	}
 
 	cam_periph_unhold(periph);
 	cam_periph_unlock(periph);
 
-	if (error != 0) {
-		softc->flags &= ~DA_FLAG_OPEN;
+	if (error != 0)
 		cam_periph_release(periph);
-	}
 
 	return (error);
 }
@@ -1549,9 +1559,6 @@ daoninvalidate(struct cam_periph *periph)
 	 * done cleaning up its resources.
 	 */
 	disk_gone(softc->disk);
-
-	xpt_print(periph->path, "lost device - %d outstanding, %d refs\n",
-		  softc->outstanding_cmds, periph->refcount);
 }
 
 static void
@@ -1561,7 +1568,6 @@ dacleanup(struct cam_periph *periph)
 
 	softc = (struct da_softc *)periph->softc;
 
-	xpt_print(periph->path, "removing device entry\n");
 	cam_periph_unlock(periph);
 
 	/*
@@ -1857,7 +1863,7 @@ dadeletemaxsize(struct da_softc *softc, da_delete_methods delete_method)
 
 	switch(delete_method) {
 	case DA_DELETE_UNMAP:
-		sectors = (off_t)softc->unmap_max_lba * softc->unmap_max_ranges;
+		sectors = (off_t)softc->unmap_max_lba;
 		break;
 	case DA_DELETE_ATA_TRIM:
 		sectors = (off_t)ATA_DSM_RANGE_MAX * softc->trim_max_ranges;
@@ -2259,7 +2265,7 @@ skipstate:
 		if ((bp->bio_flags & BIO_ORDERED) != 0 ||
 		    (softc->flags & DA_FLAG_NEED_OTAG) != 0) {
 			softc->flags &= ~DA_FLAG_NEED_OTAG;
-			softc->ordered_tag_count++;
+			softc->flags |= DA_FLAG_WAS_OTAG;
 			tag_code = MSG_ORDERED_Q_TAG;
 		} else {
 			tag_code = MSG_SIMPLE_Q_TAG;
@@ -2311,13 +2317,8 @@ skipstate:
 		start_ccb->ccb_h.ccb_state = DA_CCB_BUFFER_IO;
 
 out:
-		/*
-		 * Block out any asyncronous callbacks
-		 * while we touch the pending ccb list.
-		 */
 		LIST_INSERT_HEAD(&softc->pending_ccbs,
 				 &start_ccb->ccb_h, periph_links.le);
-		softc->outstanding_cmds++;
 
 		/* We expect a unit attention from this device */
 		if ((softc->flags & DA_FLAG_RETRY_UA) != 0) {
@@ -2542,6 +2543,7 @@ da_delete_unmap(struct cam_periph *periph, union ccb *ccb, struct bio *bp)
 	struct bio *bp1;
 	uint8_t *buf = softc->unmap_buf;
 	uint64_t lba, lastlba = (uint64_t)-1;
+	uint64_t totalcount = 0;
 	uint64_t count;
 	uint32_t lastcount = 0, c;
 	uint32_t off, ranges = 0;
@@ -2568,41 +2570,42 @@ da_delete_unmap(struct cam_periph *periph, union ccb *ccb, struct bio *bp)
 
 		/* Try to extend the previous range. */
 		if (lba == lastlba) {
-			c = min(count, softc->unmap_max_lba - lastcount);
+			c = omin(count, UNMAP_RANGE_MAX - lastcount);
 			lastcount += c;
 			off = ((ranges - 1) * UNMAP_RANGE_SIZE) +
 			      UNMAP_HEAD_SIZE;
 			scsi_ulto4b(lastcount, &buf[off + 8]);
 			count -= c;
 			lba +=c;
+			totalcount += c;
 		}
 
 		while (count > 0) {
-			if (ranges > softc->unmap_max_ranges) {
+			c = omin(count, UNMAP_RANGE_MAX);
+			if (totalcount + c > softc->unmap_max_lba ||
+			    ranges >= softc->unmap_max_ranges) {
 				xpt_print(periph->path,
-				    "%s issuing short delete %d > %d\n",
+				    "%s issuing short delete %ld > %ld"
+				    "|| %d >= %d",
 				    da_delete_method_desc[softc->delete_method],
+				    totalcount + c, softc->unmap_max_lba,
 				    ranges, softc->unmap_max_ranges);
 				break;
 			}
-			c = min(count, softc->unmap_max_lba);
 			off = (ranges * UNMAP_RANGE_SIZE) + UNMAP_HEAD_SIZE;
 			scsi_u64to8b(lba, &buf[off + 0]);
 			scsi_ulto4b(c, &buf[off + 8]);
 			lba += c;
+			totalcount += c;
 			ranges++;
 			count -= c;
 			lastcount = c;
 		}
 		lastlba = lba;
 		bp1 = bioq_first(&softc->delete_queue);
-		/*
-		 * Assume no range extension on the next loop iteration to
-		 * avoid issuing a short delete.
-		 */
 		if (bp1 == NULL || ranges >= softc->unmap_max_ranges ||
-		    bp1->bio_bcount / softc->params.secsize >
-		    softc->unmap_max_lba * (softc->unmap_max_ranges - ranges))
+		    totalcount + bp1->bio_bcount /
+		    softc->params.secsize > softc->unmap_max_lba)
 			break;
 	} while (1);
 	scsi_ulto2b(ranges * 16 + 6, &buf[0]);
@@ -2940,7 +2943,10 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 					bp->bio_flags |= BIO_ERROR;
 				}
 			} else if (bp != NULL) {
-				bp->bio_resid = csio->resid;
+				if (state == DA_CCB_DELETE)
+					bp->bio_resid = 0;
+				else
+					bp->bio_resid = csio->resid;
 				bp->bio_error = 0;
 				if (bp->bio_resid != 0)
 					bp->bio_flags |= BIO_ERROR;
@@ -2954,7 +2960,10 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 		} else if (bp != NULL) {
 			if ((done_ccb->ccb_h.status & CAM_DEV_QFRZN) != 0)
 				panic("REQ_CMP with QFRZN");
-			bp->bio_resid = csio->resid;
+			if (state == DA_CCB_DELETE)
+				bp->bio_resid = 0;
+			else
+				bp->bio_resid = csio->resid;
 			if (csio->resid > 0)
 				bp->bio_flags |= BIO_ERROR;
 			if (softc->error_inject != 0) {
@@ -2963,30 +2972,21 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 				bp->bio_flags |= BIO_ERROR;
 				softc->error_inject = 0;
 			}
-
 		}
 
-		/*
-		 * Block out any asyncronous callbacks
-		 * while we touch the pending ccb list.
-		 */
 		LIST_REMOVE(&done_ccb->ccb_h, periph_links.le);
-		softc->outstanding_cmds--;
-		if (softc->outstanding_cmds == 0)
-			softc->flags |= DA_FLAG_WENT_IDLE;
-
-		if ((softc->flags & DA_FLAG_PACK_INVALID) != 0) {
-			xpt_print(periph->path, "oustanding %d\n",
-				  softc->outstanding_cmds);
-		}
+		if (LIST_EMPTY(&softc->pending_ccbs))
+			softc->flags |= DA_FLAG_WAS_OTAG;
 
 		if (state == DA_CCB_DELETE) {
 			while ((bp1 = bioq_takefirst(&softc->delete_run_queue))
 			    != NULL) {
-				bp1->bio_resid = bp->bio_resid;
 				bp1->bio_error = bp->bio_error;
-				if (bp->bio_flags & BIO_ERROR)
+				if (bp->bio_flags & BIO_ERROR) {
 					bp1->bio_flags |= BIO_ERROR;
+					bp1->bio_resid = bp1->bio_bcount;
+				} else
+					bp1->bio_resid = 0;
 				biodone(bp1);
 			}
 			softc->delete_running = 0;
@@ -3055,9 +3055,10 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 			 * here.
 			 */
 			if (block_size == 0 && maxsector == 0) {
-				snprintf(announce_buf, sizeof(announce_buf),
-				        "0MB (no media?)");
-			} else if (block_size >= MAXPHYS || block_size == 0) {
+				block_size = 512;
+				maxsector = -1;
+			}
+			if (block_size >= MAXPHYS || block_size == 0) {
 				xpt_print(periph->path,
 				    "unsupportable block size %ju\n",
 				    (uintmax_t) block_size);
@@ -3157,6 +3158,7 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 					const char *sense_key_desc;
 					const char *asc_desc;
 
+					dasetgeom(periph, 512, -1, NULL, 0);
 					scsi_sense_desc(sense_key, asc, ascq,
 							&cgd.inq_data,
 							&sense_key_desc,
@@ -3535,8 +3537,8 @@ daerror(union ccb *ccb, u_int32_t cam_flags, u_int32_t sense_flags)
 		    asc == 0x28 && ascq == 0x00)
 			disk_media_changed(softc->disk, M_NOWAIT);
 		else if (sense_key == SSD_KEY_NOT_READY &&
-		    asc == 0x3a && (softc->flags & DA_FLAG_SAW_MEDIA)) {
-			softc->flags &= ~DA_FLAG_SAW_MEDIA;
+		    asc == 0x3a && (softc->flags & DA_FLAG_PACK_INVALID) == 0) {
+			softc->flags |= DA_FLAG_PACK_INVALID;
 			disk_media_gone(softc->disk, M_NOWAIT);
 		}
 	}
@@ -3559,7 +3561,7 @@ damediapoll(void *arg)
 	struct cam_periph *periph = arg;
 	struct da_softc *softc = periph->softc;
 
-	if (!softc->tur && softc->outstanding_cmds == 0) {
+	if (!softc->tur && LIST_EMPTY(&softc->pending_ccbs)) {
 		if (cam_periph_acquire(periph) == CAM_REQ_CMP) {
 			softc->tur = 1;
 			daschedule(periph);
@@ -3726,14 +3728,11 @@ dasendorderedtag(void *arg)
 	struct da_softc *softc = arg;
 
 	if (da_send_ordered) {
-		if ((softc->ordered_tag_count == 0) 
-		 && ((softc->flags & DA_FLAG_WENT_IDLE) == 0)) {
-			softc->flags |= DA_FLAG_NEED_OTAG;
+		if (!LIST_EMPTY(&softc->pending_ccbs)) {
+			if ((softc->flags & DA_FLAG_WAS_OTAG) == 0)
+				softc->flags |= DA_FLAG_NEED_OTAG;
+			softc->flags &= ~DA_FLAG_WAS_OTAG;
 		}
-		if (softc->outstanding_cmds > 0)
-			softc->flags &= ~DA_FLAG_WENT_IDLE;
-
-		softc->ordered_tag_count = 0;
 	}
 	/* Queue us up again */
 	callout_reset(&softc->sendordered_c,
@@ -3815,6 +3814,33 @@ scsi_format_unit(struct ccb_scsiio *csio, u_int32_t retries,
 	scsi_cmd->opcode = FORMAT_UNIT;
 	scsi_cmd->byte2 = byte2;
 	scsi_ulto2b(ileave, scsi_cmd->interleave);
+
+	cam_fill_csio(csio,
+		      retries,
+		      cbfcnp,
+		      /*flags*/ (dxfer_len > 0) ? CAM_DIR_OUT : CAM_DIR_NONE,
+		      tag_action,
+		      data_ptr,
+		      dxfer_len,
+		      sense_len,
+		      sizeof(*scsi_cmd),
+		      timeout);
+}
+
+void
+scsi_sanitize(struct ccb_scsiio *csio, u_int32_t retries,
+	      void (*cbfcnp)(struct cam_periph *, union ccb *),
+	      u_int8_t tag_action, u_int8_t byte2, u_int16_t control,
+	      u_int8_t *data_ptr, u_int32_t dxfer_len, u_int8_t sense_len,
+	      u_int32_t timeout)
+{
+	struct scsi_sanitize *scsi_cmd;
+
+	scsi_cmd = (struct scsi_sanitize *)&csio->cdb_io.cdb_bytes;
+	scsi_cmd->opcode = SANITIZE;
+	scsi_cmd->byte2 = byte2;
+	scsi_cmd->control = control;
+	scsi_ulto2b(dxfer_len, scsi_cmd->length);
 
 	cam_fill_csio(csio,
 		      retries,

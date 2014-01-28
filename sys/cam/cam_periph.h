@@ -121,6 +121,7 @@ struct cam_periph {
 #define CAM_PERIPH_NEW_DEV_FOUND	0x10
 #define CAM_PERIPH_RECOVERY_INPROG	0x20
 #define CAM_PERIPH_FREE			0x80
+#define CAM_PERIPH_ANNOUNCED		0x100
 	u_int32_t		 immediate_priority;
 	u_int32_t		 refcount;
 	SLIST_HEAD(, ccb_hdr)	 ccb_list;	/* For "immediate" requests */
@@ -171,8 +172,6 @@ int		cam_periph_ioctl(struct cam_periph *periph, u_long cmd,
 						      cam_flags camflags,
 						      u_int32_t sense_flags));
 void		cam_freeze_devq(struct cam_path *path);
-void		cam_freeze_devq_arg(struct cam_path *path, u_int32_t flags,
-		    uint32_t arg);
 u_int32_t	cam_release_devq(struct cam_path *path, u_int32_t relsim_flags,
 				 u_int32_t opening_reduction, u_int32_t arg,
 				 int getcount_only);

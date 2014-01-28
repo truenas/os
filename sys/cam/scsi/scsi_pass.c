@@ -207,11 +207,6 @@ passoninvalidate(struct cam_periph *periph)
 	 * XXX Handle any transactions queued to the card
 	 *     with XPT_ABORT_CCB.
 	 */
-
-	if (bootverbose) {
-		xpt_print(periph->path, "lost device\n");
-	}
-
 }
 
 static void
@@ -221,8 +216,6 @@ passcleanup(struct cam_periph *periph)
 
 	softc = (struct pass_softc *)periph->softc;
 
-	if (bootverbose)
-		xpt_print(periph->path, "removing device entry\n");
 	devstat_remove_entry(softc->device_stats);
 
 	cam_periph_unlock(periph);
@@ -628,8 +621,8 @@ passdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread 
 
 		/* Compatibility for RL/priority-unaware code. */
 		priority = inccb->ccb_h.pinfo.priority;
-		if (priority < CAM_RL_TO_PRIORITY(CAM_RL_NORMAL))
-		    priority += CAM_RL_TO_PRIORITY(CAM_RL_NORMAL);
+		if (priority <= CAM_PRIORITY_OOB)
+		    priority += CAM_PRIORITY_OOB + 1;
 
 		/*
 		 * Non-immediate CCBs need a CCB from the per-device pool

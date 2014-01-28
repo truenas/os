@@ -218,9 +218,9 @@ cam_periph_alloc(periph_ctor_t *periph_ctor,
 	}
 	if (*p_drv == NULL) {
 		printf("cam_periph_alloc: invalid periph name '%s'\n", name);
+		xpt_unlock_buses();
 		xpt_free_path(periph->path);
 		free(periph, M_CAMPERIPH);
-		xpt_unlock_buses();
 		return (CAM_REQ_INVALID);
 	}
 	periph->unit_number = camperiphunit(*p_drv, path_id, target_id, lun_id);
@@ -258,7 +258,7 @@ failure:
 		break;
 	case 3:
 		CAM_DEBUG(periph->path, CAM_DEBUG_INFO, ("Periph destroyed\n"));
-		xpt_remove_periph(periph, /*topology_lock_held*/ 0);
+		xpt_remove_periph(periph);
 		/* FALLTHROUGH */
 	case 2:
 		xpt_lock_buses();
@@ -586,6 +586,8 @@ cam_periph_invalidate(struct cam_periph *periph)
 		return;
 
 	CAM_DEBUG(periph->path, CAM_DEBUG_INFO, ("Periph invalidated\n"));
+	if (periph->flags & CAM_PERIPH_ANNOUNCED)
+		xpt_denounce_periph(periph);
 	periph->flags |= CAM_PERIPH_INVALID;
 	periph->flags &= ~CAM_PERIPH_NEW_DEV_FOUND;
 	if (periph->periph_oninval != NULL)
@@ -645,10 +647,13 @@ camperiphfree(struct cam_periph *periph)
 	TAILQ_REMOVE(&(*p_drv)->units, periph, unit_links);
 	(*p_drv)->generation++;
 
-	xpt_remove_periph(periph, /*topology_lock_held*/ 1);
+	xpt_remove_periph(periph);
 
 	xpt_unlock_buses();
-	CAM_DEBUG(periph->path, CAM_DEBUG_INFO, ("Periph destroyed\n"));
+	if (periph->flags & CAM_PERIPH_ANNOUNCED) {
+		xpt_print(periph->path, "Periph destroyed\n");
+	} else
+		CAM_DEBUG(periph->path, CAM_DEBUG_INFO, ("Periph destroyed\n"));
 
 	if (periph->flags & CAM_PERIPH_NEW_DEV_FOUND) {
 		union ccb ccb;
@@ -1113,21 +1118,13 @@ cam_periph_runccb(union ccb *ccb,
 void
 cam_freeze_devq(struct cam_path *path)
 {
+	struct ccb_hdr ccb_h;
 
-	cam_freeze_devq_arg(path, 0, 0);
-}
-
-void
-cam_freeze_devq_arg(struct cam_path *path, uint32_t flags, uint32_t arg)
-{
-	struct ccb_relsim crs;
-
-	xpt_setup_ccb(&crs.ccb_h, path, CAM_PRIORITY_NONE);
-	crs.ccb_h.func_code = XPT_FREEZE_QUEUE;
-	crs.release_flags = flags;
-	crs.openings = arg;
-	crs.release_timeout = arg;
-	xpt_action((union ccb *)&crs);
+	CAM_DEBUG(path, CAM_DEBUG_TRACE, ("cam_freeze_devq\n"));
+	xpt_setup_ccb(&ccb_h, path, /*priority*/1);
+	ccb_h.func_code = XPT_NOOP;
+	ccb_h.flags = CAM_DEV_QFREEZE;
+	xpt_action((union ccb *)&ccb_h);
 }
 
 u_int32_t
@@ -1137,6 +1134,8 @@ cam_release_devq(struct cam_path *path, u_int32_t relsim_flags,
 {
 	struct ccb_relsim crs;
 
+	CAM_DEBUG(path, CAM_DEBUG_TRACE, ("cam_release_devq(%u, %u, %u, %d)\n",
+	    relsim_flags, openings, arg, getcount_only));
 	xpt_setup_ccb(&crs.ccb_h, path, CAM_PRIORITY_NORMAL);
 	crs.ccb_h.func_code = XPT_REL_SIMQ;
 	crs.ccb_h.flags = getcount_only ? CAM_DEV_QFREEZE : 0;
@@ -1787,9 +1786,11 @@ cam_periph_error(union ccb *ccb, cam_flags camflags,
 				scan_ccb->ccb_h.func_code = XPT_SCAN_TGT;
 				scan_ccb->crcn.flags = 0;
 				xpt_rescan(scan_ccb);
-			} else
+			} else {
 				xpt_print(newpath,
 				    "Can't allocate CCB to rescan target\n");
+				xpt_free_path(newpath);
+			}
 		}
 	}
 

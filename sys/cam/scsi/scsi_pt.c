@@ -333,8 +333,6 @@ ptoninvalidate(struct cam_periph *periph)
 	 *     with XPT_ABORT_CCB.
 	 */
 	bioq_flush(&softc->bio_queue, NULL, ENXIO);
-
-	xpt_print(periph->path, "lost device\n");
 }
 
 static void
@@ -344,7 +342,6 @@ ptdtor(struct cam_periph *periph)
 
 	softc = (struct pt_softc *)periph->softc;
 
-	xpt_print(periph->path, "removing device entry\n");
 	devstat_remove_entry(softc->device_stats);
 	cam_periph_unlock(periph);
 	destroy_dev(softc->dev);
@@ -455,7 +452,7 @@ ptstart(struct cam_periph *periph, union ccb *start_ccb)
 		start_ccb->ccb_h.ccb_state = PT_CCB_BUFFER_IO_UA;
 
 		/*
-		 * Block out any asyncronous callbacks
+		 * Block out any asynchronous callbacks
 		 * while we touch the pending ccb list.
 		 */
 		LIST_INSERT_HEAD(&softc->pending_ccbs, &start_ccb->ccb_h,
@@ -549,7 +546,7 @@ ptdone(struct cam_periph *periph, union ccb *done_ccb)
 		}
 
 		/*
-		 * Block out any asyncronous callbacks
+		 * Block out any asynchronous callbacks
 		 * while we touch the pending ccb list.
 		 */
 		LIST_REMOVE(&done_ccb->ccb_h, periph_links.le);
