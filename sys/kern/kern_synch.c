@@ -146,12 +146,12 @@ sleepinit(void)
  */
 int
 _sleep(void *ident, struct lock_object *lock, int priority,
-    const char *wmesg, sbintime_t sbt, sbintime_t pr, int flags)
+    const char *wmesg, int timo)
 {
 	struct thread *td;
 	struct proc *p;
 	struct lock_class *class;
-	int catch, lock_state, pri, rval, sleepq_flags;
+	int catch, flags, lock_state, pri, rval;
 	WITNESS_SAVE_DECL(lock_witness);
 
 	td = curthread;
@@ -162,7 +162,7 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 #endif
 	WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, lock,
 	    "Sleeping on \"%s\"", wmesg);
-	KASSERT(sbt != 0 || mtx_owned(&Giant) || lock != NULL,
+	KASSERT(timo != 0 || mtx_owned(&Giant) || lock != NULL,
 	    ("sleeping without a lock"));
 	KASSERT(p != NULL, ("msleep1"));
 	KASSERT(ident != NULL && TD_IS_RUNNING(td), ("msleep"));
@@ -199,13 +199,13 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 		sleepq_remove(td, td->td_wchan);
 
 	if (ident == &pause_wchan)
-		sleepq_flags = SLEEPQ_PAUSE;
+		flags = SLEEPQ_PAUSE;
 	else
-		sleepq_flags = SLEEPQ_SLEEP;
+		flags = SLEEPQ_SLEEP;
 	if (catch)
-		sleepq_flags |= SLEEPQ_INTERRUPTIBLE;
+		flags |= SLEEPQ_INTERRUPTIBLE;
 	if (priority & PBDRY)
-		sleepq_flags |= SLEEPQ_STOP_ON_BDRY;
+		flags |= SLEEPQ_STOP_ON_BDRY;
 
 	sleepq_lock(ident);
 	CTR5(KTR_PROC, "sleep: thread %ld (pid %ld, %s) on %s (%p)",
@@ -231,18 +231,18 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 	 * stopped, then td will no longer be on a sleep queue upon
 	 * return from cursig().
 	 */
-	sleepq_add(ident, lock, wmesg, sleepq_flags, 0);
-	if (sbt != 0)
-		sleepq_set_timeout_sbt(ident, sbt, pr, flags);
+	sleepq_add(ident, lock, wmesg, flags, 0);
+	if (timo)
+		sleepq_set_timeout(ident, timo);
 	if (lock != NULL && class->lc_flags & LC_SLEEPABLE) {
 		sleepq_release(ident);
 		WITNESS_SAVE(lock, lock_witness);
 		lock_state = class->lc_unlock(lock);
 		sleepq_lock(ident);
 	}
-	if (sbt != 0 && catch)
+	if (timo && catch)
 		rval = sleepq_timedwait_sig(ident, pri);
-	else if (sbt != 0)
+	else if (timo)
 		rval = sleepq_timedwait(ident, pri);
 	else if (catch)
 		rval = sleepq_wait_sig(ident, pri);
@@ -263,8 +263,7 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 }
 
 int
-msleep_spin_sbt(void *ident, struct mtx *mtx, const char *wmesg,
-    sbintime_t sbt, sbintime_t pr, int flags)
+msleep_spin(void *ident, struct mtx *mtx, const char *wmesg, int timo)
 {
 	struct thread *td;
 	struct proc *p;
@@ -302,8 +301,8 @@ msleep_spin_sbt(void *ident, struct mtx *mtx, const char *wmesg,
 	 * We put ourselves on the sleep queue and start our timeout.
 	 */
 	sleepq_add(ident, &mtx->lock_object, wmesg, SLEEPQ_SLEEP, 0);
-	if (sbt != 0)
-		sleepq_set_timeout_sbt(ident, sbt, pr, flags);
+	if (timo)
+		sleepq_set_timeout(ident, timo);
 
 	/*
 	 * Can't call ktrace with any spin locks held so it can lock the
@@ -325,7 +324,7 @@ msleep_spin_sbt(void *ident, struct mtx *mtx, const char *wmesg,
 	    wmesg);
 	sleepq_lock(ident);
 #endif
-	if (sbt != 0)
+	if (timo)
 		rval = sleepq_timedwait(ident, 0);
 	else {
 		sleepq_wait(ident, 0);
@@ -349,30 +348,28 @@ msleep_spin_sbt(void *ident, struct mtx *mtx, const char *wmesg,
  * to a "timo" value of one.
  */
 int
-pause_sbt(const char *wmesg, sbintime_t sbt, sbintime_t pr, int flags)
+pause(const char *wmesg, int timo)
 {
-	int sbt_sec;
-
-	sbt_sec = sbintime_getsec(sbt);
-	KASSERT(sbt_sec >= 0, ("pause: timo must be >= 0"));
+	KASSERT(timo >= 0, ("pause: timo must be >= 0"));
 
 	/* silently convert invalid timeouts */
-	if (sbt == 0)
-		sbt = tick_sbt;
+	if (timo < 1)
+		timo = 1;
 
 	if (cold) {
 		/*
-		 * We delay one second at a time to avoid overflowing the
+		 * We delay one HZ at a time to avoid overflowing the
 		 * system specific DELAY() function(s):
 		 */
-		while (sbt_sec > 0) {
+		while (timo >= hz) {
 			DELAY(1000000);
-			sbt_sec--;
+			timo -= hz;
 		}
-		DELAY((sbt & 0xffffffff) / SBT_1US);
+		if (timo > 0)
+			DELAY(timo * tick);
 		return (0);
 	}
-	return (_sleep(&pause_wchan, NULL, 0, wmesg, sbt, pr, flags));
+	return (tsleep(&pause_wchan, 0, wmesg, timo));
 }
 
 /*
