@@ -88,9 +88,7 @@ dummynet(void *arg)
 void
 dn_reschedule(void)
 {
-
-	callout_reset_sbt(&dn_timeout, tick_sbt, 0, dummynet, NULL,
-	    C_HARDCLOCK | C_DIRECT_EXEC);
+	callout_reset(&dn_timeout, 1, dummynet, NULL);
 }
 /*----- end of callout hooks -----*/
 
@@ -2161,12 +2159,12 @@ ip_dn_init(void)
 	DN_LOCK_INIT();
 
 	TASK_INIT(&dn_task, 0, dummynet_task, curvnet);
-	dn_tq = taskqueue_create_fast("dummynet", M_WAITOK,
+	dn_tq = taskqueue_create("dummynet", M_WAITOK,
 	    taskqueue_thread_enqueue, &dn_tq);
 	taskqueue_start_threads(&dn_tq, 1, PI_NET, "dummynet");
 
 	callout_init(&dn_timeout, CALLOUT_MPSAFE);
-	dn_reschedule();
+	callout_reset(&dn_timeout, 1, dummynet, NULL);
 
 	/* Initialize curr_time adjustment mechanics. */
 	getmicrouptime(&dn_cfg.prev_t);
