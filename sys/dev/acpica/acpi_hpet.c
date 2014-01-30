@@ -147,7 +147,8 @@ hpet_disable(struct hpet_softc *sc)
 }
 
 static int
-hpet_start(struct eventtimer *et, sbintime_t first, sbintime_t period)
+hpet_start(struct eventtimer *et,
+    struct bintime *first, struct bintime *period)
 {
 	struct hpet_timer *mt = (struct hpet_timer *)et->et_priv;
 	struct hpet_timer *t;
@@ -155,16 +156,20 @@ hpet_start(struct eventtimer *et, sbintime_t first, sbintime_t period)
 	uint32_t fdiv, now;
 
 	t = (mt->pcpu_master < 0) ? mt : &sc->t[mt->pcpu_slaves[curcpu]];
-	if (period != 0) {
+	if (period != NULL) {
 		t->mode = 1;
-		t->div = (sc->freq * period) >> 32;
+		t->div = (sc->freq * (period->frac >> 32)) >> 32;
+		if (period->sec != 0)
+			t->div += sc->freq * period->sec;
 	} else {
 		t->mode = 2;
 		t->div = 0;
 	}
-	if (first != 0)
-		fdiv = (sc->freq * first) >> 32;
-	else
+	if (first != NULL) {
+		fdiv = (sc->freq * (first->frac >> 32)) >> 32;
+		if (first->sec != 0)
+			fdiv += sc->freq * first->sec;
+	} else
 		fdiv = t->div;
 	if (t->irq < 0)
 		bus_write_4(sc->mem_res, HPET_ISR, 1 << t->num);
@@ -685,9 +690,12 @@ hpet_attach(device_t dev)
 		if ((t->caps & HPET_TCAP_PER_INT) == 0)
 			t->et.et_quality -= 10;
 		t->et.et_frequency = sc->freq;
-		t->et.et_min_period =
-		    ((uint64_t)(HPET_MIN_CYCLES * 2) << 32) / sc->freq;
-		t->et.et_max_period = (0xfffffffeLLU << 32) / sc->freq;
+		t->et.et_min_period.sec = 0;
+		t->et.et_min_period.frac =
+		    (((uint64_t)(HPET_MIN_CYCLES * 2) << 32) / sc->freq) << 32;
+		t->et.et_max_period.sec = 0xfffffffeLLU / sc->freq;
+		t->et.et_max_period.frac =
+		    ((0xfffffffeLLU << 32) / sc->freq) << 32;
 		t->et.et_start = hpet_start;
 		t->et.et_stop = hpet_stop;
 		t->et.et_priv = &sc->t[i];

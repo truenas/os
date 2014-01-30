@@ -168,7 +168,7 @@ static void	lapic_timer_stop(struct lapic *);
 static void	lapic_timer_set_divisor(u_int divisor);
 static uint32_t	lvt_mode(struct lapic *la, u_int pin, uint32_t value);
 static int	lapic_et_start(struct eventtimer *et,
-    sbintime_t first, sbintime_t period);
+    struct bintime *first, struct bintime *period);
 static int	lapic_et_stop(struct eventtimer *et);
 
 struct pic lapic_pic = { .pic_resume = lapic_resume };
@@ -267,8 +267,10 @@ lapic_init(vm_paddr_t addr)
 		}
 		lapic_et.et_frequency = 0;
 		/* We don't know frequency yet, so trying to guess. */
-		lapic_et.et_min_period = 0x00001000LL;
-		lapic_et.et_max_period = SBT_1S;
+		lapic_et.et_min_period.sec = 0;
+		lapic_et.et_min_period.frac = 0x00001000LL << 32;
+		lapic_et.et_max_period.sec = 1;
+		lapic_et.et_max_period.frac = 0;
 		lapic_et.et_start = lapic_et_start;
 		lapic_et.et_stop = lapic_et_stop;
 		lapic_et.et_priv = NULL;
@@ -483,7 +485,8 @@ lapic_disable_pmc(void)
 }
 
 static int
-lapic_et_start(struct eventtimer *et, sbintime_t first, sbintime_t period)
+lapic_et_start(struct eventtimer *et,
+    struct bintime *first, struct bintime *period)
 {
 	struct lapic *la;
 	u_long value;
@@ -508,18 +511,28 @@ lapic_et_start(struct eventtimer *et, sbintime_t first, sbintime_t period)
 			printf("lapic: Divisor %lu, Frequency %lu Hz\n",
 			    lapic_timer_divisor, value);
 		et->et_frequency = value;
-		et->et_min_period = (0x00000002LLU << 32) / et->et_frequency;
-		et->et_max_period = (0xfffffffeLLU << 32) / et->et_frequency;
+		et->et_min_period.sec = 0;
+		et->et_min_period.frac =
+		    ((0x00000002LLU << 32) / et->et_frequency) << 32;
+		et->et_max_period.sec = 0xfffffffeLLU / et->et_frequency;
+		et->et_max_period.frac =
+		    ((0xfffffffeLLU << 32) / et->et_frequency) << 32;
 	}
 	if (la->la_timer_mode == 0)
 		lapic_timer_set_divisor(lapic_timer_divisor);
-	if (period != 0) {
+	if (period != NULL) {
 		la->la_timer_mode = 1;
-		la->la_timer_period = ((uint32_t)et->et_frequency * period) >> 32;
+		la->la_timer_period =
+		    (et->et_frequency * (period->frac >> 32)) >> 32;
+		if (period->sec != 0)
+			la->la_timer_period += et->et_frequency * period->sec;
 		lapic_timer_periodic(la, la->la_timer_period, 1);
 	} else {
 		la->la_timer_mode = 2;
-		la->la_timer_period = ((uint32_t)et->et_frequency * first) >> 32;
+		la->la_timer_period =
+		    (et->et_frequency * (first->frac >> 32)) >> 32;
+		if (first->sec != 0)
+			la->la_timer_period += et->et_frequency * first->sec;
 		lapic_timer_oneshot(la, la->la_timer_period, 1);
 	}
 	return (0);
