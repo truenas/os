@@ -767,7 +767,7 @@ cpu_stopprofclock(void)
 /*
  * Switch to idle mode (all ticks handled).
  */
-sbintime_t
+void
 cpu_idleclock(void)
 {
 	struct bintime now, t;
@@ -779,7 +779,7 @@ cpu_idleclock(void)
 	    || curcpu == CPU_FIRST()
 #endif
 	    )
-		return (-1);
+		return;
 	state = DPCPU_PTR(timerstate);
 	if (periodic)
 		now = state->now;
@@ -795,8 +795,6 @@ cpu_idleclock(void)
 	if (!periodic)
 		loadtimer(&now, 0);
 	ET_HW_UNLOCK(state);
-	bintime_sub(&t, &now);
-	return (MAX(bttosbt(t), 0));
 }
 
 /*

@@ -171,7 +171,7 @@ extern vm_offset_t ksym_start, ksym_end;
 struct msgbuf *msgbufp = NULL;
 
 /* Other subsystems (e.g., ACPI) can hook this later. */
-void (*cpu_idle_hook)(sbintime_t) = NULL;
+void (*cpu_idle_hook)(void) = NULL;
 
 struct kva_md_info kmi;
 
@@ -408,11 +408,10 @@ void
 cpu_idle(int busy)
 {
 	register_t ie;
-	sbintime_t sbt = -1;
 
 	if (!busy) {
 		critical_enter();
-		sbt = cpu_idleclock();
+		cpu_idleclock();
 	}
 
 	ie = intr_disable();
@@ -421,7 +420,7 @@ cpu_idle(int busy)
 	if (sched_runnable())
 		ia64_enable_intr();
 	else if (cpu_idle_hook != NULL) {
-		(*cpu_idle_hook)(sbt);
+		(*cpu_idle_hook)();
 		/* The hook must enable interrupts! */
 	} else {
 		ia64_call_pal_static(PAL_HALT_LIGHT, 0, 0, 0);

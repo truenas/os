@@ -1225,7 +1225,7 @@ cpu_halt(void)
 int scheduler_running;
 
 static void
-cpu_idle_hlt(sbintime_t sbt)
+cpu_idle_hlt(int busy)
 {
 
 	scheduler_running = 1;
@@ -1246,7 +1246,7 @@ cpu_halt(void)
 
 #endif
 
-void (*cpu_idle_hook)(sbintime_t) = NULL;	/* ACPI idle hook. */
+void (*cpu_idle_hook)(void) = NULL;	/* ACPI idle hook. */
 static int	cpu_ident_amdc1e = 0;	/* AMD C1E supported. */
 static int	idle_mwait = 1;		/* Use MONITOR/MWAIT for short idle. */
 TUNABLE_INT("machdep.idle_mwait", &idle_mwait);
@@ -1258,7 +1258,7 @@ SYSCTL_INT(_machdep, OID_AUTO, idle_mwait, CTLFLAG_RW, &idle_mwait,
 #define	STATE_SLEEPING	0x2
 
 static void
-cpu_idle_acpi(sbintime_t sbt)
+cpu_idle_acpi(int busy)
 {
 	int *state;
 
@@ -1268,7 +1268,7 @@ cpu_idle_acpi(sbintime_t sbt)
 	if (sched_runnable())
 		enable_intr();
 	else if (cpu_idle_hook)
-		cpu_idle_hook(sbt);
+		cpu_idle_hook();
 	else
 		__asm __volatile("sti; hlt");
 	*state = STATE_RUNNING;
@@ -1276,7 +1276,7 @@ cpu_idle_acpi(sbintime_t sbt)
 
 #ifndef XEN
 static void
-cpu_idle_hlt(sbintime_t sbt)
+cpu_idle_hlt(int busy)
 {
 	int *state;
 
@@ -1305,7 +1305,7 @@ cpu_idle_hlt(sbintime_t sbt)
 #define	MWAIT_C4	0x30
 
 static void
-cpu_idle_mwait(sbintime_t sbt)
+cpu_idle_mwait(int busy)
 {
 	int *state;
 
@@ -1320,7 +1320,7 @@ cpu_idle_mwait(sbintime_t sbt)
 }
 
 static void
-cpu_idle_spin(sbintime_t sbt)
+cpu_idle_spin(int busy)
 {
 	int *state;
 	int i;
@@ -1364,9 +1364,9 @@ cpu_probe_amdc1e(void)
 }
 
 #ifdef XEN
-void (*cpu_idle_fn)(sbintime_t) = cpu_idle_hlt;
+void (*cpu_idle_fn)(int) = cpu_idle_hlt;
 #else
-void (*cpu_idle_fn)(sbintime_t) = cpu_idle_acpi;
+void (*cpu_idle_fn)(int) = cpu_idle_acpi;
 #endif
 
 void
@@ -1375,7 +1375,6 @@ cpu_idle(int busy)
 #ifndef XEN
 	uint64_t msr;
 #endif
-	sbintime_t sbt = -1;
 
 	CTR2(KTR_SPARE2, "cpu_idle(%d) at %d",
 	    busy, curcpu);
@@ -1395,7 +1394,7 @@ cpu_idle(int busy)
 	/* If we have time - switch timers into idle mode. */
 	if (!busy) {
 		critical_enter();
-		sbt = cpu_idleclock();
+		cpu_idleclock();
 	}
 
 #ifndef XEN
@@ -1408,7 +1407,7 @@ cpu_idle(int busy)
 #endif
 
 	/* Call main idle method. */
-	cpu_idle_fn(sbt);
+	cpu_idle_fn(busy);
 
 	/* Switch timers mack into active mode. */
 	if (!busy) {

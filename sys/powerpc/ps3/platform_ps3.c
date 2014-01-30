@@ -70,7 +70,7 @@ static int ps3_smp_start_cpu(platform_t, struct pcpu *cpu);
 static struct cpu_group *ps3_smp_topo(platform_t);
 #endif
 static void ps3_reset(platform_t);
-static void ps3_cpu_idle(sbintime_t);
+static void ps3_cpu_idle(void);
 
 static platform_method_t ps3_methods[] = {
 	PLATFORMMETHOD(platform_probe, 		ps3_probe),
@@ -245,7 +245,7 @@ ps3_real_maxaddr(platform_t plat)
 }
 
 static void
-ps3_cpu_idle(sbintime_t sbt)
+ps3_cpu_idle(void)
 {
 	lv1_pause(0);
 }
