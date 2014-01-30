@@ -37,6 +37,7 @@
 
 #include <sys/mutex.h>
 #include <sys/condvar.h>
+#include <sys/kernel.h>
 #include <sys/time.h>
 
 typedef struct cv	kcondvar_t;
@@ -63,13 +64,12 @@ static clock_t
 cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim, hrtime_t res,
     int flag)
 {
-	sbintime_t sbt;
-	sbintime_t pr;
+	/* XXX real hires is not available. */
 
-	sbt = tim * SBT_1NS;
-	pr = res * SBT_1NS;
+	/* We do not attempt to support any flags yet. */
+	ASSERT(flag == 0);
 
-	return (cv_timedwait_sbt(cvp, mp, sbt, pr, 0));
+	return (cv_timedwait(cvp, mp, NSEC_TO_TICK(tim)));
 }
 
 #endif	/* _KERNEL */

@@ -1061,8 +1061,9 @@ dmu_tx_delay(dmu_tx_t *tx, uint64_t dirty)
 		continue;
 	mutex_exit(&curthread->t_delay_lock);
 #else
-	pause_sbt("dmu_tx_delay", wakeup * SBT_1NS,
-	    zfs_delay_resolution_ns * SBT_1NS, C_ABSOLUTE);
+	/* XXX High resolution callouts are not available */
+	ASSERT(wakeup >= now);
+	pause("dmu_tx_delay", NSEC_TO_TICK(wakeup - now));
 #endif
 #else
 	hrtime_t delta = wakeup - gethrtime();
