@@ -289,7 +289,7 @@ _mtx_unlock_spin_flags(struct mtx *m, int opts, const char *file, int line)
  * is already owned, it will recursively acquire the lock.
  */
 int
-mtx_trylock_flags_(struct mtx *m, int opts, const char *file, int line)
+_mtx_trylock(struct mtx *m, int opts, const char *file, int line)
 {
 #ifdef LOCK_PROFILING
 	uint64_t waittime = 0;
@@ -572,7 +572,7 @@ _mtx_lock_spin(struct mtx *m, uintptr_t tid, int opts, const char *file,
 #endif /* SMP */
 
 void
-thread_lock_flags_(struct thread *td, int opts, const char *file, int line)
+_thread_lock_flags(struct thread *td, int opts, const char *file, int line)
 {
 	struct mtx *m;
 	uintptr_t tid;

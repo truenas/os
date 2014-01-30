@@ -623,7 +623,6 @@ vm_map_locked(vm_map_t map)
 		return (sx_xlocked(&map->lock));
 }
 
-/* XXX: INVARIANTS here is still necessary because of sx support. */
 #ifdef INVARIANTS
 static void
 _vm_map_assert_locked(vm_map_t map, const char *file, int line)

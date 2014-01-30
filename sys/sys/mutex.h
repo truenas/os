@@ -92,8 +92,6 @@
 void	mtx_init(struct mtx *m, const char *name, const char *type, int opts);
 void	mtx_destroy(struct mtx *m);
 void	mtx_sysinit(void *arg);
-int	mtx_trylock_flags_(struct mtx *m, int opts, const char *file,
-	    int line);
 void	mutex_init(void);
 void	_mtx_lock_sleep(struct mtx *m, uintptr_t tid, int opts,
 	    const char *file, int line);
@@ -103,6 +101,7 @@ void	_mtx_lock_spin(struct mtx *m, uintptr_t tid, int opts,
 	    const char *file, int line);
 #endif
 void	_mtx_unlock_spin(struct mtx *m, int opts, const char *file, int line);
+int	_mtx_trylock(struct mtx *m, int opts, const char *file, int line);
 void	_mtx_lock_flags(struct mtx *m, int opts, const char *file, int line);
 void	_mtx_unlock_flags(struct mtx *m, int opts, const char *file, int line);
 void	_mtx_lock_spin_flags(struct mtx *m, int opts, const char *file,
@@ -112,7 +111,7 @@ void	_mtx_unlock_spin_flags(struct mtx *m, int opts, const char *file,
 #if defined(INVARIANTS) || defined(INVARIANT_SUPPORT)
 void	_mtx_assert(const struct mtx *m, int what, const char *file, int line);
 #endif
-void	thread_lock_flags_(struct thread *, int, const char *, int);
+void	_thread_lock_flags(struct thread *, int, const char *, int);
 
 #define	mtx_trylock_flags_(m, opts, file, line)				\
 	_mtx_trylock((m), (opts), (file), (line))
@@ -120,9 +119,9 @@ void	thread_lock_flags_(struct thread *, int, const char *, int);
 #define	thread_lock_flags_(tdp, opts, file, line)			\
     _thread_lock_flags((tdp), (opts), (file), (line))
 #define	thread_lock(tdp)						\
-	thread_lock_flags_((tdp), 0, __FILE__, __LINE__)
+    _thread_lock_flags((tdp), 0, __FILE__, __LINE__)
 #define	thread_lock_flags(tdp, opt)					\
-	thread_lock_flags_((tdp), (opt), __FILE__, __LINE__)
+    _thread_lock_flags((tdp), (opt), __FILE__, __LINE__)
 #define	thread_unlock(tdp)						\
        mtx_unlock_spin((tdp)->td_lock)
 
