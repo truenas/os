@@ -83,12 +83,6 @@ PMC_SOFT_DEFINE( , , lock, failed);
 #endif
 
 /*
- * Return the mutex address when the lock cookie address is provided.
- * This functionality assumes that struct mtx* have a member named mtx_lock.
- */
-#define	mtxlock2mtx(c)	(__containerof(c, struct mtx, mtx_lock))
-
-/*
  * Internal utility macros.
  */
 #define mtx_unowned(m)	((m)->mtx_lock == MTX_UNOWNED)
@@ -201,14 +195,11 @@ owner_mtx(const struct lock_object *lock, struct thread **owner)
  * modules and can also be called from assembly language if needed.
  */
 void
-__mtx_lock_flags(volatile uintptr_t *c, int opts, const char *file, int line)
+_mtx_lock_flags(struct mtx *m, int opts, const char *file, int line)
 {
-	struct mtx *m;
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
 
 	KASSERT(!TD_IS_IDLETHREAD(curthread),
 	    ("mtx_lock() by idle thread %p on sleep mutex %s @ %s:%d",
@@ -229,15 +220,11 @@ __mtx_lock_flags(volatile uintptr_t *c, int opts, const char *file, int line)
 }
 
 void
-__mtx_unlock_flags(volatile uintptr_t *c, int opts, const char *file, int line)
+_mtx_unlock_flags(struct mtx *m, int opts, const char *file, int line)
 {
-	struct mtx *m;
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
-
 	KASSERT(m->mtx_lock != MTX_DESTROYED,
 	    ("mtx_unlock() of destroyed mutex @ %s:%d", file, line));
 	KASSERT(LOCK_CLASS(&m->lock_object) == &lock_class_mtx_sleep,
@@ -255,16 +242,11 @@ __mtx_unlock_flags(volatile uintptr_t *c, int opts, const char *file, int line)
 }
 
 void
-__mtx_lock_spin_flags(volatile uintptr_t *c, int opts, const char *file,
-    int line)
+_mtx_lock_spin_flags(struct mtx *m, int opts, const char *file, int line)
 {
-	struct mtx *m;
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
-
 	KASSERT(m->mtx_lock != MTX_DESTROYED,
 	    ("mtx_lock_spin() of destroyed mutex @ %s:%d", file, line));
 	KASSERT(LOCK_CLASS(&m->lock_object) == &lock_class_mtx_spin,
@@ -283,16 +265,11 @@ __mtx_lock_spin_flags(volatile uintptr_t *c, int opts, const char *file,
 }
 
 void
-__mtx_unlock_spin_flags(volatile uintptr_t *c, int opts, const char *file,
-    int line)
+_mtx_unlock_spin_flags(struct mtx *m, int opts, const char *file, int line)
 {
-	struct mtx *m;
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
-
 	KASSERT(m->mtx_lock != MTX_DESTROYED,
 	    ("mtx_unlock_spin() of destroyed mutex @ %s:%d", file, line));
 	KASSERT(LOCK_CLASS(&m->lock_object) == &lock_class_mtx_spin,
@@ -312,9 +289,8 @@ __mtx_unlock_spin_flags(volatile uintptr_t *c, int opts, const char *file,
  * is already owned, it will recursively acquire the lock.
  */
 int
-_mtx_trylock_flags_(volatile uintptr_t *c, int opts, const char *file, int line)
+mtx_trylock_flags_(struct mtx *m, int opts, const char *file, int line)
 {
-	struct mtx *m;
 #ifdef LOCK_PROFILING
 	uint64_t waittime = 0;
 	int contested = 0;
@@ -323,8 +299,6 @@ _mtx_trylock_flags_(volatile uintptr_t *c, int opts, const char *file, int line)
 
 	if (SCHEDULER_STOPPED())
 		return (1);
-
-	m = mtxlock2mtx(c);
 
 	KASSERT(!TD_IS_IDLETHREAD(curthread),
 	    ("mtx_trylock() by idle thread %p on sleep mutex %s @ %s:%d",
@@ -357,16 +331,15 @@ _mtx_trylock_flags_(volatile uintptr_t *c, int opts, const char *file, int line)
 }
 
 /*
- * __mtx_lock_sleep: the tougher part of acquiring an MTX_DEF lock.
+ * _mtx_lock_sleep: the tougher part of acquiring an MTX_DEF lock.
  *
  * We call this if the lock is either contested (i.e. we need to go to
  * sleep waiting for it), or if we need to recurse on it.
  */
 void
-__mtx_lock_sleep(volatile uintptr_t *c, uintptr_t tid, int opts,
-    const char *file, int line)
+_mtx_lock_sleep(struct mtx *m, uintptr_t tid, int opts, const char *file,
+    int line)
 {
-	struct mtx *m;
 	struct turnstile *ts;
 	uintptr_t v;
 #ifdef ADAPTIVE_MUTEXES
@@ -387,8 +360,6 @@ __mtx_lock_sleep(volatile uintptr_t *c, uintptr_t tid, int opts,
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
 
 	if (mtx_owned(m)) {
 		KASSERT((m->lock_object.lo_flags & LO_RECURSABLE) != 0,
@@ -548,16 +519,15 @@ _mtx_lock_spin_failed(struct mtx *m)
 
 #ifdef SMP
 /*
- * _mtx_lock_spin_cookie: the tougher part of acquiring an MTX_SPIN lock.
+ * _mtx_lock_spin: the tougher part of acquiring an MTX_SPIN lock.
  *
  * This is only called if we need to actually spin for the lock. Recursion
  * is handled inline.
  */
 void
-_mtx_lock_spin_cookie(volatile uintptr_t *c, uintptr_t tid, int opts,
-    const char *file, int line)
+_mtx_lock_spin(struct mtx *m, uintptr_t tid, int opts, const char *file,
+    int line)
 {
-	struct mtx *m;
 	int i = 0;
 #ifdef LOCK_PROFILING
 	int contested = 0;
@@ -566,8 +536,6 @@ _mtx_lock_spin_cookie(volatile uintptr_t *c, uintptr_t tid, int opts,
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
 
 	if (LOCK_LOG_TEST(&m->lock_object, opts))
 		CTR1(KTR_LOCK, "_mtx_lock_spin: %p spinning", m);
@@ -717,21 +685,18 @@ thread_lock_set(struct thread *td, struct mtx *new)
 }
 
 /*
- * __mtx_unlock_sleep: the tougher part of releasing an MTX_DEF lock.
+ * _mtx_unlock_sleep: the tougher part of releasing an MTX_DEF lock.
  *
  * We are only called here if the lock is recursed or contested (i.e. we
  * need to wake up a blocked thread).
  */
 void
-__mtx_unlock_sleep(volatile uintptr_t *c, int opts, const char *file, int line)
+_mtx_unlock_sleep(struct mtx *m, int opts, const char *file, int line)
 {
-	struct mtx *m;
 	struct turnstile *ts;
 
 	if (SCHEDULER_STOPPED())
 		return;
-
-	m = mtxlock2mtx(c);
 
 	if (mtx_recursed(m)) {
 		if (--(m->mtx_recurse) == 0)
@@ -771,15 +736,11 @@ __mtx_unlock_sleep(volatile uintptr_t *c, int opts, const char *file, int line)
  */
 #ifdef INVARIANT_SUPPORT
 void
-__mtx_assert(const volatile uintptr_t *c, int what, const char *file, int line)
+_mtx_assert(const struct mtx *m, int what, const char *file, int line)
 {
-	const struct mtx *m;
 
 	if (panicstr != NULL || dumping)
 		return;
-
-	m = mtxlock2mtx(c);
-
 	switch (what) {
 	case MA_OWNED:
 	case MA_OWNED | MA_RECURSED:
@@ -846,8 +807,7 @@ mtx_sysinit(void *arg)
 {
 	struct mtx_args *margs = arg;
 
-	mtx_init((struct mtx *)margs->ma_mtx, margs->ma_desc, NULL,
-	    margs->ma_opts);
+	mtx_init(margs->ma_mtx, margs->ma_desc, NULL, margs->ma_opts);
 }
 
 /*
@@ -857,13 +817,10 @@ mtx_sysinit(void *arg)
  * witness.
  */
 void
-_mtx_init(volatile uintptr_t *c, const char *name, const char *type, int opts)
+mtx_init(struct mtx *m, const char *name, const char *type, int opts)
 {
-	struct mtx *m;
 	struct lock_class *class;
 	int flags;
-
-	m = mtxlock2mtx(c);
 
 	MPASS((opts & ~(MTX_SPIN | MTX_QUIET | MTX_RECURSE |
 		MTX_NOWITNESS | MTX_DUPOK | MTX_NOPROFILE)) == 0);
@@ -907,11 +864,8 @@ _mtx_init(volatile uintptr_t *c, const char *name, const char *type, int opts)
  * flags.
  */
 void
-_mtx_destroy(volatile uintptr_t *c)
+mtx_destroy(struct mtx *m)
 {
-	struct mtx *m;
-
-	m = mtxlock2mtx(c);
 
 	if (!mtx_owned(m))
 		MPASS(mtx_unowned(m));
