@@ -637,11 +637,13 @@ void
 disk_create(struct disk *dp, int version)
 {
 
-	if (version != DISK_VERSION_03 && version != DISK_VERSION_02 &&
+	if (version != DISK_VERSION_04 &&
+	    version != DISK_VERSION_03 &&
+	    version != DISK_VERSION_02 &&
 	    version != DISK_VERSION_01) {
-		printf("WARNING: Attempt to add disk %s%d %s",
-		    dp->d_name, dp->d_unit,
-		    " using incompatible ABI version of disk(9)\n");
+		printf("WARNING: Attempt to add disk %s%d"
+		    " using incompatible ABI version %d of disk(9)\n",
+		    dp->d_name, dp->d_unit, version);
 		printf("WARNING: Ignoring disk %s%d\n",
 		    dp->d_name, dp->d_unit);
 		return;
