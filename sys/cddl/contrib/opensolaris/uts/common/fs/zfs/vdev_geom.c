@@ -23,6 +23,8 @@
  * All rights reserved.
  *
  * Portions Copyright (c) 2012 Martin Matuska <mm@FreeBSD.org>
+ *
+ * Portions Copyright (c) 2014 iXsystems, Inc. by Xin LI <delphij@FreeBSD.org>
  */
 
 #include <sys/zfs_context.h>
@@ -99,6 +101,50 @@ vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
 	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
 		vdev_geom_set_rotation_rate(vd, cp);
 		return;
+	} else if (strcmp(attr, "GEOM::physpath") == 0) {
+		spa_t *spa;
+		char *physpath;
+		int error, physpath_len;
+
+		if (g_access(cp, 1, 0, 0) != 0)
+			return;
+
+		/*
+		 * Record/Update physical path information for this device.
+		 */
+		spa = vd->vdev_spa;
+		physpath_len = MAXPATHLEN;
+		physpath = g_malloc(physpath_len, M_WAITOK|M_ZERO);
+		error = g_io_getattr("GEOM::physpath", cp, &physpath_len, physpath);
+		g_access(cp, -1, 0, 0);
+
+		if (error == 0) {
+			char *old_physpath;
+
+			old_physpath = vd->vdev_physpath;
+			vd->vdev_physpath = spa_strdup(physpath);
+			spa_async_request(spa, SPA_ASYNC_CONFIG_UPDATE);
+
+			if (old_physpath != NULL) {
+				int held_lock;
+
+				held_lock = spa_config_held(spa, SCL_STATE, RW_WRITER);
+				if (held_lock == 0) {
+					g_topology_unlock();
+					spa_config_enter(spa, SCL_STATE, FTAG,
+						RW_WRITER);
+				}
+
+				spa_strfree(old_physpath);
+
+				if (held_lock == 0) {
+					spa_config_exit(spa, SCL_STATE, FTAG);
+					g_topology_lock();
+				}
+			}
+		}
+
+		g_free(physpath);
 	}
 }
 
@@ -733,16 +779,17 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	 */
 	vd->vdev_nowritecache = B_FALSE;
 
-	if (vd->vdev_physpath != NULL)
-		spa_strfree(vd->vdev_physpath);
-	bufsize = sizeof("/dev/") + strlen(pp->name);
-	vd->vdev_physpath = kmem_alloc(bufsize, KM_SLEEP);
-	snprintf(vd->vdev_physpath, bufsize, "/dev/%s", pp->name);
-
 	/*
 	 * Determine the device's rotation rate.
 	 */
 	vdev_geom_set_rotation_rate(vd, cp);
+
+	/* Fetch initial physical path information for this device. */
+	DROP_GIANT();
+	g_topology_lock();
+	vdev_geom_attrchanged(cp, "GEOM::physpath");
+	g_topology_unlock();
+	PICKUP_GIANT();
 
 	return (0);
 }
