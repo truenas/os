@@ -97,7 +97,6 @@ struct disk {
 	uint16_t		d_hba_device;
 	uint16_t		d_hba_subvendor;
 	uint16_t		d_hba_subdevice;
-	uint16_t		d_rotation_rate;
 
 	/* Fields private to the driver */
 	void			*d_drv1;
