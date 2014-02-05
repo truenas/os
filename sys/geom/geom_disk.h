@@ -93,7 +93,6 @@ struct disk {
 	uint16_t		d_hba_device;
 	uint16_t		d_hba_subvendor;
 	uint16_t		d_hba_subdevice;
-	uint16_t		d_rotation_rate;
 
 	/* Fields private to the driver */
 	void			*d_drv1;
@@ -103,6 +102,9 @@ struct disk {
 
 	/* new fields in stable - don't use if DISKFLAG_LACKS_DELMAX is set */
 	off_t			d_delmaxsize;
+
+	/* new fields in stable */
+	uint16_t		d_rotation_rate;
 };
 
 #define DISKFLAG_NEEDSGIANT	0x1
