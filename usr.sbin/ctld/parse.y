@@ -317,7 +317,7 @@ target_alias:	ALIAS STR
 	{
 		if (target->t_alias != NULL) {
 			log_warnx("alias for target \"%s\" "
-			    "specified more than once", target->t_iqn);
+			    "specified more than once", target->t_name);
 			return (1);
 		}
 		target->t_alias = $2;
@@ -329,17 +329,17 @@ target_auth_group:	AUTH_GROUP STR
 		if (target->t_auth_group != NULL) {
 			if (target->t_auth_group->ag_name != NULL)
 				log_warnx("auth-group for target \"%s\" "
-				    "specified more than once", target->t_iqn);
+				    "specified more than once", target->t_name);
 			else
 				log_warnx("cannot mix auth-group with explicit "
 				    "authorisations for target \"%s\"",
-				    target->t_iqn);
+				    target->t_name);
 			return (1);
 		}
 		target->t_auth_group = auth_group_find(conf, $2);
 		if (target->t_auth_group == NULL) {
 			log_warnx("unknown auth-group \"%s\" for target "
-			    "\"%s\"", $2, target->t_iqn);
+			    "\"%s\"", $2, target->t_name);
 			return (1);
 		}
 		free($2);
@@ -354,7 +354,7 @@ target_chap:	CHAP STR STR
 			if (target->t_auth_group->ag_name != NULL) {
 				log_warnx("cannot mix auth-group with explicit "
 				    "authorisations for target \"%s\"",
-				    target->t_iqn);
+				    target->t_name);
 				free($2);
 				free($3);
 				return (1);
@@ -384,7 +384,7 @@ target_chap_mutual:	CHAP_MUTUAL STR STR STR STR
 			if (target->t_auth_group->ag_name != NULL) {
 				log_warnx("cannot mix auth-group with explicit "
 				    "authorisations for target \"%s\"",
-				    target->t_iqn);
+				    target->t_name);
 				free($2);
 				free($3);
 				free($4);
@@ -421,7 +421,7 @@ target_initiator_name:	INITIATOR_NAME STR
 			if (target->t_auth_group->ag_name != NULL) {
 				log_warnx("cannot mix auth-group with "
 				    "initiator-name for target \"%s\"",
-				    target->t_iqn);
+				    target->t_name);
 				free($2);
 				return (1);
 			}
@@ -448,7 +448,7 @@ target_initiator_portal:	INITIATOR_PORTAL STR
 			if (target->t_auth_group->ag_name != NULL) {
 				log_warnx("cannot mix auth-group with "
 				    "initiator-portal for target \"%s\"",
-				    target->t_iqn);
+				    target->t_name);
 				free($2);
 				return (1);
 			}
@@ -471,14 +471,14 @@ target_portal_group:	PORTAL_GROUP STR
 	{
 		if (target->t_portal_group != NULL) {
 			log_warnx("portal-group for target \"%s\" "
-			    "specified more than once", target->t_iqn);
+			    "specified more than once", target->t_name);
 			free($2);
 			return (1);
 		}
 		target->t_portal_group = portal_group_find(conf, $2);
 		if (target->t_portal_group == NULL) {
 			log_warnx("unknown portal-group \"%s\" for target "
-			    "\"%s\"", $2, target->t_iqn);
+			    "\"%s\"", $2, target->t_name);
 			free($2);
 			return (1);
 		}
@@ -527,7 +527,7 @@ lun_backend:	BACKEND STR
 		if (lun->l_backend != NULL) {
 			log_warnx("backend for lun %d, target \"%s\" "
 			    "specified more than once",
-			    lun->l_lun, target->t_iqn);
+			    lun->l_lun, target->t_name);
 			free($2);
 			return (1);
 		}
@@ -541,7 +541,7 @@ lun_blocksize:	BLOCKSIZE NUM
 		if (lun->l_blocksize != 0) {
 			log_warnx("blocksize for lun %d, target \"%s\" "
 			    "specified more than once",
-			    lun->l_lun, target->t_iqn);
+			    lun->l_lun, target->t_name);
 			return (1);
 		}
 		lun_set_blocksize(lun, $2);
@@ -553,7 +553,7 @@ lun_device_id:	DEVICE_ID STR
 		if (lun->l_device_id != NULL) {
 			log_warnx("device_id for lun %d, target \"%s\" "
 			    "specified more than once",
-			    lun->l_lun, target->t_iqn);
+			    lun->l_lun, target->t_name);
 			free($2);
 			return (1);
 		}
@@ -579,7 +579,7 @@ lun_path:	PATH STR
 		if (lun->l_path != NULL) {
 			log_warnx("path for lun %d, target \"%s\" "
 			    "specified more than once",
-			    lun->l_lun, target->t_iqn);
+			    lun->l_lun, target->t_name);
 			free($2);
 			return (1);
 		}
@@ -593,7 +593,7 @@ lun_serial:	SERIAL STR
 		if (lun->l_serial != NULL) {
 			log_warnx("serial for lun %d, target \"%s\" "
 			    "specified more than once",
-			    lun->l_lun, target->t_iqn);
+			    lun->l_lun, target->t_name);
 			free($2);
 			return (1);
 		}
@@ -607,7 +607,7 @@ lun_size:	SIZE NUM
 		if (lun->l_size != 0) {
 			log_warnx("size for lun %d, target \"%s\" "
 			    "specified more than once",
-			    lun->l_lun, target->t_iqn);
+			    lun->l_lun, target->t_name);
 			return (1);
 		}
 		lun_set_size(lun, $2);
