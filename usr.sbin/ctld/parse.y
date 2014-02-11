@@ -58,10 +58,10 @@ extern int	yyparse(void);
 
 %}
 
-%token ALIAS AUTH_GROUP BACKEND BLOCKSIZE CHAP CHAP_MUTUAL CLOSING_BRACKET
-%token DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP INITIATOR_NAME INITIATOR_PORTAL
-%token LISTEN LISTEN_ISER LUN MAXPROC NUM OPENING_BRACKET OPTION PATH PIDFILE
-%token PORTAL_GROUP SERIAL SIZE STR TARGET TIMEOUT
+%token ALIAS AUTH_GROUP AUTH_TYPE BACKEND BLOCKSIZE CHAP CHAP_MUTUAL
+%token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP INITIATOR_NAME
+%token INITIATOR_PORTAL LISTEN LISTEN_ISER LUN MAXPROC NUM OPENING_BRACKET
+%token OPTION PATH PIDFILE PORTAL_GROUP SERIAL SIZE STR TARGET TIMEOUT
 
 %union
 {
@@ -146,6 +146,8 @@ auth_group_entries:
 	;
 
 auth_group_entry:
+	auth_group_auth_type
+	|
 	auth_group_chap
 	|
 	auth_group_chap_mutual
@@ -153,6 +155,17 @@ auth_group_entry:
 	auth_group_initiator_name
 	|
 	auth_group_initiator_portal
+	;
+
+auth_group_auth_type:	AUTH_TYPE STR
+	{
+		int error;
+
+		error = auth_group_set_type_str(auth_group, $2);
+		free($2);
+		if (error != 0)
+			return (1);
+	}
 	;
 
 auth_group_chap:	CHAP STR STR
@@ -300,6 +313,8 @@ target_entry:
 	|
 	target_auth_group
 	|
+	target_auth_type
+	|
 	target_chap
 	|
 	target_chap_mutual
@@ -331,7 +346,7 @@ target_auth_group:	AUTH_GROUP STR
 				log_warnx("auth-group for target \"%s\" "
 				    "specified more than once", target->t_name);
 			else
-				log_warnx("cannot mix auth-group with explicit "
+				log_warnx("cannot use both auth-group and explicit "
 				    "authorisations for target \"%s\"",
 				    target->t_name);
 			return (1);
@@ -346,14 +361,40 @@ target_auth_group:	AUTH_GROUP STR
 	}
 	;
 
+target_auth_type:	AUTH_TYPE STR
+	{
+		int error;
+
+		if (target->t_auth_group != NULL) {
+			if (target->t_auth_group->ag_name != NULL) {
+				log_warnx("cannot use both auth-group and "
+				    "auth-type for target \"%s\"",
+				    target->t_name);
+				return (1);
+			}
+		} else {
+			target->t_auth_group = auth_group_new(conf, NULL);
+			if (target->t_auth_group == NULL) {
+				free($2);
+				return (1);
+			}
+			target->t_auth_group->ag_target = target;
+		}
+		error = auth_group_set_type_str(target->t_auth_group, $2);
+		free($2);
+		if (error != 0)
+			return (1);
+	}
+	;
+
 target_chap:	CHAP STR STR
 	{
 		const struct auth *ca;
 
 		if (target->t_auth_group != NULL) {
 			if (target->t_auth_group->ag_name != NULL) {
-				log_warnx("cannot mix auth-group with explicit "
-				    "authorisations for target \"%s\"",
+				log_warnx("cannot use both auth-group and "
+				    "chap for target \"%s\"",
 				    target->t_name);
 				free($2);
 				free($3);
@@ -382,8 +423,8 @@ target_chap_mutual:	CHAP_MUTUAL STR STR STR STR
 
 		if (target->t_auth_group != NULL) {
 			if (target->t_auth_group->ag_name != NULL) {
-				log_warnx("cannot mix auth-group with explicit "
-				    "authorisations for target \"%s\"",
+				log_warnx("cannot use both auth-group and "
+				    "chap-mutual for target \"%s\"",
 				    target->t_name);
 				free($2);
 				free($3);
@@ -419,7 +460,7 @@ target_initiator_name:	INITIATOR_NAME STR
 
 		if (target->t_auth_group != NULL) {
 			if (target->t_auth_group->ag_name != NULL) {
-				log_warnx("cannot mix auth-group with "
+				log_warnx("cannot use both auth-group and "
 				    "initiator-name for target \"%s\"",
 				    target->t_name);
 				free($2);
@@ -446,7 +487,7 @@ target_initiator_portal:	INITIATOR_PORTAL STR
 
 		if (target->t_auth_group != NULL) {
 			if (target->t_auth_group->ag_name != NULL) {
-				log_warnx("cannot mix auth-group with "
+				log_warnx("cannot use both auth-group and "
 				    "initiator-portal for target \"%s\"",
 				    target->t_name);
 				free($2);
