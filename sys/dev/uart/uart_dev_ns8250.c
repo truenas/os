@@ -315,15 +315,20 @@ static void
 ns8250_putc(struct uart_bas *bas, int c)
 {
 	int limit;
+	static int broken1 = 0, broken2 = 0;
 
-	limit = 250000;
+	limit = broken1 ? 300 : 250000;
 	while ((uart_getreg(bas, REG_LSR) & LSR_THRE) == 0 && --limit)
 		DELAY(4);
+	broken1 = (limit == 0);
 	uart_setreg(bas, REG_DATA, c);
 	uart_barrier(bas);
-	limit = 250000;
-	while ((uart_getreg(bas, REG_LSR) & LSR_TEMT) == 0 && --limit)
-		DELAY(4);
+	if (!broken2) {
+		limit = 250000;
+		while ((uart_getreg(bas, REG_LSR) & LSR_TEMT) == 0 && --limit)
+			DELAY(4);
+		broken2 = (limit == 0);
+	}
 }
 
 static int
