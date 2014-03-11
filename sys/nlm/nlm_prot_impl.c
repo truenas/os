@@ -360,6 +360,8 @@ nlm_get_rpc(struct sockaddr *sa, rpcprog_t prog, rpcvers_t vers)
 	struct portmap mapping;
 	u_short port = 0;
 
+	char tmp[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"];
+
 	/*
 	 * First we need to contact the remote RPCBIND service to find
 	 * the right port.
@@ -508,8 +510,25 @@ again:
 		}
 
 		/* Otherwise, bad news. */
+		switch (sa->sa_family) {
+		case AF_INET:
+			inet_ntop(AF_INET,
+			    &((const struct sockaddr_in *) sa)->sin_addr,
+			    tmp, sizeof tmp);
+			break;
+#ifdef INET6
+		case AF_INET6:
+			inet_ntop(AF_INET6,
+			    &((const struct sockaddr_in6 *) sa)->sin6_addr,
+			    tmp, sizeof tmp);
+			break;
+#endif
+		default:
+			strcpy(tmp, "<unknown>");
+		}
+
 		NLM_ERR("NLM: failed to contact remote rpcbind, "
-		    "stat = %d, port = %d\n", (int) stat, port);
+		    "stat = %d, addr = %s, port = %d\n", (int) stat, tmp, port);
 		CLNT_DESTROY(rpcb);
 		return (NULL);
 	}
