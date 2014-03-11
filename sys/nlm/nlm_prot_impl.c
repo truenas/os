@@ -524,7 +524,7 @@ again:
 			break;
 #endif
 		default:
-			strcpy(tmp, "<unknown>");
+			strlcpy(tmp, "<unknown>", sizeof(tmp));
 		}
 
 		NLM_ERR("NLM: failed to contact remote rpcbind, "
