@@ -167,6 +167,10 @@ struct timeval nlm_zero_tv = { 0, 0 };
  */
 int nlm_nsm_state;
 
+/*
+ * A timeout for lock messages; defaults to 25 seconds
+ */
+static int lock_timeout = 25;
 
 /*
  * A lock to protect the host list and waiting lock list.
@@ -402,7 +406,7 @@ try_tcp:
 	/*
 	 * Use the default timeout.
 	 */
-	timo.tv_sec = 25;
+	timo.tv_sec = lock_timeout;
 	timo.tv_usec = 0;
 again:
 	switch (rpcvers) {
@@ -886,13 +890,15 @@ nlm_create_host(const char* caller_name)
 	    "version", CTLFLAG_RD, &host->nh_vers, 0, "");
 	SYSCTL_ADD_UINT(&host->nh_sysctl, SYSCTL_CHILDREN(oid), OID_AUTO,
 	    "monitored", CTLFLAG_RD, &host->nh_monstate, 0, "");
+	SYSCTL_ADD_UINT(&host->nh_sysctl, SYSCTL_CHILDREN(oid), OID_AUTO,
+	    "lock_timeout", CTLTYPE_INT | CTLFLAG_RW, &lock_timeout, 0, "");
 	SYSCTL_ADD_PROC(&host->nh_sysctl, SYSCTL_CHILDREN(oid), OID_AUTO,
 	    "lock_count", CTLTYPE_INT | CTLFLAG_RD, host, 0,
 	    nlm_host_lock_count_sysctl, "I", "");
 	SYSCTL_ADD_PROC(&host->nh_sysctl, SYSCTL_CHILDREN(oid), OID_AUTO,
 	    "client_lock_count", CTLTYPE_INT | CTLFLAG_RD, host, 0,
 	    nlm_host_client_lock_count_sysctl, "I", "");
-
+	
 	mtx_lock(&nlm_global_lock);
 
 	return (host);
@@ -1175,7 +1181,7 @@ nlm_host_unmonitor(struct nlm_host *host)
 	smmonid.my_id.my_vers = NLM_SM;
 	smmonid.my_id.my_proc = NLM_SM_NOTIFY;
 
-	timo.tv_sec = 25;
+	timo.tv_sec = lock_timeout;
 	timo.tv_usec = 0;
 	stat = CLNT_CALL(nlm_nsm, SM_UNMON,
 	    (xdrproc_t) xdr_mon, &smmonid,
@@ -1240,7 +1246,7 @@ nlm_host_monitor(struct nlm_host *host, int state)
 	smmon.mon_id.my_id.my_proc = NLM_SM_NOTIFY;
 	memcpy(smmon.priv, &host->nh_sysid, sizeof(host->nh_sysid));
 
-	timo.tv_sec = 25;
+	timo.tv_sec = lock_timeout;
 	timo.tv_usec = 0;
 	stat = CLNT_CALL(nlm_nsm, SM_MON,
 	    (xdrproc_t) xdr_mon, &smmon,
@@ -1626,7 +1632,7 @@ nlm_server_main(int addr_count, char **addrs)
 	memset(&id, 0, sizeof(id));
 	id.my_name = "NFS NLM";
 
-	timo.tv_sec = 25;
+	timo.tv_sec = lock_timeout;
 	timo.tv_usec = 0;
 	stat = CLNT_CALL(nlm_nsm, SM_UNMON_ALL,
 	    (xdrproc_t) xdr_my_id, &id,
