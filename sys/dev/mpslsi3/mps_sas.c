@@ -1572,7 +1572,7 @@ mpssas_action_scsiio(struct mpssas_softc *sassc, union ccb *ccb)
 	if (targ->handle == 0x0) {
 		mps_dprint(sc, MPS_TRACE, "%s NULL handle for target %u\n", 
 		    __func__, csio->ccb_h.target_id);
-		csio->ccb_h.status = CAM_TID_INVALID;
+		csio->ccb_h.status = CAM_SEL_TIMEOUT;
 		xpt_done(ccb);
 		return;
 	}
