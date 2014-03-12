@@ -59,10 +59,12 @@ static struct {
 	int		ports;
 	int		quirks;
 } mvs_ids[] = {
+/*
 	{0x504011ab, 0x00, "Marvell 88SX5040",	4,	MVS_Q_GENI},
 	{0x504111ab, 0x00, "Marvell 88SX5041",	4,	MVS_Q_GENI},
 	{0x508011ab, 0x00, "Marvell 88SX5080",	8,	MVS_Q_GENI},
 	{0x508111ab, 0x00, "Marvell 88SX5081",	8,	MVS_Q_GENI},
+*/
 	{0x604011ab, 0x00, "Marvell 88SX6040",	4,	MVS_Q_GENII},
 	{0x604111ab, 0x00, "Marvell 88SX6041",	4,	MVS_Q_GENII},
 	{0x604211ab, 0x00, "Marvell 88SX6042",	4,	MVS_Q_GENIIE},
