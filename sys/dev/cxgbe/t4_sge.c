@@ -3108,13 +3108,13 @@ write_txpkt_wr(struct port_info *pi, struct sge_txq *txq, struct mbuf *m,
 
 	/* Checksum offload */
 	ctrl1 = 0;
-	if (!(m->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TSO)))
+	if (!(m->m_pkthdr.csum_flags & CSUM_IP))
 		ctrl1 |= F_TXPKT_IPCSUM_DIS;
 	if (!(m->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_UDP | CSUM_UDP_IPV6 |
-	    CSUM_TCP_IPV6 | CSUM_TSO)))
+	    CSUM_TCP_IPV6)))
 		ctrl1 |= F_TXPKT_L4CSUM_DIS;
 	if (m->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TCP | CSUM_UDP |
-	    CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO))
+	    CSUM_UDP_IPV6 | CSUM_TCP_IPV6))
 		txq->txcsum++;	/* some hardware assistance provided */
 
 	/* VLAN tag insertion */
@@ -3310,13 +3310,11 @@ write_ulp_cpl_sgl(struct port_info *pi, struct sge_txq *txq,
 
 	/* Checksum offload */
 	ctrl = 0;
-	if (!(m->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TSO)))
+	if (!(m->m_pkthdr.csum_flags & CSUM_IP))
 		ctrl |= F_TXPKT_IPCSUM_DIS;
-	if (!(m->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_UDP | CSUM_UDP_IPV6 |
-	    CSUM_TCP_IPV6 | CSUM_TSO)))
+	if (!(m->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_UDP)))
 		ctrl |= F_TXPKT_L4CSUM_DIS;
-	if (m->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TCP | CSUM_UDP |
-	    CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO))
+	if (m->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TCP | CSUM_UDP))
 		txq->txcsum++;	/* some hardware assistance provided */
 
 	/* VLAN tag insertion */
