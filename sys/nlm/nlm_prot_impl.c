@@ -1156,6 +1156,35 @@ void nlm_host_release(struct nlm_host *host)
 	}
 }
 
+static void
+nlm_host_monfail(const struct nlm_host *host, bool action)
+{
+	const char *monitor = (action ? "monitor" : "unmonitor");
+
+	char tmp[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"];
+	const struct sockaddr *addr = (const struct sockaddr *)&(host->nh_addr);
+
+	switch (addr->sa_family) {
+	case AF_INET:
+		inet_ntop(AF_INET,
+		    &((const struct sockaddr_in *) addr)->sin_addr,
+		    tmp, sizeof tmp);
+		break;
+#ifdef INET6
+	case AF_INET6:
+		inet_ntop(AF_INET6,
+		    &((const struct sockaddr_in6 *) addr)->sin6_addr,
+		    tmp, sizeof tmp);
+		break;
+#endif
+	default:
+		strlcpy(tmp, "<unknown>", sizeof(tmp));
+	}
+
+	NLM_ERR("Local NSM refuses to %s %s (%s)\n",
+	    monitor, host->nh_caller_name, tmp);
+}
+
 /*
  * Unregister this NLM host with the local NSM due to idleness.
  */
@@ -1192,8 +1221,7 @@ nlm_host_unmonitor(struct nlm_host *host)
 		return;
 	}
 	if (smstat.res_stat == stat_fail) {
-		NLM_ERR("Local NSM refuses to unmonitor %s\n",
-		    host->nh_caller_name);
+		nlm_host_monfail(host, false);
 		return;
 	}
 
@@ -1257,8 +1285,7 @@ nlm_host_monitor(struct nlm_host *host, int state)
 		return;
 	}
 	if (smstat.res_stat == stat_fail) {
-		NLM_ERR("Local NSM refuses to monitor %s\n",
-		    host->nh_caller_name);
+		nlm_host_monfail(host, true);
 		mtx_lock(&host->nh_lock);
 		host->nh_monstate = NLM_MONITOR_FAILED;
 		mtx_unlock(&host->nh_lock);
