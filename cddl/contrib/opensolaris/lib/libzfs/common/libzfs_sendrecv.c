@@ -80,6 +80,8 @@ typedef struct progress_arg {
 	boolean_t pa_parsable;
 	boolean_t pa_astitle;
 	uint64_t pa_size;
+	pthread_mutex_t mtx;
+	pthread_cond_t cv;
 } progress_arg_t;
 
 typedef struct dataref {
@@ -980,17 +982,22 @@ send_progress_thread(void *arg)
 	zfs_handle_t *zhp = pa->pa_zhp;
 	libzfs_handle_t *hdl = zhp->zfs_hdl;
 	unsigned long long bytes, total;
-	int pct;
+	int pct, err, title;
 	char buf[16];
 
 	time_t t;
 	struct tm *tm;
 
+	struct timespec waittime;
+
 	assert(zhp->zfs_type == ZFS_TYPE_SNAPSHOT);
 	(void) strlcpy(zc.zc_name, zhp->zfs_name, sizeof (zc.zc_name));
 
 	if (!pa->pa_parsable && !pa->pa_astitle)
-		(void) fprintf(stderr, "TIME        SENT   SNAPSHOT\n");
+		title = 1;
+	else
+		title = 0;
+
 
 	if (pa->pa_astitle)
 		total = pa->pa_size / 100;
@@ -999,7 +1006,13 @@ send_progress_thread(void *arg)
 	 * Print the progress from ZFS_IOC_SEND_PROGRESS every second.
 	 */
 	for (;;) {
-		(void) sleep(1);
+		clock_gettime(CLOCK_REALTIME_FAST, &waittime);
+		waittime.tv_sec++;
+		pthread_mutex_lock(&pa->mtx);
+		err = pthread_cond_timedwait(&pa->cv, &pa->mtx, &waittime);
+		pthread_mutex_unlock(&pa->mtx);
+		if (err != ETIMEDOUT)
+			return ((void *)-1);
 
 		zc.zc_cookie = pa->pa_fd;
 		if (zfs_ioctl(hdl, ZFS_IOC_SEND_PROGRESS, &zc) != 0)
@@ -1008,6 +1021,11 @@ send_progress_thread(void *arg)
 		(void) time(&t);
 		tm = localtime(&t);
 		bytes = zc.zc_cookie;
+
+		if (title == 1) {
+			(void) fprintf(stderr, "TIME        SENT   SNAPSHOT\n");
+			title = 0;
+		}
 
 		if (pa->pa_astitle) {
 			if (total > 0) {
@@ -1038,13 +1056,14 @@ static int
 dump_snapshot(zfs_handle_t *zhp, void *arg)
 {
 	send_dump_data_t *sdd = arg;
-	progress_arg_t pa = { 0 };
+	progress_arg_t pa;
 	pthread_t tid;
 	char *thissnap;
 	int err;
 	boolean_t isfromsnap, istosnap, fromorigin;
 	boolean_t exclude = B_FALSE;
 
+	memset(&pa, 0, sizeof(pa));
 	err = 0;
 	thissnap = strchr(zhp->zfs_name, '@') + 1;
 	isfromsnap = (sdd->fromsnap != NULL &&
@@ -1172,7 +1191,9 @@ dump_snapshot(zfs_handle_t *zhp, void *arg)
 		    fromorigin, sdd->outfd, sdd->debugnv);
 
 		if (sdd->progress) {
-			(void) pthread_cancel(tid);
+			pthread_mutex_lock(&pa.mtx);
+			pthread_cond_signal(&pa.cv);
+			pthread_mutex_unlock(&pa.mtx);
 			(void) pthread_join(tid, NULL);
 		}
 	}
