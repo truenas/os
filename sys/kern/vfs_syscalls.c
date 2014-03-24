@@ -761,10 +761,10 @@ sys_fchdir(td, uap)
 		return (error);
 	}
 	VOP_UNLOCK(vp, 0);
-	FILEDESC_XLOCK(fdp);
+	FILEDESC_XLOCK_DIR(fdp);
 	vpold = fdp->fd_cdir;
 	fdp->fd_cdir = vp;
-	FILEDESC_XUNLOCK(fdp);
+	FILEDESC_XUNLOCK_DIR(fdp);
 	vrele(vpold);
 	return (0);
 }
@@ -807,10 +807,10 @@ kern_chdir(struct thread *td, char *path, enum uio_seg pathseg)
 	}
 	VOP_UNLOCK(nd.ni_vp, 0);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
-	FILEDESC_XLOCK(fdp);
+	FILEDESC_XLOCK_DIR(fdp);
 	vp = fdp->fd_cdir;
 	fdp->fd_cdir = nd.ni_vp;
-	FILEDESC_XUNLOCK(fdp);
+	FILEDESC_XUNLOCK_DIR(fdp);
 	vrele(vp);
 	return (0);
 }
@@ -941,11 +941,13 @@ change_root(vp, td)
 	int error;
 
 	fdp = td->td_proc->p_fd;
+	FILEDESC_XLOCK_DIR(fdp);
 	FILEDESC_XLOCK(fdp);
 	if (chroot_allow_open_directories == 0 ||
 	    (chroot_allow_open_directories == 1 && fdp->fd_rdir != rootvnode)) {
 		error = chroot_refuse_vdir_fds(fdp);
 		if (error != 0) {
+			FILEDESC_XUNLOCK_DIR(fdp);
 			FILEDESC_XUNLOCK(fdp);
 			return (error);
 		}
@@ -957,6 +959,7 @@ change_root(vp, td)
 		fdp->fd_jdir = vp;
 		VREF(fdp->fd_jdir);
 	}
+	FILEDESC_XUNLOCK_DIR(fdp);
 	FILEDESC_XUNLOCK(fdp);
 	vrele(oldvp);
 	return (0);
@@ -4114,11 +4117,11 @@ sys_umask(td, uap)
 {
 	register struct filedesc *fdp;
 
-	FILEDESC_XLOCK(td->td_proc->p_fd);
+	FILEDESC_XLOCK_DIR(td->td_proc->p_fd);
 	fdp = td->td_proc->p_fd;
 	td->td_retval[0] = fdp->fd_cmask;
 	fdp->fd_cmask = uap->newmask & ALLPERMS;
-	FILEDESC_XUNLOCK(td->td_proc->p_fd);
+	FILEDESC_XUNLOCK_DIR(td->td_proc->p_fd);
 	return (0);
 }
 
