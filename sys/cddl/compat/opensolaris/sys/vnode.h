@@ -180,7 +180,7 @@ vn_openat(char *pnamep, enum uio_seg seg, int filemode, int createmode,
 	ASSERT(umask == 0);
 
 	fdc = td->td_proc->p_fd;
-	FILEDESC_XLOCK(fdc);
+	FILEDESC_XLOCK_DIR(fdc);
 	if (fdc->fd_rdir == NULL) {
 		fdc->fd_rdir = rootvnode;
 		vref(fdc->fd_rdir);
@@ -189,7 +189,7 @@ vn_openat(char *pnamep, enum uio_seg seg, int filemode, int createmode,
 		fdc->fd_cdir = rootvnode;
 		vref(fdc->fd_rdir);
 	}
-	FILEDESC_XUNLOCK(fdc);
+	FILEDESC_XUNLOCK_DIR(fdc);
 
 	if (startvp != NULL)
 		vref(startvp);
