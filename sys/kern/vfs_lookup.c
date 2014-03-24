@@ -204,7 +204,7 @@ namei(struct nameidata *ndp)
 	/*
 	 * Get starting point for the translation.
 	 */
-	FILEDESC_SLOCK(fdp);
+	FILEDESC_SLOCK_DIR(fdp);
 	ndp->ni_rootdir = fdp->fd_rdir;
 	ndp->ni_topdir = fdp->fd_jdir;
 
@@ -249,7 +249,7 @@ namei(struct nameidata *ndp)
 #endif
 		}
 		if (error != 0 || dp != NULL) {
-			FILEDESC_SUNLOCK(fdp);
+			FILEDESC_SUNLOCK_DIR(fdp);
 			if (error == 0 && dp->v_type != VDIR) {
 				vrele(dp);
 				error = ENOTDIR;
@@ -267,7 +267,7 @@ namei(struct nameidata *ndp)
 	if (dp == NULL) {
 		dp = fdp->fd_cdir;
 		VREF(dp);
-		FILEDESC_SUNLOCK(fdp);
+		FILEDESC_SUNLOCK_DIR(fdp);
 		if (ndp->ni_startdir != NULL)
 			vrele(ndp->ni_startdir);
 	}

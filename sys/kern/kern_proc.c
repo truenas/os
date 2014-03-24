@@ -2581,9 +2581,9 @@ sysctl_kern_proc_umask(SYSCTL_HANDLER_ARGS)
 	if (error != 0)
 		return (error);
 
-	FILEDESC_SLOCK(p->p_fd);
+	FILEDESC_SLOCK_DIR(p->p_fd);
 	fd_cmask = p->p_fd->fd_cmask;
-	FILEDESC_SUNLOCK(p->p_fd);
+	FILEDESC_SUNLOCK_DIR(p->p_fd);
 	PRELE(p);
 	error = SYSCTL_OUT(req, &fd_cmask, sizeof(fd_cmask));
 	return (error);

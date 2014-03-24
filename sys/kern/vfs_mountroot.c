@@ -190,7 +190,7 @@ set_rootvnode(void)
 	VOP_UNLOCK(rootvnode, 0);
 
 	p = curthread->td_proc;
-	FILEDESC_XLOCK(p->p_fd);
+	FILEDESC_XLOCK_DIR(p->p_fd);
 
 	if (p->p_fd->fd_cdir != NULL)
 		vrele(p->p_fd->fd_cdir);
@@ -202,7 +202,7 @@ set_rootvnode(void)
 	p->p_fd->fd_rdir = rootvnode;
 	VREF(rootvnode);
 
-	FILEDESC_XUNLOCK(p->p_fd);
+	FILEDESC_XUNLOCK_DIR(p->p_fd);
 }
 
 static int
