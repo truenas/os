@@ -144,6 +144,7 @@ typedef enum {
 	ZFS_PROP_CLONES,
 	ZFS_PROP_LOGICALUSED,
 	ZFS_PROP_LOGICALREFERENCED,
+	ZFS_PROP_VOLMODE,
 	ZFS_NUM_PROPS
 } zfs_prop_t;
 
@@ -336,6 +337,12 @@ typedef enum {
 	ZFS_SYNC_DISABLED = 2
 } zfs_sync_type_t;
 
+typedef enum {
+	ZFS_VOLMODE_DEFAULT = 0,
+	ZFS_VOLMODE_GEOM = 1,
+	ZFS_VOLMODE_DEV = 2,
+	ZFS_VOLMODE_NONE = 3
+} zfs_volmode_t;
 
 /*
  * On-disk version number.
