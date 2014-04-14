@@ -3764,7 +3764,7 @@ zpool_get_history(zpool_handle_t *zhp, nvlist_t **nvhisp)
 	if ((buf = malloc(bufsize)) == NULL)
 		return (ENOMEM);
 	do {
-		uint64_t bytes_read = sizeof (buf);
+		uint64_t bytes_read = bufsize;
 		uint64_t leftover;
 
 		if ((err = get_history(zhp, buf, &off, &bytes_read)) != 0)
