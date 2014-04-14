@@ -3752,18 +3752,14 @@ zpool_history_unpack(char *buf, uint64_t bytes_read, uint64_t *leftover,
 int
 zpool_get_history(zpool_handle_t *zhp, nvlist_t **nvhisp)
 {
-	char *buf = NULL;
-	uint64_t bufsize = HIS_BUF_LEN;
+	char buf[HIS_BUF_LEN];
 	uint64_t off = 0;
 	nvlist_t **records = NULL;
 	uint_t numrecords = 0;
 	int err, i;
 
-	if ((buf = malloc(bufsize)) == NULL)
-		return (ENOMEM);
-
 	do {
-		uint64_t bytes_read = bufsize;
+		uint64_t bytes_read = sizeof (buf);
 		uint64_t leftover;
 
 		if ((err = get_history(zhp, buf, &off, &bytes_read)) != 0)
@@ -3776,21 +3772,6 @@ zpool_get_history(zpool_handle_t *zhp, nvlist_t **nvhisp)
 		if ((err = zpool_history_unpack(buf, bytes_read,
 		    &leftover, &records, &numrecords)) != 0)
 			break;
-
-		if (leftover == bytes_read) {
-			/* Our supplied buffer (bytes_read or bufsize) is too small */
-			bufsize = sizeof(bufsize);
-
-			/* get length of packed record (stored as little endian) */
-			for (i = 0; i < sizeof (bufsize); i++)
-				bufsize += (uint64_t)(((uchar_t *)buf)[i]) << (8*i);
-
-			if (buf < HIS_BUF_LEN || (buf = reallocf(buf, bufsize)) == NULL) {
-				err = ENOMEM;
-				break;
-			}
-		}
-
 		off -= leftover;
 
 		/* CONSTCOND */
@@ -3804,7 +3785,6 @@ zpool_get_history(zpool_handle_t *zhp, nvlist_t **nvhisp)
 	for (i = 0; i < numrecords; i++)
 		nvlist_free(records[i]);
 	free(records);
-	free(buf);
 
 	return (err);
 }
