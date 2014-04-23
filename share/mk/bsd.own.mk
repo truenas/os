@@ -378,7 +378,8 @@ __DEFAULT_NO_OPTIONS = \
     SHARED_TOOLCHAIN \
     SVN \
     TESTS \
-    USB_GADGET_EXAMPLES
+    USB_GADGET_EXAMPLES \
+    VIMAGE
 
 #
 # Default behaviour of some options depends on the architecture.  Unfortunately
