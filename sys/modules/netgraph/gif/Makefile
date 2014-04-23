@@ -12,3 +12,9 @@ opt_inet6.h:
 .endif
 
 .include <bsd.kmod.mk>
+
+.if !defined(KERNBUILDDIR)
+.if ${MK_VIMAGE} != "no"
+CFLAGS+=	-DVIMAGE
+.endif
+.endif
