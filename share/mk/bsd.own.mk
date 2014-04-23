@@ -450,7 +450,8 @@ __DEFAULT_NO_OPTIONS = \
     NMTREE \
     OFED \
     OPENSSH_NONE_CIPHER \
-    SHARED_TOOLCHAIN
+    SHARED_TOOLCHAIN \
+    VIMAGE
 
 #
 # Default behaviour of some options depends on the architecture.  Unfortunately
