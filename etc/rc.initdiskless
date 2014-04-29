@@ -198,7 +198,7 @@ handle_remount() { # $1 = mount point
 # Create a generic memory disk
 #
 mount_md() {
-    /sbin/mdmfs -S -i 4096 -s $1 -M md $2
+	/sbin/mount -t tmpfs -o size=$1 tmpfs $2
 }
 
 # Create the memory filesystem if it has not already been created
@@ -210,7 +210,8 @@ create_md() {
 	else
 	    md_size=`eval echo \\$md_size_$1`
 	fi
-	log create_md $1 with size $md_size
+	md_size=$((${md_size} * 512))
+	log mount_md $1 with size $md_size
 	mount_md $md_size /$1
 	/bin/chmod 755 /$1
 	eval md_created_$1=created
