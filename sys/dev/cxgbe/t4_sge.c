@@ -163,7 +163,9 @@ struct sgl {
 };
 
 static int service_iq(struct sge_iq *, int);
-static struct mbuf *get_fl_payload(struct adapter *, struct sge_fl *, uint32_t,
+static struct mbuf *get_fl_payload1(struct adapter *, struct sge_fl *, uint32_t,
+    int *);
+static struct mbuf *get_fl_payload2(struct adapter *, struct sge_fl *, uint32_t,
     int *);
 static int t4_eth_rx(struct sge_iq *, const struct rss_header *, struct mbuf *);
 static inline void init_iq(struct sge_iq *, struct adapter *, int, int, int,
@@ -610,6 +612,27 @@ t4_read_chip_settings(struct adapter *sc)
 				break;
 		}
 	}
+	for (i = 0; i < nitems(sw_flbuf_sizes); i++) {
+		for (j = 0; j < nitems(sge_flbuf_sizes); j++) {
+			if (sw_flbuf_sizes[i] != sge_flbuf_sizes[j])
+				continue;
+			FL_BUF_HWTAG(sc, n) = j;
+			FL_BUF_SIZE(sc, n) = sw_flbuf_sizes[i];
+			FL_BUF_TYPE(sc, n) = m_gettype(sw_flbuf_sizes[i]);
+			FL_BUF_ZONE(sc, n) = m_getzone(sw_flbuf_sizes[i]);
+			n++;
+			break;
+		}
+	}
+	if (n == 0) {
+		device_printf(sc->dev, "no usable SGE FL buffer size.\n");
+		rc = EINVAL;
+	} else if (n == 1 && (sc->flags & BUF_PACKING_OK)) {
+		device_printf(sc->dev,
+		    "no usable SGE FL buffer size when not packing buffers.\n");
+		rc = EINVAL;
+	}
+	FL_BUF_SIZES(sc) = n;
 
 	r = t4_read_reg(sc, A_SGE_INGRESS_RX_THRESHOLD);
 	s->counter_val[0] = G_THRESHOLD_0(r);
@@ -1547,7 +1570,230 @@ get_scatter_segment(struct adapter *sc, struct sge_fl *fl, int total, int flags)
 }
 
 static struct mbuf *
-get_fl_payload(struct adapter *sc, struct sge_fl *fl, uint32_t len_newbuf,
+get_mbuf_from_stash(struct sge_fl *fl)
+{
+	int i;
+
+	for (i = 0; i < nitems(fl->mstash); i++) {
+		if (fl->mstash[i] != NULL) {
+			struct mbuf *m;
+
+			m = fl->mstash[i];
+			fl->mstash[i] = NULL;
+			return (m);
+		} else
+			fl->mstash[i] = m_get(M_NOWAIT, MT_NOINIT);
+	}
+
+	return (m_get(M_NOWAIT, MT_NOINIT));
+}
+
+static void
+return_mbuf_to_stash(struct sge_fl *fl, struct mbuf *m)
+{
+	int i;
+
+	if (m == NULL)
+		return;
+
+	for (i = 0; i < nitems(fl->mstash); i++) {
+		if (fl->mstash[i] == NULL) {
+			fl->mstash[i] = m;
+			return;
+		}
+	}
+	m_init(m, NULL, 0, M_NOWAIT, MT_DATA, 0);
+	m_free(m);
+}
+
+/* buf can be any address within the buffer */
+static inline u_int *
+find_buf_refcnt(caddr_t buf)
+{
+	uintptr_t ptr = (uintptr_t)buf;
+
+	return ((u_int *)((ptr & ~(MJUMPAGESIZE - 1)) + MSIZE - sizeof(u_int)));
+}
+
+static inline struct mbuf *
+find_buf_mbuf(caddr_t buf)
+{
+	uintptr_t ptr = (uintptr_t)buf;
+
+	return ((struct mbuf *)(ptr & ~(MJUMPAGESIZE - 1)));
+}
+
+static void
+rxb_free(void *arg1, void *arg2)
+{
+	uma_zone_t zone = arg1;
+	caddr_t cl = arg2;
+#ifdef INVARIANTS
+	u_int refcount;
+
+	refcount = *find_buf_refcnt(cl);
+	KASSERT(refcount == 0, ("%s: cl %p refcount is %u", __func__,
+	    cl - MSIZE, refcount));
+#endif
+	cl -= MSIZE;
+	uma_zfree(zone, cl);
+}
+
+static struct mbuf *
+get_fl_payload1(struct adapter *sc, struct sge_fl *fl, uint32_t len_newbuf,
+    int *fl_bufs_used)
+{
+	struct mbuf *m0, *m;
+	struct fl_sdesc *sd = &fl->sdesc[fl->cidx];
+	unsigned int nbuf, len;
+	int pack_boundary = is_t4(sc) ? t4_fl_pack : t5_fl_pack;
+
+	/*
+	 * No assertion for the fl lock because we don't need it.  This routine
+	 * is called only from the rx interrupt handler and it only updates
+	 * fl->cidx.  (Contrast that with fl->pidx/fl->needed which could be
+	 * updated in the rx interrupt handler or the starvation helper routine.
+	 * That's why code that manipulates fl->pidx/fl->needed needs the fl
+	 * lock but this routine does not).
+	 */
+
+	KASSERT(fl->flags & FL_BUF_PACKING,
+	    ("%s: buffer packing disabled for fl %p", __func__, fl));
+
+	len = G_RSPD_LEN(len_newbuf);
+
+	if ((len_newbuf & F_RSPD_NEWBUF) == 0) {
+		KASSERT(fl->rx_offset > 0,
+		    ("%s: packed frame but driver at offset=0", __func__));
+
+		/* A packed frame is guaranteed to fit entirely in this buf. */
+		KASSERT(FL_BUF_SIZE(sc, sd->tag_idx) - fl->rx_offset >= len,
+		    ("%s: packing error.  bufsz=%u, offset=%u, len=%u",
+		    __func__, FL_BUF_SIZE(sc, sd->tag_idx), fl->rx_offset,
+		    len));
+
+		m0 = get_mbuf_from_stash(fl);
+		if (m0 == NULL ||
+		    m_init(m0, NULL, 0, M_NOWAIT, MT_DATA, M_PKTHDR) != 0) {
+			return_mbuf_to_stash(fl, m0);
+			return (NULL);
+		}
+
+		bus_dmamap_sync(fl->tag[sd->tag_idx], sd->map,
+		    BUS_DMASYNC_POSTREAD);
+		if (len < RX_COPY_THRESHOLD) {
+#ifdef T4_PKT_TIMESTAMP
+			/* Leave room for a timestamp */
+			m0->m_data += 8;
+#endif
+			bcopy(sd->cl + fl->rx_offset, mtod(m0, caddr_t), len);
+			m0->m_pkthdr.len = len;
+			m0->m_len = len;
+		} else {
+			m0->m_pkthdr.len = len;
+			m0->m_len = len;
+			m_extaddref(m0, sd->cl + fl->rx_offset,
+			    roundup2(m0->m_len, fl_pad),
+			    find_buf_refcnt(sd->cl), rxb_free,
+			    FL_BUF_ZONE(sc, sd->tag_idx), sd->cl);
+		}
+		fl->rx_offset += len;
+		fl->rx_offset = roundup2(fl->rx_offset, fl_pad);
+		fl->rx_offset = roundup2(fl->rx_offset, pack_boundary);
+		if (fl->rx_offset >= FL_BUF_SIZE(sc, sd->tag_idx)) {
+			fl->rx_offset = 0;
+			(*fl_bufs_used) += 1;
+			if (__predict_false(++fl->cidx == fl->cap))
+				fl->cidx = 0;
+		}
+
+		return (m0);
+	}
+
+	KASSERT(len_newbuf & F_RSPD_NEWBUF,
+	    ("%s: only new buffer handled here", __func__));
+
+	nbuf = 0;
+
+	/*
+	 * Move to the start of the next buffer if we are still in the middle of
+	 * some buffer.  This is the case where there was some room left in the
+	 * previous buffer but not enough to fit this frame in its entirety.
+	 */
+	if (fl->rx_offset > 0) {
+		KASSERT(roundup2(len, fl_pad) > FL_BUF_SIZE(sc, sd->tag_idx) -
+		    fl->rx_offset, ("%s: frame (%u bytes) should have fit at "
+		    "cidx %u offset %u bufsize %u", __func__, len, fl->cidx,
+		    fl->rx_offset, FL_BUF_SIZE(sc, sd->tag_idx)));
+		nbuf++;
+		fl->rx_offset = 0;
+		sd++;
+		if (__predict_false(++fl->cidx == fl->cap)) {
+			sd = fl->sdesc;
+			fl->cidx = 0;
+		}
+	}
+
+	m0 = find_buf_mbuf(sd->cl);
+	if (m_init(m0, NULL, 0, M_NOWAIT, MT_DATA, M_PKTHDR | M_NOFREE))
+		goto done;
+	bus_dmamap_sync(fl->tag[sd->tag_idx], sd->map, BUS_DMASYNC_POSTREAD);
+	m0->m_len = min(len, FL_BUF_SIZE(sc, sd->tag_idx));
+	m_extaddref(m0, sd->cl, roundup2(m0->m_len, fl_pad),
+	    find_buf_refcnt(sd->cl), rxb_free, FL_BUF_ZONE(sc, sd->tag_idx),
+	    sd->cl);
+	m0->m_pkthdr.len = len;
+
+	fl->rx_offset = roundup2(m0->m_len, fl_pad);
+	fl->rx_offset = roundup2(fl->rx_offset, pack_boundary);
+	if (fl->rx_offset >= FL_BUF_SIZE(sc, sd->tag_idx)) {
+		fl->rx_offset = 0;
+		nbuf++;
+		sd++;
+		if (__predict_false(++fl->cidx == fl->cap)) {
+			sd = fl->sdesc;
+			fl->cidx = 0;
+		}
+	}
+
+	m = m0;
+	len -= m->m_len;
+
+	while (len > 0) {
+		m->m_next = find_buf_mbuf(sd->cl);
+		m = m->m_next;
+
+		bus_dmamap_sync(fl->tag[sd->tag_idx], sd->map,
+		    BUS_DMASYNC_POSTREAD);
+
+		/* m_init for !M_PKTHDR can't fail so don't bother */
+		m_init(m, NULL, 0, M_NOWAIT, MT_DATA, M_NOFREE);
+		m->m_len = min(len, FL_BUF_SIZE(sc, sd->tag_idx));
+		m_extaddref(m, sd->cl, roundup2(m->m_len, fl_pad),
+		    find_buf_refcnt(sd->cl), rxb_free,
+		    FL_BUF_ZONE(sc, sd->tag_idx), sd->cl);
+
+		fl->rx_offset = roundup2(m->m_len, fl_pad);
+		fl->rx_offset = roundup2(fl->rx_offset, pack_boundary);
+		if (fl->rx_offset >= FL_BUF_SIZE(sc, sd->tag_idx)) {
+			fl->rx_offset = 0;
+			nbuf++;
+			sd++;
+			if (__predict_false(++fl->cidx == fl->cap)) {
+				sd = fl->sdesc;
+				fl->cidx = 0;
+			}
+		}
+
+		len -= m->m_len;
+	}
+done:
+	(*fl_bufs_used) += nbuf;
+	return (m0);
+}
+
+static struct mbuf *
+get_fl_payload2(struct adapter *sc, struct sge_fl *fl, uint32_t len_newbuf,
     int *fl_bufs_used)
 {
 	struct mbuf *m0, *m, **pnext;
@@ -3033,6 +3279,12 @@ refill_fl(struct adapter *sc, struct sge_fl *fl, int nbufs)
 	struct cluster_metadata *clm;
 
 	FL_LOCK_ASSERT_OWNED(fl);
+#ifdef INVARIANTS
+	if (fl->flags & FL_BUF_PACKING)
+		KASSERT(sd->tag_idx == 0,
+		    ("%s: expected tag 0 but found tag %d at pidx %u instead",
+		    __func__, sd->tag_idx, fl->pidx));
+#endif
 
 	if (nbufs > fl->needed)
 		nbufs = fl->needed;
@@ -4020,6 +4272,11 @@ get_flit(bus_dma_segment_t *sgl, int nsegs, int idx)
 	return (0);
 }
 
+/*
+ * Find an SGE FL buffer size to use for the given bufsize.  Look for the the
+ * smallest size that is large enough to hold bufsize or pick the largest size
+ * if all sizes are less than bufsize.
+ */
 static void
 find_best_refill_source(struct adapter *sc, struct sge_fl *fl, int maxp)
 {
