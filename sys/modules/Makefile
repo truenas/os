@@ -210,6 +210,7 @@ SUBDIR=	\
 	${_mly} \
 	mmc \
 	mmcsd \
+	mpr \
 	mps \
 	mpslsi3 \
 	mpt \
