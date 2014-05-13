@@ -813,7 +813,11 @@ cleanup:
 
 static const char confirmation_message[] =
 "The package management tool is not yet installed on your system.\n"
-"Do you want to fetch and install it now? [y/N]: ";
+"The mechanism for doing this is not secure on FreeBSD 9.2. To securely install\n"
+"pkg(8), use ports from a portsnap checkout:\n"
+"  # portsnap fetch extract\n"
+"  # make -C /usr/ports/ports-mgmt/pkg install clean\n"
+"Do you still want to fetch and install it now? [y/N]: ";
 
 static int
 pkg_query_yes_no(void)
