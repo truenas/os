@@ -311,7 +311,9 @@ interrupt_polarity(UINT16 IntiFlags, UINT8 Source)
 	case ACPI_MADT_POLARITY_ACTIVE_LOW:
 		return (INTR_POLARITY_LOW);
 	default:
-		panic("Bogus Interrupt Polarity");
+		printf("Bogus Interrupt Polarity %x, set to low\n",
+			IntiFlags & ACPI_MADT_POLARITY_MASK);
+		return (INTR_POLARITY_LOW);
 	}
 }
 
@@ -330,7 +332,9 @@ interrupt_trigger(UINT16 IntiFlags, UINT8 Source)
 	case ACPI_MADT_TRIGGER_LEVEL:
 		return (INTR_TRIGGER_LEVEL);
 	default:
-		panic("Bogus Interrupt Trigger Mode");
+		printf("Bogus Interrupt Trigger Mode %x, set to level\n",
+			IntiFlags & ACPI_MADT_TRIGGER_MASK);
+		return (INTR_TRIGGER_LEVEL);
 	}
 }
 
@@ -415,7 +419,7 @@ madt_parse_interrupt_override(ACPI_MADT_INTERRUPT_OVERRIDE *intr)
 	 */
 	trig = interrupt_trigger(intr->IntiFlags, intr->SourceIrq);
 	pol = interrupt_polarity(intr->IntiFlags, intr->SourceIrq);
-	
+
 	/*
 	 * If the SCI is identity mapped but has edge trigger and
 	 * active-hi polarity or the force_sci_lo tunable is set,
