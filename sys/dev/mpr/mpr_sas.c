@@ -765,7 +765,6 @@ mpr_attach_sas(struct mpr_softc *sc)
 	sassc->ev_tq = taskqueue_create("mpr_taskq", M_NOWAIT | M_ZERO,
 	    taskqueue_thread_enqueue, &sassc->ev_tq);
 
-	/* Run the task queue with lowest priority */
 	taskqueue_start_threads(&sassc->ev_tq, 1, PRIBIO, "%s taskq", 
 	    device_get_nameunit(sc->mpr_dev));
 
