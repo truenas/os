@@ -87,10 +87,7 @@ struct mpssas_softc {
 #define MPSSAS_DISCOVERY_TIMEOUT_PENDING	(1 << 2)
 #define MPSSAS_QUEUE_FROZEN	(1 << 3)
 #define	MPSSAS_SHUTDOWN		(1 << 4)
-<<<<<<< HEAD
 	u_int			maxtargets;
-=======
->>>>>>> MFC mps(4) driver changes 253460, 253549, 253550 and 254615.
 	struct mpssas_target	*targets;
 	struct cam_devq		*devq;
 	struct cam_sim		*sim;
