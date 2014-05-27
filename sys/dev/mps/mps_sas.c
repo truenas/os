@@ -204,11 +204,6 @@ mpssas_startup_decrement(struct mpssas_softc *sassc)
 			    "%s releasing simq\n", __func__);
 			sassc->flags &= ~MPSSAS_IN_STARTUP;
 			xpt_release_simq(sassc->sim, 1);
-#if (__FreeBSD_version >= 1000039) || \
-    ((__FreeBSD_version < 1000000) && (__FreeBSD_version >= 902502))
-			xpt_release_boot();
-#else
-			xpt_release_simq(sassc->sim, 1);
 #if __FreeBSD_version >= 1000039
 			xpt_release_boot();
 #else
