@@ -1031,14 +1031,6 @@ static struct da_quirk_entry da_quirk_table[] =
 	},
 	{
 		/*
-		 * Intel X25-M Series SSDs
-		 * 4k optimised & trim only works in 4k requests + 4k aligned
-		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "INTEL SSDSA2M*", "*" },
-		/*quirks*/DA_Q_4K
-	},
-	{
-		/*
 		 * Kingston E100 Series SSDs
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
@@ -1051,22 +1043,6 @@ static struct da_quirk_entry da_quirk_table[] =
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
 		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "KINGSTON SH103S3*", "*" },
-		/*quirks*/DA_Q_4K
-	},
-	{
-		/*
-		 * Marvell SSDs (entry taken from OpenSolaris)
-		 * 4k optimised & trim only works in 4k requests + 4k aligned
-		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "MARVELL SD88SA02*", "*" },
-		/*quirks*/DA_Q_4K
-	},
-	{
-		/*
-		 * OCZ Agility 2 SSDs
-		 * 4k optimised & trim only works in 4k requests + 4k aligned
-		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "*", "OCZ-AGILITY2*", "*" },
 		/*quirks*/DA_Q_4K
 	},
 	{
@@ -2867,29 +2843,6 @@ cmd6workaround(union ccb *ccb)
 		return (0);
 	}
 
-	/* Detect unsupported PREVENT ALLOW MEDIUM REMOVAL. */
-	if ((ccb->ccb_h.flags & CAM_CDB_POINTER) == 0 &&
-	    (*cdb == PREVENT_ALLOW) &&
-	    (softc->quirks & DA_Q_NO_PREVENT) == 0) {
-		if (bootverbose)
-			xpt_print(ccb->ccb_h.path,
-			    "PREVENT ALLOW MEDIUM REMOVAL not supported.\n");
-		softc->quirks |= DA_Q_NO_PREVENT;
-		return (0);
-	}
-
-	/* Detect unsupported SYNCHRONIZE CACHE(10). */
-	if ((ccb->ccb_h.flags & CAM_CDB_POINTER) == 0 &&
-	    (*cdb == SYNCHRONIZE_CACHE) &&
-	    (softc->quirks & DA_Q_NO_SYNC_CACHE) == 0) {
-		if (bootverbose)
-			xpt_print(ccb->ccb_h.path,
-			    "SYNCHRONIZE CACHE(10) not supported.\n");
-		softc->quirks |= DA_Q_NO_SYNC_CACHE;
-		softc->disk->d_flags &= ~DISKFLAG_CANFLUSHCACHE;
-		return (0);
-	}
-
 	/* Translation only possible if CDB is an array and cmd is R/W6 */
 	if ((ccb->ccb_h.flags & CAM_CDB_POINTER) != 0 ||
 	    (*cdb != READ_6 && *cdb != WRITE_6))
@@ -3439,18 +3392,9 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 			 * Disable queue sorting for non-rotational media
 			 * by default.
 			 */
-			u_int old_rate = softc->disk->d_rotation_rate;
-
-			softc->disk->d_rotation_rate =
-				scsi_2btoul(bdc->medium_rotation_rate);
-			if (softc->disk->d_rotation_rate ==
-			    SVPD_BDC_RATE_NON_ROTATING) {
+			if (scsi_2btoul(bdc->medium_rotation_rate) ==
+			    SVPD_BDC_RATE_NONE_ROTATING)
 				softc->sort_io_queue = 0;
-			}
-			if (softc->disk->d_rotation_rate != old_rate) {
-				disk_attr_changed(softc->disk,
-				    "GEOM::rotation_rate", M_NOWAIT);
-			}
 		} else {
 			int error;
 			error = daerror(done_ccb, CAM_RETRY_SELTO,
@@ -3485,8 +3429,6 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 		ptr = (uint16_t *)ata_params;
 
 		if ((csio->ccb_h.status & CAM_STATUS_MASK) == CAM_REQ_CMP) {
-			uint16_t old_rate;
-
 			for (i = 0; i < sizeof(*ata_params) / 2; i++)
 				ptr[i] = le16toh(ptr[i]);
 			if (ata_params->support_dsm & ATA_SUPPORT_DSM_TRIM &&
@@ -3502,18 +3444,8 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 			 * Disable queue sorting for non-rotational media
 			 * by default.
 			 */
-			old_rate = softc->disk->d_rotation_rate;
-			softc->disk->d_rotation_rate =
-			    ata_params->media_rotation_rate;
-			if (softc->disk->d_rotation_rate ==
-			    ATA_RATE_NON_ROTATING) {
+			if (ata_params->media_rotation_rate == 1)
 				softc->sort_io_queue = 0;
-			}
-
-			if (softc->disk->d_rotation_rate != old_rate) {
-				disk_attr_changed(softc->disk,
-				    "GEOM::rotation_rate", M_NOWAIT);
-			}
 		} else {
 			int error;
 			error = daerror(done_ccb, CAM_RETRY_SELTO,

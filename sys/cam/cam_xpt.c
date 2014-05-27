@@ -154,6 +154,10 @@ TUNABLE_INT("kern.cam.boot_delay", &xsoftc.boot_delay);
 SYSCTL_INT(_kern_cam, OID_AUTO, boot_delay, CTLFLAG_RDTUN,
            &xsoftc.boot_delay, 0, "Bus registration wait time");
 
+/* Queues for our software interrupt handler */
+typedef TAILQ_HEAD(cam_isrq, ccb_hdr) cam_isrq_t;
+typedef TAILQ_HEAD(cam_simq, cam_sim) cam_simq_t;
+
 struct cam_doneq {
 	struct mtx_padalign	cam_doneq_mtx;
 	STAILQ_HEAD(, ccb_hdr)	cam_doneq;
@@ -2514,6 +2518,7 @@ xpt_action_default(union ccb *start_ccb)
 			xpt_run_devq(devq);
 		mtx_unlock(&devq->send_mtx);
 		break;
+	}
 	case XPT_CALC_GEOMETRY:
 		/* Filter out garbage */
 		if (start_ccb->ccg.block_size == 0
@@ -5142,16 +5147,6 @@ xpt_unlock_buses(void)
 struct mtx *
 xpt_path_mtx(struct cam_path *path)
 {
-	cam_simq_t queue;
-	struct cam_sim *sim;
-
-	mtx_lock(&cam_simq_lock);
-	cambio_lost = 0;
-	TAILQ_INIT(&queue);
-	while (!TAILQ_EMPTY(&cam_simq)) {
-		TAILQ_CONCAT(&queue, &cam_simq, links);
-		mtx_unlock(&cam_simq_lock);
-
 	return (&path->device->device_mtx);
 }
 

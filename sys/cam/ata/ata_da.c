@@ -363,14 +363,6 @@ static struct ada_quirk_entry ada_quirk_table[] =
 	},
 	{
 		/*
-		 * Intel X25-M Series SSDs
-		 * 4k optimised & trim only works in 4k requests + 4k aligned
-		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "*", "INTEL SSDSA2M*", "*" },
-		/*quirks*/ADA_Q_4K
-	},
-	{
-		/*
 		 * Kingston E100 Series SSDs
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
@@ -383,22 +375,6 @@ static struct ada_quirk_entry ada_quirk_table[] =
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
 		{ T_DIRECT, SIP_MEDIA_FIXED, "*", "KINGSTON SH103S3*", "*" },
-		/*quirks*/ADA_Q_4K
-	},
-	{
-		/*
-		 * Marvell SSDs (entry taken from OpenSolaris)
-		 * 4k optimised & trim only works in 4k requests + 4k aligned
-		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "*", "MARVELL SD88SA02*", "*" },
-		/*quirks*/ADA_Q_4K
-	},
-	{
-		/*
-		 * OCZ Agility 2 SSDs
-		 * 4k optimised & trim only works in 4k requests + 4k aligned
-		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "*", "OCZ-AGILITY2*", "*" },
 		/*quirks*/ADA_Q_4K
 	},
 	{
@@ -1245,13 +1221,12 @@ adaregister(struct cam_periph *periph, void *arg)
 	    "kern.cam.ada.%d.write_cache", periph->unit_number);
 	TUNABLE_INT_FETCH(announce_buf, &softc->write_cache);
 	/* Disable queue sorting for non-rotational media by default. */
-	if (cgd->ident_data.media_rotation_rate == ATA_RATE_NON_ROTATING)
+	if (cgd->ident_data.media_rotation_rate == 1)
 		softc->sort_io_queue = 0;
 	else
 		softc->sort_io_queue = -1;
 	adagetparams(periph, cgd);
 	softc->disk = disk_alloc();
-	softc->disk->d_rotation_rate = cgd->ident_data.media_rotation_rate;
 	softc->disk->d_devstat = devstat_new_entry(periph->periph_name,
 			  periph->unit_number, softc->params.secsize,
 			  DEVSTAT_ALL_SUPPORTED,

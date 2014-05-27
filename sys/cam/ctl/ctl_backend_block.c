@@ -1183,37 +1183,6 @@ ctl_be_block_next(struct ctl_be_block_io *beio)
 }
 
 static void
-ctl_be_block_next(struct ctl_be_block_io *beio)
-{
-	struct ctl_be_block_lun *be_lun;
-	union ctl_io *io;
-
-	io = beio->io;
-	be_lun = beio->lun;
-	ctl_free_beio(beio);
-	if (((io->io_hdr.status & CTL_STATUS_MASK) != CTL_STATUS_NONE)
-	  && ((io->io_hdr.status & CTL_STATUS_MASK) != CTL_SUCCESS)) {
-		ctl_done(io);
-		return;
-	}
-
-	io->scsiio.kern_rel_offset += io->scsiio.kern_data_len;
-	io->io_hdr.status &= ~CTL_STATUS_MASK;
-	io->io_hdr.status |= CTL_STATUS_NONE;
-
-	mtx_lock(&be_lun->lock);
-	/*
-	 * XXX KDM make sure that links is okay to use at this point.
-	 * Otherwise, we either need to add another field to ctl_io_hdr,
-	 * or deal with resource allocation here.
-	 */
-	STAILQ_INSERT_TAIL(&be_lun->input_queue, &io->io_hdr, links);
-	mtx_unlock(&be_lun->lock);
-
-	taskqueue_enqueue(be_lun->io_taskqueue, &be_lun->io_task);
-}
-
-static void
 ctl_be_block_dispatch(struct ctl_be_block_lun *be_lun,
 			   union ctl_io *io)
 {
