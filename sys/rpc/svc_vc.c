@@ -46,7 +46,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/lock.h>
 #include <sys/kernel.h>
-#include <sys/limits.h>
 #include <sys/malloc.h>
 #include <sys/mbuf.h>
 #include <sys/mutex.h>
@@ -645,100 +644,6 @@ svc_vc_process_pending(SVCXPRT *xprt)
 	return (TRUE);
 }
 
-static enum xprt_stat
-svc_vc_backchannel_stat(SVCXPRT *xprt)
-{
-	struct cf_conn *cd;
-
-	cd = (struct cf_conn *)(xprt->xp_p1);
-
-	if (cd->mreq != NULL)
-		return (XPRT_MOREREQS);
-
-	return (XPRT_IDLE);
-}
-
-/*
- * If we have an mbuf chain in cd->mpending, try to parse a record from it,
- * leaving the result in cd->mreq. If we don't have a complete record, leave
- * the partial result in cd->mreq and try to read more from the socket.
- */
-static int
-svc_vc_process_pending(SVCXPRT *xprt)
-{
-	struct cf_conn *cd = (struct cf_conn *) xprt->xp_p1;
-	struct socket *so = xprt->xp_socket;
-	struct mbuf *m;
-
-	/*
-	 * If cd->resid is non-zero, we have part of the
-	 * record already, otherwise we are expecting a record
-	 * marker.
-	 */
-	if (!cd->resid && cd->mpending) {
-		/*
-		 * See if there is enough data buffered to
-		 * make up a record marker. Make sure we can
-		 * handle the case where the record marker is
-		 * split across more than one mbuf.
-		 */
-		size_t n = 0;
-		uint32_t header;
-
-		m = cd->mpending;
-		while (n < sizeof(uint32_t) && m) {
-			n += m->m_len;
-			m = m->m_next;
-		}
-		if (n < sizeof(uint32_t)) {
-			so->so_rcv.sb_lowat = sizeof(uint32_t) - n;
-			return (FALSE);
-		}
-		m_copydata(cd->mpending, 0, sizeof(header),
-		    (char *)&header);
-		header = ntohl(header);
-		cd->eor = (header & 0x80000000) != 0;
-		cd->resid = header & 0x7fffffff;
-		m_adj(cd->mpending, sizeof(uint32_t));
-	}
-
-	/*
-	 * Start pulling off mbufs from cd->mpending
-	 * until we either have a complete record or
-	 * we run out of data. We use m_split to pull
-	 * data - it will pull as much as possible and
-	 * split the last mbuf if necessary.
-	 */
-	while (cd->mpending && cd->resid) {
-		m = cd->mpending;
-		if (cd->mpending->m_next
-		    || cd->mpending->m_len > cd->resid)
-			cd->mpending = m_split(cd->mpending,
-			    cd->resid, M_WAITOK);
-		else
-			cd->mpending = NULL;
-		if (cd->mreq)
-			m_last(cd->mreq)->m_next = m;
-		else
-			cd->mreq = m;
-		while (m) {
-			cd->resid -= m->m_len;
-			m = m->m_next;
-		}
-	}
-
-	/*
-	 * Block receive upcalls if we have more data pending,
-	 * otherwise report our need.
-	 */
-	if (cd->mpending)
-		so->so_rcv.sb_lowat = INT_MAX;
-	else
-		so->so_rcv.sb_lowat =
-		    imax(1, imin(cd->resid, so->so_rcv.sb_hiwat / 2));
-	return (TRUE);
-}
-
 static bool_t
 svc_vc_recv(SVCXPRT *xprt, struct rpc_msg *msg,
     struct sockaddr **addrp, struct mbuf **mp)
@@ -962,69 +867,6 @@ svc_vc_backchannel_reply(SVCXPRT *xprt, struct rpc_msg *msg,
 	 * Leave space for record mark.
 	 */
 	mrep = m_gethdr(M_WAITOK, MT_DATA);
-	mrep->m_data += sizeof(uint32_t);
-
-	xdrmbuf_create(&xdrs, mrep, XDR_ENCODE);
-
-	if (msg->rm_reply.rp_stat == MSG_ACCEPTED &&
-	    msg->rm_reply.rp_acpt.ar_stat == SUCCESS) {
-		if (!xdr_replymsg(&xdrs, msg))
-			stat = FALSE;
-		else
-			xdrmbuf_append(&xdrs, m);
-	} else {
-		stat = xdr_replymsg(&xdrs, msg);
-	}
-
-	if (stat) {
-		m_fixhdr(mrep);
-
-		/*
-		 * Prepend a record marker containing the reply length.
-		 */
-		M_PREPEND(mrep, sizeof(uint32_t), M_WAITOK);
-		*mtod(mrep, uint32_t *) =
-			htonl(0x80000000 | (mrep->m_pkthdr.len
-				- sizeof(uint32_t)));
-		sx_xlock(&xprt->xp_lock);
-		ct = (struct ct_data *)xprt->xp_p2;
-		if (ct != NULL)
-			error = sosend(ct->ct_socket, NULL, NULL, mrep, NULL,
-			    0, curthread);
-		else
-			error = EPIPE;
-		sx_xunlock(&xprt->xp_lock);
-		if (!error) {
-			xprt->xp_snd_cnt += len;
-			if (seq)
-				*seq = xprt->xp_snd_cnt;
-			stat = TRUE;
-		} else
-			atomic_subtract_32(&xprt->xp_snd_cnt, len);
-	} else {
-		m_freem(mrep);
-	}
-
-	XDR_DESTROY(&xdrs);
-
-	return (stat);
-}
-
-static bool_t
-svc_vc_backchannel_reply(SVCXPRT *xprt, struct rpc_msg *msg,
-    struct sockaddr *addr, struct mbuf *m, uint32_t *seq)
-{
-	struct ct_data *ct;
-	XDR xdrs;
-	struct mbuf *mrep;
-	bool_t stat = TRUE;
-	int error;
-
-	/*
-	 * Leave space for record mark.
-	 */
-	MGETHDR(mrep, M_WAITOK, MT_DATA);
-	mrep->m_len = 0;
 	mrep->m_data += sizeof(uint32_t);
 
 	xdrmbuf_create(&xdrs, mrep, XDR_ENCODE);
