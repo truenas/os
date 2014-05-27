@@ -1086,12 +1086,12 @@ kern___getcwd(struct thread *td, u_char *buf, enum uio_seg bufseg, u_int buflen)
 
 	tmpbuf = malloc(buflen, M_TEMP, M_WAITOK);
 	fdp = td->td_proc->p_fd;
-	FILEDESC_SLOCK_DIR(fdp);
+	FILEDESC_SLOCK(fdp);
 	cdir = fdp->fd_cdir;
 	VREF(cdir);
 	rdir = fdp->fd_rdir;
 	VREF(rdir);
-	FILEDESC_SUNLOCK_DIR(fdp);
+	FILEDESC_SUNLOCK(fdp);
 	error = vn_fullpath1(td, cdir, rdir, tmpbuf, &bp, buflen);
 	vrele(rdir);
 	vrele(cdir);
@@ -1150,10 +1150,10 @@ vn_fullpath(struct thread *td, struct vnode *vn, char **retbuf, char **freebuf)
 
 	buf = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
 	fdp = td->td_proc->p_fd;
-	FILEDESC_SLOCK_DIR(fdp);
+	FILEDESC_SLOCK(fdp);
 	rdir = fdp->fd_rdir;
 	VREF(rdir);
-	FILEDESC_SUNLOCK_DIR(fdp);
+	FILEDESC_SUNLOCK(fdp);
 	error = vn_fullpath1(td, vn, rdir, buf, retbuf, MAXPATHLEN);
 	vrele(rdir);
 
