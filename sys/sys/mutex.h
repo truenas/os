@@ -119,11 +119,6 @@ void	__mtx_assert(const volatile uintptr_t *c, int what, const char *file,
 #endif
 void	thread_lock_flags_(struct thread *, int, const char *, int);
 
-#define	mtx_trylock_flags_(m, opts, file, line)				\
-	_mtx_trylock((m), (opts), (file), (line))
-
-#define	thread_lock_flags_(tdp, opts, file, line)			\
-    _thread_lock_flags((tdp), (opts), (file), (line))
 #define	thread_lock(tdp)						\
 	thread_lock_flags_((tdp), 0, __FILE__, __LINE__)
 #define	thread_lock_flags(tdp, opt)					\
