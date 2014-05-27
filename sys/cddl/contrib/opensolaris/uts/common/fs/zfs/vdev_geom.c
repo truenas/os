@@ -235,8 +235,6 @@ vdev_geom_attach(struct g_provider *pp)
 	}
 	cp->flags |= G_CF_DIRECT_SEND | G_CF_DIRECT_RECEIVE;
 
-	cp->private = vd;
-
 	/* Fetch initial physical path information for this device. */
 	vdev_geom_attrchanged(cp, "GEOM::physpath");
 	

@@ -452,26 +452,6 @@ spa_feature_decr(spa_t *spa, spa_feature_t fid, dmu_tx_t *tx)
 	feature_do_action(spa, fid, FEATURE_ACTION_DECR, tx);
 }
 
-/*
- * This interface is for debugging only. Normal consumers should use
- * spa_feature_is_enabled/spa_feature_is_active.
- */
-int
-spa_feature_get_refcount(spa_t *spa, zfeature_info_t *feature)
-{
-	int err;
-	uint64_t refcount;
-
-	if (spa_version(spa) < SPA_VERSION_FEATURES)
-		return (B_FALSE);
-
-	err = feature_get_refcount(spa->spa_meta_objset,
-	    spa->spa_feat_for_read_obj, spa->spa_feat_for_write_obj,
-	    feature, &refcount);
-	ASSERT(err == 0 || err == ENOTSUP);
-	return (err == 0 ? refcount : 0);
-}
-
 boolean_t
 spa_feature_is_enabled(spa_t *spa, spa_feature_t fid)
 {
