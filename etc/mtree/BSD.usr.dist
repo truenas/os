@@ -486,14 +486,6 @@
                 ..
             ..
         ..
-        keys
-            pkg
-                revoked
-                ..
-                trusted
-                ..
-            ..
-        ..
         locale
             UTF-8
             ..
