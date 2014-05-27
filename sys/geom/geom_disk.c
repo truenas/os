@@ -243,7 +243,7 @@ g_disk_done(struct bio *bp)
 	if (bp2->bio_error == 0)
 		bp2->bio_error = bp->bio_error;
 	bp2->bio_completed += bp->bio_completed;
-	if ((bp->bio_cmd & (BIO_READ|BIO_WRITE|BIO_DELETE)) != 0)
+	if ((bp->bio_cmd & (BIO_READ|BIO_WRITE|BIO_DELETE|BIO_FLUSH)) != 0)
 		devstat_end_transaction_bio_bt(sc->dp->d_devstat, bp, &now);
 	bp2->bio_inbed++;
 	if (bp2->bio_children == bp2->bio_inbed) {
@@ -264,7 +264,7 @@ g_disk_done_single(struct bio *bp)
 	bp->bio_completed = bp->bio_length - bp->bio_resid;
 	bp->bio_done = (void *)bp->bio_to;
 	bp->bio_to = LIST_FIRST(&bp->bio_disk->d_geom->provider);
-	if ((bp->bio_cmd & (BIO_READ|BIO_WRITE|BIO_DELETE)) != 0) {
+	if ((bp->bio_cmd & (BIO_READ|BIO_WRITE|BIO_DELETE|BIO_FLUSH)) != 0) {
 		binuptime(&now);
 		sc = bp->bio_to->private;
 		mtx_lock(&sc->done_mtx);
@@ -412,25 +412,22 @@ g_disk_start(struct bio *bp)
 			break;
 		else if (g_handleattr_str(bp, "GEOM::ident", dp->d_ident))
 			break;
-		else if (g_handleattr_uint16_t(bp, "GEOM::hba_vendor",
-		    dp->d_hba_vendor))
+		else if (g_handleattr(bp, "GEOM::hba_vendor",
+		    &dp->d_hba_vendor, 2))
 			break;
-		else if (g_handleattr_uint16_t(bp, "GEOM::hba_device",
-		    dp->d_hba_device))
+		else if (g_handleattr(bp, "GEOM::hba_device",
+		    &dp->d_hba_device, 2))
 			break;
-		else if (g_handleattr_uint16_t(bp, "GEOM::hba_subvendor",
-		    dp->d_hba_subvendor))
+		else if (g_handleattr(bp, "GEOM::hba_subvendor",
+		    &dp->d_hba_subvendor, 2))
 			break;
-		else if (g_handleattr_uint16_t(bp, "GEOM::hba_subdevice",
-		    dp->d_hba_subdevice))
+		else if (g_handleattr(bp, "GEOM::hba_subdevice",
+		    &dp->d_hba_subdevice, 2))
 			break;
 		else if (!strcmp(bp->bio_attribute, "GEOM::kerneldump"))
 			g_disk_kerneldump(bp, dp);
 		else if (!strcmp(bp->bio_attribute, "GEOM::setstate"))
 			g_disk_setstate(bp, sc);
-		else if (g_handleattr_uint16_t(bp, "GEOM::rotation_rate",
-		    dp->d_rotation_rate))
-			break;
 		else 
 			error = ENOIOCTL;
 		break;
@@ -444,6 +441,9 @@ g_disk_start(struct bio *bp)
 		bp->bio_disk = dp;
 		bp->bio_to = (void *)bp->bio_done;
 		bp->bio_done = g_disk_done_single;
+		mtx_lock(&sc->start_mtx); 
+		devstat_start_transaction_bio(dp->d_devstat, bp);
+		mtx_unlock(&sc->start_mtx); 
 		g_disk_lock_giant(dp);
 		dp->d_strategy(bp);
 		g_disk_unlock_giant(dp);
