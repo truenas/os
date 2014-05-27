@@ -2922,7 +2922,7 @@ sysctl_ffs_fsck(SYSCTL_HANDLER_ARGS)
 		}
 		VOP_UNLOCK(vp, 0);
 		fdp = td->td_proc->p_fd;
-		FILEDESC_XLOCK_DIR(fdp);
+		FILEDESC_XLOCK(fdp);
 		vpold = fdp->fd_cdir;
 		fdp->fd_cdir = vp;
 		FILEDESC_XUNLOCK(fdp);
@@ -2947,9 +2947,9 @@ sysctl_ffs_fsck(SYSCTL_HANDLER_ARGS)
 		/*
 		 * Now we get and lock the child directory containing "..".
 		 */
-		FILEDESC_SLOCK_DIR(td->td_proc->p_fd);
+		FILEDESC_SLOCK(td->td_proc->p_fd);
 		dvp = td->td_proc->p_fd->fd_cdir;
-		FILEDESC_SUNLOCK_DIR(td->td_proc->p_fd);
+		FILEDESC_SUNLOCK(td->td_proc->p_fd);
 		if ((error = vget(dvp, LK_EXCLUSIVE, td)) != 0) {
 			vput(fdvp);
 			break;
@@ -3104,7 +3104,7 @@ buffered_write(fp, uio, active_cred, flags, td)
 	if (!vn_isdisk(devvp, NULL))
 		return (EINVAL);
 	fdp = td->td_proc->p_fd;
-	FILEDESC_SLOCK_DIR(fdp);
+	FILEDESC_SLOCK(fdp);
 	vp = fdp->fd_cdir;
 	vref(vp);
 	FILEDESC_SUNLOCK(fdp);
