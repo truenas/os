@@ -346,26 +346,3 @@ variable root_state
 	verbose_disable
 	2 goto_menu
 ;
-
-\ 
-\ Menusets
-\ 
-
-: goto_menu ( N M -- N TRUE )
-	menu-unset
-	menuset-loadsetnum ( n m -- n )
-	menu-redraw
-	TRUE \ Loop menu again
-;
-
-\ 
-\ Defaults
-\ 
-
-: set_default_boot_options ( N -- N TRUE )
-	acpi_enable
-	safemode_disable
-	singleuser_disable
-	verbose_disable
-	2 goto_menu
-;

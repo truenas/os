@@ -80,12 +80,6 @@ only forth also support-functions also builtins definitions
 : boot
   0= if ( interpreted ) get_arguments then
 
-  loader_color? if
-    ." [37;44mBooting...[0m" cr
-  else
-    ." Booting..." cr
-  then
-
   \ Unload only if a path was passed
   dup if
     >r over r> swap
@@ -145,7 +139,6 @@ include /boot/check-password.4th
   s" /boot/defaults/loader.conf" initialize
   include_conf_files
   include_nextboot_file
-  s" /boot/loader.rc.local" include-if-exists
   \ Will *NOT* try to load kernel and modules if no configuration file
   \ was succesfully loaded!
   any_conf_read? if
