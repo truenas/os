@@ -1978,10 +1978,17 @@ vm_map_protect(vm_map_t map, vm_offset_t start, vm_offset_t end,
 		else
 			current->protection = new_prot;
 
-		if ((current->eflags & (MAP_ENTRY_COW | MAP_ENTRY_USER_WIRED))
-		     == (MAP_ENTRY_COW | MAP_ENTRY_USER_WIRED) &&
+		/*
+		 * For user wired map entries, the normal lazy evaluation of
+		 * write access upgrades through soft page faults is
+		 * undesirable.  Instead, immediately copy any pages that are
+		 * copy-on-write and enable write access in the physical map.
+		 */
+		if ((current->eflags & MAP_ENTRY_USER_WIRED) != 0 &&
 		    (current->protection & VM_PROT_WRITE) != 0 &&
 		    (old_prot & VM_PROT_WRITE) == 0) {
+			KASSERT(old_prot != VM_PROT_NONE,
+			    ("vm_map_protect: inaccessible wired map entry"));
 			vm_fault_copy_entry(map, map, current, current, NULL);
 		}
 
@@ -3017,8 +3024,8 @@ vm_map_copy_entry(
 	if ((dst_entry->eflags|src_entry->eflags) & MAP_ENTRY_IS_SUB_MAP)
 		return;
 
-	if (src_entry->wired_count == 0) {
-
+	if (src_entry->wired_count == 0 ||
+	    (src_entry->protection & VM_PROT_WRITE) == 0) {
 		/*
 		 * If the source entry is marked needs_copy, it is already
 		 * write-protected.
@@ -3109,9 +3116,9 @@ vm_map_copy_entry(
 		    dst_entry->end - dst_entry->start, src_entry->start);
 	} else {
 		/*
-		 * Of course, wired down pages can't be set copy-on-write.
-		 * Cause wired pages to be copied into the new map by
-		 * simulating faults (the new pages are pageable)
+		 * We don't want to make writeable wired pages copy-on-write.
+		 * Immediately copy these pages into the new map by simulating
+		 * page faults.  The new pages are pageable.
 		 */
 		vm_fault_copy_entry(dst_map, src_map, dst_entry, src_entry,
 		    fork_charge);
@@ -3751,6 +3758,8 @@ vmspace_exec(struct proc *p, vm_offset_t minuser, vm_offset_t maxuser)
 	struct vmspace *oldvmspace = p->p_vmspace;
 	struct vmspace *newvmspace;
 
+	KASSERT((curthread->td_pflags & TDP_EXECVMSPC) == 0,
+	    ("vmspace_exec recursed"));
 	newvmspace = vmspace_alloc(minuser, maxuser, NULL);
 	if (newvmspace == NULL)
 		return (ENOMEM);
@@ -3767,7 +3776,7 @@ vmspace_exec(struct proc *p, vm_offset_t minuser, vm_offset_t maxuser)
 	PROC_VMSPACE_UNLOCK(p);
 	if (p == curthread->td_proc)
 		pmap_activate(curthread);
-	vmspace_free(oldvmspace);
+	curthread->td_pflags |= TDP_EXECVMSPC;
 	return (0);
 }
 
