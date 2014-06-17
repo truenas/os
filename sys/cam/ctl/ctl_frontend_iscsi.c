@@ -1121,8 +1121,6 @@ cfiscsi_maintenance_thread(void *arg)
 			icl_conn_shutdown(cs->cs_conn);
 			icl_conn_close(cs->cs_conn);
 
-			cs->cs_terminating++;
-
 			/*
 			 * At this point ICL receive thread is no longer
 			 * running; no new tasks can be queued.
@@ -1140,9 +1138,9 @@ static void
 cfiscsi_session_terminate(struct cfiscsi_session *cs)
 {
 
-	if (cs->cs_terminating != 0)
+	if (cs->cs_terminating)
 		return;
-	cs->cs_terminating = 1;
+	cs->cs_terminating = true;
 	cv_signal(&cs->cs_maintenance_cv);
 #ifdef ICL_KERNEL_PROXY
 	cv_signal(&cs->cs_login_cv);
