@@ -9773,7 +9773,7 @@ ctl_inquiry_evpd_block_limits(struct ctl_scsiio *ctsio, int alloc_len)
 
 	bl_ptr->page_code = SVPD_BLOCK_LIMITS;
 	scsi_ulto2b(sizeof(*bl_ptr), bl_ptr->page_length);
-	bl_ptr->max_cmp_write_len = 0xff;
+	bl_ptr->max_cmp_write_len = 0;//xff;
 	scsi_ulto4b(0xffffffff, bl_ptr->max_txfer_len);
 	scsi_ulto4b(MAXPHYS / bs, bl_ptr->opt_txfer_len);
 	if (lun->be_lun->flags & CTL_LUN_FLAG_UNMAP) {
