@@ -9503,15 +9503,18 @@ ctl_inquiry_evpd_serial(struct ctl_scsiio *ctsio, int alloc_len)
 		sn_ptr->device = (SID_QUAL_LU_OFFLINE << 5) | T_DIRECT;
 
 	sn_ptr->page_code = SVPD_UNIT_SERIAL_NUMBER;
-	sn_ptr->length = ctl_min(sizeof(*sn_ptr) - 4, CTL_SN_LEN);
 	/*
 	 * If we don't have a LUN, we just leave the serial number as
 	 * all spaces.
 	 */
-	memset(sn_ptr->serial_num, 0x20, sizeof(sn_ptr->serial_num));
 	if (lun != NULL) {
+		sn_ptr->length = ctl_min(sizeof(*sn_ptr) - 4,
+		    strnlen((char *)lun->be_lun->serial_num, CTL_SN_LEN));
 		strncpy((char *)sn_ptr->serial_num,
-			(char *)lun->be_lun->serial_num, CTL_SN_LEN);
+			(char *)lun->be_lun->serial_num, sn_ptr->length);
+	} else {
+		sn_ptr->length = ctl_min(sizeof(sn_ptr->serial_num), CTL_SN_LEN);
+		memset(sn_ptr->serial_num, 0x20, sn_ptr->length);
 	}
 	ctsio->scsi_status = SCSI_STATUS_OK;
 
