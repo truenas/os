@@ -1,25 +1,4 @@
-/*
- * Powerdog Industries kindly requests feedback from anyone modifying
- * this function:
- *
- * Date: Thu, 05 Jun 1997 23:17:17 -0400  
- * From: Kevin Ruddy <kevin.ruddy@powerdog.com>
- * To: James FitzGibbon <james@nexis.net>
- * Subject: Re: Use of your strptime(3) code (fwd)
- * 
- * The reason for the "no mod" clause was so that modifications would
- * come back and we could integrate them and reissue so that a wider 
- * audience could use it (thereby spreading the wealth).  This has   
- * made it possible to get strptime to work on many operating systems.
- * I'm not sure why that's "plain unacceptable" to the FreeBSD team.
- * 
- * Anyway, you can change it to "with or without modification" as
- * you see fit.  Enjoy.                                          
- * 
- * Kevin Ruddy
- * Powerdog Industries, Inc.
- */
-/*
+/*-
  * Copyright (c) 1994 Powerdog Industries.  All rights reserved.
  *
  * Copyright (c) 2011 The FreeBSD Foundation
@@ -36,12 +15,6 @@
  *    notice, this list of conditions and the following disclaimer
  *    in the documentation and/or other materials provided with the
  *    distribution.
- * 3. All advertising materials mentioning features or use of this
- *    software must display the following acknowledgement:
- *      This product includes software developed by Powerdog Industries.
- * 4. The name of Powerdog Industries may not be used to endorse or
- *    promote products derived from this software without specific prior
- *    written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY POWERDOG INDUSTRIES ``AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -54,6 +27,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * The views and conclusions contained in the software and documentation
+ * are those of the authors and should not be interpreted as representing
+ * official policies, either expressed or implied, of Powerdog Industries.
  */
 
 #include <sys/cdefs.h>
@@ -79,7 +56,7 @@ __FBSDID("$FreeBSD$");
 
 static char * _strptime(const char *, const char *, struct tm *, int *, locale_t);
 
-#define asizeof(a)	(sizeof (a) / sizeof ((a)[0]))
+#define	asizeof(a)	(sizeof (a) / sizeof ((a)[0]))
 
 static char *
 _strptime(const char *buf, const char *fmt, struct tm *tm, int *GMTp,
@@ -87,8 +64,7 @@ _strptime(const char *buf, const char *fmt, struct tm *tm, int *GMTp,
 {
 	char	c;
 	const char *ptr;
-	int	i,
-		len;
+	int	i, len;
 	int Ealternative, Oalternative;
 	struct lc_time_T *tptr = __get_current_time_locale(locale);
 
@@ -105,7 +81,7 @@ _strptime(const char *buf, const char *fmt, struct tm *tm, int *GMTp,
 				       isspace_l((unsigned char)*buf, locale))
 					buf++;
 			else if (c != *buf++)
-				return 0;
+				return (NULL);
 			continue;
 		}
 
@@ -117,18 +93,18 @@ label:
 		case 0:
 		case '%':
 			if (*buf++ != '%')
-				return 0;
+				return (NULL);
 			break;
 
 		case '+':
 			buf = _strptime(buf, tptr->date_fmt, tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'C':
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			/* XXX This will break for 3-digit centuries. */
 			len = 2;
@@ -139,21 +115,21 @@ label:
 				len--;
 			}
 			if (i < 19)
-				return 0;
+				return (NULL);
 
 			tm->tm_year = i * 100 - 1900;
 			break;
 
 		case 'c':
 			buf = _strptime(buf, tptr->c_fmt, tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'D':
 			buf = _strptime(buf, "%m/%d/%y", tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'E':
@@ -170,43 +146,43 @@ label:
 
 		case 'F':
 			buf = _strptime(buf, "%Y-%m-%d", tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'R':
 			buf = _strptime(buf, "%H:%M", tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'r':
 			buf = _strptime(buf, tptr->ampm_fmt, tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'T':
 			buf = _strptime(buf, "%H:%M:%S", tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'X':
 			buf = _strptime(buf, tptr->X_fmt, tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'x':
 			buf = _strptime(buf, tptr->x_fmt, tm, GMTp, locale);
-			if (buf == 0)
-				return 0;
+			if (buf == NULL)
+				return (NULL);
 			break;
 
 		case 'j':
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = 3;
 			for (i = 0; len && *buf != 0 &&
@@ -216,7 +192,7 @@ label:
 				len--;
 			}
 			if (i < 1 || i > 366)
-				return 0;
+				return (NULL);
 
 			tm->tm_yday = i - 1;
 			break;
@@ -228,7 +204,7 @@ label:
 				break;
 
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = 2;
 			for (i = 0; len && *buf != 0 &&
@@ -240,11 +216,11 @@ label:
 
 			if (c == 'M') {
 				if (i > 59)
-					return 0;
+					return (NULL);
 				tm->tm_min = i;
 			} else {
 				if (i > 60)
-					return 0;
+					return (NULL);
 				tm->tm_sec = i;
 			}
 
@@ -268,7 +244,7 @@ label:
 			 * digits if used incorrectly.
 			 */
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = 2;
 			for (i = 0; len && *buf != 0 &&
@@ -279,9 +255,9 @@ label:
 			}
 			if (c == 'H' || c == 'k') {
 				if (i > 23)
-					return 0;
+					return (NULL);
 			} else if (i > 12)
-				return 0;
+				return (NULL);
 
 			tm->tm_hour = i;
 
@@ -300,7 +276,7 @@ label:
 			len = strlen(tptr->am);
 			if (strncasecmp_l(buf, tptr->am, len, locale) == 0) {
 				if (tm->tm_hour > 12)
-					return 0;
+					return (NULL);
 				if (tm->tm_hour == 12)
 					tm->tm_hour = 0;
 				buf += len;
@@ -310,14 +286,14 @@ label:
 			len = strlen(tptr->pm);
 			if (strncasecmp_l(buf, tptr->pm, len, locale) == 0) {
 				if (tm->tm_hour > 12)
-					return 0;
+					return (NULL);
 				if (tm->tm_hour != 12)
 					tm->tm_hour += 12;
 				buf += len;
 				break;
 			}
 
-			return 0;
+			return (NULL);
 
 		case 'A':
 		case 'a':
@@ -332,7 +308,7 @@ label:
 					break;
 			}
 			if (i == asizeof(tptr->weekday))
-				return 0;
+				return (NULL);
 
 			tm->tm_wday = i;
 			buf += len;
@@ -347,7 +323,7 @@ label:
 			 * range for now.
 			 */
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = 2;
 			for (i = 0; len && *buf != 0 &&
@@ -357,7 +333,7 @@ label:
 				len--;
 			}
 			if (i > 53)
-				return 0;
+				return (NULL);
 
 			if (*buf != 0 &&
 			    isspace_l((unsigned char)*buf, locale))
@@ -368,11 +344,11 @@ label:
 
 		case 'w':
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			i = *buf - '0';
 			if (i > 6)
-				return 0;
+				return (NULL);
 
 			tm->tm_wday = i;
 
@@ -394,7 +370,7 @@ label:
 			 * digits if used incorrectly.
 			 */
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = 2;
 			for (i = 0; len && *buf != 0 &&
@@ -404,7 +380,7 @@ label:
 				len--;
 			}
 			if (i > 31)
-				return 0;
+				return (NULL);
 
 			tm->tm_mday = i;
 
@@ -447,7 +423,7 @@ label:
 				}
 			}
 			if (i == asizeof(tptr->month))
-				return 0;
+				return (NULL);
 
 			tm->tm_mon = i;
 			buf += len;
@@ -455,7 +431,7 @@ label:
 
 		case 'm':
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = 2;
 			for (i = 0; len && *buf != 0 &&
@@ -465,7 +441,7 @@ label:
 				len--;
 			}
 			if (i < 1 || i > 12)
-				return 0;
+				return (NULL);
 
 			tm->tm_mon = i - 1;
 
@@ -488,7 +464,7 @@ label:
 			n = strtol_l(buf, &cp, 10, locale);
 			if (errno == ERANGE || (long)(t = n) != n) {
 				errno = sverrno;
-				return 0;
+				return (NULL);
 			}
 			errno = sverrno;
 			buf = cp;
@@ -504,7 +480,7 @@ label:
 				break;
 
 			if (!isdigit_l((unsigned char)*buf, locale))
-				return 0;
+				return (NULL);
 
 			len = (c == 'Y') ? 4 : 2;
 			for (i = 0; len && *buf != 0 &&
@@ -518,7 +494,7 @@ label:
 			if (c == 'y' && i < 69)
 				i += 100;
 			if (i < 0)
-				return 0;
+				return (NULL);
 
 			tm->tm_year = i;
 
@@ -549,7 +525,7 @@ label:
 				} else if (0 == strcmp(zonestr, tzname[1])) {
 				    tm->tm_isdst = 1;
 				} else {
-				    return 0;
+				    return (NULL);
 				}
 				buf += cp - buf;
 			}
@@ -564,7 +540,7 @@ label:
 				if (*buf == '-')
 					sign = -1;
 				else
-					return 0;
+					return (NULL);
 			}
 
 			buf++;
@@ -575,7 +551,7 @@ label:
 					i += *buf - '0';
 					buf++;
 				} else
-					return 0;
+					return (NULL);
 			}
 
 			tm->tm_hour -= sign * (i / 100);
@@ -585,7 +561,7 @@ label:
 			break;
 		}
 	}
-	return (char *)buf;
+	return ((char *)buf);
 }
 
 
