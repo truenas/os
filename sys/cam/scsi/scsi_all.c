@@ -44,11 +44,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/sysctl.h>
+#include <sys/ctype.h>
 #else
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #endif
 
 #include <cam/cam.h>
@@ -7397,6 +7399,63 @@ scsi_start_stop(struct ccb_scsiio *csio, u_int32_t retries,
 		      timeout);
 }
 
+
+void
+scsi_persistent_reserve_in(struct ccb_scsiio *csio, uint32_t retries, 
+			   void (*cbfcnp)(struct cam_periph *, union ccb *),
+			   uint8_t tag_action, int service_action,
+			   uint8_t *data_ptr, uint32_t dxfer_len, int sense_len,
+			   int timeout)
+{
+	struct scsi_per_res_in *scsi_cmd;
+
+	scsi_cmd = (struct scsi_per_res_in *)&csio->cdb_io.cdb_bytes;
+	bzero(scsi_cmd, sizeof(*scsi_cmd));
+
+	scsi_cmd->opcode = PERSISTENT_RES_IN;
+	scsi_cmd->action = service_action;
+	scsi_ulto2b(dxfer_len, scsi_cmd->length);
+
+	cam_fill_csio(csio,
+		      retries,
+		      cbfcnp,
+		      /*flags*/CAM_DIR_IN,
+		      tag_action,
+		      data_ptr,
+		      dxfer_len,
+		      sense_len,
+		      sizeof(*scsi_cmd),
+		      timeout);
+}
+
+void
+scsi_persistent_reserve_out(struct ccb_scsiio *csio, uint32_t retries, 
+			    void (*cbfcnp)(struct cam_periph *, union ccb *),
+			    uint8_t tag_action, int service_action,
+			    int scope, int res_type, uint8_t *data_ptr,
+			    uint32_t dxfer_len, int sense_len, int timeout)
+{
+	struct scsi_per_res_out *scsi_cmd;
+
+	scsi_cmd = (struct scsi_per_res_out *)&csio->cdb_io.cdb_bytes;
+	bzero(scsi_cmd, sizeof(*scsi_cmd));
+
+	scsi_cmd->opcode = PERSISTENT_RES_OUT;
+	scsi_cmd->action = service_action;
+	scsi_cmd->scope_type = scope | res_type;
+	scsi_ulto4b(dxfer_len, scsi_cmd->length);
+
+	cam_fill_csio(csio,
+		      retries,
+		      cbfcnp,
+		      /*flags*/CAM_DIR_OUT,
+		      tag_action,
+		      data_ptr,
+		      dxfer_len,
+		      sense_len,
+		      sizeof(*scsi_cmd),
+		      timeout);
+}
 
 /*      
  * Try make as good a match as possible with
