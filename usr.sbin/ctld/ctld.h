@@ -272,8 +272,8 @@ int			kernel_lun_add(struct lun *lun);
 int			kernel_lun_resize(struct lun *lun);
 int			kernel_lun_remove(struct lun *lun);
 void			kernel_handoff(struct connection *conn);
-int			kernel_port_on(void);
-int			kernel_port_off(void);
+int			kernel_port_add(struct target *targ);
+int			kernel_port_remove(struct target *targ);
 /* XXX: See comment at the beginning of kernel_capsicate() */
 /* void			kernel_capsicate(void); */
 
