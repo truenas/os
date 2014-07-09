@@ -66,7 +66,6 @@ struct filedescent {
 #define NDSLOTTYPE	u_long
 
 struct filedesc {
-	struct	sx fd_dirlock;
 	struct	filedescent *fd_ofiles;	/* open files */
 	struct	vnode *fd_cdir;		/* current directory */
 	struct	vnode *fd_rdir;		/* root directory */
@@ -78,7 +77,7 @@ struct filedesc {
 	u_short	fd_cmask;		/* mask for file creation */
 	u_short	fd_refcnt;		/* thread reference count */
 	u_short	fd_holdcnt;		/* hold count on structure + mutex */
-	struct	sx fd_fdlock;		/* protects members of this struct */
+	struct	sx fd_sx;		/* protects members of this struct */
 	struct	kqlist fd_kqlist;	/* list of kqueues on this filedesc */
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
@@ -116,29 +115,19 @@ struct filedesc_to_leader {
 #define	DUP_CLOEXEC	0x4	/* Atomically set FD_CLOEXEC. */
 
 /* Lock a file descriptor table. */
+#define	FILEDESC_LOCK_INIT(fdp)	sx_init(&(fdp)->fd_sx, "filedesc structure")
+#define	FILEDESC_LOCK_DESTROY(fdp)	sx_destroy(&(fdp)->fd_sx)
+#define	FILEDESC_LOCK(fdp)	(&(fdp)->fd_sx)
+#define	FILEDESC_XLOCK(fdp)	sx_xlock(&(fdp)->fd_sx)
+#define	FILEDESC_XUNLOCK(fdp)	sx_xunlock(&(fdp)->fd_sx)
+#define	FILEDESC_SLOCK(fdp)	sx_slock(&(fdp)->fd_sx)
+#define	FILEDESC_SUNLOCK(fdp)	sx_sunlock(&(fdp)->fd_sx)
 
-#define        FILEDESC_LOCK_INIT(fdp) sx_init(&(fdp)->fd_fdlock, "filedesc fd lock")
-#define        FILEDESC_LOCK_DESTROY(fdp)      sx_destroy(&(fdp)->fd_fdlock)
-#define        FILEDESC_LOCK(fdp)      (&(fdp)->fd_fdlock)
-#define        FILEDESC_XLOCK(fdp)     sx_xlock(&(fdp)->fd_fdlock)
-#define        FILEDESC_XUNLOCK(fdp)   sx_xunlock(&(fdp)->fd_fdlock)
-#define        FILEDESC_SLOCK(fdp)     sx_slock(&(fdp)->fd_fdlock)
-#define        FILEDESC_SUNLOCK(fdp)   sx_sunlock(&(fdp)->fd_fdlock)
-
-#define        FILEDESC_LOCK_INIT_DIR(fdp)     sx_init(&(fdp)->fd_dirlock, "filedesc dir lock")
-#define        FILEDESC_LOCK_DESTROY_DIR(fdp)  sx_destroy(&(fdp)->fd_dirlock)
-#define        FILEDESC_LOCK_DIR(fdp)  (&(fdp)->fd_dirlock)
-#define        FILEDESC_XLOCK_DIR(fdp) sx_xlock(&(fdp)->fd_dirlock)
-#define        FILEDESC_XUNLOCK_DIR(fdp)       sx_xunlock(&(fdp)->fd_dirlock)
-#define        FILEDESC_SLOCK_DIR(fdp) sx_slock(&(fdp)->fd_dirlock)
-#define        FILEDESC_SUNLOCK_DIR(fdp)       sx_sunlock(&(fdp)->fd_dirlock)
-
-#define        FILEDESC_LOCK_ASSERT(fdp)       sx_assert(&(fdp)->fd_fdlock, SX_LOCKED | \
-                                            SX_NOTRECURSED)
-#define        FILEDESC_XLOCK_ASSERT(fdp)      sx_assert(&(fdp)->fd_fdlock, SX_XLOCKED | \
-                                            SX_NOTRECURSED)
-#define        FILEDESC_UNLOCK_ASSERT(fdp)     sx_assert(&(fdp)->fd_fdlock, SX_UNLOCKED)
-
+#define	FILEDESC_LOCK_ASSERT(fdp)	sx_assert(&(fdp)->fd_sx, SX_LOCKED | \
+					    SX_NOTRECURSED)
+#define	FILEDESC_XLOCK_ASSERT(fdp)	sx_assert(&(fdp)->fd_sx, SX_XLOCKED | \
+					    SX_NOTRECURSED)
+#define	FILEDESC_UNLOCK_ASSERT(fdp)	sx_assert(&(fdp)->fd_sx, SX_UNLOCKED)
 
 struct thread;
 

@@ -876,8 +876,6 @@ do_dup(struct thread *td, int flags, int old, int new,
 
 	delfp = newfde->fde_file;
 
-	cap_rights_clear_all(&newfde->fde_rights);
-	free(newfde->fde_ioctls, M_FILECAPS);
 	/*
 	 * Duplicate the source descriptor.
 	 */
@@ -1810,9 +1808,8 @@ fdinit(struct filedesc *fdp)
 
 	newfdp = malloc(sizeof *newfdp, M_FILEDESC, M_WAITOK | M_ZERO);
 	FILEDESC_LOCK_INIT(&newfdp->fd_fd);
-	FILEDESC_LOCK_INIT_DIR(&newfdp->fd_fd);
 	if (fdp != NULL) {
-		FILEDESC_SLOCK_DIR(fdp);
+		FILEDESC_SLOCK(fdp);
 		newfdp->fd_fd.fd_cdir = fdp->fd_cdir;
 		if (newfdp->fd_fd.fd_cdir)
 			VREF(newfdp->fd_fd.fd_cdir);
@@ -1822,7 +1819,7 @@ fdinit(struct filedesc *fdp)
 		newfdp->fd_fd.fd_jdir = fdp->fd_jdir;
 		if (newfdp->fd_fd.fd_jdir)
 			VREF(newfdp->fd_fd.fd_jdir);
-		FILEDESC_SUNLOCK_DIR(fdp);
+		FILEDESC_SUNLOCK(fdp);
 	}
 
 	/* Create the file descriptor table. */
@@ -1862,7 +1859,6 @@ fddrop(struct filedesc *fdp)
 	if (i > 0)
 		return;
 
-	FILEDESC_LOCK_DESTROY_DIR(fdp);
 	FILEDESC_LOCK_DESTROY(fdp);
 	fdp0 = (struct filedesc0 *)fdp;
 	while ((ft = SLIST_FIRST(&fdp0->fd_free)) != NULL) {
@@ -2060,7 +2056,6 @@ fdescfree(struct thread *td)
 			(void) closef(fp, td);
 		}
 	}
-	FILEDESC_XLOCK_DIR(fdp);
 	FILEDESC_XLOCK(fdp);
 
 	/* XXX This should happen earlier. */
@@ -2081,7 +2076,6 @@ fdescfree(struct thread *td)
 	fdp->fd_rdir = NULL;
 	jdir = fdp->fd_jdir;
 	fdp->fd_jdir = NULL;
-	FILEDESC_XUNLOCK_DIR(fdp);
 	FILEDESC_XUNLOCK(fdp);
 
 	if (cdir != NULL)
@@ -2831,7 +2825,7 @@ mountcheckdirs(struct vnode *olddp, struct vnode *newdp)
 		fdp = fdhold(p);
 		if (fdp == NULL)
 			continue;
-		FILEDESC_XLOCK_DIR(fdp);
+		FILEDESC_XLOCK(fdp);
 		if (fdp->fd_cdir == olddp) {
 			vref(newdp);
 			fdp->fd_cdir = newdp;
@@ -2847,7 +2841,7 @@ mountcheckdirs(struct vnode *olddp, struct vnode *newdp)
 			fdp->fd_jdir = newdp;
 			nrele++;
 		}
-		FILEDESC_XUNLOCK_DIR(fdp);
+		FILEDESC_XUNLOCK(fdp);
 		fddrop(fdp);
 	}
 	sx_sunlock(&allproc_lock);
@@ -3057,7 +3051,6 @@ sysctl_kern_proc_ofiledesc(SYSCTL_HANDLER_ARGS)
 	if (fdp == NULL)
 		return (ENOENT);
 	kif = malloc(sizeof(*kif), M_TEMP, M_WAITOK);
-	FILEDESC_SLOCK_DIR(fdp);
 	FILEDESC_SLOCK(fdp);
 	if (fdp->fd_cdir != NULL)
 		export_vnode_for_osysctl(fdp->fd_cdir, KF_FD_TYPE_CWD, kif,
@@ -3068,7 +3061,6 @@ sysctl_kern_proc_ofiledesc(SYSCTL_HANDLER_ARGS)
 	if (fdp->fd_jdir != NULL)
 		export_vnode_for_osysctl(fdp->fd_jdir, KF_FD_TYPE_JAIL, kif,
 				fdp, req);
-	FILEDESC_SUNLOCK_DIR(fdp);
 	for (i = 0; fdp->fd_refcnt > 0 && i < fdp->fd_nfiles; i++) {
 		if ((fp = fdp->fd_ofiles[i].fde_file) == NULL)
 			continue;
@@ -3418,7 +3410,6 @@ kern_proc_filedesc_out(struct proc *p,  struct sbuf *sb, ssize_t maxlen)
 	if (fdp == NULL)
 		goto fail;
 	efbuf->fdp = fdp;
-	FILEDESC_SLOCK_DIR(fdp);
 	FILEDESC_SLOCK(fdp);
 	/* working directory */
 	if (fdp->fd_cdir != NULL) {
@@ -3441,7 +3432,6 @@ kern_proc_filedesc_out(struct proc *p,  struct sbuf *sb, ssize_t maxlen)
 		export_fd_to_sb(data, KF_TYPE_VNODE, KF_FD_TYPE_JAIL,
 		    FREAD, -1, -1, NULL, efbuf);
 	}
-	FILEDESC_SUNLOCK_DIR(fdp);
 	for (i = 0; fdp->fd_refcnt > 0 && i < fdp->fd_nfiles; i++) {
 		if ((fp = fdp->fd_ofiles[i].fde_file) == NULL)
 			continue;

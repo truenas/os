@@ -327,10 +327,6 @@ cap_rights_t *__cap_rights_set(cap_rights_t *rights, ...);
 	__cap_rights_clear((rights), __VA_ARGS__, 0ULL)
 cap_rights_t *__cap_rights_clear(cap_rights_t *rights, ...);
 
-#define	cap_rights_clear_all(rights)					\
-	__cap_rights_clear_all((rights))
-cap_rights_t *__cap_rights_clear_all(cap_rights_t *rights);
-
 #define	cap_rights_is_set(rights, ...)					\
 	__cap_rights_is_set((rights), __VA_ARGS__, 0ULL)
 bool __cap_rights_is_set(const cap_rights_t *rights, ...);
