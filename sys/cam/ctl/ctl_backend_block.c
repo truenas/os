@@ -180,8 +180,8 @@ struct ctl_be_block_lun {
 	STAILQ_HEAD(, ctl_io_hdr) input_queue;
 	STAILQ_HEAD(, ctl_io_hdr) config_write_queue;
 	STAILQ_HEAD(, ctl_io_hdr) datamove_queue;
-	struct mtx_padalign io_lock;
-	struct mtx_padalign queue_lock;
+	struct mtx io_lock;
+	struct mtx queue_lock;
 };
 
 /*
