@@ -84,7 +84,7 @@ struct ctl_be_ramdisk_lun {
 	struct taskqueue *io_taskqueue;
 	struct task io_task;
 	STAILQ_HEAD(, ctl_io_hdr) cont_queue;
-	struct mtx_padalign queue_lock;
+	struct mtx queue_lock;
 };
 
 struct ctl_be_ramdisk_softc {
