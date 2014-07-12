@@ -415,7 +415,7 @@ struct ctl_wwpn_iid {
 #define CTL_MAX_THREADS		16
 
 struct ctl_thread {
-	struct mtx_padalign queue_lock;
+	struct mtx queue_lock;
 	struct ctl_softc	*ctl_softc;
 	struct thread		*thread;
 	STAILQ_HEAD(, ctl_io_hdr) incoming_queue;
