@@ -29,6 +29,7 @@
  * Copyright (c) 2013 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
+ * Copyright (c) 2014, Nexenta Systems, Inc. All rights reserved.
  */
 
 /*
@@ -2504,37 +2505,6 @@ zfs_prop_set_special(const char *dsname, zprop_source_t source,
 		}
 		break;
 	}
-	case ZFS_PROP_COMPRESSION:
-	{
-		if (intval == ZIO_COMPRESS_LZ4) {
-			spa_t *spa;
-
-			if ((err = spa_open(dsname, &spa, FTAG)) != 0)
-				return (err);
-
-			/*
-			 * Setting the LZ4 compression algorithm activates
-			 * the feature.
-			 */
-			if (!spa_feature_is_active(spa,
-			    SPA_FEATURE_LZ4_COMPRESS)) {
-				if ((err = zfs_prop_activate_feature(spa,
-				    SPA_FEATURE_LZ4_COMPRESS)) != 0) {
-					spa_close(spa, FTAG);
-					return (err);
-				}
-			}
-
-			spa_close(spa, FTAG);
-		}
-		/*
-		 * We still want the default set action to be performed in the
-		 * caller, we only performed zfeature settings here.
-		 */
-		err = -1;
-		break;
-	}
-
 	default:
 		err = -1;
 	}
@@ -4354,6 +4324,7 @@ out:
  * zc_fromobj	objsetid of incremental fromsnap (may be zero)
  * zc_guid	if set, estimate size of stream only.  zc_cookie is ignored.
  *		output size in zc_objset_type.
+ * zc_flags	if =1, WRITE_EMBEDDED records are permitted
  *
  * outputs:
  * zc_objset_type	estimated size, if zc_guid is set
@@ -4364,6 +4335,7 @@ zfs_ioc_send(zfs_cmd_t *zc)
 	int error;
 	offset_t off;
 	boolean_t estimate = (zc->zc_guid != 0);
+	boolean_t embedok = (zc->zc_flags & 0x1);
 
 	if (zc->zc_obj != 0) {
 		dsl_pool_t *dp;
@@ -4429,9 +4401,9 @@ zfs_ioc_send(zfs_cmd_t *zc)
 		off = fp->f_offset;
 		error = dmu_send_obj(zc->zc_name, zc->zc_sendobj,
 #ifdef illumos
-		    zc->zc_fromobj, zc->zc_cookie, fp->f_vnode, &off);
+		    zc->zc_fromobj, embedok, zc->zc_cookie, fp->f_vnode, &off);
 #else
-		    zc->zc_fromobj, zc->zc_cookie, fp, &off);
+		    zc->zc_fromobj, embedok, zc->zc_cookie, fp, &off);
 #endif
 
 		if (off >= 0 && off <= MAXOFFSET_T)
@@ -5369,6 +5341,8 @@ zfs_ioc_unjail(zfs_cmd_t *zc)
  * innvl: {
  *     "fd" -> file descriptor to write stream to (int32)
  *     (optional) "fromsnap" -> full snap name to send an incremental from
+ *     (optional) "embedok" -> (value ignored)
+ *         presence indicates DRR_WRITE_EMBEDDED records are permitted
  * }
  *
  * outnvl is unused
@@ -5382,6 +5356,7 @@ zfs_ioc_send_new(const char *snapname, nvlist_t *innvl, nvlist_t *outnvl)
 	offset_t off;
 	char *fromname = NULL;
 	int fd;
+	boolean_t embedok;
 
 	error = nvlist_lookup_int32(innvl, "fd", &fd);
 	if (error != 0)
@@ -5389,15 +5364,17 @@ zfs_ioc_send_new(const char *snapname, nvlist_t *innvl, nvlist_t *outnvl)
 
 	(void) nvlist_lookup_string(innvl, "fromsnap", &fromname);
 
+	embedok = nvlist_exists(innvl, "embedok");
+
 	file_t *fp = getf(fd, cap_rights_init(&rights, CAP_READ));
 	if (fp == NULL)
 		return (SET_ERROR(EBADF));
 
 	off = fp->f_offset;
 #ifdef illumos
-	error = dmu_send(snapname, fromname, fd, fp->f_vnode, &off);
+	error = dmu_send(snapname, fromname, embedok, fd, fp->f_vnode, &off);
 #else
-	error = dmu_send(snapname, fromname, fd, fp, &off);
+	error = dmu_send(snapname, fromname, embedok, fd, fp, &off);
 #endif
 
 #ifdef illumos
@@ -6008,6 +5985,18 @@ zfsdev_ioctl(struct cdev *dev, u_long zcmd, caddr_t arg, int flag,
 		if (error != 0) {
 			error = SET_ERROR(EFAULT);
 			goto out;
+		}
+		if (zc_iocparm->zfs_ioctl_version != ZFS_IOCVER_CURRENT) {
+			compat = B_TRUE;
+
+			switch (zc_iocparm->zfs_ioctl_version) {
+			case ZFS_IOCVER_ZCMD:
+				cflag = ZFS_CMD_COMPAT_ZCMD;
+				break;
+			default:
+				error = SET_ERROR(EINVAL);
+				goto out;
+			}
 		}
 	}
 

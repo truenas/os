@@ -2236,6 +2236,7 @@ cfiscsi_devid(struct ctl_scsiio *ctsio, int alloc_len)
 
 	ctsio->scsi_status = SCSI_STATUS_OK;
 
+	ctsio->io_hdr.flags |= CTL_FLAG_ALLOCATED;
 	ctsio->be_move_done = ctl_config_move_done;
 	ctl_datamove((union ctl_io *)ctsio);
 
@@ -2805,6 +2806,16 @@ cfiscsi_scsi_command_done(union ctl_io *io)
 		    cdw->cdw_initiator_task_tag, ("dangling cdw"));
 	CFISCSI_SESSION_UNLOCK(cs);
 #endif
+
+	/*
+	 * Do not return status for aborted commands.
+	 * There are exceptions, but none supported by CTL yet.
+	 */
+	if (io->io_hdr.status == CTL_CMD_ABORTED) {
+		ctl_free_io(io);
+		icl_pdu_free(request);
+		return;
+	}
 
 	response = cfiscsi_pdu_new_response(request, M_WAITOK);
 	bhssr = (struct iscsi_bhs_scsi_response *)response->ip_bhs;
