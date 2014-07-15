@@ -449,7 +449,6 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 			 * are no outstanding commands for this frontend?
 			 */
 			ctl_port_deregister(&softc->port);
-			mtx_destroy(&softc->lun_softc_mtx);
 			free(softc, M_CTLFE);
 		}
 		break;
