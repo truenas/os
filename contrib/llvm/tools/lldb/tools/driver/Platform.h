@@ -18,9 +18,8 @@
     #include <io.h>
     #include <eh.h>
     #include <inttypes.h>
-    #include "ELWrapper.h"
     #include "lldb/Host/windows/Windows.h"
-    #include "GetOptWrapper.h"
+    #include "lldb/Host/HostGetOpt.h"
 
     struct timeval
     {
@@ -101,12 +100,6 @@
     #include <histedit.h>
     #include <pthread.h>
     #include <sys/time.h>
-
-    #if defined(__FreeBSD__)
-        #include <readline/readline.h>
-    #else
-        #include <editline/readline.h>
-    #endif
 
 #endif
 
