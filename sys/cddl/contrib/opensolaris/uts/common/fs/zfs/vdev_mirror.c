@@ -219,6 +219,10 @@ vdev_mirror_map_init(zio_t *zio)
 			mc->mc_offset = zio->io_offset;
 		}
 	}
+	for (c=0; c < mm->mm_children; c++) {
+		mc = &mm->mm_child[c];
+		VERIFY(mc->mc_vd != NULL);
+	}
 
 	zio->io_vsd = mm;
 	zio->io_vsd_ops = &vdev_mirror_vsd_ops;
