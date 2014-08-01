@@ -38,6 +38,7 @@ typedef struct devinfo {
         string dev_pathname;            /* pathname of device */
 } devinfo_t;
 
+/*
 #pragma D binding "1.0" translator
 translator devinfo_t < struct devstat *D > {
            dev_major = D->device_number;
@@ -47,6 +48,7 @@ translator devinfo_t < struct devstat *D > {
            dev_statname = stringof(D->device_name);
            dev_pathname = stringof(D->device_name);
 };
+*/
 
 typedef struct bufinfo {
         int b_flags;                    /* flags */
@@ -61,6 +63,7 @@ typedef struct bufinfo {
 /*        dev_t b_edev;                  extended device */
 } bufinfo_t;
 
+/*
 #pragma D binding "1.0" translator
 translator bufinfo_t < struct bio *B > {
            b_flags = B->bio_flags;
@@ -69,9 +72,10 @@ translator bufinfo_t < struct bio *B > {
            b_blkno = 0;
            b_lblkno = 0;
            b_resid = B->bio_resid;
-           b_bufsize = 0; /* XXX gnn */
+           b_bufsize = 0; 
            b_error = B->bio_error;
 };
+*/
 
 /*
  * The following inline constants can be used to examine fi_oflags when using
