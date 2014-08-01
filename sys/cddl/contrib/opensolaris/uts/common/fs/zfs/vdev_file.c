@@ -166,7 +166,8 @@ vdev_file_io_start(zio_t *zio)
 
 	if (!vdev_readable(vd)) {
 		zio->io_error = SET_ERROR(ENXIO);
-		return (ZIO_PIPELINE_CONTINUE);
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 
 	vf = vd->vdev_tsd;
@@ -182,7 +183,8 @@ vdev_file_io_start(zio_t *zio)
 			zio->io_error = SET_ERROR(ENOTSUP);
 		}
 
-		return (ZIO_PIPELINE_CONTINUE);
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 
 	zio->io_error = vn_rdwr(zio->io_type == ZIO_TYPE_READ ?
