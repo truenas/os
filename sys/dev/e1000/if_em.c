@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2001-2013, Intel Corporation 
+  Copyright (c) 2001-2014, Intel Corporation 
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -95,7 +95,7 @@ int	em_display_debug_stats = 0;
 /*********************************************************************
  *  Driver version:
  *********************************************************************/
-char em_driver_version[] = "7.3.8";
+char em_driver_version[] = "7.4.2";
 
 /*********************************************************************
  *  PCI Device ID Table
@@ -179,6 +179,10 @@ static em_vendor_info_t em_vendor_info_array[] =
 						PCI_ANY_ID, PCI_ANY_ID, 0},
 	{ 0x8086, E1000_DEV_ID_PCH_LPTLP_I218_V,
 						PCI_ANY_ID, PCI_ANY_ID, 0},
+	{ 0x8086, E1000_DEV_ID_PCH_I218_LM2,	PCI_ANY_ID, PCI_ANY_ID, 0},
+	{ 0x8086, E1000_DEV_ID_PCH_I218_V2,	PCI_ANY_ID, PCI_ANY_ID, 0},
+	{ 0x8086, E1000_DEV_ID_PCH_I218_LM3,	PCI_ANY_ID, PCI_ANY_ID, 0},
+	{ 0x8086, E1000_DEV_ID_PCH_I218_V3,	PCI_ANY_ID, PCI_ANY_ID, 0},
 	/* required last entry */
 	{ 0, 0, 0, 0, 0}
 };
@@ -696,6 +700,9 @@ em_attach(device_t dev)
 		error = EIO;
 		goto err_late;
 	}
+
+	/* Disable ULP support */
+	e1000_disable_ulp_lpt_lp(hw, TRUE);
 
 	/*
 	**  Do interrupt configuration
@@ -1823,7 +1830,6 @@ em_xmit(struct tx_ring *txr, struct mbuf **m_headp)
 	int			nsegs, i, j, first, last = 0;
 	int			error, do_tso, tso_desc = 0, remap = 1;
 
-retry:
 	m_head = *m_headp;
 	txd_upper = txd_lower = txd_used = txd_saved = 0;
 	do_tso = ((m_head->m_pkthdr.csum_flags & CSUM_TSO) != 0);
@@ -1949,6 +1955,7 @@ retry:
 	tx_buffer_mapped = tx_buffer;
 	map = tx_buffer->map;
 
+retry:
 	error = bus_dmamap_load_mbuf_sg(txr->txtag, map,
 	    *m_headp, segs, &nsegs, BUS_DMA_NOWAIT);
 

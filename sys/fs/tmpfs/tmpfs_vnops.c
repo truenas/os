@@ -45,7 +45,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/rwlock.h>
 #include <sys/sched.h>
-#include <sys/sf_buf.h>
 #include <sys/stat.h>
 #include <sys/systm.h>
 #include <sys/sysctl.h>
@@ -573,21 +572,6 @@ tmpfs_link(struct vop_link_args *v)
 	MPASS(VOP_ISLOCKED(dvp));
 	MPASS(cnp->cn_flags & HASBUF);
 	MPASS(dvp != vp); /* XXX When can this be false? */
-
-	/* XXX: Why aren't the following two tests done by the caller? */
-
-	/* Hard links of directories are forbidden. */
-	if (vp->v_type == VDIR) {
-		error = EPERM;
-		goto out;
-	}
-
-	/* Cannot create cross-device links. */
-	if (dvp->v_mount != vp->v_mount) {
-		error = EXDEV;
-		goto out;
-	}
-
 	node = VP_TO_TMPFS_NODE(vp);
 
 	/* Ensure that we do not overflow the maximum number of links imposed
