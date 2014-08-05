@@ -198,6 +198,10 @@ ifconfig_up()
 		_cfg=0
 	fi
 
+	if [ ${1##lagg} != $1 ]; then
+		checkyesno failover_enable && sleep 60
+	fi
+
 	return $_cfg
 }
 
