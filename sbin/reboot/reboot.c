@@ -193,6 +193,11 @@ main(int argc, char *argv[])
 
 		return (0);
 	}
+	/*
+	 * Shut off all network traffic
+	 */
+	system("/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down");
+	sleep(5);
 
 	/* Just stop init -- if we fail, we'll restart it. */
 	if (kill(1, SIGTSTP) == -1)
