@@ -183,6 +183,7 @@ kmem_cache_create(char *name, size_t bufsize, size_t align,
 void
 kmem_cache_destroy(kmem_cache_t *cache)
 {
+	VERIFY(cache != NULL);
 #if defined(_KERNEL) && !defined(KMEM_DEBUG)
 	uma_zdestroy(cache->kc_zone);
 #endif
@@ -192,6 +193,7 @@ kmem_cache_destroy(kmem_cache_t *cache)
 void *
 kmem_cache_alloc(kmem_cache_t *cache, int flags)
 {
+	VERIFY(cache != NULL);
 #if defined(_KERNEL) && !defined(KMEM_DEBUG)
 	return (uma_zalloc_arg(cache->kc_zone, cache, flags));
 #else
@@ -207,6 +209,7 @@ kmem_cache_alloc(kmem_cache_t *cache, int flags)
 void
 kmem_cache_free(kmem_cache_t *cache, void *buf)
 {
+	VERIFY(cache != NULL);
 #if defined(_KERNEL) && !defined(KMEM_DEBUG)
 	uma_zfree_arg(cache->kc_zone, buf, cache);
 #else
@@ -220,6 +223,7 @@ kmem_cache_free(kmem_cache_t *cache, void *buf)
 void
 kmem_cache_reap_now(kmem_cache_t *cache)
 {
+	VERIFY(cache != NULL);
 #ifndef KMEM_DEBUG
 	zone_drain(cache->kc_zone);
 #endif
