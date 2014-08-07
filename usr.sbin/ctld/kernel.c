@@ -756,6 +756,7 @@ kernel_receive(struct pdu *pdu)
 void
 kernel_capsicate(void)
 {
+#ifdef cap_rights_init
 	int error;
 	cap_rights_t rights;
 	const unsigned long cmds[] = { CTL_ISCSI };
@@ -778,5 +779,6 @@ kernel_capsicate(void)
 		log_debugx("Capsicum capability mode enabled");
 	else
 		log_warnx("Capsicum capability mode not supported");
+#endif
 }
 

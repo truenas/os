@@ -306,6 +306,7 @@ fail(const struct connection *conn, const char *reason)
 static void
 capsicate(struct connection *conn)
 {
+#ifdef cap_rights_init
 	int error;
 	cap_rights_t rights;
 #ifdef ICL_KERNEL_PROXY
@@ -334,6 +335,9 @@ capsicate(struct connection *conn)
 		log_debugx("Capsicum capability mode enabled");
 	else
 		log_warnx("Capsicum capability mode not supported");
+#else
+	(void)conn;
+#endif
 }
 
 bool
