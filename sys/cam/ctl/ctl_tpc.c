@@ -327,6 +327,21 @@ ctl_receive_copy_operating_parameters(struct ctl_scsiio *ctsio)
 	return (retval);
 }
 
+static struct tpc_list *
+tpc_find_list(struct ctl_lun *lun, uint32_t list_id, uint32_t init_idx)
+{
+	struct tpc_list *list;
+
+	mtx_assert(&lun->lun_lock, MA_OWNED);
+	TAILQ_FOREACH(list, &lun->tpc_lists, links) {
+		if ((list->flags & EC_LIST_ID_USAGE_MASK) !=
+		     EC_LIST_ID_USAGE_NONE && list->list_id == list_id &&
+		    list->init_idx == init_idx)
+			break;
+	}
+	return (list);
+}
+
 int
 ctl_receive_copy_status_lid1(struct ctl_scsiio *ctsio)
 {
@@ -348,11 +363,8 @@ ctl_receive_copy_status_lid1(struct ctl_scsiio *ctsio)
 
 	list_id = cdb->list_identifier;
 	mtx_lock(&lun->lun_lock);
-	TAILQ_FOREACH(list, &lun->tpc_lists, links) {
-		if ((list->flags & EC_LIST_ID_USAGE_MASK) !=
-		     EC_LIST_ID_USAGE_NONE && list->list_id == list_id)
-			break;
-	}
+	list = tpc_find_list(lun, list_id,
+	    ctl_get_resindex(&ctsio->io_hdr.nexus));
 	if (list == NULL) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_set_invalid_field(ctsio, /*sks_valid*/ 1,
@@ -433,12 +445,9 @@ ctl_receive_copy_failure_details(struct ctl_scsiio *ctsio)
 
 	list_id = cdb->list_identifier;
 	mtx_lock(&lun->lun_lock);
-	TAILQ_FOREACH(list, &lun->tpc_lists, links) {
-		if (list->completed && (list->flags & EC_LIST_ID_USAGE_MASK) !=
-		     EC_LIST_ID_USAGE_NONE && list->list_id == list_id)
-			break;
-	}
-	if (list == NULL) {
+	list = tpc_find_list(lun, list_id,
+	    ctl_get_resindex(&ctsio->io_hdr.nexus));
+	if (list == NULL || !list->completed) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_set_invalid_field(ctsio, /*sks_valid*/ 1,
 		    /*command*/ 1, /*field*/ 2, /*bit_valid*/ 0,
@@ -472,7 +481,8 @@ ctl_receive_copy_failure_details(struct ctl_scsiio *ctsio)
 
 	data = (struct scsi_receive_copy_failure_details_data *)ctsio->kern_data_ptr;
 	if (list_copy.completed && (list_copy.error || list_copy.abort)) {
-		scsi_ulto4b(sizeof(*data) - 4, data->available_data);
+		scsi_ulto4b(sizeof(*data) - 4 + list_copy.sense_len,
+		    data->available_data);
 		data->copy_command_status = RCS_CCS_ERROR;
 	} else
 		scsi_ulto4b(0, data->available_data);
@@ -507,11 +517,8 @@ ctl_receive_copy_status_lid4(struct ctl_scsiio *ctsio)
 
 	list_id = scsi_4btoul(cdb->list_identifier);
 	mtx_lock(&lun->lun_lock);
-	TAILQ_FOREACH(list, &lun->tpc_lists, links) {
-		if ((list->flags & EC_LIST_ID_USAGE_MASK) !=
-		     EC_LIST_ID_USAGE_NONE && list->list_id == list_id)
-			break;
-	}
+	list = tpc_find_list(lun, list_id,
+	    ctl_get_resindex(&ctsio->io_hdr.nexus));
 	if (list == NULL) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_set_invalid_field(ctsio, /*sks_valid*/ 1,
@@ -547,7 +554,8 @@ ctl_receive_copy_status_lid4(struct ctl_scsiio *ctsio)
 	ctsio->kern_rel_offset = 0;
 
 	data = (struct scsi_receive_copy_status_lid4_data *)ctsio->kern_data_ptr;
-	scsi_ulto4b(sizeof(*data) - 4, data->available_data);
+	scsi_ulto4b(sizeof(*data) - 4 + list_copy.sense_len,
+	    data->available_data);
 	data->response_to_service_action = list_copy.service_action;
 	if (list_copy.completed) {
 		if (list_copy.error)
@@ -560,14 +568,10 @@ ctl_receive_copy_status_lid4(struct ctl_scsiio *ctsio)
 		data->copy_command_status = RCS_CCS_INPROG_FG;
 	scsi_ulto2b(list_copy.curops, data->operation_counter);
 	scsi_ulto4b(UINT32_MAX, data->estimated_status_update_delay);
-	if (list_copy.curbytes <= UINT32_MAX) {
-		data->transfer_count_units = RCS_TC_BYTES;
-		scsi_ulto4b(list_copy.curbytes, data->transfer_count);
-	} else {
-		data->transfer_count_units = RCS_TC_MBYTES;
-		scsi_ulto4b(list_copy.curbytes >> 20, data->transfer_count);
-	}
+	data->transfer_count_units = RCS_TC_BYTES;
+	scsi_u64to8b(list_copy.curbytes, data->transfer_count);
 	scsi_ulto2b(list_copy.curseg, data->segments_processed);
+	data->length_of_the_sense_data_field = list_copy.sense_len;
 	data->sense_data_length = list_copy.sense_len;
 	memcpy(data->sense_data, &list_copy.sense_data, list_copy.sense_len);
 
@@ -596,11 +600,8 @@ ctl_copy_operation_abort(struct ctl_scsiio *ctsio)
 
 	list_id = scsi_4btoul(cdb->list_identifier);
 	mtx_lock(&lun->lun_lock);
-	TAILQ_FOREACH(list, &lun->tpc_lists, links) {
-		if ((list->flags & EC_LIST_ID_USAGE_MASK) !=
-		     EC_LIST_ID_USAGE_NONE && list->list_id == list_id)
-			break;
-	}
+	list = tpc_find_list(lun, list_id,
+	    ctl_get_resindex(&ctsio->io_hdr.nexus));
 	if (list == NULL) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_set_invalid_field(ctsio, /*sks_valid*/ 1,
@@ -941,6 +942,8 @@ tpc_process(struct tpc_list *list)
 
 done:
 //printf("ZZZ done\n");
+	free(list->params, M_CTL);
+	list->params = NULL;
 	mtx_lock(&lun->lun_lock);
 	if ((list->flags & EC_LIST_ID_USAGE_MASK) == EC_LIST_ID_USAGE_NONE) {
 		TAILQ_REMOVE(&lun->tpc_lists, list, links);
@@ -1210,12 +1213,7 @@ ctl_extended_copy_lid1(struct ctl_scsiio *ctsio)
 	list->lun = lun;
 	mtx_lock(&lun->lun_lock);
 	if ((list->flags & EC_LIST_ID_USAGE_MASK) != EC_LIST_ID_USAGE_NONE) {
-		TAILQ_FOREACH(tlist, &lun->tpc_lists, links) {
-			if ((tlist->flags & EC_LIST_ID_USAGE_MASK) !=
-			     EC_LIST_ID_USAGE_NONE &&
-			    tlist->list_id == list->list_id)
-				break;
-		}
+		tlist = tpc_find_list(lun, list->list_id, list->init_idx);
 		if (tlist != NULL && !tlist->completed) {
 			mtx_unlock(&lun->lun_lock);
 			free(list, M_CTL);
@@ -1338,12 +1336,7 @@ ctl_extended_copy_lid4(struct ctl_scsiio *ctsio)
 	list->lun = lun;
 	mtx_lock(&lun->lun_lock);
 	if ((list->flags & EC_LIST_ID_USAGE_MASK) != EC_LIST_ID_USAGE_NONE) {
-		TAILQ_FOREACH(tlist, &lun->tpc_lists, links) {
-			if ((tlist->flags & EC_LIST_ID_USAGE_MASK) !=
-			     EC_LIST_ID_USAGE_NONE &&
-			    tlist->list_id == list->list_id)
-				break;
-		}
+		tlist = tpc_find_list(lun, list->list_id, list->init_idx);
 		if (tlist != NULL && !tlist->completed) {
 			mtx_unlock(&lun->lun_lock);
 			free(list, M_CTL);

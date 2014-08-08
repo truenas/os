@@ -1160,10 +1160,8 @@ zio_write_bp_init(zio_t **ziop)
 	}
 
 	if (compress != ZIO_COMPRESS_OFF) {
-		metaslab_class_t *mc = spa_normal_class(spa);
 		void *cbuf = zio_buf_alloc(lsize);
-		psize = zio_compress_data(compress, zio->io_data, cbuf, lsize,
-		    (size_t)metaslab_class_get_minblocksize(mc));
+		psize = zio_compress_data(compress, zio->io_data, cbuf, lsize);
 		if (psize == 0 || psize == lsize) {
 			compress = ZIO_COMPRESS_OFF;
 			zio_buf_free(cbuf, lsize);
@@ -2623,7 +2621,8 @@ zio_vdev_io_start(zio_t **ziop)
 
 	align = 1ULL << vd->vdev_top->vdev_ashift;
 
-	if (!(zio->io_flags & ZIO_FLAG_PHYSICAL) &&
+	if ((!(zio->io_flags & ZIO_FLAG_PHYSICAL) ||
+	    (vd->vdev_top->vdev_physical_ashift > SPA_MINBLOCKSHIFT)) &&
 	    P2PHASE(zio->io_size, align) != 0) {
 		/* Transform logical writes to be a full physical block size. */
 		uint64_t asize = P2ROUNDUP(zio->io_size, align);
