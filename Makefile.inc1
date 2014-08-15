@@ -391,7 +391,8 @@ LIB32WMAKEENV+=	MAKEOBJDIRPREFIX=${OBJTREE}/lib32 \
 		LIBDIR=/usr/lib32 \
 		SHLIBDIR=/usr/lib32 \
 		LIBPRIVATEDIR=/usr/lib32/private \
-		COMPILER_TYPE=${WMAKE_COMPILER_TYPE}
+		COMPILER_TYPE=${WMAKE_COMPILER_TYPE} \
+		DTRACE="${DTRACE} -32"
 LIB32WMAKEFLAGS+=	\
 		CC="${XCC} ${LIB32FLAGS}" \
 		CXX="${XCXX} ${LIB32FLAGS}" \
@@ -1217,10 +1218,6 @@ _mklocale=	usr.bin/mklocale
 _sed=		usr.bin/sed
 .endif
 
-.if ${BOOTSTRAPPING} < 900006
-_lex=		usr.bin/lex
-.endif
-
 .if ${BOOTSTRAPPING} < 1000002
 _m4=		usr.bin/m4
 .endif
@@ -1241,6 +1238,10 @@ _nmtree=	lib/libnetbsd \
 
 .if ${BOOTSTRAPPING} < 1000027
 _cat=		bin/cat
+.endif
+
+.if ${BOOTSTRAPPING} < 1000033
+_lex=		usr.bin/lex
 .endif
 
 .if ${BOOTSTRAPPING} >= 900040 && ${BOOTSTRAPPING} < 900041

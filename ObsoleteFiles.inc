@@ -38,12 +38,24 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20140812: example files removed
+OLD_FILES+=usr/share/examples/libusb20/aux.c
+OLD_FILES+=usr/share/examples/libusb20/aux.h
 # 20140728: Remove an obsolete man page
 OLD_FILES+=usr/share/man/man9/VOP_GETVOBJECT.9.gz
 OLD_FILES+=usr/share/man/man9/VOP_CREATEVOBJECT.9.gz
 OLD_FILES+=usr/share/man/man9/VOP_DESTROYVOBJECT.9.gz
+# 20140625: csup example files removal
+OLD_FILES+=usr/share/examples/cvsup/README
+OLD_FILES+=usr/share/examples/cvsup/cvs-supfile
+OLD_FILES+=usr/share/examples/cvsup/stable-supfile
+OLD_FILES+=usr/share/examples/cvsup/standard-supfile
+OLD_DIRS+=usr/share/examples/cvsup
 # 20140614: send-pr removal
+OLD_FILES+=usr/bin/sendbug
+OLD_FILES+=usr/share/info/send-pr.info.gz
 OLD_FILES+=usr/share/man/man1/send-pr.1.gz
+OLD_FILES+=usr/share/man/man1/sendbug.1.gz
 OLD_FILES+=etc/gnats/freefall
 OLD_DIRS+=etc/gnats
 # 20140512: new clang import which bumps version from 3.4 to 3.4.1.
