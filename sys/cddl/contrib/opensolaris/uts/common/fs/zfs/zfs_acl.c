@@ -1167,6 +1167,16 @@ zfs_acl_chown_setattr(znode_t *zp)
 	if ((error = zfs_acl_node_read(zp, B_TRUE, &aclp, B_FALSE)) == 0)
 		zp->z_mode = zfs_mode_compute(zp->z_mode, aclp,
 		    &zp->z_pflags, zp->z_uid, zp->z_gid);
+
+	/*
+	 * When neither a ZNODE_ACL nor a DACL_ACES SA is found, ENOENT
+	 * is returned from zfs_acl_node_read().  We allow chown/chgrp
+	 * to succeed in these cases as the caller do not expect ENOENT
+	 * in their context.
+	 */
+	if (error == ENOENT)
+		error = 0;
+
 	return (error);
 }
 
