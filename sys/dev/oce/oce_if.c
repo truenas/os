@@ -45,74 +45,74 @@
 
 /* UE Status Low CSR */
 static char *ue_status_low_desc[] = {
-	"CEV",
-	"CTX",
-	"DBUF",
-	"ERX",
-	"Host",
-	"MPU",
-	"NDMA",
-	"PTC ",
-	"RDMA ",
-	"RXF ",
-	"RXIPS ",
-	"RXULP0 ",
-	"RXULP1 ",
-	"RXULP2 ",
-	"TIM ",
-	"TPOST ",
-	"TPRE ",
-	"TXIPS ",
-	"TXULP0 ",
-	"TXULP1 ",
-	"UC ",
-	"WDMA ",
-	"TXULP2 ",
-	"HOST1 ",
-	"P0_OB_LINK ",
-	"P1_OB_LINK ",
-	"HOST_GPIO ",
-	"MBOX ",
-	"AXGMAC0",
-	"AXGMAC1",
-	"JTAG",
-	"MPU_INTPEND"
+        "CEV",
+        "CTX",
+        "DBUF",
+        "ERX",
+        "Host",
+        "MPU",
+        "NDMA",
+        "PTC ",
+        "RDMA ",
+        "RXF ",
+        "RXIPS ",
+        "RXULP0 ",
+        "RXULP1 ",
+        "RXULP2 ",
+        "TIM ",
+        "TPOST ",
+        "TPRE ",
+        "TXIPS ",
+        "TXULP0 ",
+        "TXULP1 ",
+        "UC ",
+        "WDMA ",
+        "TXULP2 ",
+        "HOST1 ",
+        "P0_OB_LINK ",
+        "P1_OB_LINK ",
+        "HOST_GPIO ",
+        "MBOX ",
+        "AXGMAC0",
+        "AXGMAC1",
+        "JTAG",
+        "MPU_INTPEND"
 };
 
 /* UE Status High CSR */
 static char *ue_status_hi_desc[] = {
-	"LPCMEMHOST",
-	"MGMT_MAC",
-	"PCS0ONLINE",
-	"MPU_IRAM",
-	"PCS1ONLINE",
-	"PCTL0",
-	"PCTL1",
-	"PMEM",
-	"RR",
-	"TXPB",
-	"RXPP",
-	"XAUI",
-	"TXP",
-	"ARM",
-	"IPC",
-	"HOST2",
-	"HOST3",
-	"HOST4",
-	"HOST5",
-	"HOST6",
-	"HOST7",
-	"HOST8",
-	"HOST9",
-	"NETC",
-	"Unknown",
-	"Unknown",
-	"Unknown",
-	"Unknown",
-	"Unknown",
-	"Unknown",
-	"Unknown",
-	"Unknown"
+        "LPCMEMHOST",
+        "MGMT_MAC",
+        "PCS0ONLINE",
+        "MPU_IRAM",
+        "PCS1ONLINE",
+        "PCTL0",
+        "PCTL1",
+        "PMEM",
+        "RR",
+        "TXPB",
+        "RXPP",
+        "XAUI",
+        "TXP",
+        "ARM",
+        "IPC",
+        "HOST2",
+        "HOST3",
+        "HOST4",
+        "HOST5",
+        "HOST6",
+        "HOST7",
+        "HOST8",
+        "HOST9",
+        "NETC",
+        "Unknown",
+        "Unknown",
+        "Unknown",
+        "Unknown",
+        "Unknown",
+        "Unknown",
+        "Unknown",
+        "Unknown"
 };
 
 
@@ -327,7 +327,7 @@ oce_attach(device_t dev)
 
 	rc = oce_hw_start(sc);
 	if (rc)
-		goto lro_free;
+		goto lro_free;;
 
 	sc->vlan_attach = EVENTHANDLER_REGISTER(vlan_config,
 				oce_add_vlan, sc, EVENTHANDLER_PRI_FIRST);
@@ -828,6 +828,10 @@ oce_media_status(struct ifnet *ifp, struct ifmediareq *req)
 		req->ifm_active |= IFM_10G_SR | IFM_FDX;
 		sc->speed = 10000;
 		break;
+	case 7: /* 40 Gbps */
+		req->ifm_active |= IFM_40G_SR4 | IFM_FDX;
+		sc->speed = 40000;
+		break;
 	}
 	
 	return;
@@ -989,7 +993,7 @@ retry:
 
 	} else if (rc == EFBIG)	{
 		if (retry_cnt == 0) {
-			m_temp = m_defrag(m, M_NOWAIT);
+			m_temp = m_defrag(m, M_DONTWAIT);
 			if (m_temp == NULL)
 				goto free_ret;
 			m = m_temp;
@@ -1076,7 +1080,7 @@ oce_tso_setup(POCE_SOFTC sc, struct mbuf **mpp)
 	m = *mpp;
 
 	if (M_WRITABLE(m) == 0) {
-		m = m_dup(*mpp, M_NOWAIT);
+		m = m_dup(*mpp, M_DONTWAIT);
 		if (!m)
 			return NULL;
 		m_freem(*mpp);
@@ -1227,7 +1231,6 @@ oce_wq_handler(void *arg)
 	return 0;
 }
 
-
 #if __FreeBSD_version >= 1000000
 static __inline void
 drbr_stats_update(struct ifnet *ifp, int len, int mflags)
@@ -1258,27 +1261,30 @@ oce_multiq_transmit(struct ifnet *ifp, struct mbuf *m, struct oce_wq *wq)
 		return status;
 	}
 
-	if (m != NULL) {
+	if (m == NULL)
+		next = drbr_dequeue(ifp, br);		
+	else if (drbr_needs_enqueue(ifp, br)) {
 		if ((status = drbr_enqueue(ifp, br, m)) != 0)
 			return status;
-	} 
-	while ((next = drbr_peek(ifp, br)) != NULL) {
+		next = drbr_dequeue(ifp, br);
+	} else
+		next = m;
+
+		
+	while (next != NULL) {
 		if (oce_tx(sc, &next, queue_index)) {
-			if (next == NULL) {
-				drbr_advance(ifp, br);
-			} else {
-				drbr_putback(ifp, br, next);
+			if (next != NULL) {
 				wq->tx_stats.tx_stops ++;
 				ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 				status = drbr_enqueue(ifp, br, next);
 			}  
 			break;
 		}
-		drbr_advance(ifp, br);
-		ifp->if_obytes += next->m_pkthdr.len;
-		if (next->m_flags & M_MCAST)
-			ifp->if_omcasts++;
+#if __FreeBSD_version >= 1000000
+		drbr_stats_update(ifp, next->m_pkthdr.len, next->m_flags);
+#endif
 		ETHER_BPF_MTAP(ifp, next);
+		next = drbr_dequeue(ifp, br);
 	}
 
 	return status;
@@ -1567,7 +1573,7 @@ oce_alloc_rx_bufs(struct oce_rq *rq, int count)
 			break;	/* no more room */
 
 		pd = &rq->pckts[rq->packets_in];
-		pd->mbuf = m_getcl(M_NOWAIT, MT_DATA, M_PKTHDR);
+		pd->mbuf = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
 		if (pd->mbuf == NULL)
 			break;
 
@@ -1952,7 +1958,6 @@ done:
 	/* Is there atleast one eq that needs to be modified? */
 	if(num)
 		oce_mbox_eqd_modify_periodic(sc, set_eqd, num);
-
 }
 
 static void oce_detect_hw_error(POCE_SOFTC sc)
@@ -2152,11 +2157,6 @@ process_link_state(POCE_SOFTC sc, struct oce_async_cqe_link_state *acqe)
 		sc->link_status = ASYNC_EVENT_LINK_DOWN;
 		if_link_state_change(sc->ifp, LINK_STATE_DOWN);
 	}
-
-	/* Update speed */
-	sc->link_speed = acqe->u0.s.speed;
-	sc->qos_link_speed = (uint32_t) acqe->u0.s.qos_link_speed * 10;
-
 }
 
 
@@ -2341,18 +2341,17 @@ oce_get_config(POCE_SOFTC sc)
 		max_rss = OCE_MAX_RSS;
 
 	if (!IS_BE(sc)) {
-		rc = oce_get_func_config(sc);
+		rc = oce_get_profile_config(sc, max_rss);
 		if (rc) {
 			sc->nwqs = OCE_MAX_WQ;
 			sc->nrssqs = max_rss;
 			sc->nrqs = sc->nrssqs + 1;
 		}
 	}
-	else {
-		rc = oce_get_profile_config(sc);
+	else { /* For BE3 don't rely on fw for determining the resources */
 		sc->nrssqs = max_rss;
 		sc->nrqs = sc->nrssqs + 1;
-		if (rc)
-			sc->nwqs = OCE_MAX_WQ;
+		sc->nwqs = OCE_MAX_WQ;
+		sc->max_vlans = MAX_VLANFILTER_SIZE; 
 	}
 }

@@ -88,7 +88,18 @@
 #include "oce_hw.h"
 
 /* OCE device driver module component revision informaiton */
-#define COMPONENT_REVISION "10.0.664.0"
+#ifdef BUILD_VERSION
+#include "version.h"
+	#define COMPONENT_REVISION \
+		STR_BE_MAJOR "." STR_BE_MINOR "." STR_BE_BUILD "." STR_BE_BRANCH
+#else
+	#define COMPONENT_ID		"806"
+	#define RELEASE_REVISION	"2.0.3"
+	#define SVNREVISION		"165"
+	#define COMPONENT_REVISION \
+			COMPONENT_ID ":" RELEASE_REVISION ":" SVNREVISION
+#endif
+
 
 /* OCE devices supported by this driver */
 #define PCI_VENDOR_EMULEX		0x10df	/* Emulex */
@@ -882,8 +893,8 @@ typedef struct oce_softc {
 	uint8_t hw_error;
 	uint16_t qnq_debug_event;
 	uint16_t qnqid;
-	uint16_t pvid;
-	uint16_t max_vlans;
+	uint32_t pvid;
+	uint32_t max_vlans;
 
 } OCE_SOFTC, *POCE_SOFTC;
 
@@ -1055,7 +1066,7 @@ int oce_mbox_cq_create(struct oce_cq *cq, uint32_t ncoalesce,
 int oce_mbox_read_transrecv_data(POCE_SOFTC sc, uint32_t page_num);
 void oce_mbox_eqd_modify_periodic(POCE_SOFTC sc, struct oce_set_eqd *set_eqd,
 					int num);
-int oce_get_profile_config(POCE_SOFTC sc);
+int oce_get_profile_config(POCE_SOFTC sc, uint32_t max_rss);
 int oce_get_func_config(POCE_SOFTC sc);
 void mbx_common_req_hdr_init(struct mbx_hdr *hdr,
 			     uint8_t dom,
@@ -1098,6 +1109,9 @@ extern uint32_t oce_max_rsp_handled;	/* max responses */
 #define OCE_PHY_LOOPBACK		0x1
 #define OCE_ONE_PORT_EXT_LOOPBACK	0x2
 #define OCE_NO_LOOPBACK			0xff
+
+#undef IFM_40G_SR4
+#define IFM_40G_SR4			28
 
 #define atomic_inc_32(x)		atomic_add_32(x, 1)
 #define atomic_dec_32(x)		atomic_subtract_32(x, 1)

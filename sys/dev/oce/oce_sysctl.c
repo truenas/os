@@ -44,6 +44,7 @@ static void copy_stats_to_sc_xe201(POCE_SOFTC sc);
 static void copy_stats_to_sc_be3(POCE_SOFTC sc);
 static void copy_stats_to_sc_be2(POCE_SOFTC sc);
 static int  oce_sysctl_loopback(SYSCTL_HANDLER_ARGS);
+static int  oce_sys_aic_enable(SYSCTL_HANDLER_ARGS);
 static int  oce_be3_fwupgrade(POCE_SOFTC sc, const struct firmware *fw);
 static int oce_skyhawk_fwupgrade(POCE_SOFTC sc, const struct firmware *fw);
 static int  oce_sys_fwupgrade(SYSCTL_HANDLER_ARGS);
@@ -68,7 +69,7 @@ struct flash_img_attri {
 	int img_offset;
 	int img_size;
 	int img_type;
-	bool skip_image;
+	boolean_t skip_image;
 	int optype;
 };
 
@@ -131,6 +132,10 @@ oce_add_sysctls(POCE_SOFTC sc)
 		CTLTYPE_STRING | CTLFLAG_RW, (void *)sc, 0,
 		oce_sys_fwupgrade, "A", "Firmware ufi file");
 
+	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "aic_enable",
+		CTLTYPE_INT | CTLFLAG_RW, (void *)sc, 1,
+		oce_sys_aic_enable, "I", "aic flags");
+
         /*
          *  Dumps Transceiver data
 	 *  "sysctl dev.oce.0.sfp_vpd_dump=0"
@@ -167,6 +172,35 @@ oce_loopback_test(struct oce_softc *sc, uint8_t loopback_type)
 	oce_mbox_cmd_set_loopback(sc, sc->port_id, OCE_NO_LOOPBACK, 1);
 
 	return status;
+}
+
+static int
+oce_sys_aic_enable(SYSCTL_HANDLER_ARGS)
+{
+	int value = 0;
+	uint32_t status, vector;
+	POCE_SOFTC sc = (struct oce_softc *)arg1;
+	struct oce_aic_obj *aic;
+
+	status = sysctl_handle_int(oidp, &value, 0, req);
+	if (status || !req->newptr)
+		return status; 
+
+	for (vector = 0; vector < sc->intr_count; vector++) {
+		aic = &sc->aic_obj[vector];
+
+		if (value == 0){
+			aic->max_eqd = aic->min_eqd = aic->et_eqd = 0;
+			aic->enable = 0;
+		}
+		else {
+			aic->max_eqd = OCE_MAX_EQD;
+			aic->min_eqd = OCE_MIN_EQD;
+			aic->et_eqd = OCE_MIN_EQD;
+			aic->enable = TRUE;
+		}
+	}
+	return 0;
 }
 
 static int
@@ -381,8 +415,8 @@ oce_sh_be3_flashdata(POCE_SOFTC sc, const struct firmware *fw, int32_t num_imgs)
 		return EINVAL;
 	}
 
-	rc = oce_dma_alloc(sc, sizeof(struct mbx_common_read_write_flashrom),
-				&dma_mem, 0);
+	rc = oce_dma_alloc(sc, sizeof(struct mbx_common_read_write_flashrom)
+			+ 32*1024, &dma_mem, 0);
 	if (rc) {
 		device_printf(sc->dev,
 				"Memory allocation failure while flashing\n");
@@ -448,34 +482,34 @@ ret:
 	return rc;
 }
 
-#define UFI_TYPE2		2
-#define UFI_TYPE3		3
-#define UFI_TYPE3R		10
-#define UFI_TYPE4		4
-#define UFI_TYPE4R		11
+#define UFI_TYPE2               2
+#define UFI_TYPE3               3
+#define UFI_TYPE3R              10
+#define UFI_TYPE4               4
+#define UFI_TYPE4R              11
 static int oce_get_ufi_type(POCE_SOFTC sc,
-			    const struct flash_file_hdr *fhdr)
+                           const struct flash_file_hdr *fhdr)
 {
-	if (fhdr == NULL)
-		goto be_get_ufi_exit;
+        if (fhdr == NULL)
+                goto be_get_ufi_exit;
 
-	if (IS_SH(sc) && fhdr->build[0] == '4') {
-		if (fhdr->asic_type_rev >= 0x10)
-			return UFI_TYPE4R;
-		else
-			return UFI_TYPE4;
-	} else if (IS_BE3(sc) && fhdr->build[0] == '3') {
-		if (fhdr->asic_type_rev == 0x10)
-			return UFI_TYPE3R;
-		else
-			return UFI_TYPE3;
-	} else if (IS_BE2(sc) && fhdr->build[0] == '2')
-		return UFI_TYPE2;
+        if (IS_SH(sc) && fhdr->build[0] == '4') {
+                if (fhdr->asic_type_rev >= 0x10)
+                        return UFI_TYPE4R;
+                else
+                        return UFI_TYPE4;
+        } else if (IS_BE3(sc) && fhdr->build[0] == '3') {
+                if (fhdr->asic_type_rev == 0x10)
+                        return UFI_TYPE3R;
+                else
+                        return UFI_TYPE3;
+        } else if (IS_BE2(sc) && fhdr->build[0] == '2')
+                return UFI_TYPE2;
 
 be_get_ufi_exit:
-	device_printf(sc->dev,
-		"UFI and Interface are not compatible for flashing\n");
-	return -1;
+        device_printf(sc->dev,
+                "UFI and Interface are not compatible for flashing\n");
+        return -1;
 }
 
 
