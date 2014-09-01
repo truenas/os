@@ -166,6 +166,8 @@ SUBDIR=	\
 	${_iwnfw} \
 	${_ixgb} \
 	${_ixgbe} \
+	${_ixl} \
+	${_ixlv} \
 	jme \
 	joy \
 	kbdmux \
@@ -692,6 +694,8 @@ _iwnfw=		iwnfw
 .endif
 _ixgb=		ixgb
 _ixgbe=		ixgbe
+_ixl=		ixl
+_ixlv=		ixlv
 _lindev=	lindev
 _linprocfs=	linprocfs
 _linsysfs=	linsysfs
