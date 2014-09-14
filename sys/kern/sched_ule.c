@@ -1011,6 +1011,7 @@ tdq_notify(struct tdq *tdq, struct thread *td)
 	ctd = pcpu_find(cpu)->pc_curthread;
 	if (!sched_shouldpreempt(pri, ctd->td_priority, 1))
 		return;
+	mb();
 	if (TD_IS_IDLETHREAD(ctd)) {
 		/*
 		 * If the MD code has an idle wakeup routine try that before
@@ -2611,6 +2612,7 @@ sched_idletd(void *dummy)
 
 		/* Run main MD idle handler. */
 		tdq->tdq_cpu_idle = 1;
+		mb();
 		cpu_idle(switchcnt * 4 > sched_idlespinthresh);
 		tdq->tdq_cpu_idle = 0;
 
