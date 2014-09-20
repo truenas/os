@@ -1221,7 +1221,10 @@ insmntque1(struct vnode *vp, struct mount *mp,
 	}
 	vp->v_mount = mp;
 	MNT_REF(mp);
-	TAILQ_INSERT_TAIL(&mp->mnt_nvnodelist, vp, v_nmntvnodes);
+	if (vp->v_vflag & VV_INSMQHEAD)
+		TAILQ_INSERT_HEAD(&mp->mnt_nvnodelist, vp, v_nmntvnodes);
+	else
+		TAILQ_INSERT_TAIL(&mp->mnt_nvnodelist, vp, v_nmntvnodes);
 	VNASSERT(mp->mnt_nvnodelistsize >= 0, vp,
 		("neg mount point vnode list size"));
 	mp->mnt_nvnodelistsize++;

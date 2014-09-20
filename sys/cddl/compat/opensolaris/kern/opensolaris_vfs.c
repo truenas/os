@@ -194,10 +194,8 @@ mount_snapshot(kthread_t *td, vnode_t **vpp, const char *fstype, char *fspath,
 		VI_LOCK(vp);
 		vp->v_iflag &= ~VI_MOUNT;
 		VI_UNLOCK(vp);
-		vrele(vp);
 		vfs_unbusy(mp);
 		vfs_mount_destroy(mp);
-		*vpp = NULL;
 		return (error);
 	}
 
@@ -228,7 +226,7 @@ mount_snapshot(kthread_t *td, vnode_t **vpp, const char *fstype, char *fspath,
 	vfs_event_signal(NULL, VQ_MOUNT, 0);
 	if (VFS_ROOT(mp, LK_EXCLUSIVE, &mvp))
 		panic("mount: lost mount");
-	vput(vp);
+	VOP_UNLOCK(vp, 0);
 	vfs_unbusy(mp);
 	*vpp = mvp;
 	return (0);

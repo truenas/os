@@ -612,7 +612,7 @@ zfsctl_freebsd_root_lookup(ap)
 
 	err = zfsctl_root_lookup(dvp, nm, vpp, NULL, 0, NULL, cr, NULL, NULL, NULL);
 	if (err == 0 && (nm[0] != '.' || nm[1] != '\0'))
-		vn_lock(*vpp, LK_EXCLUSIVE | LK_RETRY);
+		err = vn_lock(*vpp, ap->a_cnp->cn_lkflags);
 	return (err);
 }
 
@@ -975,8 +975,11 @@ zfsctl_snapdir_lookup(ap)
 	ZFS_ENTER(zfsvfs);
 
 	if (gfs_lookup_dot(vpp, dvp, zfsvfs->z_ctldir, nm) == 0) {
+		err = 0;
+		if (nm[0] != '.' || nm[1] != '\0')
+			err = vn_lock(*vpp, ap->a_cnp->cn_lkflags);
 		ZFS_EXIT(zfsvfs);
-		return (0);
+		return (err);
 	}
 
 	if (flags & FIGNORECASE) {
@@ -1004,7 +1007,7 @@ zfsctl_snapdir_lookup(ap)
 	if ((sep = avl_find(&sdp->sd_snaps, &search, &where)) != NULL) {
 		*vpp = sep->se_root;
 		VN_HOLD(*vpp);
-		err = traverse(vpp, LK_EXCLUSIVE | LK_RETRY);
+		err = traverse(vpp, ap->a_cnp->cn_lkflags);
 		if (err != 0) {
 			VN_RELE(*vpp);
 			*vpp = NULL;
@@ -1013,6 +1016,8 @@ zfsctl_snapdir_lookup(ap)
 			 * The snapshot was unmounted behind our backs,
 			 * try to remount it.
 			 */
+			VN_HOLD(*vpp);
+			VOP_UNLOCK(*vpp, 0);
 			VERIFY(zfsctl_snapshot_zname(dvp, nm, MAXNAMELEN, snapname) == 0);
 			goto domount;
 		} else {
@@ -1064,7 +1069,6 @@ zfsctl_snapdir_lookup(ap)
 	sep->se_name = kmem_alloc(strlen(nm) + 1, KM_SLEEP);
 	(void) strcpy(sep->se_name, nm);
 	*vpp = sep->se_root = zfsctl_snapshot_mknode(dvp, dmu_objset_id(snap));
-	VN_HOLD(*vpp);
 	avl_insert(&sdp->sd_snaps, sep, where);
 
 	dmu_objset_rele(snap, FTAG);
@@ -1091,7 +1095,6 @@ domount:
 	mutex_exit(&sdp->sd_lock);
 	ZFS_EXIT(zfsvfs);
 
-#ifdef illumos
 	/*
 	 * If we had an error, drop our hold on the vnode and
 	 * zfsctl_snapshot_inactive() will clean up.
@@ -1100,10 +1103,6 @@ domount:
 		VN_RELE(*vpp);
 		*vpp = NULL;
 	}
-#else
-	if (err != 0)
-		*vpp = NULL;
-#endif
 	return (err);
 }
 
@@ -1130,8 +1129,11 @@ zfsctl_shares_lookup(ap)
 	strlcpy(nm, cnp->cn_nameptr, cnp->cn_namelen + 1);
 
 	if (gfs_lookup_dot(vpp, dvp, zfsvfs->z_ctldir, nm) == 0) {
+		error = 0;
+		if (nm[0] != '.' || nm[1] != '\0')
+			error = vn_lock(*vpp, ap->a_cnp->cn_lkflags);
 		ZFS_EXIT(zfsvfs);
-		return (0);
+		return (error);
 	}
 
 	if (zfsvfs->z_shares_dir == 0) {
@@ -1344,22 +1346,15 @@ zfsctl_snapdir_inactive(ap)
 	vnode_t *vp = ap->a_vp;
 	zfsctl_snapdir_t *sdp = vp->v_data;
 	zfs_snapentry_t *sep;
+	void *private;
 
-	/*
-	 * On forced unmount we have to free snapshots from here.
-	 */
-	mutex_enter(&sdp->sd_lock);
-	while ((sep = avl_first(&sdp->sd_snaps)) != NULL) {
-		avl_remove(&sdp->sd_snaps, sep);
-		kmem_free(sep->se_name, strlen(sep->se_name) + 1);
-		kmem_free(sep, sizeof (zfs_snapentry_t));
+	private = gfs_dir_inactive(vp);
+	if (private != NULL) {
+		ASSERT(avl_numnodes(&sdp->sd_snaps) == 0);
+		mutex_destroy(&sdp->sd_lock);
+		avl_destroy(&sdp->sd_snaps);
+		kmem_free(private, sizeof (zfsctl_snapdir_t));
 	}
-	mutex_exit(&sdp->sd_lock);
-	gfs_dir_inactive(vp);
-	ASSERT(avl_numnodes(&sdp->sd_snaps) == 0);
-	mutex_destroy(&sdp->sd_lock);
-	avl_destroy(&sdp->sd_snaps);
-	kmem_free(sdp, sizeof (zfsctl_snapdir_t));
 
 	return (0);
 }
@@ -1441,7 +1436,6 @@ zfsctl_snapshot_mknode(vnode_t *pvp, uint64_t objset)
 
 	vp = gfs_dir_create(sizeof (zfsctl_node_t), pvp, pvp->v_vfsp,
 	    &zfsctl_ops_snapshot, NULL, NULL, MAXNAMELEN, NULL, NULL);
-	VN_HOLD(vp);
 	zcp = vp->v_data;
 	zcp->zc_id = objset;
 	VOP_UNLOCK(vp, 0);
@@ -1462,17 +1456,24 @@ zfsctl_snapshot_inactive(ap)
 	zfsctl_snapdir_t *sdp;
 	zfs_snapentry_t *sep, *next;
 	int locked;
-	vnode_t *dvp;
+	gfs_dir_t *dp = vp->v_data;
+	vnode_t *dvp = dp->gfsd_file.gfs_parent;
 
-	if (vp->v_count > 0)
-		goto end;
-
-	VERIFY(gfs_dir_lookup(vp, "..", &dvp, cr, 0, NULL, NULL) == 0);
+	VN_HOLD(dvp);
+	VOP_UNLOCK(vp, 0);
 	sdp = dvp->v_data;
-	VOP_UNLOCK(dvp, 0);
 
 	if (!(locked = MUTEX_HELD(&sdp->sd_lock)))
 		mutex_enter(&sdp->sd_lock);
+
+	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
+
+	if (vp->v_count > 0) {
+		if (!locked)
+			mutex_exit(&sdp->sd_lock);
+		VN_RELE(dvp);
+		return(0);
+	}
 
 	ASSERT(!vn_ismntpt(vp));
 
@@ -1494,7 +1495,6 @@ zfsctl_snapshot_inactive(ap)
 		mutex_exit(&sdp->sd_lock);
 	VN_RELE(dvp);
 
-end:
 	/*
 	 * Dispose of the vnode for the snapshot mount point.
 	 * This is safe to do because once this entry has been removed
@@ -1588,7 +1588,7 @@ zfsctl_snapshot_lookup(ap)
 	error = zfsctl_root_lookup(zfsvfs->z_ctldir, "snapshot", vpp,
 	    NULL, 0, NULL, cr, NULL, NULL, NULL);
 	if (error == 0)
-		vn_lock(*vpp, LK_EXCLUSIVE | LK_RETRY);
+		error = vn_lock(*vpp, ap->a_cnp->cn_lkflags);
 	return (error);
 }
 

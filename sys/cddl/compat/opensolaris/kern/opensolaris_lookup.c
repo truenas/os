@@ -81,6 +81,8 @@ traverse(vnode_t **cvpp, int lktype)
 	 * progress on this vnode.
 	 */
 
+	vn_lock(cvp, lktype);
+
 	for (;;) {
 		/*
 		 * Reached the end of the mount chain?
@@ -89,13 +91,7 @@ traverse(vnode_t **cvpp, int lktype)
 		if (vfsp == NULL)
 			break;
 		error = vfs_busy(vfsp, 0);
-		/*
-		 * tvp is NULL for *cvpp vnode, which we can't unlock.
-		 */
-		if (tvp != NULL)
-			vput(cvp);
-		else
-			vrele(cvp);
+		VOP_UNLOCK(cvp, 0);
 		if (error)
 			return (error);
 
@@ -107,6 +103,9 @@ traverse(vnode_t **cvpp, int lktype)
 		vfs_unbusy(vfsp);
 		if (error != 0)
 			return (error);
+
+		VN_RELE(cvp);
+
 		cvp = tvp;
 	}
 
