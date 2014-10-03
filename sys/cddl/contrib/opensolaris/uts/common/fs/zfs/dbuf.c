@@ -2110,7 +2110,7 @@ dbuf_rele_and_unlock(dmu_buf_impl_t *db, void *tag)
 			if (!DBUF_IS_CACHEABLE(db)) {
 				if (db->db_blkptr != NULL &&
 				    !BP_IS_HOLE(db->db_blkptr) /* &&
-				    !BP_IS_EMBEDDED(db->db_blkptr */)) {
+				    !BP_IS_EMBEDDED(db->db_blkptr) */) {
 					spa_t *spa =
 					    dmu_objset_spa(db->db_objset);
 					blkptr_t bp = *db->db_blkptr;
