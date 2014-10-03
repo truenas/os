@@ -2218,6 +2218,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	spa->spa_async_zio_root = zio_root(spa, NULL, NULL,
 	    ZIO_FLAG_CANFAIL | ZIO_FLAG_SPECULATIVE | ZIO_FLAG_GODFATHER);
 
+	zfs_dbgmsg("%s: parsing configuration", __func__);
+
 	/*
 	 * Parse the configuration into a vdev tree.  We explicitly set the
 	 * value that will be returned by spa_version() since parsing the
@@ -2235,6 +2237,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	if (type != SPA_IMPORT_ASSEMBLE) {
 		ASSERT(spa_guid(spa) == pool_guid);
 	}
+
+	zfs_dbgmsg("%s: opening all vdevs", __func__);
 
 	/*
 	 * Try to open all vdevs, loading each label in the process.
@@ -2259,6 +2263,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	 * validation for now.
 	 */
 	if (type != SPA_IMPORT_ASSEMBLE) {
+		zfs_dbgmsg("%s: validating vdev labels against configuration", __func__);
 		spa_config_enter(spa, SCL_ALL, FTAG, RW_WRITER);
 		error = vdev_validate(rvd, mosconfig);
 		spa_config_exit(spa, SCL_ALL, FTAG);
@@ -2269,6 +2274,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		if (rvd->vdev_state <= VDEV_STATE_CANT_OPEN)
 			return (SET_ERROR(ENXIO));
 	}
+
+	zfs_dbgmsg("%s: looking for the best uberblock", __func__);
 
 	/*
 	 * Find the best uberblock.
@@ -2314,6 +2321,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	}
 
 	nvlist_free(label);
+
+	zfs_dbgmsg("%s: Checking supported features", __func__);
 
 	/*
 	 * Look through entries in the label nvlist's features_for_read. If
@@ -2378,6 +2387,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	spa->spa_claim_max_txg = spa->spa_first_txg;
 	spa->spa_prev_software_version = ub->ub_software_version;
 
+	zfs_dbgmsg("%s: Calling dsl_pool_init", __func__);
+
 	error = dsl_pool_init(spa, spa->spa_first_txg, &spa->spa_dsl_pool);
 	if (error)
 		return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
@@ -2385,6 +2396,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 
 	if (spa_dir_prop(spa, DMU_POOL_CONFIG, &spa->spa_config_object) != 0)
 		return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
+
+	zfs_dbgmsg("%s: Loading features", __func__);
 
 	if (spa_version(spa) >= SPA_VERSION_FEATURES) {
 		boolean_t missing_feat_read = B_FALSE;
@@ -2487,6 +2500,8 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 			return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
 	}
 
+	zfs_dbgmsg("%s: Starting dsl_pool_open", __func__);
+
 	spa->spa_is_initializing = B_TRUE;
 	error = dsl_pool_open(spa->spa_dsl_pool);
 	spa->spa_is_initializing = B_FALSE;
@@ -2562,6 +2577,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	if (error != 0 && error != ENOENT)
 		return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
 
+	zfs_dbgmsg("%s: Loading persistent error log", __func__);
 	/*
 	 * Load the persistent error log.  If we have an older pool, this will
 	 * not be present.
@@ -2575,6 +2591,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	if (error != 0 && error != ENOENT)
 		return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
 
+	zfs_dbgmsg("%s: Loading history object", __func__);
 	/*
 	 * Load the history object.  If we have an older pool, this
 	 * will not be present.
@@ -2589,6 +2606,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	 * devices.
 	 */
 
+	zfs_dbgmsg("%s: Loading hot spares", __func__);
 	/*
 	 * Load any hot spares for this pool.
 	 */
@@ -2617,6 +2635,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
 	if (error == 0 && type != SPA_IMPORT_ASSEMBLE) {
 		ASSERT(spa_version(spa) >= SPA_VERSION_L2CACHE);
+		zfs_dbgmsg("%s: Loading L2ARC", __func__);
 		if (load_nvlist(spa, spa->spa_l2cache.sav_object,
 		    &spa->spa_l2cache.sav_config) != 0)
 			return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
@@ -2648,6 +2667,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		spa->spa_autoreplace = (autoreplace != 0);
 	}
 
+	zfs_dbgmsg("%s: Loading all toplevel vdevs", __func__);
 	/*
 	 * If the 'autoreplace' property is set, then post a resource notifying
 	 * the ZFS DE that it should not issue any faults for unopenable
@@ -2673,6 +2693,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	 */
 	vdev_load(rvd);
 
+	zfs_dbgmsg("%s: Propogating the leaf DTLs", __func__);
 	/*
 	 * Propagate the leaf DTLs we just loaded all the way up the tree.
 	 */
@@ -2680,6 +2701,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	vdev_dtl_reassess(rvd, 0, 0, B_FALSE);
 	spa_config_exit(spa, SCL_ALL, FTAG);
 
+	zfs_dbgmsg("%s: Loading DDT", __func__);
 	/*
 	 * Load the DDTs (dedup tables).
 	 */
@@ -2687,6 +2709,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	if (error != 0)
 		return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA, EIO));
 
+	zfs_dbgmsg("%s: spa_update_dspace", __func__);
 	spa_update_dspace(spa);
 
 	/*
@@ -2697,6 +2720,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	 * over.
 	 */
 	if (type != SPA_IMPORT_ASSEMBLE) {
+		zfs_dbgmsg("%s: Validating MOS configuration", __func__);
 		nvlist_t *nvconfig;
 
 		if (load_nvlist(spa, spa->spa_config_object, &nvconfig) != 0)
@@ -2717,6 +2741,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		if (rvd->vdev_state <= VDEV_STATE_CANT_OPEN)
 			return (SET_ERROR(ENXIO));
 
+		zfs_dbgmsg("%s: spa_check_logs", __func__);
 		if (spa_check_logs(spa)) {
 			*ereport = FM_EREPORT_ZFS_LOG_REPLAY;
 			return (spa_vdev_err(rvd, VDEV_AUX_BAD_LOG, ENXIO));
@@ -2739,6 +2764,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 	 * to start pushing transactions.
 	 */
 	if (state != SPA_LOAD_TRYIMPORT) {
+		zfs_dbgmsg("%s: Start pushing transactions", __func__);
 		if (error = spa_load_verify(spa))
 			return (spa_vdev_err(rvd, VDEV_AUX_CORRUPT_DATA,
 			    error));
@@ -2750,6 +2776,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		int need_update = B_FALSE;
 
 		ASSERT(state != SPA_LOAD_TRYIMPORT);
+		zfs_dbgmsg("%s: Committing log blocks", __func__);
 
 		/*
 		 * Claim log blocks that haven't been committed yet.
@@ -2772,6 +2799,7 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		spa->spa_sync_on = B_TRUE;
 		txg_sync_start(spa->spa_dsl_pool);
 
+		zfs_dbgmsg("%s: Waiting claims to sync", __func__);
 		/*
 		 * Wait for all claims to sync.  We sync up to the highest
 		 * claimed log block birth time so that claimed log blocks
@@ -2818,18 +2846,21 @@ spa_load_impl(spa_t *spa, uint64_t pool_guid, nvlist_t *config,
 		 */
 		spa_history_log_version(spa, "open");
 
+		zfs_dbgmsg("%s: Deleting inconsistent datasets", __func__);
 		/*
 		 * Delete any inconsistent datasets.
 		 */
 		(void) dmu_objset_find(spa_name(spa),
 		    dsl_destroy_inconsistent, NULL, DS_FIND_CHILDREN);
 
+		zfs_dbgmsg("%s: Cleaning up", __func__);
 		/*
 		 * Clean up any stale temporary dataset userrefs.
 		 */
 		dsl_pool_clean_tmp_userrefs(spa->spa_dsl_pool);
 	}
 
+	zfs_dbgmsg("%s: Finished!", __func__);
 	return (0);
 }
 
