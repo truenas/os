@@ -1042,8 +1042,8 @@ ctl_be_block_cw_dispatch_ws(struct ctl_be_block_lun *be_lun,
 	softc = be_lun->softc;
 	lbalen = ARGS(beio->io);
 
-	if (lbalen->flags & ~(SWS_LBDATA | SWS_UNMAP) ||
-	    (lbalen->flags & SWS_UNMAP && be_lun->unmap == NULL)) {
+	if (lbalen->flags & ~(SWS_LBDATA | SWS_UNMAP | SWS_ANCHOR) ||
+	    (lbalen->flags & (SWS_UNMAP | SWS_ANCHOR) && be_lun->unmap == NULL)) {
 		ctl_free_beio(beio);
 		ctl_set_invalid_field(&io->scsiio,
 				      /*sks_valid*/ 1,
@@ -1079,7 +1079,7 @@ ctl_be_block_cw_dispatch_ws(struct ctl_be_block_lun *be_lun,
 		break;
 	}
 
-	if (lbalen->flags & SWS_UNMAP) {
+	if (lbalen->flags & (SWS_UNMAP | SWS_ANCHOR)) {
 		beio->io_offset = lbalen->lba * be_lun->blocksize;
 		beio->io_len = (uint64_t)lbalen->len * be_lun->blocksize;
 		beio->bio_cmd = BIO_DELETE;
@@ -1149,7 +1149,7 @@ ctl_be_block_cw_dispatch_unmap(struct ctl_be_block_lun *be_lun,
 	softc = be_lun->softc;
 	ptrlen = (struct ctl_ptr_len_flags *)&io->io_hdr.ctl_private[CTL_PRIV_LBA_LEN];
 
-	if (ptrlen->flags != 0 || be_lun->unmap == NULL) {
+	if ((ptrlen->flags & ~SU_ANCHOR) != 0 || be_lun->unmap == NULL) {
 		ctl_free_beio(beio);
 		ctl_set_invalid_field(&io->scsiio,
 				      /*sks_valid*/ 0,
@@ -2310,7 +2310,9 @@ ctl_be_block_modify_file(struct ctl_be_block_lun *be_lun,
 	if (params->lun_size_bytes != 0) {
 		be_lun->size_bytes = params->lun_size_bytes;
 	} else  {
+		vn_lock(be_lun->vn, LK_SHARED | LK_RETRY);
 		error = VOP_GETATTR(be_lun->vn, &vattr, curthread->td_ucred);
+		VOP_UNLOCK(be_lun->vn, 0);
 		if (error != 0) {
 			snprintf(req->error_str, sizeof(req->error_str),
 				 "error calling VOP_GETATTR() for file %s",
@@ -2328,24 +2330,22 @@ static int
 ctl_be_block_modify_dev(struct ctl_be_block_lun *be_lun,
 			struct ctl_lun_req *req)
 {
-	struct cdev *dev;
-	struct cdevsw *devsw;
+	struct ctl_be_block_devdata *dev_data;
 	int error;
 	struct ctl_lun_modify_params *params;
 	uint64_t size_bytes;
 
 	params = &req->reqdata.modify;
 
-	dev = be_lun->vn->v_rdev;
-	devsw = dev->si_devsw;
-	if (!devsw->d_ioctl) {
+	dev_data = &be_lun->backend.dev;
+	if (!dev_data->csw->d_ioctl) {
 		snprintf(req->error_str, sizeof(req->error_str),
 			 "%s: no d_ioctl for device %s!", __func__,
 			 be_lun->dev_path);
 		return (ENODEV);
 	}
 
-	error = devsw->d_ioctl(dev, DIOCGMEDIASIZE,
+	error = dev_data->csw->d_ioctl(dev_data->cdev, DIOCGMEDIASIZE,
 			       (caddr_t)&size_bytes, FREAD,
 			       curthread);
 	if (error) {
@@ -2378,6 +2378,7 @@ ctl_be_block_modify(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 {
 	struct ctl_lun_modify_params *params;
 	struct ctl_be_block_lun *be_lun;
+	uint64_t oldsize;
 	int error;
 
 	params = &req->reqdata.modify;
@@ -2408,28 +2409,27 @@ ctl_be_block_modify(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 		}
 	}
 
-	vn_lock(be_lun->vn, LK_SHARED | LK_RETRY);
-
+	oldsize = be_lun->size_bytes;
 	if (be_lun->vn->v_type == VREG)
 		error = ctl_be_block_modify_file(be_lun, req);
 	else
 		error = ctl_be_block_modify_dev(be_lun, req);
-
-	VOP_UNLOCK(be_lun->vn, 0);
-
 	if (error != 0)
 		goto bailout_error;
 
-	be_lun->size_blocks = be_lun->size_bytes >> be_lun->blocksize_shift;
+	if (be_lun->size_bytes != oldsize) {
+		be_lun->size_blocks = be_lun->size_bytes >>
+		    be_lun->blocksize_shift;
 
-	/*
-	 * The maximum LBA is the size - 1.
-	 *
-	 * XXX: Note that this field is being updated without locking,
-	 * 	which might cause problems on 32-bit architectures.
-	 */
-	be_lun->ctl_be_lun.maxlba = be_lun->size_blocks - 1;
-	ctl_lun_capacity_changed(&be_lun->ctl_be_lun);
+		/*
+		 * The maximum LBA is the size - 1.
+		 *
+		 * XXX: Note that this field is being updated without locking,
+		 * 	which might cause problems on 32-bit architectures.
+		 */
+		be_lun->ctl_be_lun.maxlba = be_lun->size_blocks - 1;
+		ctl_lun_capacity_changed(&be_lun->ctl_be_lun);
+	}
 
 	/* Tell the user the exact size we ended up using */
 	params->lun_size_bytes = be_lun->size_bytes;

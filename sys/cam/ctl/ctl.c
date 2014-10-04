@@ -322,10 +322,10 @@ SYSCTL_INT(_kern_cam_ctl, OID_AUTO, verbose, CTLFLAG_RWTUN,
 
 /*
  * Supported pages (0x00), Serial number (0x80), Device ID (0x83),
- * SCSI Ports (0x88), Third-party Copy (0x8F), Block limits (0xB0) and
- * Logical Block Provisioning (0xB2)
+ * SCSI Ports (0x88), Third-party Copy (0x8F), Block limits (0xB0),
+ * Block Device Characteristics (0xB1) and Logical Block Provisioning (0xB2)
  */
-#define SCSI_EVPD_NUM_SUPPORTED_PAGES	7
+#define SCSI_EVPD_NUM_SUPPORTED_PAGES	8
 
 static void ctl_isc_event_handler(ctl_ha_channel chanel, ctl_ha_event event,
 				  int param);
@@ -385,6 +385,7 @@ static int ctl_inquiry_evpd_scsi_ports(struct ctl_scsiio *ctsio,
 					 int alloc_len);
 static int ctl_inquiry_evpd_block_limits(struct ctl_scsiio *ctsio,
 					 int alloc_len);
+static int ctl_inquiry_evpd_bdc(struct ctl_scsiio *ctsio, int alloc_len);
 static int ctl_inquiry_evpd_lbp(struct ctl_scsiio *ctsio, int alloc_len);
 static int ctl_inquiry_evpd(struct ctl_scsiio *ctsio);
 static int ctl_inquiry_std(struct ctl_scsiio *ctsio);
@@ -1025,6 +1026,7 @@ ctl_init(void)
 	STAILQ_INIT(&softc->port_list);
 	STAILQ_INIT(&softc->be_list);
 	STAILQ_INIT(&softc->io_pools);
+	ctl_tpc_init(softc);
 
 	if (ctl_pool_create(softc, CTL_POOL_INTERNAL, CTL_POOL_ENTRIES_INTERNAL,
 			    &internal_pool)!= 0){
@@ -1172,6 +1174,7 @@ ctl_shutdown(void)
 	mtx_destroy(&softc->queue_lock);
 #endif
 
+	ctl_tpc_shutdown(softc);
 	mtx_destroy(&softc->pool_lock);
 	mtx_destroy(&softc->ctl_lock);
 
@@ -4598,7 +4601,7 @@ ctl_alloc_lun(struct ctl_softc *ctl_softc, struct ctl_lun *ctl_lun,
 	TAILQ_INIT(&lun->ooa_queue);
 	TAILQ_INIT(&lun->blocked_queue);
 	STAILQ_INIT(&lun->error_list);
-	ctl_tpc_init(lun);
+	ctl_tpc_lun_init(lun);
 
 	/*
 	 * Initialize the mode page index.
@@ -4750,7 +4753,7 @@ ctl_free_lun(struct ctl_lun *lun)
 	atomic_subtract_int(&lun->be_lun->be->num_luns, 1);
 	lun->be_lun->lun_shutdown(lun->be_lun->be_lun);
 
-	ctl_tpc_shutdown(lun);
+	ctl_tpc_lun_shutdown(lun);
 	mtx_destroy(&lun->lun_lock);
 	free(lun->lun_devid, M_CTL);
 	if (lun->flags & CTL_LUN_MALLOCED)
@@ -6036,7 +6039,7 @@ ctl_unmap(struct ctl_scsiio *ctsio)
 	struct scsi_unmap *cdb;
 	struct ctl_ptr_len_flags *ptrlen;
 	struct scsi_unmap_header *hdr;
-	struct scsi_unmap_desc *buf, *end;
+	struct scsi_unmap_desc *buf, *end, *endnz, *range;
 	uint64_t lba;
 	uint32_t num_blocks;
 	int len, retval;
@@ -6089,24 +6092,38 @@ ctl_unmap(struct ctl_scsiio *ctsio)
 	buf = (struct scsi_unmap_desc *)(hdr + 1);
 	end = buf + len / sizeof(*buf);
 
-	ptrlen = (struct ctl_ptr_len_flags *)&ctsio->io_hdr.ctl_private[CTL_PRIV_LBA_LEN];
-	ptrlen->ptr = (void *)buf;
-	ptrlen->len = len;
-	ptrlen->flags = byte2;
-
-	for (; buf < end; buf++) {
-		lba = scsi_8btou64(buf->lba);
-		num_blocks = scsi_4btoul(buf->length);
+	endnz = buf;
+	for (range = buf; range < end; range++) {
+		lba = scsi_8btou64(range->lba);
+		num_blocks = scsi_4btoul(range->length);
 		if (((lba + num_blocks) > (lun->be_lun->maxlba + 1))
 		 || ((lba + num_blocks) < lba)) {
 			ctl_set_lba_out_of_range(ctsio);
 			ctl_done((union ctl_io *)ctsio);
 			return (CTL_RETVAL_COMPLETE);
 		}
+		if (num_blocks != 0)
+			endnz = range + 1;
 	}
 
-	retval = lun->backend->config_write((union ctl_io *)ctsio);
+	/*
+	 * Block backend can not handle zero last range.
+	 * Filter it out and return if there is nothing left.
+	 */
+	len = (uint8_t *)endnz - (uint8_t *)buf;
+	if (len == 0) {
+		ctl_set_success(ctsio);
+		ctl_done((union ctl_io *)ctsio);
+		return (CTL_RETVAL_COMPLETE);
+	}
 
+	ptrlen = (struct ctl_ptr_len_flags *)
+	    &ctsio->io_hdr.ctl_private[CTL_PRIV_LBA_LEN];
+	ptrlen->ptr = (void *)buf;
+	ptrlen->len = len;
+	ptrlen->flags = byte2;
+
+	retval = lun->backend->config_write((union ctl_io *)ctsio);
 	return (retval);
 }
 
@@ -7252,7 +7269,7 @@ ctl_read_capacity_16(struct ctl_scsiio *ctsio)
 	data->prot_lbppbe = lun->be_lun->pblockexp & SRC16_LBPPBE;
 	scsi_ulto2b(lun->be_lun->pblockoff & SRC16_LALBA_A, data->lalba_lbp);
 	if (lun->be_lun->flags & CTL_LUN_FLAG_UNMAP)
-		data->lalba_lbp[0] |= SRC16_LBPME;
+		data->lalba_lbp[0] |= SRC16_LBPME | SRC16_LBPRZ;
 
 	ctsio->scsi_status = SCSI_STATUS_OK;
 
@@ -9667,13 +9684,10 @@ ctl_request_sense(struct ctl_scsiio *ctsio)
 	if (lun->pending_ua[initidx] != CTL_UA_NONE) {
 		ctl_ua_type ua_type;
 
-		ua_type = ctl_build_ua(lun->pending_ua[initidx],
+		ua_type = ctl_build_ua(&lun->pending_ua[initidx],
 				       sense_ptr, sense_format);
-		if (ua_type != CTL_UA_NONE) {
+		if (ua_type != CTL_UA_NONE)
 			have_error = 1;
-			/* We're reporting this UA, so clear it */
-			lun->pending_ua[initidx] &= ~ua_type;
-		}
 	}
 	mtx_unlock(&lun->lun_lock);
 
@@ -9809,8 +9823,10 @@ ctl_inquiry_evpd_supported(struct ctl_scsiio *ctsio, int alloc_len)
 	pages->page_list[4] = SVPD_SCSI_TPC;
 	/* Block limits */
 	pages->page_list[5] = SVPD_BLOCK_LIMITS;
+	/* Block Device Characteristics */
+	pages->page_list[6] = SVPD_BDC;
 	/* Logical Block Provisioning */
-	pages->page_list[6] = SVPD_LBP;
+	pages->page_list[7] = SVPD_LBP;
 
 	ctsio->scsi_status = SCSI_STATUS_OK;
 
@@ -10166,9 +10182,63 @@ ctl_inquiry_evpd_block_limits(struct ctl_scsiio *ctsio, int alloc_len)
 		if (lun->be_lun->flags & CTL_LUN_FLAG_UNMAP) {
 			scsi_ulto4b(0xffffffff, bl_ptr->max_unmap_lba_cnt);
 			scsi_ulto4b(0xffffffff, bl_ptr->max_unmap_blk_cnt);
+			if (lun->be_lun->pblockexp != 0) {
+				scsi_ulto4b((1 << lun->be_lun->pblockexp),
+				    bl_ptr->opt_unmap_grain);
+				scsi_ulto4b(0x80000000 | lun->be_lun->pblockoff,
+				    bl_ptr->unmap_grain_align);
+			}
 		}
 	}
 	scsi_u64to8b(UINT64_MAX, bl_ptr->max_write_same_length);
+
+	ctsio->scsi_status = SCSI_STATUS_OK;
+	ctsio->io_hdr.flags |= CTL_FLAG_ALLOCATED;
+	ctsio->be_move_done = ctl_config_move_done;
+	ctl_datamove((union ctl_io *)ctsio);
+
+	return (CTL_RETVAL_COMPLETE);
+}
+
+static int
+ctl_inquiry_evpd_bdc(struct ctl_scsiio *ctsio, int alloc_len)
+{
+	struct scsi_vpd_block_device_characteristics *bdc_ptr;
+	struct ctl_lun *lun;
+
+	lun = (struct ctl_lun *)ctsio->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
+
+	ctsio->kern_data_ptr = malloc(sizeof(*bdc_ptr), M_CTL, M_WAITOK | M_ZERO);
+	bdc_ptr = (struct scsi_vpd_block_device_characteristics *)ctsio->kern_data_ptr;
+	ctsio->kern_sg_entries = 0;
+
+	if (sizeof(*bdc_ptr) < alloc_len) {
+		ctsio->residual = alloc_len - sizeof(*bdc_ptr);
+		ctsio->kern_data_len = sizeof(*bdc_ptr);
+		ctsio->kern_total_len = sizeof(*bdc_ptr);
+	} else {
+		ctsio->residual = 0;
+		ctsio->kern_data_len = alloc_len;
+		ctsio->kern_total_len = alloc_len;
+	}
+	ctsio->kern_data_resid = 0;
+	ctsio->kern_rel_offset = 0;
+	ctsio->kern_sg_entries = 0;
+
+	/*
+	 * The control device is always connected.  The disk device, on the
+	 * other hand, may not be online all the time.  Need to change this
+	 * to figure out whether the disk device is actually online or not.
+	 */
+	if (lun != NULL)
+		bdc_ptr->device = (SID_QUAL_LU_CONNECTED << 5) |
+				  lun->be_lun->lun_type;
+	else
+		bdc_ptr->device = (SID_QUAL_LU_OFFLINE << 5) | T_DIRECT;
+	bdc_ptr->page_code = SVPD_BDC;
+	scsi_ulto2b(sizeof(*bdc_ptr) - 4, bdc_ptr->page_length);
+	scsi_ulto2b(SVPD_NON_ROTATING, bdc_ptr->medium_rotation_rate);
+	bdc_ptr->flags = SVPD_FUAB | SVPD_VBULS;
 
 	ctsio->scsi_status = SCSI_STATUS_OK;
 	ctsio->io_hdr.flags |= CTL_FLAG_ALLOCATED;
@@ -10215,8 +10285,12 @@ ctl_inquiry_evpd_lbp(struct ctl_scsiio *ctsio, int alloc_len)
 		lbp_ptr->device = (SID_QUAL_LU_OFFLINE << 5) | T_DIRECT;
 
 	lbp_ptr->page_code = SVPD_LBP;
-	if (lun != NULL && lun->be_lun->flags & CTL_LUN_FLAG_UNMAP)
-		lbp_ptr->flags = SVPD_LBP_UNMAP | SVPD_LBP_WS16 | SVPD_LBP_WS10;
+	scsi_ulto2b(sizeof(*lbp_ptr) - 4, lbp_ptr->page_length);
+	if (lun != NULL && lun->be_lun->flags & CTL_LUN_FLAG_UNMAP) {
+		lbp_ptr->flags = SVPD_LBP_UNMAP | SVPD_LBP_WS16 |
+		    SVPD_LBP_WS10 | SVPD_LBP_RZ | SVPD_LBP_ANC_SUP;
+		lbp_ptr->prov_type = SVPD_LBP_RESOURCE;
+	}
 
 	ctsio->scsi_status = SCSI_STATUS_OK;
 	ctsio->io_hdr.flags |= CTL_FLAG_ALLOCATED;
@@ -10258,6 +10332,9 @@ ctl_inquiry_evpd(struct ctl_scsiio *ctsio)
 		break;
 	case SVPD_BLOCK_LIMITS:
 		retval = ctl_inquiry_evpd_block_limits(ctsio, alloc_len);
+		break;
+	case SVPD_BDC:
+		retval = ctl_inquiry_evpd_bdc(ctsio, alloc_len);
 		break;
 	case SVPD_LBP:
 		retval = ctl_inquiry_evpd_lbp(ctsio, alloc_len);
@@ -10398,7 +10475,9 @@ ctl_inquiry_std(struct ctl_scsiio *ctsio)
 	 */
 	inq_ptr->response_format = SID_HiSup | 2;
 
-	inq_ptr->additional_length = sizeof(*inq_ptr) - 4;
+	inq_ptr->additional_length =
+	    offsetof(struct scsi_inquiry_data, vendor_specific1) -
+	    (offsetof(struct scsi_inquiry_data, additional_length) + 1);
 	CTL_DEBUG_PRINT(("additional_length = %d\n",
 			 inq_ptr->additional_length));
 
@@ -11522,8 +11601,7 @@ ctl_scsiio_precheck(struct ctl_softc *ctl_softc, struct ctl_scsiio *ctsio)
 	if ((entry->flags & CTL_CMD_FLAG_NO_SENSE) == 0) {
 		ctl_ua_type ua_type;
 
-		ua_type = lun->pending_ua[initidx];
-		if (ua_type != CTL_UA_NONE) {
+		if (lun->pending_ua[initidx] != CTL_UA_NONE) {
 			scsi_sense_data_type sense_format;
 
 			if (lun != NULL)
@@ -11533,14 +11611,13 @@ ctl_scsiio_precheck(struct ctl_softc *ctl_softc, struct ctl_scsiio *ctsio)
 			else
 				sense_format = SSD_TYPE_FIXED;
 
-			ua_type = ctl_build_ua(ua_type, &ctsio->sense_data,
-					       sense_format);
+			ua_type = ctl_build_ua(&lun->pending_ua[initidx],
+			    &ctsio->sense_data, sense_format);
 			if (ua_type != CTL_UA_NONE) {
 				ctsio->scsi_status = SCSI_STATUS_CHECK_COND;
 				ctsio->io_hdr.status = CTL_SCSI_ERROR |
 						       CTL_AUTOSENSE;
 				ctsio->sense_len = SSD_FULL_SIZE;
-				lun->pending_ua[initidx] &= ~ua_type;
 				mtx_unlock(&lun->lun_lock);
 				ctl_done((union ctl_io *)ctsio);
 				return (retval);

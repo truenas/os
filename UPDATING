@@ -16,6 +16,34 @@ from older versions of FreeBSD, try WITHOUT_CLANG to bootstrap to the tip of
 stable/10, and then rebuild without this option. The bootstrap process from
 older version of current is a bit fragile.
 
+20140904:
+	The ofwfb driver, used to provide a graphics console on PowerPC when
+	using vt(4), no longer allows mmap() of all of physical memory. This
+	will prevent Xorg on PowerPC with some ATI graphics cards from
+	initializing properly unless x11-servers/xorg-server is updated to
+	1.12.4_8 or newer.
+
+20140831:
+	The libatf-c and libatf-c++ major versions were downgraded to 0 and
+	1 respectively to match the upstream numbers.  They were out of
+	sync because, when they were originally added to FreeBSD, the
+	upstream versions were not respected.  These libraries are private
+	and not yet built by default, so renumbering them should be a
+	non-issue.  However, unclean source trees will yield broken test
+	programs once the operator executes "make delete-old-libs" after a
+	"make installworld".
+
+	Additionally, the atf-sh binary was made private by moving it into
+	/usr/libexec/.  Already-built shell test programs will keep the
+	path to the old binary so they will break after "make delete-old"
+	is run.
+
+	If you are using WITH_TESTS=yes (not the default), wipe the object
+	tree and rebuild from scratch to prevent spurious test failures.
+	This is only needed once: the misnumbered libraries and misplaced
+	binaries have been added to OptionalObsoleteFiles.inc so they will
+	be removed during a clean upgrade.
+
 20140814:
 	The ixgbe tunables now match their sysctl counterparts, for example:
 	hw.ixgbe.enable_aim => hw.ix.enable_aim
@@ -25,6 +53,14 @@ older version of current is a bit fragile.
 	The NFSv4.1 server committed by r269398 changes the internal
 	function call interfaces used between the NFS and krpc modules.
 	As such, __FreeBSD_version was bumped.
+
+20140729:
+	The default unbound configuration has been modified to address
+	issues with reverse lookups on networks that use private
+	address ranges.  If you use the local_unbound service, run
+	"service local_unbound setup" as root to regenerate your
+	configuration, then "service local_unbound reload" to load the
+	new configuration.
 
 20140717:
 	It is no longer necessary to include the dwarf version in your DEBUG

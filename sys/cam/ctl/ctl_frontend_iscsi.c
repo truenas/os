@@ -67,9 +67,9 @@ __FBSDID("$FreeBSD$");
 #include <cam/ctl/ctl_ioctl.h>
 #include <cam/ctl/ctl_private.h>
 
-#include "../../dev/iscsi/icl.h"
-#include "../../dev/iscsi/iscsi_proto.h"
-#include "ctl_frontend_iscsi.h"
+#include <dev/iscsi/icl.h>
+#include <dev/iscsi/iscsi_proto.h>
+#include <cam/ctl/ctl_frontend_iscsi.h>
 
 #ifdef ICL_KERNEL_PROXY
 #include <sys/socketvar.h>
@@ -1005,6 +1005,19 @@ cfiscsi_callout(void *context)
 		return;
 	}
 #endif
+
+	if (ping_timeout <= 0) {
+		/*
+		 * Pings are disabled.  Don't send NOP-In in this case;
+		 * user might have disabled pings to work around problems
+		 * with certain initiators that can't properly handle
+		 * NOP-In, such as iPXE.  Reset the timeout, to avoid
+		 * triggering reconnection, should the user decide to
+		 * reenable them.
+		 */
+		cs->cs_timeout = 0;
+		return;
+	}
 
 	if (cs->cs_timeout >= ping_timeout) {
 		CFISCSI_SESSION_WARN(cs, "no ping reply (NOP-Out) after %d seconds; "
@@ -2496,10 +2509,10 @@ cfiscsi_datamove_in(union ctl_io *io)
 		sg_addr += len;
 		sg_len -= len;
 
-		KASSERT(buffer_offset + request->ip_data_len <= expected_len,
+		KASSERT(buffer_offset + response->ip_data_len <= expected_len,
 		    ("buffer_offset %zd + ip_data_len %zd > expected_len %zd",
-		    buffer_offset, request->ip_data_len, expected_len));
-		if (buffer_offset + request->ip_data_len == expected_len) {
+		    buffer_offset, response->ip_data_len, expected_len));
+		if (buffer_offset + response->ip_data_len == expected_len) {
 			/*
 			 * Already have the amount of data the initiator wanted.
 			 */

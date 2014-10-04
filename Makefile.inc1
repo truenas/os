@@ -264,6 +264,21 @@ XMAKE=		TOOLS_PREFIX=${WORLDTMP} ${BMAKE} \
 		TARGET=${TARGET} TARGET_ARCH=${TARGET_ARCH} \
 		-DWITHOUT_GDB -DNO_TESTS
 
+# kernel-tools stage
+KTMAKEENV=	INSTALL="sh ${.CURDIR}/tools/install.sh" \
+		PATH=${BPATH}:${PATH} \
+		WORLDTMP=${WORLDTMP} \
+		VERSION="${VERSION}" \
+		COMPILER_TYPE=${COMPILER_TYPE}
+KTMAKE=		TOOLS_PREFIX=${WORLDTMP} MAKEOBJDIRPREFIX=${WORLDTMP} \
+		${KTMAKEENV} ${MAKE} ${WORLD_FLAGS} -f Makefile.inc1 \
+		DESTDIR= \
+		BOOTSTRAPPING=${OSRELDATE} \
+		SSP_CFLAGS= \
+		-DWITHOUT_HTML -DWITHOUT_INFO -DNO_LINT -DWITHOUT_MAN \
+		-DNO_PIC -DNO_PROFILE -DNO_SHARED \
+		-DNO_CPU_CFLAGS -DNO_WARNS -DNO_CTF -DEARLY_BUILD
+
 # world stage
 WMAKEENV=	${CROSSENV} \
 		_SHLIBDIRPREFIX=${WORLDTMP} \
@@ -543,6 +558,7 @@ _cross-tools:
 	@echo ">>> stage 3: cross tools"
 	@echo "--------------------------------------------------------------"
 	${_+_}cd ${.CURDIR}; ${XMAKE} cross-tools
+	${_+_}cd ${.CURDIR}; ${XMAKE} kernel-tools
 _includes:
 	@echo
 	@echo "--------------------------------------------------------------"
@@ -779,6 +795,9 @@ EXTRA_DISTRIBUTIONS+=	games
 .if defined(LIB32TMP) && ${MK_LIB32} != "no"
 EXTRA_DISTRIBUTIONS+=	lib32
 .endif
+.if ${MK_TESTS} != "no"
+EXTRA_DISTRIBUTIONS+=	tests
+.endif
 
 MTREE_MAGIC?=	mtree 2.0
 
@@ -819,6 +838,10 @@ distributeworld installworld: _installcheck_world
 .if ${MK_DEBUG_FILES} != "no"
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.debug.dist \
 	    -p ${DESTDIR}/${DISTDIR}/${dist}/usr/lib >/dev/null
+.endif
+.if ${MK_TESTS} != "no" && ${dist} == "tests"
+	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.tests.dist \
+	    -p ${DESTDIR}/${DISTDIR}/${dist}/usr >/dev/null
 .endif
 .if defined(NO_ROOT)
 	${IMAKEENV} nmtree -C -f ${.CURDIR}/etc/mtree/BSD.root.dist | \
@@ -1025,21 +1048,7 @@ buildkernel:
 	@echo "--------------------------------------------------------------"
 	@echo ">>> stage 2.3: build tools"
 	@echo "--------------------------------------------------------------"
-	cd ${KRNLOBJDIR}/${_kernel}; \
-	    PATH=${BPATH}:${PATH} \
-	    MAKESRCPATH=${KERNSRCDIR}/dev/aic7xxx/aicasm \
-	    ${MAKE} SSP_CFLAGS= -DNO_CPU_CFLAGS -DNO_WARNS -DNO_CTF \
-	    -DEARLY_BUILD -f ${KERNSRCDIR}/dev/aic7xxx/aicasm/Makefile
-# XXX - Gratuitously builds aicasm in the ``makeoptions NO_MODULES'' case.
-.if !defined(MODULES_WITH_WORLD) && !defined(NO_MODULES) && exists(${KERNSRCDIR}/modules)
-.for target in obj depend all
-	cd ${KERNSRCDIR}/modules/aic7xxx/aicasm; \
-	    PATH=${BPATH}:${PATH} \
-	    MAKEOBJDIRPREFIX=${KRNLOBJDIR}/${_kernel}/modules \
-	    ${MAKE} SSP_CFLAGS= -DNO_CPU_CFLAGS -DNO_WARNS -DNO_CTF \
-	    -DEARLY_BUILD ${target}
-.endfor
-.endif
+	${_+_}cd ${.CURDIR}; ${KTMAKE} kernel-tools
 .if !defined(NO_KERNELDEPEND)
 	@echo
 	@echo "--------------------------------------------------------------"
@@ -1206,6 +1215,10 @@ _gperf=		gnu/usr.bin/gperf
 _groff=		gnu/usr.bin/groff
 .endif
 
+.if ${MK_VT} != "no"
+_vtfontcvt=	usr.bin/vtfontcvt
+.endif
+
 .if ${BOOTSTRAPPING} < 800022
 _ar=		usr.bin/ar
 .endif
@@ -1248,7 +1261,7 @@ _lex=		usr.bin/lex
 _awk=		usr.bin/awk
 .endif
 
-.if ${MK_BSNMP} != "no" && !exists(/usr/sbin/gensnmptree)
+.if ${MK_BSNMP} != "no"
 _gensnmptree=	usr.sbin/bsnmpd/gensnmptree
 .endif
 
@@ -1314,7 +1327,8 @@ bootstrap-tools: .MAKE
     ${_gensnmptree} \
     usr.sbin/config \
     ${_crunch} \
-    ${_nmtree}
+    ${_nmtree} \
+    ${_vtfontcvt}
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,depend,all,install)"; \
 		cd ${.CURDIR}/${_tool} && \
 		${MAKE} DIRPRFX=${_tool}/ obj && \
@@ -1326,10 +1340,6 @@ bootstrap-tools: .MAKE
 #
 # build-tools: Build special purpose build tools
 #
-.if defined(MODULES_WITH_WORLD) && exists(${KERNSRCDIR}/modules)
-_aicasm= sys/modules/aic7xxx/aicasm
-.endif
-
 .if !defined(NO_SHARE)
 _share=	share/syscons/scrnmaps
 .endif
@@ -1351,7 +1361,6 @@ build-tools: .MAKE
     lib/ncurses/ncurses \
     lib/ncurses/ncursesw \
     ${_share} \
-    ${_aicasm} \
     usr.bin/awk \
     lib/libmagic \
     usr.bin/mkesdb_static \
@@ -1370,6 +1379,14 @@ build-tools: .MAKE
 		${MAKE} DIRPRFX=${_tool}/ depend && \
 		${MAKE} DIRPRFX=${_tool}/ all
 .endfor
+
+#
+# kernel-tools: Build kernel-building tools
+#
+kernel-tools: .MAKE
+	mkdir -p ${MAKEOBJDIRPREFIX}/usr
+	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.usr.dist \
+	    -p ${MAKEOBJDIRPREFIX}/usr >/dev/null
 
 #
 # cross-tools: Build cross-building tools

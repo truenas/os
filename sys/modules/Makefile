@@ -44,6 +44,7 @@ SUBDIR=	\
 	ata \
 	ath \
 	ath_pci \
+	autofs \
 	${_auxio} \
 	${_bce} \
 	bfe \
@@ -175,6 +176,8 @@ SUBDIR=	\
 	${_iwnfw} \
 	${_ixgb} \
 	${_ixgbe} \
+	${_ixl} \
+	${_ixlv} \
 	jme \
 	joy \
 	kbdmux \
@@ -240,6 +243,7 @@ SUBDIR=	\
 	${_ncp} \
 	${_ncv} \
 	${_ndis} \
+	netfpga10g \
 	${_netgraph} \
 	${_nfe} \
 	nfs_common \
@@ -720,6 +724,8 @@ _iwnfw=		iwnfw
 .endif
 _ixgb=		ixgb
 _ixgbe=		ixgbe
+_ixl=		ixl
+_ixlv=		ixlv
 _lindev=	lindev
 _linprocfs=	linprocfs
 _linsysfs=	linsysfs

@@ -354,9 +354,9 @@ static struct da_quirk_entry da_quirk_table[] =
 	},
 	{
 		/*
-		 * The STEC 842 sometimes hang on UNMAP.
+		 * The STEC SSDs sometimes hang on UNMAP.
 		 */
-		{T_DIRECT, SIP_MEDIA_FIXED, "STEC", "S842E800M2", "*"},
+		{T_DIRECT, SIP_MEDIA_FIXED, "STEC", "*", "*"},
 		/*quirks*/ DA_Q_NO_UNMAP
 	},
 	/* USB mass storage devices supported by umass(4) */
@@ -544,6 +544,13 @@ static struct da_quirk_entry da_quirk_table[] =
 		 */
 		{T_DIRECT, SIP_MEDIA_REMOVABLE, "TOSHIBA", "TransMemory",
 		"*"}, /*quirks*/ DA_Q_NO_SYNC_CACHE
+	},
+	{
+		/*
+		 * PNY USB 3.0 Flash Drives
+		*/
+		{T_DIRECT, SIP_MEDIA_REMOVABLE, "PNY", "USB 3.0 FD*",
+		"*"}, /*quirks*/ DA_Q_NO_SYNC_CACHE | DA_Q_NO_RC16
 	},
 	{
 		/*
@@ -967,10 +974,10 @@ static struct da_quirk_entry da_quirk_table[] =
 	},
 	{
 		/*
-		 * Corsair Force GT SSDs
+		 * Corsair Force GT & GS SSDs
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "Corsair Force GT*", "*" },
+		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "Corsair Force G*", "*" },
 		/*quirks*/DA_Q_4K
 	},
 	{
@@ -1107,6 +1114,14 @@ static struct da_quirk_entry da_quirk_table[] =
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
 		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "SAMSUNG SSD 830 Series*", "*" },
+		/*quirks*/DA_Q_4K
+	},
+	{
+		/*
+		 * Samsung 840 SSDs
+		 * 4k optimised & trim only works in 4k requests + 4k aligned
+		 */
+		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "Samsung SSD 840*", "*" },
 		/*quirks*/DA_Q_4K
 	},
 	{
@@ -3382,9 +3397,18 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 			 * Disable queue sorting for non-rotational media
 			 * by default.
 			 */
-			if (scsi_2btoul(bdc->medium_rotation_rate) ==
-			    SVPD_BDC_RATE_NONE_ROTATING)
+			u_int old_rate = softc->disk->d_rotation_rate;
+
+			softc->disk->d_rotation_rate =
+				scsi_2btoul(bdc->medium_rotation_rate);
+			if (softc->disk->d_rotation_rate ==
+			    SVPD_BDC_RATE_NON_ROTATING) {
 				softc->sort_io_queue = 0;
+			}
+			if (softc->disk->d_rotation_rate != old_rate) {
+				disk_attr_changed(softc->disk,
+				    "GEOM::rotation_rate", M_NOWAIT);
+			}
 		} else {
 			int error;
 			error = daerror(done_ccb, CAM_RETRY_SELTO,
@@ -3419,6 +3443,8 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 		ptr = (uint16_t *)ata_params;
 
 		if ((csio->ccb_h.status & CAM_STATUS_MASK) == CAM_REQ_CMP) {
+			uint16_t old_rate;
+
 			for (i = 0; i < sizeof(*ata_params) / 2; i++)
 				ptr[i] = le16toh(ptr[i]);
 			if (ata_params->support_dsm & ATA_SUPPORT_DSM_TRIM &&
@@ -3434,8 +3460,18 @@ dadone(struct cam_periph *periph, union ccb *done_ccb)
 			 * Disable queue sorting for non-rotational media
 			 * by default.
 			 */
-			if (ata_params->media_rotation_rate == 1)
+			old_rate = softc->disk->d_rotation_rate;
+			softc->disk->d_rotation_rate =
+			    ata_params->media_rotation_rate;
+			if (softc->disk->d_rotation_rate ==
+			    ATA_RATE_NON_ROTATING) {
 				softc->sort_io_queue = 0;
+			}
+
+			if (softc->disk->d_rotation_rate != old_rate) {
+				disk_attr_changed(softc->disk,
+				    "GEOM::rotation_rate", M_NOWAIT);
+			}
 		} else {
 			int error;
 			error = daerror(done_ccb, CAM_RETRY_SELTO,

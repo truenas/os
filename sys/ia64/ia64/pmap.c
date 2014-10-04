@@ -51,6 +51,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_pmap.h"
 
 #include <sys/param.h>
+#include <sys/efi.h>
 #include <sys/kernel.h>
 #include <sys/ktr.h>
 #include <sys/lock.h>
@@ -71,7 +72,6 @@ __FBSDID("$FreeBSD$");
 #include <vm/uma.h>
 
 #include <machine/bootinfo.h>
-#include <machine/efi.h>
 #include <machine/md_var.h>
 #include <machine/pal.h>
 
@@ -1692,28 +1692,29 @@ pmap_protect(pmap_t pmap, vm_offset_t sva, vm_offset_t eva, vm_prot_t prot)
  *	or lose information.  That is, this routine must actually
  *	insert this page into the given map NOW.
  */
-void
-pmap_enter(pmap_t pmap, vm_offset_t va, vm_prot_t access, vm_page_t m,
-    vm_prot_t prot, boolean_t wired)
+int
+pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
+    u_int flags, int8_t psind __unused)
 {
 	pmap_t oldpmap;
 	vm_offset_t pa;
 	vm_offset_t opa;
 	struct ia64_lpte origpte;
 	struct ia64_lpte *pte;
-	boolean_t icache_inval, managed;
+	boolean_t icache_inval, managed, wired;
 
-	CTR6(KTR_PMAP, "pmap_enter(pm=%p, va=%#lx, acc=%#x, m=%p, prot=%#x, "
-	    "wired=%u)", pmap, va, access, m, prot, wired);
+	CTR5(KTR_PMAP, "pmap_enter(pm=%p, va=%#lx, m=%p, prot=%#x, "
+	    "flags=%u)", pmap, va, m, prot, flags);
 
+	wired = (flags & PMAP_ENTER_WIRED) != 0;
 	rw_wlock(&pvh_global_lock);
 	PMAP_LOCK(pmap);
 	oldpmap = pmap_switch(pmap);
 
 	va &= ~PAGE_MASK;
  	KASSERT(va <= VM_MAX_KERNEL_ADDRESS, ("pmap_enter: toobig"));
-	KASSERT((m->oflags & VPO_UNMANAGED) != 0 || vm_page_xbusied(m),
-	    ("pmap_enter: page %p is not busy", m));
+	if ((m->oflags & VPO_UNMANAGED) == 0 && !vm_page_xbusied(m))
+		VM_OBJECT_ASSERT_LOCKED(m->object);
 
 	/*
 	 * Find (or create) a pte for the given mapping.
@@ -1722,6 +1723,8 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_prot_t access, vm_page_t m,
 		pmap_switch(oldpmap);
 		PMAP_UNLOCK(pmap);
 		rw_wunlock(&pvh_global_lock);
+		if ((flags & PMAP_ENTER_NOSLEEP) != 0)
+			return (KERN_RESOURCE_SHORTAGE);
 		VM_WAIT;
 		rw_wlock(&pvh_global_lock);
 		PMAP_LOCK(pmap);
@@ -1815,6 +1818,7 @@ validate:
 	rw_wunlock(&pvh_global_lock);
 	pmap_switch(oldpmap);
 	PMAP_UNLOCK(pmap);
+	return (KERN_SUCCESS);
 }
 
 /*
@@ -1942,34 +1946,33 @@ pmap_object_init_pt(pmap_t pmap, vm_offset_t addr, vm_object_t object,
 }
 
 /*
- *	Routine:	pmap_change_wiring
- *	Function:	Change the wiring attribute for a map/virtual-address
- *			pair.
- *	In/out conditions:
- *			The mapping must already exist in the pmap.
+ *	Clear the wired attribute from the mappings for the specified range of
+ *	addresses in the given pmap.  Every valid mapping within that range
+ *	must have the wired attribute set.  In contrast, invalid mappings
+ *	cannot have the wired attribute set, so they are ignored.
+ *
+ *	The wired attribute of the page table entry is not a hardware feature,
+ *	so there is no need to invalidate any TLB entries.
  */
 void
-pmap_change_wiring(pmap_t pmap, vm_offset_t va, boolean_t wired)
+pmap_unwire(pmap_t pmap, vm_offset_t sva, vm_offset_t eva)
 {
 	pmap_t oldpmap;
 	struct ia64_lpte *pte;
 
-	CTR4(KTR_PMAP, "%s(pm=%p, va=%#lx, wired=%u)", __func__, pmap, va,
-	    wired);
+	CTR4(KTR_PMAP, "%s(%p, %#x, %#x)", __func__, pmap, sva, eva);
 
 	PMAP_LOCK(pmap);
 	oldpmap = pmap_switch(pmap);
-
-	pte = pmap_find_vhpt(va);
-	KASSERT(pte != NULL, ("pte"));
-	if (wired && !pmap_wired(pte)) {
-		pmap->pm_stats.wired_count++;
-		pmap_set_wired(pte);
-	} else if (!wired && pmap_wired(pte)) {
+	for (; sva < eva; sva += PAGE_SIZE) {
+		pte = pmap_find_vhpt(sva);
+		if (pte == NULL)
+			continue;
+		if (!pmap_wired(pte))
+			panic("pmap_unwire: pte %p isn't wired", pte);
 		pmap->pm_stats.wired_count--;
 		pmap_clear_wired(pte);
 	}
-
 	pmap_switch(oldpmap);
 	PMAP_UNLOCK(pmap);
 }

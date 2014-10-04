@@ -42,6 +42,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/cons.h>
 #include <sys/cpu.h>
+#include <sys/efi.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
 #include <sys/imgact.h>
@@ -83,7 +84,6 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bootinfo.h>
 #include <machine/cpu.h>
-#include <machine/efi.h>
 #include <machine/elf.h>
 #include <machine/fpu.h>
 #include <machine/intr.h>
@@ -458,12 +458,14 @@ cpu_switch(struct thread *old, struct thread *new, struct mtx *mtx)
 #ifdef COMPAT_FREEBSD32
 	ia32_savectx(oldpcb);
 #endif
-	if (PCPU_GET(fpcurthread) == old)
+	if (pcpup->pc_fpcurthread == old)
 		old->td_frame->tf_special.psr |= IA64_PSR_DFH;
 	if (!savectx(oldpcb)) {
 		newpcb = new->td_pcb;
 		oldpcb->pcb_current_pmap =
 		    pmap_switch(newpcb->pcb_current_pmap);
+
+		ia64_mf();
 
 		atomic_store_rel_ptr(&old->td_lock, mtx);
 
@@ -472,13 +474,13 @@ cpu_switch(struct thread *old, struct thread *new, struct mtx *mtx)
 			cpu_spinwait();
 #endif
 
-		PCPU_SET(curthread, new);
+		pcpup->pc_curthread = new;
 
 #ifdef COMPAT_FREEBSD32
 		ia32_restorectx(newpcb);
 #endif
 
-		if (PCPU_GET(fpcurthread) == new)
+		if (pcpup->pc_fpcurthread == new)
 			new->td_frame->tf_special.psr &= ~IA64_PSR_DFH;
 		restorectx(newpcb);
 		/* We should not get here. */
@@ -500,7 +502,7 @@ cpu_throw(struct thread *old __unused, struct thread *new)
 		cpu_spinwait();
 #endif
 
-	PCPU_SET(curthread, new);
+	pcpup->pc_curthread = new;
 
 #ifdef COMPAT_FREEBSD32
 	ia32_restorectx(newpcb);
@@ -833,7 +835,7 @@ ia64_init(void)
 	pcpu_init(pcpup, 0, sizeof(pcpu0));
 	dpcpu_init(ia64_physmem_alloc(DPCPU_SIZE, PAGE_SIZE), 0);
 	cpu_pcpu_setup(pcpup, ~0U, ia64_get_lid());
-	PCPU_SET(curthread, &thread0);
+	pcpup->pc_curthread = &thread0;
 
 	/*
 	 * Initialize the console before we print anything out.

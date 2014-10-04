@@ -100,6 +100,9 @@ struct disk {
 
 	/* Fields private to the driver */
 	void			*d_drv1;
+
+	/* New field - don't use if DISKFLAG_LACKS_ROTRATE is set */
+	uint16_t		d_rotation_rate;
 };
 
 #define DISKFLAG_NEEDSGIANT	0x1
@@ -108,6 +111,7 @@ struct disk {
 #define DISKFLAG_CANFLUSHCACHE	0x8
 #define	DISKFLAG_UNMAPPED_BIO	0x10
 #define	DISKFLAG_DIRECT_COMPLETION	0x20
+#define DISKFLAG_LACKS_ROTRATE	0x40
 
 struct disk *disk_alloc(void);
 void disk_create(struct disk *disk, int version);

@@ -197,7 +197,6 @@ MAN=	accept_filter.9 \
 	physio.9 \
 	pmap.9 \
 	pmap_activate.9 \
-	pmap_change_wiring.9 \
 	pmap_clear_modify.9 \
 	pmap_copy.9 \
 	pmap_enter.9 \
@@ -217,6 +216,7 @@ MAN=	accept_filter.9 \
 	pmap_release.9 \
 	pmap_remove.9 \
 	pmap_resident_count.9 \
+	pmap_unwire.9 \
 	pmap_zero_page.9 \
 	printf.9 \
 	prison_check.9 \
@@ -1345,6 +1345,7 @@ MLINKS+=taskqueue.9 TASK_INIT.9 \
 	taskqueue.9 TASK_INITIALIZER.9 \
 	taskqueue.9 taskqueue_block.9 \
 	taskqueue.9 taskqueue_cancel.9 \
+	taskqueue.9 taskqueue_cancel_timeout.9 \
 	taskqueue.9 taskqueue_create.9 \
 	taskqueue.9 taskqueue_create_fast.9 \
 	taskqueue.9 TASKQUEUE_DECLARE.9 \
@@ -1352,14 +1353,20 @@ MLINKS+=taskqueue.9 TASK_INIT.9 \
 	taskqueue.9 TASKQUEUE_DEFINE_THREAD.9 \
 	taskqueue.9 taskqueue_drain.9 \
 	taskqueue.9 taskqueue_drain_all.9 \
+	taskqueue.9 taskqueue_drain_timeout.9 \
 	taskqueue.9 taskqueue_enqueue.9 \
 	taskqueue.9 taskqueue_enqueue_fast.9 \
+	taskqueue.9 taskqueue_enqueue_timeout.9 \
 	taskqueue.9 TASKQUEUE_FAST_DEFINE.9 \
 	taskqueue.9 TASKQUEUE_FAST_DEFINE_THREAD.9 \
 	taskqueue.9 taskqueue_free.9 \
 	taskqueue.9 taskqueue_member.9 \
 	taskqueue.9 taskqueue_run.9 \
-	taskqueue.9 taskqueue_unblock.9
+	taskqueue.9 taskqueue_set_callback.9 \
+	taskqueue.9 taskqueue_start_threads.9 \
+	taskqueue.9 taskqueue_start_threads_pinned.9 \
+	taskqueue.9 taskqueue_unblock.9 \
+	taskqueue.9 TIMEOUT_TASK_INIT.9
 MLINKS+=time.9 boottime.9 \
 	time.9 time_second.9 \
 	time.9 time_uptime.9

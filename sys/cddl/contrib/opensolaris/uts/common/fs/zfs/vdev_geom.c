@@ -149,6 +149,34 @@ vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
 }
 
 static void
+vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
+{ 
+	int error;
+	uint16_t rate;
+
+	error = g_getattr("GEOM::rotation_rate", cp, &rate);
+	if (error == 0)
+		vd->vdev_rotation_rate = rate;
+	else
+		vd->vdev_rotation_rate = VDEV_RATE_UNKNOWN;
+}
+
+static void
+vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
+{
+	vdev_t *vd;
+
+	vd = cp->private;
+	if (vd == NULL)
+		return;
+
+	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
+		vdev_geom_set_rotation_rate(vd, cp);
+		return;
+	}
+}
+
+static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
 	vdev_t *vd;
@@ -789,6 +817,11 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	g_topology_unlock();
 	PICKUP_GIANT();
 
+	/*
+	 * Determine the device's rotation rate.
+	 */
+	vdev_geom_set_rotation_rate(vd, cp);
+
 	return (0);
 }
 
@@ -816,7 +849,7 @@ vdev_geom_io_intr(struct bio *bp)
 	vd = zio->io_vd;
 	zio->io_error = bp->bio_error;
 	if (zio->io_error == 0 && bp->bio_resid != 0)
-		zio->io_error = EIO;
+		zio->io_error = SET_ERROR(EIO);
 
 	switch(zio->io_error) {
 	case ENOTSUP:
@@ -865,41 +898,43 @@ vdev_geom_io_start(zio_t *zio)
 
 	vd = zio->io_vd;
 
-	if (zio->io_type == ZIO_TYPE_IOCTL) {
+	switch (zio->io_type) {
+	case ZIO_TYPE_IOCTL:
 		/* XXPOLICY */
 		if (!vdev_readable(vd)) {
-			zio->io_error = ENXIO;
-			return (ZIO_PIPELINE_CONTINUE);
+			zio->io_error = SET_ERROR(ENXIO);
+		} else {
+			switch (zio->io_cmd) {
+			case DKIOCFLUSHWRITECACHE:
+				if (zfs_nocacheflush || vdev_geom_bio_flush_disable)
+					break;
+				if (vd->vdev_nowritecache) {
+					zio->io_error = SET_ERROR(ENOTSUP);
+					break;
+				}
+				goto sendreq;
+			default:
+				zio->io_error = SET_ERROR(ENOTSUP);
+			}
 		}
 
-		switch (zio->io_cmd) {
-		case DKIOCFLUSHWRITECACHE:
-			if (zfs_nocacheflush || vdev_geom_bio_flush_disable)
-				break;
-			if (vd->vdev_nowritecache) {
-				zio->io_error = ENOTSUP;
-				break;
-			}
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
+	case ZIO_TYPE_FREE:
+		if (vd->vdev_notrim) {
+			zio->io_error = SET_ERROR(ENOTSUP);
+		} else if (!vdev_geom_bio_delete_disable) {
 			goto sendreq;
-		case DKIOCTRIM:
-			if (vdev_geom_bio_delete_disable)
-				break;
-			if (vd->vdev_notrim) {
-				zio->io_error = ENOTSUP;
-				break;
-			}
-			goto sendreq;
-		default:
-			zio->io_error = ENOTSUP;
 		}
-
-		return (ZIO_PIPELINE_CONTINUE);
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 sendreq:
 	cp = vd->vdev_tsd;
 	if (cp == NULL) {
-		zio->io_error = ENXIO;
-		return (ZIO_PIPELINE_CONTINUE);
+		zio->io_error = SET_ERROR(ENXIO);
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 	bp = g_alloc_bio();
 	bp->bio_caller1 = zio;
@@ -911,22 +946,18 @@ sendreq:
 		bp->bio_offset = zio->io_offset;
 		bp->bio_length = zio->io_size;
 		break;
+	case ZIO_TYPE_FREE:
+		bp->bio_cmd = BIO_DELETE;
+		bp->bio_data = NULL;
+		bp->bio_offset = zio->io_offset;
+		bp->bio_length = zio->io_size;
+		break;
 	case ZIO_TYPE_IOCTL:
-		switch (zio->io_cmd) {
-		case DKIOCFLUSHWRITECACHE:
-			bp->bio_cmd = BIO_FLUSH;
-			bp->bio_flags |= BIO_ORDERED;
-			bp->bio_data = NULL;
-			bp->bio_offset = cp->provider->mediasize;
-			bp->bio_length = 0;
-			break;
-		case DKIOCTRIM:
-			bp->bio_cmd = BIO_DELETE;
-			bp->bio_data = NULL;
-			bp->bio_offset = zio->io_offset;
-			bp->bio_length = zio->io_size;
-			break;
-		}
+		bp->bio_cmd = BIO_FLUSH;
+		bp->bio_flags |= BIO_ORDERED;
+		bp->bio_data = NULL;
+		bp->bio_offset = cp->provider->mediasize;
+		bp->bio_length = 0;
 		break;
 	}
 	bp->bio_done = vdev_geom_io_intr;

@@ -59,6 +59,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mutex.h>
+#include <sys/refcount.h>
 #include <sys/namei.h>
 #include <sys/proc.h>
 #include <sys/procdesc.h>
@@ -625,6 +626,20 @@ sig_ffs(sigset_t *set)
 	return (0);
 }
 
+static bool
+sigact_flag_test(struct sigaction *act, int flag)
+{
+
+	/*
+	 * SA_SIGINFO is reset when signal disposition is set to
+	 * ignore or default.  Other flags are kept according to user
+	 * settings.
+	 */
+	return ((act->sa_flags & flag) != 0 && (flag != SA_SIGINFO ||
+	    ((__sighandler_t *)act->sa_sigaction != SIG_IGN &&
+	    (__sighandler_t *)act->sa_sigaction != SIG_DFL)));
+}
+
 /*
  * kern_sigaction
  * sigaction
@@ -642,6 +657,10 @@ kern_sigaction(td, sig, act, oact, flags)
 	struct proc *p = td->td_proc;
 
 	if (!_SIG_VALID(sig))
+		return (EINVAL);
+	if (act != NULL && (act->sa_flags & ~(SA_ONSTACK | SA_RESTART |
+	    SA_RESETHAND | SA_NOCLDSTOP | SA_NODEFER | SA_NOCLDWAIT |
+	    SA_SIGINFO)) != 0)
 		return (EINVAL);
 
 	PROC_LOCK(p);
@@ -683,7 +702,7 @@ kern_sigaction(td, sig, act, oact, flags)
 
 		ps->ps_catchmask[_SIG_IDX(sig)] = act->sa_mask;
 		SIG_CANTMASK(ps->ps_catchmask[_SIG_IDX(sig)]);
-		if (act->sa_flags & SA_SIGINFO) {
+		if (sigact_flag_test(act, SA_SIGINFO)) {
 			ps->ps_sigact[_SIG_IDX(sig)] =
 			    (__sighandler_t *)act->sa_sigaction;
 			SIGADDSET(ps->ps_siginfo, sig);
@@ -691,19 +710,19 @@ kern_sigaction(td, sig, act, oact, flags)
 			ps->ps_sigact[_SIG_IDX(sig)] = act->sa_handler;
 			SIGDELSET(ps->ps_siginfo, sig);
 		}
-		if (!(act->sa_flags & SA_RESTART))
+		if (!sigact_flag_test(act, SA_RESTART))
 			SIGADDSET(ps->ps_sigintr, sig);
 		else
 			SIGDELSET(ps->ps_sigintr, sig);
-		if (act->sa_flags & SA_ONSTACK)
+		if (sigact_flag_test(act, SA_ONSTACK))
 			SIGADDSET(ps->ps_sigonstack, sig);
 		else
 			SIGDELSET(ps->ps_sigonstack, sig);
-		if (act->sa_flags & SA_RESETHAND)
+		if (sigact_flag_test(act, SA_RESETHAND))
 			SIGADDSET(ps->ps_sigreset, sig);
 		else
 			SIGDELSET(ps->ps_sigreset, sig);
-		if (act->sa_flags & SA_NODEFER)
+		if (sigact_flag_test(act, SA_NODEFER))
 			SIGADDSET(ps->ps_signodefer, sig);
 		else
 			SIGDELSET(ps->ps_signodefer, sig);
@@ -904,11 +923,28 @@ siginit(p)
 	PROC_LOCK(p);
 	ps = p->p_sigacts;
 	mtx_lock(&ps->ps_mtx);
-	for (i = 1; i <= NSIG; i++)
-		if (sigprop(i) & SA_IGNORE && i != SIGCONT)
+	for (i = 1; i <= NSIG; i++) {
+		if (sigprop(i) & SA_IGNORE && i != SIGCONT) {
 			SIGADDSET(ps->ps_sigignore, i);
+		}
+	}
 	mtx_unlock(&ps->ps_mtx);
 	PROC_UNLOCK(p);
+}
+
+/*
+ * Reset specified signal to the default disposition.
+ */
+static void
+sigdflt(struct sigacts *ps, int sig)
+{
+
+	mtx_assert(&ps->ps_mtx, MA_OWNED);
+	SIGDELSET(ps->ps_sigcatch, sig);
+	if ((sigprop(sig) & SA_IGNORE) != 0 && sig != SIGCONT)
+		SIGADDSET(ps->ps_sigignore, sig);
+	ps->ps_sigact[_SIG_IDX(sig)] = SIG_DFL;
+	SIGDELSET(ps->ps_siginfo, sig);
 }
 
 /*
@@ -932,13 +968,9 @@ execsigs(struct proc *p)
 	mtx_lock(&ps->ps_mtx);
 	while (SIGNOTEMPTY(ps->ps_sigcatch)) {
 		sig = sig_ffs(&ps->ps_sigcatch);
-		SIGDELSET(ps->ps_sigcatch, sig);
-		if (sigprop(sig) & SA_IGNORE) {
-			if (sig != SIGCONT)
-				SIGADDSET(ps->ps_sigignore, sig);
+		sigdflt(ps, sig);
+		if ((sigprop(sig) & SA_IGNORE) != 0)
 			sigqueue_delete_proc(p, sig);
-		}
-		ps->ps_sigact[_SIG_IDX(sig)] = SIG_DFL;
 	}
 	/*
 	 * Reset stack state to the user stack.
@@ -1896,16 +1928,8 @@ trapsignal(struct thread *td, ksiginfo_t *ksi)
 			SIGADDSET(mask, sig);
 		kern_sigprocmask(td, SIG_BLOCK, &mask, NULL,
 		    SIGPROCMASK_PROC_LOCKED | SIGPROCMASK_PS_LOCKED);
-		if (SIGISMEMBER(ps->ps_sigreset, sig)) {
-			/*
-			 * See kern_sigaction() for origin of this code.
-			 */
-			SIGDELSET(ps->ps_sigcatch, sig);
-			if (sig != SIGCONT &&
-			    sigprop(sig) & SA_IGNORE)
-				SIGADDSET(ps->ps_sigignore, sig);
-			ps->ps_sigact[_SIG_IDX(sig)] = SIG_DFL;
-		}
+		if (SIGISMEMBER(ps->ps_sigreset, sig))
+			sigdflt(ps, sig);
 		mtx_unlock(&ps->ps_mtx);
 	} else {
 		/*
@@ -2848,16 +2872,8 @@ postsig(sig)
 		kern_sigprocmask(td, SIG_BLOCK, &mask, NULL,
 		    SIGPROCMASK_PROC_LOCKED | SIGPROCMASK_PS_LOCKED);
 
-		if (SIGISMEMBER(ps->ps_sigreset, sig)) {
-			/*
-			 * See kern_sigaction() for origin of this code.
-			 */
-			SIGDELSET(ps->ps_sigcatch, sig);
-			if (sig != SIGCONT &&
-			    sigprop(sig) & SA_IGNORE)
-				SIGADDSET(ps->ps_sigignore, sig);
-			ps->ps_sigact[_SIG_IDX(sig)] = SIG_DFL;
-		}
+		if (SIGISMEMBER(ps->ps_sigreset, sig))
+			sigdflt(ps, sig);
 		td->td_ru.ru_nsignals++;
 		if (p->p_sig == sig) {
 			p->p_code = 0;
@@ -3432,21 +3448,17 @@ void
 sigacts_free(struct sigacts *ps)
 {
 
-	mtx_lock(&ps->ps_mtx);
-	ps->ps_refcnt--;
-	if (ps->ps_refcnt == 0) {
-		mtx_destroy(&ps->ps_mtx);
-		free(ps, M_SUBPROC);
-	} else
-		mtx_unlock(&ps->ps_mtx);
+	if (refcount_release(&ps->ps_refcnt) == 0)
+		return;
+	mtx_destroy(&ps->ps_mtx);
+	free(ps, M_SUBPROC);
 }
 
 struct sigacts *
 sigacts_hold(struct sigacts *ps)
 {
-	mtx_lock(&ps->ps_mtx);
-	ps->ps_refcnt++;
-	mtx_unlock(&ps->ps_mtx);
+
+	refcount_acquire(&ps->ps_refcnt);
 	return (ps);
 }
 
@@ -3463,10 +3475,6 @@ sigacts_copy(struct sigacts *dest, struct sigacts *src)
 int
 sigacts_shared(struct sigacts *ps)
 {
-	int shared;
 
-	mtx_lock(&ps->ps_mtx);
-	shared = ps->ps_refcnt > 1;
-	mtx_unlock(&ps->ps_mtx);
-	return (shared);
+	return (ps->ps_refcnt > 1);
 }

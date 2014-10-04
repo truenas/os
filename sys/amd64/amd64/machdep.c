@@ -66,6 +66,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/callout.h>
 #include <sys/cons.h>
 #include <sys/cpu.h>
+#include <sys/efi.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
 #include <sys/imgact.h>
@@ -237,9 +238,11 @@ cpu_startup(dummy)
 	if (sysenv != NULL) {
 		if (strncmp(sysenv, "MacBook1,1", 10) == 0 ||
 		    strncmp(sysenv, "MacBook3,1", 10) == 0 ||
+		    strncmp(sysenv, "MacBook4,1", 10) == 0 ||
 		    strncmp(sysenv, "MacBookPro1,1", 13) == 0 ||
 		    strncmp(sysenv, "MacBookPro1,2", 13) == 0 ||
 		    strncmp(sysenv, "MacBookPro3,1", 13) == 0 ||
+		    strncmp(sysenv, "MacBookPro4,1", 13) == 0 ||
 		    strncmp(sysenv, "Macmini1,1", 10) == 0) {
 			if (bootverbose)
 				printf("Disabling LEGACY_USB_EN bit on "
@@ -1424,6 +1427,104 @@ add_smap_entries(struct bios_smap *smapbase, vm_paddr_t *physmap,
 	}
 }
 
+#define efi_next_descriptor(ptr, size) \
+	((struct efi_md *)(((uint8_t *) ptr) + size))
+
+static void
+add_efi_map_entries(struct efi_map_header *efihdr, vm_paddr_t *physmap,
+    int *physmap_idx)
+{
+	struct efi_md *map, *p;
+	const char *type;
+	size_t efisz;
+	int ndesc, i;
+
+	static const char *types[] = {
+		"Reserved",
+		"LoaderCode",
+		"LoaderData",
+		"BootServicesCode",
+		"BootServicesData",
+		"RuntimeServicesCode",
+		"RuntimeServicesData",
+		"ConventionalMemory",
+		"UnusableMemory",
+		"ACPIReclaimMemory",
+		"ACPIMemoryNVS",
+		"MemoryMappedIO",
+		"MemoryMappedIOPortSpace",
+		"PalCode"
+	};
+
+	/*
+	 * Memory map data provided by UEFI via the GetMemoryMap
+	 * Boot Services API.
+	 */
+	efisz = (sizeof(struct efi_map_header) + 0xf) & ~0xf;
+	map = (struct efi_md *)((uint8_t *)efihdr + efisz); 
+
+	if (efihdr->descriptor_size == 0)
+		return;
+	ndesc = efihdr->memory_size / efihdr->descriptor_size;
+
+	if (boothowto & RB_VERBOSE)
+		printf("%23s %12s %12s %8s %4s\n",
+		    "Type", "Physical", "Virtual", "#Pages", "Attr");
+
+	for (i = 0, p = map; i < ndesc; i++,
+	    p = efi_next_descriptor(p, efihdr->descriptor_size)) {
+		if (boothowto & RB_VERBOSE) {
+			if (p->md_type <= EFI_MD_TYPE_PALCODE)
+				type = types[p->md_type];
+			else
+				type = "<INVALID>";
+			printf("%23s %012lx %12p %08lx ", type, p->md_phys,
+			    p->md_virt, p->md_pages);
+			if (p->md_attr & EFI_MD_ATTR_UC)
+				printf("UC ");
+			if (p->md_attr & EFI_MD_ATTR_WC)
+				printf("WC ");
+			if (p->md_attr & EFI_MD_ATTR_WT)
+				printf("WT ");
+			if (p->md_attr & EFI_MD_ATTR_WB)
+				printf("WB ");
+			if (p->md_attr & EFI_MD_ATTR_UCE)
+				printf("UCE ");
+			if (p->md_attr & EFI_MD_ATTR_WP)
+				printf("WP ");
+			if (p->md_attr & EFI_MD_ATTR_RP)
+				printf("RP ");
+			if (p->md_attr & EFI_MD_ATTR_XP)
+				printf("XP ");
+			if (p->md_attr & EFI_MD_ATTR_RT)
+				printf("RUNTIME");
+			printf("\n");
+		}
+
+		switch (p->md_type) {
+		case EFI_MD_TYPE_CODE:
+		case EFI_MD_TYPE_DATA:
+		case EFI_MD_TYPE_BS_CODE:
+		case EFI_MD_TYPE_BS_DATA:
+		case EFI_MD_TYPE_FREE:
+			/*
+			 * We're allowed to use any entry with these types.
+			 */
+			break;
+		default:
+			continue;
+		}
+
+		if (!add_physmap_entry(p->md_phys, (p->md_pages * PAGE_SIZE),
+		    physmap, physmap_idx))
+			break;
+	}
+}
+
+static char bootmethod[16] = "";
+SYSCTL_STRING(_machdep, OID_AUTO, bootmethod, CTLFLAG_RD, bootmethod, 0,
+    "System firmware boot method");
+
 /*
  * Populate the (physmap) array with base/bound pairs describing the
  * available physical memory in the system, then test this memory and
@@ -1442,18 +1543,27 @@ getmemsize(caddr_t kmdp, u_int64_t first)
 	u_long physmem_start, physmem_tunable, memtest;
 	pt_entry_t *pte;
 	struct bios_smap *smapbase;
+	struct efi_map_header *efihdr;
 	quad_t dcons_addr, dcons_size;
 
 	bzero(physmap, sizeof(physmap));
 	basemem = 0;
 	physmap_idx = 0;
 
+	efihdr = (struct efi_map_header *)preload_search_info(kmdp,
+	    MODINFO_METADATA | MODINFOMD_EFI_MAP);
 	smapbase = (struct bios_smap *)preload_search_info(kmdp,
 	    MODINFO_METADATA | MODINFOMD_SMAP);
-	if (smapbase == NULL)
-		panic("No BIOS smap info from loader!");
 
-	add_smap_entries(smapbase, physmap, &physmap_idx);
+	if (efihdr != NULL) {
+		add_efi_map_entries(efihdr, physmap, &physmap_idx);
+		strlcpy(bootmethod, "UEFI", sizeof(bootmethod));
+	} else if (smapbase != NULL) {
+		add_smap_entries(smapbase, physmap, &physmap_idx);
+		strlcpy(bootmethod, "BIOS", sizeof(bootmethod));
+	} else {
+		panic("No BIOS smap or EFI map info from loader!");
+	}
 
 	/*
 	 * Find the 'base memory' segment for SMP
@@ -1806,6 +1916,14 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	 * initialization can use DELAY().
 	 */
 	i8254_init();
+
+	/*
+	 * Use vt(4) by default for UEFI boot (during the sc(4)/vt(4)
+	 * transition).
+	 */
+	if (kmdp != NULL && preload_search_info(kmdp,
+	    MODINFO_METADATA | MODINFOMD_EFI_MAP) != NULL)
+		vty_set_preferred(VTY_VT);
 
 	/*
 	 * Initialize the console before we print anything out.

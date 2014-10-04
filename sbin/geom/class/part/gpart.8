@@ -24,7 +24,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd July 1, 2014
+.Dd August 12, 2014
 .Dt GPART 8
 .Os
 .Sh NAME
@@ -129,6 +129,14 @@
 .Op Fl f Ar flags
 .Ar geom
 .\"
+.Nm
+.Cm list
+.Nm
+.Cm status
+.Nm
+.Cm load
+.Nm
+.Cm unload
 .Sh DESCRIPTION
 The
 .Nm
@@ -467,6 +475,18 @@ See the section entitled
 below for a discussion
 about its use.
 .El
+.It Cm list
+See
+.Xr geom 8 .
+.It Cm status
+See
+.Xr geom 8 .
+.It Cm load
+See
+.Xr geom 8 .
+.It Cm unload
+See
+.Xr geom 8 .
 .El
 .Sh PARTITIONING SCHEMES
 Several partitioning schemes are supported by the
@@ -551,8 +571,19 @@ The
 utility also allows the user to specify scheme-specific partition types
 for partition types that do not have symbolic names.
 Symbolic names currently understood and used by
-.Fx are:
+.Fx
+are:
 .Bl -tag -width ".Cm dragonfly-disklabel64"
+.It Cm apple-boot
+The system partition dedicated to storing boot loaders on some Apple
+systems.
+The scheme-specific types are
+.Qq Li "!171"
+for MBR,
+.Qq Li "!Apple_Bootstrap"
+for APM, and
+.Qq Li "!426f6f74-0000-11aa-aa11-00306543ecac"
+for GPT.
 .It Cm bios-boot
 The system partition dedicated to second stage of the boot loader program.
 Usually it is used by the GRUB 2 loader for GPT partitioning schemes.
@@ -823,6 +854,14 @@ A partition that contains a NTFS or exFAT filesystem.
 The scheme-specific type is
 .Qq Li "!7"
 for MBR.
+.It Cm prep-boot
+The system partition dedicated to storing boot loaders on some PowerPC systems,
+notably those made by IBM.
+The scheme-specific types are
+.Qq Li "!65"
+for MBR and
+.Qq Li "!0x9e1a2d38-c612-4316-aa26-8b49521e5a8b"
+for GPT.
 .It Cm vmware-vmfs
 A partition that contains a VMware File System (VMFS).
 The scheme-specific types are
@@ -1018,7 +1057,7 @@ Instead, the 800 KBytes bootstrap code image
 should be written with the
 .Cm gpart bootcode
 command to a partition of type
-.Cm freebsd-boot ,
+.Cm apple-boot ,
 which should also be 800 KB in size.
 .Sh OPERATIONAL FLAGS
 Actions other than the
@@ -1144,6 +1183,12 @@ If this variable set to 1 each component of the mirrored volume will be
 present as independent partition.
 .Em NOTE :
 This may break a mirrored volume and lead to data damage.
+.It Va kern.geom.part.mbr.enforce_chs : No 1
+Specify how the Master Boot Record (MBR) module does alignment.
+If this variable is set to a non-zero value, the module will automatically
+recalculate the user-specified offset and size for alignment with the CHS
+geometry.
+Otherwise the values will be left unchanged.
 .El
 .Sh EXIT STATUS
 Exit status is 0 on success, and 1 if the command fails.

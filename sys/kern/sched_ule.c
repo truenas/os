@@ -1037,6 +1037,14 @@ tdq_notify(struct tdq *tdq, struct thread *td)
 	ctd = pcpu_find(cpu)->pc_curthread;
 	if (!sched_shouldpreempt(pri, ctd->td_priority, 1))
 		return;
+
+	/*
+	 * Make sure that tdq_load updated before calling this function
+	 * is globally visible before we read tdq_cpu_idle.  Idle thread
+	 * accesses both of them without locks, and the order is important.
+	 */
+	mb();
+
 	if (TD_IS_IDLETHREAD(ctd)) {
 		/*
 		 * If the MD code has an idle wakeup routine try that before
@@ -1862,7 +1870,8 @@ sched_switch(struct thread *td, struct thread *newtd, int flags)
 	ts->ts_rltick = ticks;
 	td->td_lastcpu = td->td_oncpu;
 	td->td_oncpu = NOCPU;
-	preempted = !(td->td_flags & TDF_SLICEEND);
+	preempted = !((td->td_flags & TDF_SLICEEND) ||
+	    (flags & SWT_RELINQUISH));
 	td->td_flags &= ~(TDF_NEEDRESCHED | TDF_SLICEEND);
 	td->td_owepreempt = 0;
 	if (!TD_IS_IDLETHREAD(td))
@@ -2644,6 +2653,12 @@ sched_idletd(void *dummy)
 
 		/* Run main MD idle handler. */
 		tdq->tdq_cpu_idle = 1;
+		/*
+		 * Make sure that tdq_cpu_idle update is globally visible
+		 * before cpu_idle() read tdq_load.  The order is important
+		 * to avoid race with tdq_notify.
+		 */
+		mb();
 		cpu_idle(switchcnt * 4 > sched_idlespinthresh);
 		tdq->tdq_cpu_idle = 0;
 
