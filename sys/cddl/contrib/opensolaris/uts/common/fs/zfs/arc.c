@@ -2570,6 +2570,7 @@ arc_kmem_reap_now(arc_reclaim_strategy_t strat)
 	size_t			i;
 	kmem_cache_t		*prev_cache = NULL;
 	kmem_cache_t		*prev_data_cache = NULL;
+	extern kmem_cache_t	*range_seg_cache;
 
 #ifdef _KERNEL
 	if (arc_meta_used >= arc_meta_limit) {
@@ -2606,6 +2607,17 @@ arc_kmem_reap_now(arc_reclaim_strategy_t strat)
 	}
 	kmem_cache_reap_now(buf_cache);
 	kmem_cache_reap_now(hdr_cache);
+	kmem_cache_reap_now(range_seg_cache);
+
+#ifdef sun
+	/*
+	 * Ask the vmem arena to reclaim unused memory from its
+	 * quantum caches.
+	 */
+	if (zio_arena != NULL && strat == ARC_RECLAIM_AGGR)
+		vmem_qcache_reap(zio_arena);
+#endif
+	DTRACE_PROBE(arc__kmem_reap_end);
 }
 
 static void
