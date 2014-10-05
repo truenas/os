@@ -13,6 +13,8 @@
 # the default is gnu99 for now
 CSTD?=		gnu99
 
+NO_WERROR=	yes
+
 .if ${CSTD} == "k&r"
 CFLAGS+=	-traditional
 .elif ${CSTD} == "c89" || ${CSTD} == "c90"
