@@ -23,8 +23,6 @@
  * All rights reserved.
  *
  * Portions Copyright (c) 2012 Martin Matuska <mm@FreeBSD.org>
- *
- * Portions Copyright (c) 2014 iXsystems, Inc. by Xin LI <delphij@FreeBSD.org>
  */
 
 #include <sys/zfs_context.h>
@@ -64,89 +62,6 @@ static int vdev_geom_bio_delete_disable = 0;
 TUNABLE_INT("vfs.zfs.vdev.bio_delete_disable", &vdev_geom_bio_delete_disable);
 SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, bio_delete_disable, CTLFLAG_RW,
     &vdev_geom_bio_delete_disable, 0, "Disable BIO_DELETE");
-
-/*
- * Increase minimal ashift to 12 to ease future upgrades.
- */
-static int vdev_larger_ashift_minimal = 0;
-TUNABLE_INT("vfs.zfs.vdev.larger_ashift_minimal", &vdev_larger_ashift_minimal);
-SYSCTL_DECL(_vfs_zfs_vdev);
-SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
-    &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
-
-#define	ZFSVOL_CLASS_NAME	"ZFS::ZVOL"
-
-static void
-vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
-{ 
-	int error;
-	uint16_t rate;
-
-	error = g_getattr("GEOM::rotation_rate", cp, &rate);
-	if (error == 0)
-		vd->vdev_rotation_rate = rate;
-	else
-		vd->vdev_rotation_rate = VDEV_RATE_UNKNOWN;
-}
-
-static void
-vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
-{
-	vdev_t *vd;
-
-	vd = cp->private;
-	if (vd == NULL)
-		return;
-
-	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
-		vdev_geom_set_rotation_rate(vd, cp);
-		return;
-	} else if (strcmp(attr, "GEOM::physpath") == 0) {
-		spa_t *spa;
-		char *physpath;
-		int error, physpath_len;
-
-		if (g_access(cp, 1, 0, 0) != 0)
-			return;
-
-		/*
-		 * Record/Update physical path information for this device.
-		 */
-		spa = vd->vdev_spa;
-		physpath_len = MAXPATHLEN;
-		physpath = g_malloc(physpath_len, M_WAITOK|M_ZERO);
-		error = g_io_getattr("GEOM::physpath", cp, &physpath_len, physpath);
-		g_access(cp, -1, 0, 0);
-
-		if (error == 0) {
-			char *old_physpath;
-
-			old_physpath = vd->vdev_physpath;
-			vd->vdev_physpath = spa_strdup(physpath);
-			spa_async_request(spa, SPA_ASYNC_CONFIG_UPDATE);
-
-			if (old_physpath != NULL) {
-				int held_lock;
-
-				held_lock = spa_config_held(spa, SCL_STATE, RW_WRITER);
-				if (held_lock == 0) {
-					g_topology_unlock();
-					spa_config_enter(spa, SCL_STATE, FTAG,
-						RW_WRITER);
-				}
-
-				spa_strfree(old_physpath);
-
-				if (held_lock == 0) {
-					spa_config_exit(spa, SCL_STATE, FTAG);
-					g_topology_lock();
-				}
-			}
-		}
-
-		g_free(physpath);
-	}
-}
 
 static void
 vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
@@ -201,6 +116,7 @@ vdev_geom_orphan(struct g_consumer *cp)
 	 * async removal support to invoke a close on this
 	 * vdev once it is safe to do so.
 	 */
+	zfs_post_remove(vd->vdev_spa, vd);
 	vd->vdev_remove_wanted = B_TRUE;
 	spa_async_request(vd->vdev_spa, SPA_ASYNC_REMOVE);
 }
@@ -262,10 +178,6 @@ vdev_geom_attach(struct g_provider *pp)
 		}
 	}
 	cp->flags |= G_CF_DIRECT_SEND | G_CF_DIRECT_RECEIVE;
-
-	/* Fetch initial physical path information for this device. */
-	vdev_geom_attrchanged(cp, "GEOM::physpath");
-	
 	return (cp);
 }
 
@@ -488,8 +400,6 @@ vdev_geom_attach_taster(struct g_consumer *cp, struct g_provider *pp)
 	int error;
 
 	if (pp->flags & G_PF_WITHER)
-		return (EINVAL);
-	if (strcmp(pp->geom->class->name, ZFSVOL_CLASS_NAME) == 0)
 		return (EINVAL);
 	g_attach(cp, pp);
 	error = g_access(cp, 1, 0, 0);
@@ -794,9 +704,7 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	 */
 	*logical_ashift = highbit(MAX(pp->sectorsize, SPA_MINBLOCKSIZE)) - 1;
 	*physical_ashift = 0;
-	if (vdev_larger_ashift_minimal && pp->stripesize < 4096) {
-		*physical_ashift = highbit(4096) - 1;
-	} else if (pp->stripesize)
+	if (pp->stripesize)
 		*physical_ashift = highbit(pp->stripesize) - 1;
 
 	/*
@@ -805,17 +713,11 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	 */
 	vd->vdev_nowritecache = B_FALSE;
 
-	/*
-	 * Determine the device's rotation rate.
-	 */
-	vdev_geom_set_rotation_rate(vd, cp);
-
-	/* Fetch initial physical path information for this device. */
-	DROP_GIANT();
-	g_topology_lock();
-	vdev_geom_attrchanged(cp, "GEOM::physpath");
-	g_topology_unlock();
-	PICKUP_GIANT();
+	if (vd->vdev_physpath != NULL)
+		spa_strfree(vd->vdev_physpath);
+	bufsize = sizeof("/dev/") + strlen(pp->name);
+	vd->vdev_physpath = kmem_alloc(bufsize, KM_SLEEP);
+	snprintf(vd->vdev_physpath, bufsize, "/dev/%s", pp->name);
 
 	/*
 	 * Determine the device's rotation rate.
