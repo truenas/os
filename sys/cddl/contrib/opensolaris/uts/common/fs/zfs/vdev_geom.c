@@ -149,34 +149,6 @@ vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
 }
 
 static void
-vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
-{ 
-	int error;
-	uint16_t rate;
-
-	error = g_getattr("GEOM::rotation_rate", cp, &rate);
-	if (error == 0)
-		vd->vdev_rotation_rate = rate;
-	else
-		vd->vdev_rotation_rate = VDEV_RATE_UNKNOWN;
-}
-
-static void
-vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
-{
-	vdev_t *vd;
-
-	vd = cp->private;
-	if (vd == NULL)
-		return;
-
-	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
-		vdev_geom_set_rotation_rate(vd, cp);
-		return;
-	}
-}
-
-static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
 	vdev_t *vd;
