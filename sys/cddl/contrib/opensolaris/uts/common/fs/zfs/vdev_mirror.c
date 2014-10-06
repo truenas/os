@@ -207,6 +207,7 @@ vdev_mirror_map_init(zio_t *zio)
 		for (c = 0; c < mm->mm_children; c++) {
 			mc = &mm->mm_child[c];
 			mc->mc_vd = vdev_lookup_top(spa, DVA_GET_VDEV(&dva[c]));
+			VERIFY(mc->mc_vd != NULL);
 			mc->mc_offset = DVA_GET_OFFSET(&dva[c]);
 		}
 	} else {
@@ -216,13 +217,12 @@ vdev_mirror_map_init(zio_t *zio)
 		for (c = 0; c < mm->mm_children; c++) {
 			mc = &mm->mm_child[c];
 			mc->mc_vd = vd->vdev_child[c];
+			VERIFY(mc->mc_vd != NULL);
 			mc->mc_offset = zio->io_offset;
 		}
 	}
-	for (c=0; c < mm->mm_children; c++) {
+	for (c=0; c < mm->mm_children; c++)
 		mc = &mm->mm_child[c];
-		VERIFY(mc->mc_vd != NULL);
-	}
 
 	zio->io_vsd = mm;
 	zio->io_vsd_ops = &vdev_mirror_vsd_ops;
