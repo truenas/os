@@ -1,9 +1,9 @@
 /*
- *  $Id: textbox.c,v 1.110 2012/12/01 01:48:08 tom Exp $
+ *  $Id: textbox.c,v 1.101 2011/06/29 09:53:03 tom Exp $
  *
  *  textbox.c -- implements the text box
  *
- *  Copyright 2000-2011,2012	Thomas E.  Dickey
+ *  Copyright 2000-2010,2011	Thomas E.  Dickey
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU Lesser General Public License, version 2.1
@@ -55,7 +55,6 @@ lseek_obj(MY_OBJ * obj, long offset, int mode)
     long fpos;
     if ((fpos = (long) lseek(obj->fd, (off_t) offset, mode)) == -1) {
 	switch (mode) {
-	default:
 	case SEEK_CUR:
 	    dlg_exiterr("Cannot get file position");
 	    break;
@@ -74,37 +73,6 @@ static long
 ftell_obj(MY_OBJ * obj)
 {
     return lseek_obj(obj, 0L, SEEK_CUR);
-}
-
-static void
-lseek_set(MY_OBJ * obj, long offset)
-{
-    long actual = lseek_obj(obj, offset, SEEK_SET);
-
-    if (actual != offset) {
-	dlg_exiterr("Cannot set file position to %ld (actual %ld)\n",
-		    offset, actual);
-    }
-}
-
-static void
-lseek_end(MY_OBJ * obj, long offset)
-{
-    long actual = lseek_obj(obj, offset, SEEK_END);
-
-    if (actual > offset) {
-	obj->file_size = actual;
-    }
-}
-
-static void
-lseek_cur(MY_OBJ * obj, long offset)
-{
-    long actual = lseek_obj(obj, offset, SEEK_CUR);
-
-    if (actual != offset) {
-	dlg_trace_msg("Lseek returned %ld, expected %ld\n", actual, offset);
-    }
 }
 
 static char *
@@ -229,7 +197,7 @@ tabize(MY_OBJ * obj, long val, long *first_pos)
 
     fpos = ftell_obj(obj);
 
-    lseek_set(obj, fpos - obj->fd_bytes_read);
+    lseek_obj(obj, fpos - obj->fd_bytes_read, SEEK_SET);
 
     /* Allocate space for read buffer */
     buftab = xalloc((size_t) val + 1);
@@ -256,7 +224,7 @@ tabize(MY_OBJ * obj, long val, long *first_pos)
 	    count++;
     }
 
-    lseek_set(obj, fpos);
+    lseek_obj(obj, fpos, SEEK_SET);
     free(buftab);
     return count;
 }
@@ -341,10 +309,10 @@ back_lines(MY_OBJ * obj, long n)
 		/* Really possible to move backward BUF_SIZE/2 bytes? */
 		if (fpos < BUF_SIZE / 2 + obj->fd_bytes_read) {
 		    /* No, move less than */
-		    lseek_set(obj, 0L);
+		    lseek_obj(obj, 0L, SEEK_SET);
 		    val_to_tabize = fpos - obj->fd_bytes_read;
 		} else {	/* Move backward BUF_SIZE/2 bytes */
-		    lseek_cur(obj, -(BUF_SIZE / 2 + obj->fd_bytes_read));
+		    lseek_obj(obj, -(BUF_SIZE / 2 + obj->fd_bytes_read), SEEK_CUR);
 		    val_to_tabize = BUF_SIZE / 2;
 		}
 		read_high(obj, BUF_SIZE);
@@ -372,10 +340,10 @@ back_lines(MY_OBJ * obj, long n)
 		    /* Really possible to move backward BUF_SIZE/2 bytes? */
 		    if (fpos < BUF_SIZE / 2 + obj->fd_bytes_read) {
 			/* No, move less than */
-			lseek_set(obj, 0L);
+			lseek_obj(obj, 0L, SEEK_SET);
 			val_to_tabize = fpos - obj->fd_bytes_read;
 		    } else {	/* Move backward BUF_SIZE/2 bytes */
-			lseek_cur(obj, -(BUF_SIZE / 2 + obj->fd_bytes_read));
+			lseek_obj(obj, -(BUF_SIZE / 2 + obj->fd_bytes_read), SEEK_CUR);
 			val_to_tabize = BUF_SIZE / 2;
 		    }
 		    read_high(obj, BUF_SIZE);
@@ -446,7 +414,6 @@ print_page(MY_OBJ * obj, int height, int width)
 	    passed_end = 1;
     }
     (void) wnoutrefresh(obj->text);
-    dlg_trace_win(obj->text);
 }
 
 /*
@@ -521,17 +488,18 @@ get_search_term(WINDOW *dialog, char *input, int height, int width)
     keypad(widget, TRUE);
     dlg_register_window(widget, "searchbox", binding);
 
-    dlg_draw_box2(widget, 0, 0, box_height, box_width,
-		  searchbox_attr,
-		  searchbox_border_attr,
-		  searchbox_border2_attr);
-    (void) wattrset(widget, searchbox_title_attr);
+    dlg_draw_box(widget, 0, 0, box_height, box_width,
+		 searchbox_attr,
+		 searchbox_border_attr);
+    wattrset(widget, searchbox_title_attr);
     (void) wmove(widget, 0, (box_width - len_caption) / 2);
 
     indx = dlg_index_wchars(caption);
     limit = dlg_limit_columns(caption, len_caption, 0);
     (void) waddnstr(widget, caption + indx[0], indx[limit] - indx[0]);
 
+    box_y++;
+    box_x++;
     box_width -= 2;
     offset = dlg_count_columns(input);
 
@@ -599,7 +567,7 @@ perform_search(MY_OBJ * obj, int height, int width, int key, char *search_term)
 	    }
 #endif
 	    /* ESC pressed, or no search term, reprint page to clear box */
-	    (void) wattrset(obj->text, dialog_attr);
+	    wattrset(obj->text, dialog_attr);
 	    back_lines(obj, obj->page_length);
 	    return TRUE;
 	}
@@ -613,6 +581,7 @@ perform_search(MY_OBJ * obj, int height, int width, int key, char *search_term)
 	back_lines(obj, (dir
 			 ? obj->page_length - 1
 			 : obj->page_length + 1));
+	found = FALSE;
 	if (dir) {		/* Forward search */
 	    while ((found = match_string(obj, search_term)) == FALSE) {
 		if (obj->end_reached)
@@ -628,7 +597,7 @@ perform_search(MY_OBJ * obj, int height, int width, int key, char *search_term)
 	if (found == FALSE) {	/* not found */
 	    (void) beep();
 	    /* Restore program state to that before searching */
-	    lseek_set(obj, fpos);
+	    lseek_obj(obj, fpos, SEEK_SET);
 
 	    read_high(obj, BUF_SIZE);
 
@@ -644,7 +613,7 @@ perform_search(MY_OBJ * obj, int height, int width, int key, char *search_term)
 	    back_lines(obj, 1L);
 	}
 	/* Reprint page */
-	(void) wattrset(obj->text, dialog_attr);
+	wattrset(obj->text, dialog_attr);
 	moved = TRUE;
     } else {			/* no need to find */
 	(void) beep();
@@ -706,7 +675,7 @@ dialog_textbox(const char *title, const char *file, int height, int width)
     WINDOW *dialog;
     bool moved;
     int result = DLG_EXIT_UNKNOWN;
-    int button = dlg_default_button();
+    int button = dialog_vars.extra_button ? dlg_defaultno_button() : 0;
     int min_width = 12;
 
     search_term[0] = '\0';	/* no search term entered yet */
@@ -724,10 +693,10 @@ dialog_textbox(const char *title, const char *file, int height, int width)
 
     /* Get file size. Actually, 'file_size' is the real file size - 1,
        since it's only the last byte offset from the beginning */
-    lseek_end(&obj, 0L);
+    obj.file_size = lseek_obj(&obj, 0L, SEEK_END);
 
     /* Restore file pointer to beginning of file after getting file size */
-    lseek_set(&obj, 0L);
+    lseek_obj(&obj, 0L, SEEK_SET);
 
     read_high(&obj, BUF_SIZE);
 
@@ -756,8 +725,8 @@ dialog_textbox(const char *title, const char *file, int height, int width)
 
     /* register the new window, along with its borders */
     dlg_mouse_mkbigregion(0, 0, PAGE_LENGTH + 2, width, KEY_MAX, 1, 1, 1 /* lines */ );
-    dlg_draw_box2(dialog, 0, 0, height, width, dialog_attr, border_attr, border2_attr);
-    dlg_draw_bottom_box2(dialog, border_attr, border2_attr, dialog_attr);
+    dlg_draw_box(dialog, 0, 0, height, width, dialog_attr, border_attr);
+    dlg_draw_bottom_box(dialog);
     dlg_draw_title(dialog, title);
 
     dlg_draw_buttons(dialog, PAGE_LENGTH + 2, 0, obj.buttons, button, FALSE, width);
@@ -865,7 +834,7 @@ dialog_textbox(const char *title, const char *file, int height, int width)
 
 		    if (fpos > obj.fd_bytes_read) {
 			/* Yes, we have to read it in */
-			lseek_set(&obj, 0L);
+			lseek_obj(&obj, 0L, SEEK_SET);
 
 			read_high(&obj, BUF_SIZE);
 		    }
@@ -880,7 +849,7 @@ dialog_textbox(const char *title, const char *file, int height, int width)
 
 		if (fpos < obj.file_size) {
 		    /* Yes, we have to read it in */
-		    lseek_end(&obj, -BUF_SIZE);
+		    lseek_obj(&obj, -BUF_SIZE, SEEK_END);
 
 		    read_high(&obj, BUF_SIZE);
 		}
@@ -946,6 +915,7 @@ dialog_textbox(const char *title, const char *file, int height, int width)
 		height = old_height;
 		width = old_width;
 		back_lines(&obj, obj.page_length);
+		moved = TRUE;
 		/* repaint */
 		dlg_clear();
 		dlg_del_window(dialog);
