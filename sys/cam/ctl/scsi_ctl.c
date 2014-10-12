@@ -1517,11 +1517,6 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 			case CAM_MESSAGE_RECV:
 				switch (inot->arg) {
 				case MSG_ABORT_TASK_SET:
-					/*
-					 * XXX KDM this isn't currently
-					 * supported by CTL.  It ends up
-					 * being a no-op.
-					 */
 					io->taskio.task_action =
 						CTL_TASK_ABORT_TASK_SET;
 					break;
@@ -1538,11 +1533,6 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 						CTL_TASK_LUN_RESET;
 					break;
 				case MSG_CLEAR_TASK_SET:
-					/*
-					 * XXX KDM this isn't currently
-					 * supported by CTL.  It ends up
-					 * being a no-op.
-					 */
 					io->taskio.task_action =
 						CTL_TASK_CLEAR_TASK_SET;
 					break;
