@@ -4400,7 +4400,6 @@ skip_head:
 
 	rxr->fmp = NULL;
 	rxr->lmp = NULL;
-	rxr->discard = FALSE;
 
 	bus_dmamap_sync(rxr->rxdma.dma_tag, rxr->rxdma.dma_map,
 	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
@@ -4518,6 +4517,18 @@ igb_initialize_receive_units(struct adapter *adapter)
 		rctl &= ~E1000_RCTL_LPE;
 		srrctl |= 2048 >> E1000_SRRCTL_BSIZEPKT_SHIFT;
 		rctl |= E1000_RCTL_SZ_2048;
+	}
+
+	/*
+	 * If TX flow control is disabled and there's >1 queue defined,
+	 * enable DROP.
+	 *
+	 * This drops frames rather than hanging the RX MAC for all queues.
+	 */
+	if ((adapter->num_queues > 1) &&
+	    (adapter->fc == e1000_fc_none ||
+	     adapter->fc == e1000_fc_rx_pause)) {
+		srrctl |= E1000_SRRCTL_DROP_EN;
 	}
 
 	/* Setup the Base and Length of the Rx Descriptor Rings */
@@ -4864,15 +4875,16 @@ igb_rxeof(struct igb_queue *que, int count, int *done)
 		hdr = le16toh(cur->wb.lower.lo_dword.hs_rss.hdr_info);
 		eop = ((staterr & E1000_RXD_STAT_EOP) == E1000_RXD_STAT_EOP);
 
-		/* Make sure all segments of a bad packet are discarded */
-		if (((staterr & E1000_RXDEXT_ERR_FRAME_ERR_MASK) != 0) ||
-		    (rxr->discard)) {
+		/*
+		 * Free the frame (all segments) if we're at EOP and
+		 * it's an error.
+		 *
+		 * The datasheet states that EOP + status is only valid for
+		 * the final segment in a multi-segment frame.
+		 */
+		if (eop && ((staterr & E1000_RXDEXT_ERR_FRAME_ERR_MASK) != 0)) {
 			adapter->dropped_pkts++;
 			++rxr->rx_discarded;
-			if (!eop) /* Catch subsequent segs */
-				rxr->discard = TRUE;
-			else
-				rxr->discard = FALSE;
 			igb_rx_discard(rxr, i);
 			goto next_desc;
 		}
@@ -6056,6 +6068,7 @@ igb_set_flowcntl(SYSCTL_HANDLER_ARGS)
 
 	adapter->hw.fc.current_mode = adapter->hw.fc.requested_mode;
 	e1000_force_mac_fc(&adapter->hw);
+	/* XXX TODO: update DROP_EN on each RX queue if appropriate */
 	return (error);
 }
 

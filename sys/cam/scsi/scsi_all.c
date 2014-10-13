@@ -1592,37 +1592,37 @@ static struct asc_table_entry asc_table[] = {
 	{ SST(0x22, 0x00, SS_FATAL | EINVAL,
 	    "Illegal function (use 20 00, 24 00, or 26 00)") },
 	/* DT P      B    */
-	{ SST(0x23, 0x00, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x00, SS_FATAL | EINVAL,
 	    "Invalid token operation, cause not reportable") },
 	/* DT P      B    */
-	{ SST(0x23, 0x01, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x01, SS_FATAL | EINVAL,
 	    "Invalid token operation, unsupported token type") },
 	/* DT P      B    */
-	{ SST(0x23, 0x02, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x02, SS_FATAL | EINVAL,
 	    "Invalid token operation, remote token usage not supported") },
 	/* DT P      B    */
-	{ SST(0x23, 0x03, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x03, SS_FATAL | EINVAL,
 	    "Invalid token operation, remote ROD token creation not supported") },
 	/* DT P      B    */
-	{ SST(0x23, 0x04, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x04, SS_FATAL | EINVAL,
 	    "Invalid token operation, token unknown") },
 	/* DT P      B    */
-	{ SST(0x23, 0x05, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x05, SS_FATAL | EINVAL,
 	    "Invalid token operation, token corrupt") },
 	/* DT P      B    */
-	{ SST(0x23, 0x06, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x06, SS_FATAL | EINVAL,
 	    "Invalid token operation, token revoked") },
 	/* DT P      B    */
-	{ SST(0x23, 0x07, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x07, SS_FATAL | EINVAL,
 	    "Invalid token operation, token expired") },
 	/* DT P      B    */
-	{ SST(0x23, 0x08, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x08, SS_FATAL | EINVAL,
 	    "Invalid token operation, token cancelled") },
 	/* DT P      B    */
-	{ SST(0x23, 0x09, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x09, SS_FATAL | EINVAL,
 	    "Invalid token operation, token deleted") },
 	/* DT P      B    */
-	{ SST(0x23, 0x0A, SS_RDEF,	/* XXX TBD */
+	{ SST(0x23, 0x0A, SS_FATAL | EINVAL,
 	    "Invalid token operation, invalid token length") },
 	/* DTLPWROMAEBKVF */
 	{ SST(0x24, 0x00, SS_FATAL | EINVAL,
@@ -1673,28 +1673,28 @@ static struct asc_table_entry asc_table[] = {
 	{ SST(0x26, 0x05, SS_RDEF,	/* XXX TBD */
 	    "Data decryption error") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x06, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x06, SS_FATAL | EINVAL,
 	    "Too many target descriptors") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x07, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x07, SS_FATAL | EINVAL,
 	    "Unsupported target descriptor type code") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x08, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x08, SS_FATAL | EINVAL,
 	    "Too many segment descriptors") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x09, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x09, SS_FATAL | EINVAL,
 	    "Unsupported segment descriptor type code") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x0A, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x0A, SS_FATAL | EINVAL,
 	    "Unexpected inexact segment") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x0B, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x0B, SS_FATAL | EINVAL,
 	    "Inline data length exceeded") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x0C, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x0C, SS_FATAL | EINVAL,
 	    "Invalid operation for copy source or destination") },
 	/* DTLPWRO    K   */
-	{ SST(0x26, 0x0D, SS_RDEF,	/* XXX TBD */
+	{ SST(0x26, 0x0D, SS_FATAL | EINVAL,
 	    "Copy segment granularity violation") },
 	/* DT PWROMAEBK   */
 	{ SST(0x26, 0x0E, SS_RDEF,	/* XXX TBD */

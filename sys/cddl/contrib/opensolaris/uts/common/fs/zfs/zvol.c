@@ -883,7 +883,8 @@ zvol_remove_minors(const char *name)
 	LIST_FOREACH_SAFE(zv, &all_zvols, zv_links, tzv) {
 		if (strcmp(zv->zv_name, name) == 0 ||
 		    (strncmp(zv->zv_name, name, namelen) == 0 &&
-		     zv->zv_name[namelen] == '/')) {
+		    strlen(zv->zv_name) > namelen && (zv->zv_name[namelen] == '/' ||
+		    zv->zv_name[namelen] == '@'))) {
 			(void) zvol_remove_zv(zv);
 		}
 	}
@@ -1634,7 +1635,7 @@ zvol_write(struct cdev *dev, struct uio *uio, int ioflag)
 #ifdef sun
 	sync = !(zv->zv_flags & ZVOL_WCE) ||
 #else
-	sync =
+	sync = (ioflag & IO_SYNC) ||
 #endif
 	    (zv->zv_objset->os_sync == ZFS_SYNC_ALWAYS);
 
@@ -2575,13 +2576,12 @@ zvol_create_minors(const char *name)
 	if (dmu_objset_type(os) == DMU_OST_ZVOL) {
 		dsl_dataset_long_hold(os->os_dsl_dataset, FTAG);
 		dsl_pool_rele(dmu_objset_pool(os), FTAG);
-		if ((error = zvol_create_minor(name)) == 0)
+		error = zvol_create_minor(name);
+		if (error == 0 || error == EEXIST) {
 			error = zvol_create_snapshots(os, name);
-		else {
-#if 0
+		} else {
 			printf("ZFS WARNING: Unable to create ZVOL %s (error=%d).\n",
 			    name, error);
-#endif
 		}
 		dsl_dataset_long_rele(os->os_dsl_dataset, FTAG);
 		dsl_dataset_rele(os->os_dsl_dataset, FTAG);
@@ -2682,12 +2682,17 @@ zvol_rename_minors(const char *oldname, const char *newname)
 	size_t oldnamelen, newnamelen;
 	zvol_state_t *zv;
 	char *namebuf;
+	boolean_t locked = B_FALSE;
 
 	oldnamelen = strlen(oldname);
 	newnamelen = strlen(newname);
 
 	DROP_GIANT();
-	mutex_enter(&spa_namespace_lock);
+	/* See comment in zvol_open(). */
+	if (!MUTEX_HELD(&spa_namespace_lock)) {
+		mutex_enter(&spa_namespace_lock);
+		locked = B_TRUE;
+	}
 
 	LIST_FOREACH(zv, &all_zvols, zv_links) {
 		if (strcmp(zv->zv_name, oldname) == 0) {
@@ -2702,7 +2707,8 @@ zvol_rename_minors(const char *oldname, const char *newname)
 		}
 	}
 
-	mutex_exit(&spa_namespace_lock);
+	if (locked)
+		mutex_exit(&spa_namespace_lock);
 	PICKUP_GIANT();
 }
 
