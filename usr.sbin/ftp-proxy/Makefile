@@ -1,5 +1,5 @@
 # $FreeBSD$
 
-SUBDIR= libevent ftp-proxy
+SUBDIR= libevent ftp-proxy cu
 
 .include <bsd.subdir.mk>

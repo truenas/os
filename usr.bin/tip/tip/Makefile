@@ -32,8 +32,9 @@
 #	CONNECT			enable ~C command (connect pgm to remote)
 
 PROG=	tip
-LINKS=	${BINDIR}/tip ${BINDIR}/cu
-MAN=	tip.1 cu.1
+#LINKS=	${BINDIR}/tip ${BINDIR}/cu
+MAN=	tip.1
+#MAN+=	cu.1
 CFLAGS+=-I${.CURDIR} -DDEFBR=9600 -DDEFFS=BUFSIZ -DACULOG -DPRISTINE \
 	-DCONNECT -DV831 -DVENTEL -DHAYES -DCOURIER -DT3000
 WARNS?=	2
