@@ -94,6 +94,11 @@ static int zpool_do_history(int, char **);
 static int zpool_do_get(int, char **);
 static int zpool_do_set(int, char **);
 
+#ifdef __FreeBSD__
+static int is_root_pool(zpool_handle_t *);
+static void root_pool_upgrade_check(zpool_handle_t *, char *, int);
+#endif
+
 /*
  * These libumem hooks provide a reasonable set of defaults for the allocator's
  * debugging facilities.
@@ -4118,6 +4123,25 @@ status_callback(zpool_handle_t *zhp, void *data)
 		return (0);
 	}
 
+#if !defined(NO_6312_HACK)
+	/*
+	 * FreeNAS #6312: For root pools, it's okay not to be using the
+	 * latest and greatest version.
+	 */
+	if (is_root_pool(zhp) &&
+	    (reason == ZPOOL_STATUS_OK ||
+	    reason == ZPOOL_STATUS_VERSION_OLDER ||
+	    reason == ZPOOL_STATUS_FEAT_DISABLED)) {
+		if (!cbp->cb_allpools) {
+			(void) printf(gettext("pool '%s' is healthy\n"),
+			    zpool_get_name(zhp));
+			if (cbp->cb_first)
+				cbp->cb_first = B_FALSE;
+		}
+		return (0);
+	}
+#endif
+
 	if (cbp->cb_first)
 		cbp->cb_first = B_FALSE;
 	else
@@ -4615,6 +4639,15 @@ upgrade_cb(zpool_handle_t *zhp, void *arg)
 
 	assert(SPA_VERSION_IS_SUPPORTED(version));
 
+#if !defined(NO_6312_HACK)
+	/*
+	 * FreeNAS #6312: for now disable upgrade of the root pool
+	 * and pretend the upgrade was succeeded.
+	 */
+	if (is_root_pool(zhp))
+		return (0);
+#endif
+
 	if (version < cbp->cb_version) {
 		cbp->cb_first = B_FALSE;
 		ret = upgrade_version(zhp, cbp->cb_version);
@@ -4683,6 +4716,14 @@ upgrade_list_older_cb(zpool_handle_t *zhp, void *arg)
 	assert(SPA_VERSION_IS_SUPPORTED(version));
 
 	if (version < SPA_VERSION_FEATURES) {
+#if !defined(NO_6312_HACK)
+			/*
+			 * FreeNAS #6312: for now disable upgrade of the root pool
+			 * and pretend the upgrade was succeeded.
+			 */
+			if (is_root_pool(zhp))
+			return (0);
+#endif
 		if (cbp->cb_first) {
 			(void) printf(gettext("The following pools are "
 			    "formatted with legacy version numbers and can\n"
@@ -4770,6 +4811,17 @@ upgrade_one(zpool_handle_t *zhp, void *data)
 	}
 
 	cur_version = zpool_get_prop_int(zhp, ZPOOL_PROP_VERSION, NULL);
+#if !defined(NO_6312_HACK)
+	/*
+	 * FreeNAS #6312: for now disable upgrade of the root pool.
+	 */
+	if (is_root_pool(zhp) && cur_version != cbp->cb_version) {
+		(void) printf(gettext("Pool '%s' is the root pool, "
+		    "upgrade is not supported.\n\n"), zpool_get_name(zhp));
+
+		return (0);
+	}
+#endif
 	if (cur_version > cbp->cb_version) {
 		(void) printf(gettext("Pool '%s' is already formatted "
 		    "using more current version '%llu'.\n\n"),
