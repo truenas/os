@@ -4132,13 +4132,19 @@ status_callback(zpool_handle_t *zhp, void *data)
 	    (reason == ZPOOL_STATUS_OK ||
 	    reason == ZPOOL_STATUS_VERSION_OLDER ||
 	    reason == ZPOOL_STATUS_FEAT_DISABLED)) {
-		if (!cbp->cb_allpools) {
-			(void) printf(gettext("pool '%s' is healthy\n"),
-			    zpool_get_name(zhp));
-			if (cbp->cb_first)
-				cbp->cb_first = B_FALSE;
+		if (cbp->cb_explain) {
+			if (!cbp->cb_allpools) {
+				(void) printf(gettext("pool '%s' is healthy\n"),
+				    zpool_get_name(zhp));
+				if (cbp->cb_first)
+					cbp->cb_first = B_FALSE;
+			}
+			return (0);
+		} else {
+			reason = ZPOOL_STATUS_OK;
+			msgid = NULL;
+			/* FALLTHROUGH */
 		}
-		return (0);
 	}
 #endif
 
