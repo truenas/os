@@ -95,6 +95,11 @@ static int zpool_do_history(int, char **);
 static int zpool_do_get(int, char **);
 static int zpool_do_set(int, char **);
 
+#ifdef __FreeBSD__
+static int is_root_pool(zpool_handle_t *);
+static void root_pool_upgrade_check(zpool_handle_t *, char *, int);
+#endif
+
 /*
  * These libumem hooks provide a reasonable set of defaults for the allocator's
  * debugging facilities.
@@ -4166,6 +4171,31 @@ status_callback(zpool_handle_t *zhp, void *data)
 		}
 		return (0);
 	}
+
+#if !defined(NO_6312_HACK)
+	/*
+	 * FreeNAS #6312: For root pools, it's okay not to be using the
+	 * latest and greatest version.
+	 */
+	if (is_root_pool(zhp) &&
+	    (reason == ZPOOL_STATUS_OK ||
+	    reason == ZPOOL_STATUS_VERSION_OLDER ||
+	    reason == ZPOOL_STATUS_FEAT_DISABLED)) {
+		if (cbp->cb_explain) {
+			if (!cbp->cb_allpools) {
+				(void) printf(gettext("pool '%s' is healthy\n"),
+				    zpool_get_name(zhp));
+				if (cbp->cb_first)
+					cbp->cb_first = B_FALSE;
+			}
+			return (0);
+		} else {
+			reason = ZPOOL_STATUS_OK;
+			msgid = NULL;
+			/* FALLTHROUGH */
+		}
+	}
+#endif
 
 	if (cbp->cb_first)
 		cbp->cb_first = B_FALSE;

@@ -4000,8 +4000,11 @@ static int
 zfs_do_receive(int argc, char **argv)
 {
 	nvlist_t *props, *limitds;
+	nvpair_t *nvp;
 	int c, err;
 	recvflags_t flags = { 0 };
+	boolean_t abort_resumable = B_FALSE;
+
 	if (nvlist_alloc(&props, NV_UNIQUE_NAME, 0) != 0)
 		nomem();
 	if (nvlist_alloc(&limitds, NV_UNIQUE_NAME, 0) != 0)
@@ -4010,10 +4013,6 @@ zfs_do_receive(int argc, char **argv)
 	/* check options */
 	while ((c = getopt(argc, argv, ":del:no:uvx:F")) != -1) {
 		switch (c) {
-		case 'o':
-			if (parseprop(props, optarg) != 0)
-				return (1);
-			break;
 		case 'd':
 			flags.isprefix = B_TRUE;
 			break;
@@ -4152,6 +4151,15 @@ recverror:
 
 	if (limitds != NULL)
 		nvlist_free(limitds);
+
+	/*
+	 * zfs_receive() can return 0, two different negative values
+	 * (-1 or -2) or a positive value (libzfs error code). -2 means
+	 * "soft error" which is not fatal (as receive completed successfully
+	 * after all). Return 0 in that case.
+	 */
+	if (err == -2)
+		return (0);
 
 	return (err != 0);
 }
