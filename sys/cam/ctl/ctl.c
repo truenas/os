@@ -9707,17 +9707,21 @@ ctl_inquiry_evpd_serial(struct ctl_scsiio *ctsio, int alloc_len)
 {
 	struct scsi_vpd_unit_serial_number *sn_ptr;
 	struct ctl_lun *lun;
+	int data_len, sn_len;
 
 	lun = (struct ctl_lun *)ctsio->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
 
-	ctsio->kern_data_ptr = malloc(sizeof(*sn_ptr), M_CTL, M_WAITOK | M_ZERO);
+	if (lun != NULL)
+		sn_len = strnlen((char *)lun->be_lun->serial_num, CTL_SN_LEN);
+	else
+		sn_len = CTL_SN_LEN;
+	data_len = 4 + sn_len;
+	ctsio->kern_data_ptr = malloc(data_len, M_CTL, M_WAITOK | M_ZERO);
 	sn_ptr = (struct scsi_vpd_unit_serial_number *)ctsio->kern_data_ptr;
-	ctsio->kern_sg_entries = 0;
-
-	if (sizeof(*sn_ptr) < alloc_len) {
-		ctsio->residual = alloc_len - sizeof(*sn_ptr);
-		ctsio->kern_data_len = sizeof(*sn_ptr);
-		ctsio->kern_total_len = sizeof(*sn_ptr);
+	if (data_len < alloc_len) {
+		ctsio->residual = alloc_len - data_len;
+		ctsio->kern_data_len = data_len;
+		ctsio->kern_total_len = data_len;
 	} else {
 		ctsio->residual = 0;
 		ctsio->kern_data_len = alloc_len;
@@ -9739,19 +9743,16 @@ ctl_inquiry_evpd_serial(struct ctl_scsiio *ctsio, int alloc_len)
 		sn_ptr->device = (SID_QUAL_LU_OFFLINE << 5) | T_DIRECT;
 
 	sn_ptr->page_code = SVPD_UNIT_SERIAL_NUMBER;
+	sn_ptr->length = sn_len;
 	/*
 	 * If we don't have a LUN, we just leave the serial number as
 	 * all spaces.
 	 */
 	if (lun != NULL) {
-		sn_ptr->length = ctl_min(sizeof(*sn_ptr) - 4,
-		    strnlen((char *)lun->be_lun->serial_num, CTL_SN_LEN));
 		strncpy((char *)sn_ptr->serial_num,
-			(char *)lun->be_lun->serial_num, sn_ptr->length);
-	} else {
-		sn_ptr->length = ctl_min(sizeof(sn_ptr->serial_num), CTL_SN_LEN);
-		memset(sn_ptr->serial_num, 0x20, sn_ptr->length);
-	}
+			(char *)lun->be_lun->serial_num, sn_len);
+	} else
+		memset(sn_ptr->serial_num, 0x20, sn_len);
 	ctsio->scsi_status = SCSI_STATUS_OK;
 
 	ctsio->io_hdr.flags |= CTL_FLAG_ALLOCATED;
