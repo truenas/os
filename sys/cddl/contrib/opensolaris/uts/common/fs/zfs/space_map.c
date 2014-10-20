@@ -45,7 +45,7 @@ SYSCTL_DECL(_vfs_zfs);
  * DMU to keep more data in-core, and also to waste more i/o bandwidth
  * when only a few blocks have changed since the last transaction group.
  */
-int space_map_blksz = (1 << 12);
+int space_map_blksz = (1 << 15);
 SYSCTL_INT(_vfs_zfs, OID_AUTO, space_map_blksz, CTLFLAG_RDTUN, &space_map_blksz, 0,
     "Maximum block size for space map.  Must be power of 2 and greater than 4096.");
 
