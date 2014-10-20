@@ -46,6 +46,7 @@ SYSCTL_DECL(_vfs_zfs);
  * when only a few blocks have changed since the last transaction group.
  */
 int space_map_blksz = (1 << 15);
+TUNABLE_INT("vfs.zfs.space_map_blksz", &space_map_blksz);
 SYSCTL_INT(_vfs_zfs, OID_AUTO, space_map_blksz, CTLFLAG_RDTUN, &space_map_blksz, 0,
     "Maximum block size for space map.  Must be power of 2 and greater than 4096.");
 
