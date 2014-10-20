@@ -100,7 +100,7 @@ SYSCTL_INT(_vfs_zfs, OID_AUTO, no_scrub_prefetch, CTLFLAG_RW,
 
 enum ddt_class zfs_scrub_ddt_class_max = DDT_CLASS_DUPLICATE;
 /* max number of blocks to free in a single TXG */
-uint64_t zfs_free_max_blocks = UINT64_MAX;
+uint64_t zfs_free_max_blocks = 131072;
 SYSCTL_UQUAD(_vfs_zfs, OID_AUTO, free_max_blocks, CTLFLAG_RWTUN,
     &zfs_free_max_blocks, 0, "Maximum number of blocks to free in one TXG");
 
