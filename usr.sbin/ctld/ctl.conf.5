@@ -27,7 +27,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd September 5, 2014
+.Dd October 22, 2014
 .Dt CTL.CONF 5
 .Os
 .Sh NAME
@@ -132,10 +132,14 @@ The following statements are available at the portal-group level:
 .It Ic discovery-auth-group Aq Ar name
 Assigns previously defined authentication group to the portal group,
 to be used for target discovery.
-By default, portal groups that do not specify their own auth settings,
-using clauses such as "chap" or "initiator-name", are assigned
-predefined auth-group "default", which denies discovery.
-Another predefined auth-group, "no-authentication", may be used
+By default, portal groups are assigned predefined
+.Sy auth-group
+.Qq Ar default ,
+which denies discovery.
+Another predefined
+.Sy auth-group ,
+.Qq Ar no-authentication ,
+may be used
 to permit discovery without authentication.
 .It Ic listen Aq Ar address
 Specifies IPv4 or IPv6 address and port to listen on for incoming connections.
