@@ -603,27 +603,16 @@ zfsctl_freebsd_root_lookup(ap)
 	int nameiop = ap->a_cnp->cn_nameiop;
 	char nm[NAME_MAX + 1];
 	int err;
-	int ltype;
 
 	if ((flags & ISLASTCN) && (nameiop == RENAME || nameiop == CREATE))
 		return (EOPNOTSUPP);
 
 	ASSERT(ap->a_cnp->cn_namelen < sizeof(nm));
 	strlcpy(nm, ap->a_cnp->cn_nameptr, ap->a_cnp->cn_namelen + 1);
-	err = zfsctl_root_lookup(dvp, nm, vpp, NULL, 0, NULL, cr, NULL, NULL, NULL);
-	if (err == 0 && (nm[0] != '.' || nm[1] != '\0')) {
-		ltype = VOP_ISLOCKED(dvp);
-		if (flags & ISDOTDOT) {
-			VN_HOLD(*vpp);
-			VOP_UNLOCK(dvp, 0);
-		}
-		vn_lock(*vpp, LK_EXCLUSIVE | LK_RETRY);
-		if (flags & ISDOTDOT) {
-			VN_RELE(*vpp);
-			vn_lock(dvp, ltype| LK_RETRY);
-		}
-	}
 
+	err = zfsctl_root_lookup(dvp, nm, vpp, NULL, 0, NULL, cr, NULL, NULL, NULL);
+	if (err == 0 && (nm[0] != '.' || nm[1] != '\0'))
+		vn_lock(*vpp, LK_EXCLUSIVE | LK_RETRY);
 	return (err);
 }
 
@@ -636,8 +625,8 @@ static struct vop_vector zfsctl_ops_root = {
 	.vop_access =	zfsctl_common_access,
 	.vop_readdir =	gfs_vop_readdir,
 	.vop_lookup =	zfsctl_freebsd_root_lookup,
-	.vop_inactive =	VOP_NULL,
-	.vop_reclaim =	gfs_vop_reclaim,
+	.vop_inactive =	gfs_vop_inactive,
+	.vop_reclaim =	zfsctl_common_reclaim,
 #ifdef TODO
 	.vop_pathconf =	zfsctl_pathconf,
 #endif
@@ -690,7 +679,7 @@ zfsctl_unmount_snap(zfs_snapentry_t *sep, int fflags, cred_t *cr)
 	 * the sd_lock mutex held by our caller.
 	 */
 	ASSERT(svp->v_count == 1);
-	gfs_vop_reclaim(svp, cr, NULL);
+	gfs_vop_inactive(svp, cr, NULL);
 
 	kmem_free(sep->se_name, strlen(sep->se_name) + 1);
 	kmem_free(sep, sizeof (zfs_snapentry_t));
@@ -960,7 +949,7 @@ zfsctl_snapdir_lookup(ap)
 	avl_index_t where;
 	zfsvfs_t *zfsvfs = dvp->v_vfsp->vfs_data;
 	int err;
-	int ltype, flags = 0;
+	int flags = 0;
 
 	/*
 	 * No extended attributes allowed under .zfs
@@ -984,6 +973,7 @@ zfsctl_snapdir_lookup(ap)
 		return (SET_ERROR(ENOENT));
 
 	ZFS_ENTER(zfsvfs);
+
 	if (gfs_lookup_dot(vpp, dvp, zfsvfs->z_ctldir, nm) == 0) {
 		ZFS_EXIT(zfsvfs);
 		return (0);
@@ -1430,8 +1420,8 @@ static struct vop_vector zfsctl_ops_shares = {
 	.vop_access =	zfsctl_common_access,
 	.vop_readdir =	zfsctl_shares_readdir,
 	.vop_lookup =	zfsctl_shares_lookup,
-	.vop_inactive =	VOP_NULL,
-	.vop_reclaim =	gfs_vop_reclaim,
+	.vop_inactive =	gfs_vop_inactive,
+	.vop_reclaim =	zfsctl_common_reclaim,
 	.vop_fid =	zfsctl_shares_fid,
 };
 #endif	/* !sun */
@@ -1459,9 +1449,8 @@ zfsctl_snapshot_mknode(vnode_t *pvp, uint64_t objset)
 	return (vp);
 }
 
-
 static int
-zfsctl_snapshot_reclaim(ap)
+zfsctl_snapshot_inactive(ap)
 	struct vop_inactive_args /* {
 		struct vnode *a_vp;
 		struct thread *a_td;
@@ -1469,20 +1458,19 @@ zfsctl_snapshot_reclaim(ap)
 {
 	vnode_t *vp = ap->a_vp;
 	cred_t *cr = ap->a_td->td_ucred;
-	struct vop_reclaim_args iap;
+	struct vop_inactive_args iap;
 	zfsctl_snapdir_t *sdp;
 	zfs_snapentry_t *sep, *next;
 	int locked;
 	vnode_t *dvp;
 
+	if (vp->v_count > 0)
+		goto end;
+
 	VERIFY(gfs_dir_lookup(vp, "..", &dvp, cr, 0, NULL, NULL) == 0);
 	sdp = dvp->v_data;
 	VOP_UNLOCK(dvp, 0);
-	/* this may already have been unmounted */
-	if (sdp == NULL) {
-		VN_RELE(dvp);
-		return (0);
-	}
+
 	if (!(locked = MUTEX_HELD(&sdp->sd_lock)))
 		mutex_enter(&sdp->sd_lock);
 
@@ -1506,6 +1494,7 @@ zfsctl_snapshot_reclaim(ap)
 		mutex_exit(&sdp->sd_lock);
 	VN_RELE(dvp);
 
+end:
 	/*
 	 * Dispose of the vnode for the snapshot mount point.
 	 * This is safe to do because once this entry has been removed
@@ -1514,9 +1503,7 @@ zfsctl_snapshot_reclaim(ap)
 	 * creating a new vnode.
 	 */
 	iap.a_vp = vp;
-	gfs_vop_reclaim(&iap);
-	return (0);
-
+	return (gfs_vop_inactive(&iap));
 }
 
 static int
@@ -1600,15 +1587,8 @@ zfsctl_snapshot_lookup(ap)
 
 	error = zfsctl_root_lookup(zfsvfs->z_ctldir, "snapshot", vpp,
 	    NULL, 0, NULL, cr, NULL, NULL, NULL);
-	if (error == 0) {
-		int ltype = VOP_ISLOCKED(dvp);
-		VN_HOLD(*vpp);
-		VOP_UNLOCK(dvp, 0);
+	if (error == 0)
 		vn_lock(*vpp, LK_EXCLUSIVE | LK_RETRY);
-		VN_RELE(*vpp);
-		vn_lock(dvp, ltype | LK_RETRY);
-	}
-
 	return (error);
 }
 
@@ -1660,9 +1640,9 @@ zfsctl_snapshot_vptocnp(struct vop_vptocnp_args *ap)
  */
 static struct vop_vector zfsctl_ops_snapshot = {
 	.vop_default =	&default_vnodeops,
-	.vop_inactive =	VOP_NULL,
+	.vop_inactive =	zfsctl_snapshot_inactive,
 	.vop_lookup =	zfsctl_snapshot_lookup,
-	.vop_reclaim =	zfsctl_snapshot_reclaim,
+	.vop_reclaim =	zfsctl_common_reclaim,
 	.vop_getattr =	zfsctl_snapshot_getattr,
 	.vop_fid =	zfsctl_snapshot_fid,
 	.vop_vptocnp =	zfsctl_snapshot_vptocnp,
