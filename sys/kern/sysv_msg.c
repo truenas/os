@@ -300,11 +300,11 @@ msginit()
 		osd_free_reserved(rsv);
 	sx_sunlock(&allprison_lock);
 
-	error = syscall_helper_register(msg_syscalls);
+	error = syscall_helper_register(msg_syscalls, SY_THR_STATIC_KLD);
 	if (error != 0)
 		return (error);
 #ifdef COMPAT_FREEBSD32
-	error = syscall32_helper_register(msg32_syscalls);
+	error = syscall32_helper_register(msg32_syscalls, SY_THR_STATIC_KLD);
 	if (error != 0)
 		return (error);
 #endif

@@ -1038,11 +1038,11 @@ ksem_module_init(void)
 	p31b_setcfg(CTL_P1003_1B_SEM_VALUE_MAX, SEM_VALUE_MAX);
 	ksem_info = ksem_info_impl;
 
-	error = syscall_helper_register(ksem_syscalls);
+	error = syscall_helper_register(ksem_syscalls, SY_THR_STATIC_KLD);
 	if (error)
 		return (error);
 #ifdef COMPAT_FREEBSD32
-	error = syscall32_helper_register(ksem32_syscalls);
+	error = syscall32_helper_register(ksem32_syscalls, SY_THR_STATIC_KLD);
 	if (error)
 		return (error);
 #endif
