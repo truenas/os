@@ -734,6 +734,12 @@ mpssas_get_sas_address_for_sata_disk(struct mps_softc *sc,
 		ioc_status = le16toh(mpi_reply.IOCStatus)
 		    & MPI2_IOCSTATUS_MASK;
 		sas_status = mpi_reply.SASStatus;
+		if (ioc_status != MPI2_IOCSTATUS_SUCCESS) {
+			mps_dprint(sc, MPS_XINFO, "Sleeping 3 seconds "
+			    "after SATA ID error to wait for spinup\n");
+			msleep(&sc->msleep_fake_chan, &sc->mps_mtx, 0,
+			    "mpsid", 3 * hz);
+		}
 	} while ((rc == -EAGAIN || ioc_status || sas_status) &&
 	    (try_count < 5));
 
