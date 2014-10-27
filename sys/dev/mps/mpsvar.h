@@ -32,7 +32,7 @@
 #ifndef _MPSVAR_H
 #define _MPSVAR_H
 
-#define MPS_DRIVER_VERSION	"19.00.00.00-fbsd"
+#define MPS_DRIVER_VERSION	"19.00.01.00-fbsd"
 
 #define MPS_DB_MAX_WAIT		2500
 
@@ -53,6 +53,8 @@
 
 #define MPS_SCSI_RI_INVALID_FRAME	(0x00000002)
 #define MPS_STRING_LENGTH               64
+
+#define DEFAULT_SPINUP_WAIT	3	/* seconds to wait for spinup */
 
 #include <sys/endian.h>
 
@@ -276,6 +278,7 @@ struct mps_softc {
 	int				chain_free;
 	int				max_chains;
 	int				chain_free_lowwater;
+	int				spinup_wait_time;
 #if __FreeBSD_version >= 900030
 	uint64_t			chain_alloc_fail;
 #endif

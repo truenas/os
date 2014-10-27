@@ -1349,6 +1349,7 @@ mps_get_tunables(struct mps_softc *sc)
 	sc->disable_msix = 0;
 	sc->disable_msi = 0;
 	sc->max_chains = MPS_CHAIN_FRAMES;
+	sc->spinup_wait_time = DEFAULT_SPINUP_WAIT;
 
 	/*
 	 * Grab the global variables.
@@ -1357,6 +1358,7 @@ mps_get_tunables(struct mps_softc *sc)
 	TUNABLE_INT_FETCH("hw.mps.disable_msix", &sc->disable_msix);
 	TUNABLE_INT_FETCH("hw.mps.disable_msi", &sc->disable_msi);
 	TUNABLE_INT_FETCH("hw.mps.max_chains", &sc->max_chains);
+	TUNABLE_INT_FETCH("hw.mps.spinup_wait_time", &sc->spinup_wait_time);
 
 	/* Grab the unit-instance variables */
 	snprintf(tmpstr, sizeof(tmpstr), "dev.mps.%d.debug_level",
@@ -1379,6 +1381,10 @@ mps_get_tunables(struct mps_softc *sc)
 	snprintf(tmpstr, sizeof(tmpstr), "dev.mps.%d.exclude_ids",
 	    device_get_unit(sc->mps_dev));
 	TUNABLE_STR_FETCH(tmpstr, sc->exclude_ids, sizeof(sc->exclude_ids));
+
+	snprintf(tmpstr, sizeof(tmpstr), "dev.mps.%d.spinup_wait_time",
+	    device_get_unit(sc->mps_dev));
+	TUNABLE_INT_FETCH(tmpstr, &sc->spinup_wait_time);
 }
 
 static void
@@ -1456,6 +1462,11 @@ mps_setup_sysctl(struct mps_softc *sc)
 	    OID_AUTO, "chain_alloc_fail", CTLFLAG_RD,
 	    &sc->chain_alloc_fail, "chain allocation failures");
 #endif //FreeBSD_version >= 900030
+
+	SYSCTL_ADD_INT(sysctl_ctx, SYSCTL_CHILDREN(sysctl_tree),
+	    OID_AUTO, "spinup_wait_time", CTLFLAG_RD,
+	    &sc->spinup_wait_time, DEFAULT_SPINUP_WAIT, "seconds to wait for "
+	    "spinup after SATA ID error");
 }
 
 int
