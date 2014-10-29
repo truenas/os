@@ -59,10 +59,10 @@ extern int	yyparse(void);
 %}
 
 %token ALIAS AUTH_GROUP AUTH_TYPE BACKEND BLOCKSIZE CHAP CHAP_MUTUAL
-%token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP INITIATOR_NAME
-%token INITIATOR_PORTAL LISTEN LISTEN_ISER LUN MAXPROC OPENING_BRACKET
-%token OPTION PATH PIDFILE PORTAL_GROUP SERIAL SIZE STR TARGET TIMEOUT
-%token ISNS_SERVER ISNS_PERIOD ISNS_TIMEOUT
+%token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP DISCOVERY_FILTER
+%token INITIATOR_NAME INITIATOR_PORTAL LISTEN LISTEN_ISER LUN MAXPROC
+%token OPENING_BRACKET OPTION PATH PIDFILE PORTAL_GROUP SERIAL SIZE STR
+%token TARGET TIMEOUT ISNS_SERVER ISNS_PERIOD ISNS_TIMEOUT
 
 %union
 {
@@ -328,6 +328,8 @@ portal_group_entries:
 portal_group_entry:
 	portal_group_discovery_auth_group
 	|
+	portal_group_discovery_filter
+	|
 	portal_group_listen
 	|
 	portal_group_listen_iser
@@ -350,6 +352,17 @@ portal_group_discovery_auth_group:	DISCOVERY_AUTH_GROUP STR
 			return (1);
 		}
 		free($2);
+	}
+	;
+
+portal_group_discovery_filter:	DISCOVERY_FILTER STR
+	{
+		int error;
+
+		error = portal_group_set_filter_str(portal_group, $2);
+		free($2);
+		if (error != 0)
+			return (1);
 	}
 	;
 
