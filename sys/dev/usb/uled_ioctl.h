@@ -1,6 +1,6 @@
-/* $FreeBSD$ */
 /*-
- * Copyright (c) 2008 Hans Petter Selasky. All rights reserved.
+ * Copyright (c) 2014 Kevin Lo
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -22,26 +22,22 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
+ *
+ * $FreeBSD$
  */
 
-#ifndef _USB_MSCTEST_H_
-#define	_USB_MSCTEST_H_
+#ifndef _ULED_IOCTL_H_
+#define _ULED_IOCTL_H_
 
-enum {
-	MSC_EJECT_STOPUNIT,
-	MSC_EJECT_REZERO,
-	MSC_EJECT_ZTESTOR,
-	MSC_EJECT_CMOTECH,
-	MSC_EJECT_HUAWEI,
-	MSC_EJECT_HUAWEI2,
-	MSC_EJECT_TCT,
+#include <sys/ioccom.h>
+
+struct uled_color {
+	uint8_t	red;
+	uint8_t	green;
+	uint8_t	blue;
 };
 
-int usb_iface_is_cdrom(struct usb_device *udev,
-	    uint8_t iface_index);
-usb_error_t usb_msc_eject(struct usb_device *udev,
-	    uint8_t iface_index, int method);
-usb_error_t usb_msc_auto_quirk(struct usb_device *udev,
-	    uint8_t iface_index);
+#define	ULED_GET_COLOR	_IOR('U', 205, struct uled_color)
+#define	ULED_SET_COLOR	_IOW('U', 206, struct uled_color)
 
-#endif					/* _USB_MSCTEST_H_ */
+#endif	/* _ULED_IOCTL_H_ */

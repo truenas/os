@@ -1,8 +1,7 @@
-#!/bin/sh
-#-
-# Copyright (c) 2011 Nathan Whitehorn
-# Copyright (c) 2013 Devin Teske
-# All rights reserved.
+#
+# $FreeBSD$
+#
+# Copyright (c) 2014 Kevin Lo. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -25,26 +24,13 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-# $FreeBSD$
-#
-############################################################ MAIN
 
-cat $BSDINSTALL_TMPETC/rc.conf.* >> $BSDINSTALL_TMPETC/rc.conf
-rm $BSDINSTALL_TMPETC/rc.conf.*
+S=     ${.CURDIR}/../../..
 
-cp $BSDINSTALL_TMPETC/* $BSDINSTALL_CHROOT/etc
+.PATH: $S/dev/usb/misc
 
-cat $BSDINSTALL_TMPBOOT/loader.conf.* >> $BSDINSTALL_TMPBOOT/loader.conf
-rm $BSDINSTALL_TMPBOOT/loader.conf.*
-df -t zfs $BSDINSTALL_CHROOT > /dev/null && echo "zfs_load=\"YES\"" >> $BSDINSTALL_TMPBOOT/loader.conf
+KMOD=	uled
+SRCS=	opt_bus.h opt_usb.h device_if.h bus_if.h usb_if.h vnode_if.h usbdevs.h \
+	uled.c
 
-cp $BSDINSTALL_TMPBOOT/* $BSDINSTALL_CHROOT/boot
-
-[ "${debugFile#+}" ] && cp "${debugFile#+}" $BSDINSTALL_CHROOT/var/log/
-
-# Set up other things from installed config
-chroot $BSDINSTALL_CHROOT /usr/bin/newaliases > /dev/null 2>&1
-
-################################################################################
-# END
-################################################################################
+.include <bsd.kmod.mk>
