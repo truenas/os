@@ -1977,7 +1977,6 @@ ctlfe_lun_enable(void *arg, struct ctl_id targ_id, int lun_id)
 		free(softc, M_CTLFE);
 	} else {
 		STAILQ_INSERT_TAIL(&bus_softc->lun_softc_list, softc, links);
-		ctlfe_onoffline(arg, /*online*/ 1);
 	}
 
 	xpt_free_path(path);
