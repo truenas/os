@@ -627,6 +627,7 @@ ctlfeoninvalidate(struct cam_periph *periph)
 {
 	union ccb en_lun_ccb;
 	cam_status status;
+	struct ctlfe_softc *bus_softc;
 	struct ctlfe_lun_softc *softc;
 
 	softc = (struct ctlfe_lun_softc *)periph->softc;
@@ -649,21 +650,20 @@ ctlfeoninvalidate(struct cam_periph *periph)
 		  "INOTs outstanding, %d refs\n", softc->atios_sent -
 		  softc->atios_returned, softc->inots_sent -
 		  softc->inots_returned, periph->refcount);
+
+	bus_softc = softc->parent_softc;
+	STAILQ_REMOVE(&bus_softc->lun_softc_list, softc, ctlfe_lun_softc, links);
 }
 
 static void
 ctlfecleanup(struct cam_periph *periph)
 {
 	struct ctlfe_lun_softc *softc;
-	struct ctlfe_softc *bus_softc;
 
 	xpt_print(periph->path, "%s: Called\n", __func__);
 
 	softc = (struct ctlfe_lun_softc *)periph->softc;
-	bus_softc = softc->parent_softc;
 
-	STAILQ_REMOVE(&bus_softc->lun_softc_list, softc, ctlfe_lun_softc, links);
-	
 	/*
 	 * XXX KDM is there anything else that needs to be done here?
 	 */
