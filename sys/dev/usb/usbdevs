@@ -2941,6 +2941,9 @@ product MEDELI DD305		0x5011	DD305 Digital Drum Set
 /* MediaTek, Inc. */
 product MEDIATEK MTK3329	0x3329	MTK II GPS Receiver
 
+/* American Megatrends */
+product MEGATRENDS COMPOSITE	0xff92	Composite Device
+
 /* Meizu Electronics */
 product MEIZU M6_SL		0x0140	MiniPlayer M6 (SL)
 
