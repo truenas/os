@@ -41,8 +41,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/resource.h>
 #include <sys/resourcevar.h>
 #include <sys/rwlock.h>
-#include <sys/sa.h>
-#include <sys/savar.h>
 #include <sys/signal.h>
 
 #include <compat/mach/mach_types.h>

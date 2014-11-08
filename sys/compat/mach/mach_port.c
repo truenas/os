@@ -452,7 +452,7 @@ mach_port_move_member(struct mach_trap_args *args)
 	if (mrs == NULL)
 		return mach_msg_error(args, EPERM);
 
-	rw_enter(&med->med_rightlock, RW_WRITER);
+	rw_wlock(&med->med_rightlock);
 
 	/* Remove it from an existing port set */
 	if (mrr->mr_sethead != mrr)
@@ -462,7 +462,7 @@ mach_port_move_member(struct mach_trap_args *args)
 	LIST_INSERT_HEAD(&mrs->mr_set, mrr, mr_setlist);
 	mrr->mr_sethead = mrs;
 
-	rw_exit(&med->med_rightlock);
+	rw_wunlock(&med->med_rightlock);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -673,10 +673,10 @@ mach_port_put(struct mach_port *mp)
 	}
 #endif
 
-	rw_enter(&mp->mp_msglock, RW_WRITER);
+	rw_wlock(&mp->mp_msglock);
 	while ((mm = TAILQ_FIRST(&mp->mp_msglist)) != NULL)
 		mach_message_put_exclocked(mm);
-	rw_exit(&mp->mp_msglock);
+	rw_wunlock(&mp->mp_msglock);
 	rw_destroy(&mp->mp_msglock);
 
 	if (mp->mp_flags & MACH_MP_DATA_ALLOCATED)
@@ -706,12 +706,12 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 	/* Send and receive right must return an existing right */
 	rights = (MACH_PORT_TYPE_SEND | MACH_PORT_TYPE_RECEIVE);
 	if (type & rights) {
-		rw_enter(&med->med_rightlock, RW_READER);
+		rw_rlock(&med->med_rightlock);
 		LIST_FOREACH(mr, &med->med_right, mr_list) {
 			if ((mr->mr_port == mp) && (mr->mr_type & rights))
 				break;
 		}
-		rw_exit(&med->med_rightlock);
+		rw_runlock(&med->med_rightlock);
 
 		if (mr != NULL) {
 			mr->mr_type |= type;
@@ -736,14 +736,14 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 
 	/* Insert the right in the right lists */
 	if (type & MACH_PORT_TYPE_ALL_RIGHTS) {
-		rw_enter(&med->med_rightlock, RW_WRITER);
+		rw_wlock(&med->med_rightlock);
 		mr->mr_name = mach_right_newname(l, hint);
 #ifdef DEBUG_MACH_RIGHT
 		printf("mach_right_get: insert right %x(%x)\n",
 		    mr->mr_name, mr->mr_type);
 #endif
 		LIST_INSERT_HEAD(&med->med_right, mr, mr_list);
-		rw_exit(&med->med_rightlock);
+		rw_wunlock(&med->med_rightlock);
 	}
 
 rcvck:
@@ -765,9 +765,9 @@ mach_right_put(struct mach_right *mr, int right)
 {
 	struct mach_emuldata *med = mr->mr_lwp->l_proc->p_emuldata;
 
-	rw_enter(&med->med_rightlock, RW_WRITER);
+	rw_wlock(&med->med_rightlock);
 	mach_right_put_exclocked(mr, right);
-	rw_exit(&med->med_rightlock);
+	rw_wunlock(&med->med_rightlock);
 
 	return;
 }
@@ -777,10 +777,10 @@ mach_right_put_shlocked(struct mach_right *mr, int right)
 {
 	struct mach_emuldata *med = mr->mr_lwp->l_proc->p_emuldata;
 
-	if (!rw_tryupgrade(&med->med_rightlock)) {
+	if (!rw_try_upgrade(&med->med_rightlock)) {
 		/* XXX */
-		rw_exit(&med->med_rightlock);
-		rw_enter(&med->med_rightlock, RW_WRITER);
+		rw_runlock(&med->med_rightlock);
+		rw_wlock(&med->med_rightlock);
 	}
 	mach_right_put_exclocked(mr, right);
 	rw_downgrade(&med->med_rightlock);
@@ -898,7 +898,7 @@ mach_right_check(mach_port_t mn, struct thread *td, int type)
 
 	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
 
-	rw_enter(&med->med_rightlock, RW_READER);
+	rw_rlock(&med->med_rightlock);
 
 #ifdef DEBUG_MACH_RIGHT
 	printf("mach_right_check: type = %x, mn = %x\n", type, mn);
@@ -914,7 +914,7 @@ mach_right_check(mach_port_t mn, struct thread *td, int type)
 			break;
 	}
 
-	rw_exit(&med->med_rightlock);
+	rw_runlock(&med->med_rightlock);
 
 	return cmr;
 }

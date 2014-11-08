@@ -386,6 +386,6 @@ struct mach_memory_entry {
 };
 
 /* These are machine dependent functions */
-int mach_vm_machine_attribute_machdep(struct td *, vm_offset_t, size_t, int *);
+int mach_vm_machine_attribute_machdep(struct thread *, vm_offset_t, size_t, int *);
 
 #endif /* _MACH_VM_H_ */

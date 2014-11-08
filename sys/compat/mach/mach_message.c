@@ -531,7 +531,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 	 * only one reader process, so mm will not disapear
 	 * except if there is a port refcount error in our code.
 	 */
-	rw_enter(&mp->mp_msglock, RW_READER);
+	rw_rlock(&mp->mp_msglock);
 	mm = TAILQ_FIRST(&mp->mp_msglist);
 #ifdef DEBUG_MACH_MSG
 	printf("pid %d: dequeue message on port %p (id %d)\n",
@@ -629,7 +629,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 	free(mm->mm_msg, M_MACH);
 	mach_message_put_shlocked(mm); /* decrease mp_count */
 unlock:
-	rw_exit(&mp->mp_msglock);
+	rw_runlock(&mp->mp_msglock);
 
 	return ret;
 }
@@ -1117,10 +1117,10 @@ mach_message_get(mach_msg_header_t *msgh, size_t size, struct mach_port *mp, str
 	mm->mm_port = mp;
 	mm->mm_l = l;
 
-	rw_enter(&mp->mp_msglock, RW_WRITER);
+	rw_wlock(&mp->mp_msglock);
 	TAILQ_INSERT_TAIL(&mp->mp_msglist, mm, mm_list);
 	mp->mp_count++;
-	rw_exit(&mp->mp_msglock);
+	rw_wunlock(&mp->mp_msglock);
 
 	return mm;
 }
@@ -1132,9 +1132,9 @@ mach_message_put(struct mach_message *mm)
 
 	mp = mm->mm_port;
 
-	rw_enter(&mp->mp_msglock, RW_WRITER);
+	rw_wlock(&mp->mp_msglock);
 	mach_message_put_exclocked(mm);
-	rw_exit(&mp->mp_msglock);
+	rw_wunlock(&mp->mp_msglock);
 
 	return;
 }
@@ -1146,10 +1146,10 @@ mach_message_put_shlocked(struct mach_message *mm)
 
 	mp = mm->mm_port;
 
-	if (!rw_tryupgrade(&mp->mp_msglock)) {
+	if (!rw_try_upgrade(&mp->mp_msglock)) {
 		/* XXX  */
-		rw_exit(&mp->mp_msglock);
-		rw_enter(&mp->mp_msglock, RW_WRITER);
+		rw_runlock(&mp->mp_msglock);
+		rw_wlock(&mp->mp_msglock);
 	}
 	mach_message_put_exclocked(mm);
 	rw_downgrade(&mp->mp_msglock);

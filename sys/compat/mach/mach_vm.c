@@ -65,7 +65,7 @@ mach_vm_map(struct mach_trap_args *args)
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
 	struct proc *tp = ttd->td_proc;
-	struct sys_mmap_args cup;
+	struct mmap_args cup;
 	vm_offset_t addr;
 	int error, flags;
 	void *ret;
@@ -118,7 +118,7 @@ mach_vm_map(struct mach_trap_args *args)
 		cup.flags |= MAP_INHERIT_SHARE;
 		break;
 	case MACH_VM_INHERIT_COPY:
-		cup.flags) |= MAP_COPY_ON_WRITE;
+		cup.flags |= MAP_COPY_ON_WRITE;
 		break;
 	case MACH_VM_INHERIT_NONE:
 		break;
@@ -129,15 +129,16 @@ mach_vm_map(struct mach_trap_args *args)
 		break;
 	}
 
-	cup.addr) = (void *)addr;
-	cup.len) = req->req_size;
-	cup.prot) = req->req_cur_protection;
-	cup.fd) = -1;		/* XXX For now, no object mapping */
-	cup.pos) = req->req_offset;
+	cup.addr = (void *)addr;
+	cup.len = req->req_size;
+	cup.prot = req->req_cur_protection;
+	cup.fd = -1;		/* XXX For now, no object mapping */
+	cup.pos = req->req_offset;
 
-	if ((error = sys_mmap(ttd, &cup, &rep->rep_retval)) != 0)
+	if ((error = sys_mmap(ttd, &cup)) != 0)
 		return mach_msg_error(args, error);
 
+	rep->rep_retval = ttd->td_retval[0];
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
@@ -153,7 +154,7 @@ mach_vm_allocate(struct mach_trap_args *args)
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
 	struct proc *tp = ttd->td_proc;
-	struct sys_mmap_args cup;
+	struct mmap_args cup;
 	vm_offset_t addr;
 	size_t size;
 	int error;
@@ -193,17 +194,18 @@ mach_vm_allocate(struct mach_trap_args *args)
 	if (size == 0)
 		goto out;
 
-	cup.addr) = (void *)addr;
-	cup.len) = size;
-	cup.prot) = PROT_READ | PROT_WRITE;
-	cup.flags) = MAP_ANON;
+	cup.addr = (void *)addr;
+	cup.len = size;
+	cup.prot = PROT_READ | PROT_WRITE;
+	cup.flags = MAP_ANON;
 	if ((req->req_flags & MACH_VM_FLAGS_ANYWHERE) == 0)
-		cup.flags) |= MAP_FIXED;
-	cup.fd) = -1;
-	cup.pos) = 0;
+		cup.flags |= MAP_FIXED;
+	cup.fd = -1;
+	cup.pos = 0;
 
-	if ((error = sys_mmap(ttd, &cup, &rep->rep_address)) != 0)
+	if ((error = sys_mmap(ttd, &cup)) != 0)
 		return mach_msg_error(args, error);
+	rep->rep_address = ttd->td_retval[0];
 #ifdef DEBUG_MACH_VM
 	printf("vm_allocate: success at %p\n", (void *)rep->rep_address);
 #endif
@@ -226,7 +228,7 @@ mach_vm_deallocate(struct mach_trap_args *args)
 	mach_vm_deallocate_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct sys_munmap_args cup;
+	struct munmap_args cup;
 	int error;
 
 #ifdef DEBUG_MACH_VM
@@ -234,12 +236,13 @@ mach_vm_deallocate(struct mach_trap_args *args)
 	    (void *)req->req_address, (long)req->req_size);
 #endif
 
-	cup.addr) = (void *)req->req_address;
-	cup.len) = req->req_size;
+	cup.addr = (void *)req->req_address;
+	cup.len = req->req_size;
 
-	if ((error = sys_munmap(ttd, &cup, &rep->rep_retval)) != 0)
+	if ((error = sys_munmap(ttd, &cup)) != 0)
 		return mach_msg_error(args, error);
 
+	rep->rep_retval = ttd->td_retval[0];
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
@@ -259,7 +262,6 @@ mach_vm_wire(struct mach_trap_args *args)
 	mach_vm_wire_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	register_t retval;
 	int error;
 
 #ifdef DEBUG_MACH_VM
@@ -277,17 +279,17 @@ mach_vm_wire(struct mach_trap_args *args)
 	 * and unwire it once the count is zero. We cannot do that yet.
 	 */
 	if (req->req_access == 0) {
-		struct sys_munlock_args cup;
+		struct munlock_args cup;
 
-		cup.addr) = (void *)req->req_address;
-		cup.len) = req->req_size;
-		error = sys_munlock(ttd, &cup, &retval);
+		cup.addr = (void *)req->req_address;
+		cup.len = req->req_size;
+		error = sys_munlock(ttd, &cup);
 	} else {
-		struct sys_mlock_args cup;
+		struct mlock_args cup;
 
-		cup.addr) = (void *)req->req_address;
-		cup.len) = req->req_size;
-		error = sys_mlock(ttd, &cup, &retval);
+		cup.addr = (void *)req->req_address;
+		cup.len = req->req_size;
+		error = sys_mlock(ttd, &cup);
 	}
 	if (error != 0)
 		return mach_msg_error(args, error);
@@ -312,15 +314,14 @@ mach_vm_protect(struct mach_trap_args *args)
 	mach_vm_protect_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct sys_mprotect_args cup;
-	register_t retval;
+	struct mprotect_args cup;
 	int error;
 
-	cup.addr) = (void *)req->req_addr;
-	cup.len) = req->req_size;
-	cup.prot) = req->req_prot;
+	cup.addr = (void *)req->req_addr;
+	cup.len = req->req_size;
+	cup.prot = req->req_prot;
 
-	if ((error = sys_mprotect(ttd, &cup, &retval)) != 0)
+	if ((error = sys_mprotect(ttd, &cup)) != 0)
 		return mach_msg_error(args, error);
 
 	*msglen = sizeof(*rep);
@@ -331,7 +332,7 @@ mach_vm_protect(struct mach_trap_args *args)
 }
 
 int
-mach_sys_map_fd(struct thread *td, const struct mach_sys_map_fd_args *uap)
+mach_sys_map_fd(struct thread *td, const struct mach_map_fd_args *uap)
 {
 	/* {
 		syscallarg(int) fd;
@@ -345,8 +346,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_sys_map_fd_args *uap)
 	struct exec_vmcmd evc;
 	struct vm_map_entry *ret;
 	struct proc *p = td->td_proc;
-	register_t dontcare;
-	struct sys_munmap_args cup;
+	struct munmap_args cup;
 	void *va;
 	int error;
 
@@ -357,7 +357,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_sys_map_fd_args *uap)
 		/* Make some free space XXX probably not The Right Way */
 		cup.addr = va;
 		cup.len = uap->size;
-		(void)sys_munmap(td, &cup, &dontcare);
+		(void)sys_munmap(td, &cup);
 	}
 
 	fp = fd_getfile(uap->fd);
@@ -385,7 +385,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_sys_map_fd_args *uap)
 		VOP_UNLOCK(vp);
 
 #ifdef DEBUG_MACH_VM
-		printf("mach_sys_map_fd: mapping at %p failed\n", va);
+		printf("mach_map_fd: mapping at %p failed\n", va);
 #endif
 
 		if (uap->findspace == 0)
@@ -412,7 +412,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_sys_map_fd_args *uap)
 		evc.ev_vp = vp;
 
 #ifdef DEBUG_MACH_VM
-		printf("mach_sys_map_fd: trying at %p\n", va);
+		printf("mach_map_fd: trying at %p\n", va);
 #endif
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 		if ((error = (*evc.ev_proc)(td, &evc)) != 0)
@@ -422,7 +422,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_sys_map_fd_args *uap)
 	vput(vp);
 	fd_putfile(uap->fd);
 #ifdef DEBUG_MACH_VM
-	printf("mach_sys_map_fd: mapping at %p\n", (void *)evc.ev_addr);
+	printf("mach_map_fd: mapping at %p\n", (void *)evc.ev_addr);
 #endif
 
 	va = (mach_vm_offset_t *)evc.ev_addr;
@@ -438,7 +438,7 @@ bad2:
 	vrele(vp);
 	fd_putfile(uap->fd);
 #ifdef DEBUG_MACH_VM
-	printf("mach_sys_map_fd: mapping at %p failed, error = %d\n",
+	printf("mach_map_fd: mapping at %p failed, error = %d\n",
 	    (void *)evc.ev_addr, error);
 #endif
 	return error;
@@ -451,16 +451,15 @@ mach_vm_inherit(struct mach_trap_args *args)
 	mach_vm_inherit_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct sys_minherit_args cup;
-	register_t retval;
+	struct minherit_args cup;
 	int error;
 
-	cup.addr) = (void *)req->req_addr;
-	cup.len) = req->req_size;
+	cup.addr = (void *)req->req_addr;
+	cup.len = req->req_size;
 	/* Flags map well between Mach and NetBSD */
-	cup.inherit) = req->req_inh;
+	cup.inherit = req->req_inh;
 
-	if ((error = sys_minherit(ttd, &cup, &retval)) != 0)
+	if ((error = sys_minherit(ttd, &cup)) != 0)
 		return mach_msg_error(args, error);
 
 	*msglen = sizeof(*rep);
@@ -477,7 +476,6 @@ mach_make_memory_entry_64(struct mach_trap_args *args)
 	mach_make_memory_entry_64_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *td = args->td;
-	struct thread *ttd = args->ttd;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	struct mach_memory_entry *mme;
@@ -534,7 +532,7 @@ mach_vm_region(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 	*msglen = sizeof(*rep) + ((req->req_count - 9) * sizeof(int));
 
-	map = &td->td_proc->p_vmspace->vm_map;
+	map = &ttd->td_proc->p_vmspace->vm_map;
 
 	vm_map_lock(map);
 	error = vm_map_lookup_entry(map, req->req_addr, &vme);
@@ -630,9 +628,8 @@ mach_vm_msync(struct mach_trap_args *args)
 	mach_vm_msync_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct sys___msync13_args cup;
+	struct msync_args cup;
 	int error;
-	register_t dontcare;
 
 	cup.addr = (void *)req->req_addr;
 	cup.len = req->req_size;
@@ -644,7 +641,7 @@ mach_vm_msync(struct mach_trap_args *args)
 	if (req->req_flags & MACH_VM_SYNC_INVALIDATE)
 		cup.flags |= MS_INVALIDATE;
 
-	error = sys___msync13(ttd, &cup, &dontcare);
+	error = sys_msync(ttd, &cup);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

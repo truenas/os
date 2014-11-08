@@ -38,16 +38,16 @@
 
 extern int mach_semaphore_cold;
 
-struct mach_waiting_lwp {
-	TAILQ_ENTRY(mach_waiting_lwp) mwl_list;
-	struct lwp *mwl_l;
+struct mach_waiting_thread {
+	TAILQ_ENTRY(mach_waiting_thread) mwtd_list;
+	struct thread *mwl_td;
 };
 
 struct mach_semaphore {
 	int ms_value;
 	int ms_policy;
 	LIST_ENTRY(mach_semaphore) ms_list;
-	TAILQ_HEAD(ms_waiting, mach_waiting_lwp) ms_waiting;
+	TAILQ_HEAD(ms_waiting, mach_waiting_thread) ms_waiting;
 	struct rwlock ms_lock;
 };
 
@@ -86,7 +86,7 @@ typedef struct {
 } mach_semaphore_destroy_reply_t;
 
 void mach_semaphore_init(void);
-void mach_semaphore_cleanup(struct lwp *);
+void mach_semaphore_cleanup(struct thread *);
 
 #endif /* _MACH_SEMAPHORE_H_ */
 

@@ -270,10 +270,10 @@ mach_e_proc_init(struct proc *p)
 	 * must free anything that will not be used anymore.
 	 */
 	if (med->med_inited != 0) {
-		rw_enter(&med->med_rightlock, RW_WRITER);
+		rw_wlock(&med->med_rightlock);
 		while ((mr = LIST_FIRST(&med->med_right)) != NULL)
 			mach_right_put_exclocked(mr, MACH_PORT_TYPE_ALL_RIGHTS);
-		rw_exit(&med->med_rightlock);
+		rw_wunlock(&med->med_rightlock);
 
 		/*
 		 * Do not touch special ports. Some other process (eg: gdb)
@@ -285,8 +285,8 @@ mach_e_proc_init(struct proc *p)
 		 * p->p_emuldata is uninitialized. Go ahead and initialize it.
 		 */
 		LIST_INIT(&med->med_right);
-		rw_init(&med->med_rightlock);
-		rw_init(&med->med_exclock);
+		rw_init(&med->med_rightlock, "rights lock");
+		rw_init(&med->med_exclock, "excl lock");
 
 		/*
 		 * For debugging purpose, it's convenient to have each process
@@ -349,10 +349,10 @@ mach_e_proc_exit(struct proc *p)
 
 	med = (struct mach_emuldata *)p->p_emuldata;
 
-	rw_enter(&med->med_rightlock, RW_WRITER);
+	rw_wlock(&med->med_rightlock);
 	while ((mr = LIST_FIRST(&med->med_right)) != NULL)
 		mach_right_put_exclocked(mr, MACH_PORT_TYPE_ALL_RIGHTS);
-	rw_exit(&med->med_rightlock);
+	rw_wunlock(&med->med_rightlock);
 
 	MACH_PORT_UNREF(med->med_bootstrap);
 
@@ -361,7 +361,7 @@ mach_e_proc_exit(struct proc *p)
 	 * release it now as it will never be released by the
 	 * exception handler.
 	 */
-	if (rw_lock_held(&med->med_exclock))
+	if (rw_wowned(&med->med_exclock))
 		wakeup(&med->med_exclock);
 
 	/*

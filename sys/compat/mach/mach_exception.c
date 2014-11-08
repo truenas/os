@@ -346,7 +346,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	 * no new exception will be taken until the catcher
 	 * acknowledge the first one.
 	 */
-	rw_enter(&catcher_med->med_exclock, RW_WRITER);
+	rw_wlock(&catcher_med->med_exclock);
 
 	/*
 	 * If the catcher died, we are done.
@@ -378,7 +378,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	/*
 	 * Unlock the catcher's exception handler
 	 */
-	rw_exit(&catcher_med->med_exclock);
+	rw_wunlock(&catcher_med->med_exclock);
 
 out:
 	MACH_PORT_UNREF(exc_port);
@@ -490,7 +490,7 @@ mach_exception_raise(struct mach_trap_args *args)
 	 * Check for unexpected exception acknowledge, whereas
 	 * the kernel sent no exception message.
 	 */
-	if (!rw_lock_held(&med->med_exclock)) {
+	if (!rw_wowned(&med->med_exclock)) {
 #ifdef DEBUG_MACH
 		printf("spurious mach_exception_raise\n");
 #endif

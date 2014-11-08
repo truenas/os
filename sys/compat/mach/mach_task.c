@@ -35,7 +35,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/exec.h>
 #include <sys/systm.h>
-#include <sys/kauth.h>
 #include <sys/ktrace.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
@@ -623,13 +622,13 @@ mach_task_terminate(struct mach_trap_args *args)
 	mach_task_resume_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct sys_exit_args cup;
+	struct exit_args cup;
 	register_t retval;
 	int error;
 
 
 	&cup->rval = 0;
-	error = sys_exit(tl, &cup, &retval);
+	error = sys_exit(tl, &cup);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
