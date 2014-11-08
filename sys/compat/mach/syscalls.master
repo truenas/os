@@ -2,7 +2,7 @@
 
 ;	@(#)syscalls.master	8.1 (Berkeley) 7/19/93
 
-; NetBSD COMPAT_MACH system call name/number "master" file.
+; FreeBSD COMPAT_MACH system call name/number "master" file.
 ; This is used for the negative mach syscalls.
 ; (See syscalls.conf to see what it is processed into.)
 ;
@@ -36,6 +36,9 @@
 #include "opt_ntp.h"
 #endif
 
+#include <sys/cdefs.h>
+
+#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/signal.h>

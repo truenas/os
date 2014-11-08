@@ -32,17 +32,18 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
-#include <sys/kernel.h>
 #include <sys/systm.h>
-#include <sys/signal.h>
+#include <sys/kernel.h>
 #include <sys/lock.h>
-#include <sys/rwlock.h>
-#include <sys/queue.h>
+#include <sys/mutex.h>
 #include <sys/proc.h>
+#include <sys/queue.h>
 #include <sys/resource.h>
 #include <sys/resourcevar.h>
+#include <sys/rwlock.h>
 #include <sys/sa.h>
 #include <sys/savar.h>
+#include <sys/signal.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -204,13 +205,13 @@ mach_thread_create_running(struct mach_trap_args *args)
 	/*
 	 * Make the child runnable.
 	 */
-	mutex_enter(p->p_lock);
+	mtx_lock(p->p_lock);
 	lwp_lock(mctc.mctc_lwp);
 	mctc.mctc_lwp->l_private = 0;
 	mctc.mctc_lwp->l_stat = LSRUN;
 	sched_enqueue(mctc.mctc_lwp, false);
 	lwp_unlock(mctc.mctc_lwp);
-	mutex_exit(p->p_lock);
+	mtx_unlock(p->p_lock);
 
 	/*
 	 * Get the child's kernel port
@@ -394,10 +395,10 @@ mach_thread_suspend(struct mach_trap_args *args)
 	struct proc *p = ttd->td_proc;
 	int error;
 
-	mutex_enter(p->p_lock);
+	mtx_lock(p->p_lock);
 	lwp_lock(tl);
 	error = lwp_suspend(l, tl);
-	mutex_exit(p->p_lock);
+	mtx_unlock(p->p_lock);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -416,10 +417,10 @@ mach_thread_resume(struct mach_trap_args *args)
 	struct thread *ttd = args->ttd;
 	struct proc *p = ttd->td_proc;
 
-	mutex_enter(p->p_lock);
+	mtx_lock(p->p_lock);
 	lwp_lock(tl);
 	lwp_continue(tl);
-	mutex_exit(p->p_lock);
+	mtx_unlock(p->p_lock);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

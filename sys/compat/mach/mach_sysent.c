@@ -7,6 +7,8 @@
  */
 
 #include "opt_ntp.h"
+#include <sys/cdefs.h>
+#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/signal.h>

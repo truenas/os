@@ -1,5 +1,3 @@
-/*	$FreeBSD$ */
-
 /*-
  * Copyright (c) 2002-2003, 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -37,17 +35,20 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/exec.h>
 #include <sys/systm.h>
-#include <sys/proc.h>
+#include <sys/kauth.h>
 #include <sys/ktrace.h>
-#include <sys/resourcevar.h>
+#include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mount.h>
+#include <sys/mutex.h>
+#include <sys/proc.h>
+#include <sys/resourcevar.h>
 #include <sys/sysproto.h>
-#include <sys/kauth.h>
 
-#include <uvm/uvm_extern.h>
+#include <vm/vm_extern.h>
+#if 0
 #include <uvm/uvm_param.h>
-
+#endif
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_clock.h>
@@ -454,9 +455,9 @@ mach_task_info(struct mach_trap_args *args)
 
 		ru = tp->p_stats->p_ru;
 		mtbi = (struct mach_task_basic_info *)&rep->rep_info[0];
-		mutex_enter(tp->p_lock);
+		mtx_lock(tp->p_lock);
 		rulwps(tp, &ru);
-		mutex_exit(tp->p_lock);
+		mtx_unlock(tp->p_lock);
 
 		mtbi->mtbi_suspend_count = ru.ru_nvcsw + ru.ru_nivcsw;
 		mtbi->mtbi_virtual_size = ru.ru_ixrss;
@@ -503,9 +504,9 @@ mach_task_info(struct mach_trap_args *args)
 
 		mtei = (struct mach_task_events_info *)&rep->rep_info[0];
 		ru = tp->p_stats->p_ru;
-		mutex_enter(tp->p_lock);
+		mtx_lock(tp->p_lock);
 		rulwps(tp, &ru);
-		mutex_exit(tp->p_lock);
+		mtx_unlock(tp->p_lock);
 
 		mtei->mtei_faults = ru.ru_majflt;
 		mtei->mtei_pageins = ru.ru_minflt;
@@ -562,11 +563,11 @@ mach_task_suspend(struct mach_trap_args *args)
 			break;
 		}
 	}
-	mutex_enter(proc_lock);
-	mutex_enter(tp->p_lock);
+	mtx_lock(proc_lock);
+	mtx_lock(tp->p_lock);
 	proc_stop(tp, 0, SIGSTOP);
-	mutex_enter(tp->p_lock);
-	mutex_enter(proc_lock);
+	mtx_lock(tp->p_lock);
+	mtx_lock(proc_lock);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -599,11 +600,11 @@ mach_task_resume(struct mach_trap_args *args)
 #ifdef DEBUG_MACH
 	printf("resuming pid %d\n", tp->p_pid);
 #endif
-	mutex_enter(proc_lock);
-	mutex_enter(tp->p_lock);
+	mtx_lock(proc_lock);
+	mtx_lock(tp->p_lock);
 	(void)proc_unstop(tp);
-	mutex_enter(tp->p_lock);
-	mutex_enter(proc_lock);
+	mtx_lock(tp->p_lock);
+	mtx_lock(proc_lock);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -664,19 +665,19 @@ mach_sys_task_for_pid(struct thread *td, struct mach_sys_task_for_pid_args *uap)
 	    td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return EPERM;
 
-	mutex_enter(proc_lock);
+	mtx_lock(proc_lock);
 	if ((t = proc_find(uap->pid)) == NULL) {
-		mutex_exit(proc_lock);
+		mtx_unlock(proc_lock);
 		return ESRCH;
 	}
-	mutex_enter(t->p_lock);
-	mutex_exit(proc_lock);
+	mtx_lock(t->p_lock);
+	mtx_unlock(proc_lock);
 
 	/* Allowed only if the UID match, if setuid, or if superuser */
 	if ((kauth_cred_getuid(t->p_cred) != kauth_cred_getuid(l->l_cred) ||
 	    ISSET(t->p_flag, PK_SUGID)) && (error = kauth_authorize_generic(l->l_cred,
 	    KAUTH_GENERIC_ISSUSER, NULL)) != 0) {
-		mutex_exit(t->p_lock);
+		mtx_unlock(t->p_lock);
 		return (error);
 	}
 
@@ -686,10 +687,10 @@ mach_sys_task_for_pid(struct thread *td, struct mach_sys_task_for_pid_args *uap)
 	    (t->p_emul != &emul_darwin) &&
 #endif
 	    1) {
-		mutex_exit(t->p_lock);
+		mtx_unlock(t->p_lock);
 		return EINVAL;
 	}
-	mutex_exit(t->p_lock);
+	mtx_unlock(t->p_lock);
 
 	/* XXX: Unlocked, broken. */
 	med = t->p_emuldata;
