@@ -40,8 +40,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 #include <sys/queue.h>
 #include <sys/malloc.h>
-#include <sys/pool.h>
 #include <sys/ktrace.h>
+
+#include <vm/uma.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -54,8 +55,8 @@ __FBSDID("$FreeBSD$");
 #include <compat/darwin/darwin_exec.h>
 #endif
 
-/* Mach message pool */
-static struct pool mach_message_pool;
+/* Mach message zone */
+static uma_zone_t mach_message_zone;
 
 static inline
     int mach_msg_send(struct thread *, mach_msg_header_t *, int *, size_t);
@@ -1098,9 +1099,10 @@ inline void mach_add_ool_desc(msg, addr, size)
 void
 mach_message_init(void)
 {
-	pool_init(&mach_message_pool, sizeof (struct mach_message),
-	    0, 0, 0, "mach_message_pool", NULL, IPL_NONE);
-	return;
+
+	mach_message_zone =
+		uma_zcreate("mach_message_zone", sizeof (struct mach_message),
+					NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 }
 
 struct mach_message *
@@ -1108,7 +1110,7 @@ mach_message_get(mach_msg_header_t *msgh, size_t size, struct mach_port *mp, str
 {
 	struct mach_message *mm;
 
-	mm = (struct mach_message *)pool_get(&mach_message_pool, PR_WAITOK);
+	mm = uma_zallac(mach_message_zone, M_WAITOK);
 	memset(mm, 0, sizeof(*mm));
 	mm->mm_msg = msgh;
 	mm->mm_size = size;
@@ -1165,7 +1167,7 @@ mach_message_put_exclocked(struct mach_message *mm)
 	TAILQ_REMOVE(&mp->mp_msglist, mm, mm_list);
 	mp->mp_count--;
 
-	pool_put(&mach_message_pool, mm);
+	uma_zfree(mach_message_zone, mm);
 
 	return;
 }

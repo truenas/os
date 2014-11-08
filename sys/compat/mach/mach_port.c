@@ -34,10 +34,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/signal.h>
-#include <sys/pool.h>
 #include <sys/queue.h>
 #include <sys/malloc.h>
 #include <sys/proc.h>
+
+#include <vm/uma.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -54,9 +55,9 @@ __FBSDID("$FreeBSD$");
 #include <compat/darwin/darwin_exec.h>
 #endif
 
-/* Right and port pools, list of all rights and its lock */
-static struct pool mach_port_pool;
-static struct pool mach_right_pool;
+/* Right and port zones, list of all rights and its lock */
+static uma_zone_t mach_port_zone;
+static uma_zone_t mach_right_zone;
 
 struct mach_port *mach_bootstrap_port;
 struct mach_port *mach_clock_port;
@@ -621,10 +622,13 @@ mach_port_mod_refs(struct mach_trap_args *args)
 void
 mach_port_init(void)
 {
-	pool_init(&mach_port_pool, sizeof (struct mach_port),
-	    0, 0, 0, "mach_port_pool", NULL, IPL_NONE);
-	pool_init(&mach_right_pool, sizeof (struct mach_right),
-	    0, 0, 0, "mach_right_pool", NULL, IPL_NONE);
+
+	mach_port_zone =
+		uma_zcreate("mach_port_zone", sizeof (struct mach_port),
+						NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+	mach_right_zone =
+		uma_zcreate("mach_right_zone", sizeof (struct mach_right),
+						NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 
 	mach_bootstrap_port = mach_port_get();
 	mach_clock_port = mach_port_get();
@@ -644,7 +648,7 @@ mach_port_get(void)
 {
 	struct mach_port *mp;
 
-	mp = (struct mach_port *)pool_get(&mach_port_pool, PR_WAITOK);
+	mp = uma_zalloc(mach_port_zone, M_WAITOK);
 	memset(mp, 0, sizeof(*mp));
 	mp->mp_recv = NULL;
 	mp->mp_count = 0;
@@ -678,7 +682,7 @@ mach_port_put(struct mach_port *mp)
 	if (mp->mp_flags & MACH_MP_DATA_ALLOCATED)
 		free(mp->mp_data, M_MACH);
 
-	pool_put(&mach_port_pool, mp);
+	uma_zfree(mach_port_zone, mp);
 
 	return;
 }
@@ -717,7 +721,7 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 		}
 	}
 
-	mr = pool_get(&mach_right_pool, PR_WAITOK);
+	mr = uma_zalloc(mach_right_zone, M_WAITOK);
 
 	mr->mr_port = mp;
 	mr->mr_lwp = l;
@@ -875,7 +879,7 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
 
 		mach_notify_port_destroyed(mr->mr_lwp, mr);
 		LIST_REMOVE(mr, mr_list);
-		pool_put(&mach_right_pool, mr);
+		uma_zfree(mach_right_zone, mr);
 	}
 	return;
 }

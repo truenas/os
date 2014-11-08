@@ -33,12 +33,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/signal.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
-#include <sys/pool.h>
 #include <sys/proc.h>
 #include <sys/rwlock.h>
+#include <sys/signal.h>
+
+#include <vm/uma.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -49,11 +50,11 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
-/* Semaphore list, lock, pools */
+/* Semaphore list, lock, zones */
 static LIST_HEAD(mach_semaphore_list, mach_semaphore) mach_semaphore_list;
-static krwlock_t mach_semaphore_list_lock;
-static struct pool mach_semaphore_list_pool;
-static struct pool mach_waiting_lwp_pool;
+static struct rwlock mach_semaphore_list_lock;
+static uma_zone_t mach_semaphore_list_zone;
+static uma_zone_t mach_waiting_lwp_zone;
 
 /* Function to manipulate them */
 static struct mach_semaphore *mach_semaphore_get(int, int);
@@ -199,10 +200,12 @@ mach_semaphore_init(void)
 {
 	LIST_INIT(&mach_semaphore_list);
 	rw_init(&mach_semaphore_list_lock);
-	pool_init(&mach_semaphore_list_pool, sizeof (struct mach_semaphore),
-	    0, 0, 0, "mach_sem_pool", NULL, IPL_NONE);
-	pool_init(&mach_waiting_lwp_pool, sizeof (struct mach_waiting_lwp),
-	    0, 0, 0, "mach_waitp_pool", NULL, IPL_NONE);
+	mach_semaphore_list_zone =
+		uma_zcreate("mach_sem_zone", sizeof (struct mach_semaphore),
+					NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+	mach_waiting_lwp_zone =
+		uma_zcreate("mach_waitp_zone", sizeof (struct mach_waiting_lwp),
+					NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 
 	return;
 }
@@ -212,8 +215,7 @@ mach_semaphore_get(int value, int policy)
 {
 	struct mach_semaphore *ms;
 
-	ms = (struct mach_semaphore *)pool_get(&mach_semaphore_list_pool,
-	    M_WAITOK);
+	ms = uma_zalloc(mach_semaphore_list_zone, M_WAITOK);
 	ms->ms_value = value;
 	ms->ms_policy = policy;
 	TAILQ_INIT(&ms->ms_waiting);
@@ -241,7 +243,7 @@ mach_semaphore_put(struct mach_semaphore *ms)
 	LIST_REMOVE(ms, ms_list);
 	rw_exit(&mach_semaphore_list_lock);
 
-	pool_put(&mach_semaphore_list_pool, ms);
+	uma_zfree(mach_semaphore_list_zone, ms);
 
 	return;
 }
@@ -251,8 +253,7 @@ mach_waiting_lwp_get(struct thread *td, struct mach_semaphore *ms)
 {
 	struct mach_waiting_lwp *mwl;
 
-	mwl = (struct mach_waiting_lwp *)pool_get(&mach_waiting_lwp_pool,
-	    M_WAITOK);
+	mwl = uma_zalloc(mach_waiting_lwp_zone, M_WAITOK);
 	mwl->mwl_l = l;
 
 	rw_enter(&ms->ms_lock, RW_WRITER);
@@ -270,7 +271,7 @@ mach_waiting_lwp_put(struct mach_waiting_lwp *mwl, struct mach_semaphore *ms, in
 	TAILQ_REMOVE(&ms->ms_waiting, mwl, mwl_list);
 	if (!locked)
 		rw_exit(&ms->ms_lock);
-	pool_put(&mach_waiting_lwp_pool, mwl);
+	uma_zfree(mach_waiting_lwp_zone, mwl);
 
 	return;
 }
