@@ -1,5 +1,3 @@
-/*	$NetBSD: mach_host.c,v 1.31 2008/04/28 20:23:44 martin Exp $ */
-
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -30,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_host.c,v 1.31 2008/04/28 20:23:44 martin Exp $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/malloc.h>
@@ -39,9 +37,6 @@ __KERNEL_RCSID(0, "$NetBSD: mach_host.c,v 1.31 2008/04/28 20:23:44 martin Exp $"
 #include <sys/systm.h>
 #include <sys/signal.h>
 #include <sys/proc.h>
-
-#include <uvm/uvm_extern.h>
-#include <uvm/uvm_param.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_host.h>
@@ -144,10 +139,10 @@ mach_host_get_clock_service(struct mach_trap_args *args)
 	mach_host_get_clock_service_request_t *req = args->smsg;
 	mach_host_get_clock_service_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_right *mr;
 
-	mr = mach_right_get(mach_clock_port, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mach_clock_port, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -179,10 +174,10 @@ mach_host_get_io_master(struct mach_trap_args *args)
 	mach_host_get_io_master_request_t *req = args->smsg;
 	mach_host_get_io_master_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_right *mr;
 
-	mr = mach_right_get(mach_io_master_port, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mach_io_master_port, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -198,12 +193,12 @@ mach_processor_set_default(struct mach_trap_args *args)
 	mach_processor_set_default_request_t *req = args->smsg;
 	mach_processor_set_default_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_right *mr;
 	struct mach_port *mp;
 
 	mp = mach_port_get();
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -219,18 +214,18 @@ mach_host_processor_set_priv(struct mach_trap_args *args)
 	mach_host_processor_set_priv_request_t *req = args->smsg;
 	mach_host_processor_set_priv_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_right *smr;
 	struct mach_port *smp;
 
 	mn = req->req_set.name;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_msg_error(args, EINVAL);
 
 	smp = mach_port_get();
-	smr = mach_right_get(smp, l, MACH_PORT_TYPE_SEND, 0);
+	smr = mach_right_get(smp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

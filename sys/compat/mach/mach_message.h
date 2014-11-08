@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_message.h,v 1.30 2008/04/28 20:23:44 martin Exp $	 */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2001-2003 The NetBSD Foundation, Inc.
@@ -223,8 +223,8 @@ struct mach_complex_msg {
 /* Kernel-private structures */
 
 struct mach_trap_args {
-	struct lwp *l;	/* Current task (doing the Mach system call) */
-	struct lwp *tl; /* Target task */
+	struct thread *td;	/* Current task (doing the Mach system call) */
+	struct thread *ttd; /* Target task */
 	void *smsg;	/* Sent message */
 	void *rmsg;	/* Reply message */
 	size_t ssize;	/* Sent message size */
@@ -248,7 +248,7 @@ struct mach_message {
 	TAILQ_ENTRY(mach_message) mm_list;
 					/* List of pending messages */
 	struct mach_port *mm_port;	/* The port on which msg is queued */
-	struct lwp *mm_l;		/* The thread that sent it */
+	struct thread *mm_l;		/* The thread that sent it */
 };
 
 /* Flags for mach_ool_copy{in|out} */
@@ -256,16 +256,16 @@ struct mach_message {
 #define MACH_OOL_FREE	0x1	/* Free kernel buffer after copyout */
 #define MACH_OOL_TRACE	0x2	/* ktrace OOL data */
 
-__inline int mach_ool_copyin(struct lwp *, const void *, void **, size_t, int);
-__inline int mach_ool_copyout(struct lwp *, const void *, void **, size_t, int);
-__inline void mach_set_trailer(void *, size_t);
-__inline void mach_set_header(void *, void *, size_t);
-__inline void mach_add_port_desc(void *, mach_port_name_t);
-__inline void mach_add_ool_ports_desc(void *, void *, int);
-__inline void mach_add_ool_desc(void *, void *, size_t);
+int mach_ool_copyin(struct thread *, const void *, void **, size_t, int);
+int mach_ool_copyout(struct thread *, const void *, void **, size_t, int);
+void mach_set_trailer(void *, size_t);
+void mach_set_header(void *, void *, size_t);
+void mach_add_port_desc(void *, mach_port_name_t);
+void mach_add_ool_ports_desc(void *, void *, int);
+void mach_add_ool_desc(void *, void *, size_t);
 void mach_message_init(void);
 struct mach_message *mach_message_get(mach_msg_header_t *,
-    size_t, struct mach_port *, struct lwp *);
+    size_t, struct mach_port *, struct thread *);
 void mach_message_put(struct mach_message *);
 void mach_message_put_shlocked(struct mach_message *);
 void mach_message_put_exclocked(struct mach_message *);

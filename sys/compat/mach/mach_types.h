@@ -1,5 +1,4 @@
-/*	$NetBSD: mach_types.h,v 1.24 2008/04/28 20:23:44 martin Exp $	 */
-
+/*	$FreeBSD$ */
 /*-
  * Copyright (c) 2001-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -31,6 +30,10 @@
 
 #ifndef	_MACH_TYPES_H_
 #define	_MACH_TYPES_H_
+
+#include <sys/param.h>
+#include <sys/kernel.h>
+#include <sys/malloc.h>
 
 typedef int mach_port_t;
 typedef int mach_port_name_t;
@@ -73,6 +76,7 @@ typedef unsigned int mach_vm_machine_attribute_t;
 typedef mach_natural_t mach_port_urefs_t;
 typedef int mach_port_delta_t;
 
+MALLOC_DECLARE(M_MACH);
 
 /*
  * This is called cproc_t in Mach (cthread_t in Darwin). It is a pointer to

@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_notify.h,v 1.10 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -71,9 +71,9 @@ typedef struct {
 	mach_msg_trailer_t req_trailer;
 } mach_notify_port_dead_name_request_t;
 
-void mach_notify_port_destroyed(struct lwp *, struct mach_right *);
-void mach_notify_port_no_senders(struct lwp *, struct mach_right *);
-void mach_notify_port_dead_name(struct lwp *, struct mach_right *);
+void mach_notify_port_destroyed(struct thread *, struct mach_right *);
+void mach_notify_port_no_senders(struct thread *, struct mach_right *);
+void mach_notify_port_dead_name(struct thread *, struct mach_right *);
 
 #endif /* _MACH_NOTIFICATION_H_ */
 

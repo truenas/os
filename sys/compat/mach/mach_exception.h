@@ -152,9 +152,9 @@ struct mach_exc_info {
 	int mei_behavior;
 };
 
-void mach_trapsignal(struct lwp *, struct ksiginfo *);
-int mach_trapsignal1(struct lwp *, struct ksiginfo *);
-int mach_exception(struct lwp *, int, int *);
+void mach_trapsignal(struct thread *, struct ksiginfo *);
+int mach_trapsignal1(struct thread *, struct ksiginfo *);
+int mach_exception(struct thread *, int, int *);
 
 #endif /* _MACH_EXCEPTION_H_ */
 

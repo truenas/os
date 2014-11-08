@@ -1,5 +1,3 @@
-/*	$NetBSD: mach_thread.c,v 1.50 2010/06/13 04:13:31 yamt Exp $ */
-
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -30,13 +28,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_thread.c,v 1.50 2010/06/13 04:13:31 yamt Exp $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/systm.h>
 #include <sys/signal.h>
+#include <sys/lock.h>
 #include <sys/rwlock.h>
 #include <sys/queue.h>
 #include <sys/proc.h>
@@ -54,10 +53,10 @@ __KERNEL_RCSID(0, "$NetBSD: mach_thread.c,v 1.50 2010/06/13 04:13:31 yamt Exp $"
 #include <compat/mach/mach_thread.h>
 #include <compat/mach/mach_errno.h>
 #include <compat/mach/mach_services.h>
-#include <compat/mach/mach_syscallargs.h>
+#include <compat/mach/mach_proto.h>
 
 int
-mach_sys_syscall_thread_switch(struct lwp *l, const struct mach_sys_syscall_thread_switch_args *uap, register_t *retval)
+mach_sys_syscall_thread_switch(struct thread *td, const struct mach_sys_syscall_thread_switch_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) thread_name;
@@ -67,15 +66,15 @@ mach_sys_syscall_thread_switch(struct lwp *l, const struct mach_sys_syscall_thre
 	int timeout;
 	struct mach_emuldata *med;
 
-	med = (struct mach_emuldata *)l->l_proc->p_emuldata;
-	timeout = SCARG(uap, option_time) * hz / 1000;
+	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
+	timeout = uap->option_time * hz / 1000;
 
 	/*
 	 * The day we will be able to find out the struct proc from
 	 * the port number, try to use preempt() to call the right thread.
 	 * [- but preempt() is for _involuntary_ context switches.]
 	 */
-	switch(SCARG(uap, option)) {
+	switch(uap->option) {
 	case MACH_SWITCH_OPTION_NONE:
 		yield();
 		break;
@@ -95,14 +94,14 @@ mach_sys_syscall_thread_switch(struct lwp *l, const struct mach_sys_syscall_thre
 		break;
 
 	default:
-		uprintf("mach_sys_syscall_thread_switch(): unknown option %d\n",		    SCARG(uap, option));
+		uprintf("mach_sys_syscall_thread_switch(): unknown option %d\n",		    uap->option);
 		break;
 	}
 	return 0;
 }
 
 int
-mach_sys_swtch_pri(struct lwp *l, const struct mach_sys_swtch_pri_args *uap, register_t *retval)
+mach_sys_swtch_pri(struct thread *td, struct mach_sys_swtch_pri_args *uap)
 {
 	/* {
 		syscallarg(int) pri;
@@ -115,21 +114,21 @@ mach_sys_swtch_pri(struct lwp *l, const struct mach_sys_swtch_pri_args *uap, reg
 	KERNEL_UNLOCK_ALL(l, &l->l_biglocks);
 	lwp_lock(l);
 	if (l->l_stat == LSONPROC)
-		l->l_proc->p_stats->p_ru.ru_nivcsw++;	/* XXXSMP */
-	*retval = mi_switch(l);
+		td->td_proc->p_stats->p_ru.ru_nivcsw++;	/* XXXSMP */
+	td->td_retval[0] = mi_switch(td);
 	KERNEL_LOCK(l->l_biglocks, l);
 
 	return 0;
 }
 
 int
-mach_sys_swtch(struct lwp *l, const void *v, register_t *retval)
+mach_sys_swtch(struct thread *td, const void *v)
 {
 	struct mach_sys_swtch_pri_args cup;
 
-	SCARG(&cup, pri) = 0;
+	cup.pri = 0;
 
-	return mach_sys_swtch_pri(l, &cup, retval);
+	return mach_sys_swtch_pri(td, &cup, retval);
 }
 
 
@@ -166,12 +165,12 @@ mach_thread_create_running(struct mach_trap_args *args)
 	mach_thread_create_running_request_t *req = args->smsg;
 	mach_thread_create_running_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
-	struct proc *p = l->l_proc;
+	struct thread *td = args->td;
+	struct proc *p = td->td_proc;
 	struct mach_create_thread_child_args mctc;
 	struct mach_right *child_mr;
 	struct mach_lwp_emuldata *mle;
-	vaddr_t uaddr;
+	vm_offset_t uaddr;
 	int flags;
 	int error;
 	int end_offset;
@@ -217,7 +216,7 @@ mach_thread_create_running(struct mach_trap_args *args)
 	 * Get the child's kernel port
 	 */
 	mle = mctc.mctc_lwp->l_emuldata;
-	child_mr = mach_right_get(mle->mle_kernel, l, MACH_PORT_TYPE_SEND, 0);
+	child_mr = mach_right_get(mle->mle_kernel, td, MACH_PORT_TYPE_SEND, 0);
 
 	/*
 	 * The child relies on some values in mctc, so we should not
@@ -243,9 +242,9 @@ mach_thread_info(struct mach_trap_args *args)
 	mach_thread_info_request_t *req = args->smsg;
 	mach_thread_info_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
-	struct lwp *tl = args->tl;
-	struct proc *tp = tl->l_proc;
+	struct thread *td = args->td;
+	struct thread *ttd = args->ttd;
+	struct proc *tp = ttd->td_proc;
 
 	/* Sanity check req->req_count */
 	if (req->req_count > 12)
@@ -335,7 +334,7 @@ mach_thread_get_state(struct mach_trap_args *args)
 	mach_thread_get_state_request_t *req = args->smsg;
 	mach_thread_get_state_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *tl = args->tl;
+	struct thread *ttd = args->ttd;
 	int error;
 	int size;
 
@@ -361,7 +360,7 @@ mach_thread_set_state(struct mach_trap_args *args)
 	mach_thread_set_state_request_t *req = args->smsg;
 	mach_thread_set_state_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *tl = args->tl;
+	struct thread *ttd = args->ttd;
 	int error;
 	int end_offset;
 
@@ -390,9 +389,9 @@ mach_thread_suspend(struct mach_trap_args *args)
 	mach_thread_suspend_request_t *req = args->smsg;
 	mach_thread_suspend_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
-	struct lwp *tl = args->tl;
-	struct proc *p = tl->l_proc;
+	struct thread *td = args->td;
+	struct thread *ttd = args->ttd;
+	struct proc *p = ttd->td_proc;
 	int error;
 
 	mutex_enter(p->p_lock);
@@ -414,8 +413,8 @@ mach_thread_resume(struct mach_trap_args *args)
 	mach_thread_resume_request_t *req = args->smsg;
 	mach_thread_resume_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *tl = args->tl;
-	struct proc *p = tl->l_proc;
+	struct thread *ttd = args->ttd;
+	struct proc *p = ttd->td_proc;
 
 	mutex_enter(p->p_lock);
 	lwp_lock(tl);
@@ -436,7 +435,7 @@ mach_thread_abort(struct mach_trap_args *args)
 	mach_thread_abort_request_t *req = args->smsg;
 	mach_thread_abort_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *tl = args->tl;
+	struct thread *ttd = args->ttd;
 
 	lwp_exit(tl);
 
@@ -454,7 +453,7 @@ mach_thread_set_policy(struct mach_trap_args *args)
 	mach_thread_set_policy_request_t *req = args->smsg;
 	mach_thread_set_policy_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *tl = args->tl;
+	struct thread *ttd = args->ttd;
 	mach_port_t mn;
 	struct mach_right *mr;
 	int limit_count_offset, limit_offset;

@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_notify.c,v 1.20 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -30,11 +30,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_notify.c,v 1.20 2008/04/28 20:23:44 martin Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/signal.h>
+#include <sys/systm.h>
 #include <sys/proc.h>
 #include <sys/malloc.h>
 
@@ -46,7 +46,7 @@ __KERNEL_RCSID(0, "$NetBSD: mach_notify.c,v 1.20 2008/04/28 20:23:44 martin Exp 
 #include <compat/mach/mach_services.h>
 
 void
-mach_notify_port_destroyed(struct lwp *l, struct mach_right *mr)
+mach_notify_port_destroyed(struct thread *td, struct mach_right *mr)
 {
 	struct mach_port *mp;
 	mach_notify_port_destroyed_request_t *req;
@@ -65,7 +65,7 @@ mach_notify_port_destroyed(struct lwp *l, struct mach_right *mr)
 
 	MACH_PORT_REF(mp);
 
-	req = malloc(sizeof(*req), M_EMULDATA, M_WAITOK | M_ZERO);
+	req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
 
 	req->req_msgh.msgh_bits =
 	    MACH_MSGH_REPLY_LOCAL_BITS(MACH_MSG_TYPE_MOVE_SEND_ONCE);
@@ -77,10 +77,10 @@ mach_notify_port_destroyed(struct lwp *l, struct mach_right *mr)
 
 	mach_set_trailer(req, sizeof(*req));
 
-	(void)mach_message_get((mach_msg_header_t *)req, sizeof(*req), mp, l);
+	(void)mach_message_get((mach_msg_header_t *)req, sizeof(*req), mp, td);
 #ifdef DEBUG_MACH_MSG
 	printf("pid %d: message queued on port %p (%d) [%p]\n",
-	    l->l_proc->p_pid, mp, req->req_msgh.msgh_id,
+	    td->td_proc->p_pid, mp, req->req_msgh.msgh_id,
 	    mp->mp_recv->mr_sethead);
 #endif
 	wakeup(mp->mp_recv->mr_sethead);
@@ -91,7 +91,7 @@ mach_notify_port_destroyed(struct lwp *l, struct mach_right *mr)
 }
 
 void
-mach_notify_port_no_senders(struct lwp *l, struct mach_right *mr)
+mach_notify_port_no_senders(struct thread *td, struct mach_right *mr)
 {
 	struct mach_port *mp;
 	mach_notify_port_no_senders_request_t *req;
@@ -113,7 +113,7 @@ mach_notify_port_no_senders(struct lwp *l, struct mach_right *mr)
 	if ((int)mp->mp_data >= mr->mr_refcount)
 		goto out;
 
-	req = malloc(sizeof(*req), M_EMULDATA, M_WAITOK | M_ZERO);
+	req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
 
 	req->req_msgh.msgh_bits =
 	    MACH_MSGH_REPLY_LOCAL_BITS(MACH_MSG_TYPE_MOVE_SEND_ONCE);
@@ -124,10 +124,10 @@ mach_notify_port_no_senders(struct lwp *l, struct mach_right *mr)
 
 	mach_set_trailer(req, sizeof(*req));
 
-	(void)mach_message_get((mach_msg_header_t *)req, sizeof(*req), mp, l);
+	(void)mach_message_get((mach_msg_header_t *)req, sizeof(*req), mp, td);
 #ifdef DEBUG_MACH_MSG
 	printf("pid %d: message queued on port %p (%d) [%p]\n",
-	    l->l_proc->p_pid, mp, req->req_msgh.msgh_id,
+	    td->td_proc->p_pid, mp, req->req_msgh.msgh_id,
 	    mp->mp_recv->mr_sethead);
 #endif
 	wakeup(mp->mp_recv->mr_sethead);
@@ -138,7 +138,7 @@ out:
 }
 
 void
-mach_notify_port_dead_name(struct lwp *l, struct mach_right *mr)
+mach_notify_port_dead_name(struct thread *td, struct mach_right *mr)
 {
 	struct mach_port *mp;
 	mach_notify_port_dead_name_request_t *req;
@@ -156,7 +156,7 @@ mach_notify_port_dead_name(struct lwp *l, struct mach_right *mr)
 #endif
 	MACH_PORT_REF(mp);
 
-	req = malloc(sizeof(*req), M_EMULDATA, M_WAITOK | M_ZERO);
+	req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
 
 	req->req_msgh.msgh_bits =
 	    MACH_MSGH_REPLY_LOCAL_BITS(MACH_MSG_TYPE_MOVE_SEND_ONCE);
@@ -169,10 +169,10 @@ mach_notify_port_dead_name(struct lwp *l, struct mach_right *mr)
 
 	mr->mr_refcount++;
 
-	(void)mach_message_get((mach_msg_header_t *)req, sizeof(*req), mp, l);
+	(void)mach_message_get((mach_msg_header_t *)req, sizeof(*req), mp, td);
 #ifdef DEBUG_MACH_MSG
 	printf("pid %d: message queued on port %p (%d) [%p]\n",
-	    l->l_proc->p_pid, mp, req->req_msgh.msgh_id,
+	    td->td_proc->p_pid, mp, req->req_msgh.msgh_id,
 	    mp->mp_recv->mr_sethead);
 #endif
 	wakeup(mp->mp_recv->mr_sethead);

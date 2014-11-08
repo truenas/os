@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_thread.h,v 1.19 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
@@ -42,8 +42,8 @@
 
 /* For mach_create_thread_child() */
 struct mach_create_thread_child_args {
-	struct lwp *mctc_lwp;
-	struct lwp *mctc_oldlwp;
+	struct thread *mctc_lwp;
+	struct thread *mctc_oldlwp;
 	mach_natural_t *mctc_state;
 	int mctc_flavor;
 	int mctc_child_done;
@@ -242,8 +242,8 @@ typedef struct {
 } mach_thread_set_policy_reply_t;
 
 /* These are machine dependent functions */
-int mach_thread_get_state_machdep(struct lwp *, int, void *, int *);
-int mach_thread_set_state_machdep(struct lwp *, int, void *);
+int mach_thread_get_state_machdep(struct thread *, int, void *, int *);
+int mach_thread_set_state_machdep(struct thread *, int, void *);
 void mach_create_thread_child(void *);
 
 #endif /* _MACH_THREAD_H_ */

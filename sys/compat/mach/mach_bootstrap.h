@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_bootstrap.h,v 1.5 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.

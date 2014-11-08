@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_errno.h,v 1.9 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.

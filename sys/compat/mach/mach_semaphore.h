@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_semaphore.h,v 1.7 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
@@ -32,6 +32,7 @@
 #ifndef	_MACH_SEMAPHORE_H_
 #define	_MACH_SEMAPHORE_H_
 
+#include <sys/lock.h>
 #include <sys/rwlock.h>
 #include <sys/queue.h>
 
@@ -47,7 +48,7 @@ struct mach_semaphore {
 	int ms_policy;
 	LIST_ENTRY(mach_semaphore) ms_list;
 	TAILQ_HEAD(ms_waiting, mach_waiting_lwp) ms_waiting;
-	krwlock_t ms_lock;
+	struct rwlock ms_lock;
 };
 
 /* semaphore_create */

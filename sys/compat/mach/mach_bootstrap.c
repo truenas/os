@@ -1,5 +1,3 @@
-/*	$NetBSD: mach_bootstrap.c,v 1.14 2008/04/28 20:23:44 martin Exp $ */
-
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -30,13 +28,17 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_bootstrap.c,v 1.14 2008/04/28 20:23:44 martin Exp $");
+__FBSDID("$FreeBSD$");
 
-#include <sys/types.h>
 #include <sys/param.h>
+#include <sys/types.h>
+#include <sys/kernel.h>
+#include <sys/malloc.h>
+
 #include <sys/systm.h>
 #include <sys/signal.h>
 #include <sys/proc.h>
+
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -45,12 +47,15 @@ __KERNEL_RCSID(0, "$NetBSD: mach_bootstrap.c,v 1.14 2008/04/28 20:23:44 martin E
 #include <compat/mach/mach_errno.h>
 #include <compat/mach/mach_services.h>
 
+MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
+
+
 int
 mach_bootstrap_look_up(struct mach_trap_args *args)
 {
 	mach_bootstrap_look_up_request_t *req = args->smsg;
 	mach_bootstrap_look_up_reply_t *rep = args->rmsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	size_t *msglen = args->rsize;
 	const char service_name[] = "lookup\021"; /* XXX Why */
 	int service_name_len;
@@ -65,7 +70,7 @@ mach_bootstrap_look_up(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 	*msglen = len;
 
-	mr = mach_right_get(NULL, l, MACH_PORT_TYPE_DEAD_NAME, 0);
+	mr = mach_right_get(NULL, td, MACH_PORT_TYPE_DEAD_NAME, 0);
 
 	mach_set_header(rep, req, *msglen);
 

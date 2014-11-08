@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_vm.h,v 1.30 2008/04/28 20:23:45 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
@@ -381,11 +381,11 @@ typedef struct {
 
 struct mach_memory_entry {
 	struct proc *mme_proc;
-	vaddr_t	mme_offset;
+	vm_offset_t	mme_offset;
 	size_t mme_size;
 };
 
 /* These are machine dependent functions */
-int mach_vm_machine_attribute_machdep(struct lwp *, vaddr_t, size_t, int *);
+int mach_vm_machine_attribute_machdep(struct td *, vm_offset_t, size_t, int *);
 
 #endif /* _MACH_VM_H_ */

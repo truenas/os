@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_host.h,v 1.17 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.

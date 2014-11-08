@@ -9,7 +9,6 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_services_names.c,v 1.16 2009/01/13 22:33:10 pooka Exp $");
 
 struct mach_service_name {
 	int srv_id;

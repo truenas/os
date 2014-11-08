@@ -1,6 +1,7 @@
-/*	$NetBSD: mach_clock.c,v 1.19 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
+ * Copyright (c) 2014 Matthew Macy <kmacy@freebsd.org>
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
@@ -30,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_clock.c,v 1.19 2008/04/28 20:23:44 martin Exp $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -45,10 +46,21 @@ __KERNEL_RCSID(0, "$NetBSD: mach_clock.c,v 1.19 2008/04/28 20:23:44 martin Exp $
 #include <compat/mach/mach_port.h>
 #include <compat/mach/mach_clock.h>
 #include <compat/mach/mach_services.h>
-#include <compat/mach/mach_syscallargs.h>
+#include <compat/mach/mach_proto.h>
+
+#define timespecsub_netbsd(tsp, usp, vsp)                               \
+        do {                                                            \
+                (vsp)->tv_sec = (tsp)->tv_sec - (usp)->tv_sec;          \
+                (vsp)->tv_nsec = (tsp)->tv_nsec - (usp)->tv_nsec;       \
+                if ((vsp)->tv_nsec < 0) {                               \
+                        (vsp)->tv_sec--;                                \
+                        (vsp)->tv_nsec += 1000000000L;                  \
+                }                                                       \
+        } while (/* CONSTCOND */ 0)
+
 
 int
-mach_sys_clock_sleep_trap(struct lwp *l, const struct mach_sys_clock_sleep_trap_args *uap, register_t *retval)
+sys_mach_clock_sleep_trap(struct thread *td, struct mach_clock_sleep_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_clock_port_t) clock_name;
@@ -63,12 +75,12 @@ mach_sys_clock_sleep_trap(struct lwp *l, const struct mach_sys_clock_sleep_trap_
 	int error;
 	int ticks;
 
-	mts.tv_sec = SCARG(uap, sleep_sec);
-	mts.tv_nsec = SCARG(uap, sleep_nsec);
+	mts.tv_sec = uap->sleep_sec;
+	mts.tv_nsec = uap->sleep_nsec;
 
-	if (SCARG(uap, sleep_type) == MACH_TIME_ABSOLUTE) {
+	if (uap->sleep_type == MACH_TIME_ABSOLUTE) {
 		nanotime(&cts);
-		timespecsub(&mts, &cts, &tts);
+		timespecsub_netbsd(&mts, &cts, &tts);
 	} else {
 		tts.tv_sec = mts.tv_sec;
 		tts.tv_nsec = mts.tv_nsec;
@@ -79,11 +91,11 @@ mach_sys_clock_sleep_trap(struct lwp *l, const struct mach_sys_clock_sleep_trap_
 
 	tsleep(&dontcare, PZERO|PCATCH, "sleep", ticks);
 
-	if (SCARG(uap, wakeup_time) != NULL) {
+	if (uap->wakeup_time != NULL) {
 		nanotime(&cts);
 		mcts.tv_sec = cts.tv_sec;
 		mcts.tv_nsec = cts.tv_nsec;
-		error = copyout(&mcts, SCARG(uap, wakeup_time), sizeof(mcts));
+		error = copyout(&mcts, uap->wakeup_time, sizeof(mcts));
 		if (error != 0)
 			return error;
 	}
@@ -92,7 +104,7 @@ mach_sys_clock_sleep_trap(struct lwp *l, const struct mach_sys_clock_sleep_trap_
 }
 
 int
-mach_sys_timebase_info(struct lwp *l, const struct mach_sys_timebase_info_args *uap, register_t *retval)
+sys_mach_timebase_info(struct thread *td, struct mach_timebase_info_args *uap)
 {
 	/* {
 		syscallarg(mach_timebase_info_t) info;
@@ -104,7 +116,7 @@ mach_sys_timebase_info(struct lwp *l, const struct mach_sys_timebase_info_args *
 	info.numer = 4000000000UL;
 	info.denom = 75189611UL;
 
-	if ((error = copyout(&info, (void *)SCARG(uap, info),
+	if ((error = copyout(&info, (void *)uap->info,
 	    sizeof(info))) != 0)
 		return error;
 

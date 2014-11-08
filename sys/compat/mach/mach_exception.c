@@ -1,5 +1,3 @@
-/*	$NetBSD: mach_exception.c,v 1.14 2009/03/14 21:04:18 dsl Exp $ */
-
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -30,19 +28,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_exception.c,v 1.14 2009/03/14 21:04:18 dsl Exp $");
-
-#include "opt_compat_darwin.h"
+__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/signal.h>
+#include <sys/systm.h>
 #include <sys/proc.h>
 #include <sys/malloc.h>
-
-#ifdef COMPAT_DARWIN
-#include <compat/darwin/darwin_exec.h>
-#endif
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_exec.h>
@@ -68,23 +61,23 @@ static void mach_siginfo_to_exception(const struct ksiginfo *, int *);
  * mach_trapinfo1 and handle signals if it gets a non zero return value.
  */
 void
-mach_trapsignal(struct lwp *l, struct ksiginfo *ksi)
+mach_trapsignal(struct thread *td, struct ksiginfo *ksi)
 {
-	if (mach_trapsignal1(l, ksi) != 0)
-		trapsignal(l, ksi);
+	if (mach_trapsignal1(td, ksi) != 0)
+		trapsignal(td, ksi);
 	return;
 }
 
 int
-mach_trapsignal1(struct lwp *l, struct ksiginfo *ksi)
+mach_trapsignal1(struct thread *td, struct ksiginfo *ksi)
 {
-	struct proc *p = l->l_proc;
+	struct proc *p = td->td_proc;
 	struct mach_emuldata *med;
 	int exc_no;
 	int code[2];
 
 	/* Don't inhinbit non maskable signals */
-	if (sigprop[ksi->ksi_signo] & SA_CANTMASK)
+	if (sigprop(ksi->ksi_signo) & SA_CANTMASK)
 		return EINVAL;
 
 	med = (struct mach_emuldata *)p->p_emuldata;
@@ -110,12 +103,12 @@ mach_trapsignal1(struct lwp *l, struct ksiginfo *ksi)
 
 	mach_siginfo_to_exception(ksi, code);
 
-	return mach_exception(l, exc_no, code);
+	return mach_exception(td, exc_no, code);
 }
 
 int
-mach_exception(struct lwp *exc_l, int exc, int *code)
-	/* exc_l:	 currently running lwp */
+mach_exception(struct thread *exc_td, int exc, int *code)
+	/* exc_td:	 currently running thread */
 {
 	int behavior, flavor;
 	mach_msg_header_t *msgh;
@@ -125,7 +118,7 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	struct mach_lwp_emuldata *exc_mle;
 	struct mach_emuldata *catcher_med;
 	struct mach_right *kernel_mr;
-	struct lwp *catcher_l;	/* The lwp catching the exception */
+	struct thread *catcher_td;	/* The lwp catching the exception */
 	struct mach_right *exc_task;
 	struct mach_right *exc_thread;
 	struct mach_port *exc_port;
@@ -133,14 +126,14 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	int error = 0;
 
 #ifdef DIAGNOSTIC
-	if (exc_l == NULL) {
-		printf("mach_exception: exc_l = %p\n", exc_l);
+	if (exc_td == NULL) {
+		printf("mach_exception: exc_td = %p\n", exc_td);
 		return ESRCH;
 	}
 #endif
 #ifdef DEBUG_MACH
 	printf("mach_exception: %d.%d, exc %d, code (%d, %d)\n",
-	    exc_l->l_proc->p_pid, exc_l->l_lid, exc, code[0], code[1]);
+	    exc_td->td_proc->p_pid, exc_td->td_lid, exc, code[0], code[1]);
 #endif
 
 	/*
@@ -148,24 +141,22 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	 * the process at the time it dies.
 	 */
 	if (mach_exception_hang) {
-		struct proc *p = exc_l->l_proc;
+		struct proc *p = exc_td->td_proc;
 
-		sigminusset(&contsigmask, &exc_l->l_sigpendset->sp_set);
-		lwp_lock(exc_l);
+		sigminusset(&contsigmask, &exc_td->td_sigpendset->sp_set);
+		thread_lock(exc_td);
 		p->p_pptr->p_nstopchild++;
 		p->p_stat = SSTOP;
-		exc_l->l_stat = LSSTOP;
+		exc_td->td_stat = LSSTOP;
 		p->p_nrlwps--;
-		KERNEL_UNLOCK_ALL(exc_l, &exc_l->l_biglocks);
-		mi_switch(exc_l);
-		KERNEL_LOCK(exc_l->l_biglocks, exc_l);
+		mi_switch(exc_td);
 	}
 
 	/*
 	 * No exception if there is no exception port or if it has no receiver
 	 */
-	exc_mle = exc_l->l_emuldata;
-	exc_med = exc_l->l_proc->p_emuldata;
+	exc_mle = exc_td->td_emuldata;
+	exc_med = exc_td->td_proc->p_emuldata;
 	if ((exc_port = exc_med->med_exc[exc]) == NULL)
 		return EINVAL;
 
@@ -177,14 +168,14 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 
 #ifdef DEBUG_MACH
 	printf("catcher is %d.%d, state %d\n",
-	    exc_port->mp_recv->mr_lwp->l_proc->p_pid,
+	    exc_port->mp_recv->mr_lwp->td_proc->p_pid,
 	    exc_port->mp_recv->mr_lwp->l_lid,
-	    exc_port->mp_recv->mr_lwp->l_proc->p_stat);
+	    exc_port->mp_recv->mr_lwp->td_proc->p_stat);
 #endif
 	/*
 	 * Don't send exceptions to dying processes
 	 */
-	if (P_ZOMBIE(exc_port->mp_recv->mr_lwp->l_proc)) {
+	if (P_ZOMBIE(exc_port->mp_recv->mr_lwp->td_proc)) {
 		error = ESRCH;
 		goto out;
 	}
@@ -209,8 +200,8 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	 * a dying parent, a signal is sent instead of the
 	 * notification, this fixes the problem.
 	 */
-	if ((exc_l->l_proc->p_slflag & PSL_TRACED) &&
-	    (exc_l->l_proc->p_pptr->p_sflag & PS_WEXIT)) {
+	if ((exc_td->td_proc->p_slflag & PSL_TRACED) &&
+	    (exc_td->td_proc->p_pptr->p_sflag & PS_WEXIT)) {
 #ifdef DEBUG_MACH
 		printf("mach_exception: deadlock avoided\n");
 #endif
@@ -233,22 +224,22 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	 * We want the port names in the target process, that is,
 	 * the process with receive right for exc_port.
 	 */
-	catcher_l = exc_port->mp_recv->mr_lwp;
-	catcher_med = catcher_l->l_proc->p_emuldata;
-	exc_mr = mach_right_get(exc_port, catcher_l, MACH_PORT_TYPE_SEND, 0);
+	catcher_td = exc_port->mp_recv->mr_lwp;
+	catcher_med = catcher_td->td_proc->p_emuldata;
+	exc_mr = mach_right_get(exc_port, catcher_td, MACH_PORT_TYPE_SEND, 0);
 	kernel_mr = mach_right_get(catcher_med->med_kernel,
-	    catcher_l, MACH_PORT_TYPE_SEND, 0);
+	    catcher_td, MACH_PORT_TYPE_SEND, 0);
 
 	exc_task = mach_right_get(exc_med->med_kernel,
-	    catcher_l, MACH_PORT_TYPE_SEND, 0);
+	    catcher_td, MACH_PORT_TYPE_SEND, 0);
 	exc_thread = mach_right_get(exc_mle->mle_kernel,
-	    catcher_l, MACH_PORT_TYPE_SEND, 0);
+	    catcher_td, MACH_PORT_TYPE_SEND, 0);
 
 	switch (behavior) {
 	case MACH_EXCEPTION_DEFAULT: {
 		mach_exception_raise_request_t *req;
 
-		req = malloc(sizeof(*req), M_EMULDATA, M_WAITOK | M_ZERO);
+		req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
 		msglen = sizeof(*req);
 		msgh = (mach_msg_header_t *)req;
 
@@ -277,7 +268,7 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 		mach_exception_raise_state_request_t *req;
 		int dc;
 
-		req = malloc(sizeof(*req), M_EMULDATA, M_WAITOK | M_ZERO);
+		req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
 		msglen = sizeof(*req);
 		msgh = (mach_msg_header_t *)req;
 
@@ -293,7 +284,7 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 		req->req_codecount = 2;
 		memcpy(&req->req_code[0], code, sizeof(req->req_code));
 		req->req_flavor = flavor;
-		mach_thread_get_state_machdep(exc_l,
+		mach_thread_get_state_machdep(exc_td,
 		    flavor, req->req_state, &dc);
 
 		msglen = msglen -
@@ -308,7 +299,7 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 		mach_exception_raise_state_identity_request_t *req;
 		int dc;
 
-		req = malloc(sizeof(*req), M_EMULDATA, M_WAITOK | M_ZERO);
+		req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
 		msglen = sizeof(*req);
 		msgh = (mach_msg_header_t *)req;
 
@@ -329,7 +320,7 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 		req->req_codecount = 2;
 		memcpy(&req->req_code[0], code, sizeof(req->req_code));
 		req->req_flavor = flavor;
-		mach_thread_get_state_machdep(exc_l,
+		mach_thread_get_state_machdep(exc_td,
 		    flavor, req->req_state, &dc);
 
 		msglen = msglen -
@@ -362,7 +353,7 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	 */
 	if (((exc_port = exc_med->med_exc[exc]) == NULL) ||
 	    (exc_port->mp_recv == NULL) ||
-	    (P_ZOMBIE(exc_port->mp_recv->mr_lwp->l_proc))) {
+	    (P_ZOMBIE(exc_port->mp_recv->mr_lwp->td_proc))) {
 		error = ESRCH;
 		goto out;
 	}
@@ -376,12 +367,12 @@ mach_exception(struct lwp *exc_l, int exc, int *code)
 	 */
 #ifdef DEBUG_MACH
 	printf("mach_exception: %d.%d sleep on catcher_med->med_exclock = %p\n",
-	    exc_l->l_proc->p_pid, exc_l->l_lid, &catcher_med->med_exclock);
+	    exc_td->td_proc->p_pid, exc_td->td_lid, &catcher_med->med_exclock);
 #endif
 	error = tsleep(&catcher_med->med_exclock, PZERO, "mach_exc", 0);
 #ifdef DEBUG_MACH
 	printf("mach_exception: %d.%d resumed, error = %d\n",
-	    exc_l->l_proc->p_pid, exc_l->l_lid, error);
+	    exc_td->td_proc->p_pid, exc_td->td_lid, error);
 #endif
 
 	/*
@@ -470,7 +461,7 @@ mach_siginfo_to_exception(const struct ksiginfo *ksi, int *code)
 int
 mach_exception_raise(struct mach_trap_args *args)
 {
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_exception_raise_reply_t *rep;
 	struct mach_emuldata *med;
 
@@ -493,7 +484,7 @@ mach_exception_raise(struct mach_trap_args *args)
 	if (rep->rep_retval != 0)
 		return 0;
 
-	med = l->l_proc->p_emuldata;
+	med = td->td_proc->p_emuldata;
 
 	/*
 	 * Check for unexpected exception acknowledge, whereas

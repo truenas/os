@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_errno.c,v 1.18 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -30,11 +30,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_errno.c,v 1.18 2008/04/28 20:23:44 martin Exp $");
 
 #include <sys/types.h>
 #include <sys/systm.h>
-#include <sys/null.h>
 #include <sys/queue.h>
 #include <sys/errno.h>
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_exec.c,v 1.74 2010/07/25 11:25:57 jym Exp $	 */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2001-2003 The NetBSD Foundation, Inc.
@@ -30,23 +30,17 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_exec.c,v 1.74 2010/07/25 11:25:57 jym Exp $");
-
-#include "opt_syscall_debug.h"
+__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/proc.h>
 #include <sys/exec.h>
 #include <sys/queue.h>
-#include <sys/exec_macho.h>
 #include <sys/malloc.h>
 
+#include <sys/sysent.h>
 #include <sys/syscall.h>
-#include <sys/syscallvar.h>
-
-#include <uvm/uvm_extern.h>
-#include <uvm/uvm_param.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -125,7 +119,7 @@ struct emul emul_mach = {
  * emulation, and it probably contains Darwin specific bits.
  */
 int
-exec_mach_copyargs(struct lwp *l, struct exec_package *pack, struct ps_strings *arginfo, char **stackp, void *argp)
+exec_mach_copyargs(struct thread *l, struct exec_package *pack, struct ps_strings *arginfo, char **stackp, void *argp)
 {
 	struct exec_macho_emul_arg *emea;
 	struct exec_macho_object_header *macho_hdr;
@@ -189,7 +183,7 @@ mach_e_proc_exec(struct proc *p, struct exec_package *epp)
 	mach_e_proc_init(p);
 
 	if (p->p_emul != epp->ep_esch->es_emul) {
-		struct lwp *l = LIST_FIRST(&p->p_lwps);
+		struct thread *l = LIST_FIRST(&p->p_lwps);
 		KASSERT(l != NULL);
 		mach_e_lwp_fork(NULL, l);
 	}
@@ -198,14 +192,14 @@ mach_e_proc_exec(struct proc *p, struct exec_package *epp)
 }
 
 void
-mach_e_proc_fork(struct proc *p2, struct lwp *l1, int forkflags)
+mach_e_proc_fork(struct proc *p2, struct thread *l1, int forkflags)
 {
 	mach_e_proc_fork1(p2, l1, 1);
 	return;
 }
 
 void
-mach_e_proc_fork1(struct proc *p2, struct lwp *l1, int allocate)
+mach_e_proc_fork1(struct proc *p2, struct thread *l1, int allocate)
 {
 	struct mach_emuldata *med1;
 	struct mach_emuldata *med2;
@@ -221,7 +215,7 @@ mach_e_proc_fork1(struct proc *p2, struct lwp *l1, int allocate)
 	mach_e_proc_init(p2);
 
 	med1 = p2->p_emuldata;
-	med2 = l1->l_proc->p_emuldata;
+	med2 = td1->td_proc->p_emuldata;
 
 	/*
 	 * Exception ports are inherited between forks,
@@ -267,7 +261,7 @@ mach_e_proc_init(struct proc *p)
 			printf("mach_emuldata allocated for non Mach binary\n");
 #endif
 		p->p_emuldata = malloc(sizeof(struct mach_emuldata),
-		    M_EMULDATA, M_WAITOK | M_ZERO);
+		    M_MACH, M_WAITOK | M_ZERO);
 	}
 
 	med = (struct mach_emuldata *)p->p_emuldata;
@@ -347,7 +341,7 @@ mach_e_proc_exit(struct proc *p)
 {
 	struct mach_emuldata *med;
 	struct mach_right *mr;
-	struct lwp *l;
+	struct thread *l;
 	int i;
 
 	/* There is only one lwp remaining... */
@@ -391,18 +385,18 @@ mach_e_proc_exit(struct proc *p)
 
 	rw_destroy(&med->med_exclock);
 	rw_destroy(&med->med_rightlock);
-	free(med, M_EMULDATA);
+	free(med, M_MACH);
 	p->p_emuldata = NULL;
 
 	return;
 }
 
 void
-mach_e_lwp_fork(struct lwp *l1, struct lwp *l2)
+mach_e_lwp_fork(struct thread *l1, struct thread *l2)
 {
 	struct mach_lwp_emuldata *mle;
 
-	mle = malloc(sizeof(*mle), M_EMULDATA, M_WAITOK);
+	mle = malloc(sizeof(*mle), M_MACH, M_WAITOK);
 	l2->l_emuldata = mle;
 
 	mle->mle_kernel = mach_port_get();
@@ -421,7 +415,7 @@ mach_e_lwp_fork(struct lwp *l1, struct lwp *l2)
 }
 
 void
-mach_e_lwp_exit(struct lwp *l)
+mach_e_lwp_exit(struct thread *l)
 {
 	struct mach_lwp_emuldata *mle;
 
@@ -439,7 +433,7 @@ mach_e_lwp_exit(struct lwp *l)
 	mle->mle_kernel->mp_datatype = MACH_MP_NONE;
 	MACH_PORT_UNREF(mle->mle_kernel);
 
-	free(mle, M_EMULDATA);
+	free(mle, M_MACH);
 	l->l_emuldata = NULL;
 
 	return;

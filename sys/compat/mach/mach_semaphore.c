@@ -1,5 +1,3 @@
-/*	$NetBSD: mach_semaphore.c,v 1.19 2008/04/28 20:23:44 martin Exp $ */
-
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -30,16 +28,17 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_semaphore.c,v 1.19 2008/04/28 20:23:44 martin Exp $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/signal.h>
-#include <sys/pool.h>
-#include <sys/rwlock.h>
+#include <sys/lock.h>
 #include <sys/malloc.h>
+#include <sys/pool.h>
 #include <sys/proc.h>
+#include <sys/rwlock.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -48,7 +47,7 @@ __KERNEL_RCSID(0, "$NetBSD: mach_semaphore.c,v 1.19 2008/04/28 20:23:44 martin E
 #include <compat/mach/mach_errno.h>
 #include <compat/mach/mach_port.h>
 #include <compat/mach/mach_services.h>
-#include <compat/mach/mach_syscallargs.h>
+#include <compat/mach/mach_proto.h>
 
 /* Semaphore list, lock, pools */
 static LIST_HEAD(mach_semaphore_list, mach_semaphore) mach_semaphore_list;
@@ -65,7 +64,7 @@ static void mach_waiting_lwp_put
     (struct mach_waiting_lwp *, struct mach_semaphore *, int);
 
 int
-mach_sys_semaphore_wait_trap(struct lwp *l, const struct mach_sys_semaphore_wait_trap_args *uap, register_t *retval)
+mach_sys_semaphore_wait_trap(struct thread *td, struct mach_sys_semaphore_wait_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) wait_name;
@@ -76,8 +75,8 @@ mach_sys_semaphore_wait_trap(struct lwp *l, const struct mach_sys_semaphore_wait
 	mach_port_t mn;
 	int blocked = 0;
 
-	mn = SCARG(uap, wait_name);
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
+	mn = uap->wait_name);
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
 		return EPERM;
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
@@ -101,7 +100,7 @@ mach_sys_semaphore_wait_trap(struct lwp *l, const struct mach_sys_semaphore_wait
 }
 
 int
-mach_sys_semaphore_signal_trap(struct lwp *l, const struct mach_sys_semaphore_signal_trap_args *uap, register_t *retval)
+mach_sys_semaphore_signal_trap(struct thread *td, struct mach_sys_semaphore_signal_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) signal_name;
@@ -112,8 +111,8 @@ mach_sys_semaphore_signal_trap(struct lwp *l, const struct mach_sys_semaphore_si
 	mach_port_t mn;
 	int unblocked = 0;
 
-	mn = SCARG(uap, signal_name);
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
+	mn = uap->signal_name);
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
 		return EPERM;
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
@@ -142,7 +141,7 @@ mach_semaphore_create(struct mach_trap_args *args)
 	mach_semaphore_create_request_t *req = args->smsg;
 	mach_semaphore_create_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_semaphore *ms;
 	struct mach_port *mp;
 	struct mach_right *mr;
@@ -153,7 +152,7 @@ mach_semaphore_create(struct mach_trap_args *args)
 	mp->mp_datatype = MACH_MP_SEMAPHORE;
 	mp->mp_data = (void *)ms;
 
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -168,14 +167,14 @@ mach_semaphore_destroy(struct mach_trap_args *args)
 {
 	mach_semaphore_destroy_request_t *req = args->smsg;
 	mach_semaphore_destroy_reply_t *rep = args->rmsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	size_t *msglen = args->rsize;
 	struct mach_semaphore *ms;
 	struct mach_right *mr;
 	mach_port_t mn;
 
 	mn = req->req_sem.name;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
 		return mach_msg_error(args, EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
@@ -248,7 +247,7 @@ mach_semaphore_put(struct mach_semaphore *ms)
 }
 
 static struct mach_waiting_lwp *
-mach_waiting_lwp_get(struct lwp *l, struct mach_semaphore *ms)
+mach_waiting_lwp_get(struct thread *td, struct mach_semaphore *ms)
 {
 	struct mach_waiting_lwp *mwl;
 
@@ -281,7 +280,7 @@ mach_waiting_lwp_put(struct mach_waiting_lwp *mwl, struct mach_semaphore *ms, in
  * can be some memory leaks here.
  */
 void
-mach_semaphore_cleanup(struct lwp *l)
+mach_semaphore_cleanup(struct thread *td)
 {
 	struct mach_semaphore *ms;
 	struct mach_waiting_lwp *mwl;
@@ -304,7 +303,7 @@ mach_semaphore_cleanup(struct lwp *l)
 }
 
 int
-mach_sys_semaphore_wait_signal_trap(struct lwp *l, const struct mach_sys_semaphore_wait_signal_trap_args *uap, register_t *retval)
+mach_sys_semaphore_wait_signal_trap(struct thread *td, struct mach_sys_semaphore_wait_signal_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) wait_name;
@@ -314,12 +313,12 @@ mach_sys_semaphore_wait_signal_trap(struct lwp *l, const struct mach_sys_semapho
 	struct mach_sys_semaphore_signal_trap_args cupsig;
 	int error;
 
-	SCARG(&cupsig, signal_name) = SCARG(uap, signal_name);
-	if ((error = mach_sys_semaphore_signal_trap(l, &cupsig, retval)) != 0)
+	&cupsig->signal_name = uap->signal_name;
+	if ((error = mach_sys_semaphore_signal_trap(td, &cupsig)) != 0)
 		return error;
 
-	SCARG(&cupwait, wait_name) = SCARG(uap, wait_name);
-	if ((error = mach_sys_semaphore_wait_trap(l, &cupwait, retval)) != 0)
+	&cupwait->wait_name = uap->wait_name;
+	if ((error = mach_sys_semaphore_wait_trap(td, &cupwait)) != 0)
 		return error;
 
 	return 0;
@@ -327,7 +326,7 @@ mach_sys_semaphore_wait_signal_trap(struct lwp *l, const struct mach_sys_semapho
 
 
 int
-mach_sys_semaphore_signal_thread_trap(struct lwp *l, const struct mach_sys_semaphore_signal_thread_trap_args *uap, register_t *retval)
+mach_sys_semaphore_signal_thread_trap(struct thread *td, struct mach_sys_semaphore_signal_thread_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) signal_name;
@@ -342,8 +341,8 @@ mach_sys_semaphore_signal_thread_trap(struct lwp *l, const struct mach_sys_semap
 	/*
 	 * Get the semaphore
 	 */
-	mn = SCARG(uap, signal_name);
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	mn = uap->signal_name);
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return EINVAL;
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
@@ -355,9 +354,9 @@ mach_sys_semaphore_signal_thread_trap(struct lwp *l, const struct mach_sys_semap
 	 * Get the thread, and check that it is waiting for our semaphore
 	 * If no thread was supplied, pick up the first one.
 	 */
-	mn = SCARG(uap, thread);
+	mn = uap->thread);
 	if (mn != 0) {
-		if ((mr = mach_right_check(mn, l,
+		if ((mr = mach_right_check(mn, td,
 		    MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 			return EINVAL;
 
@@ -395,7 +394,7 @@ mach_sys_semaphore_signal_thread_trap(struct lwp *l, const struct mach_sys_semap
 
 
 int
-mach_sys_semaphore_signal_all_trap(struct lwp *l, const struct mach_sys_semaphore_signal_all_trap_args *uap, register_t *retval)
+mach_sys_semaphore_signal_all_trap(struct thread *td, struct mach_sys_semaphore_signal_all_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) signal_name;
@@ -409,8 +408,8 @@ mach_sys_semaphore_signal_all_trap(struct lwp *l, const struct mach_sys_semaphor
 	/*
 	 * Get the semaphore
 	 */
-	mn = SCARG(uap, signal_name);
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	mn = uap->signal_name;
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return EINVAL;
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)

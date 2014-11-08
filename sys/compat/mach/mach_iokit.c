@@ -1,5 +1,3 @@
-/*	$NetBSD: mach_iokit.c,v 1.36 2008/04/28 20:23:44 martin Exp $ */
-
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -29,9 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "opt_compat_darwin.h"
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_iokit.c,v 1.36 2008/04/28 20:23:44 martin Exp $");
+__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -87,7 +84,7 @@ mach_io_service_get_matching_services(struct mach_trap_args *args)
 	mach_io_service_get_matching_services_request_t *req = args->smsg;
 	mach_io_service_get_matching_services_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -103,7 +100,7 @@ mach_io_service_get_matching_services(struct mach_trap_args *args)
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	mp->mp_data = NULL;
 	i = 0;
@@ -114,7 +111,7 @@ mach_io_service_get_matching_services(struct mach_trap_args *args)
 
 			size = sizeof(*mdi)
 			    + sizeof(struct mach_device_iterator *);
-			mdi = malloc(size, M_EMULDATA, M_WAITOK);
+			mdi = malloc(size, M_MACH, M_WAITOK);
 			mdi->mdi_devices[0] = mid;
 			mdi->mdi_devices[1] = NULL;
 			mdi->mdi_current = 0;
@@ -141,14 +138,14 @@ mach_io_iterator_next(struct mach_trap_args *args)
 	mach_io_iterator_next_request_t *req = args->smsg;
 	mach_io_iterator_next_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	struct mach_device_iterator *mdi;
 	mach_port_t mn;
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_DEVICE_ITERATOR)
@@ -165,7 +162,7 @@ mach_io_iterator_next(struct mach_trap_args *args)
 	mp->mp_datatype = MACH_MP_IOKIT_DEVCLASS;
 	mp->mp_data = mdi->mdi_devices[mdi->mdi_current++];
 
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -181,13 +178,13 @@ mach_io_service_open(struct mach_trap_args *args)
 	mach_io_service_open_request_t *req = args->smsg;
 	mach_io_service_open_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	mach_port_t mn;
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	mp = mach_port_get();
@@ -196,7 +193,7 @@ mach_io_service_open(struct mach_trap_args *args)
 		mp->mp_datatype = MACH_MP_IOKIT_DEVCLASS;
 		mp->mp_data = mr->mr_port->mp_data;
 	}
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -210,7 +207,7 @@ int
 mach_io_connect_method_scalari_scalaro(struct mach_trap_args *args)
 {
 	mach_io_connect_method_scalari_scalaro_request_t *req = args->smsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -231,7 +228,7 @@ mach_io_connect_method_scalari_scalaro(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
@@ -252,13 +249,13 @@ mach_io_connect_get_service(struct mach_trap_args *args)
 	mach_io_connect_get_service_request_t *req = args->smsg;
 	mach_io_connect_get_service_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	mach_port_t mn;
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	mp = mach_port_get();
@@ -267,7 +264,7 @@ mach_io_connect_get_service(struct mach_trap_args *args)
 		mp->mp_datatype = MACH_MP_IOKIT_DEVCLASS;
 		mp->mp_data = mr->mr_port->mp_data;
 	}
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	/*
 	 * XXX Bump the refcount to workaround an emulation bug
@@ -289,7 +286,7 @@ mach_io_registry_entry_create_iterator(struct mach_trap_args *args)
 	mach_io_registry_entry_create_iterator_request_t *req = args->smsg;
 	mach_io_registry_entry_create_iterator_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	mach_port_t mn;
 	struct mach_right *mr;
@@ -310,7 +307,7 @@ mach_io_registry_entry_create_iterator(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
 		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
@@ -322,7 +319,7 @@ mach_io_registry_entry_create_iterator(struct mach_trap_args *args)
 
 	maxdev = sizeof(mach_iokit_devclasses);
 	size = sizeof(*mdi) + (maxdev * sizeof(struct mach_iokit_devclass *));
-	mdi = malloc(size, M_EMULDATA, M_WAITOK);
+	mdi = malloc(size, M_MACH, M_WAITOK);
 	mp->mp_data = mdi;
 
 	if (req->req_options & MACH_IOKIT_PARENT_ITERATOR)
@@ -344,7 +341,7 @@ mach_io_registry_entry_create_iterator(struct mach_trap_args *args)
 
 	mdi->mdi_current = 0;
 
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 #ifdef DEBUG_MACH
 	printf("io_registry_entry_create_iterator\n");
@@ -394,7 +391,7 @@ mach_io_service_add_interest_notification(struct mach_trap_args *args)
 	mach_io_service_add_interest_notification_request_t *req = args->smsg;
 	mach_io_service_add_interest_notification_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	int end_offset, refcount_offset;
@@ -424,7 +421,7 @@ mach_io_service_add_interest_notification(struct mach_trap_args *args)
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 #ifdef DEBUG_DARWIN
 	uprintf("Unimplemented mach_io_service_add_interest_notification\n");
@@ -442,7 +439,7 @@ mach_io_connect_set_notification_port(struct mach_trap_args *args)
 {
 	mach_io_connect_set_notification_port_request_t *req = args->smsg;
 	mach_io_connect_set_notification_port_reply_t *rep = args->rmsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	size_t *msglen = args->rsize;
 	mach_port_t mnn, mn;
 	struct mach_right *mrn;
@@ -453,11 +450,11 @@ mach_io_connect_set_notification_port(struct mach_trap_args *args)
 	printf("mach_io_connect_set_notification_port\n");
 #endif
 	mnn = req->req_port.name;
-	if ((mrn = mach_right_check(mnn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mrn = mach_right_check(mnn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_msg_error(args, EINVAL);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
@@ -485,7 +482,7 @@ mach_io_registry_get_root_entry(struct mach_trap_args *args)
 	mach_io_registry_get_root_entry_request_t *req = args->smsg;
 	mach_io_registry_get_root_entry_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 
@@ -494,7 +491,7 @@ mach_io_registry_get_root_entry(struct mach_trap_args *args)
 	mp->mp_datatype = MACH_MP_IOKIT_DEVCLASS;
 	mp->mp_data = &mach_ioroot_devclass;
 
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -510,7 +507,7 @@ mach_io_registry_entry_get_child_iterator(struct mach_trap_args *args)
 	mach_io_registry_entry_get_child_iterator_request_t *req = args->smsg;
 	mach_io_registry_entry_get_child_iterator_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	mach_port_t mn;
@@ -529,7 +526,7 @@ mach_io_registry_entry_get_child_iterator(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
 		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
@@ -541,13 +538,13 @@ mach_io_registry_entry_get_child_iterator(struct mach_trap_args *args)
 
 	maxdev = sizeof(mach_iokit_devclasses);
 	size = sizeof(*mdi) + (maxdev * sizeof(struct mach_iokit_devclass *));
-	mdi = malloc(size, M_EMULDATA, M_WAITOK);
+	mdi = malloc(size, M_MACH, M_WAITOK);
 	mp->mp_data = mdi;
 
 	(void)mach_fill_child_iterator(mdi, maxdev, 0, mid);
 	mdi->mdi_current = 0;
 
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -563,7 +560,7 @@ mach_io_registry_entry_get_name_in_plane(struct mach_trap_args *args)
 	mach_io_registry_entry_get_name_in_plane_request_t *req = args->smsg;
 	mach_io_registry_entry_get_name_in_plane_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_right *mr;
 	mach_port_t mn;
 	struct mach_iokit_devclass *mid;
@@ -578,7 +575,7 @@ mach_io_registry_entry_get_name_in_plane(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
 		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
@@ -655,7 +652,7 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 	mach_io_registry_entry_get_properties_request_t *req = args->smsg;
 	mach_io_registry_entry_get_properties_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	int error;
 	void *uaddr;
 	size_t size;
@@ -664,7 +661,7 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 	struct mach_iokit_devclass *mid;
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
@@ -679,7 +676,7 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 	    mid->mid_properties, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit properties failed\n",
-		    l->l_proc->p_pid, l->l_lid);
+		    td->td_proc->p_pid, td->td_lid);
 #endif
 	}
 
@@ -700,7 +697,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 	mach_io_registry_entry_get_property_request_t *req = args->smsg;
 	mach_io_registry_entry_get_property_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	int error;
 	void *uaddr;
 	size_t size;
@@ -720,7 +717,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 
 	/* Find the port */
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	/* Find the devclass information */
@@ -746,7 +743,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 	    mip->mip_value, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit property failed\n",
-		    l->l_proc->p_pid, l->l_lid);
+		    td->td_proc->p_pid, td->td_lid);
 #endif
 	}
 
@@ -812,13 +809,13 @@ int
 mach_io_connect_map_memory(struct mach_trap_args *args)
 {
 	mach_io_connect_map_memory_request_t *req = args->smsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
@@ -839,13 +836,13 @@ mach_io_iterator_reset(struct mach_trap_args *args)
 	mach_io_iterator_reset_request_t *req = args->smsg;
 	mach_io_iterator_reset_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_device_iterator *mdi;
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_DEVICE_ITERATOR)
@@ -868,7 +865,7 @@ int
 mach_io_connect_method_scalari_structo(struct mach_trap_args *args)
 {
 	mach_io_connect_method_scalari_structo_request_t *req = args->smsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -885,7 +882,7 @@ mach_io_connect_method_scalari_structo(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
@@ -904,7 +901,7 @@ int
 mach_io_connect_method_structi_structo(struct mach_trap_args *args)
 {
 	mach_io_connect_method_structi_structo_request_t *req = args->smsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -923,7 +920,7 @@ mach_io_connect_method_structi_structo(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
@@ -1003,7 +1000,7 @@ int
 mach_io_connect_method_scalari_structi(struct mach_trap_args *args)
 {
 	mach_io_connect_method_scalari_structi_request_t *req = args->smsg;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	mach_port_t mn;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -1025,7 +1022,7 @@ mach_io_connect_method_scalari_structi(struct mach_trap_args *args)
 		return mach_msg_error(args, EINVAL);
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
@@ -1046,7 +1043,7 @@ mach_io_registry_entry_from_path(struct mach_trap_args *args)
 	mach_io_registry_entry_from_path_request_t *req = args->smsg;
 	mach_io_registry_entry_from_path_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -1067,7 +1064,7 @@ mach_io_registry_entry_from_path(struct mach_trap_args *args)
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	i = 0;
 	while ((mid = mach_iokit_devclasses[i++]) != NULL) {
@@ -1099,7 +1096,7 @@ mach_io_registry_entry_get_parent_iterator(struct mach_trap_args *args)
 	mach_io_registry_entry_get_parent_iterator_request_t *req = args->smsg;
 	mach_io_registry_entry_get_parent_iterator_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct lwp *l = args->l;
+	struct thread *td = args->td;
 	struct mach_port *mp;
 	struct mach_right *mr;
 	struct mach_iokit_devclass *mid;
@@ -1123,7 +1120,7 @@ mach_io_registry_entry_get_parent_iterator(struct mach_trap_args *args)
 #endif
 
 	mn = req->req_msgh.msgh_remote_port;
-	if ((mr = mach_right_check(mn, l, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return mach_iokit_error(args, MACH_IOKIT_EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
@@ -1136,13 +1133,13 @@ mach_io_registry_entry_get_parent_iterator(struct mach_trap_args *args)
 
 	maxdev = sizeof(mach_iokit_devclasses);
 	size = sizeof(*mdi) + (maxdev * sizeof(struct mach_iokit_devclass *));
-	mdi = malloc(size, M_EMULDATA, M_WAITOK);
+	mdi = malloc(size, M_MACH, M_WAITOK);
 	mp->mp_data = mdi;
 
 	(void)mach_fill_parent_iterator(mdi, maxdev, 0, mid);
 	mdi->mdi_current = 0;
 
-	mr = mach_right_get(mp, l, MACH_PORT_TYPE_SEND, 0);
+	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

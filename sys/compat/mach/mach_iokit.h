@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_iokit.h,v 1.26 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.

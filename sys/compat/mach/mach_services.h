@@ -8,7 +8,6 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_services.h,v 1.19 2009/01/13 22:33:10 pooka Exp $");
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>

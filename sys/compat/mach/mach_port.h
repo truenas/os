@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_port.h,v 1.40 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
@@ -31,6 +31,8 @@
 
 #ifndef	_MACH_PORT_H_
 #define	_MACH_PORT_H_
+#include <sys/lock.h>
+#include <sys/rwlock.h>
 
 #define MACH_PORT_REF(mp)	(mp)->mp_refcount++
 #define MACH_PORT_UNREF(mp)	if (--(mp)->mp_refcount <= 0) mach_port_put(mp)
@@ -294,7 +296,7 @@ extern struct mach_port *mach_saved_bootstrap_port;
 /* In-kernel Mach port right description */
 struct mach_right {
 	mach_port_t mr_name;		/* The right name */
-	struct lwp *mr_lwp;		/* points back to struct lwp */
+	struct thread *mr_lwp;		/* points back to struct thread */
 	int mr_type;			/* right type (recv, send, sendonce) */
 	LIST_ENTRY(mach_right) mr_list; /* Right list for a process */
 	int mr_refcount;		/* Reference count */
@@ -314,13 +316,13 @@ struct mach_right {
 	struct mach_right *mr_sethead;	/* Points back to right set */
 };
 
-mach_port_t mach_right_newname(struct lwp *, mach_port_t);
+mach_port_t mach_right_newname(struct thread *, mach_port_t);
 struct mach_right *mach_right_get(struct mach_port *,
-    struct lwp *, int, mach_port_t);
+    struct thread *, int, mach_port_t);
 void mach_right_put(struct mach_right *, int);
 void mach_right_put_shlocked(struct mach_right *, int);
 void mach_right_put_exclocked(struct mach_right *, int);
-struct mach_right *mach_right_check(mach_port_t, struct lwp *, int);
+struct mach_right *mach_right_check(mach_port_t, struct thread *, int);
 
 /* In-kernel Mach port description */
 struct mach_port {
@@ -328,7 +330,7 @@ struct mach_port {
 	int mp_count;			/* Count of queued messages */
 	TAILQ_HEAD(mp_msglist,		/* Queue pending messages */
 	    mach_message) mp_msglist;
-	krwlock_t mp_msglock;		/* Lock for the queue */
+	struct rwlock mp_msglock;		/* Lock for the queue */
 	int mp_refcount;		/* Reference count */
 	int mp_flags;			/* Flags, see below */
 	int mp_datatype;		/* Type of field mp_data, see below */
@@ -341,7 +343,7 @@ struct mach_port {
 
 /* mp_datatype for struct mach_port */
 #define	MACH_MP_NONE		0x0	/* No data */
-#define MACH_MP_LWP		0x1	/* (struct lwp *) */
+#define MACH_MP_LWP		0x1	/* (struct thread *) */
 #define MACH_MP_DEVICE_ITERATOR	0x2	/* (struct mach_device_iterator *) */
 #define MACH_MP_IOKIT_DEVCLASS	0x3	/* (struct mach_iokit_devclass *) */
 #define MACH_MP_PROC		0x4	/* (struct proc *) */
@@ -354,7 +356,7 @@ void mach_port_init(void);
 struct mach_port *mach_port_get(void);
 void mach_port_put(struct mach_port *);
 void mach_remove_recvport(struct mach_port *);
-void mach_add_recvport(struct mach_port *, struct lwp *);
+void mach_add_recvport(struct mach_port *, struct thread *);
 int mach_port_check(struct mach_port *);
 #ifdef DEBUG_MACH
 void mach_debug_port(void);

@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_sysctl.h,v 1.3 2008/04/28 20:23:44 martin Exp $ */
+/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.

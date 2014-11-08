@@ -1,16 +1,17 @@
-#	$NetBSD: Makefile,v 1.7 2005/12/11 12:20:20 christos Exp $
+# Makefile for syscall tables
+#
+# $FreeBSD$
 
-SYSCALL_DEP=	syscalls.conf syscalls.master ../../kern/makesyscalls.sh
-SYSCALL_OBJS=	mach_sysent.c mach_syscalls.c mach_syscall.h mach_syscallargs.h
-MACH_DEP=	mach_services.master makemachservices.sh
-MACH_OBJ=	mach_services.c mach_services.h mach_services_names.c
+all:
+	@echo "make sysent only"
 
-all:	${SYSCALL_OBJS} ${MACH_OBJ}
+sysent:  mach_sysent.c mach_syscall.h mach_proto.h mach_syscalls.c mach_systrace_args.c
 
-.include <bsd.sys.mk>		# for HOST_SH
-
-${SYSCALL_OBJS}: ${SYSCALL_DEP}
-	${HOST_SH} ../../kern/makesyscalls.sh syscalls.conf syscalls.master
-
-${MACH_OBJ}: ${MACH_DEP}
-	${HOSH_SH} ./makemachservices.sh
+mach_sysent.c mach_syscall.h mach_proto.h mach_syscalls.c mach_systrace_args.c: \
+		../../kern/makesyscalls.sh syscalls.master syscalls.conf
+	-mv -f mach_sysent.c mach_sysent.c.bak
+	-mv -f mach_syscall.h mach_syscall.h.bak
+	-mv -f mach_proto.h mach_proto.h.bak
+	-mv -f mach_syscalls.c mach_syscalls.c.bak
+	-mv -f mach_systrace_args.c mach_systrace_args.c.bak
+	sh ../../kern/makesyscalls.sh syscalls.master syscalls.conf
