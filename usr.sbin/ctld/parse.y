@@ -62,7 +62,8 @@ extern int	yyparse(void);
 %token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP DISCOVERY_FILTER
 %token INITIATOR_NAME INITIATOR_PORTAL ISNS_SERVER ISNS_PERIOD ISNS_TIMEOUT
 %token LISTEN LISTEN_ISER LUN MAXPROC OPENING_BRACKET OPTION
-%token PATH PIDFILE PORTAL_GROUP SEMICOLON SERIAL SIZE STR TARGET TIMEOUT 
+%token PATH PIDFILE PORTAL_GROUP REDIRECT SEMICOLON SERIAL SIZE STR
+%token TARGET TIMEOUT 
 
 %union
 {
@@ -339,6 +340,8 @@ portal_group_entry:
 	portal_group_listen
 	|
 	portal_group_listen_iser
+	|
+	portal_group_redirect
 	;
 
 portal_group_discovery_auth_group:	DISCOVERY_AUTH_GROUP STR
@@ -394,6 +397,17 @@ portal_group_listen_iser:	LISTEN_ISER STR
 	}
 	;
 
+portal_group_redirect:	REDIRECT STR
+	{
+		int error;
+
+		error = portal_group_set_redirection(portal_group, $2);
+		free($2);
+		if (error != 0)
+			return (1);
+	}
+	;
+
 target:	TARGET target_name
     OPENING_BRACKET target_entries CLOSING_BRACKET
 	{
@@ -433,6 +447,8 @@ target_entry:
 	target_initiator_portal
 	|
 	target_portal_group
+	|
+	target_redirect
 	|
 	target_lun
 	;
@@ -633,6 +649,17 @@ target_portal_group:	PORTAL_GROUP STR
 			return (1);
 		}
 		free($2);
+	}
+	;
+
+target_redirect:	REDIRECT STR
+	{
+		int error;
+
+		error = target_set_redirection(target, $2);
+		free($2);
+		if (error != 0)
+			return (1);
 	}
 	;
 
