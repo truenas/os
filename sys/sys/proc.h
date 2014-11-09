@@ -261,6 +261,7 @@ struct thread {
 	sigset_t	td_oldsigmask;	/* (k) Saved mask from pre sigpause. */
 	volatile u_int	td_generation;	/* (k) For detection of preemption */
 	stack_t		td_sigstk;	/* (k) Stack ptr and on-stack flag. */
+	void		*td_emuldata;	/* (k) Emulator state data. */
 	int		td_xsig;	/* (c) Signal for ptrace */
 	u_long		td_profil_addr;	/* (k) Temporary addr until AST. */
 	u_int		td_profil_ticks; /* (k) Temporary ticks until AST. */
