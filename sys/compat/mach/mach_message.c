@@ -35,11 +35,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/signal.h>
-#include <sys/proc.h>
 #include <sys/kernel.h>
-#include <sys/queue.h>
 #include <sys/malloc.h>
+#include <sys/proc.h>
+#include <sys/queue.h>
+#include <sys/signal.h>
+#include <sys/uio.h>
 #include <sys/ktrace.h>
 
 #include <vm/uma.h>
@@ -60,11 +61,14 @@ __FBSDID("$FreeBSD$");
 #include <compat/darwin/darwin_exec.h>
 #endif
 
+/* don't see these in the recent NetBSD tree */
+#define ktrmmsg(a, b)
+#define ktrmool(a, b, c)
+
 /* Mach message zone */
 static uma_zone_t mach_message_zone;
 
-static inline
-    int mach_msg_send(struct thread *, mach_msg_header_t *, int *, size_t);
+static inline int mach_msg_send(struct thread *, mach_msg_header_t *, int *, size_t);
 static inline int mach_msg_recv(struct thread *, mach_msg_header_t *,
     int, size_t, unsigned int, mach_port_t);
 static inline
@@ -76,7 +80,7 @@ static inline
     int mach_trade_rights_complex(struct thread *, struct mach_message *);
 
 int
-sys_mach_msg_overwrite_trap(struct thread *td, const struct mach_msg_overwrite_trap_args *uap)
+sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_msg_header_t *) msg;
@@ -641,7 +645,7 @@ unlock:
 
 
 int
-sys_mach_msg_trap(struct thread *td, const struct mach_msg_trap_args *uap)
+sys_mach_msg_trap(struct thread *td, struct mach_msg_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_msg_header_t *) msg;
@@ -909,6 +913,59 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 
 	return MACH_MSG_SUCCESS;
 }
+
+/*
+ * Like copyin(), but operates on an arbitrary process.
+ */
+static int
+copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
+{
+	struct proc *mycp;
+	struct vmspace *myvm, *tmpvm;
+	struct thread *td = curthread;
+	int error;
+
+	/* XXX need to suspend other threads in curproc if we're in a user
+	 * context
+	 */
+
+	/*
+	 * Local copies of curproc (cp) and vmspace (myvm)
+	 */
+	mycp = td->td_proc;
+	myvm = mycp->p_vmspace;
+
+	/*
+	 * Connect to process address space for user program.
+	 */
+	if (p != mycp) {
+		/*
+		 * Save the current address space that we are
+		 * connected to.
+		 */
+		tmpvm = mycp->p_vmspace;
+
+		/*
+		 * Point to the new user address space, and
+		 * refer to it.
+		 */
+		mycp->p_vmspace = p->p_vmspace;
+		atomic_add_int(&mycp->p_vmspace->vm_refcnt, 1);
+
+		/* Activate the new mapping. */
+		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
+	}
+	error = copyin(uaddr, kaddr, len);
+	if (p != mycp) {
+		mycp->p_vmspace = myvm;
+		vmspace_free(tmpvm);
+		/* Activate the old mapping. */
+		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
+	}
+	return (error);
+}
+
+
 
 inline int
 mach_ool_copyin(struct thread *td, const void *uaddr, void **kaddr, size_t size, int flags)
