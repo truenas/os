@@ -112,7 +112,7 @@ mach_host_info(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 
@@ -130,7 +130,7 @@ mach_host_page_size(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -149,7 +149,7 @@ mach_host_get_clock_service(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 void
@@ -164,8 +164,6 @@ mach_host_priority_info(struct mach_host_priority_info *info)
 	info->idle_priority = 0x00;
 	info->minimum_priority = 0x00;
 	info->maximum_priority = 0x4f;
-
-	return;
 }
 
 int
@@ -184,7 +182,7 @@ mach_host_get_io_master(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -205,7 +203,7 @@ mach_processor_set_default(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -222,7 +220,7 @@ mach_host_processor_set_priv(struct mach_trap_args *args)
 
 	mn = req->req_set.name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	smp = mach_port_get();
 	smr = mach_right_get(smp, td, MACH_PORT_TYPE_SEND, 0);
@@ -232,5 +230,5 @@ mach_host_processor_set_priv(struct mach_trap_args *args)
 	mach_add_port_desc(rep, smr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }

@@ -80,7 +80,7 @@ mach_trapsignal1(struct thread *td, struct ksiginfo *ksi)
 
 	/* Don't inhinbit non maskable signals */
 	if (sigprop(ksi->ksi_signo) & SA_CANTMASK)
-		return EINVAL;
+		return (EINVAL);
 
 	med = (struct mach_emuldata *)p->p_emuldata;
 
@@ -99,13 +99,13 @@ mach_trapsignal1(struct thread *td, struct ksiginfo *ksi)
 		exc_no = MACH_EXC_BREAKPOINT;
 		break;
 	default: /* SIGCHLD, SIGPOLL */
-		return EINVAL;
+		return (EINVAL);
 		break;
 	}
 
 	mach_siginfo_to_exception(ksi, code);
 
-	return mach_exception(td, exc_no, code);
+	return (mach_exception(td, exc_no, code));
 }
 
 int
@@ -130,7 +130,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 #ifdef DIAGNOSTIC
 	if (exc_td == NULL) {
 		printf("mach_exception: exc_td = %p\n", exc_td);
-		return ESRCH;
+		return (ESRCH);
 	}
 #endif
 #ifdef DEBUG_MACH
@@ -162,7 +162,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	exc_mle = exc_td->td_emuldata;
 	exc_med = exc_td->td_proc->p_emuldata;
 	if ((exc_port = exc_med->med_exc[exc]) == NULL)
-		return EINVAL;
+		return (EINVAL);
 
 	MACH_PORT_REF(exc_port);
 	if (exc_port->mp_recv == NULL) {
@@ -386,7 +386,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 
 out:
 	MACH_PORT_UNREF(exc_port);
-	return error;
+	return (error);
 }
 
 static void
@@ -486,7 +486,7 @@ mach_exception_raise(struct mach_trap_args *args)
 	printf("mach_excpetion_raise: retval = %ld\n", (long)rep->rep_retval);
 #endif
 	if (rep->rep_retval != 0)
-		return 0;
+		return (0);
 
 	med = td->td_proc->p_emuldata;
 
@@ -498,7 +498,7 @@ mach_exception_raise(struct mach_trap_args *args)
 #ifdef DEBUG_MACH
 		printf("spurious mach_exception_raise\n");
 #endif
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	}
 
 	/*
@@ -509,17 +509,19 @@ mach_exception_raise(struct mach_trap_args *args)
 #endif
 	wakeup(&med->med_exclock);
 
-	return 0;
+	return (0);
 }
 
 int
 mach_exception_raise_state(struct mach_trap_args *args)
 {
-	return mach_exception_raise(args);
+
+	return (mach_exception_raise(args));
 }
 
 int
 mach_exception_raise_state_identity(struct mach_trap_args *args)
 {
-	return mach_exception_raise(args);
+
+	return (mach_exception_raise(args));
 }

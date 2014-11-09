@@ -67,7 +67,7 @@ mach_bootstrap_look_up(struct mach_trap_args *args)
 	len = sizeof(*rep) - sizeof(rep->rep_service_name) + service_name_len;
 
 	if (len > *msglen)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	*msglen = len;
 
 	mr = mach_right_get(NULL, td, MACH_PORT_TYPE_DEAD_NAME, 0);
@@ -81,6 +81,6 @@ mach_bootstrap_look_up(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 

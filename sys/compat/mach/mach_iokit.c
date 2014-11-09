@@ -100,7 +100,7 @@ mach_io_service_get_matching_services(struct mach_trap_args *args)
 	/* Sanity check req_size */
 	end_offset = req->req_size;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_string[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
@@ -126,14 +126,14 @@ mach_io_service_get_matching_services(struct mach_trap_args *args)
 	}
 
 	if (mp->mp_data == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_ENOENT);
+		return (mach_iokit_error(args, MACH_IOKIT_ENOENT));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -150,16 +150,16 @@ mach_io_iterator_next(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype != MACH_MP_DEVICE_ITERATOR)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	mdi = mr->mr_port->mp_data;
 
 	/* Is there something coming next? */
 	if (mdi->mdi_devices[mdi->mdi_current] == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
@@ -173,7 +173,7 @@ mach_io_iterator_next(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -189,7 +189,7 @@ mach_io_service_open(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
@@ -204,7 +204,7 @@ mach_io_service_open(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -224,16 +224,16 @@ mach_io_connect_method_scalari_scalaro(struct mach_trap_args *args)
 	end_offset = req->req_incount +
 		     (sizeof(req->req_outcount) / sizeof(req->req_in[0]));
 	if (MACH_REQMSG_OVERFLOW(args, req->req_in[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	/* Sanity check req->req_outcount */
 	outcount = req->req_in[req->req_incount];
 	if (outcount > 16)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
 		mid = mr->mr_port->mp_data;
@@ -241,10 +241,10 @@ mach_io_connect_method_scalari_scalaro(struct mach_trap_args *args)
 			printf("no connect_method_scalari_scalaro method "
 			    "for darwin_iokit_class %s\n", mid->mid_name);
 		else
-			return (mid->mid_connect_method_scalari_scalaro)(args);
+			return ((mid->mid_connect_method_scalari_scalaro)(args));
 	}
 
-	return mach_iokit_error(args, MACH_IOKIT_ENODEV);
+	return (mach_iokit_error(args, MACH_IOKIT_ENODEV));
 }
 
 int
@@ -260,7 +260,7 @@ mach_io_connect_get_service(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
@@ -281,7 +281,7 @@ mach_io_connect_get_service(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -308,13 +308,13 @@ mach_io_registry_entry_create_iterator(struct mach_trap_args *args)
 	end_offset = req->req_planecount +
 		     (sizeof(req->req_options) / sizeof(req->req_plane[0]));
 	if (MACH_REQMSG_OVERFLOW(args, req->req_plane[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 	mid = (struct mach_iokit_devclass *)mr->mr_port->mp_data;
 
 	mp = mach_port_get();
@@ -356,7 +356,7 @@ mach_io_registry_entry_create_iterator(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -373,7 +373,7 @@ mach_io_object_conforms_to(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_classnamecount;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_classname[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 #ifdef DEBUG_DARWIN
 	uprintf("Unimplemented mach_io_object_conforms_to\n");
@@ -386,7 +386,7 @@ mach_io_object_conforms_to(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -409,7 +409,7 @@ mach_io_service_add_interest_notification(struct mach_trap_args *args)
 	refcount_offset = (req->req_typeofinterestcount & ~0x3UL) + 4;
 	if (MACH_REQMSG_OVERFLOW(args,
 	    req->req_typeofinterest[refcount_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	refcount = req->req_typeofinterest[refcount_offset];
 
 	/*
@@ -421,7 +421,7 @@ mach_io_service_add_interest_notification(struct mach_trap_args *args)
 		     (sizeof(refcount) / item_size) +
 		     (refcount * refitem_size / item_size);
 	if (MACH_REQMSG_OVERFLOW(args, req->req_typeofinterest[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mp = mach_port_get();
 	mp->mp_flags |= MACH_MP_INKERNEL;
@@ -435,7 +435,7 @@ mach_io_service_add_interest_notification(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -455,14 +455,14 @@ mach_io_connect_set_notification_port(struct mach_trap_args *args)
 #endif
 	mnn = req->req_port.name;
 	if ((mrn = mach_right_check(mnn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 #ifdef DEBUG_DARWIN
 	printf("notification on right %p, name %x\n", mrn, mrn->mr_name);
@@ -477,7 +477,7 @@ mach_io_connect_set_notification_port(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -502,7 +502,7 @@ mach_io_registry_get_root_entry(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -527,13 +527,13 @@ mach_io_registry_entry_get_child_iterator(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_planecount;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_plane[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 	mid = (struct mach_iokit_devclass *)mr->mr_port->mp_data;
 
 	mp = mach_port_get();
@@ -555,7 +555,7 @@ mach_io_registry_entry_get_child_iterator(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -576,13 +576,13 @@ mach_io_registry_entry_get_name_in_plane(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_planecount;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_plane[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 	mid = mr->mr_port->mp_data;
 
 	*msglen = sizeof(*rep);
@@ -595,7 +595,7 @@ mach_io_registry_entry_get_name_in_plane(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -617,7 +617,7 @@ mach_io_object_get_class(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -636,7 +636,7 @@ mach_io_registry_entry_get_location_in_plane(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_namecount;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_plane[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -647,7 +647,7 @@ mach_io_registry_entry_get_location_in_plane(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -666,14 +666,14 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	mid = mr->mr_port->mp_data;
 	if (mid->mid_properties == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 	size = strlen(mid->mid_properties) + 1; /* Include trailing zero */
 
 	if ((error = mach_ool_copyout(td,
@@ -692,7 +692,7 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -717,20 +717,20 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_property_namecount;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_property_name[end_offset]))
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	/* Find the port */
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	/* Find the devclass information */
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	mid = mr->mr_port->mp_data;
 	if (mid->mid_properties_array == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	/* Lookup the property name */
 	for (mip = mid->mid_properties_array; mip->mip_name; mip++)
@@ -739,7 +739,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 			break;
 
 	if (mip->mip_value == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_ENOENT);
+		return (mach_iokit_error(args, MACH_IOKIT_ENOENT));
 	size = strlen(mip->mip_value) + 1; /* Include trailing zero */
 
 	/* And copyout its associated value */
@@ -759,7 +759,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -781,14 +781,14 @@ mach_io_registry_entry_get_path(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_count;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_plane[end_offset]))
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	/* XXX Just return a dummy name for now */
 	len = req->req_count + strlen(location) - 1;
 
 	/* Sanity check for len */
 	if (len > 512)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 	plen = (len & ~0x3UL) + 4;	/* Round to an int */
 
 	*msglen = sizeof(*rep) + (plen - 512);
@@ -806,7 +806,7 @@ mach_io_registry_entry_get_path(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -820,7 +820,7 @@ mach_io_connect_map_memory(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
 		mid = mr->mr_port->mp_data;
@@ -828,10 +828,10 @@ mach_io_connect_map_memory(struct mach_trap_args *args)
 			printf("no connect_map_memory method "
 			    "for darwin_iokit_class %s\n", mid->mid_name);
 		else
-			return (mid->mid_connect_map_memory)(args);
+			return ((mid->mid_connect_map_memory)(args));
 	}
 
-	return mach_iokit_error(args, MACH_IOKIT_ENODEV);
+	return (mach_iokit_error(args, MACH_IOKIT_ENODEV));
 }
 
 int
@@ -847,10 +847,10 @@ mach_io_iterator_reset(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype != MACH_MP_DEVICE_ITERATOR)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 
 	mdi = mr->mr_port->mp_data;
 	mdi->mdi_current = 0;
@@ -862,7 +862,7 @@ mach_io_iterator_reset(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -879,15 +879,15 @@ mach_io_connect_method_scalari_structo(struct mach_trap_args *args)
 	end_offset = req->req_incount +
 		     (sizeof(req->req_outcount) / sizeof(req->req_in[0]));
 	if (MACH_REQMSG_OVERFLOW(args, req->req_in[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	/* Sanity check req_outcount */
 	if (req->req_outcount > 4096)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
 		mid = mr->mr_port->mp_data;
@@ -895,10 +895,10 @@ mach_io_connect_method_scalari_structo(struct mach_trap_args *args)
 			printf("no connect_method_scalari_structo method "
 			    "for darwin_iokit_class %s\n", mid->mid_name);
 		else
-			return (mid->mid_connect_method_scalari_structo)(args);
+			return ((mid->mid_connect_method_scalari_structo)(args));
 	}
 
-	return mach_iokit_error(args, MACH_IOKIT_ENODEV);
+	return (mach_iokit_error(args, MACH_IOKIT_ENODEV));
 }
 
 int
@@ -916,16 +916,16 @@ mach_io_connect_method_structi_structo(struct mach_trap_args *args)
 	end_offset = req->req_incount +
 		     (sizeof(req->req_outcount) / sizeof(req->req_in[0]));
 	if (MACH_REQMSG_OVERFLOW(args, req->req_in[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	/* Sanity check outcount. It is word aligned */
 	outcount = req->req_in[(req->req_incount & ~0x3UL) + 4];
 	if (outcount > 4096)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
 		mid = mr->mr_port->mp_data;
@@ -933,10 +933,10 @@ mach_io_connect_method_structi_structo(struct mach_trap_args *args)
 			printf("no connect_method_structi_structo method "
 			    "for darwin_iokit_class %s\n", mid->mid_name);
 		else
-			return (mid->mid_connect_method_structi_structo)(args);
+			return ((mid->mid_connect_method_structi_structo)(args));
 	}
 
-	return mach_iokit_error(args, MACH_IOKIT_ENODEV);
+	return (mach_iokit_error(args, MACH_IOKIT_ENODEV));
 }
 
 int
@@ -955,7 +955,7 @@ mach_io_connect_set_properties(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -976,7 +976,7 @@ mach_io_service_close(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -997,7 +997,7 @@ mach_io_connect_add_client(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -1013,7 +1013,7 @@ mach_io_connect_method_scalari_structi(struct mach_trap_args *args)
 
 	/* Sanity check req_incount and get instructcount */
 	if (MACH_REQMSG_OVERFLOW(args, req->req_in[req->req_incount]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	instructcount = req->req_in[req->req_incount];
 
 	/* Sanity check instructcount */
@@ -1023,11 +1023,11 @@ mach_io_connect_method_scalari_structi(struct mach_trap_args *args)
 		     (sizeof(instructcount) / scalar_size) +
 		     (instructcount * struct_size / scalar_size);
 	if (MACH_REQMSG_OVERFLOW(args, req->req_in[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype == MACH_MP_IOKIT_DEVCLASS) {
 		mid = mr->mr_port->mp_data;
@@ -1035,10 +1035,10 @@ mach_io_connect_method_scalari_structi(struct mach_trap_args *args)
 			printf("no connect_method_scalari_structi method "
 			    "for darwin_iokit_class %s\n", mid->mid_name);
 		else
-			return (mid->mid_connect_method_scalari_structi)(args);
+			return ((mid->mid_connect_method_scalari_structi)(args));
 	}
 
-	return mach_iokit_error(args, MACH_IOKIT_ENODEV);
+	return (mach_iokit_error(args, MACH_IOKIT_ENODEV));
 }
 
 int
@@ -1060,7 +1060,7 @@ mach_io_registry_entry_from_path(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_pathcount;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_path[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 #ifdef DEBUG_MACH
 	printf("mach_io_registry_entry_from_path: path = %s\n", req->req_path);
@@ -1091,7 +1091,7 @@ mach_io_registry_entry_from_path(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -1116,7 +1116,7 @@ mach_io_registry_entry_get_parent_iterator(struct mach_trap_args *args)
 	 */
 	end_offset = req->req_count;
 	if (MACH_REQMSG_OVERFLOW(args, req->req_plane[end_offset]))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 #ifdef DEBUG_MACH
 	printf("mach_io_registry_entry_get_parent_iterator: plane = %s\n",
@@ -1125,10 +1125,10 @@ mach_io_registry_entry_get_parent_iterator(struct mach_trap_args *args)
 
 	mn = req->req_msgh.msgh_remote_port;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return mach_iokit_error(args, MACH_IOKIT_EPERM);
+		return (mach_iokit_error(args, MACH_IOKIT_EPERM));
 
 	if (mr->mr_port->mp_datatype != MACH_MP_IOKIT_DEVCLASS)
-		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
+		return (mach_iokit_error(args, MACH_IOKIT_EINVAL));
 	mid = mr->mr_port->mp_data;
 
 	mp = mach_port_get();
@@ -1150,7 +1150,7 @@ mach_io_registry_entry_get_parent_iterator(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 void
@@ -1187,7 +1187,7 @@ mach_fill_child_iterator(struct mach_device_iterator *mdi, int size, int index, 
 	}
 	mdi->mdi_devices[index] = NULL;
 
-	return index;
+	return (index);
 }
 
 static int
@@ -1206,5 +1206,5 @@ mach_fill_parent_iterator(struct mach_device_iterator *mdi, int size, int index,
 	}
 	mdi->mdi_devices[index] = NULL;
 
-	return index;
+	return (index);
 }

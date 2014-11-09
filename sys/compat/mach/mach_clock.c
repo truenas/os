@@ -95,10 +95,10 @@ sys_mach_clock_sleep_trap(struct thread *td, struct mach_clock_sleep_trap_args *
 		mcts.tv_nsec = cts.tv_nsec;
 		error = copyout(&mcts, uap->wakeup_time, sizeof(mcts));
 		if (error != 0)
-			return error;
+			return (error);
 	}
 
-	return 0;
+	return (0);
 }
 
 int
@@ -116,9 +116,9 @@ sys_mach_timebase_info(struct thread *td, struct mach_timebase_info_args *uap)
 
 	if ((error = copyout(&info, (void *)uap->info,
 	    sizeof(info))) != 0)
-		return error;
+		return (error);
 
-	return 0;
+	return (0);
 }
 
 
@@ -141,5 +141,5 @@ mach_clock_get_time(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }

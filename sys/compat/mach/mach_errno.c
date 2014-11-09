@@ -147,7 +147,7 @@ mach_msg_error(struct mach_trap_args *args, int error)
 		printf("failure in kernel service %d (err %x, native %d)\n",
 		    req->msgh_id, (int)rep->rep_retval, error);
 #endif
-	return 0;
+	return (0);
 }
 
 int
@@ -169,5 +169,5 @@ mach_iokit_error(struct mach_trap_args *args, int error)
 #endif
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }

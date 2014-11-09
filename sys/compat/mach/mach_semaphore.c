@@ -78,10 +78,10 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 
 	mn = uap->wait_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
-		return EPERM;
+		return (EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
-		return EINVAL;
+		return (EINVAL);
 
 	ms = (struct mach_semaphore *)mr->mr_port->mp_data;
 
@@ -97,7 +97,7 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 			tsleep(mwtd, PZERO|PCATCH, "sem_wait", 0);
 		mach_waiting_thread_put(mwtd, ms, 0);
 	}
-	return 0;
+	return (0);
 }
 
 int
@@ -114,10 +114,10 @@ sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_t
 
 	mn = uap->signal_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
-		return EPERM;
+		return (EPERM);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
-		return EINVAL;
+		return (EINVAL);
 
 	ms = (struct mach_semaphore *)mr->mr_port->mp_data;
 
@@ -133,7 +133,7 @@ sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_t
 		wakeup(mwtd);
 		rw_runlock(&ms->ms_lock);
 	}
-	return 0;
+	return (0);
 }
 
 int
@@ -160,7 +160,7 @@ mach_semaphore_create(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -176,10 +176,10 @@ mach_semaphore_destroy(struct mach_trap_args *args)
 
 	mn = req->req_sem.name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
-		return mach_msg_error(args, EPERM);
+		return (mach_msg_error(args, EPERM));
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	ms = (struct mach_semaphore *)mr->mr_port->mp_data;
 	mach_semaphore_put(ms);
@@ -192,7 +192,7 @@ mach_semaphore_destroy(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 void
@@ -224,7 +224,7 @@ mach_semaphore_get(int value, int policy)
 	LIST_INSERT_HEAD(&mach_semaphore_list, ms, ms_list);
 	rw_wunlock(&mach_semaphore_list_lock);
 
-	return ms;
+	return (ms);
 }
 
 static void
@@ -257,7 +257,7 @@ mach_waiting_thread_get(struct thread *td, struct mach_semaphore *ms)
 	TAILQ_INSERT_TAIL(&ms->ms_waiting, mwtd, mwtd_list);
 	rw_wunlock(&ms->ms_lock);
 
-	return mwtd;
+	return (mwtd);
 }
 
 static void
@@ -337,10 +337,10 @@ sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_s
 	 */
 	mn = uap->signal_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return EINVAL;
+		return (EINVAL);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
-		return EINVAL;
+		return (EINVAL);
 
 	ms = (struct mach_semaphore *)mr->mr_port->mp_data;
 
@@ -352,10 +352,10 @@ sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_s
 	if (mn != 0) {
 		if ((mr = mach_right_check(mn, td,
 		    MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-			return EINVAL;
+			return (EINVAL);
 
 		if (mr->mr_port->mp_datatype != MACH_MP_LWP)
-			return EINVAL;
+			return (EINVAL);
 
 		rw_wlock(&ms->ms_lock);
 		TAILQ_FOREACH(mwtd, &ms->ms_waiting, mwtd_list)
@@ -372,7 +372,7 @@ sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_s
 	 */
 	if (mwtd == NULL) {
 		rw_wunlock(&ms->ms_lock);
-		return 0; /* Should be KERN_NOT_WAITING */
+		return (0); /* Should be KERN_NOT_WAITING */
 	}
 
 	ms->ms_value++;
@@ -383,7 +383,7 @@ sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_s
 	if (unblocked != 0)
 		wakeup(mwtd);
 
-	return 0;
+	return (0);
 }
 
 
@@ -404,10 +404,10 @@ sys_mach_semaphore_signal_all_trap(struct thread *td, struct mach_semaphore_sign
 	 */
 	mn = uap->signal_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return EINVAL;
+		return (EINVAL);
 
 	if (mr->mr_port->mp_datatype != MACH_MP_SEMAPHORE)
-		return EINVAL;
+		return (EINVAL);
 
 	ms = (struct mach_semaphore *)mr->mr_port->mp_data;
 
@@ -425,7 +425,7 @@ sys_mach_semaphore_signal_all_trap(struct thread *td, struct mach_semaphore_sign
 
 	rw_wunlock(&ms->ms_lock);
 
-	return 0;
+	return (0);
 }
 
 
