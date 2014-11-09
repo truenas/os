@@ -189,6 +189,25 @@ chap_hex2bin(const char *hex, void **binp, size_t *bin_lenp)
 	return (0);
 }
 
+#ifdef USE_BASE64
+static char *
+chap_bin2hex(const char *bin, size_t bin_len)
+{
+	unsigned char *b64, *tmp;
+	size_t b64_len;
+
+	b64_len = (bin_len + 2) / 3 * 4 + 3; /* +2 for "0b", +1 for '\0'. */
+	b64 = malloc(b64_len);
+	if (b64 == NULL)
+		log_err(1, "malloc");
+
+	tmp = b64;
+	tmp += sprintf(tmp, "0b");
+	b64_ntop(bin, bin_len, tmp, b64_len - 2);
+
+	return (b64);
+}
+#else
 static char *
 chap_bin2hex(const char *bin, size_t bin_len)
 {
@@ -210,6 +229,7 @@ chap_bin2hex(const char *bin, size_t bin_len)
 
 	return (hex);
 }
+#endif /* !USE_BASE64 */
 
 struct chap *
 chap_new(void)
