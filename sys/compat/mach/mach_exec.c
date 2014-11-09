@@ -181,7 +181,7 @@ mach_e_proc_exec(struct proc *p, struct exec_package *epp)
 	mach_e_proc_init(p);
 
 	if (p->p_emul != epp->ep_esch->es_emul) {
-		struct thread *td = LIST_FIRST(&p->p_threads);
+		struct thread *td = TAILQ_FIRST(&p->p_threads);
 		KASSERT(td != NULL, ("no threads in proc"));
 		mach_e_lwp_fork(NULL, l);
 	}
@@ -340,7 +340,7 @@ mach_e_proc_exit(struct proc *p)
 	int i;
 
 	/* There is only one lwp remaining... */
-	td = LIST_FIRST(&p->p_threads);
+	td = TAILQ_FIRST(&p->p_threads);
 	KASSERT(td != NULL, ("no threads in proc"));
 	mach_e_lwp_exit(td);
 
@@ -382,8 +382,6 @@ mach_e_proc_exit(struct proc *p)
 	rw_destroy(&med->med_rightlock);
 	free(med, M_MACH);
 	p->p_emuldata = NULL;
-
-	return;
 }
 
 void
@@ -405,8 +403,6 @@ mach_e_lwp_fork(struct thread *l1, struct thread *l2)
 	/* Nothing to copy from parent thread for now */
 	if (l1 != NULL);
 #endif
-
-	return;
 }
 
 void
@@ -430,8 +426,6 @@ mach_e_lwp_exit(struct thread *l)
 
 	free(mle, M_MACH);
 	l->l_emuldata = NULL;
-
-	return;
 }
 
 static void
@@ -442,6 +436,4 @@ mach_init(void)
 	mach_port_init();
 
 	mach_cold = 0;
-
-	return;
 }

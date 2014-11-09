@@ -85,8 +85,6 @@ mach_notify_port_destroyed(struct thread *td, struct mach_right *mr)
 	wakeup(mp->mp_recv->mr_sethead);
 
 	MACH_PORT_UNREF(mp);
-
-	return;
 }
 
 void
@@ -133,7 +131,6 @@ mach_notify_port_no_senders(struct thread *td, struct mach_right *mr)
 
 out:
 	MACH_PORT_UNREF(mp);
-	return;
 }
 
 void
@@ -176,6 +173,4 @@ mach_notify_port_dead_name(struct thread *td, struct mach_right *mr)
 #endif
 	wakeup(mp->mp_recv->mr_sethead);
 	MACH_PORT_UNREF(mp);
-
-	return;
 }

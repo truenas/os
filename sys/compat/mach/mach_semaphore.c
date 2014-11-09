@@ -76,7 +76,7 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 	mach_port_t mn;
 	int blocked = 0;
 
-	mn = uap->wait_name);
+	mn = uap->wait_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
 		return EPERM;
 
@@ -92,7 +92,7 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 	rw_wunlock(&ms->ms_lock);
 
 	if (blocked != 0) {
-		mwtd = mach_waiting_thread_get(l, ms);
+		mwtd = mach_waiting_thread_get(td, ms);
 		while (ms->ms_value < 0)
 			tsleep(mwtd, PZERO|PCATCH, "sem_wait", 0);
 		mach_waiting_thread_put(mwtd, ms, 0);
@@ -112,7 +112,7 @@ sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_t
 	mach_port_t mn;
 	int unblocked = 0;
 
-	mn = uap->signal_name);
+	mn = uap->signal_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
 		return EPERM;
 
@@ -207,7 +207,6 @@ mach_semaphore_init(void)
 		uma_zcreate("mach_waitp_zone", sizeof (struct mach_waiting_thread),
 					NULL, NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 
-	return;
 }
 
 static struct mach_semaphore *
@@ -244,8 +243,6 @@ mach_semaphore_put(struct mach_semaphore *ms)
 	rw_wunlock(&mach_semaphore_list_lock);
 
 	uma_zfree(mach_semaphore_list_zone, ms);
-
-	return;
 }
 
 static struct mach_waiting_thread *
@@ -272,8 +269,6 @@ mach_waiting_thread_put(struct mach_waiting_thread *mwtd, struct mach_semaphore 
 	if (!locked)
 		rw_wunlock(&ms->ms_lock);
 	uma_zfree(mach_waiting_thread_zone, mwtd);
-
-	return;
 }
 
 /*
@@ -299,8 +294,6 @@ mach_semaphore_cleanup(struct thread *td)
 		rw_wunlock(&ms->ms_lock);
 	}
 	rw_runlock(&mach_semaphore_list_lock);
-
-	return;
 }
 
 int
@@ -314,15 +307,15 @@ sys_mach_semaphore_wait_signal_trap(struct thread *td, struct mach_semaphore_wai
 	struct mach_semaphore_signal_trap_args cupsig;
 	int error;
 
-	&cupsig->signal_name = uap->signal_name;
+	cupsig.signal_name = uap->signal_name;
 	if ((error = sys_mach_semaphore_signal_trap(td, &cupsig)) != 0)
-		return error;
+		return (error);
 
-	&cupwait->wait_name = uap->wait_name;
+	cupwait.wait_name = uap->wait_name;
 	if ((error = sys_mach_semaphore_wait_trap(td, &cupwait)) != 0)
-		return error;
+		return (error);
 
-	return 0;
+	return (0);
 }
 
 
@@ -342,7 +335,7 @@ sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_s
 	/*
 	 * Get the semaphore
 	 */
-	mn = uap->signal_name);
+	mn = uap->signal_name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return EINVAL;
 
@@ -355,7 +348,7 @@ sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_s
 	 * Get the thread, and check that it is waiting for our semaphore
 	 * If no thread was supplied, pick up the first one.
 	 */
-	mn = uap->thread);
+	mn = uap->thread;
 	if (mn != 0) {
 		if ((mr = mach_right_check(mn, td,
 		    MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)

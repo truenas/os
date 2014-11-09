@@ -248,7 +248,7 @@ struct mach_message {
 	TAILQ_ENTRY(mach_message) mm_list;
 					/* List of pending messages */
 	struct mach_port *mm_port;	/* The port on which msg is queued */
-	struct thread *mm_l;		/* The thread that sent it */
+	struct thread *mm_td;		/* The thread that sent it */
 };
 
 /* Flags for mach_ool_copy{in|out} */

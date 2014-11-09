@@ -367,7 +367,7 @@ out1:
 		return MACH_SEND_INVALID_DEST;
 	}
 
-	(void)mach_message_get(sm, send_size, mp, l);
+	(void)mach_message_get(sm, send_size, mp, td);
 #ifdef DEBUG_MACH_MSG
 	printf("pid %d: message queued on port %p (%d) [%p]\n",
 	    p->p_pid, mp, sm->msgh_id,
@@ -579,10 +579,10 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 	/*
 	 * Get rights carried by the message if it is not a
 	 * reply from the kernel.
-	 * XXX mm->mm_l could contain stall data. Reference
+	 * XXX mm->mm_td could contain stall data. Reference
 	 * the thread's kernel port instead?
 	 */
-	if (mm->mm_l != NULL) {
+	if (mm->mm_td != NULL) {
 		mach_port_t *mnp;
 #ifdef DEBUG_MACH
 		printf("mach_msg: non kernel-reply message\n");
@@ -593,11 +593,11 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 		 */
 		bits = MACH_MSGH_LOCAL_BITS(mm->mm_msg->msgh_bits);
 		mnp = &mm->mm_msg->msgh_local_port;
-		mach_trade_rights(td, mm->mm_l, mnp, bits);
+		mach_trade_rights(td, mm->mm_td, mnp, bits);
 
 		bits = MACH_MSGH_REMOTE_BITS(mm->mm_msg->msgh_bits);
 		mnp = &mm->mm_msg->msgh_remote_port;
-		mach_trade_rights(td, mm->mm_l, mnp, bits);
+		mach_trade_rights(td, mm->mm_td, mnp, bits);
 
 		/*
 		 * The same operation must be done to all
@@ -716,8 +716,6 @@ mach_drop_rights(struct mach_right *mr, int bits)
 
 	if (rights != 0)
 		mach_right_put(mr, rights);
-
-	return;
 }
 
 /*
@@ -726,9 +724,9 @@ mach_drop_rights(struct mach_right *mr, int bits)
  * namespace.
  */
 static inline void
-mach_trade_rights(struct thread *tdl, struct thread *rl, mach_port_t *mnp, int bits)
-	/* ll:		 local lwp (receiver, current lwp) */
-	/* rl:		 remote lwp (sender) */
+mach_trade_rights(struct thread *ltd, struct thread *rtd, mach_port_t *mnp, int bits)
+	/* ltd:		 local lwp (receiver, current lwp) */
+	/* rtd:		 remote lwp (sender) */
 	/* mnp:	 pointer to the port name */
 	/* bits:		 right bits */
 {
@@ -773,17 +771,15 @@ mach_trade_rights(struct thread *tdl, struct thread *rl, mach_port_t *mnp, int b
 	/* Get the right in the remote process (sender) */
 	rmr = NULL;
 	if (lr != 0)
-		rmr = mach_right_check(*mnp, rl, rr);
+		rmr = mach_right_check(*mnp, rtd, rr);
 
 	/* Translate it into a right in the local process (receiver) */
 	if (rmr != NULL) {
-		lmr = mach_right_get(rmr->mr_port, ll, lr, 0);
+		lmr = mach_right_get(rmr->mr_port, ltd, rr, 0);
 		*mnp = lmr->mr_name;
 	} else {
 		*mnp = 0;
 	}
-
-	return;
 }
 
 /*
@@ -822,13 +818,13 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 	for (i = 0; i < count; i++) {
 		switch (mcm->mcm_desc.gen[i].type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
-			mach_trade_rights(l, mm->mm_l,
+			mach_trade_rights(td, mm->mm_td,
 			    &mcm->mcm_desc.port[i].name,
 			    mcm->mcm_desc.port[i].disposition);
 			break;
 
 		case MACH_MSG_OOL_PORTS_DESCRIPTOR: {	/* XXX untested */
-			struct thread *rl;		/* remote LWP */
+			struct thread *rtd;		/* remote LWP */
 			void *lumnp;		/* local user address */
 			void *rumnp;		/* remote user address */
 			int disp;		/* disposition*/
@@ -839,7 +835,7 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 			int error;
 			int j;
 
-			rl = mm->mm_l;
+			rtd = mm->mm_td;
 			disp = mcm->mcm_desc.ool_ports[i].disposition;
 			rumnp = mcm->mcm_desc.ool_ports[i].address;
 			mcount = mcm->mcm_desc.ool_ports[i].count;
@@ -848,16 +844,16 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 			lumnp = NULL;
 
 			/* This allocates kmnp */
-			error = mach_ool_copyin(rl, rumnp, &kaddr, size, 0);
+			error = mach_ool_copyin(rtd, rumnp, &kaddr, size, 0);
 			if (error != 0)
 				return MACH_SEND_INVALID_DATA;
 
 			kmnp = (mach_port_t *)kaddr;
 			for (j = 0; j < mcount; j++)
-				mach_trade_rights(l, mm->mm_l, &kmnp[j], disp);
+				mach_trade_rights(td, mm->mm_td, &kmnp[j], disp);
 
 			/* This frees kmnp */
-			if ((error = mach_ool_copyout(l, kmnp, &lumnp,
+			if ((error = mach_ool_copyout(td, kmnp, &lumnp,
 			    size, MACH_OOL_FREE|MACH_OOL_TRACE)) != 0)
 				return MACH_SEND_INVALID_DATA;
 
@@ -871,14 +867,14 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 #endif
 			/* FALLTHROUGH */
 		case MACH_MSG_OOL_DESCRIPTOR: {	/* XXX untested */
-			struct thread *rl;		/* remote LWP */
+			struct thread *rtd;		/* remote LWP */
 			void *ludata;		/* local user address */
 			void *rudata;		/* remote user address */
 			size_t size;		/* data size */
 			void *kdata;
 			int error;
 
-			rl = mm->mm_l;
+			rtd = mm->mm_td;
 			rudata = mcm->mcm_desc.ool[i].address;
 			size = mcm->mcm_desc.ool[i].size;
 			kdata = NULL;
@@ -890,12 +886,12 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 			 */
 
 			/* This allocates kdata */
-			error = mach_ool_copyin(rl, rudata, &kdata, size, 0);
+			error = mach_ool_copyin(rtd, rudata, &kdata, size, 0);
 			if (error != 0)
 				return MACH_SEND_INVALID_DATA;
 
 			/* This frees kdata */
-			if ((error = mach_ool_copyout(l, kdata, &ludata,
+			if ((error = mach_ool_copyout(td, kdata, &ludata,
 			    size, MACH_OOL_FREE|MACH_OOL_TRACE)) != 0)
 				return MACH_SEND_INVALID_DATA;
 
@@ -995,11 +991,11 @@ mach_ool_copyout(struct thread *td, const void *kaddr, void **uaddr, size_t size
 
 out:
 	if (flags & MACH_OOL_FREE)
-		free(__UNCONST(kaddr), M_MACH); /*XXXUNCONST*/
+		free(__DECONST(void *, kaddr), M_MACH); /*XXXUNCONST*/
 
 	if (error == 0)
 		*uaddr = (void *)ubuf;
-	return error;
+	return (error);
 }
 
 
@@ -1012,8 +1008,6 @@ mach_set_trailer(void *msgh, size_t size)
 	trailer = (mach_msg_trailer_t *)&msg[size - sizeof(*trailer)];
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
 	trailer->msgh_trailer_size = sizeof(*trailer);
-
-	return;
 }
 
 inline void
@@ -1028,8 +1022,6 @@ mach_set_header(void *rep, void *req, size_t size)
 	rephdr->msgh_local_port = reqhdr->msgh_local_port;
 	rephdr->msgh_remote_port = 0;
 	rephdr->msgh_id = reqhdr->msgh_id + 100;
-
-	return;
 }
 
 inline void
@@ -1050,7 +1042,6 @@ mach_add_port_desc(void *msg, mach_port_name_t name)
 	mcm->mcm_desc.port[i].type = MACH_MSG_PORT_DESCRIPTOR;
 
 	mcm->mcm_body.msgh_descriptor_count++;
-	return;
 }
 
 inline void
@@ -1073,7 +1064,6 @@ mach_add_ool_ports_desc(void *msg, void *addr, int count)
 	mcm->mcm_desc.ool_ports[i].type = MACH_MSG_OOL_PORTS_DESCRIPTOR;
 
 	mcm->mcm_body.msgh_descriptor_count++;
-	return;
 }
 
 inline void mach_add_ool_desc(msg, addr, size)
@@ -1098,7 +1088,6 @@ inline void mach_add_ool_desc(msg, addr, size)
 	mcm->mcm_desc.ool[i].type = MACH_MSG_OOL_DESCRIPTOR;
 
 	mcm->mcm_body.msgh_descriptor_count++;
-	return;
 }
 
 void
@@ -1115,12 +1104,12 @@ mach_message_get(mach_msg_header_t *msgh, size_t size, struct mach_port *mp, str
 {
 	struct mach_message *mm;
 
-	mm = uma_zallac(mach_message_zone, M_WAITOK);
+	mm = uma_zalloc(mach_message_zone, M_WAITOK);
 	memset(mm, 0, sizeof(*mm));
 	mm->mm_msg = msgh;
 	mm->mm_size = size;
 	mm->mm_port = mp;
-	mm->mm_l = l;
+	mm->mm_td = td;
 
 	rw_wlock(&mp->mp_msglock);
 	TAILQ_INSERT_TAIL(&mp->mp_msglist, mm, mm_list);
@@ -1140,8 +1129,6 @@ mach_message_put(struct mach_message *mm)
 	rw_wlock(&mp->mp_msglock);
 	mach_message_put_exclocked(mm);
 	rw_wunlock(&mp->mp_msglock);
-
-	return;
 }
 
 void
@@ -1158,8 +1145,6 @@ mach_message_put_shlocked(struct mach_message *mm)
 	}
 	mach_message_put_exclocked(mm);
 	rw_downgrade(&mp->mp_msglock);
-
-	return;
 }
 
 void
@@ -1173,8 +1158,6 @@ mach_message_put_exclocked(struct mach_message *mm)
 	mp->mp_count--;
 
 	uma_zfree(mach_message_zone, mm);
-
-	return;
 }
 
 #ifdef DEBUG_MACH
@@ -1225,7 +1208,6 @@ mach_debug_message(void)
 				printf("\n");
 			}
 	}
-	return;
 }
 
 #endif /* DEBUG_MACH */

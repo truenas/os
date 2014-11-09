@@ -724,7 +724,7 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 	mr = uma_zalloc(mach_right_zone, M_WAITOK);
 
 	mr->mr_port = mp;
-	mr->mr_td = l;
+	mr->mr_td = td;
 	mr->mr_type = type;
 	mr->mr_sethead = mr;
 	mr->mr_refcount = 1;
@@ -737,7 +737,7 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 	/* Insert the right in the right lists */
 	if (type & MACH_PORT_TYPE_ALL_RIGHTS) {
 		rw_wlock(&med->med_rightlock);
-		mr->mr_name = mach_right_newname(l, hint);
+		mr->mr_name = mach_right_newname(td, hint);
 #ifdef DEBUG_MACH_RIGHT
 		printf("mach_right_get: insert right %x(%x)\n",
 		    mr->mr_name, mr->mr_type);
@@ -768,8 +768,6 @@ mach_right_put(struct mach_right *mr, int right)
 	rw_wlock(&med->med_rightlock);
 	mach_right_put_exclocked(mr, right);
 	rw_wunlock(&med->med_rightlock);
-
-	return;
 }
 
 void
@@ -784,8 +782,6 @@ mach_right_put_shlocked(struct mach_right *mr, int right)
 	}
 	mach_right_put_exclocked(mr, right);
 	rw_downgrade(&med->med_rightlock);
-
-	return;
 }
 
 void
@@ -881,7 +877,6 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
 		LIST_REMOVE(mr, mr_list);
 		uma_zfree(mach_right_zone, mr);
 	}
-	return;
 }
 
 /*
@@ -893,7 +888,7 @@ mach_right_check(mach_port_t mn, struct thread *td, int type)
 	struct mach_right *cmr;
 	struct mach_emuldata *med;
 
-	if ((mn == 0) || (mn == -1) || (l == NULL))
+	if ((mn == 0) || (mn == -1) || (td == NULL))
 		return NULL;
 
 	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
@@ -998,7 +993,6 @@ mach_debug_port(void)
 			printf("\n");
 		}
 	}
-	return;
 }
 
 #endif /* DEBUG_MACH */

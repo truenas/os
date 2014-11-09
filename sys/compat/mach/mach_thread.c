@@ -293,7 +293,7 @@ mach_thread_info(struct mach_trap_args *args)
 		}
 
 		tbi->suspend_count = 0;
-		tbi->sleep_time = tl->l_slptime;
+		tbi->sleep_time = td->td_slptime;
 		break;
 	}
 
@@ -340,7 +340,7 @@ mach_thread_get_state(struct mach_trap_args *args)
 	if (req->req_count > 144)
 		return mach_msg_error(args, EINVAL);
 
-	if ((error = mach_thread_get_state_machdep(tl,
+	if ((error = mach_thread_get_state_machdep(ttd,
 	    req->req_flavor, &rep->rep_state, &size)) != 0)
 		return mach_msg_error(args, error);
 
@@ -367,7 +367,7 @@ mach_thread_set_state(struct mach_trap_args *args)
 	if (MACH_REQMSG_OVERFLOW(args, req->req_state[end_offset]))
 		return mach_msg_error(args, EINVAL);
 
-	if ((error = mach_thread_set_state_machdep(tl,
+	if ((error = mach_thread_set_state_machdep(ttd,
 	    req->req_flavor, &req->req_state)) != 0)
 		return mach_msg_error(args, error);
 
@@ -394,13 +394,13 @@ mach_thread_suspend(struct mach_trap_args *args)
 
 	PROC_LOCK(p);
 	PROC_SLOCK(p);
-	error = thread_suspend_switch(ttd);
+	thread_suspend_switch(ttd);
 	PROC_SUNLOCK(p);
 	PROC_UNLOCK(p);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
-	rep->rep_retval = native_to_mach_errno[error];
+	rep->rep_retval = native_to_mach_errno[0];
 	mach_set_trailer(rep, *msglen);
 
 	return 0;

@@ -35,7 +35,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/exec.h>
 #include <sys/systm.h>
-#include <sys/ktrace.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mount.h>
@@ -43,6 +42,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/resourcevar.h>
 #include <sys/sysproto.h>
+#include <sys/uio.h>
+#include <sys/ktrace.h>
+
 
 #include <vm/vm.h>
 #include <vm/vm_param.h>
@@ -151,7 +153,7 @@ mach_ports_lookup(struct mach_trap_args *args)
 	 * On Darwin, the data seems always null...
 	 */
 	uaddr = NULL;
-	if ((error = mach_ool_copyout(l, &mnp[0],
+	if ((error = mach_ool_copyout(td, &mnp[0],
 	    &uaddr, sizeof(mnp), MACH_OOL_TRACE)) != 0)
 		return mach_msg_error(args, error);
 
@@ -276,26 +278,26 @@ mach_task_threads(struct mach_trap_args *args)
 	mach_port_name_t *mnp;
 
 	med = tp->p_emuldata;
-	size = tp->p_nthreads * sizeof(*mnp);
+	size = tp->p_numthreads * sizeof(*mnp);
 	mnp = malloc(size, M_TEMP, M_WAITOK);
 	uaddr = NULL;
 
-	LIST_FOREACH(ctd, &tp->p_threads, td_plist) {
+	TAILQ_FOREACH(ctd, &tp->p_threads, td_plist) {
 		mle = ctd->td_emuldata;
 		mr = mach_right_get(mle->mle_kernel, td, MACH_PORT_TYPE_SEND, 0);
 		mnp[i++] = mr->mr_name;
 	}
 
 	/* This will free mnp */
-	if ((error = mach_ool_copyout(l, mnp, &uaddr,
+	if ((error = mach_ool_copyout(td, mnp, &uaddr,
 	    size, MACH_OOL_TRACE|MACH_OOL_FREE)) != 0)
 		return mach_msg_error(args, error);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
-	mach_add_ool_ports_desc(rep, uaddr, tp->p_nthreads);
+	mach_add_ool_ports_desc(rep, uaddr, tp->p_numthreads);
 
-	rep->rep_count = tp->p_nthreads;
+	rep->rep_count = tp->p_numthreads;
 
 	mach_set_trailer(rep, *msglen);
 
@@ -454,7 +456,7 @@ mach_task_info(struct mach_trap_args *args)
 		if (req->req_count < count)
 			return mach_msg_error(args, ENOBUFS);
 
-		ru = tp->p_stats->p_ru;
+		ru = tp->p_stats->p_cru;
 		mtbi = (struct mach_task_basic_info *)&rep->rep_info[0];
 		PROC_LOCK(tp);
 		rulwps(tp, &ru);
@@ -482,7 +484,7 @@ mach_task_info(struct mach_trap_args *args)
 		if (req->req_count < count)
 			return mach_msg_error(args, ENOBUFS);
 
-		ru = tp->p_stats->p_ru;
+		ru = tp->p_stats->p_cru;
 		mttti = (struct mach_task_thread_times_info *)&rep->rep_info[0];
 
 		mttti->mttti_user_time.seconds = ru.ru_utime.tv_sec;
@@ -504,7 +506,7 @@ mach_task_info(struct mach_trap_args *args)
 			return mach_msg_error(args, ENOBUFS);
 
 		mtei = (struct mach_task_events_info *)&rep->rep_info[0];
-		ru = tp->p_stats->p_ru;
+		ru = tp->p_stats->p_cru;
 		PROC_LOCK(tp);
 		rulwps(tp, &ru);
 		PROC_UNLOCK(tp);
@@ -551,7 +553,7 @@ mach_task_suspend(struct mach_trap_args *args)
 	med = tp->p_emuldata;
 	med->med_suspend++; /* XXX Mach also has a per thread semaphore */
 
-	LIST_FOREACH(tdp, &tp->p_threads, td_plist) {
+	TAILQ_FOREACH(tdp, &tp->p_threads, td_plist) {
 		switch(tdp->td_state) {
 		case TDS_INACTIVE:
 		case TDS_INHIBITED:
@@ -620,18 +622,15 @@ mach_task_terminate(struct mach_trap_args *args)
 	mach_task_resume_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct exit_args cup;
-	register_t retval;
-	int error;
+	struct sys_exit_args cup;
 
-
-	&cup->rval = 0;
-	error = sys_exit(tl, &cup);
+	cup.rval = 0;
+	sys_sys_exit(ttd, &cup);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 
-	rep->rep_retval = native_to_mach_errno[error];
+	rep->rep_retval = native_to_mach_errno[0];
 
 	mach_set_trailer(rep, *msglen);
 

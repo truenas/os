@@ -33,12 +33,16 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/bus.h>
 #include <sys/malloc.h>
-#include <sys/signal.h>
 #include <sys/mount.h>
 #include <sys/proc.h>
+#include <sys/resource.h>
+#include <sys/signal.h>
+#include <sys/uio.h>
 #include <sys/ktrace.h>
-#include <sys/device.h>
+
+
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_port.h>
@@ -672,7 +676,7 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
 	size = strlen(mid->mid_properties) + 1; /* Include trailing zero */
 
-	if ((error = mach_ool_copyout(l,
+	if ((error = mach_ool_copyout(td,
 	    mid->mid_properties, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit properties failed\n",
@@ -739,7 +743,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 	size = strlen(mip->mip_value) + 1; /* Include trailing zero */
 
 	/* And copyout its associated value */
-	if ((error = mach_ool_copyout(l,
+	if ((error = mach_ool_copyout(td,
 	    mip->mip_value, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit property failed\n",
@@ -1159,8 +1163,6 @@ mach_iokit_cleanup_notify(struct mach_right *mr)
 	while ((mid = mach_iokit_devclasses[i++]) != NULL)
 		if (mid->mid_notify == mr)
 			mid->mid_notify = NULL;
-
-	return;
 }
 
 static int

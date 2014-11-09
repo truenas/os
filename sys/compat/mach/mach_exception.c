@@ -68,7 +68,6 @@ mach_trapsignal(struct thread *td, struct ksiginfo *ksi)
 {
 	if (mach_trapsignal1(td, ksi) != 0)
 		trapsignal(td, ksi);
-	return;
 }
 
 int
