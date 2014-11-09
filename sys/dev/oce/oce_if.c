@@ -1752,10 +1752,6 @@ oce_attach_ifp(POCE_SOFTC sc)
 	sc->ifp->if_hw_tsomaxsegsize = 4096;
 #endif
 
-#if __FreeBSD_version >= 1000000
-	sc->ifp->if_hw_tsomax = OCE_MAX_TSO_SIZE;
-#endif
-
 	ether_ifattach(sc->ifp, sc->macaddr.mac_addr);
 	
 	return 0;
