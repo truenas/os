@@ -166,7 +166,6 @@ mach_thread_create_running(struct mach_trap_args *args)
 	mach_thread_create_running_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *td = args->td;
-	struct proc *p = td->td_proc;
 	struct mach_create_thread_child_args mctc;
 	struct mach_right *child_mr;
 	struct mach_thread_emuldata *mle;
@@ -193,8 +192,8 @@ mach_thread_create_running(struct mach_trap_args *args)
 		return (ENOMEM);
 
 	flags = 0;
-	if ((error = lwp_create(l, p, uaddr, flags, NULL, 0,
-	    mach_create_thread_child, (void *)&mctc, &mctc.mctc_lwp,
+	if ((error = create_thread(td, uaddr, flags, NULL, 0,
+	    mach_create_thread_child, (void *)&mctc, &mctc.mctc_td,
 	    SCHED_OTHER)) != 0)
 	{
 		uvm_uarea_free(uaddr);
@@ -433,8 +432,18 @@ mach_thread_abort(struct mach_trap_args *args)
 	mach_thread_abort_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
+	ksiginfo_t ksi;
 
-	lwp_exit(ttd);
+	if (ttd == curthread)
+		thread_exit();
+	else {
+		ksiginfo_init(&ksi);
+		ksi.ksi_signo = SIGKILL;
+		ksi.ksi_code = SI_LWP;
+		ksi.ksi_pid = ttd->td_proc->p_pid;
+		ksi.ksi_uid = curthread->td_ucred->cr_ruid;
+		tdksignal(ttd, SIGKILL, &ksi);
+	}
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

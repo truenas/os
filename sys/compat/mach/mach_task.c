@@ -664,21 +664,11 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 	}
 
 	/* Allowed only if the UID match, if setuid, or if superuser */
-	if ((kauth_cred_getuid(t->p_cred) != kauth_cred_getuid(l->l_cred) ||
-	    ISSET(t->p_flag, PK_SUGID)) && (error = kauth_authorize_generic(l->l_cred,
+	if ((kauth_cred_getuid(t->p_ucred) != kauth_cred_getuid(td->td_ucred) ||
+	    ISSET(t->p_flag, PK_SUGID)) && (error = kauth_authorize_generic(td->td_ucred,
 	    KAUTH_GENERIC_ISSUSER, NULL)) != 0) {
 		PROC_UNLOCK(t);
 		return (error);
-	}
-
-	/* This will only work on a Mach process */
-	if ((t->p_emul != &emul_mach) &&
-#ifdef COMPAT_DARWIN
-	    (t->p_emul != &emul_darwin) &&
-#endif
-	    1) {
-		PROC_UNLOCK(t);
-		return (EINVAL);
 	}
 	PROC_UNLOCK(t);
 
