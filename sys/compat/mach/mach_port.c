@@ -65,7 +65,7 @@ struct mach_port *mach_io_master_port;
 struct mach_port *mach_saved_bootstrap_port;
 
 int
-mach_sys_reply_port(struct thread *td, const void *v)
+sys_mach_reply_port(struct thread *td, const void *v)
 {
 	struct mach_right *mr;
 
@@ -76,12 +76,12 @@ mach_sys_reply_port(struct thread *td, const void *v)
 }
 
 int
-mach_sys_thread_self_trap(struct thread *td, const void *v)
+sys_mach_thread_self_trap(struct thread *td, const void *v)
 {
-	struct mach_lwp_emuldata *mle;
+	struct mach_td_emuldata *mle;
 	struct mach_right *mr;
 
-	mle = l->l_emuldata;
+	mle = td->td_emuldata;
 	mr = mach_right_get(mle->mle_kernel, td, MACH_PORT_TYPE_SEND, 0);
 	td->td_retval[0] = (register_t)mr->mr_name;
 
@@ -104,7 +104,7 @@ mach_task_self_trap(struct thread *td, const void *v)
 
 
 int
-mach_sys_host_self_trap(struct thread *td, const void *v)
+sys_mach_host_self_trap(struct thread *td, const void *v)
 {
 	struct mach_emuldata *med;
 	struct mach_right *mr;
@@ -625,10 +625,10 @@ mach_port_init(void)
 
 	mach_port_zone =
 		uma_zcreate("mach_port_zone", sizeof (struct mach_port),
-						NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+					NULL, NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 	mach_right_zone =
 		uma_zcreate("mach_right_zone", sizeof (struct mach_right),
-						NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+					NULL, NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 
 	mach_bootstrap_port = mach_port_get();
 	mach_clock_port = mach_port_get();
@@ -656,7 +656,7 @@ mach_port_get(void)
 	mp->mp_datatype = MACH_MP_NONE;
 	mp->mp_data = NULL;
 	TAILQ_INIT(&mp->mp_msglist);
-	rw_init(&mp->mp_msglock);
+	rw_init(&mp->mp_msglock, "mach msg");
 
 	return mp;
 }
@@ -724,7 +724,7 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 	mr = uma_zalloc(mach_right_zone, M_WAITOK);
 
 	mr->mr_port = mp;
-	mr->mr_lwp = l;
+	mr->mr_td = l;
 	mr->mr_type = type;
 	mr->mr_sethead = mr;
 	mr->mr_refcount = 1;
@@ -763,7 +763,7 @@ rcvck:
 void
 mach_right_put(struct mach_right *mr, int right)
 {
-	struct mach_emuldata *med = mr->mr_lwp->l_proc->p_emuldata;
+	struct mach_emuldata *med = mr->mr_td->td_proc->p_emuldata;
 
 	rw_wlock(&med->med_rightlock);
 	mach_right_put_exclocked(mr, right);
@@ -775,7 +775,7 @@ mach_right_put(struct mach_right *mr, int right)
 void
 mach_right_put_shlocked(struct mach_right *mr, int right)
 {
-	struct mach_emuldata *med = mr->mr_lwp->l_proc->p_emuldata;
+	struct mach_emuldata *med = mr->mr_td->td_proc->p_emuldata;
 
 	if (!rw_try_upgrade(&med->med_rightlock)) {
 		/* XXX */
@@ -796,7 +796,7 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
 	int lright;
 	int kill_right;
 
-	med = mr->mr_lwp->l_proc->p_emuldata;
+	med = mr->mr_td->td_proc->p_emuldata;
 
 #ifdef DEBUG_MACH_RIGHT
 	printf("mach_right_put: mr = %p\n", mr);
@@ -829,7 +829,7 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
 		} else {
 			mr->mr_type &= ~MACH_PORT_TYPE_RECEIVE;
 			mr->mr_type |= MACH_PORT_TYPE_DEAD_NAME;
-			mach_notify_port_dead_name(mr->mr_lwp, mr);
+			mach_notify_port_dead_name(mr->mr_td, mr);
 		}
 		if (mr->mr_port != NULL) {
 			/* There is no more receiver */
@@ -849,7 +849,7 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
 	if (mr->mr_type & lright) {
 		mr->mr_refcount--;
 
-		mach_notify_port_no_senders(mr->mr_lwp, mr);
+		mach_notify_port_no_senders(mr->mr_td, mr);
 
 		if (mr->mr_refcount <= 0) {
 			mr->mr_type &= ~MACH_PORT_TYPE_REF_RIGHTS;
@@ -877,7 +877,7 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
 		/* If the right is used for an IO notification, remove it */
 		mach_iokit_cleanup_notify(mr);
 
-		mach_notify_port_destroyed(mr->mr_lwp, mr);
+		mach_notify_port_destroyed(mr->mr_td, mr);
 		LIST_REMOVE(mr, mr_list);
 		uma_zfree(mach_right_zone, mr);
 	}
@@ -921,7 +921,7 @@ mach_right_check(mach_port_t mn, struct thread *td, int type)
 
 
 /*
- * Find an usnused port name in a given lwp.
+ * Find an usnused port name in a given thread.
  * Right lists should be locked.
  */
 mach_port_t

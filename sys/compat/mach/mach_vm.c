@@ -44,6 +44,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/exec.h>
 #include <sys/sysproto.h>
 
+#include <vm/vm.h>
+#include <vm/vm_param.h>
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
@@ -332,7 +334,7 @@ mach_vm_protect(struct mach_trap_args *args)
 }
 
 int
-mach_sys_map_fd(struct thread *td, const struct mach_map_fd_args *uap)
+sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 {
 	/* {
 		syscallarg(int) fd;
@@ -382,7 +384,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_map_fd_args *uap)
 
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	if ((error = (*evc.ev_proc)(td, &evc)) != 0) {
-		VOP_UNLOCK(vp);
+		VOP_UNLOCK(vp, 0);
 
 #ifdef DEBUG_MACH_VM
 		printf("mach_map_fd: mapping at %p failed\n", va);
@@ -433,7 +435,7 @@ mach_sys_map_fd(struct thread *td, const struct mach_map_fd_args *uap)
 	return 0;
 
 bad1:
-	VOP_UNLOCK(vp);
+	VOP_UNLOCK(vp, 0);
 bad2:
 	vrele(vp);
 	fd_putfile(uap->fd);
@@ -741,21 +743,21 @@ mach_vm_read(struct mach_trap_args *args)
 
 	addr = (void *)req->req_addr;
 	if ((error = copyin_proc(td->td_proc, addr, tbuf, size)) != 0) {
-		printf("copyin_proc error = %d, addr = %p, size = %x\n", error, addr, size);
-		free(tbuf, M_WAITOK);
+		printf("copyin_proc error = %d, addr = %p, size = %zx\n", error, addr, size);
+		free(tbuf, M_MACH);
 		return mach_msg_error(args, EFAULT);
 	}
 
 	if ((error = copyout(tbuf, (void *)va, size)) != 0) {
 		printf("copyout error = %d\n", error);
-		free(tbuf, M_WAITOK);
+		free(tbuf, M_MACH);
 		return mach_msg_error(args, EFAULT);
 	}
 
 	if (error == 0)
 		ktrmool(tbuf, size, (void *)va);
 
-	free(tbuf, M_WAITOK);
+	free(tbuf, M_MACH);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -795,21 +797,21 @@ mach_vm_write(struct mach_trap_args *args)
 
 	if ((error = copyin(req->req_data.address, tbuf, size)) != 0) {
 		printf("copyin error = %d\n", error);
-		free(tbuf, M_WAITOK);
+		free(tbuf, M_MACH);
 		return mach_msg_error(args, EFAULT);
 	}
 
 	addr = (void *)req->req_addr;
 	if ((error = copyout_proc(td->td_proc, tbuf, addr, size)) != 0) {
 		printf("copyout_proc error = %d\n", error);
-		free(tbuf, M_WAITOK);
+		free(tbuf, M_MACH);
 		return mach_msg_error(args, EFAULT);
 	}
 
 	if (error == 0)
 		ktrmool(tbuf, size, (void *)addr);
 
-	free(tbuf, M_WAITOK);
+	free(tbuf, M_MACH);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

@@ -296,7 +296,7 @@ extern struct mach_port *mach_saved_bootstrap_port;
 /* In-kernel Mach port right description */
 struct mach_right {
 	mach_port_t mr_name;		/* The right name */
-	struct thread *mr_lwp;		/* points back to struct thread */
+	struct thread *mr_td;		/* points back to struct thread */
 	int mr_type;			/* right type (recv, send, sendonce) */
 	LIST_ENTRY(mach_right) mr_list; /* Right list for a process */
 	int mr_refcount;		/* Reference count */

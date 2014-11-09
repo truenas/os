@@ -42,8 +42,8 @@
 
 /* For mach_create_thread_child() */
 struct mach_create_thread_child_args {
-	struct thread *mctc_lwp;
-	struct thread *mctc_oldlwp;
+	struct thread *mctc_td;
+	struct thread *mctc_oldtd;
 	mach_natural_t *mctc_state;
 	int mctc_flavor;
 	int mctc_child_done;

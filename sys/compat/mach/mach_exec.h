@@ -62,12 +62,14 @@ struct mach_thread_emuldata {
 };
 
 struct ps_strings;
+#ifdef notyet
 int exec_mach_copyargs(struct thread *, struct exec_package *,
     struct ps_strings *, char **, void *);
+void mach_e_proc_exec(struct proc *, struct exec_package *);
+#endif
 int exec_mach_probe(const char **);
 void mach_e_proc_init(struct proc *);
 void mach_e_proc_exit(struct proc *);
-void mach_e_proc_exec(struct proc *, struct exec_package *);
 void mach_e_proc_fork(struct proc *, struct thread *, int);
 void mach_e_proc_fork1(struct proc *, struct thread *, int);
 void mach_e_lwp_fork(struct thread *, struct thread *);

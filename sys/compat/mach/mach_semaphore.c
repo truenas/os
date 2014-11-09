@@ -65,7 +65,7 @@ static void mach_waiting_thread_put
     (struct mach_waiting_thread *, struct mach_semaphore *, int);
 
 int
-mach_sys_semaphore_wait_trap(struct thread *td, struct mach_sys_semaphore_wait_trap_args *uap)
+sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) wait_name;
@@ -101,7 +101,7 @@ mach_sys_semaphore_wait_trap(struct thread *td, struct mach_sys_semaphore_wait_t
 }
 
 int
-mach_sys_semaphore_signal_trap(struct thread *td, struct mach_sys_semaphore_signal_trap_args *uap)
+sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) signal_name;
@@ -202,10 +202,10 @@ mach_semaphore_init(void)
 	rw_init(&mach_semaphore_list_lock, "mach semaphore list");
 	mach_semaphore_list_zone =
 		uma_zcreate("mach_sem_zone", sizeof (struct mach_semaphore),
-					NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+					NULL, NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 	mach_waiting_thread_zone =
 		uma_zcreate("mach_waitp_zone", sizeof (struct mach_waiting_thread),
-					NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+					NULL, NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 
 	return;
 }
@@ -264,7 +264,7 @@ mach_waiting_thread_get(struct thread *td, struct mach_semaphore *ms)
 }
 
 static void
-mach_waiting_thread_put(struct mach_waiting_thraed *mwtd, struct mach_semaphore *ms, int locked)
+mach_waiting_thread_put(struct mach_waiting_thread *mwtd, struct mach_semaphore *ms, int locked)
 {
 	if (!locked)
 		rw_wlock(&ms->ms_lock);
@@ -291,7 +291,7 @@ mach_semaphore_cleanup(struct thread *td)
 		rw_wlock(&ms->ms_lock);
 		TAILQ_FOREACH(mwtd, &ms->ms_waiting, mwtd_list)
 			if (mwtd->mwtd_td == td) {
-				mach_waiting_thraed_put(mwtd, ms, 0);
+				mach_waiting_thread_put(mwtd, ms, 0);
 				ms->ms_value++;
 				if (ms->ms_value >= 0)
 					wakeup(TAILQ_FIRST(&ms->ms_waiting));
@@ -304,22 +304,22 @@ mach_semaphore_cleanup(struct thread *td)
 }
 
 int
-mach_sys_semaphore_wait_signal_trap(struct thread *td, struct mach_sys_semaphore_wait_signal_trap_args *uap)
+sys_mach_semaphore_wait_signal_trap(struct thread *td, struct mach_semaphore_wait_signal_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) wait_name;
 		syscallarg(mach_port_name_t) signal_name;
 	} */
-	struct mach_sys_semaphore_wait_trap_args cupwait;
-	struct mach_sys_semaphore_signal_trap_args cupsig;
+	struct mach_semaphore_wait_trap_args cupwait;
+	struct mach_semaphore_signal_trap_args cupsig;
 	int error;
 
 	&cupsig->signal_name = uap->signal_name;
-	if ((error = mach_sys_semaphore_signal_trap(td, &cupsig)) != 0)
+	if ((error = sys_mach_semaphore_signal_trap(td, &cupsig)) != 0)
 		return error;
 
 	&cupwait->wait_name = uap->wait_name;
-	if ((error = mach_sys_semaphore_wait_trap(td, &cupwait)) != 0)
+	if ((error = sys_mach_semaphore_wait_trap(td, &cupwait)) != 0)
 		return error;
 
 	return 0;
@@ -327,7 +327,7 @@ mach_sys_semaphore_wait_signal_trap(struct thread *td, struct mach_sys_semaphore
 
 
 int
-mach_sys_semaphore_signal_thread_trap(struct thread *td, struct mach_sys_semaphore_signal_thread_trap_args *uap)
+sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_signal_thread_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) signal_name;
@@ -395,7 +395,7 @@ mach_sys_semaphore_signal_thread_trap(struct thread *td, struct mach_sys_semapho
 
 
 int
-mach_sys_semaphore_signal_all_trap(struct thread *td, struct mach_sys_semaphore_signal_all_trap_args *uap)
+sys_mach_semaphore_signal_all_trap(struct thread *td, struct mach_semaphore_signal_all_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) signal_name;

@@ -32,10 +32,12 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
-#include <sys/signal.h>
 #include <sys/systm.h>
-#include <sys/proc.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
 #include <sys/malloc.h>
+#include <sys/proc.h>
+#include <sys/signal.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_exec.h>
@@ -47,6 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_sysctl.h>
 
 #include <machine/mach_machdep.h>
+static sigset_t              contsigmask;
 
 static void mach_siginfo_to_exception(const struct ksiginfo *, int *);
 
@@ -115,7 +118,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	size_t msglen;
 	struct mach_right *exc_mr;
 	struct mach_emuldata *exc_med;
-	struct mach_lwp_emuldata *exc_mle;
+	struct mach_thread_emuldata *exc_mle;
 	struct mach_emuldata *catcher_med;
 	struct mach_right *kernel_mr;
 	struct thread *catcher_td;	/* The lwp catching the exception */
@@ -143,13 +146,15 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	if (mach_exception_hang) {
 		struct proc *p = exc_td->td_proc;
 
-		sigminusset(&contsigmask, &exc_td->td_sigpendset->sp_set);
+		SIGSETNAND(exc_td->td_sigmask, contsigmask);
 		thread_lock(exc_td);
+#ifdef notyet
 		p->p_pptr->p_nstopchild++;
-		p->p_stat = SSTOP;
-		exc_td->td_stat = LSSTOP;
-		p->p_nrlwps--;
-		mi_switch(exc_td);
+#endif
+		exc_td->td_state = TDS_INHIBITED;
+		p->p_numthreads--;
+		mi_switch(SW_VOL, NULL);
+		thread_unlock(exc_td);
 	}
 
 	/*
@@ -168,14 +173,14 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 
 #ifdef DEBUG_MACH
 	printf("catcher is %d.%d, state %d\n",
-	    exc_port->mp_recv->mr_lwp->td_proc->p_pid,
-	    exc_port->mp_recv->mr_lwp->l_lid,
-	    exc_port->mp_recv->mr_lwp->td_proc->p_stat);
+	    exc_port->mp_recv->mr_td->td_proc->p_pid,
+	    exc_port->mp_recv->mr_td->l_lid,
+	    exc_port->mp_recv->mr_td->td_proc->p_stat);
 #endif
 	/*
 	 * Don't send exceptions to dying processes
 	 */
-	if (P_ZOMBIE(exc_port->mp_recv->mr_lwp->td_proc)) {
+	if (exc_port->mp_recv->mr_td->td_proc->p_state == PRS_ZOMBIE) {
 		error = ESRCH;
 		goto out;
 	}
@@ -200,8 +205,8 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	 * a dying parent, a signal is sent instead of the
 	 * notification, this fixes the problem.
 	 */
-	if ((exc_td->td_proc->p_slflag & PSL_TRACED) &&
-	    (exc_td->td_proc->p_pptr->p_sflag & PS_WEXIT)) {
+	if ((exc_td->td_proc->p_flag & P_TRACED) &&
+	    (exc_td->td_proc->p_pptr->p_flag & P_WEXIT)) {
 #ifdef DEBUG_MACH
 		printf("mach_exception: deadlock avoided\n");
 #endif
@@ -224,7 +229,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	 * We want the port names in the target process, that is,
 	 * the process with receive right for exc_port.
 	 */
-	catcher_td = exc_port->mp_recv->mr_lwp;
+	catcher_td = exc_port->mp_recv->mr_td;
 	catcher_med = catcher_td->td_proc->p_emuldata;
 	exc_mr = mach_right_get(exc_port, catcher_td, MACH_PORT_TYPE_SEND, 0);
 	kernel_mr = mach_right_get(catcher_med->med_kernel,
@@ -353,7 +358,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	 */
 	if (((exc_port = exc_med->med_exc[exc]) == NULL) ||
 	    (exc_port->mp_recv == NULL) ||
-	    (P_ZOMBIE(exc_port->mp_recv->mr_lwp->td_proc))) {
+	    (exc_port->mp_recv->mr_td->td_proc->p_state == PRS_ZOMBIE)) {
 		error = ESRCH;
 		goto out;
 	}

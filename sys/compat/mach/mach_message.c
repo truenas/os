@@ -43,6 +43,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/ktrace.h>
 
 #include <vm/uma.h>
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
+#include <vm/vm_extern.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -71,7 +76,7 @@ static inline
     int mach_trade_rights_complex(struct thread *, struct mach_message *);
 
 int
-mach_sys_msg_overwrite_trap(struct thread *td, const struct mach_sys_msg_overwrite_trap_args *uap)
+sys_mach_msg_overwrite_trap(struct thread *td, const struct mach_msg_overwrite_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_msg_header_t *) msg;
@@ -294,8 +299,8 @@ skip_null_lr:
 		else
 			rm = NULL;
 
-		args.l = l;
-		args.tl = mach_get_target_task(td, mp);
+		args.td = td;
+		args.ttd = mach_get_target_task(td, mp);
 		args.smsg = sm;
 		args.rmsg = rm;
 		args.rsize = &reply_size;
@@ -636,7 +641,7 @@ unlock:
 
 
 int
-mach_sys_msg_trap(struct thread *td, const struct mach_sys_msg_trap_args *uap)
+sys_mach_msg_trap(struct thread *td, const struct mach_msg_trap_args *uap)
 {
 	/* {
 		syscallarg(mach_msg_header_t *) msg;
@@ -647,7 +652,7 @@ mach_sys_msg_trap(struct thread *td, const struct mach_sys_msg_trap_args *uap)
 		syscallarg(mach_msg_timeout_t) timeout;
 		syscallarg(mach_port_name_t) notify;
 	} */
-	struct mach_sys_msg_overwrite_trap_args cup;
+	struct mach_msg_overwrite_trap_args cup;
 
 	cup.msg = uap->msg;
 	cup.option = uap->option;
@@ -659,7 +664,7 @@ mach_sys_msg_trap(struct thread *td, const struct mach_sys_msg_trap_args *uap)
 	cup.rcv_msg = NULL;
 	cup.scatter_list_size = 0;
 
-	return mach_sys_msg_overwrite_trap(td, &cup);
+	return sys_mach_msg_overwrite_trap(td, &cup);
 }
 
 static inline  struct thread *
@@ -672,7 +677,7 @@ mach_get_target_task(struct thread *td, struct mach_port *mp)
 	case MACH_MP_PROC:
 		tp = (struct proc *)mp->mp_data;
 		ttd = TAILQ_FIRST(&tp->p_threads);
-		KASSERT(tl != NULL);
+		KASSERT(ttd != NULL, ("no threads in proc"));
 		break;
 
 	case MACH_MP_LWP:
@@ -1102,7 +1107,7 @@ mach_message_init(void)
 
 	mach_message_zone =
 		uma_zcreate("mach_message_zone", sizeof (struct mach_message),
-					NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
+					NULL, NULL, NULL, NULL, 0/* align*/, 0/*flags*/);
 }
 
 struct mach_message *

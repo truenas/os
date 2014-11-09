@@ -55,7 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_proto.h>
 
 int
-mach_sys_syscall_thread_switch(struct thread *td, const struct mach_sys_syscall_thread_switch_args *uap)
+sys_mach_syscall_thread_switch(struct thread *td, struct mach_syscall_thread_switch_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) thread_name;
@@ -75,7 +75,7 @@ mach_sys_syscall_thread_switch(struct thread *td, const struct mach_sys_syscall_
 	 */
 	switch(uap->option) {
 	case MACH_SWITCH_OPTION_NONE:
-		yield();
+		sched_yield();
 		break;
 
 	case MACH_SWITCH_OPTION_WAIT:
@@ -88,19 +88,19 @@ mach_sys_syscall_thread_switch(struct thread *td, const struct mach_sys_syscall_
 	case MACH_SWITCH_OPTION_DEPRESS:
 	case MACH_SWITCH_OPTION_IDLE:
 		/* Use a callout to restore the priority after depression? */
-		med->med_thpri = l->l_priority;
-		l->l_priority = MAXPRI;
+		med->med_thpri = td->td_priority;
+		td->td_priority = PRI_MAX_TIMESHARE;
 		break;
 
 	default:
-		uprintf("mach_sys_syscall_thread_switch(): unknown option %d\n",		    uap->option);
+		uprintf("sys_mach_syscall_thread_switch(): unknown option %d\n",		    uap->option);
 		break;
 	}
 	return 0;
 }
 
 int
-mach_sys_swtch_pri(struct thread *td, struct mach_sys_swtch_pri_args *uap)
+sys_mach_swtch_pri(struct thread *td, struct mach_swtch_pri_args *uap)
 {
 	/* {
 		syscallarg(int) pri;
@@ -109,25 +109,25 @@ mach_sys_swtch_pri(struct thread *td, struct mach_sys_swtch_pri_args *uap)
 	/*
 	 * Copied from preempt(9). We cannot just call preempt
 	 * because we want to return mi_switch(9) return value.
+	 * XXX no return value on FreeBSD
 	 */
-	KERNEL_UNLOCK_ALL(l, &l->l_biglocks);
-	lwp_lock(l);
-	if (l->l_stat == LSONPROC)
+	thread_lock(td);
+	if (td->td_state == TDS_RUNNING)
 		td->td_proc->p_stats->p_ru.ru_nivcsw++;	/* XXXSMP */
-	td->td_retval[0] = mi_switch(td);
-	KERNEL_LOCK(l->l_biglocks, l);
+	mi_switch(SW_VOL, NULL);
+	thread_unlock(td);
 
 	return 0;
 }
 
 int
-mach_sys_swtch(struct thread *td, const void *v)
+sys_mach_swtch(struct thread *td, struct mach_swtch_args *v)
 {
-	struct mach_sys_swtch_pri_args cup;
+	struct mach_swtch_pri_args cup;
 
 	cup.pri = 0;
 
-	return mach_sys_swtch_pri(td, &cup, retval);
+	return sys_mach_swtch_pri(td, &cup);
 }
 
 
@@ -168,7 +168,7 @@ mach_thread_create_running(struct mach_trap_args *args)
 	struct proc *p = td->td_proc;
 	struct mach_create_thread_child_args mctc;
 	struct mach_right *child_mr;
-	struct mach_lwp_emuldata *mle;
+	struct mach_thread_emuldata *mle;
 	vm_offset_t uaddr;
 	int flags;
 	int error;
@@ -183,7 +183,7 @@ mach_thread_create_running(struct mach_trap_args *args)
 	 * Prepare the data we want to transmit to the child.
 	 */
 	mctc.mctc_flavor = req->req_flavor;
-	mctc.mctc_oldlwp = l;
+	mctc.mctc_oldtd = td;
 	mctc.mctc_child_done = 0;
 	mctc.mctc_state = req->req_state;
 
@@ -203,13 +203,13 @@ mach_thread_create_running(struct mach_trap_args *args)
 	/*
 	 * Make the child runnable.
 	 */
-	mtx_lock(p->p_lock);
-	lwp_lock(mctc.mctc_lwp);
-	mctc.mctc_lwp->l_private = 0;
-	mctc.mctc_lwp->l_stat = LSRUN;
-	sched_enqueue(mctc.mctc_lwp, false);
-	lwp_unlock(mctc.mctc_lwp);
-	mtx_unlock(p->p_lock);
+	PROC_LOCK(p);
+	thread_lock(mctc.mctc_td);
+	mctc.mctc_td->td_private = 0;
+	mctc.mctc_td->td_state = LSRUN;
+	sched_enqueue(mctc.mctc_td, false);
+	thread_unlock(mctc.mctc_td);
+	PROC_UNLOCK(p);
 
 	/*
 	 * Get the child's kernel port
@@ -274,17 +274,17 @@ mach_thread_info(struct mach_trap_args *args)
 		/* XXX this is not very accurate */
 		tbi->run_state = MACH_TH_STATE_RUNNING;
 		tbi->flags = 0;
-		switch (l->l_stat) {
-		case LSRUN:
+		switch (td->td_state) {
+		case TDS_RUNNING:
 			tbi->run_state = MACH_TH_STATE_RUNNING;
 			break;
-		case LSSTOP:
+		case TDS_INACTIVE:
 			tbi->run_state = MACH_TH_STATE_STOPPED;
 			break;
-		case LSSLEEP:
+		case TDS_INHIBITED:
 			tbi->run_state = MACH_TH_STATE_WAITING;
 			break;
-		case LSIDL:
+		case TDS_CAN_RUN:
 			tbi->run_state = MACH_TH_STATE_RUNNING;
 			tbi->flags = MACH_TH_FLAGS_IDLE;
 			break;
@@ -305,11 +305,11 @@ mach_thread_info(struct mach_trap_args *args)
 
 		pti = (struct mach_policy_timeshare_info *)rep->rep_out;
 
-		pti->max_priority = tl->l_priority;
-		pti->base_priority = tl->l_priority;
-		pti->cur_priority = tl->l_priority;
+		pti->max_priority = ttd->td_priority;
+		pti->base_priority = ttd->td_priority;
+		pti->cur_priority = ttd->td_priority;
 		pti->depressed = 0;
-		pti->depress_priority = tl->l_priority;
+		pti->depress_priority = ttd->td_priority;
 		break;
 	}
 
@@ -318,13 +318,12 @@ mach_thread_info(struct mach_trap_args *args)
 		uprintf("Unimplemented thread_info flavor %d\n",
 		    req->req_flavor);
 	default:
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 		break;
 	}
 
 	mach_set_trailer(rep, *msglen);
-
-	return 0;
+	return (0);
 }
 
 int
@@ -393,10 +392,11 @@ mach_thread_suspend(struct mach_trap_args *args)
 	struct proc *p = ttd->td_proc;
 	int error;
 
-	mtx_lock(p->p_lock);
-	lwp_lock(tl);
-	error = lwp_suspend(l, tl);
-	mtx_unlock(p->p_lock);
+	PROC_LOCK(p);
+	PROC_SLOCK(p);
+	error = thread_suspend_switch(ttd);
+	PROC_SUNLOCK(p);
+	PROC_UNLOCK(p);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -415,10 +415,11 @@ mach_thread_resume(struct mach_trap_args *args)
 	struct thread *ttd = args->ttd;
 	struct proc *p = ttd->td_proc;
 
-	mtx_lock(p->p_lock);
-	lwp_lock(tl);
-	lwp_continue(tl);
-	mtx_unlock(p->p_lock);
+	PROC_SLOCK(p);
+	thread_lock(ttd);
+	thread_unsuspend_one(ttd);
+	thread_unlock(ttd);
+	PROC_SUNLOCK(p);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);

@@ -181,19 +181,16 @@ mach_e_proc_exec(struct proc *p, struct exec_package *epp)
 	mach_e_proc_init(p);
 
 	if (p->p_emul != epp->ep_esch->es_emul) {
-		struct thread *l = LIST_FIRST(&p->p_lwps);
-		KASSERT(l != NULL);
+		struct thread *td = LIST_FIRST(&p->p_threads);
+		KASSERT(td != NULL, ("no threads in proc"));
 		mach_e_lwp_fork(NULL, l);
 	}
-
-	return;
 }
 
 void
 mach_e_proc_fork(struct proc *p2, struct thread *l1, int forkflags)
 {
 	mach_e_proc_fork1(p2, l1, 1);
-	return;
 }
 
 void
@@ -339,13 +336,13 @@ mach_e_proc_exit(struct proc *p)
 {
 	struct mach_emuldata *med;
 	struct mach_right *mr;
-	struct thread *l;
+	struct thread *td;
 	int i;
 
 	/* There is only one lwp remaining... */
-	l = LIST_FIRST(&p->p_lwps);
-	KASSERT(l != NULL);
-	mach_e_lwp_exit(l);
+	td = LIST_FIRST(&p->p_threads);
+	KASSERT(td != NULL, ("no threads in proc"));
+	mach_e_lwp_exit(td);
 
 	med = (struct mach_emuldata *)p->p_emuldata;
 
@@ -392,7 +389,7 @@ mach_e_proc_exit(struct proc *p)
 void
 mach_e_lwp_fork(struct thread *l1, struct thread *l2)
 {
-	struct mach_lwp_emuldata *mle;
+	struct mach_thread_emuldata *mle;
 
 	mle = malloc(sizeof(*mle), M_MACH, M_WAITOK);
 	l2->l_emuldata = mle;
@@ -415,7 +412,7 @@ mach_e_lwp_fork(struct thread *l1, struct thread *l2)
 void
 mach_e_lwp_exit(struct thread *l)
 {
-	struct mach_lwp_emuldata *mle;
+	struct mach_thread_emuldata *mle;
 
 	mach_semaphore_cleanup(l);
 

@@ -68,7 +68,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in.h>
 #include <sys/sysproto.h>
 
-#include <miscfs/specfs/specdev.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -77,21 +76,20 @@ __FBSDID("$FreeBSD$");
 
 
 int
-mach_sys_semaphore_timedwait_trap(struct thread *td, const struct mach_sys_semaphore_timedwait_trap_args *uap)
+sys_mach_semaphore_timedwait_trap(struct thread *td, struct mach_semaphore_timedwait_trap_args *uap)
 {
 
-	DPRINTF(("mach_sys_semaphore_timedwait_trap(0x%x, %d, %d);\n",
-	    uap->wait_name, uap->sec, uap->nsec));
+	DPRINTF(("%s(0x%x, %d, %d);\n",
+			 __FUNCTION__, uap->wait_name, uap->sec, uap->nsec));
 	return 0;
 }
 
 
 int
-mach_sys_semaphore_timedwait_signal_trap(struct thread *td, const struct mach_sys_semaphore_timedwait_signal_trap_args *uap)
+sys_mach_semaphore_timedwait_signal_trap(struct thread *td, struct mach_semaphore_timedwait_signal_trap_args *uap)
 {
 
-	DPRINTF((
-	    "mach_sys_semaphore_timedwait_signal_trap(0x%x, 0x%x, %d, %d);\n",
+	DPRINTF(("%s(0x%x, 0x%x, %d, %d);\n", __FUNCTION__,
 	    uap->wait_name, uap->signal_name, uap->sec,
 	    uap->nsec));
 	return 0;
@@ -99,47 +97,47 @@ mach_sys_semaphore_timedwait_signal_trap(struct thread *td, const struct mach_sy
 
 
 int
-mach_sys_init_process(struct thread *td, const void *v)
+sys_mach_init_process(struct thread *td, const void *v)
 {
-	DPRINTF(("mach_sys_init_process();\n"));
+	DPRINTF(("sys_mach_init_process();\n"));
 	return 0;
 }
 
 
 int
-mach_sys_pid_for_task(struct thread *td, const struct mach_sys_pid_for_task_args *uap)
+sys_mach_pid_for_task(struct thread *td, struct mach_pid_for_task_args *uap)
 {
 
-	DPRINTF(("mach_sys_pid_for_task(0x%x, %p);\n",
+	DPRINTF(("sys_mach_pid_for_task(0x%x, %p);\n",
 	    uap->t, uap->x));
 	return 0;
 }
 
 
 int
-mach_sys_macx_swapon(struct thread *td, const struct mach_sys_macx_swapon_args *uap)
+sys_mach_macx_swapon(struct thread *td, struct mach_macx_swapon_args *uap)
 {
 
-	DPRINTF(("mach_sys_macx_swapon(%p, %d, %d, %d);\n",
+	DPRINTF(("sys_mach_macx_swapon(%p, %d, %d, %d);\n",
 	    uap->name, uap->flags, uap->size,
 			 uap->priority));
 	return 0;
 }
 
 int
-mach_sys_macx_swapoff(struct thread *td, const struct mach_sys_macx_swapoff_args *uap)
+sys_mach_macx_swapoff(struct thread *td, struct mach_macx_swapoff_args *uap)
 {
 
-	DPRINTF(("mach_sys_macx_swapoff(%p, %d);\n",
+	DPRINTF(("sys_mach_macx_swapoff(%p, %d);\n",
 			 uap->name, uap->flags));
 	return 0;
 }
 
 int
-mach_sys_macx_triggers(struct thread *td, const struct mach_sys_macx_triggers_args *uap)
+sys_mach_macx_triggers(struct thread *td, struct mach_macx_triggers_args *uap)
 {
 
-	DPRINTF(("mach_sys_macx_triggers(%d, %d, %d, 0x%x);\n",
+	DPRINTF(("sys_mach_macx_triggers(%d, %d, %d, 0x%x);\n",
 	    uap->hi_water, uap->low_water, uap->flags,
 			 uap->alert_port));
 	return 0;
@@ -147,54 +145,54 @@ mach_sys_macx_triggers(struct thread *td, const struct mach_sys_macx_triggers_ar
 
 
 int
-mach_sys_wait_until(struct thread *td, const struct mach_sys_wait_until_args *uap)
+sys_mach_wait_until(struct thread *td, struct mach_wait_until_args *uap)
 {
 
-	DPRINTF(("mach_sys_wait_until(%lld);\n", uap->deadline));
+	DPRINTF(("sys_mach_wait_until(%lld);\n", uap->deadline));
 	return 0;
 }
 
 
 int
-mach_sys_timer_create(struct thread *td, const void *v)
+sys_mach_timer_create(struct thread *td, const void *v)
 {
-	DPRINTF(("mach_sys_timer_create();\n"));
+	DPRINTF(("sys_mach_timer_create();\n"));
 	return 0;
 }
 
 
 int
-mach_sys_timer_destroy(struct thread *td, const struct mach_sys_timer_destroy_args *uap)
+sys_mach_timer_destroy(struct thread *td, struct mach_timer_destroy_args *uap)
 {
 
-	DPRINTF(("mach_sys_timer_destroy(0x%x);\n", uap->name));
+	DPRINTF(("sys_mach_timer_destroy(0x%x);\n", uap->name));
 	return 0;
 }
 
 
 int
-mach_sys_timer_arm(struct thread *td, const struct mach_sys_timer_arm_args *uap)
+sys_mach_timer_arm(struct thread *td, struct mach_timer_arm_args *uap)
 {
 
-	DPRINTF(("mach_sys_timer_arm(0x%x, %d);\n",
+	DPRINTF(("sys_mach_timer_arm(0x%x, %d);\n",
 	    uap->name, uap->expire_time));
 	return 0;
 }
 
 
 int
-mach_sys_timer_cancel(struct thread *td, const struct mach_sys_timer_cancel_args *uap)
+sys_mach_timer_cancel(struct thread *td, struct mach_timer_cancel_args *uap)
 {
 
-	DPRINTF(("mach_sys_timer_cancel(0x%x, %p);\n",
+	DPRINTF(("sys_mach_timer_cancel(0x%x, %p);\n",
 	    uap->name, uap->result_time));
 	return 0;
 }
 
 
 int
-mach_sys_get_time_base_info(struct thread *td, const void *v)
+sys_mach_get_time_base_info(struct thread *td, const void *v)
 {
-	DPRINTF(("mach_sys_get_time_base_info();\n"));
+	DPRINTF(("sys_mach_get_time_base_info();\n"));
 	return 0;
 }

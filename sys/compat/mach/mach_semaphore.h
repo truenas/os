@@ -40,7 +40,7 @@ extern int mach_semaphore_cold;
 
 struct mach_waiting_thread {
 	TAILQ_ENTRY(mach_waiting_thread) mwtd_list;
-	struct thread *mwl_td;
+	struct thread *mwtd_td;
 };
 
 struct mach_semaphore {

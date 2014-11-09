@@ -44,10 +44,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/resourcevar.h>
 #include <sys/sysproto.h>
 
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
 #include <vm/vm_extern.h>
-#if 0
-#include <uvm/uvm_param.h>
-#endif
+
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_clock.h>
@@ -263,9 +265,9 @@ mach_task_threads(struct mach_trap_args *args)
 	struct thread *td = args->td;
 	struct thread *ttd = args->ttd;
 	struct proc *tp = ttd->td_proc;
-	struct lwp *cl;
+	struct thread *ctd;
 	struct mach_emuldata *med;
-	struct mach_lwp_emuldata *mle;
+	struct mach_thread_emuldata *mle;
 	int error;
 	void *uaddr;
 	size_t size;
@@ -274,12 +276,12 @@ mach_task_threads(struct mach_trap_args *args)
 	mach_port_name_t *mnp;
 
 	med = tp->p_emuldata;
-	size = tp->p_nlwps * sizeof(*mnp);
+	size = tp->p_nthreads * sizeof(*mnp);
 	mnp = malloc(size, M_TEMP, M_WAITOK);
 	uaddr = NULL;
 
-	LIST_FOREACH(cl, &tp->p_lwps, l_sibling) {
-		mle = cl->l_emuldata;
+	LIST_FOREACH(ctd, &tp->p_threads, td_plist) {
+		mle = ctd->td_emuldata;
 		mr = mach_right_get(mle->mle_kernel, td, MACH_PORT_TYPE_SEND, 0);
 		mnp[i++] = mr->mr_name;
 	}
@@ -291,9 +293,9 @@ mach_task_threads(struct mach_trap_args *args)
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
-	mach_add_ool_ports_desc(rep, uaddr, tp->p_nlwps);
+	mach_add_ool_ports_desc(rep, uaddr, tp->p_nthreads);
 
-	rep->rep_count = tp->p_nlwps;
+	rep->rep_count = tp->p_nthreads;
 
 	mach_set_trailer(rep, *msglen);
 
@@ -454,9 +456,9 @@ mach_task_info(struct mach_trap_args *args)
 
 		ru = tp->p_stats->p_ru;
 		mtbi = (struct mach_task_basic_info *)&rep->rep_info[0];
-		mtx_lock(tp->p_lock);
+		PROC_LOCK(tp);
 		rulwps(tp, &ru);
-		mtx_unlock(tp->p_lock);
+		PROC_LOCK(tp);
 
 		mtbi->mtbi_suspend_count = ru.ru_nvcsw + ru.ru_nivcsw;
 		mtbi->mtbi_virtual_size = ru.ru_ixrss;
@@ -503,9 +505,9 @@ mach_task_info(struct mach_trap_args *args)
 
 		mtei = (struct mach_task_events_info *)&rep->rep_info[0];
 		ru = tp->p_stats->p_ru;
-		mtx_lock(tp->p_lock);
+		PROC_LOCK(tp);
 		rulwps(tp, &ru);
-		mtx_unlock(tp->p_lock);
+		PROC_UNLOCK(tp);
 
 		mtei->mtei_faults = ru.ru_majflt;
 		mtei->mtei_pageins = ru.ru_minflt;
@@ -549,24 +551,22 @@ mach_task_suspend(struct mach_trap_args *args)
 	med = tp->p_emuldata;
 	med->med_suspend++; /* XXX Mach also has a per thread semaphore */
 
-	LIST_FOREACH(lp, &tp->p_lwps, l_sibling) {
-		switch(lp->l_stat) {
-		case LSONPROC:
-		case LSRUN:
-		case LSSLEEP:
-		case LSSUSPENDED:
-		case LSZOMB:
+	LIST_FOREACH(tdp, &tp->p_threads, td_plist) {
+		switch(tdp->td_state) {
+		case TDS_INACTIVE:
+		case TDS_INHIBITED:
+		case TDS_CAN_RUN:
+		case TDS_RUNQ:
+		case TDS_RUNNING:
 			break;
 		default:
 			return mach_msg_error(args, 0);
 			break;
 		}
 	}
-	mtx_lock(proc_lock);
-	mtx_lock(tp->p_lock);
-	proc_stop(tp, 0, SIGSTOP);
-	mtx_lock(tp->p_lock);
-	mtx_lock(proc_lock);
+	PROC_LOCK(tp);
+	kern_psignal(tp, SIGSTOP);
+	PROC_UNLOCK(tp);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -599,11 +599,9 @@ mach_task_resume(struct mach_trap_args *args)
 #ifdef DEBUG_MACH
 	printf("resuming pid %d\n", tp->p_pid);
 #endif
-	mtx_lock(proc_lock);
-	mtx_lock(tp->p_lock);
-	(void)proc_unstop(tp);
-	mtx_lock(tp->p_lock);
-	mtx_lock(proc_lock);
+	PROC_LOCK(tp);
+	(void)kern_psignal(tp, SIGCONT);
+	PROC_UNLOCK(tp);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -641,7 +639,7 @@ mach_task_terminate(struct mach_trap_args *args)
 }
 
 int
-mach_sys_task_for_pid(struct thread *td, struct mach_sys_task_for_pid_args *uap)
+sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 {
 	/* {
 		syscallarg(mach_port_t) target_tport;
@@ -664,19 +662,15 @@ mach_sys_task_for_pid(struct thread *td, struct mach_sys_task_for_pid_args *uap)
 	    td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
 		return EPERM;
 
-	mtx_lock(proc_lock);
-	if ((t = proc_find(uap->pid)) == NULL) {
-		mtx_unlock(proc_lock);
+	if ((t = pfind(uap->pid)) == NULL) {
 		return ESRCH;
 	}
-	mtx_lock(t->p_lock);
-	mtx_unlock(proc_lock);
 
 	/* Allowed only if the UID match, if setuid, or if superuser */
 	if ((kauth_cred_getuid(t->p_cred) != kauth_cred_getuid(l->l_cred) ||
 	    ISSET(t->p_flag, PK_SUGID)) && (error = kauth_authorize_generic(l->l_cred,
 	    KAUTH_GENERIC_ISSUSER, NULL)) != 0) {
-		mtx_unlock(t->p_lock);
+		PROC_UNLOCK(t);
 		return (error);
 	}
 
@@ -686,10 +680,10 @@ mach_sys_task_for_pid(struct thread *td, struct mach_sys_task_for_pid_args *uap)
 	    (t->p_emul != &emul_darwin) &&
 #endif
 	    1) {
-		mtx_unlock(t->p_lock);
+		PROC_UNLOCK(t);
 		return EINVAL;
 	}
-	mtx_unlock(t->p_lock);
+	PROC_UNLOCK(t);
 
 	/* XXX: Unlocked, broken. */
 	med = t->p_emuldata;
