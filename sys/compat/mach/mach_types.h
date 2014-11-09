@@ -77,6 +77,10 @@ typedef mach_natural_t mach_port_urefs_t;
 typedef int mach_port_delta_t;
 
 MALLOC_DECLARE(M_MACH);
+/* don't see these in the recent NetBSD tree */
+#define ktrmmsg(a, b)
+#define ktrmool(a, b, c)
+
 
 /*
  * This is called cproc_t in Mach (cthread_t in Darwin). It is a pointer to

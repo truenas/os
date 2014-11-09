@@ -38,6 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/signal.h>
+#include <sys/sysctl.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_exec.h>
@@ -46,12 +47,18 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_exception.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_services.h>
-#include <compat/mach/mach_sysctl.h>
 
 #include <machine/mach_machdep.h>
 static sigset_t              contsigmask;
 
+static int mach_exception_hang = 0;
 static void mach_siginfo_to_exception(const struct ksiginfo *, int *);
+SYSCTL_NODE(_debug, OID_AUTO, emul, CTLFLAG_RD, 0, "emulation debugging");
+SYSCTL_NODE(_debug_emul, OID_AUTO, mach, CTLFLAG_RD, 0, "mach emulation debugging");
+SYSCTL_NODE(_debug_emul_mach, OID_AUTO, exception, CTLFLAG_RD, 0, "mach exception emulation debugging");
+SYSCTL_INT(_debug_emul_mach_exception, OID_AUTO, hang, CTLFLAG_RW, &mach_exception_hang, 0,
+                   "Mach exceptions hang the process");
+
 
 /*
  * Exception handler

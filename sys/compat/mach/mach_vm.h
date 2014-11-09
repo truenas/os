@@ -39,6 +39,10 @@
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 
+int copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len);
+
+int copyout_proc(struct proc *p, const void *kaddr, void *uaddr, size_t len);
+	
 #define	MACH_ALTERNATE_LOAD_SITE	1
 #define MACH_NEW_LOCAL_SHARED_REGIONS	2
 #define MACH_QUERY_IS_SYSTEM_REGION	4

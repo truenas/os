@@ -50,20 +50,17 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
 
-#include <compat/mach/mach_types.h>
+#include <compat/mach/mach_clock.h>
+#include <compat/mach/mach_exec.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_port.h>
-#include <compat/mach/mach_exec.h>
-#include <compat/mach/mach_clock.h>
 #include <compat/mach/mach_proto.h>
+#include <compat/mach/mach_types.h>
+#include <compat/mach/mach_vm.h>
 
 #ifdef COMPAT_DARWIN
 #include <compat/darwin/darwin_exec.h>
 #endif
-
-/* don't see these in the recent NetBSD tree */
-#define ktrmmsg(a, b)
-#define ktrmool(a, b, c)
 
 /* Mach message zone */
 static uma_zone_t mach_message_zone;
@@ -105,11 +102,11 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 	/* XXX not safe enough: lots of big messages will kill us */
 	if (send_size > MACH_MAX_MSG_LEN) {
 		td->td_retval[0] = MACH_SEND_TOO_LARGE;
-		return 0;
+		return (0);
 	}
 	if (recv_size > MACH_MAX_MSG_LEN) {
 		td->td_retval[0] = MACH_RCV_TOO_LARGE;
-		return 0;
+		return (0);
 	}
 
 	/*
@@ -131,14 +128,14 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 			msg = uap->msg;
 		else {
 			td->td_retval[0] = MACH_RCV_INVALID_DATA;
-			return 0;
+			return (0);
 		}
 
 		td->td_retval[0] = mach_msg_recv(td, msg, opt, recv_size,
 		    uap->timeout, uap->rcv_name);
 	}
 
-	return 0;
+	return (0);
 }
 
 /*
@@ -163,7 +160,7 @@ mach_msg_send(struct thread *td, mach_msg_header_t *msg, int *option, size_t sen
 	int error = 0;
 
 	if (msg == NULL)
-		return MACH_SEND_INVALID_DATA;
+		return (MACH_SEND_INVALID_DATA);
 
 	/*
 	 * Allocate memory for the message and its reply,
@@ -319,7 +316,7 @@ skip_null_lr:
 		 */
 		if (lr == NULL) {
 			*option &= ~MACH_RCV_MSG;
-			return MACH_MSG_SUCCESS;
+			return (MACH_MSG_SUCCESS);
 		}
 
 #ifdef DIAGNOSTIC
@@ -354,7 +351,7 @@ skip_null_lr:
 out1:
 		free(sm, M_MACH);
 
-		return ret;
+		return (ret);
 	}
 
 	/*
@@ -368,7 +365,7 @@ out1:
 		printf("msg id %d: invalid dst\n", sm->msgh_id);
 #endif
 		free(sm, M_MACH);
-		return MACH_SEND_INVALID_DEST;
+		return (MACH_SEND_INVALID_DEST);
 	}
 
 	(void)mach_message_get(sm, send_size, mp, td);
@@ -395,7 +392,7 @@ out1:
 	 */
 	wakeup(mp->mp_recv->mr_sethead);
 
-	return MACH_MSG_SUCCESS;
+	return (MACH_MSG_SUCCESS);
 }
 
 /*
@@ -434,7 +431,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 		 */
 		mr = mach_right_check(mn, td, MACH_PORT_TYPE_PORT_SET);
 		if (mr == NULL)
-			return MACH_RCV_INVALID_NAME;
+			return (MACH_RCV_INVALID_NAME);
 
 		/*
 		 * This is a port set. For each port in the
@@ -444,7 +441,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 		LIST_FOREACH(cmr, &mr->mr_set, mr_setlist) {
 			if ((mach_right_check(cmr->mr_name, td,
 			    MACH_PORT_TYPE_RECEIVE)) == NULL)
-				return MACH_RCV_INVALID_NAME;
+				return (MACH_RCV_INVALID_NAME);
 
 			mp = cmr->mr_port;
 #ifdef DEBUG_MACH
@@ -469,7 +466,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 			error = tsleep(mr->mr_sethead, PZERO|PCATCH,
 			    "mach_msg", timeout);
 			if ((error == ERESTART) || (error == EINTR))
-				return MACH_RCV_INTERRUPTED;
+				return (MACH_RCV_INTERRUPTED);
 
 			/*
 			 * Check we did not loose the receive right
@@ -477,7 +474,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 			 */
 			if ((mach_right_check(mn, td,
 			     MACH_PORT_TYPE_PORT_SET)) == NULL)
-				return  MACH_RCV_PORT_DIED;
+				return (MACH_RCV_PORT_DIED);
 
 			/*
 			 * Is there any pending message for
@@ -490,7 +487,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 			}
 
 			if (cmr == NULL)
-				return MACH_RCV_TIMED_OUT;
+				return (MACH_RCV_TIMED_OUT);
 		}
 
 		/*
@@ -519,7 +516,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 			error = tsleep(mr->mr_sethead, PZERO|PCATCH,
 			    "mach_msg", timeout);
 			if ((error == ERESTART) || (error == EINTR))
-				return MACH_RCV_INTERRUPTED;
+				return (MACH_RCV_INTERRUPTED);
 
 			/*
 			 * Check we did not lose the receive right
@@ -527,10 +524,10 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 			 */
 			if ((mach_right_check(mn, td,
 			     MACH_PORT_TYPE_RECEIVE)) == NULL)
-				return MACH_RCV_PORT_DIED;
+				return (MACH_RCV_PORT_DIED);
 
 			if (mp->mp_count == 0)
-				return MACH_RCV_TIMED_OUT;
+				return (MACH_RCV_TIMED_OUT);
 		}
 	}
 
@@ -640,7 +637,7 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 unlock:
 	rw_runlock(&mp->mp_msglock);
 
-	return ret;
+	return (ret);
 }
 
 
@@ -668,7 +665,7 @@ sys_mach_msg_trap(struct thread *td, struct mach_msg_trap_args *uap)
 	cup.rcv_msg = NULL;
 	cup.scatter_list_size = 0;
 
-	return sys_mach_msg_overwrite_trap(td, &cup);
+	return (sys_mach_msg_overwrite_trap(td, &cup));
 }
 
 static inline  struct thread *
@@ -693,7 +690,7 @@ mach_get_target_task(struct thread *td, struct mach_port *mp)
 		break;
 	}
 
-	return ttd;
+	return (ttd);
 }
 
 static inline void
@@ -816,7 +813,7 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 #ifdef DEBUG_MACH
 		printf("msg id %d: invalid count\n", mm->mm_msg->msgh_id);
 #endif
-		return MACH_SEND_INVALID_DATA;
+		return (MACH_SEND_INVALID_DATA);
 	}
 
 	for (i = 0; i < count; i++) {
@@ -850,7 +847,7 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 			/* This allocates kmnp */
 			error = mach_ool_copyin(rtd, rumnp, &kaddr, size, 0);
 			if (error != 0)
-				return MACH_SEND_INVALID_DATA;
+				return (MACH_SEND_INVALID_DATA);
 
 			kmnp = (mach_port_t *)kaddr;
 			for (j = 0; j < mcount; j++)
@@ -859,7 +856,7 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 			/* This frees kmnp */
 			if ((error = mach_ool_copyout(td, kmnp, &lumnp,
 			    size, MACH_OOL_FREE|MACH_OOL_TRACE)) != 0)
-				return MACH_SEND_INVALID_DATA;
+				return (MACH_SEND_INVALID_DATA);
 
 			mcm->mcm_desc.ool_ports[i].address = lumnp;
 			break;
@@ -892,12 +889,12 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 			/* This allocates kdata */
 			error = mach_ool_copyin(rtd, rudata, &kdata, size, 0);
 			if (error != 0)
-				return MACH_SEND_INVALID_DATA;
+				return (MACH_SEND_INVALID_DATA);
 
 			/* This frees kdata */
 			if ((error = mach_ool_copyout(td, kdata, &ludata,
 			    size, MACH_OOL_FREE|MACH_OOL_TRACE)) != 0)
-				return MACH_SEND_INVALID_DATA;
+				return (MACH_SEND_INVALID_DATA);
 
 			mcm->mcm_desc.ool_ports[i].address = ludata;
 			break;
@@ -911,60 +908,8 @@ mach_trade_rights_complex(struct thread *td, struct mach_message *mm)
 		}
 	}
 
-	return MACH_MSG_SUCCESS;
+	return (MACH_MSG_SUCCESS);
 }
-
-/*
- * Like copyin(), but operates on an arbitrary process.
- */
-static int
-copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
-{
-	struct proc *mycp;
-	struct vmspace *myvm, *tmpvm;
-	struct thread *td = curthread;
-	int error;
-
-	/* XXX need to suspend other threads in curproc if we're in a user
-	 * context
-	 */
-
-	/*
-	 * Local copies of curproc (cp) and vmspace (myvm)
-	 */
-	mycp = td->td_proc;
-	myvm = mycp->p_vmspace;
-
-	/*
-	 * Connect to process address space for user program.
-	 */
-	if (p != mycp) {
-		/*
-		 * Save the current address space that we are
-		 * connected to.
-		 */
-		tmpvm = mycp->p_vmspace;
-
-		/*
-		 * Point to the new user address space, and
-		 * refer to it.
-		 */
-		mycp->p_vmspace = p->p_vmspace;
-		atomic_add_int(&mycp->p_vmspace->vm_refcnt, 1);
-
-		/* Activate the new mapping. */
-		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
-	}
-	error = copyin(uaddr, kaddr, len);
-	if (p != mycp) {
-		mycp->p_vmspace = myvm;
-		vmspace_free(tmpvm);
-		/* Activate the old mapping. */
-		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
-	}
-	return (error);
-}
-
 
 
 inline int
@@ -981,7 +926,7 @@ mach_ool_copyin(struct thread *td, const void *uaddr, void **kaddr, size_t size,
 	 */
 #if 0
 	if (size > MACH_MAX_OOL_LEN)
-		return ENOMEM;
+		return (ENOMEM);
 #endif
 
 	if (*kaddr == NULL)
@@ -992,7 +937,7 @@ mach_ool_copyin(struct thread *td, const void *uaddr, void **kaddr, size_t size,
 	if ((error = copyin_proc(p, uaddr, kbuf, size)) != 0) {
 		if (*kaddr == NULL)
 			free(kbuf, M_MACH);
-		return error;
+		return (error);
 	}
 
 	if (size > PAGE_SIZE)
@@ -1001,7 +946,7 @@ mach_ool_copyin(struct thread *td, const void *uaddr, void **kaddr, size_t size,
 		ktrmool(kaddr, size, uaddr);
 
 	*kaddr = kbuf;
-	return 0;
+	return (0);
 }
 
 inline int
@@ -1173,7 +1118,7 @@ mach_message_get(mach_msg_header_t *msgh, size_t size, struct mach_port *mp, str
 	mp->mp_count++;
 	rw_wunlock(&mp->mp_msglock);
 
-	return mm;
+	return (mm);
 }
 
 void

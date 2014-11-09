@@ -59,6 +59,59 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
+/*
+ * Like copyin(), but operates on an arbitrary process.
+ */
+
+int
+copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
+{
+	struct proc *mycp;
+	struct vmspace *myvm, *tmpvm;
+	struct thread *td = curthread;
+	int error;
+
+	/* XXX need to suspend other threads in curproc if we're in a user
+	 * context
+	 */
+
+	/*
+	 * Local copies of curproc (cp) and vmspace (myvm)
+	 */
+	mycp = td->td_proc;
+	myvm = mycp->p_vmspace;
+
+	/*
+	 * Connect to process address space for user program.
+	 */
+	if (p != mycp) {
+		/*
+		 * Save the current address space that we are
+		 * connected to.
+		 */
+		tmpvm = mycp->p_vmspace;
+
+		/*
+		 * Point to the new user address space, and
+		 * refer to it.
+		 */
+		mycp->p_vmspace = p->p_vmspace;
+		atomic_add_int(&mycp->p_vmspace->vm_refcnt, 1);
+
+		/* Activate the new mapping. */
+		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
+	}
+	error = copyin(uaddr, kaddr, len);
+	if (p != mycp) {
+		mycp->p_vmspace = myvm;
+		vmspace_free(tmpvm);
+		/* Activate the old mapping. */
+		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
+	}
+	return (error);
+}
+
+
 int
 mach_vm_map(struct mach_trap_args *args)
 {
@@ -84,7 +137,7 @@ mach_vm_map(struct mach_trap_args *args)
 
 	/* XXX Darwin fails on mapping a page at address 0 */
 	if (req->req_address == 0)
-		return mach_msg_error(args, ENOMEM);
+		return (mach_msg_error(args, ENOMEM));
 
 	req->req_size = round_page(req->req_size);
 
@@ -113,7 +166,7 @@ mach_vm_map(struct mach_trap_args *args)
 	vm_map_unlock(&tp->p_vmspace->vm_map);
 
 	if (ret == NULL)
-		return mach_msg_error(args, ENOMEM);
+		return (mach_msg_error(args, ENOMEM));
 
 	switch(req->req_inherance) {
 	case MACH_VM_INHERIT_SHARE:
@@ -138,14 +191,14 @@ mach_vm_map(struct mach_trap_args *args)
 	cup.pos = req->req_offset;
 
 	if ((error = sys_mmap(ttd, &cup)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	rep->rep_retval = ttd->td_retval[0];
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -177,7 +230,7 @@ mach_vm_allocate(struct mach_trap_args *args)
 		if (req->req_flags & MACH_VM_FLAGS_ANYWHERE)
 			addr = 0x1000;
 		else
-			return mach_msg_error(args, EINVAL);
+			return (mach_msg_error(args, EINVAL));
 #ifdef DEBUG_MACH_VM
 		printf("mach_vm_allocate: trying addr = %p\n", (void *)addr);
 #endif
@@ -206,7 +259,7 @@ mach_vm_allocate(struct mach_trap_args *args)
 	cup.pos = 0;
 
 	if ((error = sys_mmap(ttd, &cup)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 	rep->rep_address = ttd->td_retval[0];
 #ifdef DEBUG_MACH_VM
 	printf("vm_allocate: success at %p\n", (void *)rep->rep_address);
@@ -220,7 +273,7 @@ out:
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -242,14 +295,14 @@ mach_vm_deallocate(struct mach_trap_args *args)
 	cup.len = req->req_size;
 
 	if ((error = sys_munmap(ttd, &cup)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	rep->rep_retval = ttd->td_retval[0];
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 /*
@@ -274,7 +327,7 @@ mach_vm_wire(struct mach_trap_args *args)
 	memset(&rep, 0, sizeof(*rep));
 
 	if ((req->req_access & ~VM_PROT_ALL) != 0)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	/*
 	 * Mach maintains a count of how many times a page is wired
@@ -294,18 +347,18 @@ mach_vm_wire(struct mach_trap_args *args)
 		error = sys_mlock(ttd, &cup);
 	}
 	if (error != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	if ((error = vm_map_protect(&ttd->td_proc->p_vmspace->vm_map,
 	    req->req_address, req->req_address + req->req_size,
 	    req->req_access, 0)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 #endif
 
@@ -324,13 +377,13 @@ mach_vm_protect(struct mach_trap_args *args)
 	cup.prot = req->req_prot;
 
 	if ((error = sys_mprotect(ttd, &cup)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -343,7 +396,7 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 		syscallarg(mach_boolean_t) findspace;
 		syscallarg(mach_vm_size_t) size;
 	} */
-	file_t *fp;
+	struct file *fp;
 	struct vnode *vp;
 	struct exec_vmcmd evc;
 	struct vm_map_entry *ret;
@@ -353,7 +406,7 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 	int error;
 
 	if ((error = copyin(uap->va, (void *)&va, sizeof(va))) != 0)
-		return error;
+		return (error);
 
 	if (uap->findspace == 0) {
 		/* Make some free space XXX probably not The Right Way */
@@ -362,9 +415,9 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 		(void)sys_munmap(td, &cup);
 	}
 
-	fp = fd_getfile(uap->fd);
-	if (fp == NULL)
-		return EBADF;
+	error = fget(td, uap->fd, NULL, &fp);
+	if (error)
+		return (error);
 
 	vp = fp->f_data;
 	vref(vp);
@@ -422,7 +475,7 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 	}
 
 	vput(vp);
-	fd_putfile(uap->fd);
+	fdrop(fp, td);
 #ifdef DEBUG_MACH_VM
 	printf("mach_map_fd: mapping at %p\n", (void *)evc.ev_addr);
 #endif
@@ -430,20 +483,20 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 	va = (mach_vm_offset_t *)evc.ev_addr;
 
 	if ((error = copyout((void *)&va, uap->va, sizeof(va))) != 0)
-		return error;
+		return (error);
 
-	return 0;
+	return (0);
 
 bad1:
 	VOP_UNLOCK(vp, 0);
 bad2:
 	vrele(vp);
-	fd_putfile(uap->fd);
+	fdrop(fp, td);
 #ifdef DEBUG_MACH_VM
 	printf("mach_map_fd: mapping at %p failed, error = %d\n",
 	    (void *)evc.ev_addr, error);
 #endif
-	return error;
+	return (error);
 }
 
 int
@@ -462,13 +515,13 @@ mach_vm_inherit(struct mach_trap_args *args)
 	cup.inherit = req->req_inh;
 
 	if ((error = sys_minherit(ttd, &cup)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -505,7 +558,7 @@ mach_make_memory_entry_64(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -522,16 +575,16 @@ mach_vm_region(struct mach_trap_args *args)
 
 	/* Sanity check req_count */
 	if (req->req_count > 9)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	/*
 	 * MACH_VM_REGION_BASIC_INFO is the only
 	 * supported flavor in Darwin.
 	 */
 	if (req->req_flavor != MACH_VM_REGION_BASIC_INFO)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	if (req->req_count != (sizeof(*rbi) / sizeof(int))) /* This is 8 */
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	*msglen = sizeof(*rep) + ((req->req_count - 9) * sizeof(int));
 
 	map = &ttd->td_proc->p_vmspace->vm_map;
@@ -541,7 +594,7 @@ mach_vm_region(struct mach_trap_args *args)
 	vm_map_unlock(map);
 
 	if (error == 0)
-		return mach_msg_error(args, ENOMEM);
+		return (mach_msg_error(args, ENOMEM));
 
 	mach_set_header(rep, req, *msglen);
 	mach_add_port_desc(rep, 0); /* XXX Why this null name */
@@ -563,7 +616,7 @@ mach_vm_region(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -580,26 +633,26 @@ mach_vm_region_64(struct mach_trap_args *args)
 
 	/* Sanity check req_count */
 	if (req->req_count > 10)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	/*
 	 * MACH_VM_REGION_BASIC_INFO is the only
 	 * supported flavor in Darwin.
 	 */
 	if (req->req_flavor != MACH_VM_REGION_BASIC_INFO)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	if (req->req_count != (sizeof(*rbi) / sizeof(int))) /* This is 8 */
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	*msglen = sizeof(*rep) + ((req->req_count - 9) * sizeof(int));
 
-	map = &td->td_proc->p_vmspace->vm_map;
+	map = &ttd->td_proc->p_vmspace->vm_map;
 
 	vm_map_lock(map);
 	error = vm_map_lookup_entry(map, req->req_addr, &vme);
 	vm_map_unlock(map);
 
 	if (error == 0)
-		return mach_msg_error(args, ENOMEM);
+		return (mach_msg_error(args, ENOMEM));
 
 	mach_set_header(rep, req, *msglen);
 	mach_add_port_desc(rep, 0);	/* XXX null port ? */
@@ -620,7 +673,7 @@ mach_vm_region_64(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -652,7 +705,7 @@ mach_vm_msync(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 /* XXX Do it for remote task */
@@ -674,7 +727,7 @@ mach_vm_copy(struct mach_trap_args *args)
 	if ((req->req_src & (PAGE_SIZE - 1)) ||
 	    (req->req_addr & (PAGE_SIZE - 1)) ||
 	    (req->req_size & (PAGE_SIZE - 1)))
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	src = (void *)req->req_src;
 	dst = (void *)req->req_addr;
@@ -703,11 +756,11 @@ mach_vm_copy(struct mach_trap_args *args)
 	mach_set_trailer(rep, *msglen);
 
 	free(tmpbuf, M_TEMP);
-	return 0;
+	return (0);
 
 out:
 	free(tmpbuf, M_TEMP);
-	return mach_msg_error(args, error);
+	return (mach_msg_error(args, error));
 }
 
 int
@@ -731,7 +784,7 @@ mach_vm_read(struct mach_trap_args *args)
 	    UVM_MAPFLAG(UVM_PROT_RW, UVM_PROT_ALL,
 	    UVM_INH_COPY, UVM_ADV_NORMAL, UVM_FLAG_COPYONW))) != 0) {
 		printf("uvm_map error = %d\n", error);
-		return mach_msg_error(args, EFAULT);
+		return (mach_msg_error(args, EFAULT));
 	}
 
 	/*
@@ -745,13 +798,13 @@ mach_vm_read(struct mach_trap_args *args)
 	if ((error = copyin_proc(td->td_proc, addr, tbuf, size)) != 0) {
 		printf("copyin_proc error = %d, addr = %p, size = %zx\n", error, addr, size);
 		free(tbuf, M_MACH);
-		return mach_msg_error(args, EFAULT);
+		return (mach_msg_error(args, EFAULT));
 	}
 
 	if ((error = copyout(tbuf, (void *)va, size)) != 0) {
 		printf("copyout error = %d\n", error);
 		free(tbuf, M_MACH);
-		return mach_msg_error(args, EFAULT);
+		return (mach_msg_error(args, EFAULT));
 	}
 
 	if (error == 0)
@@ -764,10 +817,8 @@ mach_vm_read(struct mach_trap_args *args)
 	mach_add_ool_desc(rep, (void *)va, size);
 
 	rep->rep_count = size;
-
 	mach_set_trailer(rep, *msglen);
-
-	return 0;
+	return (0);
 }
 
 int
@@ -798,14 +849,14 @@ mach_vm_write(struct mach_trap_args *args)
 	if ((error = copyin(req->req_data.address, tbuf, size)) != 0) {
 		printf("copyin error = %d\n", error);
 		free(tbuf, M_MACH);
-		return mach_msg_error(args, EFAULT);
+		return (mach_msg_error(args, EFAULT));
 	}
 
 	addr = (void *)req->req_addr;
-	if ((error = copyout_proc(td->td_proc, tbuf, addr, size)) != 0) {
+	if ((error = copyout_proc(ttd->td_proc, tbuf, addr, size)) != 0) {
 		printf("copyout_proc error = %d\n", error);
 		free(tbuf, M_MACH);
-		return mach_msg_error(args, EFAULT);
+		return (mach_msg_error(args, EFAULT));
 	}
 
 	if (error == 0)
@@ -820,7 +871,7 @@ mach_vm_write(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -874,5 +925,5 @@ mach_vm_machine_attribute(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }

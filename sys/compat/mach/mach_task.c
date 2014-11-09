@@ -103,7 +103,7 @@ mach_task_get_special_port(struct mach_trap_args *args)
 	default:
 		uprintf("mach_task_get_special_port(): unimpl. port %d\n",
 		    req->req_which_port);
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 		break;
 	}
 
@@ -112,7 +112,7 @@ mach_task_get_special_port(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -155,7 +155,7 @@ mach_ports_lookup(struct mach_trap_args *args)
 	uaddr = NULL;
 	if ((error = mach_ool_copyout(td, &mnp[0],
 	    &uaddr, sizeof(mnp), MACH_OOL_TRACE)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	count = 3; /* XXX Shouldn't this be 7? */
 
@@ -167,7 +167,7 @@ mach_ports_lookup(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -187,14 +187,14 @@ mach_task_set_special_port(struct mach_trap_args *args)
 
 	/* Null port ? */
 	if (mn == 0)
-		return mach_msg_error(args, 0);
+		return (mach_msg_error(args, 0));
 
 	/* Does the inserted port exists? */
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_ALL_RIGHTS)) == 0)
-		return mach_msg_error(args, EPERM);
+		return (mach_msg_error(args, EPERM));
 
 	if (mr->mr_type == MACH_PORT_TYPE_DEAD_NAME)
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 
 	med = (struct mach_emuldata *)ttd->td_proc->p_emuldata;
 
@@ -255,7 +255,7 @@ mach_task_set_special_port(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -291,7 +291,7 @@ mach_task_threads(struct mach_trap_args *args)
 	/* This will free mnp */
 	if ((error = mach_ool_copyout(td, mnp, &uaddr,
 	    size, MACH_OOL_TRACE|MACH_OOL_FREE)) != 0)
-		return mach_msg_error(args, error);
+		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -301,7 +301,7 @@ mach_task_threads(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -353,7 +353,7 @@ mach_task_get_exception_ports(struct mach_trap_args *args)
 	*msglen = sizeof(*rep);
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 static void
@@ -363,8 +363,6 @@ update_exception_port(struct mach_emuldata *med, int exc, struct mach_port *mp)
 		MACH_PORT_UNREF(med->med_exc[exc]);
 	med->med_exc[exc] = mp;
 	MACH_PORT_REF(mp);
-
-	return;
 }
 
 int
@@ -383,7 +381,7 @@ mach_task_set_exception_ports(struct mach_trap_args *args)
 
 	mn = req->req_new_port.name;
 	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_SEND)) == 0)
-		return mach_msg_error(args, EPERM);
+		return (mach_msg_error(args, EPERM));
 
 	mp = mr->mr_port;
 #ifdef DIAGNOSTIC
@@ -434,7 +432,7 @@ mach_task_set_exception_ports(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -454,7 +452,7 @@ mach_task_info(struct mach_trap_args *args)
 
 		count = sizeof(*mtbi) / sizeof(rep->rep_info[0]);
 		if (req->req_count < count)
-			return mach_msg_error(args, ENOBUFS);
+			return (mach_msg_error(args, ENOBUFS));
 
 		ru = tp->p_stats->p_cru;
 		mtbi = (struct mach_task_basic_info *)&rep->rep_info[0];
@@ -482,7 +480,7 @@ mach_task_info(struct mach_trap_args *args)
 
 		count = sizeof(*mttti) / sizeof(rep->rep_info[0]);
 		if (req->req_count < count)
-			return mach_msg_error(args, ENOBUFS);
+			return (mach_msg_error(args, ENOBUFS));
 
 		ru = tp->p_stats->p_cru;
 		mttti = (struct mach_task_thread_times_info *)&rep->rep_info[0];
@@ -503,7 +501,7 @@ mach_task_info(struct mach_trap_args *args)
 
 		count = sizeof(*mtei) / sizeof(rep->rep_info[0]);
 		if (req->req_count < count)
-			return mach_msg_error(args, ENOBUFS);
+			return (mach_msg_error(args, ENOBUFS));
 
 		mtei = (struct mach_task_events_info *)&rep->rep_info[0];
 		ru = tp->p_stats->p_cru;
@@ -527,7 +525,7 @@ mach_task_info(struct mach_trap_args *args)
 	default:
 		uprintf("mach_task_info: unsupported flavor %d\n",
 		    req->req_flavor);
-		return mach_msg_error(args, EINVAL);
+		return (mach_msg_error(args, EINVAL));
 	};
 
 	mach_set_header(rep, req, *msglen);
@@ -536,7 +534,7 @@ mach_task_info(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -562,7 +560,7 @@ mach_task_suspend(struct mach_trap_args *args)
 		case TDS_RUNNING:
 			break;
 		default:
-			return mach_msg_error(args, 0);
+			return (mach_msg_error(args, 0));
 			break;
 		}
 	}
@@ -577,7 +575,7 @@ mach_task_suspend(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -594,7 +592,7 @@ mach_task_resume(struct mach_trap_args *args)
 	med->med_suspend--; /* XXX Mach also has a per thread semaphore */
 #if 0
 	if (med->med_suspend > 0)
-		return mach_msg_error(args, 0); /* XXX error code */
+		return (mach_msg_error(args, 0)); /* XXX error code */
 #endif
 
 	/* XXX We should also wake up the stopped thread... */
@@ -612,7 +610,7 @@ mach_task_resume(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -634,7 +632,7 @@ mach_task_terminate(struct mach_trap_args *args)
 
 	mach_set_trailer(rep, *msglen);
 
-	return 0;
+	return (0);
 }
 
 int
@@ -659,10 +657,10 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 	 */
 	if ((mr = mach_right_check(uap->target_tport,
 	    td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
-		return EPERM;
+		return (EPERM);
 
 	if ((t = pfind(uap->pid)) == NULL) {
-		return ESRCH;
+		return (ESRCH);
 	}
 
 	/* Allowed only if the UID match, if setuid, or if superuser */
@@ -680,7 +678,7 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 #endif
 	    1) {
 		PROC_UNLOCK(t);
-		return EINVAL;
+		return (EINVAL);
 	}
 	PROC_UNLOCK(t);
 
@@ -694,6 +692,6 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 		error = EINVAL;
 	}
 
-	return error;
+	return (error);
 }
 

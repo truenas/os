@@ -63,53 +63,6 @@ extern char sigcode[], esigcode[];
 struct uvm_object *emul_mach_object;
 #endif
 
-struct emul emul_mach = {
-	.e_name =		"mach",
-	.e_path =		"/emul/mach",
-#ifndef __HAVE_MINIMAL_EMUL
-	.e_flags =		0,
-	.e_errno =		NULL,
-	.e_nosys =		SYS_syscall,
-	.e_nsysent =		SYS_NSYSENT,
-#endif
-	.e_sysent =		sysent,
-#ifdef SYSCALL_DEBUG
-	.e_syscallnames =	mach_syscallnames,
-#else
-	.e_syscallnames =	NULL,
-#endif
-	.e_sendsig =		sendsig,
-	.e_trapsignal =		mach_trapsignal,
-	.e_tracesig =		NULL,
-#ifdef COMPAT_16
-	.e_sigcode =		sigcode,
-	.e_esigcode =		esigcode,
-	.e_sigobject =		&emul_mach_object,
-#else
-	.e_sigcode =		NULL,
-	.e_esigcode =		NULL,
-	.e_sigobject =		NULL,
-#endif
-	.e_setregs =		setregs,
-	.e_proc_exec =		mach_e_proc_exec,
-	.e_proc_fork =		mach_e_proc_fork,
-	.e_proc_exit =		mach_e_proc_exit,
-	.e_lwp_fork =		mach_e_lwp_fork,
-	.e_lwp_exit =		mach_e_lwp_exit,
-#ifdef __HAVE_SYSCALL_INTERN
-	.e_syscall_intern =	mach_syscall_intern,
-#else
-	.e_syscall_intern =	syscall,
-#endif
-	.e_sysctlovly =		NULL,
-	.e_fault =		NULL,
-	.e_vm_default_addr =	uvm_default_mapaddr,
-	.e_usertrap =		NULL,
-	.e_sa =			NULL,
-	.e_ucsize =		0,
-	.e_startlwp =		NULL
-};
-
 /*
  * Copy arguments onto the stack in the normal way, but add some
  * extra information in case of dynamic binding.
@@ -117,7 +70,7 @@ struct emul emul_mach = {
  * emulation, and it probably contains Darwin specific bits.
  */
 int
-exec_mach_copyargs(struct thread *l, struct exec_package *pack, struct ps_strings *arginfo, char **stackp, void *argp)
+exec_mach_copyargs(struct thread *td, struct exec_package *pack, struct ps_strings *arginfo, char **stackp, void *argp)
 {
 	struct exec_macho_emul_arg *emea;
 	struct exec_macho_object_header *macho_hdr;
@@ -134,7 +87,7 @@ exec_mach_copyargs(struct thread *l, struct exec_package *pack, struct ps_string
 
 	*stackp += sizeof(macho_hdr);
 
-	if ((error = copyargs(l, pack, arginfo, stackp, argp)) != 0) {
+	if ((error = copyargs(td, pack, arginfo, stackp, argp)) != 0) {
 		DPRINTF(("mach: copyargs failed\n"));
 		return error;
 	}
@@ -183,18 +136,18 @@ mach_e_proc_exec(struct proc *p, struct exec_package *epp)
 	if (p->p_emul != epp->ep_esch->es_emul) {
 		struct thread *td = TAILQ_FIRST(&p->p_threads);
 		KASSERT(td != NULL, ("no threads in proc"));
-		mach_e_lwp_fork(NULL, l);
+		mach_e_lwp_fork(NULL, td);
 	}
 }
 
 void
-mach_e_proc_fork(struct proc *p2, struct thread *l1, int forkflags)
+mach_e_proc_fork(struct proc *p2, struct thread *td1, int forkflags)
 {
-	mach_e_proc_fork1(p2, l1, 1);
+	mach_e_proc_fork1(p2, td1, 1);
 }
 
 void
-mach_e_proc_fork1(struct proc *p2, struct thread *l1, int allocate)
+mach_e_proc_fork1(struct proc *p2, struct thread *td1, int allocate)
 {
 	struct mach_emuldata *med1;
 	struct mach_emuldata *med2;
@@ -227,8 +180,6 @@ mach_e_proc_fork1(struct proc *p2, struct thread *l1, int allocate)
 		if (med1->med_exc[i] !=  NULL)
 			med1->med_exc[i]->mp_refcount *= 2;
 	}
-
-	return;
 }
 
 void
@@ -385,47 +336,47 @@ mach_e_proc_exit(struct proc *p)
 }
 
 void
-mach_e_lwp_fork(struct thread *l1, struct thread *l2)
+mach_e_lwp_fork(struct thread *td1, struct thread *td2)
 {
 	struct mach_thread_emuldata *mle;
 
 	mle = malloc(sizeof(*mle), M_MACH, M_WAITOK);
-	l2->l_emuldata = mle;
+	td2->td_emuldata = mle;
 
 	mle->mle_kernel = mach_port_get();
 	MACH_PORT_REF(mle->mle_kernel);
 
 	mle->mle_kernel->mp_flags |= MACH_MP_INKERNEL;
 	mle->mle_kernel->mp_datatype = MACH_MP_LWP;
-	mle->mle_kernel->mp_data = (void *)l2;
+	mle->mle_kernel->mp_data = (void *)td2;
 
 #if 0
 	/* Nothing to copy from parent thread for now */
-	if (l1 != NULL);
+	if (td1 != NULL);
 #endif
 }
 
 void
-mach_e_lwp_exit(struct thread *l)
+mach_e_lwp_exit(struct thread *td)
 {
 	struct mach_thread_emuldata *mle;
 
-	mach_semaphore_cleanup(l);
+	mach_semaphore_cleanup(td);
 
 #ifdef DIAGNOSTIC
-	if (l->l_emuldata == NULL) {
+	if (td->td_emuldata == NULL) {
 		printf("lwp_emuldata already freed\n");
 		return;
 	}
 #endif
-	mle = l->l_emuldata;
+	mle = td->td_emuldata;
 
 	mle->mle_kernel->mp_data = NULL;
 	mle->mle_kernel->mp_datatype = MACH_MP_NONE;
 	MACH_PORT_UNREF(mle->mle_kernel);
 
 	free(mle, M_MACH);
-	l->l_emuldata = NULL;
+	td->td_emuldata = NULL;
 }
 
 static void
