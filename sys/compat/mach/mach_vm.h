@@ -109,7 +109,7 @@ typedef struct {
 	mach_boolean_t req_copy;
 	mach_vm_prot_t req_cur_protection;
 	mach_vm_prot_t req_max_protection;
-	mach_vm_inherit_t req_inherance;
+	mach_vm_inherit_t req_inheritance;
 } mach_vm_map_request_t;
 
 typedef struct {
@@ -390,6 +390,6 @@ struct mach_memory_entry {
 };
 
 /* These are machine dependent functions */
-int mach_vm_machine_attribute_machdep(struct thread *, vm_offset_t, size_t, int *);
+int cpu_mach_vm_machine_attribute(struct thread *, vm_offset_t, size_t, int *);
 
 #endif /* _MACH_VM_H_ */

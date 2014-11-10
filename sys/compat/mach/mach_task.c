@@ -666,9 +666,9 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 
 	/* Allowed only if the UID match, if setuid, or if superuser */
 	if ((t->p_ucred->cr_ruid != td->td_ucred->cr_ruid ||
-		 !priv_check_cred(t->p_ucred, PRIV_CRED_SETUID)) != 0) {
+		 !priv_check(td, PRIV_CRED_SETUID)) != 0) {
 		PROC_UNLOCK(t);
-		return (error);
+		return (EPERM);
 	}
 	PROC_UNLOCK(t);
 

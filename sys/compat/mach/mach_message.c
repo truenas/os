@@ -954,6 +954,8 @@ mach_ool_copyout(struct thread *td, const void *kaddr, void **uaddr, size_t size
 {
 	vm_offset_t ubuf;
 	int error = 0;
+	vm_map_t map;
+	vm_prot_t prot;
 	struct proc *p = td->td_proc;
 
 	/*
@@ -967,22 +969,22 @@ mach_ool_copyout(struct thread *td, const void *kaddr, void **uaddr, size_t size
 		goto out;
 	}
 #endif
-
-	if (*uaddr == NULL)
-		ubuf = (vm_offset_t)vm_map_min(&p->p_vmspace->vm_map);
-	else
-		ubuf = (vm_offset_t)*uaddr;
-
-	/* Never map anything at address zero: this is a red zone */
-	if (ubuf == (vm_offset_t)NULL)
-		ubuf += PAGE_SIZE;
-
-	if ((error = uvm_map(&p->p_vmspace->vm_map, &ubuf,
-	    round_page(size), NULL, UVM_UNKNOWN_OFFSET, 0,
-	    UVM_MAPFLAG(UVM_PROT_RW, UVM_PROT_ALL,
-	    UVM_INH_COPY, UVM_ADV_NORMAL, UVM_FLAG_COPYONW))) != 0)
+	map = &p->p_vmspace->vm_map;
+	prot = VM_PROT_READ|VM_PROT_WRITE;
+	vm_map_lock(map);
+	if ((*uaddr == NULL || (vm_offset_t)*uaddr < PAGE_SIZE) &&
+		vm_map_findspace(map, 0, round_page(size), &ubuf)) {
+		vm_map_unlock(map);
+		error = ENOMEM;
 		goto out;
-
+	} else
+		ubuf = (vm_offset_t)*uaddr;
+	if (vm_map_insert(map, NULL, 0, ubuf, ubuf + size, prot, VM_PROT_ALL, 1)) {
+		vm_map_unlock(map);
+		error = EFAULT;
+		goto out;
+	}
+	vm_map_unlock(map);
 	if ((error = copyout_proc(p, kaddr, (void *)ubuf, size)) != 0)
 		goto out;
 

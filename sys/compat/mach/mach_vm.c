@@ -37,12 +37,14 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/mman.h>
 #include <sys/malloc.h>
-#include <sys/vnode.h>
 #include <sys/file.h>
 #include <sys/filedesc.h>
-#include <sys/ktrace.h>
 #include <sys/exec.h>
 #include <sys/sysproto.h>
+#include <sys/uio.h>
+#include <sys/vnode.h>
+
+#include <sys/ktrace.h>
 
 #include <vm/vm.h>
 #include <vm/vm_param.h>
@@ -111,6 +113,56 @@ copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
 	return (error);
 }
 
+/*
+ * Like copyout(), but operates on an arbitrary process.
+ */
+int
+copyout_proc(struct proc *p, const void *kaddr, void *uaddr, size_t len)
+{
+	struct proc *mycp;
+	struct vmspace *myvm, *tmpvm;
+	struct thread *td = curthread;
+	int error;
+
+	/* XXX need to suspend other threads in curproc if we're in a user
+	 * context
+	 */
+
+	/*
+	 * Local copies of curproc (cp) and vmspace (myvm)
+	 */
+	mycp = td->td_proc;
+	myvm = mycp->p_vmspace;
+
+	/*
+	 * Connect to process address space for user program.
+	 */
+	if (p != mycp) {
+		/*
+		 * Save the current address space that we are
+		 * connected to.
+		 */
+		tmpvm = mycp->p_vmspace;
+
+		/*
+		 * Point to the new user address space, and
+		 * refer to it.
+		 */
+		mycp->p_vmspace = p->p_vmspace;
+		atomic_add_int(&mycp->p_vmspace->vm_refcnt, 1);
+
+		/* Activate the new mapping. */
+		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
+	}
+	error = copyout(kaddr, uaddr, len);
+	if (p != mycp) {
+		mycp->p_vmspace = myvm;
+		vmspace_free(tmpvm);
+		/* Activate the old mapping. */
+		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
+	}
+	return (error);
+}
 
 int
 mach_vm_map(struct mach_trap_args *args)
@@ -120,10 +172,11 @@ mach_vm_map(struct mach_trap_args *args)
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
 	struct proc *tp = ttd->td_proc;
-	struct mmap_args cup;
+	vm_prot_t prot, protmax;
 	vm_offset_t addr;
-	int error, flags;
-	void *ret;
+	int flags, docow = 0;
+	size_t size;
+	vm_map_t map = &tp->p_vmspace->vm_map;
 
 #ifdef DEBUG_MACH_VM
 	printf("mach_vm_map(addr = %p, size = 0x%08lx, obj = 0x%x, "
@@ -132,7 +185,7 @@ mach_vm_map(struct mach_trap_args *args)
 	    (void *)req->req_address, (long)req->req_size, req->req_object.name,
 	    (long)req->req_mask, req->req_flags, (off_t)req->req_offset,
 	    req->req_copy, req->req_cur_protection, req->req_max_protection,
-	    req->req_inherance);
+	    req->req_inheritance);
 #endif
 
 	/* XXX Darwin fails on mapping a page at address 0 */
@@ -148,52 +201,48 @@ mach_vm_map(struct mach_trap_args *args)
 		req->req_mask += 1;
 
 	if (req->req_flags & MACH_VM_FLAGS_ANYWHERE) {
-		cup.flags = MAP_ANON;
-		flags = 0;
+		flags = MAP_ANON;
 	} else {
-		cup.flags = MAP_ANON | MAP_FIXED;
-		flags = MAP_FIXED;
+		flags = MAP_ANON | MAP_FIXED;
 	}
 
-	/*
-	 * Use uvm_map_findspace to find a place which conforms to the
-	 * requested alignement.
-	 */
-	vm_map_lock(&tp->p_vmspace->vm_map);
-	ret = vm_map_findspace(&tp->p_vmspace->vm_map,
-	    trunc_page(req->req_address), req->req_size, &addr,
-	    NULL, 0, req->req_mask, flags);
-	vm_map_unlock(&tp->p_vmspace->vm_map);
-
-	if (ret == NULL)
+	prot = req->req_cur_protection;
+	protmax = req->req_max_protection;
+	size = round_page(req->req_size);
+#if 0
+	/* only doing anonymous mappings for now */
+	cup.pos = req->req_offset;
+#endif
+	vm_map_lock(map);
+	if (vm_map_findspace(map,
+						 trunc_page(req->req_address),
+						 size, &addr)) {
+		vm_map_unlock(map);
 		return (mach_msg_error(args, ENOMEM));
-
-	switch(req->req_inherance) {
+	}
+	switch(req->req_inheritance) {
 	case MACH_VM_INHERIT_SHARE:
-		cup.flags |= MAP_INHERIT_SHARE;
+		flags |= MAP_INHERIT_SHARE;
 		break;
 	case MACH_VM_INHERIT_COPY:
-		cup.flags |= MAP_COPY_ON_WRITE;
+		flags |= MAP_COPY_ON_WRITE;
+		docow = 1;
 		break;
 	case MACH_VM_INHERIT_NONE:
 		break;
 	case MACH_VM_INHERIT_DONATE_COPY:
 	default:
 		uprintf("mach_vm_map: unsupported inheritance flag %d\n",
-		    req->req_inherance);
+		    req->req_inheritance);
 		break;
 	}
 
-	cup.addr = (void *)addr;
-	cup.len = req->req_size;
-	cup.prot = req->req_cur_protection;
-	cup.fd = -1;		/* XXX For now, no object mapping */
-	cup.pos = req->req_offset;
+	if (vm_map_insert(map, NULL, 0, addr, addr + size, prot, protmax, docow)) {
+		vm_map_unlock(map);
+		return (EFAULT);
+	}
 
-	if ((error = sys_mmap(ttd, &cup)) != 0)
-		return (mach_msg_error(args, error));
-
-	rep->rep_retval = ttd->td_retval[0];
+	rep->rep_retval = addr;
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
@@ -396,107 +445,37 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 		syscallarg(mach_boolean_t) findspace;
 		syscallarg(mach_vm_size_t) size;
 	} */
-	struct file *fp;
-	struct vnode *vp;
-	struct exec_vmcmd evc;
-	struct vm_map_entry *ret;
-	struct proc *p = td->td_proc;
+
 	struct munmap_args cup;
+	struct mmap_args mmap_cup;
 	void *va;
 	int error;
+
 
 	if ((error = copyin(uap->va, (void *)&va, sizeof(va))) != 0)
 		return (error);
 
+	mmap_cup.addr = va;
+	mmap_cup.len = uap->size;
+	mmap_cup.prot = VM_PROT_ALL;
+	mmap_cup.flags = MAP_SHARED;
+	mmap_cup.fd = uap->fd;
+	mmap_cup.pos = uap->offset;
 	if (uap->findspace == 0) {
 		/* Make some free space XXX probably not The Right Way */
 		cup.addr = va;
 		cup.len = uap->size;
 		(void)sys_munmap(td, &cup);
+		mmap_cup.flags |= MAP_FIXED;
 	}
 
-	error = fget(td, uap->fd, NULL, &fp);
-	if (error)
+	if ((error = sys_mmap(td, &mmap_cup)) != 0)
 		return (error);
 
-	vp = fp->f_data;
-	vref(vp);
-
-#ifdef DEBUG_MACH_VM
-	printf("vm_map_fd: addr = %p len = 0x%08lx\n",
-		   va, (long)uap->size);
-#endif
-	memset(&evc, 0, sizeof(evc));
-	evc.ev_addr = (u_long)va;
-	evc.ev_len = uap->size;
-	evc.ev_prot = VM_PROT_ALL;
-	evc.ev_flags = uap->findspace ? 0 : VMCMD_FIXED;
-	evc.ev_proc = vmcmd_map_readvn;
-	evc.ev_offset = uap->offset;
-	evc.ev_vp = vp;
-
-	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-	if ((error = (*evc.ev_proc)(td, &evc)) != 0) {
-		VOP_UNLOCK(vp, 0);
-
-#ifdef DEBUG_MACH_VM
-		printf("mach_map_fd: mapping at %p failed\n", va);
-#endif
-
-		if (uap->findspace == 0)
-			goto bad2;
-
-		vm_map_lock(&p->p_vmspace->vm_map);
-		if ((ret = vm_map_findspace(&p->p_vmspace->vm_map,
-		    vm_map_min(&p->p_vmspace->vm_map), evc.ev_len,
-		    (vm_offset_t *)&evc.ev_addr, NULL, 0, PAGE_SIZE, 0)) == NULL) {
-			vm_map_unlock(&p->p_vmspace->vm_map);
-			goto bad2;
-		}
-		vm_map_unlock(&p->p_vmspace->vm_map);
-
-		va = (void *)evc.ev_addr;
-
-		memset(&evc, 0, sizeof(evc));
-		evc.ev_addr = (u_long)va;
-		evc.ev_len = uap->size;
-		evc.ev_prot = VM_PROT_ALL;
-		evc.ev_flags = 0;
-		evc.ev_proc = vmcmd_map_readvn;
-		evc.ev_offset = uap->offset;
-		evc.ev_vp = vp;
-
-#ifdef DEBUG_MACH_VM
-		printf("mach_map_fd: trying at %p\n", va);
-#endif
-		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-		if ((error = (*evc.ev_proc)(td, &evc)) != 0)
-			goto bad1;
-	}
-
-	vput(vp);
-	fdrop(fp, td);
-#ifdef DEBUG_MACH_VM
-	printf("mach_map_fd: mapping at %p\n", (void *)evc.ev_addr);
-#endif
-
-	va = (mach_vm_offset_t *)evc.ev_addr;
-
-	if ((error = copyout((void *)&va, uap->va, sizeof(va))) != 0)
+	if ((error = copyout((void *)&td->td_retval[0], uap->va, sizeof(va))) != 0)
 		return (error);
 
 	return (0);
-
-bad1:
-	VOP_UNLOCK(vp, 0);
-bad2:
-	vrele(vp);
-	fdrop(fp, td);
-#ifdef DEBUG_MACH_VM
-	printf("mach_map_fd: mapping at %p failed, error = %d\n",
-	    (void *)evc.ev_addr, error);
-#endif
-	return (error);
 }
 
 int
@@ -770,23 +749,27 @@ mach_vm_read(struct mach_trap_args *args)
 	mach_vm_read_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *td = args->td;
-	struct thread *ttd = args->ttd;
-	char *tbuf;
-	void *addr;
-	vm_offset_t va;
+	vm_map_t map = &curproc->p_vmspace->vm_map;
+	caddr_t tbuf;
+	vm_offset_t srcaddr, dstaddr;
+	vm_prot_t prot, protmax;
 	size_t size;
 	int error;
 
-	size = req->req_size;
-	va = vm_map_min(&td->td_proc->p_vmspace->vm_map);
-	if ((error = vm_map(&td->td_proc->p_vmspace->vm_map, &va,
-	    round_page(size), NULL, UVM_UNKNOWN_OFFSET, 0,
-	    UVM_MAPFLAG(UVM_PROT_RW, UVM_PROT_ALL,
-	    UVM_INH_COPY, UVM_ADV_NORMAL, UVM_FLAG_COPYONW))) != 0) {
-		printf("uvm_map error = %d\n", error);
+	size = round_page(req->req_size);
+	prot = VM_PROT_READ|VM_PROT_WRITE;
+	protmax = VM_PROT_ALL;
+
+	vm_map_lock(map);
+	if (vm_map_findspace(map, 0, size, &dstaddr)) {
+		vm_map_unlock(map);
+		return (mach_msg_error(args, ENOMEM));
+	}
+	if (vm_map_insert(map, NULL, 0, dstaddr, dstaddr + size, prot, protmax, 0)) {
+		vm_map_unlock(map);
 		return (mach_msg_error(args, EFAULT));
 	}
-
+	vm_map_unlock(map);
 	/*
 	 * Copy the data from the target process to the current process
 	 * This is reasonable for small chunk of data, but we should
@@ -794,14 +777,14 @@ mach_vm_read(struct mach_trap_args *args)
 	 */
 	tbuf = malloc(size, M_MACH, M_WAITOK);
 
-	addr = (void *)req->req_addr;
-	if ((error = copyin_proc(td->td_proc, addr, tbuf, size)) != 0) {
-		printf("copyin_proc error = %d, addr = %p, size = %zx\n", error, addr, size);
+	srcaddr = req->req_addr;
+	if ((error = copyin_proc(td->td_proc, (caddr_t)srcaddr, tbuf, size)) != 0) {
+		printf("copyin_proc error = %d, addr = %lx, size = %zx\n", error, srcaddr, size);
 		free(tbuf, M_MACH);
 		return (mach_msg_error(args, EFAULT));
 	}
 
-	if ((error = copyout(tbuf, (void *)va, size)) != 0) {
+	if ((error = copyout(tbuf, (void *)dstaddr, size)) != 0) {
 		printf("copyout error = %d\n", error);
 		free(tbuf, M_MACH);
 		return (mach_msg_error(args, EFAULT));
@@ -814,7 +797,7 @@ mach_vm_read(struct mach_trap_args *args)
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
-	mach_add_ool_desc(rep, (void *)va, size);
+	mach_add_ool_desc(rep, (void *)dstaddr, size);
 
 	rep->rep_count = size;
 	mach_set_trailer(rep, *msglen);
@@ -894,7 +877,7 @@ mach_vm_machine_attribute(struct mach_trap_args *args)
 		case MACH_MATTR_VAL_DCACHE_FLUSH:
 		case MACH_MATTR_VAL_ICACHE_FLUSH:
 		case MACH_MATTR_VAL_CACHE_SYNC:
-			error = mach_vm_machine_attribute_machdep(ttd,
+			error = cpu_mach_vm_machine_attribute(ttd,
 			    req->req_addr, req->req_size, &value);
 			break;
 		default:

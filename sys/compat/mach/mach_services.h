@@ -70,6 +70,7 @@ int mach_task_suspend(struct mach_trap_args *);
 int mach_task_resume(struct mach_trap_args *);
 int mach_task_get_special_port(struct mach_trap_args *);
 int mach_task_set_special_port(struct mach_trap_args *);
+int mach_thread_create(struct mach_trap_args *);
 int mach_thread_create_running(struct mach_trap_args *);
 int mach_task_set_exception_ports(struct mach_trap_args *);
 int mach_task_get_exception_ports(struct mach_trap_args *);

@@ -295,8 +295,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 		req->req_codecount = 2;
 		memcpy(&req->req_code[0], code, sizeof(req->req_code));
 		req->req_flavor = flavor;
-		mach_thread_get_state_machdep(exc_td,
-		    flavor, req->req_state, &dc);
+		cpu_mach_thread_get_state(exc_td, flavor, req->req_state, &dc);
 
 		msglen = msglen -
 			 sizeof(req->req_state) +
@@ -331,8 +330,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 		req->req_codecount = 2;
 		memcpy(&req->req_code[0], code, sizeof(req->req_code));
 		req->req_flavor = flavor;
-		mach_thread_get_state_machdep(exc_td,
-		    flavor, req->req_state, &dc);
+		cpu_mach_thread_get_state(exc_td, flavor, req->req_state, &dc);
 
 		msglen = msglen -
 			 sizeof(req->req_state) +

@@ -227,7 +227,7 @@ struct mach_service mach_services_table[] = {
 	{3408, mach_task_resume, "task_resume", sizeof(mach_task_resume_request_t), sizeof(mach_task_resume_reply_t)},
 	{3409, mach_task_get_special_port, "task_get_special_port", sizeof(mach_task_get_special_port_request_t), sizeof(mach_task_get_special_port_reply_t)},
 	{3410, mach_task_set_special_port, "task_set_special_port", sizeof(mach_task_set_special_port_request_t), sizeof(mach_task_set_special_port_reply_t)},
-	{3411, NULL, "unimpl. thread_create", 0, 0},
+	{3411, mach_thread_create, "thread_create", sizeof(mach_thread_create_request_t), sizeof(mach_thread_create_reply_t)},
 	{3412, mach_thread_create_running, "thread_create_running", sizeof(mach_thread_create_running_request_t), sizeof(mach_thread_create_running_reply_t)},
 	{3413, mach_task_set_exception_ports, "task_set_exception_ports", sizeof(mach_task_set_exception_ports_request_t), sizeof(mach_task_set_exception_ports_reply_t)},
 	{3414, mach_task_get_exception_ports, "task_get_exception_ports", sizeof(mach_task_get_exception_ports_request_t), sizeof(mach_task_get_exception_ports_reply_t)},

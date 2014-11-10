@@ -271,6 +271,13 @@ mach_thread_policy(struct mach_trap_args *args)
 	return (0);
 }
 
+int
+mach_thread_create(struct mach_trap_args *args)
+{
+
+	return (ENOSYS);
+}
+
 /* XXX it might be possible to use this on another task */
 int
 mach_thread_create_running(struct mach_trap_args *args)
