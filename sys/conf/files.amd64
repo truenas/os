@@ -529,12 +529,13 @@ compat/mach/mach_notify.c       optional  compat_mach
 compat/mach/mach_port.c         optional  compat_mach
 compat/mach/mach_semaphore.c    optional  compat_mach
 compat/mach/mach_services.c     optional  compat_mach
-compat/mach/mach_service_names.c     optional  compat_mach
+compat/mach/mach_services_names.c     optional  compat_mach
 compat/mach/mach_syscalls.c     optional  compat_mach
 compat/mach/mach_sysent.c       optional  compat_mach
 compat/mach/mach_task.c         optional  compat_mach
 compat/mach/mach_thread.c       optional  compat_mach
 compat/mach/mach_vm.c           optional  compat_mach
+amd64/mach/mach_machdep.c		optional  compat_mach
 
 #
 # Windows NDIS driver support
