@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/mount.h>
 #include <sys/mutex.h>
+#include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/resourcevar.h>
 #include <sys/sysproto.h>
@@ -457,7 +458,7 @@ mach_task_info(struct mach_trap_args *args)
 		ru = tp->p_stats->p_cru;
 		mtbi = (struct mach_task_basic_info *)&rep->rep_info[0];
 		PROC_LOCK(tp);
-		rulwps(tp, &ru);
+		rufetch(tp, &ru);
 		PROC_LOCK(tp);
 
 		mtbi->mtbi_suspend_count = ru.ru_nvcsw + ru.ru_nivcsw;
@@ -506,7 +507,7 @@ mach_task_info(struct mach_trap_args *args)
 		mtei = (struct mach_task_events_info *)&rep->rep_info[0];
 		ru = tp->p_stats->p_cru;
 		PROC_LOCK(tp);
-		rulwps(tp, &ru);
+		rufetch(tp, &ru);
 		PROC_UNLOCK(tp);
 
 		mtei->mtei_faults = ru.ru_majflt;
@@ -664,9 +665,8 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 	}
 
 	/* Allowed only if the UID match, if setuid, or if superuser */
-	if ((kauth_cred_getuid(t->p_ucred) != kauth_cred_getuid(td->td_ucred) ||
-	    ISSET(t->p_flag, PK_SUGID)) && (error = kauth_authorize_generic(td->td_ucred,
-	    KAUTH_GENERIC_ISSUSER, NULL)) != 0) {
+	if ((t->p_ucred->cr_ruid != td->td_ucred->cr_ruid ||
+		 !priv_check_cred(t->p_ucred, PRIV_CRED_SETUID)) != 0) {
 		PROC_UNLOCK(t);
 		return (error);
 	}

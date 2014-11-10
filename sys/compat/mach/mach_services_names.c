@@ -9,6 +9,7 @@
  */
 
 #include <sys/cdefs.h>
+#include <sys/param.h>
 
 struct mach_service_name {
 	int srv_id;
