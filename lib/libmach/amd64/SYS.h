@@ -36,12 +36,20 @@
 #include <compat/mach/mach_syscall.h>
 #include <machine/asm.h>
 
-#define	MACH_RSYSCALL(name)	ENTRY(__sys_##name);				\
+#define	RSYSCALL(name)	ENTRY(__sys_##name);				\
 			WEAK_REFERENCE(__sys_##name, name);		\
 			WEAK_REFERENCE(__sys_##name, _##name);		\
 			mov $-MACH_SYS_##name,%eax; KERNCALL;			\
 			jb HIDENAME(cerror); ret;			\
 			END(__sys_##name)
+
+#define	MACH_RSYSCALL(name)	ENTRY(__sys_##name);				\
+			WEAK_REFERENCE(__sys_##name, name);							\
+			WEAK_REFERENCE(__sys_##name, _##name);		\
+			mov $-MACH_SYS_mach_##name,%eax; KERNCALL;	\
+			jb HIDENAME(cerror); ret;			\
+			END(__sys_##name)
+
 
 #define	PSEUDO(name)	ENTRY(__sys_##name);				\
 			WEAK_REFERENCE(__sys_##name, _##name);		\
