@@ -146,7 +146,7 @@ sys_mach_wait_until(struct thread *td, struct mach_wait_until_args *uap)
 
 
 int
-sys_mach_timer_create(struct thread *td, struct mach_timer_create_args *uap)
+sys_mk_timer_create(struct thread *td, struct mk_timer_create_args *uap)
 {
 	DPRINTF(("sys_mach_timer_create();\n"));
 	return (0);
@@ -154,7 +154,7 @@ sys_mach_timer_create(struct thread *td, struct mach_timer_create_args *uap)
 
 
 int
-sys_mach_timer_destroy(struct thread *td, struct mach_timer_destroy_args *uap)
+sys_mk_timer_destroy(struct thread *td, struct mk_timer_destroy_args *uap)
 {
 
 	DPRINTF(("sys_mach_timer_destroy(0x%x);\n", uap->name));
@@ -163,7 +163,7 @@ sys_mach_timer_destroy(struct thread *td, struct mach_timer_destroy_args *uap)
 
 
 int
-sys_mach_timer_arm(struct thread *td, struct mach_timer_arm_args *uap)
+sys_mk_timer_arm(struct thread *td, struct mk_timer_arm_args *uap)
 {
 
 	DPRINTF(("sys_mach_timer_arm(0x%x, %d);\n",
@@ -171,21 +171,12 @@ sys_mach_timer_arm(struct thread *td, struct mach_timer_arm_args *uap)
 	return (0);
 }
 
-
 int
-sys_mach_timer_cancel(struct thread *td, struct mach_timer_cancel_args *uap)
+sys_mk_timer_cancel(struct thread *td, struct mk_timer_cancel_args *uap)
 {
 
 	DPRINTF(("sys_mach_timer_cancel(0x%x, %p);\n",
 	    uap->name, uap->result_time));
-	return (0);
-}
-
-
-int
-sys_mach_get_time_base_info(struct thread *td, struct mach_get_time_base_info_args *uap)
-{
-	DPRINTF(("sys_mach_get_time_base_info();\n"));
 	return (0);
 }
 

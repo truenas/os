@@ -50,9 +50,8 @@
 #define	MACH_SYS_mach_clock_sleep_trap	62
 #define	MACH_SYS_mach_timebase_info	89
 #define	MACH_SYS_mach_wait_until	90
-#define	MACH_SYS_mach_timer_create	91
-#define	MACH_SYS_mach_timer_destroy	92
-#define	MACH_SYS_mach_timer_arm	93
-#define	MACH_SYS_mach_timer_cancel	94
-#define	MACH_SYS_mach_get_time_base_info	95
+#define	MACH_SYS_mk_timer_create	91
+#define	MACH_SYS_mk_timer_destroy	92
+#define	MACH_SYS_mk_timer_arm	93
+#define	MACH_SYS_mk_timer_cancel	94
 #define	MACH_SYS_MAXSYSCALL	128

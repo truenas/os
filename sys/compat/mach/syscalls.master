@@ -220,13 +220,13 @@
 88  AUE_NULL	UNIMPL	nosys
 89	AUE_NULL	STD		{ int mach_timebase_info(mach_timebase_info_t info); }
 90	AUE_NULL	STD		{ int mach_wait_until(uint64_t deadline); }
-91	AUE_NULL	STD		{ int mach_timer_create(void); }
-92	AUE_NULL	STD		{ int mach_timer_destroy(mach_port_name_t name); }
-93	AUE_NULL	STD		{ int mach_timer_arm(mach_port_name_t name, \
+91	AUE_NULL	STD		{ int mk_timer_create(void); }
+92	AUE_NULL	STD		{ int mk_timer_destroy(mach_port_name_t name); }
+93	AUE_NULL	STD		{ int mk_timer_arm(mach_port_name_t name, \
 			      			mach_absolute_time_t expire_time); }
-94	AUE_NULL	STD		{ int mach_timer_cancel(mach_port_name_t name, \
+94	AUE_NULL	STD		{ int mk_timer_cancel(mach_port_name_t name, \
 			    		mach_absolute_time_t *result_time); }
-95	AUE_NULL	STD		{ int mach_get_time_base_info(void); }
+95	AUE_NULL	UNIMPL	nosys
 96  AUE_NULL	UNIMPL	nosys
 97  AUE_NULL	UNIMPL	nosys
 98  AUE_NULL	UNIMPL	nosys

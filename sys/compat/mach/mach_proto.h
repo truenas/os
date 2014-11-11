@@ -252,22 +252,19 @@ struct mach_timebase_info_args {
 struct mach_wait_until_args {
 	char deadline_l_[PADL_(uint64_t)]; uint64_t deadline; char deadline_r_[PADR_(uint64_t)];
 };
-struct mach_timer_create_args {
+struct mk_timer_create_args {
 	register_t dummy;
 };
-struct mach_timer_destroy_args {
+struct mk_timer_destroy_args {
 	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
 };
-struct mach_timer_arm_args {
+struct mk_timer_arm_args {
 	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
 	char expire_time_l_[PADL_(mach_absolute_time_t)]; mach_absolute_time_t expire_time; char expire_time_r_[PADR_(mach_absolute_time_t)];
 };
-struct mach_timer_cancel_args {
+struct mk_timer_cancel_args {
 	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
 	char result_time_l_[PADL_(mach_absolute_time_t *)]; mach_absolute_time_t * result_time; char result_time_r_[PADR_(mach_absolute_time_t *)];
-};
-struct mach_get_time_base_info_args {
-	register_t dummy;
 };
 #if defined(_KERNEL_OPT)
 #endif
@@ -315,11 +312,10 @@ int	sys_mach_syscall_thread_switch(struct thread *, struct mach_syscall_thread_s
 int	sys_mach_clock_sleep_trap(struct thread *, struct mach_clock_sleep_trap_args *);
 int	sys_mach_timebase_info(struct thread *, struct mach_timebase_info_args *);
 int	sys_mach_wait_until(struct thread *, struct mach_wait_until_args *);
-int	sys_mach_timer_create(struct thread *, struct mach_timer_create_args *);
-int	sys_mach_timer_destroy(struct thread *, struct mach_timer_destroy_args *);
-int	sys_mach_timer_arm(struct thread *, struct mach_timer_arm_args *);
-int	sys_mach_timer_cancel(struct thread *, struct mach_timer_cancel_args *);
-int	sys_mach_get_time_base_info(struct thread *, struct mach_get_time_base_info_args *);
+int	sys_mk_timer_create(struct thread *, struct mk_timer_create_args *);
+int	sys_mk_timer_destroy(struct thread *, struct mk_timer_destroy_args *);
+int	sys_mk_timer_arm(struct thread *, struct mk_timer_arm_args *);
+int	sys_mk_timer_cancel(struct thread *, struct mk_timer_cancel_args *);
 
 #ifdef COMPAT_43
 
@@ -396,11 +392,10 @@ int	sys_mach_get_time_base_info(struct thread *, struct mach_get_time_base_info_
 #define	MACH_SYS_AUE_mach_clock_sleep_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_timebase_info	AUE_NULL
 #define	MACH_SYS_AUE_mach_wait_until	AUE_NULL
-#define	MACH_SYS_AUE_mach_timer_create	AUE_NULL
-#define	MACH_SYS_AUE_mach_timer_destroy	AUE_NULL
-#define	MACH_SYS_AUE_mach_timer_arm	AUE_NULL
-#define	MACH_SYS_AUE_mach_timer_cancel	AUE_NULL
-#define	MACH_SYS_AUE_mach_get_time_base_info	AUE_NULL
+#define	MACH_SYS_AUE_mk_timer_create	AUE_NULL
+#define	MACH_SYS_AUE_mk_timer_destroy	AUE_NULL
+#define	MACH_SYS_AUE_mk_timer_arm	AUE_NULL
+#define	MACH_SYS_AUE_mk_timer_cancel	AUE_NULL
 
 #undef PAD_
 #undef PADL_

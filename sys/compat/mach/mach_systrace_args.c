@@ -395,37 +395,32 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 1;
 		break;
 	}
-	/* mach_timer_create */
+	/* mk_timer_create */
 	case 91: {
 		*n_args = 0;
 		break;
 	}
-	/* mach_timer_destroy */
+	/* mk_timer_destroy */
 	case 92: {
-		struct mach_timer_destroy_args *p = params;
+		struct mk_timer_destroy_args *p = params;
 		iarg[0] = p->name; /* mach_port_name_t */
 		*n_args = 1;
 		break;
 	}
-	/* mach_timer_arm */
+	/* mk_timer_arm */
 	case 93: {
-		struct mach_timer_arm_args *p = params;
+		struct mk_timer_arm_args *p = params;
 		iarg[0] = p->name; /* mach_port_name_t */
 		iarg[1] = p->expire_time; /* mach_absolute_time_t */
 		*n_args = 2;
 		break;
 	}
-	/* mach_timer_cancel */
+	/* mk_timer_cancel */
 	case 94: {
-		struct mach_timer_cancel_args *p = params;
+		struct mk_timer_cancel_args *p = params;
 		iarg[0] = p->name; /* mach_port_name_t */
 		uarg[1] = (intptr_t) p->result_time; /* mach_absolute_time_t * */
 		*n_args = 2;
-		break;
-	}
-	/* mach_get_time_base_info */
-	case 95: {
-		*n_args = 0;
 		break;
 	}
 	default:
@@ -1097,10 +1092,10 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_timer_create */
+	/* mk_timer_create */
 	case 91:
 		break;
-	/* mach_timer_destroy */
+	/* mk_timer_destroy */
 	case 92:
 		switch(ndx) {
 		case 0:
@@ -1110,7 +1105,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_timer_arm */
+	/* mk_timer_arm */
 	case 93:
 		switch(ndx) {
 		case 0:
@@ -1123,7 +1118,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_timer_cancel */
+	/* mk_timer_cancel */
 	case 94:
 		switch(ndx) {
 		case 0:
@@ -1135,9 +1130,6 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		default:
 			break;
 		};
-		break;
-	/* mach_get_time_base_info */
-	case 95:
 		break;
 	default:
 		break;
@@ -1357,25 +1349,23 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_timer_create */
+	/* mk_timer_create */
 	case 91:
-	/* mach_timer_destroy */
+	/* mk_timer_destroy */
 	case 92:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_timer_arm */
+	/* mk_timer_arm */
 	case 93:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_timer_cancel */
+	/* mk_timer_cancel */
 	case 94:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_get_time_base_info */
-	case 95:
 	default:
 		break;
 	};
