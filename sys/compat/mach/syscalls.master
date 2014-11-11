@@ -47,9 +47,12 @@
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
 
+#include <vm/vm.h>
+
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_clock.h>
+#include <compat/mach/mach_port.h>
 #include <compat/mach/mach_proto.h>
 ;;
 
@@ -63,44 +66,73 @@
 7  AUE_NULL	UNIMPL	nosys
 8  AUE_NULL	UNIMPL	nosys
 9  AUE_NULL	UNIMPL	nosys
-10  AUE_NULL	UNIMPL	nosys
+10  AUE_NULL	STD		{ int _kernelrpc_mach_vm_allocate_trap( mach_port_name_t target, \
+								mach_vm_offset_t *address, \
+								mach_vm_size_t size, \
+								int flags); }
 11  AUE_NULL	UNIMPL	nosys
-12  AUE_NULL	UNIMPL	nosys
+12  AUE_NULL	STD		{ int _kernelrpc_mach_vm_deallocate_trap(mach_port_name_t target, \
+							mach_vm_offset_t *address, mach_vm_size_t size); }
 13  AUE_NULL	UNIMPL	nosys
-14  AUE_NULL	UNIMPL	nosys
-15  AUE_NULL	UNIMPL	nosys
-16  AUE_NULL	UNIMPL	nosys
-17  AUE_NULL	UNIMPL	nosys
-18  AUE_NULL	UNIMPL	nosys
-19  AUE_NULL	UNIMPL	nosys
-20  AUE_NULL	UNIMPL	nosys
-21  AUE_NULL	UNIMPL	nosys
-22  AUE_NULL	UNIMPL	nosys
-23  AUE_NULL	UNIMPL	nosys
-24  AUE_NULL	UNIMPL	nosys
-25  AUE_NULL	UNIMPL	nosys
+14  AUE_NULL	STD		{ int _kernelrpc_mach_vm_protect_trap(mach_port_name_t target, \
+								mach_vm_offset_t address, mach_vm_size_t size, \
+								int set_maximum, vm_prot_t new_protection); }
+15  AUE_MMAP	STD		{ int _kernelrpc_mach_vm_map_trap(mach_port_name_t target, \
+						  		mach_vm_offset_t *address, mach_vm_size_t size, \
+								mach_vm_offset_t mask, int flags, \
+								vm_prot_t cur_protection); }
+16  AUE_NULL	STD		{ int _kernelrpc_mach_port_allocate_trap( \
+						  		mach_port_name_t target, mach_port_right_t right, \
+						  		mach_port_name_t *name); }
+17  AUE_NULL	STD		{ int _kernelrpc_mach_port_destroy_trap( \
+						  		mach_port_name_t target, mach_port_name_t name);}
+18  AUE_NULL	STD		{ int _kernelrpc_mach_port_deallocate_trap( \
+						  		mach_port_name_t target, mach_port_name_t name);}
+19  AUE_NULL	STD		{ int _kernelrpc_mach_port_mod_refs_trap(		  \
+								mach_port_name_t target, mach_port_name_t name, \
+						  		mach_port_right_t right, mach_port_delta_t delta); }
+20  AUE_NULL	STD		{ int _kernelrpc_mach_port_move_member_trap( \
+						  		mach_port_name_t target, mach_port_name_t member, \
+								mach_port_name_t after);}
+21  AUE_NULL	STD		{ int _kernelrpc_mach_port_insert_right_trap( \
+						  		mach_port_name_t target, mach_port_name_t name, \
+						  		mach_port_name_t poly, \
+								mach_msg_type_name_t polyPoly); }
+22  AUE_NULL	STD		{ int _kernelrpc_mach_port_insert_member_trap( \
+						  		mach_port_name_t target, mach_port_name_t name, \
+								mach_port_name_t pset); }
+23  AUE_NULL	STD		{ int _kernelrpc_mach_port_extract_member_trap( \
+						  		mach_port_name_t target, mach_port_name_t name, \
+								mach_port_name_t pset); }
+24  AUE_NULL	STD		{ int _kernelrpc_mach_port_construct_trap( \
+						  		mach_port_name_t target, \
+								mach_port_options_t options, uint64_t context, \
+								mach_port_name_t *name);}
+25  AUE_NULL	STD		{ int _kernelrpc_mach_port_destruct_trap( \
+						  		mach_port_name_t target, mach_port_name_t name, \
+								mach_port_delta_t srdelta, uint64_t guard);}
 26	AUE_NULL	STD		{ int mach_reply_port(void); }
 27	AUE_NULL	STD		{ int mach_thread_self_trap(void); }
 28	AUE_NULL	STD		{ int mach_task_self_trap(void); }
-29	AUE_NULL	STD		{ int mach_host_self_trap(void); }
+29	AUE_NULL	STD	  	{ int mach_host_self_trap(void); }
 30  AUE_NULL	UNIMPL	nosys
 31	AUE_NULL	STD		{ int mach_msg_trap(mach_msg_header_t	*msg, \
-			    mach_msg_option_t	option, \
-			    mach_msg_size_t	send_size, \
-			    mach_msg_size_t	rcv_size, \
-			    mach_port_name_t	rcv_name, \
-			    mach_msg_timeout_t	timeout, \
-			    mach_port_name_t	notify); }
+			    		  	  mach_msg_option_t	option, \
+			    			  mach_msg_size_t	send_size, \
+			    			  mach_msg_size_t	rcv_size, \
+			    			  mach_port_name_t	rcv_name, \
+			    			  mach_msg_timeout_t	timeout, \
+			    			  mach_port_name_t	notify); }
 32	AUE_NULL	STD		{ int mach_msg_overwrite_trap( \
-			    mach_msg_header_t	*msg, \
-			    mach_msg_option_t	option, \
-			    mach_msg_size_t	send_size, \
-			    mach_msg_size_t	rcv_size, \
-			    mach_port_name_t	rcv_name, \
-			    mach_msg_timeout_t	timeout, \
-			    mach_port_name_t	notify, \
-			    mach_msg_header_t	*rcv_msg, \
-			    mach_msg_size_t	scatter_list_size); }
+			    			 mach_msg_header_t	*msg, \
+			   				 mach_msg_option_t	option, \
+			  				 mach_msg_size_t	send_size, \
+			    			 mach_msg_size_t	rcv_size, \
+			    			 mach_port_name_t	rcv_name, \
+			    			 mach_msg_timeout_t	timeout, \
+			    			 mach_port_name_t	notify, \
+			    			 mach_msg_header_t	*rcv_msg, \
+			    			 mach_msg_size_t	scatter_list_size); }
 33	AUE_NULL	STD		{ int mach_semaphore_signal_trap( \
 			  mach_port_name_t signal_name); }
 34	AUE_NULL	STD		{ int mach_semaphore_signal_all_trap( \
@@ -111,29 +143,29 @@
 36	AUE_NULL	STD		{ int mach_semaphore_wait_trap( \
 			      mach_port_name_t wait_name); }
 37	AUE_NULL	STD		{ int mach_semaphore_wait_signal_trap( \
-			      mach_port_name_t wait_name, \
-			      mach_port_name_t signal_name); }
+			      		  	  mach_port_name_t wait_name, \
+			      			  mach_port_name_t signal_name); }
 38	AUE_NULL	STD		{ int mach_semaphore_timedwait_trap( \
-			    mach_port_name_t wait_name, \
-			    unsigned int sec, \
-			    mach_clock_res_t nsec); }
+							    mach_port_name_t wait_name, \
+			    				unsigned int sec, \
+			    				mach_clock_res_t nsec); }
 39	AUE_NULL	STD		{ int mach_semaphore_timedwait_signal_trap( \
-			    mach_port_name_t wait_name, \
-			    mach_port_name_t signal_name, \
-			    unsigned int sec, \
-			    mach_clock_res_t nsec); }
+						  	  	mach_port_name_t wait_name, \
+							    mach_port_name_t signal_name, \
+			    				unsigned int sec, mach_clock_res_t nsec); }
 40  AUE_NULL	UNIMPL	nosys
-41	AUE_NULL	STD		{ int mach_init_process(void); }
-42  AUE_NULL	UNIMPL	nosys
+41	AUE_NULL	STD		{ int _kernelrpc_mach_port_guard_trap(mach_port_name_t target, \
+						  	  mach_port_name_t name, uint64_t guard, int strict); }
+42  AUE_NULL	STD		{ int _kernelrpc_mach_port_unguard_trap(mach_port_name_t target, \
+						  	  mach_port_name_t name, uint64_t guard); }
 43	AUE_NULL	STD		{ int mach_map_fd(int fd, \
 			    mach_vm_offset_t offset, mach_vm_offset_t *va, \
 			    mach_boolean_t findspace, mach_vm_size_t size); }
-44  AUE_NULL	UNIMPL	nosys
-45	AUE_NULL	STD		{ int mach_task_for_pid( \
-			    mach_port_t target_tport, int pid, \
-			    mach_port_t *t); }
-46	AUE_NULL	STD		{ int mach_pid_for_task( \
-			    mach_port_t t, int *x); }
+44  AUE_NULL	STD     { int mach_task_name_for_pid(mach_port_name_t target_tport, \
+						  int pid, mach_port_t *tn); }
+45	AUE_NULL	STD		{ int mach_task_for_pid(mach_port_t target_tport, \
+						  int pid, mach_port_t *t); }
+46	AUE_NULL	STD		{ int mach_pid_for_task(mach_port_t t, int *pid); }
 47  AUE_NULL	UNIMPL	nosys
 48	AUE_NULL	STD		{ int mach_macx_swapon( \
 			    char *name, int flags, int size, int priority); }
@@ -142,8 +174,8 @@
 50  AUE_NULL	UNIMPL	nosys
 51	AUE_NULL	STD		{ int mach_macx_triggers(int hi_water, int low_water, \
 			  	  int flags, mach_port_t alert_port); }
-52  AUE_NULL	UNIMPL	nosys
-53  AUE_NULL	UNIMPL	nosys
+52  AUE_NULL	STD		{ int mach_macx_backing_store_suspend(int suspend); }
+53  AUE_NULL	STD		{ int mach_macx_backing_store_recovery(int pid); }
 54  AUE_NULL	UNIMPL	nosys
 55  AUE_NULL	UNIMPL	nosys
 56  AUE_NULL	UNIMPL	nosys

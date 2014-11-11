@@ -148,6 +148,18 @@ typedef struct mach_port_limits {
 	mach_port_msgcount_t	mpl_qlimit;
 } mach_port_limits_t;
 
+/*
+ * Structure to define optional attributes for a newly
+ * constructed port.
+ */
+typedef struct mach_port_options {
+        uint32_t                flags;          /* Flags defining attributes for port */
+        mach_port_limits_t      mpl;            /* Message queue limit for port */
+        uint64_t                reserved[2];    /* Reserved */
+}mach_port_options_t;
+
+typedef mach_port_options_t *mach_port_options_ptr_t;
+
 typedef struct {
 	mach_msg_header_t req_msgh;
 	mach_ndr_record_t req_ndr;

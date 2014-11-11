@@ -36,6 +36,84 @@ struct thread;
 
 #if defined(_KERNEL_OPT)
 #endif
+struct _kernelrpc_mach_vm_allocate_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char address_l_[PADL_(mach_vm_offset_t *)]; mach_vm_offset_t * address; char address_r_[PADR_(mach_vm_offset_t *)];
+	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
+};
+struct _kernelrpc_mach_vm_deallocate_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char address_l_[PADL_(mach_vm_offset_t *)]; mach_vm_offset_t * address; char address_r_[PADR_(mach_vm_offset_t *)];
+	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
+};
+struct _kernelrpc_mach_vm_protect_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char address_l_[PADL_(mach_vm_offset_t)]; mach_vm_offset_t address; char address_r_[PADR_(mach_vm_offset_t)];
+	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
+	char set_maximum_l_[PADL_(int)]; int set_maximum; char set_maximum_r_[PADR_(int)];
+	char new_protection_l_[PADL_(vm_prot_t)]; vm_prot_t new_protection; char new_protection_r_[PADR_(vm_prot_t)];
+};
+struct _kernelrpc_mach_vm_map_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char address_l_[PADL_(mach_vm_offset_t *)]; mach_vm_offset_t * address; char address_r_[PADR_(mach_vm_offset_t *)];
+	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
+	char mask_l_[PADL_(mach_vm_offset_t)]; mach_vm_offset_t mask; char mask_r_[PADR_(mach_vm_offset_t)];
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
+	char cur_protection_l_[PADL_(vm_prot_t)]; vm_prot_t cur_protection; char cur_protection_r_[PADR_(vm_prot_t)];
+};
+struct _kernelrpc_mach_port_allocate_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char right_l_[PADL_(mach_port_right_t)]; mach_port_right_t right; char right_r_[PADR_(mach_port_right_t)];
+	char name_l_[PADL_(mach_port_name_t *)]; mach_port_name_t * name; char name_r_[PADR_(mach_port_name_t *)];
+};
+struct _kernelrpc_mach_port_destroy_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+};
+struct _kernelrpc_mach_port_deallocate_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+};
+struct _kernelrpc_mach_port_mod_refs_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char right_l_[PADL_(mach_port_right_t)]; mach_port_right_t right; char right_r_[PADR_(mach_port_right_t)];
+	char delta_l_[PADL_(mach_port_delta_t)]; mach_port_delta_t delta; char delta_r_[PADR_(mach_port_delta_t)];
+};
+struct _kernelrpc_mach_port_move_member_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char member_l_[PADL_(mach_port_name_t)]; mach_port_name_t member; char member_r_[PADR_(mach_port_name_t)];
+	char after_l_[PADL_(mach_port_name_t)]; mach_port_name_t after; char after_r_[PADR_(mach_port_name_t)];
+};
+struct _kernelrpc_mach_port_insert_right_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char poly_l_[PADL_(mach_port_name_t)]; mach_port_name_t poly; char poly_r_[PADR_(mach_port_name_t)];
+	char polyPoly_l_[PADL_(mach_msg_type_name_t)]; mach_msg_type_name_t polyPoly; char polyPoly_r_[PADR_(mach_msg_type_name_t)];
+};
+struct _kernelrpc_mach_port_insert_member_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char pset_l_[PADL_(mach_port_name_t)]; mach_port_name_t pset; char pset_r_[PADR_(mach_port_name_t)];
+};
+struct _kernelrpc_mach_port_extract_member_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char pset_l_[PADL_(mach_port_name_t)]; mach_port_name_t pset; char pset_r_[PADR_(mach_port_name_t)];
+};
+struct _kernelrpc_mach_port_construct_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char options_l_[PADL_(mach_port_options_t)]; mach_port_options_t options; char options_r_[PADR_(mach_port_options_t)];
+	char context_l_[PADL_(uint64_t)]; uint64_t context; char context_r_[PADR_(uint64_t)];
+	char name_l_[PADL_(mach_port_name_t *)]; mach_port_name_t * name; char name_r_[PADR_(mach_port_name_t *)];
+};
+struct _kernelrpc_mach_port_destruct_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char srdelta_l_[PADL_(mach_port_delta_t)]; mach_port_delta_t srdelta; char srdelta_r_[PADR_(mach_port_delta_t)];
+	char guard_l_[PADL_(uint64_t)]; uint64_t guard; char guard_r_[PADR_(uint64_t)];
+};
 struct mach_reply_port_args {
 	register_t dummy;
 };
@@ -96,8 +174,16 @@ struct mach_semaphore_timedwait_signal_trap_args {
 	char sec_l_[PADL_(unsigned int)]; unsigned int sec; char sec_r_[PADR_(unsigned int)];
 	char nsec_l_[PADL_(mach_clock_res_t)]; mach_clock_res_t nsec; char nsec_r_[PADR_(mach_clock_res_t)];
 };
-struct mach_init_process_args {
-	register_t dummy;
+struct _kernelrpc_mach_port_guard_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char guard_l_[PADL_(uint64_t)]; uint64_t guard; char guard_r_[PADR_(uint64_t)];
+	char strict_l_[PADL_(int)]; int strict; char strict_r_[PADR_(int)];
+};
+struct _kernelrpc_mach_port_unguard_trap_args {
+	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
+	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
+	char guard_l_[PADL_(uint64_t)]; uint64_t guard; char guard_r_[PADR_(uint64_t)];
 };
 struct mach_map_fd_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
@@ -106,6 +192,11 @@ struct mach_map_fd_args {
 	char findspace_l_[PADL_(mach_boolean_t)]; mach_boolean_t findspace; char findspace_r_[PADR_(mach_boolean_t)];
 	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
 };
+struct mach_task_name_for_pid_args {
+	char target_tport_l_[PADL_(mach_port_name_t)]; mach_port_name_t target_tport; char target_tport_r_[PADR_(mach_port_name_t)];
+	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
+	char tn_l_[PADL_(mach_port_t *)]; mach_port_t * tn; char tn_r_[PADR_(mach_port_t *)];
+};
 struct mach_task_for_pid_args {
 	char target_tport_l_[PADL_(mach_port_t)]; mach_port_t target_tport; char target_tport_r_[PADR_(mach_port_t)];
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
@@ -113,7 +204,7 @@ struct mach_task_for_pid_args {
 };
 struct mach_pid_for_task_args {
 	char t_l_[PADL_(mach_port_t)]; mach_port_t t; char t_r_[PADR_(mach_port_t)];
-	char x_l_[PADL_(int *)]; int * x; char x_r_[PADR_(int *)];
+	char pid_l_[PADL_(int *)]; int * pid; char pid_r_[PADR_(int *)];
 };
 struct mach_macx_swapon_args {
 	char name_l_[PADL_(char *)]; char * name; char name_r_[PADR_(char *)];
@@ -130,6 +221,12 @@ struct mach_macx_triggers_args {
 	char low_water_l_[PADL_(int)]; int low_water; char low_water_r_[PADR_(int)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char alert_port_l_[PADL_(mach_port_t)]; mach_port_t alert_port; char alert_port_r_[PADR_(mach_port_t)];
+};
+struct mach_macx_backing_store_suspend_args {
+	char suspend_l_[PADL_(int)]; int suspend; char suspend_r_[PADR_(int)];
+};
+struct mach_macx_backing_store_recovery_args {
+	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
 };
 struct mach_swtch_pri_args {
 	char pri_l_[PADL_(int)]; int pri; char pri_r_[PADR_(int)];
@@ -174,6 +271,20 @@ struct mach_get_time_base_info_args {
 };
 #if defined(_KERNEL_OPT)
 #endif
+int	sys__kernelrpc_mach_vm_allocate_trap(struct thread *, struct _kernelrpc_mach_vm_allocate_trap_args *);
+int	sys__kernelrpc_mach_vm_deallocate_trap(struct thread *, struct _kernelrpc_mach_vm_deallocate_trap_args *);
+int	sys__kernelrpc_mach_vm_protect_trap(struct thread *, struct _kernelrpc_mach_vm_protect_trap_args *);
+int	sys__kernelrpc_mach_vm_map_trap(struct thread *, struct _kernelrpc_mach_vm_map_trap_args *);
+int	sys__kernelrpc_mach_port_allocate_trap(struct thread *, struct _kernelrpc_mach_port_allocate_trap_args *);
+int	sys__kernelrpc_mach_port_destroy_trap(struct thread *, struct _kernelrpc_mach_port_destroy_trap_args *);
+int	sys__kernelrpc_mach_port_deallocate_trap(struct thread *, struct _kernelrpc_mach_port_deallocate_trap_args *);
+int	sys__kernelrpc_mach_port_mod_refs_trap(struct thread *, struct _kernelrpc_mach_port_mod_refs_trap_args *);
+int	sys__kernelrpc_mach_port_move_member_trap(struct thread *, struct _kernelrpc_mach_port_move_member_trap_args *);
+int	sys__kernelrpc_mach_port_insert_right_trap(struct thread *, struct _kernelrpc_mach_port_insert_right_trap_args *);
+int	sys__kernelrpc_mach_port_insert_member_trap(struct thread *, struct _kernelrpc_mach_port_insert_member_trap_args *);
+int	sys__kernelrpc_mach_port_extract_member_trap(struct thread *, struct _kernelrpc_mach_port_extract_member_trap_args *);
+int	sys__kernelrpc_mach_port_construct_trap(struct thread *, struct _kernelrpc_mach_port_construct_trap_args *);
+int	sys__kernelrpc_mach_port_destruct_trap(struct thread *, struct _kernelrpc_mach_port_destruct_trap_args *);
 int	sys_mach_reply_port(struct thread *, struct mach_reply_port_args *);
 int	sys_mach_thread_self_trap(struct thread *, struct mach_thread_self_trap_args *);
 int	sys_mach_task_self_trap(struct thread *, struct mach_task_self_trap_args *);
@@ -187,13 +298,17 @@ int	sys_mach_semaphore_wait_trap(struct thread *, struct mach_semaphore_wait_tra
 int	sys_mach_semaphore_wait_signal_trap(struct thread *, struct mach_semaphore_wait_signal_trap_args *);
 int	sys_mach_semaphore_timedwait_trap(struct thread *, struct mach_semaphore_timedwait_trap_args *);
 int	sys_mach_semaphore_timedwait_signal_trap(struct thread *, struct mach_semaphore_timedwait_signal_trap_args *);
-int	sys_mach_init_process(struct thread *, struct mach_init_process_args *);
+int	sys__kernelrpc_mach_port_guard_trap(struct thread *, struct _kernelrpc_mach_port_guard_trap_args *);
+int	sys__kernelrpc_mach_port_unguard_trap(struct thread *, struct _kernelrpc_mach_port_unguard_trap_args *);
 int	sys_mach_map_fd(struct thread *, struct mach_map_fd_args *);
+int	sys_mach_task_name_for_pid(struct thread *, struct mach_task_name_for_pid_args *);
 int	sys_mach_task_for_pid(struct thread *, struct mach_task_for_pid_args *);
 int	sys_mach_pid_for_task(struct thread *, struct mach_pid_for_task_args *);
 int	sys_mach_macx_swapon(struct thread *, struct mach_macx_swapon_args *);
 int	sys_mach_macx_swapoff(struct thread *, struct mach_macx_swapoff_args *);
 int	sys_mach_macx_triggers(struct thread *, struct mach_macx_triggers_args *);
+int	sys_mach_macx_backing_store_suspend(struct thread *, struct mach_macx_backing_store_suspend_args *);
+int	sys_mach_macx_backing_store_recovery(struct thread *, struct mach_macx_backing_store_recovery_args *);
 int	sys_mach_swtch_pri(struct thread *, struct mach_swtch_pri_args *);
 int	sys_mach_swtch(struct thread *, struct mach_swtch_args *);
 int	sys_mach_syscall_thread_switch(struct thread *, struct mach_syscall_thread_switch_args *);
@@ -237,6 +352,20 @@ int	sys_mach_get_time_base_info(struct thread *, struct mach_get_time_base_info_
 
 #endif /* COMPAT_FREEBSD7 */
 
+#define	MACH_SYS_AUE__kernelrpc_mach_vm_allocate_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_vm_deallocate_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_vm_protect_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_vm_map_trap	AUE_MMAP
+#define	MACH_SYS_AUE__kernelrpc_mach_port_allocate_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_destroy_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_deallocate_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_mod_refs_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_move_member_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_insert_right_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_insert_member_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_extract_member_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_construct_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_destruct_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_reply_port	AUE_NULL
 #define	MACH_SYS_AUE_mach_thread_self_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_task_self_trap	AUE_NULL
@@ -250,13 +379,17 @@ int	sys_mach_get_time_base_info(struct thread *, struct mach_get_time_base_info_
 #define	MACH_SYS_AUE_mach_semaphore_wait_signal_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_semaphore_timedwait_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_semaphore_timedwait_signal_trap	AUE_NULL
-#define	MACH_SYS_AUE_mach_init_process	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_guard_trap	AUE_NULL
+#define	MACH_SYS_AUE__kernelrpc_mach_port_unguard_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_map_fd	AUE_NULL
+#define	MACH_SYS_AUE_mach_task_name_for_pid	AUE_NULL
 #define	MACH_SYS_AUE_mach_task_for_pid	AUE_NULL
 #define	MACH_SYS_AUE_mach_pid_for_task	AUE_NULL
 #define	MACH_SYS_AUE_mach_macx_swapon	AUE_NULL
 #define	MACH_SYS_AUE_mach_macx_swapoff	AUE_NULL
 #define	MACH_SYS_AUE_mach_macx_triggers	AUE_NULL
+#define	MACH_SYS_AUE_mach_macx_backing_store_suspend	AUE_NULL
+#define	MACH_SYS_AUE_mach_macx_backing_store_recovery	AUE_NULL
 #define	MACH_SYS_AUE_mach_swtch_pri	AUE_NULL
 #define	MACH_SYS_AUE_mach_swtch	AUE_NULL
 #define	MACH_SYS_AUE_mach_syscall_thread_switch	AUE_NULL

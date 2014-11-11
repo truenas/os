@@ -71,6 +71,7 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_clock.h>
+#include <compat/mach/mach_port.h>
 #include <compat/mach/mach_proto.h>
 
 
@@ -91,14 +92,6 @@ sys_mach_semaphore_timedwait_signal_trap(struct thread *td, struct mach_semaphor
 	DPRINTF(("%s(0x%x, 0x%x, %d, %d);\n", __FUNCTION__,
 	    uap->wait_name, uap->signal_name, uap->sec,
 	    uap->nsec));
-	return (0);
-}
-
-
-int
-sys_mach_init_process(struct thread *td,struct mach_init_process_args *uap )
-{
-	DPRINTF(("sys_mach_init_process();\n"));
 	return (0);
 }
 
@@ -195,3 +188,121 @@ sys_mach_get_time_base_info(struct thread *td, struct mach_get_time_base_info_ar
 	DPRINTF(("sys_mach_get_time_base_info();\n"));
 	return (0);
 }
+
+int
+sys__kernelrpc_mach_vm_allocate_trap(struct thread *td, struct _kernelrpc_mach_vm_allocate_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_vm_deallocate_trap(struct thread *td, struct _kernelrpc_mach_vm_deallocate_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_vm_protect_trap(struct thread *td, struct _kernelrpc_mach_vm_protect_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_vm_map_trap(struct thread *td, struct _kernelrpc_mach_vm_map_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_allocate_trap(struct thread *td, struct _kernelrpc_mach_port_allocate_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_mach_port_deallocate_trap_args *args)
+{
+
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach_port_mod_refs_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_mach_port_move_member_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_insert_member_trap(struct thread *td, struct _kernelrpc_mach_port_insert_member_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_extract_member_trap(struct thread *td, struct _kernelrpc_mach_port_extract_member_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_construct_trap(struct thread *td, struct _kernelrpc_mach_port_construct_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_destruct_trap(struct thread *td, struct _kernelrpc_mach_port_destruct_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_guard_trap(struct thread *td, struct _kernelrpc_mach_port_guard_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_unguard_trap(struct thread *td, struct _kernelrpc_mach_port_unguard_trap_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys_mach_task_name_for_pid(struct thread *td, struct mach_task_name_for_pid_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys_mach_macx_backing_store_suspend(struct thread *td, struct mach_macx_backing_store_suspend_args *args)
+{
+	return (ENOSYS);
+}
+
+int
+sys_mach_macx_backing_store_recovery(struct thread *td, struct mach_macx_backing_store_recovery_args *args)
+{
+	return (ENOSYS);
+}
+
+
+

@@ -16,9 +16,11 @@
 #include <sys/poll.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
+#include <vm/vm.h>
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_clock.h>
+#include <compat/mach/mach_port.h>
 #include <compat/mach/mach_proto.h>
 
 #define AS(name) (sizeof(struct name) / sizeof(register_t))
@@ -37,22 +39,22 @@ struct sysent mach_sysent[] = {
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 7 = nosys */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 8 = nosys */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 9 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 10 = nosys */
+	{ AS(_kernelrpc_mach_vm_allocate_trap_args), (sy_call_t *)sys__kernelrpc_mach_vm_allocate_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 10 = _kernelrpc_mach_vm_allocate_trap */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 11 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 12 = nosys */
+	{ AS(_kernelrpc_mach_vm_deallocate_trap_args), (sy_call_t *)sys__kernelrpc_mach_vm_deallocate_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 12 = _kernelrpc_mach_vm_deallocate_trap */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 13 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 14 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 15 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 16 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 17 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 18 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 19 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 20 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 21 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 22 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 23 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 24 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 25 = nosys */
+	{ AS(_kernelrpc_mach_vm_protect_trap_args), (sy_call_t *)sys__kernelrpc_mach_vm_protect_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 14 = _kernelrpc_mach_vm_protect_trap */
+	{ AS(_kernelrpc_mach_vm_map_trap_args), (sy_call_t *)sys__kernelrpc_mach_vm_map_trap, AUE_MMAP, NULL, 0, 0, 0, SY_THR_STATIC },	/* 15 = _kernelrpc_mach_vm_map_trap */
+	{ AS(_kernelrpc_mach_port_allocate_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_allocate_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 16 = _kernelrpc_mach_port_allocate_trap */
+	{ AS(_kernelrpc_mach_port_destroy_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_destroy_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 17 = _kernelrpc_mach_port_destroy_trap */
+	{ AS(_kernelrpc_mach_port_deallocate_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_deallocate_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 18 = _kernelrpc_mach_port_deallocate_trap */
+	{ AS(_kernelrpc_mach_port_mod_refs_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_mod_refs_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 19 = _kernelrpc_mach_port_mod_refs_trap */
+	{ AS(_kernelrpc_mach_port_move_member_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_move_member_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 20 = _kernelrpc_mach_port_move_member_trap */
+	{ AS(_kernelrpc_mach_port_insert_right_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_insert_right_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 21 = _kernelrpc_mach_port_insert_right_trap */
+	{ AS(_kernelrpc_mach_port_insert_member_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_insert_member_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 22 = _kernelrpc_mach_port_insert_member_trap */
+	{ AS(_kernelrpc_mach_port_extract_member_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_extract_member_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 23 = _kernelrpc_mach_port_extract_member_trap */
+	{ AS(_kernelrpc_mach_port_construct_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_construct_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 24 = _kernelrpc_mach_port_construct_trap */
+	{ AS(_kernelrpc_mach_port_destruct_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_destruct_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 25 = _kernelrpc_mach_port_destruct_trap */
 	{ 0, (sy_call_t *)sys_mach_reply_port, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 26 = mach_reply_port */
 	{ 0, (sy_call_t *)sys_mach_thread_self_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 27 = mach_thread_self_trap */
 	{ 0, (sy_call_t *)sys_mach_task_self_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 28 = mach_task_self_trap */
@@ -68,10 +70,10 @@ struct sysent mach_sysent[] = {
 	{ AS(mach_semaphore_timedwait_trap_args), (sy_call_t *)sys_mach_semaphore_timedwait_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 38 = mach_semaphore_timedwait_trap */
 	{ AS(mach_semaphore_timedwait_signal_trap_args), (sy_call_t *)sys_mach_semaphore_timedwait_signal_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 39 = mach_semaphore_timedwait_signal_trap */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 40 = nosys */
-	{ 0, (sy_call_t *)sys_mach_init_process, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 41 = mach_init_process */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 42 = nosys */
+	{ AS(_kernelrpc_mach_port_guard_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_guard_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 41 = _kernelrpc_mach_port_guard_trap */
+	{ AS(_kernelrpc_mach_port_unguard_trap_args), (sy_call_t *)sys__kernelrpc_mach_port_unguard_trap, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 42 = _kernelrpc_mach_port_unguard_trap */
 	{ AS(mach_map_fd_args), (sy_call_t *)sys_mach_map_fd, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 43 = mach_map_fd */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 44 = nosys */
+	{ AS(mach_task_name_for_pid_args), (sy_call_t *)sys_mach_task_name_for_pid, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 44 = mach_task_name_for_pid */
 	{ AS(mach_task_for_pid_args), (sy_call_t *)sys_mach_task_for_pid, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 45 = mach_task_for_pid */
 	{ AS(mach_pid_for_task_args), (sy_call_t *)sys_mach_pid_for_task, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 46 = mach_pid_for_task */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 47 = nosys */
@@ -79,8 +81,8 @@ struct sysent mach_sysent[] = {
 	{ AS(mach_macx_swapoff_args), (sy_call_t *)sys_mach_macx_swapoff, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 49 = mach_macx_swapoff */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 50 = nosys */
 	{ AS(mach_macx_triggers_args), (sy_call_t *)sys_mach_macx_triggers, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 51 = mach_macx_triggers */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 52 = nosys */
-	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 53 = nosys */
+	{ AS(mach_macx_backing_store_suspend_args), (sy_call_t *)sys_mach_macx_backing_store_suspend, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 52 = mach_macx_backing_store_suspend */
+	{ AS(mach_macx_backing_store_recovery_args), (sy_call_t *)sys_mach_macx_backing_store_recovery, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 53 = mach_macx_backing_store_recovery */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 54 = nosys */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 55 = nosys */
 	{ 0, (sy_call_t *)nosys, AUE_NULL, NULL, 0, 0, 0, SY_THR_ABSENT },			/* 56 = nosys */
