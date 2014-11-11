@@ -129,7 +129,7 @@ extern int UserTypeLimit;
 extern int yylineno;
 extern string_t yyinname;
 
-extern void init_global();
+extern void init_global(void);
 
 extern string_t UserFilePrefix;
 extern string_t UserHeaderFileName;
@@ -138,8 +138,9 @@ extern string_t InternalHeaderFileName;
 extern string_t DefinesHeaderFileName;
 extern string_t UserFileName;
 extern string_t ServerFileName;
+extern string_t GenerationDate;
 
-extern void more_global();
+extern void more_global(void);
 
 extern char NewCDecl[];
 extern char LintLib[];

@@ -1,3 +1,29 @@
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -194,6 +220,7 @@
  */
 
 #include <assert.h>
+#include <stdlib.h>
 
 #include <mach/message.h>
 #include "write.h"
@@ -263,7 +290,7 @@ WriteMyIncludes(file, stats)
 	WriteIncludes(file, FALSE, FALSE);
     if (ServerHeaderFileName != strNULL)
     {
-        register char *cp;
+        register const char *cp;
 
         /* Strip any leading path from ServerHeaderFileName. */
         cp = strrchr(ServerHeaderFileName, '/');
@@ -404,8 +431,8 @@ WriteSymTabEntries(file, stats)
 
     for (stat = stats; stat != stNULL; stat = stat->stNext)
 	if (stat->stKind == skRoutine) {
-	    register	num = stat->stRoutine->rtNumber;
-	    char	*name = stat->stRoutine->rtName;
+	    register u_int num = stat->stRoutine->rtNumber;
+	    const char	*name = stat->stRoutine->rtName;
 	    while (++current <= num)
 		fprintf(file,"\t\t\t{ \"\", 0, 0 },\n");
 	    fprintf(file, "\t{ \"%s\", %d, _X%s },\n",
@@ -462,7 +489,6 @@ WriteArgDescriptorEntries(file, stats)
     FILE *file;
     statement_t *stats;
 {
-    register u_int current = 0;
     register statement_t *stat;
 
     fprintf(file, "\t{\n");
@@ -538,7 +564,7 @@ WriteSubsystem(file, stats)
 
     fprintf(file, "};\n\n");
 }
-
+#if 0
 static void
 WriteArraySizes(file, stats)
     FILE *file;
@@ -559,7 +585,8 @@ WriteArraySizes(file, stats)
     while (current++ < rtNumber)
 	fprintf(file, "\t\t\t0,\n");
 }
-
+#endif
+static void
 WriteReplyUnion(file, stats)
     FILE *file;
     statement_t *stats;
@@ -696,13 +723,14 @@ WriteDispatcher(file, stats)
  *  Returns the return type of the server-side work function.
  *  Suitable for "extern %s serverfunc()".
  */
-static char *
+#if 0
+static const char *
 ServerSideType(rt)
     routine_t *rt;
 {
     return rt->rtRetCode->argType->itTransType;
 }
-
+#endif
 static void
 WriteRetCode(file, ret)
     FILE *file;
@@ -738,6 +766,7 @@ WriteLocalVarDecl(file, arg)
 	fprintf(file, "\t%s %s", it->itTransType, arg->argVarName);
 }
 
+#if 0
 static void
 WriteServerArgDecl(file, arg)
     FILE *file;
@@ -748,7 +777,7 @@ WriteServerArgDecl(file, arg)
 	    arg->argByReferenceServer ? "*" : "",
 	    arg->argVarName);
 }
-
+#endif
 /*
  *  Writes the local variable declarations which are always
  *  present:  InP, OutP, the server-side work function.
@@ -758,7 +787,7 @@ WriteVarDecls(file, rt)
     FILE *file;
     routine_t *rt;
 {
-    int i;
+    u_int i;
     boolean_t NeedMsghSize = FALSE;
     boolean_t NeedMsghSizeDelta = FALSE;
 
@@ -819,9 +848,7 @@ WriteReplyInit(file, rt)
 }
 
 static void
-WriteRetCArgCheckError(file, rt)
-    FILE *file;
-    routine_t *rt;
+WriteRetCArgCheckError(FILE *file, routine_t *rt __unused)
 {
     fprintf(file, "\tif (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) &&\n");
     fprintf(file, "\t    (In0P->Head.msgh_size == sizeof(mig_reply_error_t)))\n");
@@ -981,10 +1008,10 @@ WriteCheckMsgSize(file, arg)
     fprintf(file, "\n");
 }
 
-static char *
+static const char *
 InArgMsgField(arg, str)
     register argument_t *arg;
-    char *str;
+    const char *str;
 {
     static char buffer[MAX_STR_LEN];
     char who[20] = {0};
@@ -995,12 +1022,12 @@ InArgMsgField(arg, str)
      *	Hence we must cast the values.
      */
 
-    if (!(arg->argFlags & flRetCode))
-	if (akCheck(arg->argKind, akbServerImplicit)) 
-	    sprintf(who, "TrailerP->");
-	else
-	    sprintf(who, "In%dP->", arg->argRequestPos);
-
+    if (!(arg->argFlags & flRetCode)) {
+		if (akCheck(arg->argKind, akbServerImplicit))
+			sprintf(who, "TrailerP->");
+		else
+			sprintf(who, "In%dP->", arg->argRequestPos);
+	}
     if (IsKernelServer &&
 	((akIdent(arg->argKind) == akeRequestPort) ||
 	 (akIdent(arg->argKind) == akeReplyPort)))
@@ -1046,7 +1073,7 @@ WriteExtractKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *recast = "";
+    const char *recast = "";
 
     WriteKPD_Iterator(file, TRUE, it->itVarArray, arg, FALSE);
     /* translation function do not apply to complex types */
@@ -1086,7 +1113,7 @@ WriteExtractKPD_oolport(file, arg)
     fprintf(file, "\t}\n");
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbSendRcv)) {
         register argument_t *poly = arg->argPoly;
-        register char *pref = poly->argByReferenceServer ? "*" : "";
+        register const char *pref = poly->argByReferenceServer ? "*" : "";
 
         fprintf(file, "\t%s%s = In%dP->%s[0].disposition;\n",
             pref, poly->argVarName, arg->argRequestPos, arg->argMsgField);
@@ -1125,7 +1152,7 @@ WriteInitializeCount(file, arg)
      */
 
     if (arg->argCInOut != argNULL) {
-	char *msgfield = InArgMsgField(arg->argCInOut, "");
+	const char *msgfield = InArgMsgField(arg->argCInOut, "");
 
 	fprintf(file, "\tif (%s < %s)\n", msgfield, newstr);
 	fprintf(file, "\t\t%s = %s;\n", newstr, msgfield);
@@ -1213,12 +1240,12 @@ WriteExtractArg(file, arg)
     FILE *file;
     register argument_t *arg;
 {
-    if (akCheckAll(arg->argKind, akbSendRcv|akbVarNeeded))
-	if (akCheck(arg->argKind, akbSendKPD))
-	    (*arg->argKPD_Extract)(file, arg);
-	else
-	    WriteExtractArgValue(file, arg);
-
+    if (akCheckAll(arg->argKind, akbSendRcv|akbVarNeeded)) {
+		if (akCheck(arg->argKind, akbSendKPD))
+			(*arg->argKPD_Extract)(file, arg);
+		else
+			WriteExtractArgValue(file, arg);
+	}
     if ((akIdent(arg->argKind) == akeCount) &&
 	akCheck(arg->argKind, akbReturnSnd)) {
 
@@ -1309,8 +1336,6 @@ WriteConditionalCallArg(file, arg)
 {
     ipc_type_t *it = arg->argType;
     boolean_t NeedClose = FALSE;
-    string_t  msgfield = 
-	(arg->argSuffix != strNULL) ? arg->argSuffix : arg->argMsgField;
 
     if ((it->itInTrans != strNULL) &&
 	akCheck(arg->argKind, akbSendRcv) &&
@@ -1417,9 +1442,8 @@ WriteDestroyPortArg(file, arg)
 /*
  * Check whether WriteDestroyPortArg would generate any code for arg.
  */
-boolean_t
-CheckDestroyPortArg(arg)
-    register argument_t *arg;
+static boolean_t
+CheckDestroyPortArg(argument_t *arg)
 {
     register ipc_type_t *it = arg->argType;
 
@@ -1489,7 +1513,7 @@ WriteInitKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *subindex = "";
+    const char *subindex = "";
     boolean_t close = FALSE;
     char firststring[MAX_STR_LEN];
     char string[MAX_STR_LEN];
@@ -1670,8 +1694,8 @@ WriteKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *subindex = "";
-    char *recast = "";
+    const char *subindex = "";
+    const char *recast = "";
     boolean_t close = FALSE;
     char string[MAX_STR_LEN];
     ipc_type_t *real_it;
@@ -1738,7 +1762,7 @@ WriteKPD_ool(file, arg)
     boolean_t VarArray;
     argument_t *count;
     u_int howbig;
-    char *subindex;
+    const char *subindex;
 
     if (IS_MULTIPLE_KPD(it)) {
 	WriteKPD_Iterator(file, FALSE, it->itVarArray, arg, TRUE);
@@ -1800,7 +1824,8 @@ WriteKPD_oolport(file, arg)
     register ipc_type_t *it = arg->argType;
     boolean_t VarArray;
     argument_t *count;
-    char *subindex, string[MAX_STR_LEN];
+    const char *subindex;
+	char string[MAX_STR_LEN];
 
     if (IS_MULTIPLE_KPD(it)) {
 	WriteKPD_Iterator(file, FALSE, it->itVarArray, arg, TRUE);
@@ -1855,7 +1880,7 @@ WriteTCheckKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *tab = "";
+    const char *tab = "";
     char string[MAX_STR_LEN];
     boolean_t close = FALSE;
 
@@ -1889,7 +1914,8 @@ WriteTCheckKPD_ool(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *tab, string[MAX_STR_LEN];
+    const char *tab;
+	char string[MAX_STR_LEN];
     boolean_t test;
     u_int howmany, howbig;
 
@@ -1929,10 +1955,11 @@ WriteTCheckKPD_oolport(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *tab, string[MAX_STR_LEN];
+    const char *tab;
+	char string[MAX_STR_LEN];
     boolean_t test;
     u_int howmany;
-    char *howstr;
+    const char *howstr;
 
     if (IS_MULTIPLE_KPD(it)) {
 	WriteKPD_Iterator(file, TRUE, FALSE, arg, TRUE);
@@ -2099,7 +2126,7 @@ WriteArgSize(file, arg)
      * we have to round up.
      */
     if (bsize % sizeof(natural_t) != 0)
-	fprintf(file, " + %d) & ~%d)", sizeof(natural_t)-1, sizeof(natural_t)-1);
+	fprintf(file, " + %ld) & ~%ld)", sizeof(natural_t)-1, sizeof(natural_t)-1);
     else
 	fprintf(file, "))");
 }
@@ -2373,14 +2400,14 @@ WriteRoutine(file, rt)
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) { 
 	WriteRetCArgCheckError(file, rt);
 	if (rt->rtServerImpl)
-	    WriteCheckTrailerHead(file, rt, FALSE, "In0P");
+	    WriteCheckTrailerHead(file, rt, FALSE);
         WriteServerCall(file, rt, WriteConditionalCallArg);
 	WriteRetCArgFinishError(file, rt);
     }
 
     WriteCheckHead(file, rt);
     if (rt->rtServerImpl)
-        WriteCheckTrailerHead(file, rt, FALSE, "In0P");
+        WriteCheckTrailerHead(file, rt, FALSE);
 
     WriteList(file, rt->rtArgs, WriteTypeCheck, akbSendKPD, "\n", "\n");
 

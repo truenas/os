@@ -1,3 +1,30 @@
+
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -127,6 +154,8 @@
  *	Created.
  */
 
+#include <stdio.h>
+
 #include "type.h"
 #include <sys/types.h>
 #include <mach/message.h>
@@ -137,7 +166,7 @@
 #include "error.h"
 #include "alloc.h"
 #include "global.h"
-#include <stdio.h>
+#include "strdefs.h"
 
 #define	PortSize	(sizeof (mach_port_t) * NBBY)
 
@@ -153,7 +182,7 @@ ipc_type_t *itMsgOptionType;	/* used for dummy MsgOption args */
 
 static ipc_type_t *list = itNULL;
 
-static char *machine_integer_name;
+static string_t machine_integer_name;
 static u_int machine_integer_size;
 static u_int machine_integer_bits;
 
@@ -168,15 +197,15 @@ itLookUp(name)
     register ipc_type_t *it, **last;
 
     for (it = *(last = &list); it != itNULL; it = *(last = &it->itNext))
-	if (streql(name, it->itName))
-	{
-	    /* move this type to the front of the list */
-	    *last = it->itNext;
-	    it->itNext = list;
-	    list = it;
+		if (streql(name, it->itName))
+		{
+			/* move this type to the front of the list */
+			*last = it->itNext;
+			it->itNext = list;
+			list = it;
 
-	    return it;
-	}
+			return it;
+		}
 
     return itNULL;
 }
@@ -199,43 +228,44 @@ static ipc_type_t *
 itAlloc()
 {
     static ipc_type_t prototype =
-    {
-	strNULL,		/* identifier_t itName */
-	0,			/* ipc_type_t *itNext */
-	0,			/* u_int itTypeSize */
-	0,			/* u_int itPadSize */
-	0,			/* u_int itMinTypeSize */
-	0,			/* u_int itInName */
-	0,			/* u_int itOutName */
-	0,			/* u_int itSize */
-	1,			/* u_int itNumber */
-	0,			/* u_int itKPD_Number */
-	TRUE,			/* boolean_t itInLine */
-	FALSE,			/* boolean_t itMigInLine */
-	FALSE,			/* boolean_t itPortType */
-	strNULL,		/* string_t itInNameStr */
-	strNULL,		/* string_t itOutNameStr */
-	TRUE,			/* boolean_t itStruct */
-	FALSE,			/* boolean_t itString */
-	FALSE,			/* boolean_t itVarArray */
-	FALSE,			/* boolean_t itNoOptArray */
-	FALSE,			/* boolean_t itNative */
-	FALSE,			/* boolean_t itNativePointer */
-	itNULL,			/* ipc_type_t *itElement */
-	strNULL,		/* identifier_t itUserType */
-	strNULL,		/* identifier_t itServerType */
-	strNULL,		/* identifier_t itTransType */
-	strNULL,		/* identifier_t itUserKPDType */
-	strNULL,		/* identifier_t itServerKPDType */
-	strNULL,		/* identifier_t itInTrans */
-	strNULL,		/* identifier_t itOutTrans */
-	strNULL,		/* identifier_t itDestructor */
-    };
+		{
+			strNULL,		/* identifier_t itName */
+			0,			/* ipc_type_t *itNext */
+			0,			/* u_int itTypeSize */
+			0,			/* u_int itPadSize */
+			0,			/* u_int itMinTypeSize */
+			0,			/* u_int itInName */
+			0,			/* u_int itOutName */
+			0,			/* u_int itSize */
+			1,			/* u_int itNumber */
+			0,			/* u_int itKPD_Number */
+			TRUE,			/* boolean_t itInLine */
+			FALSE,			/* boolean_t itMigInLine */
+			FALSE,			/* boolean_t itPortType */
+			strNULL,		/* string_t itInNameStr */
+			strNULL,		/* string_t itOutNameStr */
+			TRUE,			/* boolean_t itStruct */
+			FALSE,			/* boolean_t itString */
+			FALSE,			/* boolean_t itVarArray */
+			FALSE,			/* boolean_t itNoOptArray */
+			FALSE,			/* boolean_t itNative */
+			FALSE,			/* boolean_t itNativePointer */
+			itNULL,			/* ipc_type_t *itElement */
+			strNULL,		/* identifier_t itUserType */
+			strNULL,		/* identifier_t itServerType */
+			strNULL,		/* identifier_t itTransType */
+			strNULL,		/* identifier_t itUserKPDType */
+			strNULL,		/* identifier_t itServerKPDType */
+			strNULL,		/* identifier_t itInTrans */
+			strNULL,		/* identifier_t itOutTrans */
+			strNULL,		/* identifier_t itDestructor */
+			strNULL		    /* identifier_t itBadValue */
+		};
     register ipc_type_t *new;
 
     new = (ipc_type_t *) malloc(sizeof *new);
     if (new == itNULL)
-	fatal("itAlloc(): %s", strerror(errno));
+		fatal("itAlloc(): %s", strerror(errno));
     *new = prototype;
     return new;
 }
@@ -243,9 +273,8 @@ itAlloc()
 /*
  * Convert an IPC type-name into a string.
  */
-static char *
-itNameToString(name)
-    u_int name;
+static const char *
+itNameToString(u_int name)
 {
     char buffer[100];
 
@@ -264,47 +293,47 @@ itCalculateSizeInfo(it)
 {
     if (!IS_KERN_PROC_DATA(it))
     {
-	u_int bytes = (it->itNumber * it->itSize + 7) / 8;
-	u_int padding = machine_padding(bytes);
+		u_int bytes = (it->itNumber * it->itSize + 7) / 8;
+		u_int padding = machine_padding(bytes);
 
-	it->itTypeSize = bytes;
-	it->itPadSize = padding;
-	if (IS_VARIABLE_SIZED_UNTYPED(it)) {
-	    /*
-   	     * for these arrays, the argCount is not a akbRequest|akbReply,
-	     * therefore we need to account here for the space of the count
-	     * (itMinTypeSize is used only in rtFindSize)
-	     */
-	    it->itMinTypeSize = sizeof (mach_msg_type_number_t);
-	    /* 
-	     * NDR encoded VarString carry the extra offset 4-bytes fields
-	     * for MIG, it should be always 0;
-	     */
-	    if (it->itString)
-		it->itMinTypeSize += sizeof (mach_msg_type_number_t);
-	} else
-	    it->itMinTypeSize = bytes + padding;
+		it->itTypeSize = bytes;
+		it->itPadSize = padding;
+		if (IS_VARIABLE_SIZED_UNTYPED(it)) {
+			/*
+			 * for these arrays, the argCount is not a akbRequest|akbReply,
+			 * therefore we need to account here for the space of the count
+			 * (itMinTypeSize is used only in rtFindSize)
+			 */
+			it->itMinTypeSize = sizeof (mach_msg_type_number_t);
+			/* 
+			 * NDR encoded VarString carry the extra offset 4-bytes fields
+			 * for MIG, it should be always 0;
+			 */
+			if (it->itString)
+				it->itMinTypeSize += sizeof (mach_msg_type_number_t);
+		} else
+			it->itMinTypeSize = bytes + padding;
     } else {
-	/*
-	 * 1) ports 2) OOL 3) ports OOL 
+		/*
+		 * 1) ports 2) OOL 3) ports OOL 
          * all have the same size = sizeof(mach_msg_descriptor_t)
-	 */
-	u_int bytes;
-	if (IS_MULTIPLE_KPD(it))
-	    bytes = it->itKPD_Number * sizeof(mach_msg_descriptor_t);
-	else 
-	    bytes = sizeof(mach_msg_descriptor_t);
+		 */
+		u_int bytes;
+		if (IS_MULTIPLE_KPD(it))
+			bytes = it->itKPD_Number * sizeof(mach_msg_descriptor_t);
+		else 
+			bytes = sizeof(mach_msg_descriptor_t);
 
-	it->itTypeSize = bytes;
-	it->itPadSize = 0;
-	it->itMinTypeSize = bytes;
+		it->itTypeSize = bytes;
+		it->itPadSize = 0;
+		it->itMinTypeSize = bytes;
     }
 
     /* Unfortunately, these warning messages can't give a type name;
        we haven't seen a name yet (it might stay anonymous.) */
 
     if ((it->itTypeSize == 0) && !it->itVarArray && !it->itNative)
-	warn("sizeof(%s) == 0");
+		warn("sizeof(%s) == 0");
 }
 
 /*
@@ -317,14 +346,14 @@ itCalculateNameInfo(it)
     register ipc_type_t *it;
 {
     if (it->itInNameStr == strNULL)
-	it->itInNameStr = strmake(itNameToString(it->itInName));
+		it->itInNameStr = strmake(itNameToString(it->itInName));
     if (it->itOutNameStr == strNULL)
-	it->itOutNameStr = strmake(itNameToString(it->itOutName));
+		it->itOutNameStr = strmake(itNameToString(it->itOutName));
 
     if (it->itUserType == strNULL)
-	it->itUserType = it->itName;
+		it->itUserType = it->itName;
     if (it->itServerType == strNULL)
-	it->itServerType = it->itName;
+		it->itServerType = it->itName;
 
     /*
      *	KernelServer and KernelUser interfaces get special treatment here.
@@ -340,23 +369,23 @@ itCalculateNameInfo(it)
      */
 
     if (IsKernelServer &&
-	streql(it->itServerType, "mach_port_t") &&
-	(((it->itInName == MACH_MSG_TYPE_POLYMORPHIC) &&
-	  (it->itOutName == MACH_MSG_TYPE_POLYMORPHIC)) ||
-	 MACH_MSG_TYPE_PORT_ANY(it->itInName) ||
-	 MACH_MSG_TYPE_PORT_ANY(it->itOutName)))
-	it->itServerType = "ipc_port_t";
+		streql(it->itServerType, "mach_port_t") &&
+		(((it->itInName == MACH_MSG_TYPE_POLYMORPHIC) &&
+		  (it->itOutName == MACH_MSG_TYPE_POLYMORPHIC)) ||
+		 MACH_MSG_TYPE_PORT_ANY(it->itInName) ||
+		 MACH_MSG_TYPE_PORT_ANY(it->itOutName)))
+		it->itServerType = "ipc_port_t";
 
     if (IsKernelUser &&
-	streql(it->itUserType, "mach_port_t") &&
-	(((it->itInName == MACH_MSG_TYPE_POLYMORPHIC) &&
-	  (it->itOutName == MACH_MSG_TYPE_POLYMORPHIC)) ||
-	 MACH_MSG_TYPE_PORT_ANY(it->itInName) ||
-	 MACH_MSG_TYPE_PORT_ANY(it->itOutName)))
-	it->itUserType = "ipc_port_t";
+		streql(it->itUserType, "mach_port_t") &&
+		(((it->itInName == MACH_MSG_TYPE_POLYMORPHIC) &&
+		  (it->itOutName == MACH_MSG_TYPE_POLYMORPHIC)) ||
+		 MACH_MSG_TYPE_PORT_ANY(it->itInName) ||
+		 MACH_MSG_TYPE_PORT_ANY(it->itOutName)))
+		it->itUserType = "ipc_port_t";
 
     if (it->itTransType == strNULL)
-	it->itTransType = it->itServerType;
+		it->itTransType = it->itServerType;
 }
 
 /******************************************************
@@ -378,11 +407,11 @@ itCheckDecl(name, it)
        limitations in Mig */
 
     if (it->itVarArray) {
-	if ((it->itInTrans != strNULL) || (it->itOutTrans != strNULL))
-	    error("%s: can't translate variable-sized arrays", name);
+		if ((it->itInTrans != strNULL) || (it->itOutTrans != strNULL))
+			error("%s: can't translate variable-sized arrays", name);
 
-	if (it->itDestructor != strNULL)
-	    error("%s: can't destroy variable-sized array", name);
+		if (it->itDestructor != strNULL)
+			error("%s: can't destroy variable-sized array", name);
     }
 }
 
@@ -394,21 +423,21 @@ itPrintTrans(it)
     register ipc_type_t *it;
 {
     if (!streql(it->itName, it->itUserType))
-	printf("\tCUserType:\t%s\n", it->itUserType);
+		printf("\tCUserType:\t%s\n", it->itUserType);
 
     if (!streql(it->itName, it->itServerType))
-	printf("\tCServerType:\t%s\n", it->itServerType);
+		printf("\tCServerType:\t%s\n", it->itServerType);
 
     if (it->itInTrans != strNULL)
-       printf("\tInTran:\t\t%s %s(%s)\n",
-	      it->itTransType, it->itInTrans, it->itServerType);
+		printf("\tInTran:\t\t%s %s(%s)\n",
+			   it->itTransType, it->itInTrans, it->itServerType);
 
     if (it->itOutTrans != strNULL)
-       printf("\tOutTran:\t%s %s(%s)\n",
-	      it->itServerType, it->itOutTrans, it->itTransType);
+		printf("\tOutTran:\t%s %s(%s)\n",
+			   it->itServerType, it->itOutTrans, it->itTransType);
 
     if (it->itDestructor != strNULL)
-	printf("\tDestructor:\t%s(%s)\n", it->itDestructor, it->itTransType);
+		printf("\tDestructor:\t%s(%s)\n", it->itDestructor, it->itTransType);
 }
 
 /*
@@ -421,22 +450,22 @@ itPrintDecl(name, it)
 {
     printf("Type %s = ", name);
     if (!it->itInLine)
-	printf("^ ");
+		printf("^ ");
     if (it->itVarArray)
-	if (it->itNumber == 0 || it->itMigInLine)
-	    printf("array [] of ");
-	else
-	    printf("array [*:%d] of ", it->itNumber);
+		if (it->itNumber == 0 || it->itMigInLine)
+			printf("array [] of ");
+		else
+			printf("array [*:%d] of ", it->itNumber);
     else if (it->itStruct && ((it->itNumber != 1) ||
-			      (it->itInName == MACH_MSG_TYPE_STRING_C)))
-	printf("struct [%d] of ", it->itNumber);
+							  (it->itInName == MACH_MSG_TYPE_STRING_C)))
+		printf("struct [%d] of ", it->itNumber);
     else if (it->itNumber != 1)
-	printf("array [%d] of ", it->itNumber);
+		printf("array [%d] of ", it->itNumber);
 
     if (streql(it->itInNameStr, it->itOutNameStr))
-	printf("(%s,", it->itInNameStr);
+		printf("(%s,", it->itInNameStr);
     else
-	printf("(%s|%s", it->itInNameStr, it->itOutNameStr);
+		printf("(%s|%s", it->itInNameStr, it->itOutNameStr);
 
     printf(" %d)\n", it->itSize);
 
@@ -459,7 +488,7 @@ itTypeDecl(name, it)
     itCheckDecl(name, it);
 
     if (BeVerbose)
-	itPrintDecl(name, it);
+		itPrintDecl(name, it);
 }
 
 /*
@@ -478,7 +507,7 @@ itShortDecl(inname, instr, outname, outstr, defsize)
     register ipc_type_t *it;
 
     if (defsize == 0)
-	error("must use full IPC type decl");
+		error("must use full IPC type decl");
 
     it = itAlloc();
     it->itInName = inname;
@@ -488,8 +517,8 @@ itShortDecl(inname, instr, outname, outstr, defsize)
     it->itSize = defsize;
     if (inname == MACH_MSG_TYPE_STRING_C)
     {
-	it->itStruct = FALSE;
-	it->itString = TRUE;
+		it->itStruct = FALSE;
+		it->itString = TRUE;
     }
     /*
      * I check only inname, because outname
@@ -497,7 +526,7 @@ itShortDecl(inname, instr, outname, outstr, defsize)
      * are now restricted to port rights)
      */
     if (MACH_MSG_TYPE_PORT_ANY(inname) ||
-	inname == MACH_MSG_TYPE_POLYMORPHIC) {
+		inname == MACH_MSG_TYPE_POLYMORPHIC) {
 	    it->itPortType = TRUE;
 	    it->itKPD_Number = 1;
     }
@@ -560,11 +589,11 @@ itPrevDecl(name)
 
     old = itLookUp(name);
     if (old == itNULL) {
-	error("type '%s' not defined", name);
-	return itAlloc();
+		error("type '%s' not defined", name);
+		return itAlloc();
     }
     else
-	return itCopyType(old);
+		return itCopyType(old);
 }
 
 /*
@@ -581,34 +610,34 @@ itVarArrayDecl(number, old)
     register ipc_type_t *it = itResetType(itCopyType(old)); 
 
     if (!it->itInLine) {
-	/* already an initialized KPD */
-	if (it->itKPD_Number != 1 || !number)
-	    error("IPC type decl is too complicated for Kernel Processed Data");
-	it->itKPD_Number *= number;
-	it->itNumber = 1;
-	it->itInLine = FALSE;
-	it->itStruct = FALSE;  
+		/* already an initialized KPD */
+		if (it->itKPD_Number != 1 || !number)
+			error("IPC type decl is too complicated for Kernel Processed Data");
+		it->itKPD_Number *= number;
+		it->itNumber = 1;
+		it->itInLine = FALSE;
+		it->itStruct = FALSE;  
     } else if (it->itVarArray)
-	error("IPC type decl is too complicated");
+		error("IPC type decl is too complicated");
     else if (number) {
-	it->itNumber *= number;
-	/* 
-	 * Bounded [Scalar, Port] VarArray: in-line!
-	 */
-	it->itInLine = TRUE;
-	it->itStruct = FALSE;  
+		it->itNumber *= number;
+		/* 
+		 * Bounded [Scalar, Port] VarArray: in-line!
+		 */
+		it->itInLine = TRUE;
+		it->itStruct = FALSE;  
         if (it->itPortType) 
-	    it->itKPD_Number *= number;
+			it->itKPD_Number *= number;
     } else {
-	it->itNumber = 0;
-	/* 
-	 * UnBounded [Scalar, Port] VarArray: always in-line
-	 * interface and out-of-line mechanism!
-	 */
-	it->itMigInLine = TRUE;
-	it->itInLine = FALSE;
-	it->itStruct = TRUE;  
-	it->itKPD_Number = 1;
+		it->itNumber = 0;
+		/* 
+		 * UnBounded [Scalar, Port] VarArray: always in-line
+		 * interface and out-of-line mechanism!
+		 */
+		it->itMigInLine = TRUE;
+		it->itInLine = FALSE;
+		it->itStruct = TRUE;  
+		it->itKPD_Number = 1;
     }
 	
     it->itVarArray = TRUE;
@@ -630,22 +659,22 @@ itArrayDecl(number, old)
     register ipc_type_t *it = itResetType(itCopyType(old)); 
 
     if (!it->itInLine) {
-	/* already an initialized KPD */
-	if (it->itKPD_Number != 1)
-	    error("IPC type decl is too complicated for Kernel Processed Data");
-	it->itKPD_Number *= number;
-	it->itNumber = 1;
-	it->itStruct = FALSE;
-	it->itString = FALSE;
-	it->itVarArray = FALSE;
+		/* already an initialized KPD */
+		if (it->itKPD_Number != 1)
+			error("IPC type decl is too complicated for Kernel Processed Data");
+		it->itKPD_Number *= number;
+		it->itNumber = 1;
+		it->itStruct = FALSE;
+		it->itString = FALSE;
+		it->itVarArray = FALSE;
     } else if (it->itVarArray)
-	error("IPC type decl is too complicated");
+		error("IPC type decl is too complicated");
     else {
-	it->itNumber *= number;
-	it->itStruct = FALSE;
-	it->itString = FALSE;
-	if (it->itPortType) 
-	    it->itKPD_Number *= number;
+		it->itNumber *= number;
+		it->itStruct = FALSE;
+		it->itString = FALSE;
+		if (it->itPortType) 
+			it->itKPD_Number *= number;
     }
 
     itCalculateSizeInfo(it);
@@ -661,7 +690,7 @@ itPtrDecl(it)
     ipc_type_t *it;
 {
     if (!it->itInLine && !it->itMigInLine)
-	error("IPC type decl is already defined to be Out-Of-Line");
+		error("IPC type decl is already defined to be Out-Of-Line");
     it->itInLine = FALSE;
     it->itStruct = TRUE;
     it->itString = FALSE;
@@ -684,7 +713,7 @@ itStructDecl(number, old)
     register ipc_type_t *it = itResetType(itCopyType(old));
 
     if (!it->itInLine || it->itVarArray)
-	error("IPC type decl is too complicated");
+		error("IPC type decl is too complicated");
     it->itNumber *= number;
     it->itStruct = TRUE;
     it->itString = FALSE;
@@ -698,18 +727,16 @@ itStructDecl(number, old)
  * 'array[n] of (MSG_TYPE_STRING_C, 8)'
  */
 ipc_type_t *
-itCStringDecl(count, varying)
-    int	count;
-    boolean_t varying;
+itCStringDecl(u_int count, boolean_t varying)
 {
     register ipc_type_t *it;
     register ipc_type_t *itElement;
 
     itElement = itShortDecl(MACH_MSG_TYPE_STRING_C,
-			    "MACH_MSG_TYPE_STRING_C",
-			    MACH_MSG_TYPE_STRING_C,
-			    "MACH_MSG_TYPE_STRING_C",
-			    8);
+							"MACH_MSG_TYPE_STRING_C",
+							MACH_MSG_TYPE_STRING_C,
+							"MACH_MSG_TYPE_STRING_C",
+							8);
     itCheckDecl("char", itElement);
 
     it = itResetType(itCopyType(itElement));
@@ -723,19 +750,16 @@ itCStringDecl(count, varying)
 }
 
 extern ipc_type_t *
-itMakeSubCountType(count, varying, name)
-    int	count;
-    boolean_t varying;
-    string_t  name;
+itMakeSubCountType(u_int count, boolean_t varying, string_t name __unused)
 {
     register ipc_type_t *it;
     register ipc_type_t *itElement;
 
     itElement = itShortDecl(machine_integer_size,
-			    machine_integer_name,
-			    machine_integer_size,
-			    machine_integer_name,
-			    machine_integer_bits);
+							machine_integer_name,
+							machine_integer_size,
+							machine_integer_name,
+							machine_integer_bits);
     itCheckDecl("mach_msg_type_number_t", itElement);
 
     it = itResetType(itCopyType(itElement));
@@ -750,11 +774,11 @@ itMakeSubCountType(count, varying, name)
     it->itInLine = TRUE;
     it->itName = "mach_msg_type_number_t *";
     if (varying)
-	it->itVarArray = TRUE;
+		it->itVarArray = TRUE;
     else
-	/* to skip the optimized copy of fixed array: in fact we need to
-	 * reference each element and we also miss a user type for it */
-	it->itNoOptArray = TRUE;
+		/* to skip the optimized copy of fixed array: in fact we need to
+		 * reference each element and we also miss a user type for it */
+		it->itNoOptArray = TRUE;
 
     itCalculateSizeInfo(it);
     itCalculateNameInfo(it);
@@ -762,7 +786,7 @@ itMakeSubCountType(count, varying, name)
 }
 
 extern ipc_type_t *
-itMakeCountType()
+itMakeCountType(void)
 {
     ipc_type_t *it = itAlloc();
 
@@ -779,7 +803,7 @@ itMakeCountType()
 }
 
 extern ipc_type_t *
-itMakePolyType()
+itMakePolyType(void)
 {
     ipc_type_t *it = itAlloc();
 
@@ -796,7 +820,7 @@ itMakePolyType()
 }
 
 extern ipc_type_t *
-itMakeDeallocType()
+itMakeDeallocType(void)
 {
     ipc_type_t *it = itAlloc();
 
@@ -847,15 +871,15 @@ init_type()
 
     size = NBBY * sizeof (natural_t);
     if (size == 32) {
-	machine_integer_name = "MACH_MSG_TYPE_INTEGER_32";
-	machine_integer_size = MACH_MSG_TYPE_INTEGER_32;
+		machine_integer_name = "MACH_MSG_TYPE_INTEGER_32";
+		machine_integer_size = MACH_MSG_TYPE_INTEGER_32;
     }
     else if (size == 64) {
-	machine_integer_name = "MACH_MSG_TYPE_INTEGER_64";
-	machine_integer_size = MACH_MSG_TYPE_INTEGER_64;
+		machine_integer_name = "MACH_MSG_TYPE_INTEGER_64";
+		machine_integer_size = MACH_MSG_TYPE_INTEGER_64;
     }
     else
-	error("init_type unknown size %d", size);
+		error("init_type unknown size %d", size);
 
     machine_integer_bits = size;
 
@@ -943,10 +967,10 @@ itCheckReturnType(name, it)
     ipc_type_t *it;
 {
     if (!it->itStruct)
-	error("type of %s is too complicated", name);
+		error("type of %s is too complicated", name);
     if ((it->itInName == MACH_MSG_TYPE_POLYMORPHIC) ||
-	(it->itOutName == MACH_MSG_TYPE_POLYMORPHIC))
-	error("type of %s can't be polymorphic", name);
+		(it->itOutName == MACH_MSG_TYPE_POLYMORPHIC))
+		error("type of %s can't be polymorphic", name);
 }
 
 
@@ -960,17 +984,17 @@ itCheckRequestPortType(name, it)
     ipc_type_t *it;
 {
 /*    error("Port size = %d %d name = %s\n", PortSize, it->itSize, it->itName);
-    error("server = %s user = %x\n",it->itServerType, it->itUserType);
+	  error("server = %s user = %x\n",it->itServerType, it->itUserType);
 */
     if (((it->itOutName != MACH_MSG_TYPE_PORT_SEND) &&
-	 (it->itOutName != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
-	 (it->itOutName != MACH_MSG_TYPE_POLYMORPHIC)) ||
-	(it->itNumber != 1) ||
-	(it->itSize != PortSize) ||
-	!it->itInLine ||
-	!it->itStruct ||
-	it->itVarArray)
-	error("argument %s isn't a proper request port", name);
+		 (it->itOutName != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
+		 (it->itOutName != MACH_MSG_TYPE_POLYMORPHIC)) ||
+		(it->itNumber != 1) ||
+		(it->itSize != PortSize) ||
+		!it->itInLine ||
+		!it->itStruct ||
+		it->itVarArray)
+		error("argument %s isn't a proper request port", name);
 }
 
 
@@ -984,15 +1008,15 @@ itCheckReplyPortType(name, it)
     ipc_type_t *it;
 {
     if (((it->itOutName != MACH_MSG_TYPE_PORT_SEND) &&
-	 (it->itOutName != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
-	 (it->itOutName != MACH_MSG_TYPE_POLYMORPHIC) &&
-	 (it->itOutName != 0)) ||
-	(it->itNumber != 1) ||
-	(it->itSize != PortSize) ||
-	!it->itInLine ||
-	!it->itStruct ||
-	it->itVarArray)
-	error("argument %s isn't a proper reply port", name);
+		 (it->itOutName != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
+		 (it->itOutName != MACH_MSG_TYPE_POLYMORPHIC) &&
+		 (it->itOutName != 0)) ||
+		(it->itNumber != 1) ||
+		(it->itSize != PortSize) ||
+		!it->itInLine ||
+		!it->itStruct ||
+		it->itVarArray)
+		error("argument %s isn't a proper reply port", name);
 }
 
 
@@ -1006,13 +1030,13 @@ itCheckIntType(name, it)
     ipc_type_t *it;
 {
     if ((it->itInName != machine_integer_size) ||
-	(it->itOutName != machine_integer_size) ||
-	(it->itNumber != 1) ||
-	(it->itSize != machine_integer_bits) ||
-	!it->itInLine ||
-	!it->itStruct ||
-	it->itVarArray)
-	error("argument %s isn't a proper integer", name);
+		(it->itOutName != machine_integer_size) ||
+		(it->itNumber != 1) ||
+		(it->itSize != machine_integer_bits) ||
+		!it->itInLine ||
+		!it->itStruct ||
+		it->itVarArray)
+		error("argument %s isn't a proper integer", name);
 }
 
 void
@@ -1022,6 +1046,6 @@ itCheckSecTokenType(name, it)
 {
     if (it->itMigInLine || it->itNoOptArray || it->itString || 
         it->itTypeSize != 8 || !it->itInLine || !it->itStruct || 
-	it->itVarArray || it->itPortType)
+		it->itVarArray || it->itPortType)
 	    error("argument %s isn't a proper SecToken", name);
 }

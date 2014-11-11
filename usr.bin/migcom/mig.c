@@ -1,3 +1,29 @@
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -143,6 +169,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "error.h"
 #include "lexxer.h"
 #include "global.h"
@@ -296,12 +323,10 @@ parseArgs(argc, argv)
 	    fatal("bad argument: '%s'", *argv);
 }
 
-FILE *uheader, *server, *user;
+static FILE *uheader, *server, *user;
 
-void
-main(argc, argv)
-    int argc;
-    char *argv[];
+int
+main(int argc, char *argv[])
 {
     FILE *iheader, *sheader, *dheader;
     time_t loc;
@@ -341,7 +366,7 @@ main(argc, argv)
 	printf("Writing %s ... ", UserHeaderFileName);
 	fflush(stdout);
     }
-    WriteUserHeader(uheader, stats);
+    WriteUserHeader(uheader, defs_stats);
     fclose(uheader);
     if (ServerHeaderFileName)
     {
@@ -350,7 +375,7 @@ main(argc, argv)
 	    printf ("done.\nWriting %s ...", ServerHeaderFileName);
 	    fflush (stdout);
 	}
-	WriteServerHeader(sheader, stats);
+	WriteServerHeader(sheader, defs_stats);
 	fclose(sheader);
     }
     if (IsKernelServer)
@@ -360,7 +385,7 @@ main(argc, argv)
 	    printf("done.\nWriting %s ... ", InternalHeaderFileName);
 	    fflush(stdout);
 	}
-	WriteInternalHeader(iheader, stats);
+	WriteInternalHeader(iheader, defs_stats);
 	fclose(iheader);
     }
     if (DefinesHeaderFileName)
@@ -370,7 +395,7 @@ main(argc, argv)
 	    printf ("done.\nWriting %s ...", DefinesHeaderFileName);
 	    fflush (stdout);
 	}
-	WriteDefinesHeader(dheader, stats);
+	WriteDefinesHeader(dheader, defs_stats);
 	fclose(dheader);
     }
     if (UserFilePrefix)
@@ -380,7 +405,7 @@ main(argc, argv)
 	    printf("done.\nWriting individual user files ... ");
 	    fflush(stdout);
 	}
-	WriteUserIndividual(stats);
+	WriteUserIndividual(defs_stats);
     }
     else
     {
@@ -389,7 +414,7 @@ main(argc, argv)
 	    printf("done.\nWriting %s ... ", UserFileName);
 	    fflush(stdout);
 	}
-	WriteUser(user, stats);
+	WriteUser(user, defs_stats);
 	fclose(user);
     }
     if (BeVerbose)
@@ -397,12 +422,12 @@ main(argc, argv)
 	printf("done.\nWriting %s ... ", ServerFileName);
 	fflush(stdout);
     }
-    WriteServer(server, stats);
+    WriteServer(server, defs_stats);
     fclose(server);
     if (BeVerbose)
 	printf("done.\n");
 
-    exit(0);
+	return (0);
 }
 
 static FILE *
@@ -410,7 +435,7 @@ myfopen(name, mode)
     char *name;
     char *mode;
 {
-    char *realname;
+    const char *realname;
     FILE *file;
 
     if (name == strNULL)

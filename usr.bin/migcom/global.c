@@ -105,6 +105,9 @@
  *	Created.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <mach/message.h>
 #include "strdefs.h"
 #include "global.h"
 #include "error.h"
@@ -147,7 +150,7 @@ char NewCDecl[] = "(defined(__STDC__) || defined(c_plusplus))";
 char LintLib[] = "defined(LINTLIBRARY)";
 
 void
-init_global()
+init_global(void)
 {
     yyinname = strmake("<no name yet>");
 }
@@ -162,11 +165,12 @@ string_t ServerFileName = strNULL;
 string_t GenerationDate = strNULL;
 
 void
-more_global()
+more_global(void)
 {
-    if (SubsystemName == strNULL)
-	fatal("no SubSystem declaration");
-
+    if (SubsystemName == strNULL) {
+		printf("no SubSystem declaration");
+		exit(1);
+	}
     if (UserHeaderFileName == strNULL)
 	UserHeaderFileName = strconcat(SubsystemName, ".h");
     else if (streql(UserHeaderFileName, "/dev/null"))

@@ -1,3 +1,29 @@
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -221,18 +247,20 @@
  */
 
 #include <assert.h>
+#include <stdlib.h>
 
 #include <mach/message.h>
 #include "write.h"
 #include "error.h"
 #include "utils.h"
 #include "global.h"
+#include "alloc.h"
 
-char *MessAllocRoutine = "mig_user_allocate";
-char *MessFreeRoutine = "mig_user_deallocate";
+const char *MessAllocRoutine = "mig_user_allocate";
+const char *MessFreeRoutine = "mig_user_deallocate";
 
-char stRetCode[] = "ReturnValue";
-char stRetNone[] = "";
+static char stRetCode[] = "ReturnValue";
+static char stRetNone[] = "";
 
 void WriteLogDefines();
 void WriteIdentificationString();
@@ -251,37 +279,37 @@ WriteKPD_Iterator(file, in, overwrite, varying, arg, bracket)
     fprintf(file, "\t    register\t%s\t*ptr;\n", it->itUserKPDType);
     fprintf(file, "\t    register int\ti");
     if (varying && !in)
-	fprintf(file, ", j");
+		fprintf(file, ", j");
     fprintf(file, ";\n\n");
 
     if (in)
-	sprintf(string, "InP");
+		sprintf(string, "InP");
     else if (overwrite)
-	sprintf(string, "InOvTemplate");
+		sprintf(string, "InOvTemplate");
     else
-	sprintf(string, "Out%dP", arg->argRequestPos);
+		sprintf(string, "Out%dP", arg->argRequestPos);
 
     fprintf(file, "\t    ptr = &%s->%s[0];\n", string, arg->argMsgField);
 
     if (varying) {
-	register argument_t *count = arg->argCount;
-	register char *cref = count->argByReferenceUser ? "*" : "";
+		register argument_t *count = arg->argCount;
+		register const char *cref = count->argByReferenceUser ? "*" : "";
 
-	if (in || overwrite) {
-	    fprintf(file, "\t    if (%s%s > %d)\n", cref, count->argVarName,
-		it->itKPD_Number);
-	    WriteReturnMsgError(file, arg->argRoutine, TRUE, arg, "MIG_ARRAY_TOO_LARGE");
+		if (in || overwrite) {
+			fprintf(file, "\t    if (%s%s > %d)\n", cref, count->argVarName,
+					it->itKPD_Number);
+			WriteReturnMsgError(file, arg->argRoutine, TRUE, arg, "MIG_ARRAY_TOO_LARGE");
             fprintf(file, "\t    for (i = 0; i < %s%s; ptr++, i++) %s\n",
-		cref, count->argVarName, (bracket) ? "{" : "");
-	} else {
-	    fprintf(file, "\t    j = min(Out%dP->%s, %s%s);\n", count->argReplyPos, 
-		count->argVarName, cref, count->argVarName);
-	    fprintf(file, "\t    for (i = 0; i < j; ptr++, i++) %s\n",
-		(bracket) ? "{" : "");
-	}
+					cref, count->argVarName, (bracket) ? "{" : "");
+		} else {
+			fprintf(file, "\t    j = min(Out%dP->%s, %s%s);\n", count->argReplyPos, 
+					count->argVarName, cref, count->argVarName);
+			fprintf(file, "\t    for (i = 0; i < j; ptr++, i++) %s\n",
+					(bracket) ? "{" : "");
+		}
     } else
         fprintf(file, "\t    for (i = 0; i < %d; ptr++, i++) %s\n", it->itKPD_Number,
-	    (bracket) ? "{" : "");
+				(bracket) ? "{" : "");
 }
 
 /*************************************************************
@@ -296,25 +324,25 @@ WriteMyIncludes(file, stats)
 {
     if (IsKernelServer)
     {
-	/*
-	 *	We want to get the user-side definitions of types
-	 *	like task_t, ipc_space_t, etc. in mach/mach_types.h.
-	 */
+		/*
+		 *	We want to get the user-side definitions of types
+		 *	like task_t, ipc_space_t, etc. in mach/mach_types.h.
+		 */
 
-	fprintf(file, "#undef\tMACH_KERNEL\n");
+		fprintf(file, "#undef\tMACH_KERNEL\n");
 
-	if (InternalHeaderFileName != strNULL)
-	{
-	    register char *cp;
+		if (InternalHeaderFileName != strNULL)
+		{
+			register const char *cp;
 
-	    /* Strip any leading path from InternalHeaderFileName. */
-	    cp = strrchr(InternalHeaderFileName, '/');
-	    if (cp == 0)
-		cp = InternalHeaderFileName;
-	    else
-		cp++;	/* skip '/' */
-	    fprintf(file, "#include \"%s\"\n", cp);
-	}
+			/* Strip any leading path from InternalHeaderFileName. */
+			cp = strrchr(InternalHeaderFileName, '/');
+			if (cp == 0)
+				cp = InternalHeaderFileName;
+			else
+				cp++;	/* skip '/' */
+			fprintf(file, "#include \"%s\"\n", cp);
+		}
     }
 
     
@@ -322,28 +350,28 @@ WriteMyIncludes(file, stats)
         WriteIncludes(file, TRUE, FALSE);
     if (UserHeaderFileName != strNULL)
     {
-	register char *cp;
+		register const char *cp;
 
-	/* Strip any leading path from UserHeaderFileName. */
-	cp = strrchr(UserHeaderFileName, '/');
-	if (cp == 0)
-	    cp = UserHeaderFileName;
-	else
-	    cp++;	/* skip '/' */
-	fprintf(file, "#include \"%s\"\n", cp);
+		/* Strip any leading path from UserHeaderFileName. */
+		cp = strrchr(UserHeaderFileName, '/');
+		if (cp == 0)
+			cp = UserHeaderFileName;
+		else
+			cp++;	/* skip '/' */
+		fprintf(file, "#include \"%s\"\n", cp);
     } 
     if (UseSplitHeaders)
         WriteImplImports(file, stats, TRUE);
 
     if (UseEventLogger) {
-	if (IsKernelUser) {
-	    fprintf(file, "#ifdef\tMACH_KERNEL\n");
-	    fprintf(file, "#include <mig_debug.h>\n");
-	    fprintf(file, "#endif\t/* MACH_KERNEL */\n");
+		if (IsKernelUser) {
+			fprintf(file, "#ifdef\tMACH_KERNEL\n");
+			fprintf(file, "#include <mig_debug.h>\n");
+			fprintf(file, "#endif\t/* MACH_KERNEL */\n");
         }
-	fprintf(file, "#if  MIG_DEBUG\n"); 
-	fprintf(file, "#include <mach/mig_log.h>\n");
-	fprintf(file, "#endif /* MIG_DEBUG */\n"); 
+		fprintf(file, "#if  MIG_DEBUG\n"); 
+		fprintf(file, "#include <mach/mig_log.h>\n");
+		fprintf(file, "#endif /* MIG_DEBUG */\n"); 
     }
     fprintf(file, "/* LINTLIBRARY */\n");
     fprintf(file, "\n");
@@ -352,8 +380,8 @@ WriteMyIncludes(file, stats)
         fprintf(file, "#else\t/* %s */\n", NewCDecl);
         fprintf(file, "extern mach_port_t mig_get_reply_port();\n");
         fprintf(file, "extern void mig_dealloc_reply_port();\n");
-	fprintf(file, "extern char *%s();\n", MessAllocRoutine);
-	fprintf(file, "extern void %s();\n", MessFreeRoutine);
+		fprintf(file, "extern char *%s();\n", MessAllocRoutine);
+		fprintf(file, "extern void %s();\n", MessFreeRoutine);
         fprintf(file, "#endif\t/* %s */\n", NewCDecl);
     }
     fprintf(file, "\n");
@@ -364,21 +392,18 @@ WriteGlobalDecls(file)
     FILE *file;
 {
     if (RCSId != strNULL)
-	WriteRCSDecl(file, strconcat(SubsystemName, "_user"), RCSId);
+		WriteRCSDecl(file, strconcat(SubsystemName, "_user"), RCSId);
 
     fprintf(file, "#define msgh_request_port\tmsgh_remote_port\n");
     fprintf(file, "#define msgh_reply_port\t\tmsgh_local_port\n");
     fprintf(file, "\n");
     if (UseEventLogger)
-	WriteLogDefines(file, "MACH_MSG_LOG_USER");
+		WriteLogDefines(file, "MACH_MSG_LOG_USER");
     fprintf(file, "\n");
 }
 
 static void
-WriteOneMachErrorDefine(file, name, timeout)
-    FILE *file;
-    char *name;
-    boolean_t timeout;
+WriteOneMachErrorDefine(FILE *file, const char *name, boolean_t timeout)
 {
     fprintf(file, "#ifndef\t%s\n", name);
     fprintf(file, "#define\t%s(_R_) { \\\n", name);
@@ -431,8 +456,7 @@ WriteProlog(file, stats)
 
 /*ARGSUSED*/
 static void
-WriteEpilog(file)
-    FILE *file;
+WriteEpilog(FILE *file __unused)
 {
 }
 
@@ -441,9 +465,9 @@ WriteHeaderPortType(arg)
     argument_t *arg;
 {
     if (arg->argType->itInName == MACH_MSG_TYPE_POLYMORPHIC)
-	return arg->argPoly->argVarName;
+		return arg->argPoly->argVarName;
     else
-	return arg->argType->itInNameStr;
+		return arg->argType->itInNameStr;
 }
 
 static void
@@ -452,25 +476,25 @@ WriteRequestHead(file, rt)
     routine_t *rt;
 {
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) 
-	fprintf(file, "ready_to_send:\n");
+		fprintf(file, "ready_to_send:\n");
 
-    if (rt->rtMaxRequestPos > 0)
-	if (rt->rtOverwrite)
-	    fprintf(file, "\tInP = &MessRequest;\n");
-	else
-	    fprintf(file, "\tInP = &Mess%sIn;\n",
-		    (rtMessOnStack(rt) ? "." : "->"));
-
+    if (rt->rtMaxRequestPos > 0) {
+		if (rt->rtOverwrite)
+			fprintf(file, "\tInP = &MessRequest;\n");
+		else
+			fprintf(file, "\tInP = &Mess%sIn;\n",
+					(rtMessOnStack(rt) ? "." : "->"));
+	}
     fprintf(file, "\tInP->Head.msgh_bits =");
     if (rt->rtRetCArg == argNULL && !rt->rtSimpleRequest)
         fprintf(file, " MACH_MSGH_BITS_COMPLEX|");
     fprintf(file, "\n");
     fprintf(file, "\t\tMACH_MSGH_BITS(%s, %s);\n",
-    WriteHeaderPortType(rt->rtRequestPort),
-    WriteHeaderPortType(rt->rtReplyPort));
+			WriteHeaderPortType(rt->rtRequestPort),
+			WriteHeaderPortType(rt->rtReplyPort));
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) {
         fprintf(file, "\tif (!%s)\n", rt->rtRetCArg->argVarName); 
-	fprintf(file, "\t\tInP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;\n");
+		fprintf(file, "\t\tInP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;\n");
     }
 
 
@@ -482,32 +506,32 @@ WriteRequestHead(file, rt)
      */
 
     if (IsKernelUser)
-	fprintf(file, "\tInP->%s = (mach_port_t) %s;\n",
-		rt->rtRequestPort->argMsgField,
-		rt->rtRequestPort->argVarName);
+		fprintf(file, "\tInP->%s = (mach_port_t) %s;\n",
+				rt->rtRequestPort->argMsgField,
+				rt->rtRequestPort->argVarName);
     else
-	fprintf(file, "\tInP->%s = %s;\n",
-		rt->rtRequestPort->argMsgField,
-		rt->rtRequestPort->argVarName);
+		fprintf(file, "\tInP->%s = %s;\n",
+				rt->rtRequestPort->argMsgField,
+				rt->rtRequestPort->argVarName);
 
     if (akCheck(rt->rtReplyPort->argKind, akbUserArg)) {
-	if (IsKernelUser)
-	    fprintf(file, "\tInP->%s = (mach_port_t) %s;\n",
-		    rt->rtReplyPort->argMsgField,
-		    rt->rtReplyPort->argVarName);
-	else
-	    fprintf(file, "\tInP->%s = %s;\n",
-		    rt->rtReplyPort->argMsgField,
-		    rt->rtReplyPort->argVarName);
+		if (IsKernelUser)
+			fprintf(file, "\tInP->%s = (mach_port_t) %s;\n",
+					rt->rtReplyPort->argMsgField,
+					rt->rtReplyPort->argVarName);
+		else
+			fprintf(file, "\tInP->%s = %s;\n",
+					rt->rtReplyPort->argMsgField,
+					rt->rtReplyPort->argVarName);
     } else if (rt->rtOneWay || IsKernelUser)
-	fprintf(file, "\tInP->%s = MACH_PORT_NULL;\n",
-		rt->rtReplyPort->argMsgField);
+		fprintf(file, "\tInP->%s = MACH_PORT_NULL;\n",
+				rt->rtReplyPort->argMsgField);
     else
-	fprintf(file, "\tInP->%s = mig_get_reply_port();\n",
-		rt->rtReplyPort->argMsgField);
+		fprintf(file, "\tInP->%s = mig_get_reply_port();\n",
+				rt->rtReplyPort->argMsgField);
 
     fprintf(file, "\tInP->Head.msgh_id = %d;\n",
-	    rt->rtNumber + SubsystemBase);
+			rt->rtNumber + SubsystemBase);
 }
 
 /*************************************************************
@@ -519,43 +543,43 @@ WriteVarDecls(file, rt)
     FILE *file;
     routine_t *rt;
 {
-    register i;
+    register u_int i;
 
     if (rt->rtOverwrite) {
-	fprintf(file, "\tRequest MessRequest;\n");
-	fprintf(file, "\tregister Request *InP = &MessRequest;\n\n");
+		fprintf(file, "\tRequest MessRequest;\n");
+		fprintf(file, "\tregister Request *InP = &MessRequest;\n\n");
 
-	fprintf(file, "\tunion {\n");
-	fprintf(file, "\t\tOverwriteTemplate In;\n");
+		fprintf(file, "\tunion {\n");
+		fprintf(file, "\t\tOverwriteTemplate In;\n");
 	    fprintf(file, "\t\tReply Out;\n");
-	fprintf(file, "\t} MessReply;\n");
+		fprintf(file, "\t} MessReply;\n");
 
-	fprintf(file, "\tregister OverwriteTemplate *InOvTemplate = &MessReply.In;\n");
-	fprintf(file, "\tregister Reply *Out0P = &MessReply.Out;\n");
-	for (i = 1; i <= rt->rtMaxReplyPos; i++)
-	    fprintf(file, "\tregister Reply *Out%dP;\n", i);
+		fprintf(file, "\tregister OverwriteTemplate *InOvTemplate = &MessReply.In;\n");
+		fprintf(file, "\tregister Reply *Out0P = &MessReply.Out;\n");
+		for (i = 1; i <= rt->rtMaxReplyPos; i++)
+			fprintf(file, "\tregister Reply *Out%dP;\n", i);
     } else {
         if (rtMessOnStack(rt))
-	    fprintf(file, "\tunion {\n");
-	else
-	    fprintf(file, "\tunion %sMessU {\n", rt->rtName);
-	fprintf(file, "\t\tRequest In;\n");
-	if (!rt->rtOneWay)
-	    fprintf(file, "\t\tReply Out;\n");
+			fprintf(file, "\tunion {\n");
+		else
+			fprintf(file, "\tunion %sMessU {\n", rt->rtName);
+		fprintf(file, "\t\tRequest In;\n");
+		if (!rt->rtOneWay)
+			fprintf(file, "\t\tReply Out;\n");
         if (rtMessOnStack(rt))
-	    fprintf(file, "\t} Mess;\n");
+			fprintf(file, "\t} Mess;\n");
         else
-	    fprintf(file, "\t} *Mess = (union %sMessU *) %s(sizeof(*Mess));\n",
-		rt->rtName, MessAllocRoutine);
-	fprintf(file, "\n");
+			fprintf(file, "\t} *Mess = (union %sMessU *) %s(sizeof(*Mess));\n",
+					rt->rtName, MessAllocRoutine);
+		fprintf(file, "\n");
 
-	fprintf(file, "\tregister Request *InP = &Mess%sIn;\n",
-	    (rtMessOnStack(rt) ? "." : "->"));
-	if (!rt->rtOneWay) {
-	    fprintf(file, "\tregister Reply *Out0P = &Mess%sOut;\n",
-		(rtMessOnStack(rt) ? "." : "->"));
-	    for (i = 1; i <= rt->rtMaxReplyPos; i++)
-		fprintf(file, "\tregister Reply *Out%dP;\n", i);
+		fprintf(file, "\tregister Request *InP = &Mess%sIn;\n",
+				(rtMessOnStack(rt) ? "." : "->"));
+		if (!rt->rtOneWay) {
+			fprintf(file, "\tregister Reply *Out0P = &Mess%sOut;\n",
+					(rtMessOnStack(rt) ? "." : "->"));
+			for (i = 1; i <= rt->rtMaxReplyPos; i++)
+				fprintf(file, "\tregister Reply *Out%dP;\n", i);
         }
     }
     
@@ -564,76 +588,71 @@ WriteVarDecls(file, rt)
     fprintf(file, "\tmach_msg_return_t msg_result;\n");
 
     if (!rt->rtOneWay &&
-	     !(rt->rtSimpleReply)) {
-	fprintf(file, "\tboolean_t msgh_simple;\n");
+		!(rt->rtSimpleReply)) {
+		fprintf(file, "\tboolean_t msgh_simple;\n");
     }
 
     if (rt->rtNumRequestVar > 0)
-	fprintf(file, "\tunsigned int msgh_size;\n");
+		fprintf(file, "\tunsigned int msgh_size;\n");
     else if (!rt->rtOneWay && !rt->rtNoReplyArgs) {
-	fprintf(file, "#if\tTypeCheck\n");
-	fprintf(file, "\tunsigned int msgh_size;\n");
-	fprintf(file, "#endif\t/* TypeCheck */\n");
+		fprintf(file, "#if\tTypeCheck\n");
+		fprintf(file, "\tunsigned int msgh_size;\n");
+		fprintf(file, "#endif\t/* TypeCheck */\n");
     }
 
     /* if either request or reply is variable, we need msgh_size_delta */
     if ((rt->rtMaxRequestPos > 0) ||
-	(rt->rtMaxReplyPos > 0))
-	fprintf(file, "\tunsigned int msgh_size_delta;\n");
+		(rt->rtMaxReplyPos > 0))
+		fprintf(file, "\tunsigned int msgh_size_delta;\n");
 
     if (rt->rtUserImpl) {
-	fprintf(file, "\tmach_msg_format_0_trailer_t *TrailerP;\n");
-	fprintf(file, "#if\tTypeCheck\n");
-	fprintf(file, "\tunsigned int trailer_size;\n");
-	fprintf(file, "#endif\t/* TypeCheck */\n");
+		fprintf(file, "\tmach_msg_format_0_trailer_t *TrailerP;\n");
+		fprintf(file, "#if\tTypeCheck\n");
+		fprintf(file, "\tunsigned int trailer_size;\n");
+		fprintf(file, "#endif\t/* TypeCheck */\n");
     }
     WriteApplMacro(file, "Send", "Declare", rt);
     fprintf(file, "\n");
 }
 
 static void
-WriteReturn(file, rt, before, value, after)
-    FILE *file;
-    routine_t *rt;
-    char *before;
-    char *value;
-    char *after;
+WriteReturn(FILE *file, routine_t *rt, const char *before, const char *value, const char *after)
 {
     if (rtMessOnStack(rt) && value != stRetCode)
     {
-	/* get the easy case (no braces needed) out of the way */
-	fprintf(file, "%sreturn%s%s;%s",
-	    before, (*value ? " " : ""), value, after);
-	return;
+		/* get the easy case (no braces needed) out of the way */
+		fprintf(file, "%sreturn%s%s;%s",
+				before, (*value ? " " : ""), value, after);
+		return;
     }
 
     /* get the easy case (no braces needed) out of the way */
     if (rtMessOnStack(rt))
     {
-	if (value == stRetNone)
-	    fprintf(file, "%sreturn;%s",
-		before, after);
-	else if (value == stRetCode)
-	    fprintf(file, "%sreturn Out0P->RetCode;%s",
-		before, after);
-	else
-	    fprintf(file, "%sreturn %s;%s",
-		before, value, after);
-	return;
+		if (value == stRetNone)
+			fprintf(file, "%sreturn;%s",
+					before, after);
+		else if (value == stRetCode)
+			fprintf(file, "%sreturn Out0P->RetCode;%s",
+					before, after);
+		else
+			fprintf(file, "%sreturn %s;%s",
+					before, value, after);
+		return;
     }
 
     fprintf(file, "%s{ ", before);
 
     if (value == stRetCode)
-	fprintf(file, "%s ReturnValue = Out0P->RetCode; ", ReturnTypeStr(rt));
+		fprintf(file, "%s ReturnValue = Out0P->RetCode; ", ReturnTypeStr(rt));
 
     if (! rtMessOnStack(rt))
-	fprintf(file, "%s((char *) Mess, sizeof(*Mess)); ", MessFreeRoutine);
+		fprintf(file, "%s((char *) Mess, sizeof(*Mess)); ", MessFreeRoutine);
 
     if (value == stRetNone)
-	fprintf(file, "return; }%s", after);
+		fprintf(file, "return; }%s", after);
     else
-	fprintf(file, "return %s; }%s", value, after);
+		fprintf(file, "return %s; }%s", value, after);
 }
 
 static void
@@ -642,13 +661,13 @@ WriteRetCodeArg(file, rt)
     register routine_t *rt;
 {
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) {
-	register argument_t *arg = rt->rtRetCArg;
+		register argument_t *arg = rt->rtRetCArg;
 
-	fprintf(file, "\tif (%s) {\n", arg->argVarName);
-	fprintf(file, "\t\t((mig_reply_error_t *)InP)->RetCode = %s;\n", arg->argVarName);
-	fprintf(file, "\t\t((mig_reply_error_t *)InP)->NDR = NDR_record;\n");
-	fprintf(file, "\t\tgoto ready_to_send;\n");
-	fprintf(file, "\t}\n\n");
+		fprintf(file, "\tif (%s) {\n", arg->argVarName);
+		fprintf(file, "\t\t((mig_reply_error_t *)InP)->RetCode = %s;\n", arg->argVarName);
+		fprintf(file, "\t\t((mig_reply_error_t *)InP)->NDR = NDR_record;\n");
+		fprintf(file, "\t\tgoto ready_to_send;\n");
+		fprintf(file, "\t}\n\n");
     }
 }
 
@@ -661,33 +680,33 @@ WriteMsgSend(file, rt)
     FILE *file;
     routine_t *rt;
 {
-    char *SendSize = "";
+    const char *SendSize = "";
     char string[MAX_STR_LEN];
 
     if (rt->rtNumRequestVar == 0)
-	SendSize = "sizeof(Request)";
+		SendSize = "sizeof(Request)";
     else
-	SendSize = "msgh_size";
+		SendSize = "msgh_size";
 
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) {
-	sprintf(string, "(%s) ? sizeof(mig_reply_error_t) : ", 
-	    rt->rtRetCArg->argVarName);
-	SendSize = strconcat(string, SendSize);
+		sprintf(string, "(%s) ? sizeof(mig_reply_error_t) : ", 
+				rt->rtRetCArg->argVarName);
+		SendSize = strconcat(string, SendSize);
     }
 
     if (IsKernelUser)
     {
-	fprintf(file, "\tmsg_result = mach_msg_send_from_kernel(");
-	fprintf(file, "&InP->Head, %s);\n", SendSize);
+		fprintf(file, "\tmsg_result = mach_msg_send_from_kernel(");
+		fprintf(file, "&InP->Head, %s);\n", SendSize);
     }
     else
     {
-	fprintf(file, "\tmsg_result = mach_msg_overwrite("
-                      "&InP->Head, MACH_SEND_MSG|%s, %s, 0,",
-		rt->rtMsgOption->argVarName,
-		SendSize);
-	fprintf(file, " MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL,");
-	fprintf(file, " (mach_msg_header_t *) 0, 0);\n");
+		fprintf(file, "\tmsg_result = mach_msg_overwrite("
+				"&InP->Head, MACH_SEND_MSG|%s, %s, 0,",
+				rt->rtMsgOption->argVarName,
+				SendSize);
+		fprintf(file, " MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL,");
+		fprintf(file, " (mach_msg_header_t *) 0, 0);\n");
     }
     WriteApplMacro(file, "Send", "After", rt);
     WriteReturn(file, rt, "\t\t", "msg_result", "\n");
@@ -698,22 +717,19 @@ WriteMsgSend(file, rt)
  *  Called by WriteMsgSendReceive and WriteMsgRPC
  *************************************************************/
 static void
-WriteMsgCheckReceive(file, rt, success)
-    FILE *file;
-    routine_t *rt;
-    char *success;
+WriteMsgCheckReceive(FILE *file, routine_t *rt, const char *success)
 {
     fprintf(file, "\tif (msg_result != %s) {\n", success);
     if (!akCheck(rt->rtReplyPort->argKind, akbUserArg) && !IsKernelUser)
     {
-	/* If we aren't using a user-supplied reply port, then
-	   deallocate the reply port when it is invalid or
-	   for TIMED_OUT errors. */
+		/* If we aren't using a user-supplied reply port, then
+		   deallocate the reply port when it is invalid or
+		   for TIMED_OUT errors. */
 #ifdef DeallocOnAnyError
-	fprintf(file,
-		"\t\tmig_dealloc_reply_port(InP->Head.msgh_reply_port);\n");
+		fprintf(file,
+				"\t\tmig_dealloc_reply_port(InP->Head.msgh_reply_port);\n");
 #else
-	if (rt->rtWaitTime != argNULL)
+		if (rt->rtWaitTime != argNULL)
             fprintf(file, "\t\t__MachMsgErrorWithTimeout(msg_result);\n");
         else
             fprintf(file, "\t\t__MachMsgErrorWithoutTimeout(msg_result);\n");
@@ -735,24 +751,24 @@ WriteMsgSendReceive(file, rt)
     FILE *file;
     routine_t *rt;
 {
-    char *SendSize = "";
+    const char *SendSize = "";
     char string[MAX_STR_LEN];
 
     if (rt->rtNumRequestVar == 0)
-	SendSize = "sizeof(Request)";
+		SendSize = "sizeof(Request)";
     else
-	SendSize = "msgh_size";
+		SendSize = "msgh_size";
 
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) {
-	sprintf(string, "(%s) ? sizeof(mig_reply_error_t) : ", 
-	    rt->rtRetCArg->argVarName);
-	SendSize = strconcat(string, SendSize);
+		sprintf(string, "(%s) ? sizeof(mig_reply_error_t) : ", 
+				rt->rtRetCArg->argVarName);
+		SendSize = strconcat(string, SendSize);
     }
 
     /* IsKernelUser to be done! */
     fprintf(file, "\tmsg_result = mach_msg_overwrite(&InP->Head, MACH_SEND_MSG|%s, %s, 0, ",
-	    rt->rtMsgOption->argVarName,
-	    SendSize);
+			rt->rtMsgOption->argVarName,
+			SendSize);
     fprintf(file, " MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL,");
     fprintf(file, " (mach_msg_header_t *) 0, 0);\n");
 
@@ -761,10 +777,10 @@ WriteMsgSendReceive(file, rt)
     fprintf(file, "\n");
 
     fprintf(file, "\tmsg_result = mach_msg_overwrite(&Out0P->Head, MACH_RCV_MSG|%s%s%s, 0, sizeof(Reply), InP->Head.msgh_local_port, %s, MACH_PORT_NULL, ",
-	    rt->rtMsgOption->argVarName,
-	    rt->rtUserImpl != 0 ? "|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)" : "",
-	    rt->rtWaitTime != argNULL ? "|MACH_RCV_TIMEOUT" : "",
-	    rt->rtWaitTime != argNULL ? rt->rtWaitTime->argVarName : "MACH_MSG_TIMEOUT_NONE");
+			rt->rtMsgOption->argVarName,
+			rt->rtUserImpl != 0 ? "|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)" : "",
+			rt->rtWaitTime != argNULL ? "|MACH_RCV_TIMEOUT" : "",
+			rt->rtWaitTime != argNULL ? rt->rtWaitTime->argVarName : "MACH_MSG_TIMEOUT_NONE");
     fprintf(file, " (mach_msg_header_t *) 0, 0);\n");
     WriteApplMacro(file, "Send", "After", rt);
     WriteMsgCheckReceive(file, rt, "MACH_MSG_SUCCESS");
@@ -781,34 +797,34 @@ WriteMsgRPC(file, rt)
     FILE *file;
     routine_t *rt;
 {
-    char *SendSize = "";
+    const char *SendSize = "";
     char string[MAX_STR_LEN];
 
     if (rt->rtNumRequestVar == 0)
-	SendSize = "sizeof(Request)";
+		SendSize = "sizeof(Request)";
     else
-	SendSize = "msgh_size";
+		SendSize = "msgh_size";
 
     if (rt->rtRetCArg != argNULL && !rt->rtSimpleRequest) {
-	sprintf(string, "(%s) ? sizeof(mig_reply_error_t) : ", 
-	    rt->rtRetCArg->argVarName);
-	SendSize = strconcat(string, SendSize);
+		sprintf(string, "(%s) ? sizeof(mig_reply_error_t) : ", 
+				rt->rtRetCArg->argVarName);
+		SendSize = strconcat(string, SendSize);
     }
 
     if (IsKernelUser)
-	fprintf(file, "\tmsg_result = mach_msg_rpc_from_kernel(&InP->Head, %s, sizeof(Reply));\n", SendSize);
+		fprintf(file, "\tmsg_result = mach_msg_rpc_from_kernel(&InP->Head, %s, sizeof(Reply));\n", SendSize);
     else {
-	fprintf(file, "\tmsg_result = mach_msg_overwrite(&InP->Head, MACH_SEND_MSG|MACH_RCV_MSG|%s%s%s%s, %s, sizeof(Reply), InP->Head.msgh_reply_port, %s, MACH_PORT_NULL, ",
-	    rt->rtMsgOption->argVarName,
-	    rt->rtUserImpl != 0 ? "|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)" : "",
-	    rt->rtOverwrite ? "|MACH_RCV_OVERWRITE" : "",
-	    rt->rtWaitTime != argNULL ? "|MACH_RCV_TIMEOUT" : "",
-	    SendSize,
-	    rt->rtWaitTime != argNULL? rt->rtWaitTime->argVarName : "MACH_MSG_TIMEOUT_NONE");
-	if (rt->rtOverwrite)
+		fprintf(file, "\tmsg_result = mach_msg_overwrite(&InP->Head, MACH_SEND_MSG|MACH_RCV_MSG|%s%s%s%s, %s, sizeof(Reply), InP->Head.msgh_reply_port, %s, MACH_PORT_NULL, ",
+				rt->rtMsgOption->argVarName,
+				rt->rtUserImpl != 0 ? "|MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0)" : "",
+				rt->rtOverwrite ? "|MACH_RCV_OVERWRITE" : "",
+				rt->rtWaitTime != argNULL ? "|MACH_RCV_TIMEOUT" : "",
+				SendSize,
+				rt->rtWaitTime != argNULL? rt->rtWaitTime->argVarName : "MACH_MSG_TIMEOUT_NONE");
+		if (rt->rtOverwrite)
       	    fprintf(file, " &InOvTemplate->Head, sizeof(OverwriteTemplate));\n");
-	else
-	    fprintf(file, " (mach_msg_header_t *) 0, 0);\n");
+		else
+			fprintf(file, " (mach_msg_header_t *) 0, 0);\n");
     }
     WriteApplMacro(file, "Send", "After", rt);
     WriteMsgCheckReceive(file, rt, "MACH_MSG_SUCCESS");
@@ -824,100 +840,96 @@ WriteKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *subindex = "";
-    char *recast = "";
+    const char *subindex = "";
+    const char *recast = "";
     char firststring[MAX_STR_LEN];
     char string[MAX_STR_LEN];
-    register char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
     ipc_type_t *real_it;
 
     if (IS_MULTIPLE_KPD(it)) {
-	WriteKPD_Iterator(file, TRUE, FALSE, it->itVarArray, arg, TRUE);
-	(void)sprintf(firststring, "\t*ptr");
-	(void)sprintf(string, "\tptr->");
-	subindex = "[i]";
-	real_it = it->itElement;
+		WriteKPD_Iterator(file, TRUE, FALSE, it->itVarArray, arg, TRUE);
+		(void)sprintf(firststring, "\t*ptr");
+		(void)sprintf(string, "\tptr->");
+		subindex = "[i]";
+		real_it = it->itElement;
     } else {
-	(void)sprintf(firststring, "InP->%s", arg->argMsgField);
-	(void)sprintf(string, "InP->%s.", arg->argMsgField);
-	real_it = it;
+		(void)sprintf(firststring, "InP->%s", arg->argMsgField);
+		(void)sprintf(string, "InP->%s.", arg->argMsgField);
+		real_it = it;
     }
 
     if (IsKernelUser && streql(real_it->itUserType, "ipc_port_t"))
-	recast = "(mach_port_t)";
+		recast = "(mach_port_t)";
     fprintf(file, "#if\tUseStaticTemplates\n");
     fprintf(file, "\t%s = %s;\n", firststring,
-	arg->argTTName);
+			arg->argTTName);
     /* ref is required also in the Request part, because of inout parameters */
     fprintf(file, "\t%sname = %s%s%s%s;\n", string,
-	recast, ref, arg->argVarName, subindex);
+			recast, ref, arg->argVarName, subindex);
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbSendSnd)) {
-	register argument_t *poly = arg->argPoly;
+		register argument_t *poly = arg->argPoly;
 
-	fprintf(file, "\t%sdisposition = %s%s;\n", string, 
-	    poly->argByReferenceUser ? "*" : "", poly->argVarName);
+		fprintf(file, "\t%sdisposition = %s%s;\n", string, 
+				poly->argByReferenceUser ? "*" : "", poly->argVarName);
     }
     fprintf(file, "#else\t/* UseStaticTemplates */\n");
     fprintf(file, "\t%sname = %s%s%s%s;\n", string,
-	recast, ref, arg->argVarName, subindex);
+			recast, ref, arg->argVarName, subindex);
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbSendSnd)) {
         register argument_t *poly = arg->argPoly;
 
         fprintf(file, "\t%sdisposition = %s%s;\n", string,
-            poly->argByReferenceUser ? "*" : "", poly->argVarName);
+				poly->argByReferenceUser ? "*" : "", poly->argVarName);
     } else 
-	fprintf(file, "\t%sdisposition = %s;\n", string,
-	    it->itInNameStr);
+		fprintf(file, "\t%sdisposition = %s;\n", string,
+				it->itInNameStr);
     fprintf(file, "\t%stype = MACH_MSG_PORT_DESCRIPTOR;\n", string);
     fprintf(file, "#endif\t/* UseStaticTemplates */\n");
     if (IS_MULTIPLE_KPD(it))  {
-	fprintf(file, "\t    }\n");
-	if (it->itVarArray) {
-	    fprintf(file, "\t    for (i = %s; i < %d; ptr++, i++) {\n", 
-		arg->argCount->argVarName, it->itKPD_Number);
-	    /* fill the rest of the statically allocated KPD entries with MACH_PORT_NULL */
+		fprintf(file, "\t    }\n");
+		if (it->itVarArray) {
+			fprintf(file, "\t    for (i = %s; i < %d; ptr++, i++) {\n", 
+					arg->argCount->argVarName, it->itKPD_Number);
+			/* fill the rest of the statically allocated KPD entries with MACH_PORT_NULL */
     	    fprintf(file, "#if\tUseStaticTemplates\n");
     	    fprintf(file, "\t%s = %s;\n", firststring,
-		arg->argTTName);
-	    fprintf(file, "#else\t/* UseStaticTemplates */\n");
+					arg->argTTName);
+			fprintf(file, "#else\t/* UseStaticTemplates */\n");
     	    fprintf(file, "\t%sname = MACH_PORT_NULL;\n", string);
     	    fprintf(file, "\t%stype = MACH_MSG_PORT_DESCRIPTOR;\n", string);
     	    fprintf(file, "#endif\t/* UseStaticTemplates */\n");
-	    fprintf(file, "\t    }\n");
-	}
-	fprintf(file, "\t}\n");
+			fprintf(file, "\t    }\n");
+		}
+		fprintf(file, "\t}\n");
     }
     fprintf(file, "\n");
 }
 
 static void
-WriteKPD_ool_varsize(file, arg, who, where, iscomplex)
-    FILE *file;
-    register argument_t *arg;
-    char *who, *where;
-    boolean_t iscomplex;
+WriteKPD_ool_varsize(FILE *file, argument_t *arg, const char *who, const char *where, boolean_t iscomplex)
 {
     register ipc_type_t *it = arg->argType;
     register argument_t *count;
-    register char *cref;
+    const char *cref;
 
     if (iscomplex) {
-	it = it->itElement;
-	count = arg->argSubCount;
+		it = it->itElement;
+		count = arg->argSubCount;
     } else 
-	count = arg->argCount;
+		count = arg->argCount;
     cref = count->argByReferenceUser ? "*" : "";
 
     /* size has to be expressed in bytes! */
     if (count->argMultiplier > 1 || it->itSize > 8)
         fprintf(file, "\t%s->%s = %s%s%s * %d;\n", who, where,
-	   cref, count->argVarName, 
-	   (iscomplex)? "[i]" : "", 
-	   count->argMultiplier * it->itSize / 8);	
+				cref, count->argVarName, 
+				(iscomplex)? "[i]" : "", 
+				count->argMultiplier * it->itSize / 8);	
     else
-	fprintf(file, "\t%s->%s = %s%s%s;\n", who, where,
-	   cref, count->argVarName,
-	   (iscomplex)? "[i]" : "");
+		fprintf(file, "\t%s->%s = %s%s%s;\n", who, where,
+				cref, count->argVarName,
+				(iscomplex)? "[i]" : "");
 }
 
 /*
@@ -929,69 +941,70 @@ WriteKPD_ool(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    register char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
     char firststring[MAX_STR_LEN];
     char string[MAX_STR_LEN];
     boolean_t VarArray;
     u_int howmany, howbig;
-    char *subindex;
+    const char *subindex;
 
     if (IS_MULTIPLE_KPD(it)) {
-	WriteKPD_Iterator(file, TRUE, FALSE, it->itVarArray, arg, TRUE);
-	(void)sprintf(firststring, "\t*ptr");
-	(void)sprintf(string, "\tptr->");
-	VarArray = it->itElement->itVarArray;
-	howmany = it->itElement->itNumber;
-	howbig = it->itElement->itSize;
-	subindex = "[i]";
+		WriteKPD_Iterator(file, TRUE, FALSE, it->itVarArray, arg, TRUE);
+		(void)sprintf(firststring, "\t*ptr");
+		(void)sprintf(string, "\tptr->");
+		VarArray = it->itElement->itVarArray;
+		howmany = it->itElement->itNumber;
+		howbig = it->itElement->itSize;
+		subindex = "[i]";
     } else {
-	(void)sprintf(firststring, "InP->%s", arg->argMsgField);
-	(void)sprintf(string, "InP->%s.", arg->argMsgField);
-	VarArray = it->itVarArray;
-	howmany = it->itNumber;
-	howbig = it->itSize;
-	subindex = "";
+		(void)sprintf(firststring, "InP->%s", arg->argMsgField);
+		(void)sprintf(string, "InP->%s.", arg->argMsgField);
+		VarArray = it->itVarArray;
+		howmany = it->itNumber;
+		howbig = it->itSize;
+		subindex = "";
     }
 
     fprintf(file, "#if\tUseStaticTemplates\n");
 
     fprintf(file, "\t%s = %s;\n", firststring, arg->argTTName);
     fprintf(file, "\t%saddress = (void *)(%s%s%s);\n", 
-	string, ref, arg->argVarName, subindex);
-    if (VarArray)
-	if (IS_MULTIPLE_KPD(it)) 
-	    WriteKPD_ool_varsize(file, arg, "\tptr", "size", TRUE);
-	else 
-	    WriteKPD_ool_varsize(file, arg, "InP", 
-		strconcat(arg->argMsgField, ".size"), FALSE);
+			string, ref, arg->argVarName, subindex);
+    if (VarArray) {
+		if (IS_MULTIPLE_KPD(it))
+			WriteKPD_ool_varsize(file, arg, "\tptr", "size", TRUE);
+		else
+			WriteKPD_ool_varsize(file, arg, "InP",
+								 strconcat(arg->argMsgField, ".size"), FALSE);
+	}
     if (arg->argDeallocate == d_MAYBE)
-	fprintf(file, "\t%sdeallocate =  %s;\n", 
-	    string, arg->argDealloc->argVarName); 
+		fprintf(file, "\t%sdeallocate =  %s;\n", 
+				string, arg->argDealloc->argVarName); 
 
     fprintf(file, "#else\t/* UseStaticTemplates */\n");
 
     fprintf(file, "\t%saddress = (void *)(%s%s%s);\n", 
-	string, ref, arg->argVarName, subindex);
+			string, ref, arg->argVarName, subindex);
     if (VarArray)
-	if (IS_MULTIPLE_KPD(it)) 
-	    WriteKPD_ool_varsize(file, arg, "\tptr", "size", TRUE);
-	else 
-	    WriteKPD_ool_varsize(file, arg, "InP", 
-		strconcat(arg->argMsgField, ".size"), FALSE);
+		if (IS_MULTIPLE_KPD(it))
+			WriteKPD_ool_varsize(file, arg, "\tptr", "size", TRUE);
+		else
+			WriteKPD_ool_varsize(file, arg, "InP",
+								 strconcat(arg->argMsgField, ".size"), FALSE);
     else
         fprintf(file, "\t%ssize = %d;\n", string, 
-	    (howmany * howbig + 7)/8);
+				(howmany * howbig + 7)/8);
     if (arg->argDeallocate == d_MAYBE)
-	fprintf(file, "\t%sdeallocate =  %s;\n", string,
-	    arg->argDealloc->argVarName); 
+		fprintf(file, "\t%sdeallocate =  %s;\n", string,
+				arg->argDealloc->argVarName); 
     else
-	fprintf(file, "\t%sdeallocate =  %s;\n", string,
-	    (arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
+		fprintf(file, "\t%sdeallocate =  %s;\n", string,
+				(arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
     fprintf(file, "\t%scopy = %s;\n", string,
-	(arg->argFlags & flPhysicalCopy) ? "MACH_MSG_PHYSICAL_COPY" : "MACH_MSG_VIRTUAL_COPY");
+			(arg->argFlags & flPhysicalCopy) ? "MACH_MSG_PHYSICAL_COPY" : "MACH_MSG_VIRTUAL_COPY");
 #ifdef ALIGNMENT
     fprintf(file, "\t%salignment = MACH_MSG_ALIGN_%d;\n", string,
-	(it->itElement->itSize < 8) ? 1 : it->itElement->itSize / 8);
+			(it->itElement->itSize < 8) ? 1 : it->itElement->itSize / 8);
 #endif
     fprintf(file, "\t%stype = MACH_MSG_OOL_DESCRIPTOR;\n", string);
 
@@ -999,19 +1012,19 @@ WriteKPD_ool(file, arg)
     if (IS_MULTIPLE_KPD(it)) {
         fprintf(file, "\t    }\n");
         if (it->itVarArray) {
-	    fprintf(file, "\t    for (i = %s; i < %d; ptr++, i++) {\n", 
-   	        arg->argCount->argVarName, it->itKPD_Number);
-	    /* fill the rest of the statically allocated KPD entries with size NULL */
+			fprintf(file, "\t    for (i = %s; i < %d; ptr++, i++) {\n", 
+					arg->argCount->argVarName, it->itKPD_Number);
+			/* fill the rest of the statically allocated KPD entries with size NULL */
     	    fprintf(file, "#if\tUseStaticTemplates\n");
-	    fprintf(file, "\t%s = %s;\n", firststring, arg->argTTName);
+			fprintf(file, "\t%s = %s;\n", firststring, arg->argTTName);
             if (!VarArray)
     	        fprintf(file, "\t%ssize = 0;\n", string); 
-	    /* otherwise the size in the template would be != 0! */
+			/* otherwise the size in the template would be != 0! */
     	    fprintf(file, "#else\t/* UseStaticTemplates */\n");
     	    fprintf(file, "\t%ssize = 0;\n", string);
     	    fprintf(file, "\t%stype = MACH_MSG_OOL_DESCRIPTOR;\n", string);
     	    fprintf(file, "#endif\t/* UseStaticTemplates */\n");
-	    fprintf(file, "\t    }\n");
+			fprintf(file, "\t    }\n");
         }
         fprintf(file, "\t}\n");
     }
@@ -1027,80 +1040,80 @@ WriteKPD_oolport(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    register char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
     register argument_t *count;
     boolean_t VarArray;
     string_t howstr;
     u_int howmany;
-    char *subindex;
+    const char *subindex;
     char firststring[MAX_STR_LEN];
     char string[MAX_STR_LEN];
 
     if (IS_MULTIPLE_KPD(it)) {
         WriteKPD_Iterator(file, TRUE, FALSE, it->itVarArray, arg, TRUE);
-	(void)sprintf(firststring, "\t*ptr");
-	(void)sprintf(string, "\tptr->");
-	VarArray = it->itElement->itVarArray;
-	howmany = it->itElement->itNumber;
-	howstr = it->itElement->itInNameStr;
-	count = arg->argSubCount;
-	subindex = "[i]";
+		(void)sprintf(firststring, "\t*ptr");
+		(void)sprintf(string, "\tptr->");
+		VarArray = it->itElement->itVarArray;
+		howmany = it->itElement->itNumber;
+		howstr = it->itElement->itInNameStr;
+		count = arg->argSubCount;
+		subindex = "[i]";
     } else {
-	(void)sprintf(firststring, "InP->%s", arg->argMsgField);
-	(void)sprintf(string, "InP->%s.", arg->argMsgField);
-	VarArray = it->itVarArray;
-	howmany = it->itNumber;
-	howstr = it->itInNameStr;
-	count = arg->argCount;
-	subindex = "";
+		(void)sprintf(firststring, "InP->%s", arg->argMsgField);
+		(void)sprintf(string, "InP->%s.", arg->argMsgField);
+		VarArray = it->itVarArray;
+		howmany = it->itNumber;
+		howstr = it->itInNameStr;
+		count = arg->argCount;
+		subindex = "";
     }
 
     fprintf(file, "#if\tUseStaticTemplates\n");
 
     fprintf(file, "\t%s = %s;\n", firststring, arg->argTTName);
     fprintf(file, "\t%saddress = (void *)(%s%s%s);\n", string,
-        ref, arg->argVarName, subindex);
+			ref, arg->argVarName, subindex);
     if (VarArray)
         fprintf(file, "\t%scount = %s%s%s;\n", string, 
-            count->argByReferenceUser ? "*" : "",
-            count->argVarName, subindex);
+				count->argByReferenceUser ? "*" : "",
+				count->argVarName, subindex);
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbSendSnd)) {
         register argument_t *poly = arg->argPoly;
-        register char *pref = poly->argByReferenceUser ? "*" : "";
+        const char *pref = poly->argByReferenceUser ? "*" : "";
 
         fprintf(file, "\t%sdisposition = %s%s;\n", string,
-            pref, poly->argVarName);
+				pref, poly->argVarName);
     }
     if (arg->argDeallocate == d_MAYBE)
         fprintf(file, "\t%sdeallocate =  %s;\n", string,
-            arg->argDealloc->argVarName);
+				arg->argDealloc->argVarName);
 
     fprintf(file, "#else\t/* UseStaticTemplates */\n");
 
     fprintf(file, "\t%saddress = (void *)(%s%s%s);\n", 
-        string, ref, arg->argVarName, subindex);
+			string, ref, arg->argVarName, subindex);
     if (VarArray)
         fprintf(file, "\t%scount = %s%s%s;\n", string,
-            count->argByReferenceUser ? "*" : "",
-            count->argVarName, subindex);
+				count->argByReferenceUser ? "*" : "",
+				count->argVarName, subindex);
     else
         fprintf(file, "\t%scount = %d;\n", string,
-            howmany);
+				howmany);
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbSendSnd)) {
         register argument_t *poly = arg->argPoly;
-        register char *pref = poly->argByReferenceUser ? "*" : "";
+        const char *pref = poly->argByReferenceUser ? "*" : "";
 
         fprintf(file, "\t%sdisposition = %s%s;\n", 
-            string, pref, poly->argVarName);
+				string, pref, poly->argVarName);
     } else
         fprintf(file, "\t%sdisposition = %s;\n", 
-            string, howstr);
+				string, howstr);
     if (arg->argDeallocate == d_MAYBE)
         fprintf(file, "\t%sdeallocate =  %s;\n", string,
-            arg->argDealloc->argVarName);
+				arg->argDealloc->argVarName);
     else
         fprintf(file, "\t%sdeallocate =  %s;\n", string,
-            (arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
+				(arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
     fprintf(file, "\t%stype = MACH_MSG_OOL_PORTS_DESCRIPTOR;\n", string);
  
     fprintf(file, "#endif\t/* UseStaticTemplates */\n");
@@ -1110,7 +1123,7 @@ WriteKPD_oolport(file, arg)
         fprintf(file, "\t    }\n");
         if (it->itVarArray) {
             fprintf(file, "\t    for (i = %s; i < %d; ptr++, i++) {\n",
-                arg->argCount->argVarName, it->itKPD_Number);
+					arg->argCount->argVarName, it->itKPD_Number);
             /* fill the rest of the statically allocated KPD entries with size NULL */
             fprintf(file, "#if\tUseStaticTemplates\n");
             fprintf(file, "\t%s = %s;\n", firststring, arg->argTTName);
@@ -1135,58 +1148,58 @@ WriteOverwriteTemplate(file, rt)
 {
     register argument_t *arg;
     char string[MAX_STR_LEN];
-    char *subindex = "";
+    const char *subindex = "";
     boolean_t finish = FALSE;
 
     fprintf(file, "\t/* Initialize the template for overwrite */\n");
     fprintf(file, "\tInOvTemplate->msgh_body.msgh_descriptor_count = %d;\n",
-	rt->rtOverwriteKPDs);
+			rt->rtOverwriteKPDs);
     for (arg = rt->rtArgs; arg != argNULL; arg = arg->argNext)  {
-	register ipc_type_t *it = arg->argType;
-	char *ref = arg->argByReferenceUser ? "*" : "";
-	argument_t *count;
-	char *cref;
-	boolean_t VarIndex;
-	u_int howmany, howbig;
+		register ipc_type_t *it = arg->argType;
+		const char *ref = arg->argByReferenceUser ? "*" : "";
+		argument_t *count;
+		const char *cref;
+		boolean_t VarIndex;
+		u_int howmany, howbig;
 
-	if (akCheck(arg->argKind, akbOverwrite)) {
-	    if (arg->argFlags & flOverwrite) {
-		if (IS_MULTIPLE_KPD(it)) {
-		    WriteKPD_Iterator(file, FALSE, TRUE, it->itVarArray, arg, TRUE);
-		    if (it->itVarArray)
-			finish = TRUE;
-		    sprintf(string, "\tptr->");
-		    subindex = "[i]";
-		    count = arg->argSubCount;
-		    VarIndex = it->itElement->itVarArray;
-		    howmany = it->itElement->itNumber;
-		    howbig = it->itElement->itSize;
-	 	} else {
-		    sprintf(string, "InOvTemplate->%s.", arg->argMsgField);
-		    subindex = "";
-		    count = arg->argCount;
-		    VarIndex = it->itVarArray;
-		    howmany = it->itNumber;
-		    howbig = it->itSize;
-		}
+		if (akCheck(arg->argKind, akbOverwrite)) {
+			if (arg->argFlags & flOverwrite) {
+				if (IS_MULTIPLE_KPD(it)) {
+					WriteKPD_Iterator(file, FALSE, TRUE, it->itVarArray, arg, TRUE);
+					if (it->itVarArray)
+						finish = TRUE;
+					sprintf(string, "\tptr->");
+					subindex = "[i]";
+					count = arg->argSubCount;
+					VarIndex = it->itElement->itVarArray;
+					howmany = it->itElement->itNumber;
+					howbig = it->itElement->itSize;
+				} else {
+					sprintf(string, "InOvTemplate->%s.", arg->argMsgField);
+					subindex = "";
+					count = arg->argCount;
+					VarIndex = it->itVarArray;
+					howmany = it->itNumber;
+					howbig = it->itSize;
+				}
 
-		fprintf(file, "\t%saddress = (void *) %s%s%s;\n", string, 
-		    ref, arg->argVarName, subindex);	
+				fprintf(file, "\t%saddress = (void *) %s%s%s;\n", string, 
+						ref, arg->argVarName, subindex);	
 
-		if (it->itPortType) {
-		    fprintf(file, "\t%scount = ", string);
-		    if (VarIndex) {
-			cref = count->argByReferenceUser ? "*" : "";
-	 		fprintf(file, "%s%s%s;\n", cref, count->argVarName, subindex);
-		    } else
-			fprintf(file, "%d;\n", howmany);
-	        } else {
-		    fprintf(file, "\t%ssize = ", string);
-		    if (VarIndex) {
-			cref = count->argByReferenceUser ? "*" : "";
-			if (count->argMultiplier > 1 || howbig > 8)
-	 		    fprintf(file, "%s%s%s * %d;\n", cref, count->argVarName, subindex,
-				count->argMultiplier * howbig / 8);
+				if (it->itPortType) {
+					fprintf(file, "\t%scount = ", string);
+					if (VarIndex) {
+						cref = count->argByReferenceUser ? "*" : "";
+						fprintf(file, "%s%s%s;\n", cref, count->argVarName, subindex);
+					} else
+						fprintf(file, "%d;\n", howmany);
+				} else {
+					fprintf(file, "\t%ssize = ", string);
+					if (VarIndex) {
+						cref = count->argByReferenceUser ? "*" : "";
+						if (count->argMultiplier > 1 || howbig > 8)
+							fprintf(file, "%s%s%s * %d;\n", cref, count->argVarName, subindex,
+									count->argMultiplier * howbig / 8);
 		        else
 	 		    fprintf(file, "%s%s%s;\n", cref, count->argVarName, subindex);
 		    } else
@@ -1242,7 +1255,7 @@ WritePackArgValueNormal(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    register char *ref = (arg->argByReferenceUser ||
+    const char *ref = (arg->argByReferenceUser ||
                           it->itNativePointer) ? "*" : "";
 
     if (IS_VARIABLE_SIZED_UNTYPED(it) || it->itNoOptArray) {
@@ -1269,7 +1282,7 @@ WritePackArgValueNormal(file, arg)
 	     *	exceed declared maximum.
 	     */
 	    register argument_t *count = arg->argCount;
-	    register char *countRef = count->argByReferenceUser ? "*" : "";
+	    const char *countRef = count->argByReferenceUser ? "*" : "";
 	    register ipc_type_t *btype = it->itElement;
 
 	    /* Note btype->itNumber == count->argMultiplier */
@@ -1612,7 +1625,7 @@ WriteTCheckKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *tab = "";
+    const char *tab = "";
     char string[MAX_STR_LEN];
     boolean_t close = FALSE;
 
@@ -1645,7 +1658,8 @@ WriteTCheckKPD_ool(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *tab, string[MAX_STR_LEN];
+    const char *tab;
+	char string[MAX_STR_LEN];
     boolean_t test;
     u_int howmany, howbig;
 
@@ -1684,10 +1698,11 @@ WriteTCheckKPD_oolport(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *tab, string[MAX_STR_LEN];
+    const char *tab;
+	char string[MAX_STR_LEN];
     boolean_t test;
     u_int howmany;
-    char *howstr;
+    const char *howstr;
 
     if (IS_MULTIPLE_KPD(it)) {
         WriteKPD_Iterator(file, FALSE, FALSE, FALSE, arg, TRUE);
@@ -1817,10 +1832,8 @@ WriteCheckMsgSize(file, arg)
     fprintf(file, "\n");
 }
 
-void
-WriteAdjustReplyMsgPtr(file, arg)
-    FILE *file;
-    register argument_t *arg;
+static void
+WriteAdjustReplyMsgPtr(FILE *file, argument_t *arg)
 {
     register ipc_type_t *ptype = arg->argType;
 
@@ -1838,9 +1851,9 @@ WriteExtractKPD_port(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t	*it = arg->argType;
-    register char *ref = arg->argByReferenceUser ? "*" : "";
-    register char *subindex;
-    register char *recast = "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *subindex;
+    const char *recast = "";
     ipc_type_t *real_it;
 
     real_it = (IS_MULTIPLE_KPD(it)) ? it->itElement : it;
@@ -1853,7 +1866,7 @@ WriteExtractKPD_port(file, arg)
 	    arg->argVarName, recast);
 	if (it->itVarArray) {
 	    register argument_t *count = arg->argCount;
-	    register char *cref = count->argByReferenceUser ? "*" : "";
+	    const char *cref = count->argByReferenceUser ? "*" : "";
 
 	    fprintf(file, "\t    if (Out%dP->%s > %s%s)\n",  count->argReplyPos, 
 		count->argVarName, cref, count->argVarName);
@@ -1869,7 +1882,7 @@ WriteExtractKPD_port(file, arg)
 
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbReturnRcv)) {
 	register argument_t *poly = arg->argPoly;
-	register char *pref = poly->argByReferenceUser ? "*" : "";
+	const char *pref = poly->argByReferenceUser ? "*" : "";
 
 	fprintf(file, "\t%s%s = Out%dP->%s%s.disposition;\n",
 	    pref, poly->argVarName, arg->argReplyPos, arg->argMsgField, subindex);
@@ -1884,7 +1897,7 @@ WriteExtractKPD_ool(file, arg)
     FILE *file;
     register argument_t *arg;
 {
-    register char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
     register ipc_type_t	*it = arg->argType;
 
     if (IS_MULTIPLE_KPD(it)) {
@@ -1911,9 +1924,9 @@ WriteExtractKPD_oolport(file, arg)
     FILE *file;
     register argument_t *arg;
 {
-    register char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
     register ipc_type_t *it = arg->argType;
-    char *subindex;
+    const char *subindex;
 
     if (IS_MULTIPLE_KPD(it)) {
 	WriteKPD_Iterator(file, FALSE, FALSE, it->itVarArray, arg, FALSE);
@@ -1933,7 +1946,7 @@ WriteExtractKPD_oolport(file, arg)
      */
     if (arg->argPoly != argNULL && akCheckAll(arg->argPoly->argKind, akbReturnRcv)) {
         register argument_t *poly = arg->argPoly;
-        register char *pref = poly->argByReferenceUser ? "*" : "";
+        const char *pref = poly->argByReferenceUser ? "*" : "";
 
         fprintf(file, "\t%s%s = Out%dP->%s%s.disposition;\n",
             pref, poly->argVarName, arg->argReplyPos, arg->argMsgField, subindex);
@@ -1952,7 +1965,7 @@ WriteExtractArgValueNormal(file, arg)
     register argument_t *arg;
 {
     register ipc_type_t	*argType = arg->argType;
-    register char *ref = arg->argByReferenceUser ? "*" : "";
+    const char *ref = arg->argByReferenceUser ? "*" : "";
     char who[20];
 
     if (akCheck(arg->argKind, akbUserImplicit)) 
@@ -1983,7 +1996,7 @@ WriteExtractArgValueNormal(file, arg)
 	     *	exceed user`s maximum.
 	     */
 	    register argument_t *count = arg->argCount;
-	    register char *countRef = count->argByReferenceUser ? "*" : "";
+	    const char *countRef = count->argByReferenceUser ? "*" : "";
 	    register ipc_type_t *btype = argType->itElement;
 
 	    /* Note count->argMultiplier == btype->itNumber */
@@ -2212,14 +2225,10 @@ WriteRPCArgDescriptor(file, arg, offset)
 }
 
 void
-WriteRPCRoutineDescriptor(file, rt, arg_count, descr_count,
-			  work_routine, stub_routine, sig_array)
-    FILE *file;
-    register routine_t *rt;
-    int arg_count, descr_count;
-    string_t work_routine, stub_routine, sig_array;
+WriteRPCRoutineDescriptor(FILE *file, routine_t *rt __unused, int arg_count,
+						  int descr_count, string_t work_routine,
+						  string_t stub_routine, string_t sig_array)
 {
-    register argument_t *arg;
 
     fprintf(file, "          { (mig_impl_routine_t) %s,\n\
             (mig_stub_routine_t) %s, ",
@@ -2326,7 +2335,7 @@ CheckRPCCall(rt)
     for (arg = rt->rtArgs; arg != argNULL; arg = arg->argNext)
     {
 	if (akCheck(arg->argKind, akbUserArg) &&
-	    ((arg->argType->itOutName == -1) || (arg->argType->itInName == -1)))
+	    ((arg->argType->itOutName == (u_int)-1) || (arg->argType->itInName == (u_int)-1)))
 	{
 	    return FALSE;
 	}
@@ -2409,7 +2418,7 @@ WriteShortCircInArgBefore(file, arg)
 		if (it->itTypeSize <= sizeof(char *) ||
 			rtMessOnStack(arg->argRoutine) ||
 			arg->argRoutine->rtTempBytesOnStack +
-				     it->itTypeSize <= MaxMessSizeOnStack) {
+			it->itTypeSize <= (u_int)MaxMessSizeOnStack) {
 		    fprintf(file, "\t{   char _%sTemp_[%d];\n",
 			    arg->argVarName, it->itTypeSize);
 		    arg->argRoutine->rtTempBytesOnStack += it->itTypeSize;
@@ -2963,8 +2972,8 @@ WriteRoutine(file, rt)
 	fprintf(file, "\n");
 
 	WriteCheckIdentity(file, rt);
-        if (rt->rtUserImpl)
-	    WriteCheckTrailerHead(file, TRUE);	
+	if (rt->rtUserImpl)
+	    WriteCheckTrailerHead(file, rt, TRUE);	
 
 	/* If the reply message has no Out parameters or return values
 	   other than the return code, we can type-check it and
@@ -2998,13 +3007,12 @@ WriteRPCClientFunctions(file, stats)
     statement_t *stats;
 {
     register statement_t *stat;
-    char *fname;
-    char *argfmt = "(mach_port_t, char *, mach_msg_type_number_t)";
+    const char *fname;
+    const char *argfmt = "(mach_port_t, char *, mach_msg_type_number_t)";
 
     fprintf(file, "#ifdef AUTOTEST\n");
     for (stat = stats; stat != stNULL; stat = stat->stNext)
-	if (stat->stKind == skRoutine)
-	{
+	if (stat->stKind == skRoutine) {
 	    fname = stat->stRoutine->rtName;
 	    fprintf(file, "extern void client_%s%s;\n", fname, argfmt);
 	}
@@ -3068,9 +3076,9 @@ WriteUserIndividual(stats)
 	  case skRoutine:
 	    {
 		FILE *file;
-		register char *filename;
+		char *filename;
 
-		filename = strconcat(UserFilePrefix,
+		filename = (char *)strconcat(UserFilePrefix,
 				     strconcat(stat->stRoutine->rtName, ".c"));
 		file = fopen(filename, "w");
 		if (file == NULL)

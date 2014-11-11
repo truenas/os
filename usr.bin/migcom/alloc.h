@@ -66,8 +66,12 @@
 #ifndef	_ALLOC_H
 #define	_ALLOC_H
 
-extern char *malloc();
-extern char *calloc();
-extern void free();
+#include <stdlib.h>
+
+extern const char *MessFreeRoutine;
+extern const char *MessAllocRoutine;
+extern const char * GenerationDate;
+extern const char * MigGenerationDate;
+extern const char * MigMoreData;
 
 #endif	/* _ALLOC_H */

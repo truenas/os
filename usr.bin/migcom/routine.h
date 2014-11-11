@@ -531,33 +531,33 @@ typedef struct routine
 
 extern u_int rtNumber;
 /* rt->rtNumber will be initialized */
-extern routine_t *rtAlloc();
+extern routine_t *rtAlloc(void);
 /* skip a number */
-extern void rtSkip();
+extern void rtSkip(void);
 
-extern argument_t *argAlloc();
-
-extern boolean_t
-rtCheckMask(/* argument_t *args, u_int mask */);
+extern argument_t *argAlloc(void);
 
 extern boolean_t
-rtCheckMaskFunction(/* argument_t *args, u_int mask,
-		boolean_t (*func)(argument_t *arg) */);
+rtCheckMask(argument_t *args, u_int mask);
+
+extern boolean_t
+rtCheckMaskFunction(argument_t *args, u_int mask,
+					boolean_t (*func)(argument_t *arg));
 
 extern routine_t *
-rtMakeRoutine(/* identifier_t name, argument_t *args */);
+rtMakeRoutine( identifier_t name, argument_t *args);
 extern routine_t *
-rtMakeSimpleRoutine(/* identifier_t name, argument_t *args */);
+rtMakeSimpleRoutine(identifier_t name, argument_t *args);
 
-extern void rtPrintRoutine(/* routine_t *rt */);
-extern void rtCheckRoutine(/* routine_t *rt */);
+extern void rtPrintRoutine(routine_t *rt);
+extern void rtCheckRoutine(routine_t *rt);
 
-extern char *rtRoutineKindToStr(/* routine_kind_t rk */);
+extern const char *rtRoutineKindToStr(routine_kind_t rk);
 
-extern int rtCountArgDescriptors(/* argument_t *args, int *argcount */);
+extern int rtCountArgDescriptors(argument_t *args, int *argcount);
 
-extern void rtMinRequestSize(/* FILE *file, routine_t *rt, char *str */);
-extern void rtMinReplySize(/* FILE *file, routine_t *rt, char *str */);
+extern void rtMinRequestSize(FILE *file, routine_t *rt, const char *str);
+extern void rtMinReplySize(FILE *file, routine_t *rt, const char *str);
 
 #define RPCUserStruct(arg)    (arg->argType->itStruct && arg->argType->itInLine)
 

@@ -1,3 +1,30 @@
+
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -73,14 +100,13 @@
 #include "strdefs.h"
 
 string_t
-strmake(string)
-    char *string;
+strmake(const char *string)
 {
-    register string_t saved;
+    register char *saved;
 
     saved = malloc(strlen(string) + 1);
     if (saved == strNULL)
-	fatal("strmake('%s'): %s", string, strerror(errno));
+		fatal("strmake('%s'): %s", string, strerror(errno));
     return strcpy(saved, string);
 }
 
@@ -88,12 +114,12 @@ string_t
 strconcat(left, right)
     string_t left, right;
 {
-    register string_t saved;
+    register char *saved;
 
     saved = malloc(strlen(left) + strlen(right) + 1);
     if (saved == strNULL)
-	fatal("strconcat('%s', '%s'): %s",
-	      left, right, strerror(errno));
+		fatal("strconcat('%s', '%s'): %s",
+			  left, right, strerror(errno));
     return strcat(strcpy(saved, left), right);
 }
 
@@ -101,60 +127,58 @@ string_t
 strphrase(left, right)
     string_t left, right;
 {
-    string_t saved;
-    string_t current;
+    char *saved;
+    char *current;
     size_t llen;
 
     llen = strlen(left);
     saved = malloc(llen + strlen(right) + 2);
     if (saved == strNULL)
-	fatal("strphrase('%s', '%s'): %s",
-	      left, right, strerror(errno));
+		fatal("strphrase('%s', '%s'): %s",
+			  left, right, strerror(errno));
     strcpy(saved, left);
     current = saved + llen;
     *(current++) = ' ';
     strcpy(current, right);
-    free(left);
+    free((char*)left);
     return(saved);
 }
 
 void
-strfree(string)
-    string_t string;
+strfree(string_t string)
 {
-    free(string);
+    free((char *)string);
 }
 
-char *
+const char *
 strbool(bool)
     boolean_t bool;
 {
     if (bool)
-	return "TRUE";
+		return "TRUE";
     else
-	return "FALSE";
+		return "FALSE";
 }
 
-char *
+const char *
 strstring(string)
     string_t string;
 {
     if (string == strNULL)
-	return "NULL";
+		return "NULL";
     else
-	return string;
+		return string;
 }
 
-char *
-toupperstr(p)
-    char *p;
+const char *
+toupperstr(char *p)
 {
     register char *s = p;
     char c;
 
     while ((c = *s)) {
         if (islower(c))
-	    *s = toupper(c);
+			*s = toupper(c);
         s++;
     }
     return(p);

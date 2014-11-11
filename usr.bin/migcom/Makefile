@@ -21,72 +21,28 @@
 # 
 # cmk1.1
 
-SETUP_PROGRAMS		= migcom migcom1
+.include <src.opts.mk>
+PROG= mig
+SRCS= error.c global.c header.c ident.c \
+	lexxer.l mig.c parser.y routine.c server.c \
+	statement.c string.c type.c user.c utils.c
+#handler.c
 
-PROGRAMS		= migcom migcom1
+CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT
 
-ILIST			= migcom  ${INCLUDES}
-IDIR			= ${MACH3_LIBRARY_IDIR} 
 
-VPATH			= ${MACHINE}
-#VPATH			= ${${TARGET_MACHINE}_VPATH} 
-
-DATAFILES		= alloc.h      global.h     routine.h    strdefs.h    utils.h \
-				  error.h      lexxer.h     statement.h  type.h       write.h   
-
-INCLUDES        = 
-EXPDIR          = ${MACH3_INCLUDE_IDIR}lib/ 
-
-.ifdef	LINUX
-NO_STARTFILES		=
-NO_STRICT_ANSI		=
-.undef	FLEXSKEL
+.if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
+.PATH: i386
+CFLAGS+= -Ii386
 .endif
 
-USE_STATIC_LIBRARIES    =
-DEPENDENCIES			=
-CFLAGS					= -D_ANSI_C_SOURCE  
-INCFLAGS				= -I${MACHINE}  -I${EXPORTBASE}/include
-
-.if ${TARGET_MACHINE} == "ALPHA"
-LDFLAGS					= -non_shared
-.endif
-error.o_CFLAGS			= ${CFLAGS} ${NO_VFPRINTF:D-DNO_VFPRINTF}
-COMMON_OFILES			= parser.o lexxer.o mig.o \
-			  error.o string.o type.o routine.o \
-			  statement.o global.o \
-			  header.o user.o server.o utils.o
-migcom1_OFILES			= ${COMMON_OFILES} ident1.o
-migcom_OFILES			= ${COMMON_OFILES} ident.o
-.ifdef	LINUX
-LIBS					= -lfl
-.else
-LIBS					= -ll
-.endif
-GARBAGE					= parser.c parser.h ident.c
-
-.if exists(${TARGET_MACHINE}/machdep.mk)
-.include "${TARGET_MACHINE}/machdep.mk"
-.endif
-.include <${RULES_MK}>
-
-lexxer.o routine.o type.o server.o user.o:	mig_machine.h
 
 ident.c:
-	echo "char *MigGenerationDate = \""`date`"\";" >${.TARGET}
-	echo "char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
+	echo "#include \"alloc.h\" " >>${.TARGET}
+	echo "const char *MigGenerationDate = \""`date`"\";" >>${.TARGET}
+	echo "const char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
 
 ident1.c: migcom
 	echo "char *MigGenerationDate = \""`date`"\";" >${.TARGET}
 	echo "char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
-
-# force generation of intermediate .c files
-lexxer.o: lexxer.c parser.h
-parser.o: parser.c
-
-# cause the 2 yacc passes to be serialized.
-.ORDER: parser.c parser.h
-
-.if exists(depend.mk)
-.include "depend.mk"
-.endif
+.include <bsd.prog.mk>

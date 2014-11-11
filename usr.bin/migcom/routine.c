@@ -1,3 +1,30 @@
+
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -61,6 +88,8 @@
  *   of distinguished arguments, eg.  Request and Reply
  *   ports, waittime, retcode etc.
  */
+#include <stdio.h>
+
 #include "type.h"
 #include <mach/message.h>
 #include <mach/kern_return.h>
@@ -76,7 +105,7 @@ u_int rtNumber = 0;
 static void rtSizeDelta();
 
 routine_t *
-rtAlloc()
+rtAlloc(void)
 {
     register routine_t *new;
 
@@ -93,13 +122,13 @@ rtAlloc()
 }
 
 void
-rtSkip()
+rtSkip(void)
 {
     rtNumber++;
 }
 
 argument_t *
-argAlloc()
+argAlloc(void)
 {
     extern void KPD_error();
 
@@ -135,7 +164,8 @@ argAlloc()
 	0,			/* int argRequestPos */
 	0,			/* int argReplyPos */
 	FALSE,			/* boolean_t argByReferenceUser */
-	FALSE			/* boolean_t argByReferenceServer */
+	FALSE,			/* boolean_t argByReferenceServer */
+	FALSE        	/* boolean_t argTempOnStack */
     };
     register argument_t *new;
 
@@ -174,7 +204,7 @@ rtMakeSimpleRoutine(name, args)
     return rt;
 }
 
-char *
+const char *
 rtRoutineKindToStr(rk)
     routine_kind_t rk;
 {
@@ -230,17 +260,19 @@ rtPrintArg(arg)
 	printf("Implicit\t");
 	break;
       default:
-	if (akCheck(arg->argKind, akbRequest))
-	    if (akCheck(arg->argKind, akbSend))
-		printf("In");
-	    else
-		printf("(In)");
-	if (akCheck(arg->argKind, akbReply))
-	    if (akCheck(arg->argKind, akbReturn))
-		printf("Out");
-	    else
-		printf("(Out)");
-	printf("\t");
+		  if (akCheck(arg->argKind, akbRequest)) {
+			  if (akCheck(arg->argKind, akbSend))
+				  printf("In");
+			  else
+				  printf("(In)");
+		  }
+		  if (akCheck(arg->argKind, akbReply)) {
+			  if (akCheck(arg->argKind, akbReturn))
+				  printf("Out");
+			  else
+				  printf("(Out)");
+		  }
+		  printf("\t");
     }
 
     printf("\t%s: %s", arg->argName, it->itName);
@@ -324,7 +356,7 @@ rtCheckFit(rt, mask, fitp, uselimp, knownp)
 {
     boolean_t uselim = FALSE;
     argument_t *arg;
-    u_int size = sizeof(mach_msg_header_t);
+    int size = sizeof(mach_msg_header_t);
 
     if (!rt->rtSimpleRequest)    
 	machine_alignment(size,sizeof(mach_msg_body_t));
@@ -437,10 +469,8 @@ rtCheckMaskFunction(args, mask, func)
 }
 
 
-int
-rtCountKPDs(args, mask)
-    argument_t *args;
-    u_int mask;
+static int
+rtCountKPDs(argument_t *args, u_int mask)
 {
     register argument_t *arg;
     int count = 0;
@@ -451,7 +481,7 @@ rtCountKPDs(args, mask)
     return count;
 }
 
-int
+static int
 rtCountFlags(args, flag)
     argument_t *args;
     u_int flag;
@@ -502,7 +532,7 @@ rtCountArgDescriptors(args, argcount)
     return count;
 }
 
-int
+static int
 rtCountMask(args, mask)
     argument_t *args;
     u_int mask;
@@ -631,25 +661,22 @@ rtProcessCountInOutFlag(it, flags, kind, what, name)
     boolean_t *what;
     string_t name;
 {
-    if (flags & flCountInOut) 
-	if (!akCheck(kind, akbReply)) {
-	    warn("%s: CountInOut is ignored: argument must be Out\n", name);
-	    flags &= ~flCountInOut;
-	} else if (!it->itVarArray || !it->itInLine) {
-	    warn("%s: CountInOut is ignored: argument isn't variable or in-line\n", name);
-	    flags &= ~flCountInOut;
-	} else
-	    *what = TRUE;
-
+    if (flags & flCountInOut) {
+		if (!akCheck(kind, akbReply)) {
+			warn("%s: CountInOut is ignored: argument must be Out\n", name);
+			flags &= ~flCountInOut;
+		} else if (!it->itVarArray || !it->itInLine) {
+			warn("%s: CountInOut is ignored: argument isn't variable or in-line\n", name);
+			flags &= ~flCountInOut;
+		} else
+			*what = TRUE;
+	}
     return flags;
 }
 
 static ipc_flags_t
-rtProcessPhysicalCopyFlag(it, flags, kind, name)
-    register ipc_type_t *it;
-    register ipc_flags_t flags;
-    register arg_kind_t kind;
-    string_t name;
+rtProcessPhysicalCopyFlag(ipc_type_t *it, ipc_flags_t flags,
+						  arg_kind_t kind __unused, string_t name)
 {
     if (flags & flPhysicalCopy) {
 	if (it->itInLine) {
@@ -670,7 +697,6 @@ rtProcessRetCodeFlag(thisarg)
 {
     register ipc_type_t *it = thisarg->argType;
     register ipc_flags_t flags = thisarg->argFlags;
-    register arg_kind_t kind = thisarg->argKind;
     string_t name = thisarg->argVarName;
     routine_t *thisrout = thisarg->argRoutine;
 
@@ -713,7 +739,7 @@ rtDetectKPDArg(arg)
     argument_t *arg;
 {
     register ipc_type_t *it = arg->argType;
-    char *string;
+    const char *string;
 
     if  (IS_KERN_PROC_DATA(it)) {
         if (akCheck(arg->argKind, akbSendBody)) {
@@ -800,7 +826,7 @@ rtSuffixExtArg(args)
     register argument_t *args;
 {
     register argument_t *arg;
-    register char *subindex;
+    register const char *subindex;
     char string[MAX_STR_LEN];
 
     for (arg = args; arg != argNULL; arg = arg->argNext)  {
@@ -1190,20 +1216,21 @@ rtCheckRoutineArgs(rt)
     }
 }
 
-static void
+static boolean_t
 rtCheckTrailerType(arg)
     register argument_t *arg;
 {
     if (akIdent(arg->argKind) == akeSecToken) 
-	itCheckSecTokenType(arg->argVarName, arg->argType);
+		itCheckSecTokenType(arg->argVarName, arg->argType);
 
     if (akIdent(arg->argKind) == akeMsgSeqno) 
-	itCheckIntType(arg->argVarName, arg->argType);
+		itCheckIntType(arg->argVarName, arg->argType);
     /*
      * if the built-in are not used, we cannot match
      * the type/size of the desciption provided by the user
      * with the one defined in message.h.
      */
+	return (TRUE);
 }
 
 static void
@@ -1239,9 +1266,9 @@ rtCheckArgTypes(rt)
 	    fatal("Implicit data is not supported in the KernelUser and KernelServer modes");
     /* rtCheckTrailerType will hit a fatal() if something goes wrong */
     if (rt->rtServerImpl)
-	rtCheckMaskFunction(rt->rtArgs, akbServerImplicit, rtCheckTrailerType);
+		rtCheckMaskFunction(rt->rtArgs, akbServerImplicit, rtCheckTrailerType);
     if (rt->rtUserImpl)
-	rtCheckMaskFunction(rt->rtArgs, akbUserImplicit, rtCheckTrailerType);
+		rtCheckMaskFunction(rt->rtArgs, akbUserImplicit, rtCheckTrailerType);
 }
 
 /*
@@ -1502,7 +1529,7 @@ rtCheckOverwrite(rt)
     register routine_t *rt;
 {
     register argument_t *arg;
-    register howmany = rt->rtOverwrite;
+    register int howmany = rt->rtOverwrite;
 
     for (arg = rt->rtArgs; arg != argNULL; arg = arg->argNext) {
 	register ipc_type_t *it = arg->argType;
@@ -1643,7 +1670,7 @@ rtAddByReference(rt)
  * been set properly (when rtAddCountArg is executed, akbVarNeeded
  * might not be set yet - see rtCheckVariable)
  */
-void
+static void
 rtAddSameCount(rt)
     register routine_t *rt;
 {
@@ -1707,18 +1734,18 @@ rtCheckRoutine(rt)
     /* Add dummy WaitTime and MsgOption arguments, if the routine
        doesn't have its own args and the user specified global values. */
 
-    if (rt->rtReplyPort == argNULL)
-	if (rt->rtOneWay)
-	    rtAddDummyReplyPort(rt, itZeroReplyPortType);
-	else
-	    rtAddDummyReplyPort(rt, itRealReplyPortType);
-
-    if (rt->rtMsgOption == argNULL)
-	if (MsgOption == strNULL)
-	    rtAddMsgOption(rt, "MACH_MSG_OPTION_NONE");
-	else
-	    rtAddMsgOption(rt, MsgOption);
-
+    if (rt->rtReplyPort == argNULL) {
+		if (rt->rtOneWay)
+			rtAddDummyReplyPort(rt, itZeroReplyPortType);
+		else
+			rtAddDummyReplyPort(rt, itRealReplyPortType);
+	}
+    if (rt->rtMsgOption == argNULL) {
+		if (MsgOption == strNULL)
+			rtAddMsgOption(rt, "MACH_MSG_OPTION_NONE");
+		else
+			rtAddMsgOption(rt, MsgOption);
+	}
     if ((rt->rtWaitTime == argNULL) &&
 	(WaitTime != strNULL))
 	rtAddWaitTime(rt, WaitTime);
@@ -1793,7 +1820,7 @@ void
 rtMinRequestSize(file, rt, str)
     FILE *file;
     routine_t *rt;
-    char *str;
+    const char *str;
 {
     fprintf(file, "(sizeof(%s)", str);
     rtSizeDelta(file, akbRequest, rt);
@@ -1804,7 +1831,7 @@ void
 rtMinReplySize(file, rt, str)
     FILE *file;
     routine_t *rt;
-    char *str;
+    const char *str;
 {
     fprintf(file, "(sizeof(%s)", str);
     rtSizeDelta(file, akbReply, rt);

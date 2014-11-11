@@ -63,15 +63,16 @@
  *	Created.
  */
 
+#include <stdio.h>
 #include "error.h"
 #include "alloc.h"
 #include "statement.h"
 
-statement_t *stats = stNULL;
-static statement_t **last = &stats;
+statement_t *defs_stats = stNULL;
+static statement_t **last = &defs_stats;
 
 statement_t *
-stAlloc()
+stAlloc(void)
 {
     register statement_t *new;
 

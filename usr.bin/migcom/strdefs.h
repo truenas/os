@@ -70,24 +70,25 @@
 #ifndef	STRDEFS_H
 #define	STRDEFS_H
 
+#include <mach/message.h>
 #include <string.h>
 
-typedef char *string_t;
+typedef const char *string_t;
 typedef string_t identifier_t;
 
 #define MAX_STR_LEN 200 
 
 #define	strNULL		((string_t) 0)
 
-extern string_t strmake(/* char *string */);
-extern string_t strconcat(/* string_t left, right */);
-extern string_t strphrase(/* string_t left, right */);
-extern void strfree(/* string_t string */);
+extern string_t strmake(string_t string);
+extern string_t strconcat(string_t left, string_t right);
+extern string_t strphrase(string_t left, string_t right);
+extern void strfree(string_t string);
 
 #define	streql(a, b)	(strcmp((a), (b)) == 0)
 
-extern char *strbool(/* boolean_t bool */);
-extern char *strstring(/* string_t string */);
-extern char *toupperstr(/* char *string */);
+extern const char *strbool(boolean_t bool);
+extern const char *strstring(string_t string);
+extern const char *toupperstr(char *string);
 
 #endif	/* STRDEFS_H */

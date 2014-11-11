@@ -63,7 +63,7 @@
  *	Created.
  */
 
-extern void LookFileName();
-extern void LookString();
-extern void LookQString();
-extern void LookNormal();
+extern void LookFileName(void);
+extern void LookString(void);
+extern void LookQString(void);
+extern void LookNormal(void);

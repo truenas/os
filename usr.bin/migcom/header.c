@@ -1,3 +1,29 @@
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -122,10 +148,7 @@
 #include <stdlib.h>
 
 void
-WriteIncludes(file, isuser, isdef)
-    FILE *file;
-    boolean_t	isuser;
-    boolean_t   isdef;
+WriteIncludes(FILE *file, boolean_t isuser, boolean_t isdef)
 {
     if (isdef) {
 	fprintf(file, "#include <mach/port.h>\n");
@@ -156,17 +179,16 @@ WriteIncludes(file, isuser, isdef)
 }
 
 static void
-WriteETAPDefines(file)
-    FILE *file;
+WriteETAPDefines(FILE *file)
 {
     register statement_t *stat;
     int fnum;
-    char *fname;
+    const char *fname;
     int first = TRUE;
 
     fprintf(file, "\n#ifndef subsystem_to_name_map_%s\n", SubsystemName);
     fprintf(file, "#define subsystem_to_name_map_%s \\\n", SubsystemName);
-    for (stat = stats; stat != stNULL; stat = stat->stNext)
+    for (stat = defs_stats; stat != stNULL; stat = stat->stNext)
         if (stat->stKind == skRoutine)
 	{
 	    fnum = SubsystemBase + stat->stRoutine->rtNumber;
@@ -180,14 +202,12 @@ WriteETAPDefines(file)
 }
 
 static void
-WriteDefines(file)
-    FILE *file;
+WriteDefines(FILE *file __unused)
 {
 }
 
 static void
-WriteMigExternal(file)
-    FILE *file;
+WriteMigExternal(FILE *file)
 {
     fprintf(file, "#ifdef\tmig_external\n");
     fprintf(file, "mig_external\n");
@@ -197,10 +217,7 @@ WriteMigExternal(file)
 }
 
 static void
-WriteProlog(file, protect, more, isuser)
-    FILE *file;
-    char *protect;
-    boolean_t more, isuser;
+WriteProlog(FILE *file, const char *protect, boolean_t more, boolean_t isuser)
 {
     if (protect != strNULL) {
 	fprintf(file, "#ifndef\t_%s\n", protect);
@@ -233,12 +250,9 @@ WriteProlog(file, protect, more, isuser)
 }
 
 static void
-WriteEpilog(file, protect, isuser)
-    FILE *file;
-    char *protect;
-    boolean_t isuser;
+WriteEpilog(FILE *file, const char *protect, boolean_t isuser)
 {
-    char *defname = 
+    const char *defname = 
         isuser ? "__AfterMigUserHeader" : "__AfterMigServerHeader";
 
     WriteETAPDefines(file);
@@ -251,9 +265,7 @@ WriteEpilog(file, protect, isuser)
 }
 
 static void
-WriteUserRoutine(file, rt)
-    FILE *file;
-    routine_t *rt;
+WriteUserRoutine(FILE *file, routine_t *rt)
 {
     fprintf(file, "\n");
     fprintf(file, "/* %s %s */\n", rtRoutineKindToStr(rt->rtKind), rt->rtName);
@@ -288,12 +300,10 @@ WriteUserRoutine(file, rt)
 }
 
 void
-WriteUserHeader(file, stats)
-    FILE *file;
-    statement_t *stats;
+WriteUserHeader(FILE *file, statement_t *stats)
 {
     register statement_t *stat;
-    char *protect = strconcat(SubsystemName, "_user_");
+    const char *protect = strconcat(SubsystemName, "_user_");
 
     WriteProlog(file, protect, TRUE, TRUE);
     for (stat = stats; stat != stNULL; stat = stat->stNext)
@@ -323,13 +333,11 @@ WriteUserHeader(file, stats)
 }
 
 static void
-WriteDefinesRoutine(file, rt)
-    FILE *file;
-    routine_t *rt;
+WriteDefinesRoutine(FILE *file, routine_t *rt)
 {
-    register char *up = (char *)malloc(strlen(rt->rtName)+1);
+    char *up = (char *)malloc(strlen(rt->rtName)+1);
 
-    up = toupperstr(strcpy(up, rt->rtName));
+    up = (char *)toupperstr(strcpy(up, rt->rtName));
     fprintf(file, "#define\tMACH_ID_%s\t\t%d\t/* %s() */\n", 
 	up, rt->rtNumber + SubsystemBase, rt->rtName);
     if (rt->rtKind == rkRoutine)
@@ -339,9 +347,7 @@ WriteDefinesRoutine(file, rt)
 }
 
 void
-WriteServerRoutine(file, rt)
-    FILE *file;
-    routine_t *rt;
+WriteServerRoutine(FILE *file, routine_t *rt)
 {
     fprintf(file, "\n");
     fprintf(file, "/* %s %s */\n", rtRoutineKindToStr(rt->rtKind), rt->rtName);
@@ -379,13 +385,12 @@ WriteServerRoutine(file, rt)
 }
 
 static void
-WriteDispatcher(file)
-    FILE *file;
+WriteDispatcher(FILE *file)
 {
     register statement_t *stat;
     int descr_count = 0;
 
-    for (stat = stats; stat != stNULL; stat = stat->stNext)
+    for (stat = defs_stats; stat != stNULL; stat = stat->stNext)
 	if (stat->stKind == skRoutine)
 	{
 	    register routine_t *rt = stat->stRoutine;
@@ -415,12 +420,10 @@ WriteDispatcher(file)
 }
 
 void
-WriteServerHeader(file, stats)
-    FILE *file;
-    statement_t *stats;
+WriteServerHeader(FILE *file, statement_t *stats)
 {
     register statement_t *stat;
-    char *protect = strconcat(SubsystemName, "_server_");
+    const char *protect = strconcat(SubsystemName, "_server_");
 
     WriteProlog(file, protect, TRUE, FALSE);
     for (stat = stats; stat != stNULL; stat = stat->stNext)
@@ -451,18 +454,14 @@ WriteServerHeader(file, stats)
 }
 
 static void
-WriteInternalRedefine(file, rt)
-    FILE *file;
-    register routine_t *rt;
+WriteInternalRedefine(FILE *file, routine_t *rt)
 {
     fprintf(file, "#define %s %s_external\n",
 	    rt->rtUserName, rt->rtUserName);
 }
 
 void
-WriteInternalHeader(file, stats)
-    FILE *file;
-    statement_t *stats;
+WriteInternalHeader(FILE *file, statement_t *stats)
 {
     register statement_t *stat;
 
@@ -485,12 +484,10 @@ WriteInternalHeader(file, stats)
 }
 
 void
-WriteDefinesHeader(file, stats)
-    FILE *file;
-    statement_t *stats;
+WriteDefinesHeader(FILE *file, statement_t *stats)
 {
     register statement_t *stat;
-    char *protect = strconcat(SubsystemName, "_defines");
+    const char *protect = strconcat(SubsystemName, "_defines");
 
     WriteProlog(file, protect, FALSE, FALSE);
     fprintf(file, "\n/*\tDefines related to the Subsystem %s\t*/\n\n", SubsystemName);

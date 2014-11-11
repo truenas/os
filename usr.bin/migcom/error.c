@@ -64,20 +64,21 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include "global.h"
 #include "error.h"
 
 extern int lineno;
-extern char *yyinname;
+extern const char *yyinname;
 
-static char *program;
+static const char *program;
 int errors = 0;
 
 /*ARGSUSED*/
 /*VARARGS1*/
 void
-fatal(char *format, ...)
+fatal(const char *format, ...)
 {
     va_list pvar;
     va_start(pvar, format);
@@ -91,7 +92,7 @@ fatal(char *format, ...)
 /*ARGSUSED*/
 /*VARARGS1*/
 void
-warn(char *format, ...)
+warn(const char *format, ...)
 {
     va_list pvar;
     va_start(pvar, format);
@@ -107,7 +108,7 @@ warn(char *format, ...)
 /*ARGSUSED*/
 /*VARARGS1*/
 void
-error(char *format, ...)
+error(const char *format, ...)
 {
     va_list pvar;
     va_start(pvar, format);
@@ -119,7 +120,7 @@ error(char *format, ...)
 }
 
 void
-set_program_name(char *name)
+set_program_name(const char *name)
 {
     program = name;
 }

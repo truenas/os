@@ -1,3 +1,29 @@
+/*-
+ * Copyright (c) 2014, Matthew Macy <kmacy@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -100,24 +126,22 @@
  * 27-May-87  Richard Draves (rpd) at Carnegie-Mellon University
  *	Created.
  */
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include <mach/message.h>
-#include <stdarg.h>
 #include "routine.h"
 #include "write.h"
 #include "global.h"
 #include "utils.h"
+#include "alloc.h"
 
-extern char *MessFreeRoutine;
 
 void
-WriteIdentificationString(file)
-    FILE *file;
+WriteIdentificationString(FILE *file)
 {
-    extern char * GenerationDate;
-    extern char * MigGenerationDate;
-    extern char * MigMoreData;
-    extern IsKernelUser, IsKernelServer, UseMsgRPC;
+    extern int IsKernelUser, IsKernelServer, UseMsgRPC;
 
     fprintf(file, "/*\n");
     fprintf(file, " * IDENTIFICATION:\n");
@@ -168,8 +192,9 @@ WriteImplImports(file, stats, isuser)
 	  case skDImport:
 	    break;
 	  default:
-	    fatal("WriteImplImport(): bad statement_kind_t (%d)",
-		  (int) stat->stKind);
+	    printf("WriteImplImport(): bad statement_kind_t (%d)",
+			   (int) stat->stKind);
+		abort();
 	}
 }
 
@@ -190,11 +215,7 @@ WriteRCSDecl(file, name, rcs)
 }
 
 static void
-WriteOneApplDefault(file, word1, word2, word3)
-    FILE *file;
-    char *word1;
-    char *word2;
-    char *word3;
+WriteOneApplDefault(FILE *file, const char *word1, const char *word2, const char *word3)
 {
     char buf[50];
 
@@ -206,9 +227,7 @@ WriteOneApplDefault(file, word1, word2, word3)
 }
     
 void
-WriteApplDefaults(file, dir)
-    FILE *file;
-    char *dir;
+WriteApplDefaults(FILE *file, const char *dir)
 {
     WriteOneApplDefault(file, "Declare", dir, "Rpc");
     WriteOneApplDefault(file, "Before", dir, "Rpc");
@@ -219,21 +238,16 @@ WriteApplDefaults(file, dir)
 }
 
 void
-WriteApplMacro(file, dir, when, rt)
-    FILE *file;
-    char *dir;
-    char *when;
-    routine_t *rt;
+WriteApplMacro(FILE *file, const char *dir, const char *when, routine_t *rt)
 {
-    char *what = (rt->rtOneWay) ? "Simple" : "Rpc";
+    const char *what = (rt->rtOneWay) ? "Simple" : "Rpc";
 
     fprintf(file, "\t__%s%s%s(%d, \"%s\")\n", 
 	    when, dir, what, SubsystemBase + rt->rtNumber, rt->rtName);
 }
 
 void
-WriteBogusDefines(file)
-    FILE *file;
+WriteBogusDefines(FILE *file)
 {
     fprintf(file, "#ifndef\tmig_internal\n");
     fprintf(file, "#define\tmig_internal\tstatic\n");
@@ -271,18 +285,13 @@ WriteBogusDefines(file)
     fprintf(file, "#endif\t/* UseStaticTemplates */\n");
     fprintf(file, "\n");
 
-    fprintf(file, "#define _WALIGN_(x) (((x) + %d) & ~%d)\n",
+    fprintf(file, "#define _WALIGN_(x) (((x) + %ld) & ~%ld)\n",
 	    itWordAlign - 1, itWordAlign - 1);
     fprintf(file, "#define _WALIGNSZ_(x) _WALIGN_(sizeof(x))\n");
 }
 
 void
-WriteList(file, args, func, mask, between, after)
-    FILE *file;
-    argument_t *args;
-    void (*func)();
-    u_int mask;
-    char *between, *after;
+WriteList(FILE *file, argument_t *args, void (*func)(), u_int mask, const char *between, const char *after)
 {
     register argument_t *arg;
     register boolean_t sawone = FALSE;
@@ -302,12 +311,7 @@ WriteList(file, args, func, mask, between, after)
 }
 
 static boolean_t
-WriteReverseListPrim(file, arg, func, mask, between)
-    FILE *file;
-    register argument_t *arg;
-    void (*func)();
-    u_int mask;
-    char *between;
+WriteReverseListPrim(FILE *file, argument_t *arg, void (*func)(), u_int mask, const char *between)
 {
     boolean_t sawone = FALSE;
 
@@ -329,12 +333,7 @@ WriteReverseListPrim(file, arg, func, mask, between)
 }
 
 void
-WriteReverseList(file, args, func, mask, between, after)
-    FILE *file;
-    argument_t *args;
-    void (*func)();
-    u_int mask;
-    char *between, *after;
+WriteReverseList(FILE *file, argument_t *args, void (*func)(), u_int mask, const char *between, const char *after)
 {
     boolean_t sawone;
 
@@ -357,7 +356,7 @@ WriteUserVarDecl(file, arg)
     FILE *file;
     argument_t *arg;
 {
-    char *ref = (arg->argByReferenceUser ||
+    const char *ref = (arg->argByReferenceUser ||
                  arg->argType->itNativePointer) ? "*" : "";
 
     fprintf(file, "\t%s %s%s", arg->argType->itUserType, ref, arg->argVarName);
@@ -368,42 +367,42 @@ WriteServerVarDecl(file, arg)
     FILE *file;
     argument_t *arg;
 {
-    char *ref = (arg->argByReferenceServer ||
+    const char *ref = (arg->argByReferenceServer ||
 		 arg->argType->itNativePointer) ? "*" : "";
   
     fprintf(file, "\t%s %s%s",
 	    arg->argType->itTransType, ref, arg->argVarName);
 }
 
-char *
+const char *
 ReturnTypeStr(rt)
     routine_t *rt;
 {
     return rt->rtRetCode->argType->itUserType;
 }
 
-char *
+const char *
 FetchUserType(it)
     ipc_type_t *it;
 {
     return it->itUserType;
 }
 
-char *
+const char *
 FetchUserKPDType(it)
     ipc_type_t *it;
 {
     return it->itUserKPDType;
 }
 
-char *
+const char *
 FetchServerType(it)
     ipc_type_t *it;
 {
     return it->itServerType;
 }
 
-char *
+const char *
 FetchServerKPDType(it)
     ipc_type_t *it;
 {
@@ -411,7 +410,7 @@ FetchServerKPDType(it)
     return it->itServerKPDType;
 }
 
-void
+static void
 WriteTrailerDecl(file, trailer)
     FILE *file;
     boolean_t trailer;
@@ -423,10 +422,7 @@ WriteTrailerDecl(file, trailer)
 }
 
 void
-WriteFieldDeclPrim(file, arg, tfunc)
-    FILE *file;
-    argument_t *arg;
-    char *(*tfunc)();
+WriteFieldDeclPrim(FILE *file, argument_t *arg, const char *(*tfunc)(ipc_type_t *))
 {
     register ipc_type_t *it = arg->argType;
 
@@ -481,14 +477,9 @@ WriteFieldDeclPrim(file, arg, tfunc)
 
 
 void
-WriteStructDecl(file, args, func, mask, name, simple, trailer, trailer_t, template_only)
-    FILE *file;
-    argument_t *args;
-    void (*func)();
-    u_int mask;
-    char *name;
-    boolean_t simple, trailer;
-    boolean_t trailer_t, template_only;
+WriteStructDecl(FILE *file, argument_t *args, void (*func)(), u_int mask,
+				const char *name, boolean_t simple, boolean_t trailer,
+				boolean_t trailer_t, boolean_t template_only)
 {
     fprintf(file, "\ttypedef struct {\n");
     fprintf(file, "\t\tmach_msg_header_t Head;\n");
@@ -531,10 +522,7 @@ WriteTemplateDeclOut(file, arg)
 }
 
 void
-WriteTemplateKPD_port(file, arg, in)
-    FILE *file;
-    argument_t *arg;
-    boolean_t in;
+WriteTemplateKPD_port(FILE *file, argument_t *arg, boolean_t in)
 {
     register ipc_type_t *it = arg->argType;
 
@@ -553,10 +541,7 @@ WriteTemplateKPD_port(file, arg, in)
 }
 
 void
-WriteTemplateKPD_ool(file, arg, in)
-    FILE *file;
-    argument_t *arg;
-    boolean_t in;
+WriteTemplateKPD_ool(FILE *file, argument_t *arg, boolean_t in __unused)
 {
     register ipc_type_t *it = arg->argType;
 
@@ -622,11 +607,8 @@ WriteTemplateKPD_oolport(file, arg, in)
  * and skips the items that would be printed by it.  Only %s, %d,
  * and %f are recognized.
  */
-void
-SkipVFPrintf(file, fmt, pvar)
-    FILE *file;
-    register char *fmt;
-    va_list pvar;
+static void
+SkipVFPrintf(FILE *file, const char *fmt, va_list pvar)
 {
     if (*fmt == 0)
 	return;	/* degenerate case */
@@ -681,7 +663,7 @@ SkipVFPrintf(file, fmt, pvar)
 }
 
 static void
-vWriteCopyType(FILE *file, ipc_type_t *it, char *left, char *right, va_list pvar)
+vWriteCopyType(FILE *file, ipc_type_t *it, const char *left, const char *right, va_list pvar)
 {
   va_list pv2;
   __va_copy(pv2,pvar);
@@ -717,7 +699,7 @@ vWriteCopyType(FILE *file, ipc_type_t *it, char *left, char *right, va_list pvar
 /*ARGSUSED*/
 /*VARARGS4*/
 void
-WriteCopyType(FILE *file, ipc_type_t *it, char *left, char *right, ...)
+WriteCopyType(FILE *file, ipc_type_t *it, const char *left, const char *right, ...)
 {
     va_list pvar;
     va_start(pvar, right);
@@ -731,10 +713,10 @@ WriteCopyType(FILE *file, ipc_type_t *it, char *left, char *right, ...)
 /*ARGSUSED*/
 /*VARARGS4*/
 void
-WriteCopyArg(FILE *file, argument_t *arg, char *left, char *right, ...)
+WriteCopyArg(FILE *file, argument_t *arg, const char *left, const char *right, ...)
 {
     va_list pvar;
-  va_list pv2;
+	va_list pv2;
     va_start(pvar, right);
 
     {
@@ -758,18 +740,14 @@ WriteCopyArg(FILE *file, argument_t *arg, char *left, char *right, ...)
  * Global KPD disciplines 
  */
 void
-KPD_error(file, arg)
-    FILE *file;
-    argument_t *arg;
+KPD_error(FILE *file __unused, argument_t *arg)
 {
     printf("MiG internal error: argument is %s\n", arg->argVarName);
     exit(1);
 }
 
 void
-KPD_noop(file, arg)
-    FILE *file;
-    argument_t *arg;
+KPD_noop(FILE *file __unused, argument_t *arg __unused)
 {
 }
 
@@ -906,9 +884,7 @@ WriteLogMsg(file, rt, where, what)
 }
 
 void
-WriteLogDefines(file, who)
-    FILE *file;
-    string_t who;
+WriteLogDefines(FILE *file, string_t who)
 {
     fprintf(file, "#if  MIG_DEBUG\n");
     fprintf(file, "#define LOG_W_E(X)\tLOG_ERRORS(%s, \\\n", who);
@@ -929,12 +905,12 @@ WriteReturnMsgError(file, rt, isuser, arg, error)
     string_t error;
 {
     char space[MAX_STR_LEN];
-    string_t string = &space[0];
+    char * string = &space[0];
 
     if (UseEventLogger && arg != argNULL) 
-	sprintf(string, "LOG_W_E(\"%s\"); ", arg->argVarName);
+		sprintf(string, "LOG_W_E(\"%s\"); ", arg->argVarName);
     else
-	string = "";
+		string = (char *)"";
 
     fprintf(file, "\t\t{ ");
 

@@ -186,6 +186,7 @@
 
 %{
 
+#include <stdio.h>	
 #include "lexxer.h"
 #include "strdefs.h"
 #include "type.h"
@@ -194,11 +195,18 @@
 #include "global.h"
 #include "error.h"
 
-static char *import_name();
-
+static const char *import_name(statement_kind_t);
+int yylex(void);
+extern int yydebug;
+extern int yynerrs;
+extern int yyerrflag;
+extern int yychar;
+union migyys;
+extern union migyys yyval;
+extern union migyys yylval;
 %}
 
-%union
+%union migyys
 {
     u_int number;
     identifier_t identifier;
@@ -274,7 +282,7 @@ SubsystemStart		:	sySubsystem
 	warn("previous Subsystem decl (of %s) will be ignored", SubsystemName);
 	IsKernelUser = FALSE;
 	IsKernelServer = FALSE;
-	strfree(SubsystemName);
+	strfree((char *)SubsystemName);
     }
 }
 			;
@@ -775,16 +783,16 @@ LookQString		:	/* empty */
 
 %%
 
+void yyerror(const char *s);
+
 void
-yyerror(s)
-    char *s;
+yyerror(const char *s)
 {
     error(s);
 }
 
-static char *
-import_name(sk)
-    statement_kind_t sk;
+static const char *
+import_name(statement_kind_t sk)
 {
     switch (sk)
     {

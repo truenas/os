@@ -104,17 +104,21 @@ FileName	({QString}|{AString})
  *	Created.
  */
 
-#include "strdefs.h"
-#include "type.h"
 #include <sys/types.h>
 #include <mach/message.h>
 #include <mach/std_types.h>
+#include "strdefs.h"
+#include "type.h"
+#include "error.h"
 #include "statement.h"
 #include "global.h"
 #include "parser.h"
 #include "lexxer.h"
 #include "mig_machine.h"
 
+
+#undef yywrap
+#define yywrap() 1
 #define	PortSize	(sizeof (mach_port_t) * NBBY)
 #ifdef	__STDC__
 #define stringize(x)	#x
@@ -159,8 +163,10 @@ static int	oldYYBegin = 0;
 int lineno = 0;			/* Replaces lex yylineno */
 
 static void doSharp(); /* process body of # directives */
-extern void yyerror();
+extern void yyerror(const char *);
 %}
+
+%option noyywrap 
 
 %Start	Normal String FileName QString SkipToEOL
 
@@ -297,13 +303,13 @@ extern void yyerror();
 %%
 
 extern void
-LookNormal()
+LookNormal(void)
 {
     SAVE(Normal);
 }
 
 extern void
-LookString()
+LookString(void)
 {
     SAVE(String);
 }
@@ -332,7 +338,7 @@ doSharp(body)
     {
 	endName = strrchr(body, '"');
 	*endName = '\0';
-	strfree(yyinname);
+	strfree((char *)yyinname);
 	yyinname = strmake(startName+1);
     }
 }

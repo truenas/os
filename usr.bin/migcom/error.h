@@ -75,12 +75,12 @@
 #define	_ERROR_H
 
 #include <errno.h>
-
-extern void fatal(char *format, ...);
-extern void warn(char *format, ...);
-extern void error(char *format, ...);
+extern int lineno;
+extern void fatal(const char *format, ...);
+extern void warn(const char *format, ...);
+extern void error(const char *format, ...);
 
 extern int errors;
-extern void set_program_name(char *name);
+extern void set_program_name(const char *name);
 
 #endif	/* _ERROR_H */
