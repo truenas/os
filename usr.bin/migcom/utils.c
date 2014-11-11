@@ -141,7 +141,6 @@
 void
 WriteIdentificationString(FILE *file)
 {
-    extern int IsKernelUser, IsKernelServer, UseMsgRPC;
 
     fprintf(file, "/*\n");
     fprintf(file, " * IDENTIFICATION:\n");
@@ -805,10 +804,7 @@ WriteStringDynArgs(args, mask, InPOutP, str_oolports, str_ool)
  * Utilities for Logging Events that happen at the stub level
  */
 void
-WriteLogMsg(file, rt, where, what)
-    FILE *file;
-    routine_t *rt;
-    int where, what;
+WriteLogMsg(FILE *file, routine_t *rt, boolean_t where, boolean_t what)
 {
     string_t ptr_str;
     string_t StringOolPorts = strNULL;
