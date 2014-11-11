@@ -23,33 +23,38 @@
  */
 /* CMU_HIST */
 /*
- * Revision 2.4  91/05/14  16:53:00  mrt
+ * Revision 2.4  91/05/18  14:35:13  rpd
+ * 	Added mapped_time_value_t.
+ * 	[91/03/21            rpd]
+ * 
+ * Revision 2.3  91/05/14  17:01:40  mrt
  * 	Correcting copyright
  * 
- * Revision 2.3  91/02/05  17:32:34  mrt
+ * Revision 2.2  91/02/05  17:36:49  mrt
  * 	Changed to new Mach copyright
- * 	[91/02/01  17:10:49  mrt]
+ * 	[91/02/01  17:22:07  mrt]
  * 
- * Revision 2.2  90/05/03  15:48:32  dbg
- * 	First checkin.
+ * Revision 2.1  89/08/03  16:06:24  rwd
+ * Created.
  * 
- * Revision 1.3  89/03/09  20:20:12  rpd
- * 	More cleanup.
- * 
- * Revision 1.2  89/02/26  13:01:20  gm0w
+ * Revision 2.4  89/02/25  18:41:34  gm0w
  * 	Changes for cleanup.
  * 
- * 31-Dec-88  Robert Baron (rvb) at Carnegie-Mellon University
- *	Derived from MACH2.0 vax release.
- *
- * 23-Apr-87  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Changed things to "unsigned int" to appease the user community :-).
+ * Revision 2.3  89/02/07  00:53:58  mwyoung
+ * Relocated from sys/time_value.h
+ * 
+ * Revision 2.2  89/01/31  01:21:58  rpd
+ * 	TIME_MICROS_MAX should be 1 Million, not 10 Million.
+ * 	[88/10/12            dlb]
+ * 
+ *  4-Jan-88  David Golub (dbg) at Carnegie-Mellon University
+ *	Created.
  *
  */
 /* CMU_ENDHIST */
 /* 
  * Mach Operating System
- * Copyright (c) 1991,1990,1989,1988 Carnegie Mellon University
+ * Copyright (c) 1991,1990,1989,1988,1987 Carnegie Mellon University
  * All Rights Reserved.
  * 
  * Permission to use, copy, modify and distribute this software and its
@@ -75,67 +80,57 @@
 /*
  */
 
-/*
- *	File:	vm_types.h
- *	Author:	Avadis Tevanian, Jr.
- *	Date: 1985
- *
- *	Header file for VM data types.  I386 version.
- */
+#ifndef	TIME_VALUE_H_
+#define	TIME_VALUE_H_
 
-#ifndef	_MACH_I386_VM_TYPES_H_
-#define _MACH_I386_VM_TYPES_H_
-
-#ifdef	ASSEMBLER
-#else	/* ASSEMBLER */
+#include <mach/machine/vm_types.h>
 
 /*
- * A natural_t is the type for the native
- * integer type, e.g. 32 or 64 or.. whatever
- * register size the machine has.  Unsigned, it is
- * used for entities that might be either
- * unsigned integers or pointers, and for
- * type-casting between the two.
- * For instance, the IPC system represents
- * a port in user space as an integer and
- * in kernel space as a pointer.
+ *	Time value returned by kernel.
  */
-typedef unsigned int	natural_t;
+
+struct time_value {
+	integer_t seconds;
+	integer_t microseconds;
+};
+typedef	struct time_value	time_value_t;
 
 /*
- * An integer_t is the signed counterpart
- * of the natural_t type. Both types are
- * only supposed to be used to define
- * other types in a machine-independent
- * way.
+ *	Macros to manipulate time values.  Assume that time values
+ *	are normalized (microseconds <= 999999).
  */
-typedef int		integer_t;
+#define	TIME_MICROS_MAX	(1000000)
+
+#define	time_value_add_usec(val, micros)	{	\
+	if (((val)->microseconds += (micros))		\
+		>= TIME_MICROS_MAX) {			\
+	    (val)->microseconds -= TIME_MICROS_MAX;	\
+	    (val)->seconds++;				\
+	}						\
+}
+
+#define	time_value_add(result, addend)		{		\
+	(result)->microseconds += (addend)->microseconds;	\
+	(result)->seconds += (addend)->seconds;			\
+	if ((result)->microseconds >= TIME_MICROS_MAX) {	\
+	    (result)->microseconds -= TIME_MICROS_MAX;		\
+	    (result)->seconds++;				\
+	}							\
+}
 
 /*
- * An int32 is an integer that is at least 32 bits wide
- */
-typedef int		int32;
-typedef unsigned int	uint32;
-
-/*
- * A vm_offset_t is a type-neutral pointer,
- * e.g. an offset into a virtual memory space.
- */
-typedef	natural_t	vm_offset_t;
-
-/*
- * A vm_size_t is the proper type for e.g.
- * expressing the difference between two
- * vm_offset_t entities.
- */
-typedef	natural_t	vm_size_t;
-
-#endif	/* ASSEMBLER */
-
-/*
- * If composing messages by hand (please dont)
+ *	Time value available through the mapped-time interface.
+ *	Read this mapped value with
+ *		do {
+ *			secs = mtime->seconds;
+ *			usecs = mtime->microseconds;
+ *		} while (secs != mtime->check_seconds);
  */
 
-#define	MACH_MSG_TYPE_INTEGER_T	MACH_MSG_TYPE_INTEGER_32
+typedef struct mapped_time_value {
+	integer_t seconds;
+	integer_t microseconds;
+	integer_t check_seconds;
+} mapped_time_value_t;
 
-#endif	/* _MACH_I386_VM_TYPES_H_ */
+#endif	/* TIME_VALUE_H_ */

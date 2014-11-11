@@ -118,7 +118,10 @@
 #ifdef	MACH_KERNEL
 #include <dipc.h>
 #endif	/* MACH_KERNEL */
+#include <sys/cdefs.h>
+#include <sys/types.h>
 
+#include <mach/mach_types.h>
 #include <mach/kern_return.h>
 #include <mach/port.h>
 
