@@ -46,7 +46,7 @@
 #define	MACH_SYS_mach_macx_backing_store_recovery	53
 #define	MACH_SYS_mach_swtch_pri	59
 #define	MACH_SYS_mach_swtch	60
-#define	MACH_SYS_mach_syscall_thread_switch	61
+#define	MACH_SYS_mach_thread_switch	61
 #define	MACH_SYS_mach_clock_sleep_trap	62
 #define	MACH_SYS_mach_timebase_info	89
 #define	MACH_SYS_mach_wait_until	90

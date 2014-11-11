@@ -173,7 +173,7 @@ fail:
 
 
 int
-sys_mach_syscall_thread_switch(struct thread *td, struct mach_syscall_thread_switch_args *uap)
+sys_mach_thread_switch(struct thread *td, struct mach_thread_switch_args *uap)
 {
 	/* {
 		syscallarg(mach_port_name_t) thread_name;

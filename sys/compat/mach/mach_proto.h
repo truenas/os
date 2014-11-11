@@ -227,7 +227,7 @@ struct mach_swtch_pri_args {
 struct mach_swtch_args {
 	register_t dummy;
 };
-struct mach_syscall_thread_switch_args {
+struct mach_thread_switch_args {
 	char thread_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t thread_name; char thread_name_r_[PADR_(mach_port_name_t)];
 	char option_l_[PADL_(int)]; int option; char option_r_[PADR_(int)];
 	char option_time_l_[PADL_(mach_msg_timeout_t)]; mach_msg_timeout_t option_time; char option_time_r_[PADR_(mach_msg_timeout_t)];
@@ -300,7 +300,7 @@ int	sys_mach_macx_backing_store_suspend(struct thread *, struct mach_macx_backin
 int	sys_mach_macx_backing_store_recovery(struct thread *, struct mach_macx_backing_store_recovery_args *);
 int	sys_mach_swtch_pri(struct thread *, struct mach_swtch_pri_args *);
 int	sys_mach_swtch(struct thread *, struct mach_swtch_args *);
-int	sys_mach_syscall_thread_switch(struct thread *, struct mach_syscall_thread_switch_args *);
+int	sys_mach_thread_switch(struct thread *, struct mach_thread_switch_args *);
 int	sys_mach_clock_sleep_trap(struct thread *, struct mach_clock_sleep_trap_args *);
 int	sys_mach_timebase_info(struct thread *, struct mach_timebase_info_args *);
 int	sys_mach_wait_until(struct thread *, struct mach_wait_until_args *);
@@ -379,7 +379,7 @@ int	sys_mk_timer_cancel(struct thread *, struct mk_timer_cancel_args *);
 #define	MACH_SYS_AUE_mach_macx_backing_store_recovery	AUE_NULL
 #define	MACH_SYS_AUE_mach_swtch_pri	AUE_NULL
 #define	MACH_SYS_AUE_mach_swtch	AUE_NULL
-#define	MACH_SYS_AUE_mach_syscall_thread_switch	AUE_NULL
+#define	MACH_SYS_AUE_mach_thread_switch	AUE_NULL
 #define	MACH_SYS_AUE_mach_clock_sleep_trap	AUE_NULL
 #define	MACH_SYS_AUE_mach_timebase_info	AUE_NULL
 #define	MACH_SYS_AUE_mach_wait_until	AUE_NULL

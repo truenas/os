@@ -34,6 +34,7 @@
 #include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/malloc.h>
+#include <vm/vm.h>
 
 typedef int mach_port_t;
 typedef int mach_port_name_t;

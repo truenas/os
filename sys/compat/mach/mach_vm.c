@@ -435,6 +435,7 @@ mach_vm_protect(struct mach_trap_args *args)
 	return (0);
 }
 
+#ifdef USE_OBSOLETE
 int
 sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 {
@@ -477,6 +478,7 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 
 	return (0);
 }
+#endif
 
 int
 mach_vm_inherit(struct mach_trap_args *args)

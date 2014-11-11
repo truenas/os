@@ -350,9 +350,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 0;
 		break;
 	}
-	/* mach_syscall_thread_switch */
+	/* mach_thread_switch */
 	case 61: {
-		struct mach_syscall_thread_switch_args *p = params;
+		struct mach_thread_switch_args *p = params;
 		iarg[0] = p->thread_name; /* mach_port_name_t */
 		iarg[1] = p->option; /* int */
 		iarg[2] = p->option_time; /* mach_msg_timeout_t */
@@ -1001,7 +1001,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	/* mach_swtch */
 	case 60:
 		break;
-	/* mach_syscall_thread_switch */
+	/* mach_thread_switch */
 	case 61:
 		switch(ndx) {
 		case 0:
@@ -1291,7 +1291,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* mach_swtch */
 	case 60:
-	/* mach_syscall_thread_switch */
+	/* mach_thread_switch */
 	case 61:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
