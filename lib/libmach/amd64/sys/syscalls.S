@@ -1,6 +1,20 @@
 
 #include "SYS.h"
-#include "cerror.S"	
+#include "cerror.S"
+	RSYSCALL(_kernelrpc_mach_vm_allocate_trap) ;
+	RSYSCALL(_kernelrpc_mach_vm_deallocate_trap) ;
+	RSYSCALL(_kernelrpc_mach_vm_protect_trap)	 ;
+	RSYSCALL(_kernelrpc_mach_vm_map_trap)		 ;
+	RSYSCALL(_kernelrpc_mach_port_allocate_trap) ;
+	RSYSCALL(_kernelrpc_mach_port_destroy_trap)	 ;
+	RSYSCALL(_kernelrpc_mach_port_deallocate_trap) ;
+	RSYSCALL(_kernelrpc_mach_port_mod_refs_trap)   ;
+	RSYSCALL(_kernelrpc_mach_port_move_member_trap) ;
+	RSYSCALL(_kernelrpc_mach_port_insert_right_trap) ;
+	RSYSCALL(_kernelrpc_mach_port_insert_member_trap) ;
+	RSYSCALL(_kernelrpc_mach_port_extract_member_trap) ;
+	RSYSCALL(_kernelrpc_mach_port_construct_trap)	   ;
+	RSYSCALL(_kernelrpc_mach_port_destruct_trap)	   ;
 	RSYSCALL(mach_reply_port)	;
 	MACH_RSYSCALL(thread_self_trap)	;
 	MACH_RSYSCALL(task_self_trap)	;
@@ -14,22 +28,21 @@
 	MACH_RSYSCALL(semaphore_wait_signal_trap)	;
 	MACH_RSYSCALL(semaphore_timedwait_trap)	;
 	MACH_RSYSCALL(semaphore_timedwait_signal_trap)	;
-/*
-	MACH_RSYSCALL(mach_init_process)	;
-	MACH_RSYSCALL(mach_map_fd)	;
-*/
+	RSYSCALL(_kernelrpc_mach_port_guard_trap)	   ;
+	RSYSCALL(_kernelrpc_mach_port_unguard_trap)	   ;
+	MACH_RSYSCALL(task_name_for_pid)	;
 	MACH_RSYSCALL(task_for_pid)	;
 	MACH_RSYSCALL(pid_for_task)	;
 	MACH_RSYSCALL(macx_swapon)	;
 	MACH_RSYSCALL(macx_swapoff)	;
 	MACH_RSYSCALL(macx_triggers)	;
 	MACH_RSYSCALL(swtch_pri)	;
-	MACH_RSYSCALL(syscall_thread_switch)	;
+	MACH_RSYSCALL(swtch)	;
+	RSYSCALL(mach_thread_switch)	;
 	MACH_RSYSCALL(clock_sleep_trap)	;
 	RSYSCALL(mach_timebase_info)	;
 	RSYSCALL(mach_wait_until)	;
-	MACH_RSYSCALL(timer_create)	;
-	MACH_RSYSCALL(timer_destroy)	;
-	MACH_RSYSCALL(timer_arm)	;
-	MACH_RSYSCALL(timer_cancel)	;
-	MACH_RSYSCALL(get_time_base_info)	;
+	RSYSCALL(mk_timer_create)	;
+	RSYSCALL(mk_timer_destroy)	;
+	RSYSCALL(mk_timer_arm)	;
+	RSYSCALL(mk_timer_cancel)	;
