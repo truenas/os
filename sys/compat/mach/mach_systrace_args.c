@@ -270,17 +270,6 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* mach_map_fd */
-	case 43: {
-		struct mach_map_fd_args *p = params;
-		iarg[0] = p->fd; /* int */
-		iarg[1] = p->offset; /* mach_vm_offset_t */
-		uarg[2] = (intptr_t) p->va; /* mach_vm_offset_t * */
-		iarg[3] = p->findspace; /* mach_boolean_t */
-		iarg[4] = p->size; /* mach_vm_size_t */
-		*n_args = 5;
-		break;
-	}
 	/* mach_task_name_for_pid */
 	case 44: {
 		struct mach_task_name_for_pid_args *p = params;
@@ -883,28 +872,6 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_map_fd */
-	case 43:
-		switch(ndx) {
-		case 0:
-			p = "int";
-			break;
-		case 1:
-			p = "mach_vm_offset_t";
-			break;
-		case 2:
-			p = "mach_vm_offset_t *";
-			break;
-		case 3:
-			p = "mach_boolean_t";
-			break;
-		case 4:
-			p = "mach_vm_size_t";
-			break;
-		default:
-			break;
-		};
-		break;
 	/* mach_task_name_for_pid */
 	case 44:
 		switch(ndx) {
@@ -1274,11 +1241,6 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* _kernelrpc_mach_port_unguard_trap */
 	case 42:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* mach_map_fd */
-	case 43:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

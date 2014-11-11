@@ -158,7 +158,7 @@
 						  	  mach_port_name_t name, uint64_t guard, int strict); }
 42  AUE_NULL	STD		{ int _kernelrpc_mach_port_unguard_trap(mach_port_name_t target, \
 						  	  mach_port_name_t name, uint64_t guard); }
-43	AUE_NULL	STD		{ int mach_map_fd(int fd, \
+43	AUE_NULL	OBSOL	{ int mach_map_fd(int fd, \
 			    mach_vm_offset_t offset, mach_vm_offset_t *va, \
 			    mach_boolean_t findspace, mach_vm_size_t size); }
 44  AUE_NULL	STD     { int mach_task_name_for_pid(mach_port_name_t target_tport, \

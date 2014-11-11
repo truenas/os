@@ -35,7 +35,7 @@
 #define	MACH_SYS_mach_semaphore_timedwait_signal_trap	39
 #define	MACH_SYS__kernelrpc_mach_port_guard_trap	41
 #define	MACH_SYS__kernelrpc_mach_port_unguard_trap	42
-#define	MACH_SYS_mach_map_fd	43
+				/* 43 is obsolete { */
 #define	MACH_SYS_mach_task_name_for_pid	44
 #define	MACH_SYS_mach_task_for_pid	45
 #define	MACH_SYS_mach_pid_for_task	46

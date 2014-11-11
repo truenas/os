@@ -185,13 +185,6 @@ struct _kernelrpc_mach_port_unguard_trap_args {
 	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
 	char guard_l_[PADL_(uint64_t)]; uint64_t guard; char guard_r_[PADR_(uint64_t)];
 };
-struct mach_map_fd_args {
-	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
-	char offset_l_[PADL_(mach_vm_offset_t)]; mach_vm_offset_t offset; char offset_r_[PADR_(mach_vm_offset_t)];
-	char va_l_[PADL_(mach_vm_offset_t *)]; mach_vm_offset_t * va; char va_r_[PADR_(mach_vm_offset_t *)];
-	char findspace_l_[PADL_(mach_boolean_t)]; mach_boolean_t findspace; char findspace_r_[PADR_(mach_boolean_t)];
-	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
-};
 struct mach_task_name_for_pid_args {
 	char target_tport_l_[PADL_(mach_port_name_t)]; mach_port_name_t target_tport; char target_tport_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
@@ -297,7 +290,6 @@ int	sys_mach_semaphore_timedwait_trap(struct thread *, struct mach_semaphore_tim
 int	sys_mach_semaphore_timedwait_signal_trap(struct thread *, struct mach_semaphore_timedwait_signal_trap_args *);
 int	sys__kernelrpc_mach_port_guard_trap(struct thread *, struct _kernelrpc_mach_port_guard_trap_args *);
 int	sys__kernelrpc_mach_port_unguard_trap(struct thread *, struct _kernelrpc_mach_port_unguard_trap_args *);
-int	sys_mach_map_fd(struct thread *, struct mach_map_fd_args *);
 int	sys_mach_task_name_for_pid(struct thread *, struct mach_task_name_for_pid_args *);
 int	sys_mach_task_for_pid(struct thread *, struct mach_task_for_pid_args *);
 int	sys_mach_pid_for_task(struct thread *, struct mach_pid_for_task_args *);
@@ -377,7 +369,6 @@ int	sys_mk_timer_cancel(struct thread *, struct mk_timer_cancel_args *);
 #define	MACH_SYS_AUE_mach_semaphore_timedwait_signal_trap	AUE_NULL
 #define	MACH_SYS_AUE__kernelrpc_mach_port_guard_trap	AUE_NULL
 #define	MACH_SYS_AUE__kernelrpc_mach_port_unguard_trap	AUE_NULL
-#define	MACH_SYS_AUE_mach_map_fd	AUE_NULL
 #define	MACH_SYS_AUE_mach_task_name_for_pid	AUE_NULL
 #define	MACH_SYS_AUE_mach_task_for_pid	AUE_NULL
 #define	MACH_SYS_AUE_mach_pid_for_task	AUE_NULL
