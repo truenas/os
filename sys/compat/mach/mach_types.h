@@ -53,7 +53,7 @@ typedef register_t mach_vm_address_t;
 typedef int mach_vm_inherit_t;
 typedef int mach_vm_prot_t;
 typedef int mach_thread_state_flavor_t;
-typedef unsigned int mach_natural_t;
+typedef uint32_t mach_natural_t;
 typedef unsigned long mach_vm_size_t;
 typedef uint64_t mach_memory_object_size_t;
 typedef unsigned long mach_vm_offset_t;
@@ -77,11 +77,12 @@ typedef unsigned int mach_vm_machine_attribute_t;
 typedef mach_natural_t mach_port_urefs_t;
 typedef int mach_port_delta_t;
 
+#ifdef _KERNEL
 MALLOC_DECLARE(M_MACH);
 /* don't see these in the recent NetBSD tree */
 #define ktrmmsg(a, b)
 #define ktrmool(a, b, c)
-
+#endif
 
 /*
  * This is called cproc_t in Mach (cthread_t in Darwin). It is a pointer to

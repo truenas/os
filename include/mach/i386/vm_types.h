@@ -100,7 +100,7 @@
  * a port in user space as an integer and
  * in kernel space as a pointer.
  */
-typedef unsigned long	natural_t;
+typedef uint32_t	natural_t;
 
 /*
  * An integer_t is the signed counterpart

@@ -90,9 +90,6 @@
  *	Pick up "boolean_t" type definition
  */
 
-#ifndef	ASSEMBLER
-#include <mach/machine/boolean.h>
-#endif	/* ASSEMBLER */
 
 /*
  *	Define TRUE and FALSE, only if they haven't been before,
