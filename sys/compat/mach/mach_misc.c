@@ -67,6 +67,11 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in.h>
 #include <sys/sysproto.h>
 
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
+#include <vm/vm_extern.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -76,6 +81,7 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_semaphore.h>
 #include <compat/mach/mach_notify.h>
 #include <compat/mach/mach_exec.h>
+#include <compat/mach/mach_vm.h>
 
 static int mach_cold = 1; /* Have we initialized COMPAT_MACH structures? */
 
@@ -310,116 +316,214 @@ sys_mk_timer_cancel(struct thread *td, struct mk_timer_cancel_args *uap)
 }
 
 int
-sys__kernelrpc_mach_vm_allocate_trap(struct thread *td, struct _kernelrpc_mach_vm_allocate_trap_args *args)
+sys__kernelrpc_mach_vm_allocate_trap(struct thread *td, struct _kernelrpc_mach_vm_allocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; current task only */
+	mach_vm_offset_t *address = uap->address;
+	mach_vm_offset_t uaddr;
+	mach_vm_size_t size = uap->size;
+	int flags = uap->flags;
+	int error;
+
+	if ((error = copyin(address, &uaddr, sizeof(mach_vm_offset_t))))
+		return (error);
+
+	if ((error = mach_vm_allocate(&td->td_proc->p_vmspace->vm_map,
+								  &uaddr, size, flags)))
+		return (error);
+	if ((error = copyout(&uaddr, address, sizeof(mach_vm_offset_t))))
+		return (error);
+	return (0);
+}
+
+int
+sys__kernelrpc_mach_vm_deallocate_trap(struct thread *td, struct _kernelrpc_mach_vm_deallocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; current task only */
+	mach_vm_offset_t address = uap->address;
+	mach_vm_size_t size = uap->size;
+	struct munmap_args cup;
+
+	cup.addr = (void *)address;
+	cup.len = size;
+
+	return (sys_munmap(td, &cup));
+}
+
+int
+sys__kernelrpc_mach_vm_protect_trap(struct thread *td, struct _kernelrpc_mach_vm_protect_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_vm_deallocate_trap(struct thread *td, struct _kernelrpc_mach_vm_deallocate_trap_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_vm_protect_trap(struct thread *td, struct _kernelrpc_mach_vm_protect_trap_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_vm_map_trap(struct thread *td, struct _kernelrpc_mach_vm_map_trap_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_allocate_trap(struct thread *td, struct _kernelrpc_mach_port_allocate_trap_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_mach_port_deallocate_trap_args *args)
+sys__kernelrpc_mach_vm_map_trap(struct thread *td, struct _kernelrpc_mach_vm_map_trap_args *uap)
 {
 
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach_port_mod_refs_trap_args *args)
+sys__kernelrpc_mach_port_allocate_trap(struct thread *td, struct _kernelrpc_mach_port_allocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+	mach_port_right_t right = uap->right;
+	struct mach_right *mr;
+	struct mach_port *mp;
+
+	switch (right) {
+	case MACH_PORT_RIGHT_RECEIVE:
+		mp = mach_port_get();
+		mr = mach_right_get(mp, td, MACH_PORT_TYPE_RECEIVE, 0);
+		break;
+
+	case MACH_PORT_RIGHT_DEAD_NAME:
+		mr = mach_right_get(NULL, td, MACH_PORT_TYPE_DEAD_NAME, 0);
+		break;
+
+	case MACH_PORT_RIGHT_PORT_SET:
+		mr = mach_right_get(NULL, td, MACH_PORT_TYPE_PORT_SET, 0);
+		break;
+
+	default:
+		uprintf("mach_port_allocate: unknown right %x\n",
+				right);
+		return (EINVAL);
+		break;
+	}
+	return (copyout(&mr->mr_name, uap->name, sizeof(*uap->name)));
+}
+
+int
+sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+	mach_port_name_t name = uap->name;
+	struct mach_right *mr;
+
+	if ((mr =
+		 mach_right_check(name, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+		return (ENOENT);
+
+	MACH_PORT_UNREF(mr->mr_port);
+	mr->mr_port = NULL;
+	mach_right_put(mr, MACH_PORT_TYPE_ALL_RIGHTS);
+	return (0);
+}
+
+int
+sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_mach_port_deallocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+	mach_port_name_t name = uap->name;
+	struct mach_right *mr;
+
+	if ((mr = mach_right_check(name, td, MACH_PORT_TYPE_REF_RIGHTS)) == NULL)
+		return (ENOENT);
+	mach_right_put(mr, MACH_PORT_TYPE_REF_RIGHTS);
+	return (0);
+}
+
+int
+sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach_port_mod_refs_trap_args *uap)
+{
+	/*
+	  mach_port_name_t target = uap->target;
+	  mach_port_name_t *name = uap->name;
+	  mach_port_right_t right = uap->right;
+	  mach_port_delta_t delta = uap->delta;
+	*/
+	return (ENOSYS);
+}
+
+int
+sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_mach_port_move_member_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+	mach_port_name_t member = uap->member;
+	mach_port_name_t after = uap->after;
+	struct mach_emuldata *med = td->td_proc->p_emuldata;
+	struct mach_right *mrr;
+	struct mach_right *mrs;
+
+	mrr = mach_right_check(member, td, MACH_PORT_TYPE_RECEIVE);
+	if (mrr == NULL)
+		return (EPERM);
+
+	mrs = mach_right_check(after, td, MACH_PORT_TYPE_PORT_SET);
+	if (mrs == NULL)
+		return (EPERM);
+
+	rw_wlock(&med->med_rightlock);
+
+	/* Remove it from an existing port set */
+	if (mrr->mr_sethead != mrr)
+		LIST_REMOVE(mrr, mr_setlist);
+
+	/* Insert it into the new port set */
+	LIST_INSERT_HEAD(&mrs->mr_set, mrr, mr_setlist);
+	mrr->mr_sethead = mrs;
+
+	rw_wunlock(&med->med_rightlock);
+	return (0);
+}
+
+int
+sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_mach_port_move_member_trap_args *args)
+sys__kernelrpc_mach_port_insert_member_trap(struct thread *td, struct _kernelrpc_mach_port_insert_member_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *args)
+sys__kernelrpc_mach_port_extract_member_trap(struct thread *td, struct _kernelrpc_mach_port_extract_member_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_insert_member_trap(struct thread *td, struct _kernelrpc_mach_port_insert_member_trap_args *args)
+sys__kernelrpc_mach_port_construct_trap(struct thread *td, struct _kernelrpc_mach_port_construct_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_extract_member_trap(struct thread *td, struct _kernelrpc_mach_port_extract_member_trap_args *args)
+sys__kernelrpc_mach_port_destruct_trap(struct thread *td, struct _kernelrpc_mach_port_destruct_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_construct_trap(struct thread *td, struct _kernelrpc_mach_port_construct_trap_args *args)
+sys__kernelrpc_mach_port_guard_trap(struct thread *td, struct _kernelrpc_mach_port_guard_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_destruct_trap(struct thread *td, struct _kernelrpc_mach_port_destruct_trap_args *args)
+sys__kernelrpc_mach_port_unguard_trap(struct thread *td, struct _kernelrpc_mach_port_unguard_trap_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_guard_trap(struct thread *td, struct _kernelrpc_mach_port_guard_trap_args *args)
+sys_mach_task_name_for_pid(struct thread *td, struct mach_task_name_for_pid_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys__kernelrpc_mach_port_unguard_trap(struct thread *td, struct _kernelrpc_mach_port_unguard_trap_args *args)
+sys_mach_macx_backing_store_suspend(struct thread *td, struct mach_macx_backing_store_suspend_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys_mach_task_name_for_pid(struct thread *td, struct mach_task_name_for_pid_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys_mach_macx_backing_store_suspend(struct thread *td, struct mach_macx_backing_store_suspend_args *args)
-{
-	return (ENOSYS);
-}
-
-int
-sys_mach_macx_backing_store_recovery(struct thread *td, struct mach_macx_backing_store_recovery_args *args)
+sys_mach_macx_backing_store_recovery(struct thread *td, struct mach_macx_backing_store_recovery_args *uap)
 {
 	return (ENOSYS);
 }

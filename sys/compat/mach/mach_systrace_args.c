@@ -27,7 +27,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	case 12: {
 		struct _kernelrpc_mach_vm_deallocate_trap_args *p = params;
 		iarg[0] = p->target; /* mach_port_name_t */
-		uarg[1] = (intptr_t) p->address; /* mach_vm_offset_t * */
+		iarg[1] = p->address; /* mach_vm_offset_t */
 		iarg[2] = p->size; /* mach_vm_size_t */
 		*n_args = 3;
 		break;
@@ -450,7 +450,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "mach_port_name_t";
 			break;
 		case 1:
-			p = "mach_vm_offset_t *";
+			p = "mach_vm_offset_t";
 			break;
 		case 2:
 			p = "mach_vm_size_t";

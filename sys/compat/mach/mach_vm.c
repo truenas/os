@@ -251,70 +251,67 @@ mach_vm_map(struct mach_trap_args *args)
 }
 
 int
-mach_vm_allocate(struct mach_trap_args *args)
+mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
+{
+	size_t size = round_page(_size);
+	vm_offset_t daddr;
+	vm_prot_t prot, protmax;
+
+	prot = VM_PROT_READ|VM_PROT_WRITE;
+	protmax = VM_PROT_ALL;
+	KASSERT(addr != NULL, ("invalid addr passed"));
+
+	daddr = trunc_page(*addr);
+	vm_map_lock(map);
+	if ((flags & MACH_VM_FLAGS_ANYWHERE) &&
+		(vm_map_findspace(map, 0, size, &daddr))) {
+		vm_map_unlock(map);
+		return (ENOMEM);
+	} else {
+		/* Address range must be all in user VM space. */
+		if (daddr < vm_map_min(map) ||
+		    daddr + size > vm_map_max(map))
+			return (EINVAL);
+		if (daddr + size < daddr)
+			return (EINVAL);
+
+	}
+	if (vm_map_insert(map, NULL, 0, daddr, daddr + size, prot, protmax, 0)) {
+		vm_map_unlock(map);
+		return (EFAULT);
+	}
+	vm_map_unlock(map);
+	*addr = daddr;
+	return (0);
+}
+
+int
+mach_vm_allocate_ipc(struct mach_trap_args *args)
 {
 	mach_vm_allocate_request_t *req = args->smsg;
 	mach_vm_allocate_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
-	struct proc *tp = ttd->td_proc;
-	struct mmap_args cup;
+	struct proc *tp = args->ttd->td_proc;
 	vm_offset_t addr;
 	size_t size;
-	int error;
+	int error, flags;;
 
 	addr = req->req_address;
 	size = req->req_size;
+	flags = req->req_flags;
 
 #ifdef DEBUG_MACH_VM
 	printf("mach_vm_allocate(addr = %p, size = 0x%08x);\n",
 	    (void *)addr, size);
 #endif
 
-	/*
-	 * Avoid mappings at address zero: it should
-	 * be a "red zone" with nothing mapped on it.
-	 */
-	if (addr == 0) {
-		if (req->req_flags & MACH_VM_FLAGS_ANYWHERE)
-			addr = 0x1000;
-		else
-			return (mach_msg_error(args, EINVAL));
-#ifdef DEBUG_MACH_VM
-		printf("mach_vm_allocate: trying addr = %p\n", (void *)addr);
-#endif
-	}
-
-	size = round_page(size);
-	if (req->req_flags & MACH_VM_FLAGS_ANYWHERE)
-		addr = vm_map_min(&tp->p_vmspace->vm_map);
-	else
-		addr = trunc_page(addr);
-
-	if (((addr + size) > vm_map_max(&tp->p_vmspace->vm_map)) ||
-	    ((addr + size) <= addr))
-		addr = vm_map_min(&tp->p_vmspace->vm_map);
-
-	if (size == 0)
-		goto out;
-
-	cup.addr = (void *)addr;
-	cup.len = size;
-	cup.prot = PROT_READ | PROT_WRITE;
-	cup.flags = MAP_ANON;
-	if ((req->req_flags & MACH_VM_FLAGS_ANYWHERE) == 0)
-		cup.flags |= MAP_FIXED;
-	cup.fd = -1;
-	cup.pos = 0;
-
-	if ((error = sys_mmap(ttd, &cup)) != 0)
+	if ((error = mach_vm_allocate(&tp->p_vmspace->vm_map, &addr, size, flags)))
 		return (mach_msg_error(args, error));
-	rep->rep_address = ttd->td_retval[0];
+	rep->rep_address = addr;
 #ifdef DEBUG_MACH_VM
 	printf("vm_allocate: success at %p\n", (void *)rep->rep_address);
 #endif
 
-out:
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 
@@ -762,16 +759,8 @@ mach_vm_read(struct mach_trap_args *args)
 	prot = VM_PROT_READ|VM_PROT_WRITE;
 	protmax = VM_PROT_ALL;
 
-	vm_map_lock(map);
-	if (vm_map_findspace(map, 0, size, &dstaddr)) {
-		vm_map_unlock(map);
+	if ((error = mach_vm_allocate(map, &dstaddr, size, 0)))
 		return (mach_msg_error(args, ENOMEM));
-	}
-	if (vm_map_insert(map, NULL, 0, dstaddr, dstaddr + size, prot, protmax, 0)) {
-		vm_map_unlock(map);
-		return (mach_msg_error(args, EFAULT));
-	}
-	vm_map_unlock(map);
 	/*
 	 * Copy the data from the target process to the current process
 	 * This is reasonable for small chunk of data, but we should

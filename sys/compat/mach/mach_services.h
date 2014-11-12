@@ -85,7 +85,7 @@ int mach_thread_info(struct mach_trap_args *);
 int mach_thread_policy(struct mach_trap_args *);
 int mach_thread_set_policy(struct mach_trap_args *);
 int mach_vm_region(struct mach_trap_args *);
-int mach_vm_allocate(struct mach_trap_args *);
+int mach_vm_allocate_ipc(struct mach_trap_args *);
 int mach_vm_deallocate(struct mach_trap_args *);
 int mach_vm_protect(struct mach_trap_args *);
 int mach_vm_inherit(struct mach_trap_args *);

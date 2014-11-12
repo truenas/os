@@ -275,7 +275,7 @@ struct mach_service mach_services_table[] = {
 	{3623, NULL, "unimpl. thread_get_assignment", 0, 0},
 	{3624, mach_thread_set_policy, "thread_set_policy", sizeof(mach_thread_set_policy_request_t), sizeof(mach_thread_set_policy_reply_t)},
 	{3800, mach_vm_region, "vm_region", sizeof(mach_vm_region_request_t), sizeof(mach_vm_region_reply_t)},
-	{3801, mach_vm_allocate, "vm_allocate", sizeof(mach_vm_allocate_request_t), sizeof(mach_vm_allocate_reply_t)},
+	{3801, mach_vm_allocate_ipc, "vm_allocate", sizeof(mach_vm_allocate_request_t), sizeof(mach_vm_allocate_reply_t)},
 	{3802, mach_vm_deallocate, "vm_deallocate", sizeof(mach_vm_deallocate_request_t), sizeof(mach_vm_deallocate_reply_t)},
 	{3803, mach_vm_protect, "vm_protect", sizeof(mach_vm_protect_request_t), sizeof(mach_vm_protect_reply_t)},
 	{3804, mach_vm_inherit, "vm_inherit", sizeof(mach_vm_inherit_request_t), sizeof(mach_vm_inherit_reply_t)},

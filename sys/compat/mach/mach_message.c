@@ -953,9 +953,8 @@ inline int
 mach_ool_copyout(struct thread *td, const void *kaddr, void **uaddr, size_t size, int flags)
 {
 	vm_offset_t ubuf;
-	int error = 0;
+	int error;
 	vm_map_t map;
-	vm_prot_t prot;
 	struct proc *p = td->td_proc;
 
 	/*
@@ -970,21 +969,12 @@ mach_ool_copyout(struct thread *td, const void *kaddr, void **uaddr, size_t size
 	}
 #endif
 	map = &p->p_vmspace->vm_map;
-	prot = VM_PROT_READ|VM_PROT_WRITE;
-	vm_map_lock(map);
-	if ((*uaddr == NULL || (vm_offset_t)*uaddr < PAGE_SIZE) &&
-		vm_map_findspace(map, 0, round_page(size), &ubuf)) {
-		vm_map_unlock(map);
-		error = ENOMEM;
-		goto out;
-	} else
+	if (uaddr == NULL || (vm_offset_t)*uaddr < PAGE_SIZE)
+		flags |= MACH_VM_FLAGS_ANYWHERE;
+	else
 		ubuf = (vm_offset_t)*uaddr;
-	if (vm_map_insert(map, NULL, 0, ubuf, ubuf + size, prot, VM_PROT_ALL, 1)) {
-		vm_map_unlock(map);
-		error = EFAULT;
+	if ((error = mach_vm_allocate(map, &ubuf, size, flags)))
 		goto out;
-	}
-	vm_map_unlock(map);
 	if ((error = copyout_proc(p, kaddr, (void *)ubuf, size)) != 0)
 		goto out;
 

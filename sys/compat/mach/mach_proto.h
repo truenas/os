@@ -44,7 +44,7 @@ struct _kernelrpc_mach_vm_allocate_trap_args {
 };
 struct _kernelrpc_mach_vm_deallocate_trap_args {
 	char target_l_[PADL_(mach_port_name_t)]; mach_port_name_t target; char target_r_[PADR_(mach_port_name_t)];
-	char address_l_[PADL_(mach_vm_offset_t *)]; mach_vm_offset_t * address; char address_r_[PADR_(mach_vm_offset_t *)];
+	char address_l_[PADL_(mach_vm_offset_t)]; mach_vm_offset_t address; char address_r_[PADR_(mach_vm_offset_t)];
 	char size_l_[PADL_(mach_vm_size_t)]; mach_vm_size_t size; char size_r_[PADR_(mach_vm_size_t)];
 };
 struct _kernelrpc_mach_vm_protect_trap_args {

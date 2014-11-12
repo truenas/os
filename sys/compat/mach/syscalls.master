@@ -72,7 +72,7 @@
 								int flags); }
 11  AUE_NULL	UNIMPL	nosys
 12  AUE_NULL	STD		{ int _kernelrpc_mach_vm_deallocate_trap(mach_port_name_t target, \
-							mach_vm_offset_t *address, mach_vm_size_t size); }
+							mach_vm_offset_t address, mach_vm_size_t size); }
 13  AUE_NULL	UNIMPL	nosys
 14  AUE_NULL	STD		{ int _kernelrpc_mach_vm_protect_trap(mach_port_name_t target, \
 								mach_vm_offset_t address, mach_vm_size_t size, \
