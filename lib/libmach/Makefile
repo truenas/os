@@ -23,7 +23,10 @@ SYSDIR=	${_dir}
 .error "can't find kernel source tree"
 .endif
 
-SRCS= 	mach_msg.c
+SRCS=			\
+	mach_msg.c	\
+	mach_init.c \
+	mach_misc.c
 
 MACH_OBJS = 	syscalls.o	
 
