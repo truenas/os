@@ -46,14 +46,20 @@
  * any improvements or extensions that they make and grant Carnegie Mellon
  * the rights to redistribute these changes.
  */
+
+#include <sys/cdefs.h>
+#include <sys/types.h>
+
 #include <stdlib.h>
+#include <sys/queue.h>
+
 #include <mach.h>
 #include <mach/boolean.h>
-#include <mach/init.h>
 #include <mach/kern_return.h>
 #include <mach/message.h>
 #include <mach/mig_errors.h>
 #include <mach/port.h>
+
 
 #define LIBMACH_OPTIONS	(MACH_SEND_INTERRUPT|MACH_RCV_INTERRUPT)
 
@@ -170,8 +176,45 @@ mach_msg_receive(mach_msg_header_t *msg)
 			MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
 }
 
-static void mach_msg_destroy_port(mach_port_t, mach_msg_type_name_t);
-static void mach_msg_destroy_memory(vm_offset_t, vm_size_t);
+static void
+mach_msg_destroy_port(mach_port_t port, mach_msg_type_name_t type)
+{
+    if (MACH_PORT_VALID(port)) switch (type) {
+      case MACH_MSG_TYPE_MOVE_SEND:
+      case MACH_MSG_TYPE_MOVE_SEND_ONCE:
+	/* destroy the send/send-once right */
+	(void) mach_port_deallocate(mach_task_self(), port);
+	break;
+
+      case MACH_MSG_TYPE_MOVE_RECEIVE:
+	/* destroy the receive right */
+	(void) mach_port_mod_refs(mach_task_self(), port,
+				  MACH_PORT_RIGHT_RECEIVE, -1);
+	break;
+
+      case MACH_MSG_TYPE_MAKE_SEND:
+	/* create a send right and then destroy it */
+	(void) mach_port_insert_right(mach_task_self(), port,
+				      port, MACH_MSG_TYPE_MAKE_SEND);
+	(void) mach_port_deallocate(mach_task_self(), port);
+	break;
+
+      case MACH_MSG_TYPE_MAKE_SEND_ONCE:
+	/* create a send-once right and then destroy it */
+	(void) mach_port_extract_right(mach_task_self(), port,
+				       MACH_MSG_TYPE_MAKE_SEND_ONCE,
+				       &port, &type);
+	(void) mach_port_deallocate(mach_task_self(), port);
+	break;
+    }
+}
+
+static void
+mach_msg_destroy_memory(vm_offset_t addr, vm_size_t size)
+{
+    if (size != 0)
+	(void) vm_deallocate(mach_task_self(), addr, size);
+}
 
 /*
  *	Routine:	mach_msg_destroy
@@ -265,47 +308,6 @@ mach_msg_destroy(mach_msg_header_t *msg)
 	}
     }
 }
-
-static void
-mach_msg_destroy_port(mach_port_t port, mach_msg_type_name_t type)
-{
-    if (MACH_PORT_VALID(port)) switch (type) {
-      case MACH_MSG_TYPE_MOVE_SEND:
-      case MACH_MSG_TYPE_MOVE_SEND_ONCE:
-	/* destroy the send/send-once right */
-	(void) mach_port_deallocate(mach_task_self(), port);
-	break;
-
-      case MACH_MSG_TYPE_MOVE_RECEIVE:
-	/* destroy the receive right */
-	(void) mach_port_mod_refs(mach_task_self(), port,
-				  MACH_PORT_RIGHT_RECEIVE, -1);
-	break;
-
-      case MACH_MSG_TYPE_MAKE_SEND:
-	/* create a send right and then destroy it */
-	(void) mach_port_insert_right(mach_task_self(), port,
-				      port, MACH_MSG_TYPE_MAKE_SEND);
-	(void) mach_port_deallocate(mach_task_self(), port);
-	break;
-
-      case MACH_MSG_TYPE_MAKE_SEND_ONCE:
-	/* create a send-once right and then destroy it */
-	(void) mach_port_extract_right(mach_task_self(), port,
-				       MACH_MSG_TYPE_MAKE_SEND_ONCE,
-				       &port, &type);
-	(void) mach_port_deallocate(mach_task_self(), port);
-	break;
-    }
-}
-
-static void
-mach_msg_destroy_memory(vm_offset_t addr, vm_size_t size)
-{
-    if (size != 0)
-	(void) vm_deallocate(mach_task_self(), addr, size);
-}
-
 
 /*
  *	Routine:	mach_msg_server_once
