@@ -2,10 +2,14 @@
 
 LIB=	mach
 
+.PATH: mach
+CFLAGS+= -I${.CURDIR}/../../include -I. 
+
 .if ${MACHINE_CPUARCH} == "amd64"
 .PATH: amd64
 .PATH: amd64/sys
 CFLAGS+=	-I./amd64
+
 .else
 # unsupported
 .endif
@@ -19,9 +23,12 @@ SYSDIR=	${_dir}
 .error "can't find kernel source tree"
 .endif
 
-MACH_OBJS = 	syscalls.o
+SRCS= 	mach_msg.c
 
-SRCS= ${MACH_OBJS:C/.o$/.S/}
+MACH_OBJS = 	syscalls.o	
+
+SRCS+= ${MACH_OBJS:C/.o$/.S/}
+
 
 CFLAGS+= -I${SYSDIR}
 CFLAGS+= -fPIC
