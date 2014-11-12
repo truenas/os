@@ -89,14 +89,13 @@
 
 #ifndef	VM_PROT_H_
 #define	VM_PROT_H_
-
+#include <vm/vm.h>
+#include <vm/vm_param.h>
 /*
  *	Types defined:
  *
  *	vm_prot_t		VM protection values.
  */
-
-typedef int		vm_prot_t;
 
 /*
  *	Protection values, defined as bits within the vm_prot_t type
@@ -112,7 +111,6 @@ typedef int		vm_prot_t;
  *	The default protection for newly-created virtual memory
  */
 
-#define VM_PROT_DEFAULT	(VM_PROT_READ|VM_PROT_WRITE)
 
 /*
  *	The maximum privileges possible, for parameter checking.

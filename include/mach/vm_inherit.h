@@ -79,13 +79,6 @@
 #ifndef	VM_INHERIT_H_
 #define	VM_INHERIT_H_
 
-/*
- *	Types defined:
- *
- *	vm_inherit_t	inheritance codes.
- */
-
-typedef unsigned int		vm_inherit_t;	/* might want to change this */
 
 /*
  *	Enumeration of valid values for vm_inherit_t.

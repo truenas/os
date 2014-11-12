@@ -84,6 +84,7 @@ struct tvalspec {
 	clock_res_t	tv_nsec;		/* nanoseconds */
 };
 typedef struct tvalspec	tvalspec_t;
+typedef struct tvalspec mach_timespec_t;
 
 #define NSEC_PER_USEC	1000		/* nanoseconds per microsecond */
 #define USEC_PER_SEC	1000000		/* microseconds per second */

@@ -169,7 +169,7 @@
 #ifndef	_MACH_MACH_TYPES_H_
 #define _MACH_MACH_TYPES_H_
 
-typedef uint32_t boolean_t;
+#include <vm/vm.h>
 
 #include <mach/host_info.h>
 #include <mach/machine.h>

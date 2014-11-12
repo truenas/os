@@ -59,6 +59,7 @@
 #include <mach/mach_interface.h>
 #include <mach/mach_port.h>
 #include <mach/port.h>
+#include <mach/mach_init.h>
 
 /*
  * Standard prototypes
