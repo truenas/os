@@ -173,7 +173,7 @@ typedef uint32_t boolean_t;
 
 #include <mach/host_info.h>
 #include <mach/machine.h>
-#include <mach/machine/vm_types.h>
+#include <machine/mach/vm_types.h>
 #include <mach/memory_object.h>
 #include <mach/port.h>
 #include <mach/processor_info.h>

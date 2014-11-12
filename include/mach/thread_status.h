@@ -102,9 +102,9 @@
  *	The actual structure that comprises the thread state is defined
  *	in the machine dependent module.
  */
-#include <mach/machine/vm_types.h>
-#include <mach/machine/thread_status.h>
-#include <mach/machine/thread_state.h>
+#include <machine/mach/vm_types.h>
+#include <machine/mach/thread_status.h>
+#include <machine/mach/thread_state.h>
 
 /*
  *	Generic definition for machine-dependent thread status.
@@ -112,7 +112,7 @@
 
 typedef	natural_t	*thread_state_t;	/* Variable-length array */
 
-/* THREAD_STATE_MAX is now defined in <mach/machine/thread_state.h> */
+/* THREAD_STATE_MAX is now defined in <machine/mach/thread_state.h> */
 typedef	int	thread_state_data_t[THREAD_STATE_MAX];
 
 #define	THREAD_STATE_FLAVOR_LIST	0	/* List of valid flavors */

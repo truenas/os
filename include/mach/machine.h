@@ -152,7 +152,7 @@
 #include <cpus.h>
 #endif	/* MACH_KERNEL */
 
-#include <mach/machine/vm_types.h>
+#include <machine/mach/vm_types.h>
 #include <mach/boolean.h>
 
 /*

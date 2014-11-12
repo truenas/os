@@ -1,73 +1,33 @@
 /*
- * Copyright 1991-1998 by Open Software Foundation, Inc. 
- *              All Rights Reserved 
- *  
- * Permission to use, copy, modify, and distribute this software and 
- * its documentation for any purpose and without fee is hereby granted, 
- * provided that the above copyright notice appears in all copies and 
- * that both the copyright notice and this permission notice appear in 
- * supporting documentation. 
- *  
- * OSF DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
- * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
- * FOR A PARTICULAR PURPOSE. 
- *  
- * IN NO EVENT SHALL OSF BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
- * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
- * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
- * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
- */
-/*
- * MkLinux
- */
-/* CMU_HIST */
-/*
- * Revision 2.6.2.1  92/03/03  16:22:27  jeffreyh
- * 	Changes from TRUNK
- * 	[92/02/26  12:19:28  jeffreyh]
- * 
- * Revision 2.7  92/01/15  13:44:48  rpd
- * 	Changed MACH_IPC_COMPAT conditionals to default to not present.
- * 
- * Revision 2.6  91/08/28  11:15:36  jsb
- * 	Added mach_port_seqno_t.  Added mps_seqno to mach_port_status_t
- * 	and created old_mach_port_status_t for compatibility purposes.
- * 	[91/08/09            rpd]
- * 
- * Revision 2.5  91/08/24  12:17:54  af
- * 	Added a set of parenthesis to MACH_PORT_TYPE to shut up gcc2.
- * 	[91/07/19            danner]
- * 
- * Revision 2.4.4.1  91/08/19  13:48:02  danner
- * 	Added a set of parenthesis to MACH_PORT_TYPE to shut up gcc2.
- * 	[91/07/19            danner]
- * 
- * Revision 2.4  91/05/14  16:58:38  mrt
- * 	Correcting copyright
- * 
- * Revision 2.3  91/02/05  17:35:27  mrt
- * 	Changed to new Mach copyright
- * 	[91/02/01  17:20:17  mrt]
- * 
- * Revision 2.2  90/06/02  14:59:44  rpd
- * 	Added mach_port_status_t.
- * 	[90/05/13            rpd]
- * 	Converted to new IPC.
- * 	[90/03/26  22:38:36  rpd]
- * 
+ * Copyright (c) 2000-2006 Apple Computer, Inc. All rights reserved.
  *
- * Condensed history:
- *	Put ownership rights under MACH_IPC_XXXHACK (rpd).
- *	Put PORT_ENABLED under MACH_IPC_XXXHACK (rpd).
- *	Removed PORT_INVALID (rpd).
- *	Added port set, port name, port type declarations (rpd).
- *	Added PORT_INVALID (mwyoung).
- *	Added port_*_t types (mwyoung).
- *	Added PORT_ENABLED (mwyoung).
- *	Created (mwyoung).
+ * @APPLE_OSREFERENCE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. The rights granted to you under the License
+ * may not be used to create, or enable the creation or redistribution of,
+ * unlawful or unlicensed copies of an Apple operating system, or to
+ * circumvent, violate, or enable the circumvention or violation of, any
+ * terms of an Apple operating system software license agreement.
+ * 
+ * Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
  */
-/* CMU_ENDHIST */
+/*
+ * @OSF_COPYRIGHT@
+ */
 /* 
  * Mach Operating System
  * Copyright (c) 1991,1990,1989,1988,1987 Carnegie Mellon University
@@ -94,76 +54,181 @@
  * the rights to redistribute these changes.
  */
 /*
+ * NOTICE: This file was modified by McAfee Research in 2004 to introduce
+ * support for mandatory and extensible security protections.  This notice
+ * is included in support of clause 2.2 (b) of the Apple Public License,
+ * Version 2.0.
+ */
+/*
  */
 /*
  *	File:	mach/port.h
  *
- *	Definition of a port
+ *	Definition of a Mach port
  *
- *	[The basic mach_port_t type should probably be machine-dependent,
- *	as it must be represented by a 32-bit integer.]
+ *	Mach ports are the endpoints to Mach-implemented communications
+ *	channels (usually uni-directional message queues, but other types
+ *	also exist).
+ *
+ *	Unique collections of these endpoints are maintained for each
+ *	Mach task.  Each Mach port in the task's collection is given a 
+ *	[task-local] name to identify it - and the the various "rights"
+ *	held by the task for that specific endpoint.
+ *
+ *	This header defines the types used to identify these Mach ports
+ *	and the various rights associated with them.  For more info see:
+ *
+ *	<mach/mach_port.h> - manipulation of port rights in a given space
+ *	<mach/message.h> - message queue [and port right passing] mechanism
+ *
  */
 
 #ifndef	_MACH_PORT_H_
 #define _MACH_PORT_H_
 
-#if	MACH_KERNEL
-#include <dipc.h>
-#endif	/* MACH_KERNEL */
-
+#include <sys/cdefs.h>
+#include <stdint.h>
 #include <mach/boolean.h>
-#include <mach/machine/vm_types.h>
+#include <machine/mach/vm_types.h>
+
+/*
+ *	mach_port_name_t - the local identity for a Mach port
+ *
+ *	The name is Mach port namespace specific.  It is used to
+ *	identify the rights held for that port by the task whose
+ *	namespace is implied [or specifically provided].
+ *
+ *	Use of this type usually implies just a name - no rights.
+ *	See mach_port_t for a type that implies a "named right."
+ *
+ */
 
 typedef natural_t mach_port_t;
-typedef mach_port_t mach_port_name_t;
-typedef mach_port_t *mach_port_array_t;
+typedef natural_t mach_port_name_t;
+typedef mach_port_name_t *mach_port_name_array_t;
+
+#ifdef	KERNEL
+
+/* 
+ *	mach_port_t - a named port right
+ *
+ *	In the kernel, "rights" are represented [named] by pointers to
+ *	the ipc port object in question. There is no port namespace for the
+ *	rights to be collected.
+ *
+ *	Actually, there is namespace for the kernel task.  But most kernel
+ *	code - including, but not limited to, Mach IPC code - lives in the
+ *	limbo between the current user-level task and the "next" task. Very
+ *	little of the kernel code runs in full kernel task context.  So very
+ *	little of it gets to use the kernel task's port name space.  
+ *
+ *	Because of this implementation approach, all in-kernel rights for
+ *	a given port coalesce [have the same name/pointer].  The actual
+ *	references are counted in the port itself.  It is up to the kernel
+ *	code in question to "just remember" how many [and what type of]
+ *	rights it holds and handle them appropriately.
+ *
+ */
+
+#ifndef	MACH_KERNEL_PRIVATE
+/*
+ *	For kernel code that resides outside of Mach proper, we opaque the
+ *	port structure definition.
+ */
+struct ipc_port ;
+
+#endif	/* MACH_KERNEL_PRIVATE */
+
+typedef struct ipc_port	        *ipc_port_t;
+
+#define IPC_PORT_NULL		((ipc_port_t) 0UL)
+#define IPC_PORT_DEAD		((ipc_port_t)~0UL)
+#define IPC_PORT_VALID(port) \
+	((port) != IPC_PORT_NULL && (port) != IPC_PORT_DEAD)
+
+typedef ipc_port_t 		mach_port_t;
+
+/*
+ * Since the 32-bit and 64-bit representations of ~0 are different,
+ * explicitly handle MACH_PORT_DEAD
+ */
+
+#define CAST_MACH_PORT_TO_NAME(x) ((mach_port_name_t)(uintptr_t)(x))
+#define CAST_MACH_NAME_TO_PORT(x) ((x) == MACH_PORT_DEAD ? (mach_port_t)IPC_PORT_DEAD : (mach_port_t)(uintptr_t)(x))
+
+#else	/* KERNEL */
+
+/* 
+ *	mach_port_t - a named port right
+ *
+ *	In user-space, "rights" are represented by the name of the
+ *	right in the Mach port namespace.  Even so, this type is
+ *	presented as a unique one to more clearly denote the presence
+ *	of a right coming along with the name. 
+ *
+ *	Often, various rights for a port held in a single name space
+ *	will coalesce and are, therefore, be identified by a single name
+ *	[this is the case for send and receive rights].  But not
+ *	always [send-once rights currently get a unique name for
+ *	each right].      
+ *
+ */
+#if 0
+#include <sys/_types.h>
+#include <sys/_types/_mach_port_t.h>
+#endif
+#endif	/* KERNEL */
+
+typedef mach_port_t			*mach_port_array_t;
 
 /*
  *  MACH_PORT_NULL is a legal value that can be carried in messages.
  *  It indicates the absence of any port or port rights.  (A port
  *  argument keeps the message from being "simple", even if the
- *  value is MACH_PORT_NULL.)  The value MACH_PORT_DEAD is also
- *  a legal value that can be carried in messages.  It indicates
+ *  value is MACH_PORT_NULL.)  The value MACH_PORT_DEAD is also a legal
+ *  value that can be carried in messages.  It indicates
  *  that a port right was present, but it died.
  */
 
-#define MACH_PORT_NULL		((mach_port_t) 0)
-#define MACH_PORT_DEAD		((mach_port_t) ~0)
+#define MACH_PORT_NULL		0  /* intentional loose typing */
+#define MACH_PORT_DEAD		((mach_port_name_t) ~0)
+#define MACH_PORT_VALID(name)				\
+		(((name) != MACH_PORT_NULL) && 		\
+		 ((name) != MACH_PORT_DEAD))
+
 
 /*
- *  mach_port_t must be an unsigned type.  Port values
- *  have two parts, a generation number and an index.
- *  These macros encapsulate all knowledge of how
- *  a mach_port_t is laid out.  They are made visible 
- *  to user tasks so that packages to map from a mach_port_t
- *  to associated user data can discount the generation
- *  nuber (if desired) in doing the mapping.
+ *	For kernel-selected [assigned] port names, the name is
+ *	comprised of two parts: a generation number and an index.
+ *	This approach keeps the exact same name from being generated
+ *	and reused too quickly [to catch right/reference counting bugs].
+ *	The dividing line between the constituent parts is exposed so
+ *	that efficient "mach_port_name_t to data structure pointer"
+ *	conversion implementation can be made.  But it is possible
+ *	for user-level code to assign their own names to Mach ports.
+ *	These are not required to participate in this algorithm.  So
+ *	care should be taken before "assuming" this model.
  *
- *  Within the kernel, ipc/ipc_entry.c implicitly assumes
- *  when it uses the splay tree functions that the generation
- *  number is in the low bits, so that names are ordered first
- *  by index and then by generation.  If the size of generation
- *  numbers changes, be sure to update IE_BITS_GEN_MASK and
- *  friends in ipc/ipc_entry.h.
  */
-#ifndef NO_PORT_GEN
+
+#ifndef	NO_PORT_GEN
+
 #define	MACH_PORT_INDEX(name)		((name) >> 8)
 #define	MACH_PORT_GEN(name)		(((name) & 0xff) << 24)
 #define	MACH_PORT_MAKE(index, gen)	\
 		(((index) << 8) | (gen) >> 24)
-#else
+
+#else	/* NO_PORT_GEN */
+
 #define	MACH_PORT_INDEX(name)		(name)
 #define	MACH_PORT_GEN(name)		(0)
 #define	MACH_PORT_MAKE(index, gen)	(index)
-#endif	/* !NO_PORT_GEN */
-#define	MACH_PORT_MAKEB(index, bits)	\
-		MACH_PORT_MAKE(index, IE_BITS_GEN(bits))
 
-#define	MACH_PORT_VALID(name)	\
-		(((name) != MACH_PORT_NULL) && ((name) != MACH_PORT_DEAD))
+#endif	/* NO_PORT_GEN */
+
 
 /*
- *  These are the different rights a task may have.
+ *  These are the different rights a task may have for a port.
  *  The MACH_PORT_RIGHT_* definitions are used as arguments
  *  to mach_port_allocate, mach_port_get_refs, etc, to specify
  *  a particular right to act upon.  The mach_port_names and
@@ -179,19 +244,8 @@ typedef natural_t mach_port_right_t;
 #define MACH_PORT_RIGHT_SEND_ONCE	((mach_port_right_t) 2)
 #define MACH_PORT_RIGHT_PORT_SET	((mach_port_right_t) 3)
 #define MACH_PORT_RIGHT_DEAD_NAME	((mach_port_right_t) 4)
-#define MACH_PORT_RIGHT_NUMBER		((mach_port_right_t) 5)
-#define	TEMPORARY_NO_NMS	DIPC
-#if	TEMPORARY_NO_NMS
-/*
- *	XXX This definition is TEMPORARY, to permit
- *	users in-the-know to allocate ports that don't
- *	use NMS detection.  Later, mach_port_allocate
- *	will DEFAULT to this case, and an option will
- *	permit allocating ports that DO support NMS.
- *	Confused yet?  XXX
- */
-#define	MACH_PORT_RIGHT_RECEIVE_NO_NMS	((mach_port_right_t) 6)
-#endif	/* TEMPORARY_NO_NMS */
+#define MACH_PORT_RIGHT_LABELH	        ((mach_port_right_t) 5)
+#define MACH_PORT_RIGHT_NUMBER		((mach_port_right_t) 6)
 
 typedef natural_t mach_port_type_t;
 typedef mach_port_type_t *mach_port_type_array_t;
@@ -205,6 +259,7 @@ typedef mach_port_type_t *mach_port_type_array_t;
 #define MACH_PORT_TYPE_SEND_ONCE    MACH_PORT_TYPE(MACH_PORT_RIGHT_SEND_ONCE)
 #define MACH_PORT_TYPE_PORT_SET	    MACH_PORT_TYPE(MACH_PORT_RIGHT_PORT_SET)
 #define MACH_PORT_TYPE_DEAD_NAME    MACH_PORT_TYPE(MACH_PORT_RIGHT_DEAD_NAME)
+#define MACH_PORT_TYPE_LABELH       MACH_PORT_TYPE(MACH_PORT_RIGHT_LABELH)
 
 /* Convenient combinations. */
 
@@ -221,7 +276,9 @@ typedef mach_port_type_t *mach_port_type_array_t;
 
 /* Dummy type bits that mach_port_type/mach_port_names can return. */
 
-#define MACH_PORT_TYPE_DNREQUEST	0x80000000
+#define MACH_PORT_TYPE_DNREQUEST		0x80000000
+#define MACH_PORT_TYPE_SPREQUEST		0x40000000
+#define MACH_PORT_TYPE_SPREQUEST_DELAYED	0x20000000
 
 /* User-references for capabilities. */
 
@@ -236,41 +293,52 @@ typedef natural_t mach_port_msgcount_t;		/* number of msgs */
 typedef natural_t mach_port_rights_t;		/* number of rights */
 
 /*
- *	A port may have NMS detection enabled, in which case
- *	it tracks outstanding send rights.  Otherwise, there
- *	is no information available about outstanding srights.
- *	The return values are deliberately chosen to match
- *	the old boolean (0=FALSE=no srights, 1=TRUE=srights,
- *	2=xxx=no information available).
+ *	Are there outstanding send rights for a given port?
  */
-#define	MACH_PORT_SRIGHTS_NONE		0		/* NMS:  no srights */
-#define	MACH_PORT_SRIGHTS_PRESENT	1		/* NMS:  srights */
-#define	MACH_PORT_SRIGHTS_NO_INFO	2		/* no NMS */
+#define	MACH_PORT_SRIGHTS_NONE		0		/* no srights */
+#define	MACH_PORT_SRIGHTS_PRESENT	1		/* srights */
 typedef unsigned int mach_port_srights_t;	/* status of send rights */
 
 typedef struct mach_port_status {
-	mach_port_t		mps_pset;	/* containing port set */
+	mach_port_rights_t	mps_pset;	/* count of containing port sets */
 	mach_port_seqno_t	mps_seqno;	/* sequence number */
 	mach_port_mscount_t	mps_mscount;	/* make-send count */
 	mach_port_msgcount_t	mps_qlimit;	/* queue limit */
 	mach_port_msgcount_t	mps_msgcount;	/* number in the queue */
 	mach_port_rights_t	mps_sorights;	/* how many send-once rights */
-#if	DIPC
-	mach_port_srights_t	mps_srights;	/* do send rights exist? */
-#else	/* DIPC */
 	boolean_t		mps_srights;	/* do send rights exist? */
-#endif	/* DIPC */
 	boolean_t		mps_pdrequest;	/* port-deleted requested? */
 	boolean_t		mps_nsrequest;	/* no-senders requested? */
-	unsigned int		mps_flags;	/* port flags */
+	natural_t		mps_flags;		/* port flags */
 } mach_port_status_t;
 
-#define MACH_PORT_QLIMIT_DEFAULT	((mach_port_msgcount_t) 5)
-#define MACH_PORT_QLIMIT_MAX		((mach_port_msgcount_t) 16)
+/* System-wide values for setting queue limits on a port */
+#define MACH_PORT_QLIMIT_ZERO		((mach_port_msgcount_t) 0)
+#define MACH_PORT_QLIMIT_BASIC		((mach_port_msgcount_t) 5)
+#define MACH_PORT_QLIMIT_SMALL		((mach_port_msgcount_t) 16)
+#define MACH_PORT_QLIMIT_LARGE		((mach_port_msgcount_t) 1024)
+#define MACH_PORT_QLIMIT_KERNEL		((mach_port_msgcount_t) 65536)
+#define MACH_PORT_QLIMIT_MIN		MACH_PORT_QLIMIT_ZERO
+#define MACH_PORT_QLIMIT_DEFAULT	MACH_PORT_QLIMIT_BASIC
+#define MACH_PORT_QLIMIT_MAX		MACH_PORT_QLIMIT_LARGE
 
 typedef struct mach_port_limits {
 	mach_port_msgcount_t	mpl_qlimit;	/* number of msgs */
 } mach_port_limits_t;
+
+/* Possible values for mps_flags (part of mach_port_status_t) */
+#define MACH_PORT_STATUS_FLAG_TEMPOWNER		0x01
+#define MACH_PORT_STATUS_FLAG_GUARDED		0x02
+#define MACH_PORT_STATUS_FLAG_STRICT_GUARD	0x04
+#define MACH_PORT_STATUS_FLAG_IMP_DONATION	0x08
+#define MACH_PORT_STATUS_FLAG_REVIVE		0x10
+#define MACH_PORT_STATUS_FLAG_TASKPTR		0x20
+
+typedef struct mach_port_info_ext {
+	mach_port_status_t	mpie_status;
+	mach_port_msgcount_t	mpie_boost_cnt;
+	uint32_t		reserved[6];
+} mach_port_info_ext_t;
 
 typedef integer_t *mach_port_info_t;		/* varying array of natural_t */
 
@@ -279,23 +347,87 @@ typedef int	mach_port_flavor_t;
 #define MACH_PORT_LIMITS_INFO		1	/* uses mach_port_status_t */
 #define MACH_PORT_RECEIVE_STATUS	2	/* uses mach_port_limits_t */
 #define MACH_PORT_DNREQUESTS_SIZE	3	/* info is int */
+#define MACH_PORT_TEMPOWNER		4	/* indicates receive right will be reassigned to another task */
+#define MACH_PORT_IMPORTANCE_RECEIVER	5	/* indicates recieve right accepts priority donation */
+#define MACH_PORT_DENAP_RECEIVER	6	/* indicates receive right accepts de-nap donation */
+#define MACH_PORT_INFO_EXT		7	/* uses mach_port_info_ext_t */
 
-#define MACH_PORT_LIMITS_INFO_COUNT \
-	(sizeof(mach_port_limits_t)/sizeof(natural_t))
-#define MACH_PORT_RECEIVE_STATUS_COUNT \
-	(sizeof(mach_port_status_t)/sizeof(natural_t))
+#define MACH_PORT_LIMITS_INFO_COUNT	((natural_t) \
+	(sizeof(mach_port_limits_t)/sizeof(natural_t)))
+#define MACH_PORT_RECEIVE_STATUS_COUNT	((natural_t) \
+	(sizeof(mach_port_status_t)/sizeof(natural_t)))
 #define MACH_PORT_DNREQUESTS_SIZE_COUNT 1
-
+#define MACH_PORT_INFO_EXT_COUNT	((natural_t) \
+	(sizeof(mach_port_info_ext_t)/sizeof(natural_t)))
 /*
  * Structure used to pass information about port allocation requests.
  * Must be padded to 64-bits total length.
  */
-
 typedef struct mach_port_qos {
-	boolean_t		name:1;		/* name given */
-	boolean_t		rt:1;		/* real-time port */
+	unsigned int		name:1;		/* name given */
+	unsigned int 		prealloc:1;	/* prealloced message */
 	boolean_t		pad1:30;
-	boolean_t		pad2:32;
+	natural_t		len;
 } mach_port_qos_t;
+
+/* Mach Port Guarding definitions */
+
+/*
+ * Flags for mach_port_options (used for
+ * invocation of mach_port_construct).
+ * Indicates attributes to be set for the newly
+ * allocated port.
+ */
+#define MPO_CONTEXT_AS_GUARD	0x01	/* Add guard to the port */
+#define MPO_QLIMIT		0x02	/* Set qlimit for the port msg queue */
+#define MPO_TEMPOWNER		0x04	/* Set the tempowner bit of the port */
+#define MPO_IMPORTANCE_RECEIVER 0x08	/* Mark the port as importance receiver */
+#define MPO_INSERT_SEND_RIGHT   0x10	/* Insert a send right for the port */
+#define MPO_STRICT		0x20	/* Apply strict guarding for port */
+#define MPO_DENAP_RECEIVER	0x40	/* Mark the port as App de-nap receiver */
+/*
+ * Structure to define optional attributes for a newly
+ * constructed port.
+ */
+typedef struct mach_port_options {
+	uint32_t		flags;		/* Flags defining attributes for port */
+	mach_port_limits_t	mpl;		/* Message queue limit for port */
+	uint64_t		reserved[2];	/* Reserved */
+}mach_port_options_t;
+
+typedef mach_port_options_t *mach_port_options_ptr_t;
+
+/*
+ * EXC_GUARD represents a guard violation for both
+ * mach ports and file descriptors. GUARD_TYPE_ is used
+ * to differentiate among them.
+ */
+#define GUARD_TYPE_MACH_PORT	0x1
+
+/* Reasons for exception for a guarded mach port */
+enum mach_port_guard_exception_codes {
+	kGUARD_EXC_DESTROY		= 1u << 0,
+	kGUARD_EXC_MOD_REFS		= 1u << 1,
+	kGUARD_EXC_SET_CONTEXT		= 1u << 2,
+	kGUARD_EXC_UNGUARDED		= 1u << 3,
+	kGUARD_EXC_INCORRECT_GUARD	= 1u << 4
+};
+
+#if	!__DARWIN_UNIX03 && !defined(_NO_PORT_T_FROM_MACH)
+/*
+ *  Mach 3.0 renamed everything to have mach_ in front of it.
+ *  These types and macros are provided for backward compatibility
+ *	but are deprecated.
+ */
+typedef mach_port_t		port_t;
+typedef mach_port_name_t	port_name_t;
+typedef mach_port_name_t	*port_name_array_t;
+
+#define PORT_NULL		((port_t) 0)
+#define PORT_DEAD		((port_t) ~0)
+#define PORT_VALID(name) \
+		((port_t)(name) != PORT_NULL && (port_t)(name) != PORT_DEAD)
+
+#endif	/* !__DARWIN_UNIX03 && !_NO_PORT_T_FROM_MACH */
 
 #endif	/* _MACH_PORT_H_ */

@@ -107,7 +107,6 @@
 
 #include <mach/vm_statistics.h>
 #include <mach/machine.h>
-#include <mach/machine/vm_types.h>
 #include <mach/time_value.h>
 
 /*

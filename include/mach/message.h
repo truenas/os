@@ -135,6 +135,8 @@
 
 typedef natural_t mach_msg_timeout_t;
 
+typedef char *mach_msg_trailer_info_t;
+
 /*
  *  The value to be used when there is no timeout.
  *  (No MACH_SEND_TIMEOUT/MACH_RCV_TIMEOUT option.)

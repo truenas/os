@@ -54,11 +54,11 @@
 #ifndef	_MACH_H_
 #define	_MACH_H_
 
+
 #include <mach/mach_types.h>
 #include <mach/mach_interface.h>
 #include <mach/mach_port.h>
-#include <mach_init.h>
-#include <device/device_types.h>
+#include <mach/port.h>
 
 /*
  * Standard prototypes

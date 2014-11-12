@@ -96,7 +96,7 @@
 #include <mach/boolean.h>
 #include <mach/policy.h>
 #include <mach/time_value.h>
-#include <mach/machine/vm_types.h>
+#include <machine/mach/vm_types.h>
 
 /*
  *	Generic information structure to allow for expansion.

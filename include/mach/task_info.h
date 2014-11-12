@@ -84,7 +84,7 @@
 #ifndef	TASK_INFO_H_
 #define	TASK_INFO_H_
 
-#include <mach/machine/vm_types.h>
+#include <machine/mach/vm_types.h>
 #include <mach/time_value.h>
 #include <mach/policy.h>
 

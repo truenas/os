@@ -96,7 +96,7 @@
 #ifndef	VM_STATISTICS_H_
 #define	VM_STATISTICS_H_
 
-#include <mach/machine/vm_types.h>
+#include <machine/mach/vm_types.h>
 
 struct vm_statistics {
 	integer_t	free_count;		/* # of pages free */
