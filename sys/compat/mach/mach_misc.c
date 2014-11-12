@@ -83,6 +83,9 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_exec.h>
 #include <compat/mach/mach_vm.h>
 
+MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
+
+
 static int mach_cold = 1; /* Have we initialized COMPAT_MACH structures? */
 
 static void
@@ -119,11 +122,10 @@ mach_e_proc_init(struct proc *p)
 		if (p->p_emul != &emul_mach)
 			printf("mach_emuldata allocated for non Mach binary\n");
 #endif
-		p->p_emuldata = malloc(sizeof(struct mach_emuldata),
+		med = malloc(sizeof(struct mach_emuldata),
 		    M_MACH, M_WAITOK | M_ZERO);
-	}
-
-	med = (struct mach_emuldata *)p->p_emuldata;
+	} else
+		med = (struct mach_emuldata *)p->p_emuldata;
 
 	/*
 	 * p->p_emudata has med_inited set if we inherited it from
@@ -191,6 +193,11 @@ mach_e_proc_init(struct proc *p)
 	med->med_dirty_thid = 1;
 	med->med_suspend = 0;
 	med->med_inited = 1;
+
+	PROC_LOCK(p);
+	if (p->p_emuldata != med)
+		p->p_emuldata = med;
+	PROC_UNLOCK(p);
 }
 
 void
@@ -198,15 +205,20 @@ mach_e_thread_init(struct thread *td)
 {
 	struct mach_thread_emuldata *mle;
 
-	mle = malloc(sizeof(*mle), M_MACH, M_WAITOK);
-	td->td_emuldata = mle;
+	KASSERT(td == curthread, ("mach_e_thread_init should only be called on curthread"));
+	if (curproc->p_emuldata == NULL)
+		mach_e_proc_init(curproc);
 
+	mle = malloc(sizeof(*mle), M_MACH, M_WAITOK);
 	mle->mle_kernel = mach_port_get();
 	MACH_PORT_REF(mle->mle_kernel);
 
 	mle->mle_kernel->mp_flags |= MACH_MP_INKERNEL;
 	mle->mle_kernel->mp_datatype = MACH_MP_LWP;
 	mle->mle_kernel->mp_data = (void *)td;
+
+	td->td_emuldata = mle;
+	td->td_pflags |= TDP_MACHINITED;
 }
 
 

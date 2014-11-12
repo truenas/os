@@ -427,6 +427,7 @@ do {									\
 #define	TDP_UIOHELD	0x10000000 /* Current uio has pages held in td_ma */
 #define	TDP_UNUSED29	0x20000000 /* --available-- */
 #define	TDP_EXECVMSPC	0x40000000 /* Execve destroyed old vmspace */
+#define	TDP_MACHINITED	0x80000000 /* Mach initialization done */
 
 /*
  * Reasons that the current thread can not be run yet.

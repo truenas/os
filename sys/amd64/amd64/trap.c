@@ -918,10 +918,8 @@ cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 #ifdef COMPAT_MACH
 	if (MACH_SYSCALL(sa->code)) {
 		sa->callp = &mach_sysent[MACH_SYSCALL_IDX(sa->code)];
-		if (p->p_emuldata == NULL)
-			mach_e_proc_init(curproc);
-		if (curthread->td_emuldata == NULL)
-			mach_e_thread_init(curthread);
+		if ((td->td_pflags & TDP_MACHINITED) == 0)
+			mach_e_thread_init(td);
 	} else
 #endif
  	if (sa->code >= p->p_sysent->sv_size)

@@ -47,8 +47,6 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_errno.h>
 #include <compat/mach/mach_services.h>
 
-MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
-
 
 int
 mach_bootstrap_look_up(struct mach_trap_args *args)
