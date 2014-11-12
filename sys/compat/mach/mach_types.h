@@ -78,10 +78,16 @@ typedef mach_natural_t mach_port_urefs_t;
 typedef int mach_port_delta_t;
 
 #ifdef _KERNEL
+struct proc;
+struct thread;
 MALLOC_DECLARE(M_MACH);
 /* don't see these in the recent NetBSD tree */
 #define ktrmmsg(a, b)
 #define ktrmool(a, b, c)
+void mach_e_proc_init(struct proc *p);
+void mach_e_thread_init(struct thread *td);
+#define MACH_SYSCALL(x) (((x)&(1<<31)) && (-((int)x) < 127))
+#define MACH_SYSCALL_IDX(x) (-(x))
 #endif
 
 /*

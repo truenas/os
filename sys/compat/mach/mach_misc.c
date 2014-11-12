@@ -73,6 +73,135 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_clock.h>
 #include <compat/mach/mach_port.h>
 #include <compat/mach/mach_proto.h>
+#include <compat/mach/mach_semaphore.h>
+#include <compat/mach/mach_notify.h>
+#include <compat/mach/mach_exec.h>
+
+static int mach_cold = 1; /* Have we initialized COMPAT_MACH structures? */
+
+static void
+mach_init(void)
+{
+	mach_semaphore_init();
+	mach_message_init();
+	mach_port_init();
+
+	mach_cold = 0;
+}
+
+void
+mach_e_proc_init(struct proc *p)
+{
+	struct mach_emuldata *med;
+	struct mach_right *mr;
+
+	/*
+	 * Initialize various things if needed.
+	 * XXX Not the best place for this.
+	 */
+	if (mach_cold == 1)
+		mach_init();
+
+	/*
+	 * For Darwin binaries, p->p_emuldata is always allocated:
+	 * from the previous program if it had the same emulation,
+	 * or from darwin_e_proc_exec(). In the latter situation,
+	 * everything has been set to zero.
+	 */
+	if (!p->p_emuldata) {
+#ifdef DIAGNOSTIC
+		if (p->p_emul != &emul_mach)
+			printf("mach_emuldata allocated for non Mach binary\n");
+#endif
+		p->p_emuldata = malloc(sizeof(struct mach_emuldata),
+		    M_MACH, M_WAITOK | M_ZERO);
+	}
+
+	med = (struct mach_emuldata *)p->p_emuldata;
+
+	/*
+	 * p->p_emudata has med_inited set if we inherited it from
+	 * the program that called exec(). In that situation, we
+	 * must free anything that will not be used anymore.
+	 */
+	if (med->med_inited != 0) {
+		rw_wlock(&med->med_rightlock);
+		while ((mr = LIST_FIRST(&med->med_right)) != NULL)
+			mach_right_put_exclocked(mr, MACH_PORT_TYPE_ALL_RIGHTS);
+		rw_wunlock(&med->med_rightlock);
+
+		/*
+		 * Do not touch special ports. Some other process (eg: gdb)
+		 * might have grabbed them to control the process, and the
+		 * controller intend to keep in control even after exec().
+		 */
+	} else {
+		/*
+		 * p->p_emuldata is uninitialized. Go ahead and initialize it.
+		 */
+		LIST_INIT(&med->med_right);
+		rw_init(&med->med_rightlock, "rights lock");
+		rw_init(&med->med_exclock, "excl lock");
+
+		/*
+		 * For debugging purpose, it's convenient to have each process
+		 * using distinct port names, so we prefix the first port name
+		 * by the PID. Darwin does not do that, but we can remove it
+		 * when we want, it will not hurt.
+		 */
+		med->med_nextright = p->p_pid << 16;
+
+		/*
+		 * Initialize special ports. Bootstrap port is shared
+		 * among all Mach processes in our implementation.
+		 */
+		med->med_kernel = mach_port_get();
+		med->med_host = mach_port_get();
+
+		med->med_kernel->mp_flags |= MACH_MP_INKERNEL;
+		med->med_host->mp_flags |= MACH_MP_INKERNEL;
+
+		med->med_kernel->mp_data = (void *)p;
+		med->med_host->mp_data = (void *)p;
+
+		med->med_kernel->mp_datatype = MACH_MP_PROC;
+		med->med_host->mp_datatype = MACH_MP_PROC;
+
+		MACH_PORT_REF(med->med_kernel);
+		MACH_PORT_REF(med->med_host);
+
+		med->med_bootstrap = mach_bootstrap_port;
+		MACH_PORT_REF(med->med_bootstrap);
+	}
+
+	/*
+	 * Exception ports are inherited accross exec() calls.
+	 * If the structure is initialized, the ports are just
+	 * here, so leave them untouched. If the structure is
+	 * uninitalized, the ports are all set to zero, which
+	 * is the default, so do not touch them either.
+	 */
+
+	med->med_dirty_thid = 1;
+	med->med_suspend = 0;
+	med->med_inited = 1;
+}
+
+void
+mach_e_thread_init(struct thread *td)
+{
+	struct mach_thread_emuldata *mle;
+
+	mle = malloc(sizeof(*mle), M_MACH, M_WAITOK);
+	td->td_emuldata = mle;
+
+	mle->mle_kernel = mach_port_get();
+	MACH_PORT_REF(mle->mle_kernel);
+
+	mle->mle_kernel->mp_flags |= MACH_MP_INKERNEL;
+	mle->mle_kernel->mp_datatype = MACH_MP_LWP;
+	mle->mle_kernel->mp_data = (void *)td;
+}
 
 
 int

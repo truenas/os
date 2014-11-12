@@ -102,8 +102,4 @@
  *      machine dependent exception masks
  */
 #define EXC_MASK_MACHINE        0
-
-#define MACH_SYSCALL(x) (((x)&1<<31) && (-(int)x < 127))
-#define MACH_SYSCALL_MASK(x) ((x) & ~(1<<31))
-
 #endif /* MACH_MACHDEP_H_ */
