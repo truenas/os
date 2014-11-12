@@ -59,7 +59,7 @@
 #include <mach/message.h>
 #include <mach/mig_errors.h>
 #include <mach/port.h>
-
+#include <mach/mach_vm.h>
 
 #define LIBMACH_OPTIONS	(MACH_SEND_INTERRUPT|MACH_RCV_INTERRUPT)
 
@@ -245,12 +245,15 @@ mach_msg_destroy(mach_msg_header_t *msg)
     mach_msg_destroy_port(msg->msgh_remote_port, MACH_MSGH_BITS_REMOTE(mbits));
 
     if (mbits & MACH_MSGH_BITS_COMPLEX) {
-	mach_msg_body_t		*body;
-	mach_msg_descriptor_t	*saddr, *eaddr;
-	
+		mach_msg_base_t base __aligned(8);
+		mach_msg_base_t *basep;
+		mach_msg_body_t		*body;
+		mach_msg_descriptor_t	*saddr, *eaddr;
+
+		basep = &base;
+		memcpy(basep, msg, sizeof(base));
     	body = (mach_msg_body_t *) (msg + 1);
-    	saddr = (mach_msg_descriptor_t *) 
-			((mach_msg_base_t *) msg + 1);
+		saddr = (mach_msg_descriptor_t *) (uintptr_t)(basep + 1);
     	eaddr =  saddr + body->msgh_descriptor_count;
 
 	for  ( ; saddr < eaddr; saddr++) {
