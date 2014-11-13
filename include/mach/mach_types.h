@@ -184,6 +184,7 @@
 #include <mach/thread_status.h>
 #include <mach/time_value.h>
 #include <mach/clock_types.h>
+#include <mach/kern_return.h>
 #include <mach/vm_attributes.h>
 #include <mach/vm_inherit.h>
 #include <mach/vm_behavior.h>

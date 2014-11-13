@@ -2,6 +2,8 @@
 #define _MACH_MACH_PORT_H_
 #include <sys/mach/mach_port.h>
 
+extern mach_port_t mach_reply_port(void);
+
 extern kern_return_t mach_port_allocate(
 				mach_port_name_t target,
 				mach_port_right_t right,
