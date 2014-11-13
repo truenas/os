@@ -142,7 +142,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 #endif
 #ifdef DEBUG_MACH
 	printf("mach_exception: %d.%d, exc %d, code (%d, %d)\n",
-	    exc_td->td_proc->p_pid, exc_td->td_lid, exc, code[0], code[1]);
+	    exc_td->td_proc->p_pid, exc_td->td_tid, exc, code[0], code[1]);
 #endif
 
 	/*
@@ -180,8 +180,8 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 #ifdef DEBUG_MACH
 	printf("catcher is %d.%d, state %d\n",
 	    exc_port->mp_recv->mr_td->td_proc->p_pid,
-	    exc_port->mp_recv->mr_td->l_lid,
-	    exc_port->mp_recv->mr_td->td_proc->p_stat);
+	    exc_port->mp_recv->mr_td->td_tid,
+	    exc_port->mp_recv->mr_td->td_proc->p_state);
 #endif
 	/*
 	 * Don't send exceptions to dying processes
@@ -376,12 +376,13 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	 */
 #ifdef DEBUG_MACH
 	printf("mach_exception: %d.%d sleep on catcher_med->med_exclock = %p\n",
-	    exc_td->td_proc->p_pid, exc_td->td_lid, &catcher_med->med_exclock);
+	    exc_td->td_proc->p_pid, exc_td->td_tid, &catcher_med->med_exclock);
 #endif
-	error = tsleep(&catcher_med->med_exclock, PZERO, "mach_exc", 0);
+	error = msleep(&catcher_med->med_exclock, &catcher_med->med_exclock,
+				   PZERO, "mach_exc", 0);
 #ifdef DEBUG_MACH
 	printf("mach_exception: %d.%d resumed, error = %d\n",
-	    exc_td->td_proc->p_pid, exc_td->td_lid, error);
+	    exc_td->td_proc->p_pid, exc_td->td_tid, error);
 #endif
 
 	/*

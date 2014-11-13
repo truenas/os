@@ -248,7 +248,7 @@ sys_mach_pid_for_task(struct thread *td, struct mach_pid_for_task_args *uap)
 {
 
 	DPRINTF(("sys_mach_pid_for_task(0x%x, %p);\n",
-	    uap->t, uap->x));
+	    uap->t, uap->pid));
 	return (ENOSYS);
 }
 
@@ -287,7 +287,7 @@ int
 sys_mach_wait_until(struct thread *td, struct mach_wait_until_args *uap)
 {
 
-	DPRINTF(("sys_mach_wait_until(%lld);\n", uap->deadline));
+	DPRINTF(("sys_mach_wait_until(%lu);\n", uap->deadline));
 	return (ENOSYS);
 }
 
@@ -483,7 +483,8 @@ sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_m
 int
 sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
 {
-	return (ENOSYS);
+
+	return (_mach_port_insert_right(td, uap->name, uap->poly, uap->polyPoly));
 }
 
 int

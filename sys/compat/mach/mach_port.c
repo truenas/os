@@ -214,26 +214,17 @@ mach_port_allocate(struct mach_trap_args *args)
 }
 
 int
-mach_port_insert_right(struct mach_trap_args *args)
+_mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
+	mach_msg_type_name_t disposition)
 {
-	mach_port_insert_right_request_t *req = args->smsg;
-	mach_port_insert_right_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
-	mach_port_t name;
-	mach_port_t right;
 	struct mach_right *mr;
 	struct mach_right *nmr;
 
-	name = req->req_name;
-	right = req->req_poly.name;
-	nmr = NULL;
-
 	mr = mach_right_check(right, td, MACH_PORT_TYPE_ALL_RIGHTS);
 	if (mr == NULL)
-		return (mach_msg_error(args, EPERM));
+		return (EPERM);
 
-	switch (req->req_poly.disposition) {
+	switch (disposition) {
 	case MACH_MSG_TYPE_MAKE_SEND:
 	case MACH_MSG_TYPE_MOVE_SEND:
 	case MACH_MSG_TYPE_COPY_SEND:
@@ -251,12 +242,35 @@ mach_port_insert_right(struct mach_trap_args *args)
 		nmr = mach_right_get(mr->mr_port,
 		    td, MACH_PORT_TYPE_RECEIVE, name);
 		break;
-
 	default:
+		nmr = NULL;
 		uprintf("mach_port_insert_right: unknown right %x\n",
-		    req->req_poly.disposition);
+		    disposition);
 		break;
 	}
+	if (nmr == NULL)
+		return (EPERM);
+	return (0);
+}
+
+int
+mach_port_insert_right(struct mach_trap_args *args)
+{
+	mach_port_insert_right_request_t *req = args->smsg;
+	mach_port_insert_right_reply_t *rep = args->rmsg;
+	size_t *msglen = args->rsize;
+	struct thread *td = args->td;
+	int error;
+	mach_port_t name;
+	mach_port_t right;
+
+
+	name = req->req_name;
+	right = req->req_poly.name;
+	error = _mach_port_insert_right(td, req->req_name, req->req_poly.name,
+		req->req_poly.disposition);
+	if (error)
+		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -713,13 +727,16 @@ mach_right_get(struct mach_port *mp, struct thread *td, int type, mach_port_t hi
 			mr->mr_type |= type;
 			if (type & MACH_PORT_TYPE_SEND)
 				mr->mr_refcount++;
+			KASSERT(mr->mr_port != NULL, ("port not set"));
 			goto rcvck;
 		}
 	}
 
-	mr = uma_zalloc(mach_right_zone, M_WAITOK);
+	mr = uma_zalloc(mach_right_zone, M_WAITOK|M_ZERO);
 
+	/* XXX can move this to the zone allocator */
 	mr->mr_port = mp;
+	mtx_init(&mr->mr_lock, "mach right", NULL, MTX_DEF);
 	mr->mr_td = td;
 	mr->mr_type = type;
 	mr->mr_sethead = mr;
@@ -748,7 +765,8 @@ rcvck:
 		 * Destroy the former receive right on this port, and
 		 * register the new right.
 		 */
-		if (mr->mr_port->mp_recv != NULL)
+		if (mr->mr_port->mp_recv != NULL &&
+			mr->mr_port->mp_recv != mr)
 			mach_right_put(mr->mr_port->mp_recv,
 			    MACH_PORT_TYPE_RECEIVE);
 		mr->mr_port->mp_recv = mr;
@@ -945,6 +963,7 @@ mach_right_newname(struct thread *td, mach_port_t hint)
 void
 mach_debug_port(void)
 {
+#if 0
 	struct mach_emuldata *med;
 	struct mach_right *mr;
 	struct mach_right *mrs;
@@ -989,6 +1008,7 @@ mach_debug_port(void)
 			printf("\n");
 		}
 	}
+#endif
 }
 
 #endif /* DEBUG_MACH */

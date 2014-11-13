@@ -36,6 +36,8 @@
 #include <sys/malloc.h>
 #include <vm/vm.h>
 
+#define DEBUG_MACH
+
 typedef int mach_port_t;
 typedef int mach_port_name_t;
 typedef int mach_port_type_t;

@@ -198,9 +198,12 @@ sys_mach_thread_switch(struct thread *td, struct mach_thread_switch_args *uap)
 
 	case MACH_SWITCH_OPTION_WAIT:
 		med->med_thpri = 1;
-		while (med->med_thpri != 0)
-			(void)tsleep(&med->med_thpri, PZERO|PCATCH,
-			    "thread_switch", timeout);
+		while (med->med_thpri != 0) {
+			rw_wlock(&med->med_rightlock);
+			(void)msleep(&med->med_thpri, &med->med_rightlock, PZERO|PCATCH,
+						 "thread_switch", timeout);
+			rw_wunlock(&med->med_rightlock);
+		}
 		break;
 
 	case MACH_SWITCH_OPTION_DEPRESS:
@@ -320,10 +323,13 @@ mach_thread_create_running(struct mach_trap_args *args)
 	 * the process can be killed with kill -9, but we loop to avoid
 	 * spurious wakeups due to other signals.
 	 */
-	while(mctc.mctc_child_done == 0)
-		(void)tsleep(&mctc.mctc_child_done,
+	while(mctc.mctc_child_done == 0) {
+		mtx_lock(&child_mr->mr_lock);
+		(void)msleep(&mctc.mctc_child_done,
+					 &child_mr->mr_lock,
 		    PZERO|PCATCH, "mach_thread", 0);
-
+		mtx_unlock(&child_mr->mr_lock);
+	}
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_add_port_desc(rep, child_mr->mr_name);

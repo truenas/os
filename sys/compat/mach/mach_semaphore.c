@@ -93,8 +93,11 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 
 	if (blocked != 0) {
 		mwtd = mach_waiting_thread_get(td, ms);
-		while (ms->ms_value < 0)
-			tsleep(mwtd, PZERO|PCATCH, "sem_wait", 0);
+		while (ms->ms_value < 0) {
+			rw_wlock(&ms->ms_lock);
+			msleep(mwtd, &ms->ms_lock, PZERO|PCATCH, "sem_wait", 0);
+			rw_wunlock(&ms->ms_lock);
+		}
 		mach_waiting_thread_put(mwtd, ms, 0);
 	}
 	return (0);

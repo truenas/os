@@ -92,12 +92,17 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 	} */
 	size_t send_size, recv_size;
 	mach_msg_header_t *msg;
-	int opt;
+	int error, opt;
 
-	td->td_retval[0] = MACH_MSG_SUCCESS;
+	DPRINTF("mach_msg_overwrite_trap("
+		   "td=%p, msg=%p, option=%d, send_size=%u, rcv_size=%u, \n"
+		   "rcv_name=%d, timeout=%u, notify=%d, rcv_msg=%p, list_size=%u)\n",
+		   td, uap->msg, uap->option, uap->send_size, uap->rcv_size, uap->rcv_name,
+		   uap->timeout, uap->notify, uap->rcv_msg, uap->scatter_list_size);
 	send_size = uap->send_size;
 	recv_size = uap->rcv_size;
 	opt = uap->option;
+	error = 0;
 
 	/* XXX not safe enough: lots of big messages will kill us */
 	if (send_size > MACH_MAX_MSG_LEN) {
@@ -116,9 +121,9 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 	 */
 	msg = uap->msg;
 	if (opt & MACH_SEND_MSG)
-		td->td_retval[0] = mach_msg_send(td, msg, &opt, send_size);
+		error = mach_msg_send(td, msg, &opt, send_size);
 
-	if ((opt & MACH_RCV_MSG) && (td->td_retval[0] == MACH_MSG_SUCCESS)) {
+	if ((opt & MACH_RCV_MSG) && (error == MACH_MSG_SUCCESS)) {
 		/*
 		 * Find a buffer for the reply.
 		 */
@@ -131,10 +136,11 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 			return (0);
 		}
 
-		td->td_retval[0] = mach_msg_recv(td, msg, opt, recv_size,
+		error = mach_msg_recv(td, msg, opt, recv_size,
 		    uap->timeout, uap->rcv_name);
 	}
 
+	td->td_retval[0] = error;
 	return (0);
 }
 
@@ -181,7 +187,10 @@ mach_msg_send(struct thread *td, mach_msg_header_t *msg, int *option, size_t sen
 	ln = sm->msgh_local_port;
 	rn = sm->msgh_remote_port;
 
-	lr = mach_right_check(ln, td, MACH_PORT_TYPE_ALL_RIGHTS);
+	DPRINTF("mach_msg_send: local_port=%u remote_port=%u",
+		   ln, rn);
+	if (ln)
+		lr = mach_right_check(ln, td, MACH_PORT_TYPE_ALL_RIGHTS);
 	rr = mach_right_check(rn, td, MACH_PORT_TYPE_ALL_RIGHTS);
 	if ((rr == NULL) || (rr->mr_port == NULL)) {
 #ifdef DEBUG_MACH
@@ -274,7 +283,7 @@ skip_null_lr:
 		if (send_size < min_reqlen) {
 #ifdef DEBUG_MACH
 			printf("mach server %s: smsg overflow: "
-			    "send = %d, min = %d\n",
+			    "send = %lu, min = %lu\n",
 			    srv->srv_name, send_size, min_reqlen);
 #endif
 			ret = MACH_SEND_MSG_TOO_SMALL;
@@ -463,8 +472,10 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 			printf("pid %d: wait on port %p [%p]\n",
 			    p->p_pid, mp, mr->mr_sethead);
 #endif
-			error = tsleep(mr->mr_sethead, PZERO|PCATCH,
-			    "mach_msg", timeout);
+			mtx_lock(&mr->mr_lock);
+			error = msleep(mr->mr_sethead, &mr->mr_lock, PZERO|PCATCH,
+							   "mach_msg", timeout);
+			mtx_unlock(&mr->mr_lock);
 			if ((error == ERESTART) || (error == EINTR))
 				return (MACH_RCV_INTERRUPTED);
 
@@ -513,8 +524,10 @@ mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv
 		    p->p_pid, mp, mr->mr_sethead);
 #endif
 		if (mp->mp_count == 0) {
-			error = tsleep(mr->mr_sethead, PZERO|PCATCH,
-			    "mach_msg", timeout);
+			mtx_lock(&mr->mr_lock);
+			error = msleep(mr->mr_sethead, &mr->mr_lock, PZERO|PCATCH,
+						   "mach_msg", timeout);
+			mtx_unlock(&mr->mr_lock);
 			if ((error == ERESTART) || (error == EINTR))
 				return (MACH_RCV_INTERRUPTED);
 
@@ -1154,10 +1167,12 @@ mach_message_put_exclocked(struct mach_message *mm)
 	uma_zfree(mach_message_zone, mm);
 }
 
+
 #ifdef DEBUG_MACH
 void
 mach_debug_message(void)
 {
+#if 0
 	struct thread *td;
 	struct mach_emuldata *med;
 	struct mach_right *mr;
@@ -1202,6 +1217,7 @@ mach_debug_message(void)
 				printf("\n");
 			}
 	}
+#endif
 }
 
 #endif /* DEBUG_MACH */

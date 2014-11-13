@@ -680,7 +680,7 @@ mach_io_registry_entry_get_properties(struct mach_trap_args *args)
 	    mid->mid_properties, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit properties failed\n",
-		    td->td_proc->p_pid, td->td_lid);
+		    td->td_proc->p_pid, td->td_tid);
 #endif
 	}
 
@@ -747,7 +747,7 @@ mach_io_registry_entry_get_property(struct mach_trap_args *args)
 	    mip->mip_value, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit property failed\n",
-		    td->td_proc->p_pid, td->td_lid);
+		    td->td_proc->p_pid, td->td_tid);
 #endif
 	}
 

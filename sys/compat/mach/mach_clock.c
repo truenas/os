@@ -69,7 +69,9 @@ sys_mach_clock_sleep_trap(struct thread *td, struct mach_clock_sleep_trap_args *
 	} */
 	struct timespec mts, cts, tts;
 	mach_timespec_t mcts;
+#if 0
 	int dontcare;
+#endif
 	int error;
 	int ticks;
 
@@ -87,7 +89,8 @@ sys_mach_clock_sleep_trap(struct thread *td, struct mach_clock_sleep_trap_args *
 	ticks = tts.tv_sec * hz;
 	ticks += (tts.tv_nsec * hz) / 100000000L;
 
-	tsleep(&dontcare, PZERO|PCATCH, "sleep", ticks);
+	/* mach thread abort ignores uninterruptible sleep so this works */
+	pause("sleep", ticks);
 
 	if (uap->wakeup_time != NULL) {
 		nanotime(&cts);

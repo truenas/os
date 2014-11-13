@@ -33,6 +33,7 @@
 #define	_MACH_PORT_H_
 #include <sys/lock.h>
 #include <sys/rwlock.h>
+#include <sys/mutex.h>
 
 #define MACH_PORT_REF(mp)	(mp)->mp_refcount++
 #define MACH_PORT_UNREF(mp)	if (--(mp)->mp_refcount <= 0) mach_port_put(mp)
@@ -308,6 +309,7 @@ extern struct mach_port *mach_saved_bootstrap_port;
 /* In-kernel Mach port right description */
 struct mach_right {
 	mach_port_t mr_name;		/* The right name */
+	struct mtx mr_lock;
 	struct thread *mr_td;		/* points back to struct thread */
 	int mr_type;			/* right type (recv, send, sendonce) */
 	LIST_ENTRY(mach_right) mr_list; /* Right list for a process */
@@ -327,7 +329,8 @@ struct mach_right {
 	/* Revelant only if the right is part of a port set */
 	struct mach_right *mr_sethead;	/* Points back to right set */
 };
-
+int _mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
+							mach_msg_type_name_t disposition);
 mach_port_t mach_right_newname(struct thread *, mach_port_t);
 struct mach_right *mach_right_get(struct mach_port *,
     struct thread *, int, mach_port_t);
