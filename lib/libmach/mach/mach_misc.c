@@ -13,6 +13,14 @@
 #include <stdbool.h>
 
 kern_return_t
+mach_port_allocate(mach_port_name_t target, mach_port_right_t right,
+				   mach_port_name_t *name)
+{
+
+	return (_kernelrpc_mach_port_allocate_trap(target, right, name));
+}
+
+kern_return_t
 mach_port_deallocate(mach_port_name_t target, mach_port_name_t name)
 {
 
