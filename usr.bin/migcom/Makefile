@@ -21,6 +21,8 @@
 # 
 # cmk1.1
 
+MK_MAN=no
+
 .include <src.opts.mk>
 PROG= mig
 SRCS= error.c global.c header.c ident.c \
@@ -28,12 +30,12 @@ SRCS= error.c global.c header.c ident.c \
 	statement.c string.c type.c user.c utils.c
 #handler.c
 
-CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT
+CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT
 
 
 .if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
 .PATH: i386
-CFLAGS+= -Ii386
+CFLAGS+= -I${.CURDIR}/i386
 .endif
 
 

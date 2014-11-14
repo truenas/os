@@ -95,6 +95,7 @@ SUBDIR=	alias \
 	${_man} \
 	mandoc \
 	mesg \
+	migcom \
 	minigzip \
 	ministat \
 	${_mkcsmapper} \

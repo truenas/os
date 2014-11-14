@@ -6,7 +6,7 @@
 .include <bsd.own.mk>
 
 CLEANFILES= osreldate.h version vers.c
-SUBDIR= arpa protocols rpcsvc rpc xlocale
+SUBDIR= arpa mach protocols rpcsvc rpc xlocale
 INCS=	a.out.h ar.h assert.h bitstring.h complex.h cpio.h _ctype.h ctype.h \
 	db.h \
 	dirent.h dlfcn.h elf.h elf-hints.h err.h fmtmsg.h fnmatch.h fstab.h \
@@ -232,6 +232,23 @@ copies:
 	cd ${.CURDIR}/../sys/rpc; \
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 types.h \
 	    ${DESTDIR}${INCLUDEDIR}/rpc
+	cd ${.CURDIR}/../sys/teken; \
+	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 teken.h \
+	    ${DESTDIR}${INCLUDEDIR}/teken
+.if exists(${.CURDIR}/../sys/sys/mach)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/sys/mach
+	cd ${.CURDIR}/../sys/sys/mach ; \
+	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+		${DESTDIR}${INCLUDEDIR}/sys/mach
+.endif
+.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/machine/mach
+	cd ${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach ; \
+	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+		${DESTDIR}${INCLUDEDIR}/machine/mach
+.endif
 
 symlinks:
 	@${ECHO} "Setting up symlinks to kernel source tree..."

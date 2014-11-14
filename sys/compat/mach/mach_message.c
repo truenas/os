@@ -94,11 +94,11 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 	mach_msg_header_t *msg;
 	int error, opt;
 
-	DPRINTF("mach_msg_overwrite_trap("
+	DPRINTF(("mach_msg_overwrite_trap("
 		   "td=%p, msg=%p, option=%d, send_size=%u, rcv_size=%u, \n"
 		   "rcv_name=%d, timeout=%u, notify=%d, rcv_msg=%p, list_size=%u)\n",
 		   td, uap->msg, uap->option, uap->send_size, uap->rcv_size, uap->rcv_name,
-		   uap->timeout, uap->notify, uap->rcv_msg, uap->scatter_list_size);
+		   uap->timeout, uap->notify, uap->rcv_msg, uap->scatter_list_size));
 	send_size = uap->send_size;
 	recv_size = uap->rcv_size;
 	opt = uap->option;
@@ -187,8 +187,8 @@ mach_msg_send(struct thread *td, mach_msg_header_t *msg, int *option, size_t sen
 	ln = sm->msgh_local_port;
 	rn = sm->msgh_remote_port;
 
-	DPRINTF("mach_msg_send: local_port=%u remote_port=%u",
-		   ln, rn);
+	DPRINTF(("mach_msg_send: local_port=%u remote_port=%u",
+		   ln, rn));
 	if (ln)
 		lr = mach_right_check(ln, td, MACH_PORT_TYPE_ALL_RIGHTS);
 	rr = mach_right_check(rn, td, MACH_PORT_TYPE_ALL_RIGHTS);
