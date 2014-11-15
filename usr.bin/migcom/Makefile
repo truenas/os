@@ -21,8 +21,6 @@
 # 
 # cmk1.1
 
-MK_MAN=no
-
 .include <src.opts.mk>
 PROG= mig
 SRCS= error.c global.c header.c ident.c \
