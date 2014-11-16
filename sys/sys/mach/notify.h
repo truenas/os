@@ -89,6 +89,7 @@
 #ifndef	_MACH_NOTIFY_H_
 #define _MACH_NOTIFY_H_
 
+#include <vm/vm.h> /* boolean_t */
 #include <mach/port.h>
 #include <mach/message.h>
 #include <mach/ndr.h>
