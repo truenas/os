@@ -179,12 +179,19 @@ extern void yyerror(const char *);
 <Normal>[Mm][Ss][Gg][Ss][Ee][Qq][Nn][Oo]	RETURN(syMsgSeqno);
 <Normal>[Ww][Aa][Ii][Tt][Tt][Ii][Mm][Ee]	RETURN(syWaitTime);
 <Normal>[Nn][Oo][Ww][Aa][Ii][Tt][Tt][Ii][Mm][Ee]	RETURN(syNoWaitTime);
+<Normal>[Ss][Ee][Nn][Dd][Tt][Ii][Mm][Ee]	RETURN(sySendTime);
+<Normal>[Nn][Oo][Ss][Ee][Nn][Dd][Tt][Ii][Mm][Ee]	RETURN(syNoSendTime);
 <Normal>[Ii][Nn]				RETURN(syIn);
 <Normal>[Oo][Uu][Tt]				RETURN(syOut);
 <Normal>[Uu][Ss][Ee][Rr][Ii][Mm][Pp][Ll]		RETURN(syUserImpl);
 <Normal>[Ss][Ee][Rr][Vv][Ee][Rr][Ii][Mm][Pp][Ll]	RETURN(syServerImpl);
+<Normal>[Ss][Ee][Cc][Tt][Oo][Kk][Ee][Nn]	RETURN(sySecToken);
 <Normal>[Ss][Ee][Rr][Vv][Ee][Rr][Ss][Ee][Cc][Tt][Oo][Kk][Ee][Nn] RETURN(syServerSecToken);
 <Normal>[Uu][Ss][Ee][Rr][Ss][Ee][Cc][Tt][Oo][Kk][Ee][Nn]	RETURN(syUserSecToken);
+<Normal>[Aa][Uu][Dd][Ii][Tt][Tt][Oo][Kk][Ee][Nn]	RETURN(syAuditToken);
+<Normal>[Ss][Ee][Rr][Vv][Ee][Rr][Aa][Uu][Dd][Ii][Tt][Tt][Oo][Kk][Ee][Nn] RETURN(syServerAuditToken);
+<Normal>[Uu][Ss][Ee][Rr][Aa][Uu][Dd][Ii][Tt][Tt][Oo][Kk][Ee][Nn]	RETURN(syUserAuditToken);
+<Normal>[Ss][Ee][Rr][Vv][Ee][Rr][Cc][Oo][Nn][Tt][Ee][Xx][Tt][Tt][Oo][Kk][Ee][Nn]	RETURN(syServerContextToken);
 <Normal>[Ii][Nn][Oo][Uu][Tt]			RETURN(syInOut);
 <Normal>[Rr][Ee][Qq][Uu][Ee][Ss][Tt][Pp][Oo][Rr][Tt]	RETURN(syRequestPort);
 <Normal>[Rr][Ee][Pp][Ll][Yy][Pp][Oo][Rr][Tt]		RETURN(syReplyPort);
@@ -292,7 +299,7 @@ extern void yyerror(const char *);
 					  BEGIN SkipToEOL; }
 ^\#					{ yyerror("illegal # directive");
 					  BEGIN SkipToEOL; }
-
+^\#pragma			{ BEGIN SkipToEOL; }
 <SkipToEOL>\n		{ RESTORE; lineno++; }
 <SkipToEOL>.		;
 

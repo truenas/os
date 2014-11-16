@@ -135,11 +135,15 @@
 #define akeCount	(9)	/* a count arg for argParent */
 #define akePoly		(10)	/* a poly arg for argParent */
 #define	akeDealloc	(11)	/* a deallocate arg for argParent */
-#define akeCountInOut	(13)	/* a count-in-out arg */
-#define akeSameCount	(14)	/* a samecount case: in fact, a no count! */
-#define akeSubCount	(15)	/* a array of array case: subordinate arrays count */
-#define akeImplicit	(16)	/* an implicit argument, from the trailer */
-#define akeSecToken	(17)	/* an argument from the trailer: the security token */
+#define akeCountInOut   (12)  /* a count-in-out arg */
+#define akeSameCount    (13)  /* a samecount case: in fact, a no count! */
+#define akeSubCount     (14)  /* a array of array case: subordinate arrays count */
+#define akeImplicit     (15)  /* an implicit argument, from the trailer */
+#define akeSecToken     (16)  /* an argument from the trailer: the security token */
+#define akeAuditToken   (17)  /* an argument from the trailer: the audit token */
+#define akeContextToken (18)  /* an argument from the trailer: the context token */
+#define akeSendTime     (19)  /* pointed at by rtWaitTime */
+
 
 #define	akeBITS		(0x0000003f)
 #define	akbRequest	(0x00000040)	/* has a msg_type in request */
@@ -154,10 +158,12 @@
 #define akbReturnBody	(0x00008000)	/* value carried in reply body */
 #define akbReturnSnd	(0x00010000)	/* value stuffed into reply */
 #define akbReturnRcv	(0x00020000)	/* value grabbed from reply */
-#define akbReplyInit	(0x00040000)	/* reply value doesn't come from target routine */
+#define akbReturnNdr      (0x00040000)  /* needs NDR conversion in reply */
+#define akbReplyInit	(0x00080000)	/* reply value doesn't come from target routine */
 #define akbReplyCopy	(0x00200000)	/* copy reply value from request */
 #define akbVarNeeded	(0x00400000)	/* may need local var in server */
 #define akbDestroy	(0x00800000)	/* call destructor function */
+#define akbSendNdr        (0x04000000)  /* needs NDR conversion in request */
 #define akbVariable	(0x01000000)	/* variable size inline data */
 #define akbSendKPD 	(0x08000000)	/* the arg is sent in the Kernel Processed Data
 					   section of the Request message */
@@ -294,6 +300,21 @@ typedef u_int  arg_kind_t;
 #define akUserSecToken akAddFeature(akeSecToken, \
 	akbUserArg|akbUserImplicit|akbReturn|akbReturnRcv)
 
+#define akSecToken akAddFeature(akeSecToken, \
+        akbServerArg|akbServerImplicit|akbSend|akbSendRcv| \
+        akbUserArg|akbUserImplicit|akbReturn|akbReturnRcv)
+
+#define akServerAuditToken akAddFeature(akeAuditToken, \
+  akbServerArg|akbServerImplicit|akbSend|akbSendRcv)
+#define akUserAuditToken akAddFeature(akeAuditToken, \
+  akbUserArg|akbUserImplicit|akbReturn|akbReturnRcv)
+#define akAuditToken akAddFeature(akeAuditToken, \
+        akbServerArg|akbServerImplicit|akbSend|akbSendRcv| \
+        akbUserArg|akbUserImplicit|akbReturn|akbReturnRcv)
+
+#define akServerContextToken akAddFeature(akeContextToken, \
+  akbServerArg|akbServerImplicit|akbSend|akbSendRcv)
+	
 #define akMsgSeqno	akAddFeature(akeMsgSeqno,			\
 	akbServerArg|akbServerImplicit|akbSend|akbSendRcv)
 
@@ -306,6 +327,8 @@ typedef u_int  arg_kind_t;
 
 #define akWaitTime	akAddFeature(akeWaitTime, akbUserArg)
 
+#define akSendTime  akAddFeature(akeSendTime, akbUserArg)
+	
 #define akMsgOption	akAddFeature(akeMsgOption, akbUserArg)
 
 #define akReplyPort	akAddFeature(akeReplyPort,			\

@@ -136,6 +136,7 @@ typedef u_int ipc_flags_t;
 #define	flAuto		(0x100)	/* Will not be referenced by server after RPC */
 #define	flConst		(0x200)	/* Will not be modified by server during RPC */
 
+
 typedef enum dealloc {
 	d_NO,			/* do not deallocate */
 	d_YES,			/* always deallocate */
@@ -267,8 +268,8 @@ typedef struct ipc_type
     identifier_t itServerType;
     identifier_t itTransType;
 
-    identifier_t itUserKPDType; /* descriptors for KPD type of arguments */
-    identifier_t itServerKPDType; /* descriptors for KPD type of arguments */
+    identifier_t itKPDType; /* descriptors for KPD type of arguments */
+
 
     identifier_t itInTrans;	/* may be NULL */
     identifier_t itOutTrans;	/* may be NULL */
@@ -318,6 +319,8 @@ extern void itCheckReturnType(identifier_t name, ipc_type_t *it);
 extern void itCheckRequestPortType(identifier_t name, ipc_type_t *it);
 extern void itCheckReplyPortType(identifier_t name, ipc_type_t *it);
 extern void itCheckIntType(identifier_t name, ipc_type_t *it);
-extern void itCheckSecTokenType(identifier_t name, ipc_type_t *it);
+extern void itCheckTokenType(identifier_t name, ipc_type_t *it);
+
+#include "statement.h"
 
 #endif	/* _TYPE_H */

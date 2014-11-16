@@ -1,17 +1,17 @@
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
- *  
+ * 
  * Permission to use, copy, modify, and distribute this software and 
  * its documentation for any purpose and without fee is hereby granted, 
  * provided that the above copyright notice appears in all copies and 
  * that both the copyright notice and this permission notice appear in 
  * supporting documentation. 
- *  
+ * 
  * OSF DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
  * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
  * FOR A PARTICULAR PURPOSE. 
- *  
+ * 
  * IN NO EVENT SHALL OSF BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
  * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
  * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
@@ -21,28 +21,28 @@
 /*
  * cmk1.1
  */
-/* 
+/*
  * Mach Operating System
  * Copyright (c) 1991,1990 Carnegie Mellon University
  * All Rights Reserved.
- * 
+ *
  * Permission to use, copy, modify and distribute this software and its
  * documentation is hereby granted, provided that both the copyright
  * notice and this permission notice appear in all copies of the
  * software, derivative works or modified versions, and any portions
  * thereof, and that both notices appear in supporting documentation.
- * 
- * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS 
+ *
+ * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS
  * CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
  * ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
- * 
+ *
  * Carnegie Mellon requests users of this software to return to
- * 
+ *
  *  Software Distribution Coordinator  or  Software.Distribution@CS.CMU.EDU
  *  School of Computer Science
  *  Carnegie Mellon University
  *  Pittsburgh PA 15213-3890
- * 
+ *
  * any improvements or extensions that they make and grant Carnegie the
  * rights to redistribute these changes.
  */
@@ -89,23 +89,25 @@
  *	Created.
  */
 
-#ifndef	_GLOBAL_H
-#define	_GLOBAL_H
+#ifndef _GLOBAL_H
+#define _GLOBAL_H
 
 #include "type.h"
 
-extern boolean_t BeQuiet;	/* no warning messages */
-extern boolean_t BeVerbose;	/* summarize types, routines */
-extern boolean_t BeDebug;	/* enters in the debug mode */
+extern boolean_t BeQuiet;   /* no warning messages */
+extern boolean_t BeVerbose; /* summarize types, routines */
+extern boolean_t BeDebug;   /* enters in the debug mode */
 extern boolean_t UseMsgRPC;
 extern boolean_t GenSymTab;
 extern boolean_t UseEventLogger;
 extern boolean_t BeAnsiC;
+extern boolean_t CheckNDR;
 extern boolean_t PackMsg;
 extern boolean_t UseSplitHeaders;
 extern boolean_t ShortCircuit;
 extern boolean_t UseRPCTrap;
 extern boolean_t TestRPCTrap;
+extern boolean_t IsVoucherCodeAllowed;
 
 extern boolean_t IsKernelUser;
 extern boolean_t IsKernelServer;
@@ -117,6 +119,7 @@ extern u_int SubsystemBase;
 
 extern string_t MsgOption;
 extern string_t WaitTime;
+extern string_t SendTime;
 extern string_t ErrorProc;
 extern string_t ServerPrefix;
 extern string_t UserPrefix;
@@ -145,4 +148,4 @@ extern void more_global(void);
 extern char NewCDecl[];
 extern char LintLib[];
 
-#endif	/* _GLOBAL_H */
+#endif  /* _GLOBAL_H */

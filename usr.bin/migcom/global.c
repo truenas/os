@@ -1,17 +1,17 @@
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
- *  
+ * 
  * Permission to use, copy, modify, and distribute this software and 
  * its documentation for any purpose and without fee is hereby granted, 
  * provided that the above copyright notice appears in all copies and 
  * that both the copyright notice and this permission notice appear in 
  * supporting documentation. 
- *  
+ * 
  * OSF DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
  * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
  * FOR A PARTICULAR PURPOSE. 
- *  
+ * 
  * IN NO EVENT SHALL OSF BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
  * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
  * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
@@ -21,28 +21,28 @@
 /*
  * cmk1.1
  */
-/* 
+/*
  * Mach Operating System
  * Copyright (c) 1991,1990 Carnegie Mellon University
  * All Rights Reserved.
- * 
+ *
  * Permission to use, copy, modify and distribute this software and its
  * documentation is hereby granted, provided that both the copyright
  * notice and this permission notice appear in all copies of the
  * software, derivative works or modified versions, and any portions
  * thereof, and that both notices appear in supporting documentation.
- * 
- * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS 
+ *
+ * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS
  * CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
  * ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
- * 
+ *
  * Carnegie Mellon requests users of this software to return to
- * 
+ *
  *  Software Distribution Coordinator  or  Software.Distribution@CS.CMU.EDU
  *  School of Computer Science
  *  Carnegie Mellon University
  *  Pittsburgh PA 15213-3890
- * 
+ *
  * any improvements or extensions that they make and grant Carnegie the
  * rights to redistribute these changes.
  */
@@ -119,11 +119,13 @@ boolean_t UseMsgRPC = TRUE;
 boolean_t GenSymTab = FALSE;
 boolean_t UseEventLogger = FALSE;
 boolean_t BeAnsiC = TRUE;
+boolean_t CheckNDR = FALSE;
 boolean_t PackMsg = PACK_MESSAGES;
 boolean_t UseSplitHeaders = FALSE;
 boolean_t ShortCircuit = FALSE;
 boolean_t UseRPCTrap = FALSE;
 boolean_t TestRPCTrap= FALSE;
+boolean_t IsVoucherCodeAllowed = TRUE;
 
 boolean_t IsKernelUser = FALSE;
 boolean_t IsKernelServer = FALSE;
@@ -135,13 +137,14 @@ u_int SubsystemBase = 0;
 
 string_t MsgOption = strNULL;
 string_t WaitTime = strNULL;
+string_t SendTime = strNULL;
 string_t ErrorProc = "MsgError";
 string_t ServerPrefix = "";
 string_t UserPrefix = "";
 string_t ServerDemux = strNULL;
 string_t ServerImpl = strNULL;
 string_t ServerSubsys = strNULL;
-int MaxMessSizeOnStack = -1;	/* by default, always on stack */
+int MaxMessSizeOnStack = -1;    /* by default, always on stack */
 int UserTypeLimit = -1;         /* by default, assume unlimited size. */
 
 string_t yyinname;
@@ -167,36 +170,35 @@ string_t GenerationDate = strNULL;
 void
 more_global(void)
 {
-    if (SubsystemName == strNULL) {
-		printf("no SubSystem declaration");
-		exit(1);
-	}
-    if (UserHeaderFileName == strNULL)
-	UserHeaderFileName = strconcat(SubsystemName, ".h");
-    else if (streql(UserHeaderFileName, "/dev/null"))
-	UserHeaderFileName = strNULL;
+  if (SubsystemName == strNULL)
+    fatal("no SubSystem declaration");
 
-    if (UserFileName == strNULL)
-	UserFileName = strconcat(SubsystemName, "User.c");
-    else if (streql(UserFileName, "/dev/null"))
-	UserFileName = strNULL;
+  if (UserHeaderFileName == strNULL)
+    UserHeaderFileName = strconcat(SubsystemName, ".h");
+  else if (streql(UserHeaderFileName, "/dev/null"))
+    UserHeaderFileName = strNULL;
 
-    if (ServerFileName == strNULL)
-	ServerFileName = strconcat(SubsystemName, "Server.c");
-    else if (streql(ServerFileName, "/dev/null"))
-	ServerFileName = strNULL;
+  if (UserFileName == strNULL)
+    UserFileName = strconcat(SubsystemName, "User.c");
+  else if (streql(UserFileName, "/dev/null"))
+    UserFileName = strNULL;
 
-    if (ServerDemux == strNULL)
-	ServerDemux = strconcat(SubsystemName, "_server");
+  if (ServerFileName == strNULL)
+    ServerFileName = strconcat(SubsystemName, "Server.c");
+  else if (streql(ServerFileName, "/dev/null"))
+    ServerFileName = strNULL;
 
-    if (ServerImpl == strNULL)
-	ServerImpl = strconcat(SubsystemName, "_impl");
+  if (ServerDemux == strNULL)
+    ServerDemux = strconcat(SubsystemName, "_server");
 
-    if (ServerSubsys == strNULL) {
-	if (ServerPrefix != strNULL)
-	    ServerSubsys = strconcat(ServerPrefix, SubsystemName);
-	else
-	    ServerSubsys = SubsystemName;
-	ServerSubsys = strconcat(ServerSubsys, "_subsystem");
-    }
+  if (ServerImpl == strNULL)
+    ServerImpl = strconcat(SubsystemName, "_impl");
+
+  if (ServerSubsys == strNULL) {
+    if (ServerPrefix != strNULL)
+      ServerSubsys = strconcat(ServerPrefix, SubsystemName);
+    else
+      ServerSubsys = SubsystemName;
+    ServerSubsys = strconcat(ServerSubsys, "_subsystem");
+  }
 }

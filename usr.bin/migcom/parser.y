@@ -1,17 +1,17 @@
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
- *  
+ * 
  * Permission to use, copy, modify, and distribute this software and 
  * its documentation for any purpose and without fee is hereby granted, 
  * provided that the above copyright notice appears in all copies and 
  * that both the copyright notice and this permission notice appear in 
  * supporting documentation. 
- *  
+ * 
  * OSF DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE 
  * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
  * FOR A PARTICULAR PURPOSE. 
- *  
+ * 
  * IN NO EVENT SHALL OSF BE LIABLE FOR ANY SPECIAL, INDIRECT, OR 
  * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
  * LOSS OF USE, DATA OR PROFITS, WHETHER IN ACTION OF CONTRACT, 
@@ -21,28 +21,28 @@
 /*
  * cmk1.1
  */
-/* 
+/*
  * Mach Operating System
  * Copyright (c) 1991,1990 Carnegie Mellon University
  * All Rights Reserved.
- * 
+ *
  * Permission to use, copy, modify and distribute this software and its
  * documentation is hereby granted, provided that both the copyright
  * notice and this permission notice appear in all copies of the
  * software, derivative works or modified versions, and any portions
  * thereof, and that both notices appear in supporting documentation.
- * 
- * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS 
+ *
+ * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS
  * CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
  * ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
- * 
+ *
  * Carnegie Mellon requests users of this software to return to
- * 
+ *
  *  Software Distribution Coordinator  or  Software.Distribution@CS.CMU.EDU
  *  School of Computer Science
  *  Carnegie Mellon University
  *  Pittsburgh PA 15213-3890
- * 
+ *
  * any improvements or extensions that they make and grant Carnegie the
  * rights to redistribute these changes.
  */
@@ -97,7 +97,9 @@
 %token	syMsgOption
 %token	syMsgSeqno
 %token	syWaitTime
+%token	sySendTime
 %token	syNoWaitTime
+%token	syNoSendTime
 %token	syErrorProc
 %token	syServerPrefix
 %token	syUserPrefix
@@ -138,8 +140,13 @@
 %token  syValueOf
 
 %token	syCString
+%token	sySecToken
 %token	syUserSecToken
 %token	syServerSecToken
+%token	syAuditToken
+%token	syUserAuditToken
+%token	syServerAuditToken
+%token	syServerContextToken
 
 %token	syColon
 %token	sySemi
@@ -168,8 +175,8 @@
 %token	<string>	syFileName
 %token	<flag>		syIPCFlag
 
-%left	syPlus,syMinus
-%left	syStar,syDiv
+%left	syPlus syMinus
+%left	syStar syDiv
 
 
 %type	<statement_kind> ImportIndicant
@@ -180,13 +187,13 @@
 %type   <identifier> TypePhrase
 %type	<symtype> PrimIPCType IPCType
 %type	<routine> RoutineDecl Routine SimpleRoutine
-%type	<direction> Direction TrExplKeyword TrImplKeyword
+%type	<direction> Direction TrImplKeyword
 %type	<argument> Argument Trailer Arguments ArgumentList
 %type	<flag> IPCFlags
 
 %{
 
-#include <stdio.h>	
+#include <stdio.h>
 #include "lexxer.h"
 #include "strdefs.h"
 #include "type.h"
@@ -215,11 +222,11 @@ extern union migyys yylval;
     ipc_type_t *type;
     struct
     {
-	u_int innumber;		/* msgt_name value, when sending */
-	string_t instr;
-	u_int outnumber;	/* msgt_name value, when receiving */
-	string_t outstr;
-	u_int size;		/* 0 means there is no default size */
+      u_int innumber;		/* msgt_name value, when sending */
+      string_t instr;
+      u_int outnumber;	/* msgt_name value, when receiving */
+      string_t outstr;
+      u_int size;		/* 0 means there is no default size */
     } symtype;
     routine_t *routine;
     arg_kind_t direction;
@@ -235,6 +242,7 @@ Statements		:	/* empty */
 
 Statement		:	Subsystem sySemi
 			|	WaitTime sySemi
+			|	SendTime sySemi
 			|	MsgOption sySemi
                         |       UserTypeLimit sySemi
                         |       OnStackLimit sySemi
@@ -251,7 +259,7 @@ Statement		:	Subsystem sySemi
     st->stRoutine = $1;
     rtCheckRoutine($1);
     if (BeVerbose)
-	rtPrintRoutine($1);
+      rtPrintRoutine($1);
 }
 			|	sySkip sySemi
 				{ rtSkip(); }
@@ -267,11 +275,11 @@ Subsystem		:	SubsystemStart SubsystemMods
 {
     if (BeVerbose)
     {
-	printf("Subsystem %s: base = %u%s%s\n\n",
-	       SubsystemName, SubsystemBase,
-	       IsKernelUser ? ", KernelUser" : "",
-	       IsKernelServer ? ", KernelServer" : "");
-    }
+    printf("Subsystem %s: base = %u%s%s\n\n",
+    SubsystemName, SubsystemBase,
+    IsKernelUser ? ", KernelUser" : "",
+    IsKernelServer ? ", KernelServer" : "");
+  }
 }
 			;
 
@@ -279,9 +287,9 @@ SubsystemStart		:	sySubsystem
 {
     if (SubsystemName != strNULL)
     {
-	warn("previous Subsystem decl (of %s) will be ignored", SubsystemName);
-	IsKernelUser = FALSE;
-	IsKernelServer = FALSE;
+      warn("previous Subsystem decl (of %s) will be ignored", SubsystemName);
+      IsKernelUser = FALSE;
+      IsKernelServer = FALSE;
 	strfree((char *)SubsystemName);
     }
 }
@@ -294,18 +302,18 @@ SubsystemMods		:	/* empty */
 SubsystemMod		:	syKernelUser
 {
     if (IsKernelUser)
-	warn("duplicate KernelUser keyword");
+      warn("duplicate KernelUser keyword");
     if (!UseMsgRPC) 
     {
-	warn("with KernelUser the -R option is meaningless");
-	UseMsgRPC = TRUE;
+      warn("with KernelUser the -R option is meaningless");
+      UseMsgRPC = TRUE;
     }
     IsKernelUser = TRUE;
 }
 			|	syKernelServer
 {
     if (IsKernelServer)
-	warn("duplicate KernelServer keyword");
+      warn("duplicate KernelServer keyword");
     IsKernelServer = TRUE;
 }
 			;
@@ -320,37 +328,51 @@ MsgOption		:	LookString syMsgOption syString
 {
     if (streql($3, "MACH_MSG_OPTION_NONE"))
     {
-	MsgOption = strNULL;
-	if (BeVerbose)
-	    printf("MsgOption: canceled\n\n");
+      MsgOption = strNULL;
+      if (BeVerbose)
+          printf("MsgOption: canceled\n\n");
     }
     else
     {
-	MsgOption = $3;
-	if (BeVerbose)
-	    printf("MsgOption %s\n\n",$3);
+      MsgOption = $3;
+      if (BeVerbose)
+          printf("MsgOption %s\n\n",$3);
     }
 }
 			;
 
-UserTypeLimit           :       syUserTypeLimit syNumber 
+UserTypeLimit           :       syUserTypeLimit syNumber
 				{UserTypeLimit = $2; }
-                        ;            
-OnStackLimit            :       syOnStackLimit syNumber 
+                        ;
+OnStackLimit            :       syOnStackLimit syNumber
 				{MaxMessSizeOnStack = $2; }
-                        ;            
+                        ;
 
 WaitTime		:	LookString syWaitTime syString
 {
     WaitTime = $3;
     if (BeVerbose)
-	printf("WaitTime %s\n\n", WaitTime);
+      printf("WaitTime %s\n\n", WaitTime);
 }
 			|	syNoWaitTime
 {
     WaitTime = strNULL;
     if (BeVerbose)
-	printf("NoWaitTime\n\n");
+      printf("NoWaitTime\n\n");
+}
+			;
+
+SendTime		:	LookString sySendTime syString
+{
+    SendTime = $3;
+    if (BeVerbose)
+      printf("SendTime %s\n\n", SendTime);
+}
+			|	syNoSendTime
+{
+    SendTime = strNULL;
+    if (BeVerbose)
+      printf("NoSendTime\n\n");
 }
 			;
 
@@ -358,7 +380,7 @@ Error			:	syErrorProc syIdentifier
 {
     ErrorProc = $2;
     if (BeVerbose)
-	printf("ErrorProc %s\n\n", ErrorProc);
+      printf("ErrorProc %s\n\n", ErrorProc);
 }
 			;
 
@@ -366,7 +388,7 @@ ServerPrefix		:	syServerPrefix syIdentifier
 {
     ServerPrefix = $2;
     if (BeVerbose)
-	printf("ServerPrefix %s\n\n", ServerPrefix);
+      printf("ServerPrefix %s\n\n", ServerPrefix);
 }
 			;
 
@@ -374,7 +396,7 @@ UserPrefix		:	syUserPrefix syIdentifier
 {
     UserPrefix = $2;
     if (BeVerbose)
-	printf("UserPrefix %s\n\n", UserPrefix);
+      printf("UserPrefix %s\n\n", UserPrefix);
 }
 			;
 
@@ -382,7 +404,7 @@ ServerDemux		:	syServerDemux syIdentifier
 {
     ServerDemux = $2;
     if (BeVerbose)
-	printf("ServerDemux %s\n\n", ServerDemux);
+      printf("ServerDemux %s\n\n", ServerDemux);
 }
 			;
 
@@ -393,7 +415,7 @@ Import			:	LookFileName ImportIndicant syFileName
     st->stFileName = $3;
 
     if (BeVerbose)
-	printf("%s %s\n\n", import_name($2), $3);
+      printf("%s %s\n\n", import_name($2), $3);
 }
 			;
 
@@ -407,9 +429,9 @@ ImportIndicant		:	syImport	{ $$ = skImport; }
 RCSDecl			:	LookQString syRCSId syQString
 {
     if (RCSId != strNULL)
-	warn("previous RCS decl will be ignored");
+      warn("previous RCS decl will be ignored");
     if (BeVerbose)
-	printf("RCSId %s\n\n", $3);
+      printf("RCSId %s\n\n", $3);
     RCSId = $3;
 }
 			;
@@ -419,7 +441,7 @@ TypeDecl		:	syType NamedTypeSpec
     register identifier_t name = $2->itName;
 
     if (itLookUp(name) != itNULL)
-	warn("overriding previous definition of %s", name);
+      warn("overriding previous definition of %s", name);
     itInsert(name, $2);
 }
 			;
@@ -431,7 +453,7 @@ NamedTypeSpec		:	syIdentifier syEqual TransTypeSpec
 TransTypeSpec		:	TypeSpec
 				{ $$ = itResetType($1); }
 			|	TransTypeSpec syInTran syColon syIdentifier
-				syIdentifier syLParen syIdentifier syRParen 
+				syIdentifier syLParen syIdentifier syRParen
 {
     $$ = $1;
 
@@ -540,7 +562,7 @@ TypeSpec		:	BasicTypeSpec
 
 NativeTypeSpec          :       syPointerTo syLParen TypePhrase syRParen
                                 { $$ = itNativeType($3, TRUE, 0); }
-                        |       syPointerToIfNot syLParen TypePhrase syComma 
+                        |       syPointerToIfNot syLParen TypePhrase syComma
                                 TypePhrase syRParen
                                 { $$ = itNativeType($3, TRUE, $5); }
                         |       syValueOf syLParen TypePhrase syRParen
@@ -576,23 +598,23 @@ IPCType			:	PrimIPCType
 {
     if ($1.size != $3.size)
     {
-	if ($1.size == 0)
-	    $$.size = $3.size;
-	else if ($3.size == 0)
-	    $$.size = $1.size;
+    if ($1.size == 0)
+      $$.size = $3.size;
+    else if ($3.size == 0)
+      $$.size = $1.size;
 	else
 	{
-	    error("sizes in IPCTypes (%d, %d) aren't equal",
-		  $1.size, $3.size);
-	    $$.size = 0;
-	}
+      error("sizes in IPCTypes (%d, %d) aren't equal",
+      $1.size, $3.size);
+      $$.size = 0;
     }
-    else
-	$$.size = $1.size;
-    $$.innumber = $1.innumber;
-    $$.instr = $1.instr;
-    $$.outnumber = $3.outnumber;
-    $$.outstr = $3.outstr;
+  }
+  else
+    $$.size = $1.size;
+  $$.innumber = $1.innumber;
+  $$.instr = $1.instr;
+  $$.outnumber = $3.outnumber;
+  $$.outstr = $3.outstr;
 }
 			;
 
@@ -604,7 +626,7 @@ VarArrayHead		:	syArray syLBrack syRBrack syOf
 				{ $$ = 0; }
 			|	syArray syLBrack syStar syRBrack syOf
 				{ $$ = 0; }
-			|	syArray syLBrack syStar syColon IntExp 
+			|	syArray syLBrack syStar syColon IntExp
 				syRBrack syOf
 				{ $$ = $5; }
 			;
@@ -644,7 +666,7 @@ IntExp			: 	IntExp	syPlus	IntExp
 				{ $$ = $2;	}
 			;
 
- 
+
 RoutineDecl		:	Routine			{ $$ = $1; }
 			|	SimpleRoutine		{ $$ = $1; }
 			;
@@ -670,51 +692,42 @@ ArgumentList		:	Argument
 				{ $$ = $1; }
 			|	Argument sySemi ArgumentList
 {
-    $$ = $1;
-    $$->argNext = $3;
+  $$ = $1;
+  $$->argNext = $3;
 }
 			|       Trailer sySemi ArgumentList
 {
-    $$ = $1;
-    $$->argNext = $3;
+  $$ = $1;
+  $$->argNext = $3;
 }
 			;
 
 Argument		:	Direction syIdentifier ArgumentType IPCFlags
 {
-    $$ = argAlloc();
-    $$->argKind = $1;
-    $$->argName = $2;
-    $$->argType = $3;
-    $$->argFlags = $4;
-    if ($3->itNative)
-    {
-        if ($1 != akIn && $1 != akOut && $1 != akInOut)
-	    error("Illegal direction specified");
-       
-        if (!($3->itNativePointer) && $1 != akIn)
-	    error("ValueOf only valid for in");
+  $$ = argAlloc();
+  $$->argKind = $1;
+  $$->argName = $2;
+  $$->argType = $3;
+  $$->argFlags = $4;
+  if ($3 && $3->itNative) {
+      if ($1 != akIn && $1 != akOut && $1 != akInOut)
+        error("Illegal direction specified");
 
-        if (($3->itBadValue) != NULL && $1 != akIn)
-	    error("PointerToIfNot only valid for in");
-    }
+      if (!($3->itNativePointer) && $1 != akIn)
+        error("ValueOf only valid for in");
+
+      if (($3->itBadValue) != NULL && $1 != akIn)
+        error("PointerToIfNot only valid for in");
+  }
 }
 			;
 
-Trailer			:	TrExplKeyword syIdentifier ArgumentType	
+Trailer			:	TrImplKeyword syIdentifier ArgumentType
 {
     $$ = argAlloc();
     $$->argKind = $1;
     $$->argName = $2;
     $$->argType = $3;
-}
-			|	TrImplKeyword syIdentifier ArgumentType syComma syIdentifier
-{
-    $$ = argAlloc();
-    $$->argKind = $1;
-    $$->argName = $2;
-    $$->argType = $3;
-    $$->argMsgField = $5;
 }
 			;
 
@@ -728,23 +741,28 @@ Direction		:	/* empty */	{ $$ = akNone; }
 			|	sySReplyPort	{ $$ = akSReplyPort; }
 			|	syUReplyPort	{ $$ = akUReplyPort; }
 			|	syWaitTime	{ $$ = akWaitTime; }
+			|	sySendTime 	{ $$ = akSendTime; }
 			|	syMsgOption	{ $$ = akMsgOption; }
-			;
-
-TrImplKeyword		:	syServerImpl	{ $$ = akServerImpl; }	
-			|	syUserImpl	{ $$ = akUserImpl; }
-			;
-
-TrExplKeyword		:	syServerSecToken	{ $$ = akServerSecToken; }	
-			|	syUserSecToken		{ $$ = akUserSecToken; }	
+			|	sySecToken		{ $$ = akSecToken; }
+			|	syServerSecToken	{ $$ = akServerSecToken; }
+			|	syUserSecToken		{ $$ = akUserSecToken; }
+			|	syAuditToken		{ $$ = akAuditToken; }
+			|	syServerAuditToken	{ $$ = akServerAuditToken; }
+			|	syUserAuditToken	{ $$ = akUserAuditToken; }
+			|	syServerContextToken	{ $$ = akServerContextToken; }
 			|	syMsgSeqno	{ $$ = akMsgSeqno; }
 			;
 
+TrImplKeyword		:	syServerImpl	{ $$ = akServerImpl; }
+			|	syUserImpl	{ $$ = akUserImpl; }
+			;
+
+
 ArgumentType		:	syColon syIdentifier
 {
-    $$ = itLookUp($2);
-    if ($$ == itNULL)
-	error("type '%s' not defined", $2);
+  $$ = itLookUp($2);
+  if ($$ == itNULL)
+    error("type '%s' not defined", $2);
 }
 			|	syColon NamedTypeSpec
 				{ $$ = $2; }
@@ -756,17 +774,17 @@ IPCFlags		:	/* empty */
 				{ $$ = flNone; }
 			|	IPCFlags syComma syIPCFlag
 {
-    if ($1 & $3)
-	warn("redundant IPC flag ignored");
-    else
-	$$ = $1 | $3;
+  if ($1 & $3)
+    warn("redundant IPC flag ignored");
+  else
+    $$ = $1 | $3;
 }
 			|	IPCFlags syComma syIPCFlag syLBrack syRBrack
 {
-    if ($3 != flDealloc)
-	warn("only Dealloc is variable");
-    else
-	$$ = $1 | flMaybeDealloc;
+  if ($3 != flDealloc)
+    warn("only Dealloc is variable");
+  else
+    $$ = $1 | flMaybeDealloc;
 }
 
 LookString		:	/* empty */
@@ -788,7 +806,7 @@ void yyerror(const char *s);
 void
 yyerror(const char *s)
 {
-    error(s);
+  error(s);
 }
 
 static const char *
@@ -796,19 +814,19 @@ import_name(statement_kind_t sk)
 {
     switch (sk)
     {
-      case skImport:
-	return "Import";
-      case skSImport:
-	return "SImport";
-      case skUImport:
-	return "UImport";
-      case skIImport:
-	return "IImport";
-      case skDImport:
-	return "DImport";
-      default:
-	fatal("import_name(%d): not import statement", (int) sk);
-	/*NOTREACHED*/
-        return strNULL;
-    }
+    case skImport:
+      return "Import";
+    case skSImport:
+      return "SImport";
+    case skUImport:
+      return "UImport";
+    case skIImport:
+      return "IImport";
+    case skDImport:
+      return "DImport";
+    default:
+      fatal("import_name(%d): not import statement", (int) sk);
+      /*NOTREACHED*/
+      return strNULL;
+  }
 }
