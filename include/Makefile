@@ -6,7 +6,7 @@
 .include <bsd.own.mk>
 
 CLEANFILES= osreldate.h version vers.c
-SUBDIR= arpa mach protocols rpcsvc rpc xlocale
+SUBDIR= arpa protocols rpcsvc rpc xlocale
 INCS=	a.out.h ar.h assert.h bitstring.h complex.h cpio.h _ctype.h ctype.h \
 	db.h \
 	dirent.h dlfcn.h elf.h elf-hints.h err.h fmtmsg.h fnmatch.h fstab.h \
