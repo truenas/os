@@ -22,7 +22,8 @@
 # cmk1.1
 
 .include <src.opts.mk>
-PROG= mig
+PROG= migcom
+SCRIPTS=mig.sh
 SRCS= error.c global.c header.c ident.c \
 	lexxer.l mig.c parser.y routine.c server.c \
 	statement.c string.c type.c user.c utils.c
