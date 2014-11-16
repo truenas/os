@@ -104,8 +104,8 @@
 #ifndef	_MACH_I386_THREAD_STATUS_H_
 #define _MACH_I386_THREAD_STATUS_H_
 
-#include <mach/i386/fp_reg.h>
-#include <mach/i386/thread_state.h>
+#include <machine/mach/fp_reg.h>
+#include <machine/mach/thread_state.h>
 /*
  *	i386_thread_state	this is the structure that is exported
  *				to user threads for use in status/mutate
