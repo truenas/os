@@ -183,157 +183,157 @@ static FILE *myfopen();
 static void
 parseArgs(int argc,char *argv[])
 {
-  while (--argc > 0)
-	if ((++argv)[0][0] == '-') 
-	{
-	    switch (argv[0][1]) 
-	    {
-        case 'q':
-          BeQuiet = TRUE;
-          break;
-        case 'Q':
-          BeQuiet = FALSE;
-          break;
-        case 'v':
-          BeVerbose = TRUE;
-          break;
-        case 'V':
-          BeVerbose = FALSE;
-          break;
-        case 'r':
-          UseMsgRPC = TRUE;
-          break;
-        case 'R':
-          UseMsgRPC = FALSE;
-          break;
-        case 'l':
-          UseEventLogger = FALSE;
-          break;
-        case 'L':
-          UseEventLogger = TRUE;
-          break;
-        case 'k':
-          BeAnsiC = TRUE;
-          break;
-        case 'K':
-          BeAnsiC = FALSE;
-          break;
+	while (--argc > 0)
+		if ((++argv)[0][0] == '-') 
+		{
+			switch (argv[0][1]) 
+			{
+			case 'q':
+				BeQuiet = TRUE;
+				break;
+			case 'Q':
+				BeQuiet = FALSE;
+				break;
+			case 'v':
+				BeVerbose = TRUE;
+				break;
+			case 'V':
+				BeVerbose = FALSE;
+				break;
+			case 'r':
+				UseMsgRPC = TRUE;
+				break;
+			case 'R':
+				UseMsgRPC = FALSE;
+				break;
+			case 'l':
+				UseEventLogger = FALSE;
+				break;
+			case 'L':
+				UseEventLogger = TRUE;
+				break;
+			case 'k':
+				BeAnsiC = TRUE;
+				break;
+			case 'K':
+				BeAnsiC = FALSE;
+				break;
 
-        case 'n':
-	  if (streql(argv[0], "-novouchers")) {
-            IsVoucherCodeAllowed = FALSE;
-          } else {
-	    CheckNDR = TRUE;
-	  }
-          break;
+			case 'n':
+				if (streql(argv[0], "-novouchers")) {
+					IsVoucherCodeAllowed = FALSE;
+				} else {
+					CheckNDR = TRUE;
+				}
+				break;
 
-        case 'N':
-          CheckNDR = FALSE;
-          break;
+			case 'N':
+				CheckNDR = FALSE;
+				break;
 
-        case 's':
-		if (streql(argv[0], "-server"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing name for -server option");
-            ServerFileName = strmake(argv[0]);
-          }
-		else if (streql(argv[0], "-sheader"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal ("missing name for -sheader option");
-            ServerHeaderFileName = strmake(argv[0]);
-          }
-          else if (streql(argv[0], "-split"))
-            UseSplitHeaders = TRUE;
-          else
-            GenSymTab = TRUE;
-          break;
-        case 'S':
-          GenSymTab = FALSE;
-          break;
-        case 't':
-          TestRPCTrap = TRUE;
-          UseRPCTrap = TRUE;
-          break;
-        case 'T':
-          UseRPCTrap = FALSE;
-          break;
-        case 'i':
-		if (streql(argv[0], "-iheader"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing name for -iheader option");
-            InternalHeaderFileName = strmake(argv[0]);
+			case 's':
+				if (streql(argv[0], "-server"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing name for -server option");
+					ServerFileName = strmake(argv[0]);
+				}
+				else if (streql(argv[0], "-sheader"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal ("missing name for -sheader option");
+					ServerHeaderFileName = strmake(argv[0]);
+				}
+				else if (streql(argv[0], "-split"))
+					UseSplitHeaders = TRUE;
+				else
+					GenSymTab = TRUE;
+				break;
+			case 'S':
+				GenSymTab = FALSE;
+				break;
+			case 't':
+				TestRPCTrap = TRUE;
+				UseRPCTrap = TRUE;
+				break;
+			case 'T':
+				UseRPCTrap = FALSE;
+				break;
+			case 'i':
+				if (streql(argv[0], "-iheader"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing name for -iheader option");
+					InternalHeaderFileName = strmake(argv[0]);
+				}
+				else
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing prefix for -i option");
+					UserFilePrefix = strmake(argv[0]);
+				}
+				break;
+			case 'u':
+				if (streql(argv[0], "-user"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing name for -user option");
+					UserFileName = strmake(argv[0]);
+				}
+				else
+					fatal("unknown flag: '%s'", argv[0]);
+				break;
+			case 'h':
+				if (streql(argv[0], "-header"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing name for -header option");
+					UserHeaderFileName = strmake(argv[0]);
+				}
+				else
+					fatal("unknown flag: '%s'", argv[0]);
+				break;
+			case 'd':
+				if (streql(argv[0], "-dheader"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing name for -dheader option");
+					DefinesHeaderFileName = strmake(argv[0]);
+				}
+				else
+					fatal("unknown flag: '%s'", argv[0]);
+				break;
+			case 'm':
+				if (streql(argv[0], "-maxonstack"))
+				{
+					--argc; ++argv;
+					if (argc == 0)
+						fatal("missing size for -maxonstack option");
+					MaxMessSizeOnStack = atoi(argv[0]);
+				}
+				else
+					fatal("unknown flag: '%s'", argv[0]);
+				break;
+			case 'x':
+				ShortCircuit = TRUE;
+				break;
+			case 'X':
+				ShortCircuit = FALSE;
+				break;
+			default:
+				fatal("unknown flag: '%s'", argv[0]);
+				/*NOTREACHED*/
+			}
 		}
 		else
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing prefix for -i option");
-            UserFilePrefix = strmake(argv[0]);
-		}
-		break;
-		case 'u':
-		if (streql(argv[0], "-user"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing name for -user option");
-            UserFileName = strmake(argv[0]);
-		}
-		else
-            fatal("unknown flag: '%s'", argv[0]);
-		break;
-        case 'h':
-		if (streql(argv[0], "-header"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing name for -header option");
-            UserHeaderFileName = strmake(argv[0]);
-		}
-		else
-            fatal("unknown flag: '%s'", argv[0]);
-		break;
-        case 'd':
-		if (streql(argv[0], "-dheader"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing name for -dheader option");
-            DefinesHeaderFileName = strmake(argv[0]);
-		}
-		else
-            fatal("unknown flag: '%s'", argv[0]);
-		break;
-        case 'm':
-		if (streql(argv[0], "-maxonstack"))
-		{
-            --argc; ++argv;
-            if (argc == 0)
-              fatal("missing size for -maxonstack option");
-            MaxMessSizeOnStack = atoi(argv[0]);
-          }
-          else
-            fatal("unknown flag: '%s'", argv[0]);
-          break;
-	      case 'x':
-		ShortCircuit = TRUE;
-		break;
-        case 'X':
-          ShortCircuit = FALSE;
-          break;
-        default:
-		fatal("unknown flag: '%s'", argv[0]);
-          /*NOTREACHED*/
-      }
-    }
-    else
-      fatal("bad argument: '%s'", *argv);
+			fatal("bad argument: '%s'", *argv);
 }
 
 static FILE *uheader, *server, *user;
