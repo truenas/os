@@ -64,7 +64,7 @@ fi
 
 input_file="$1"
 
-tmpfile=$(mktemp migcomxxxxx.c)
+tmpfile=${TMPDIR:-/tmp}/migcom-$$.c
 
 ( echo "#line 1 \"${input_file}\"" ; cat ${input_file} ) > ${tmpfile}
 if ! ${CC} ${MD} ${CFLAGS} -E ${tmpfile} |
