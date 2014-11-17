@@ -116,19 +116,32 @@ sys_mach_host_self_trap(struct thread *td, struct mach_host_self_trap_args *uap)
 	return (0);
 }
 
+static void
+mach_port_deallocate(struct thread *td, mach_port_t mn)
+{
+	struct mach_right *mr;
+
+	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_REF_RIGHTS)) != NULL)
+		mach_right_put(mr, MACH_PORT_TYPE_REF_RIGHTS);
+}
+
 int
-mach_port_deallocate(struct mach_trap_args *args)
+sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_mach_port_deallocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+
+	mach_port_deallocate(td, uap->name);
+	return (0);
+}
+
+int
+mach_port_deallocate_msg(struct mach_trap_args *args)
 {
 	mach_port_deallocate_request_t *req = args->smsg;
 	mach_port_deallocate_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
-	mach_port_t mn;
-	struct mach_right *mr;
 
-	mn = req->req_name;
-	if ((mr = mach_right_check(mn, td, MACH_PORT_TYPE_REF_RIGHTS)) != NULL)
-		mach_right_put(mr, MACH_PORT_TYPE_REF_RIGHTS);
+	mach_port_deallocate(args->td, req->req_name);
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -136,71 +149,103 @@ mach_port_deallocate(struct mach_trap_args *args)
 	rep->rep_retval = 0;
 
 	mach_set_trailer(rep, *msglen);
+	return (0);
+}
 
+static int
+mach_port_destroy(struct thread *td, mach_port_name_t name)
+{
+	struct mach_right *mr;
+
+	if ((mr = mach_right_check(name, td, MACH_PORT_TYPE_ALL_RIGHTS)) == NULL)
+		return (ENOENT);
+
+	MACH_PORT_UNREF(mr->mr_port);
+	mr->mr_port = NULL;
+	mach_right_put(mr, MACH_PORT_TYPE_ALL_RIGHTS);
 	return (0);
 }
 
 int
-mach_port_destroy(struct mach_trap_args *args)
+sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+
+	return (mach_port_destroy(td, uap->name));
+}
+
+int
+mach_port_destroy_msg(struct mach_trap_args *args)
 {
 	mach_port_destroy_request_t *req = args->smsg;
 	mach_port_destroy_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
-	mach_port_t mn;
-	struct mach_right *mr;
 
 #ifdef DEBUG_MACH
 	printf("mach_port_destroy mn = %x\n", req->req_name);
 #endif
-	mn = req->req_name;
-	if ((mr = mach_right_check(mn,
-	    td, MACH_PORT_TYPE_ALL_RIGHTS)) != NULL) {
-		MACH_PORT_UNREF(mr->mr_port);
-		mr->mr_port = NULL;
-		mach_right_put(mr, MACH_PORT_TYPE_ALL_RIGHTS);
-	}
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 
-	rep->rep_retval = 0;
+	rep->rep_retval = mach_port_destroy(args->td, req->req_name);
 
 	mach_set_trailer(rep, *msglen);
 
 	return (0);
 }
 
-int
-mach_port_allocate(struct mach_trap_args *args)
+static int
+mach_port_allocate(struct thread *td, mach_port_right_t right, struct mach_right **mr)
 {
-	mach_port_allocate_request_t *req = args->smsg;
-	mach_port_allocate_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
-	struct mach_right *mr;
 	struct mach_port *mp;
 
-	switch (req->req_right) {
+	switch (right) {
 	case MACH_PORT_RIGHT_RECEIVE:
 		mp = mach_port_get();
-		mr = mach_right_get(mp, td, MACH_PORT_TYPE_RECEIVE, 0);
+		*mr = mach_right_get(mp, td, MACH_PORT_TYPE_RECEIVE, 0);
 		break;
 
 	case MACH_PORT_RIGHT_DEAD_NAME:
-		mr = mach_right_get(NULL, td, MACH_PORT_TYPE_DEAD_NAME, 0);
+		*mr = mach_right_get(NULL, td, MACH_PORT_TYPE_DEAD_NAME, 0);
 		break;
 
 	case MACH_PORT_RIGHT_PORT_SET:
-		mr = mach_right_get(NULL, td, MACH_PORT_TYPE_PORT_SET, 0);
+		*mr = mach_right_get(NULL, td, MACH_PORT_TYPE_PORT_SET, 0);
 		break;
 
 	default:
 		uprintf("mach_port_allocate: unknown right %x\n",
-		    req->req_right);
-		return (mach_msg_error(args, EINVAL));
+				right);
+		return (EINVAL);
 		break;
 	}
+	return (0);
+}
+
+int
+sys__kernelrpc_mach_port_allocate_trap(struct thread *td, struct _kernelrpc_mach_port_allocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+	struct mach_right *mr;
+	int error;
+
+	if ((error = mach_port_allocate(td, uap->right, &mr)) != 0)
+		return (error);
+	return (copyout(&mr->mr_name, uap->name, sizeof(*uap->name)));
+}
+
+int
+mach_port_allocate_msg(struct mach_trap_args *args)
+{
+	mach_port_allocate_request_t *req = args->smsg;
+	mach_port_allocate_reply_t *rep = args->rmsg;
+	size_t *msglen = args->rsize;
+	struct mach_right *mr;
+	int error;
+
+	if ((error = mach_port_allocate(args->td, req->req_right, &mr)) != 0)
+		return (mach_msg_error(args, EINVAL));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
@@ -213,8 +258,8 @@ mach_port_allocate(struct mach_trap_args *args)
 	return (0);
 }
 
-int
-_mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
+static int
+mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
 	mach_msg_type_name_t disposition)
 {
 	struct mach_right *mr;
@@ -254,7 +299,14 @@ _mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
 }
 
 int
-mach_port_insert_right(struct mach_trap_args *args)
+sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
+{
+
+	return (mach_port_insert_right(td, uap->name, uap->poly, uap->polyPoly));
+}
+
+int
+mach_port_insert_right_msg(struct mach_trap_args *args)
 {
 	mach_port_insert_right_request_t *req = args->smsg;
 	mach_port_insert_right_reply_t *rep = args->rmsg;
@@ -267,7 +319,7 @@ mach_port_insert_right(struct mach_trap_args *args)
 
 	name = req->req_name;
 	right = req->req_poly.name;
-	error = _mach_port_insert_right(td, req->req_name, req->req_poly.name,
+	error = mach_port_insert_right(td, req->req_name, req->req_poly.name,
 		req->req_poly.disposition);
 	if (error)
 		return (mach_msg_error(args, error));
@@ -413,7 +465,7 @@ mach_port_get_attributes(struct mach_trap_args *args)
 		return (mach_msg_error(args, EINVAL));
 
 		break;
-	};
+	}
 
 	*msglen = sizeof(*rep) - 10 + rep->rep_count;
 	mach_set_header(rep, req, *msglen);
@@ -424,6 +476,8 @@ mach_port_get_attributes(struct mach_trap_args *args)
 
 	return (0);
 }
+
+
 
 /* XXX insert a recv right into a port set without removing it from another */
 int
@@ -439,33 +493,26 @@ mach_port_insert_member(struct mach_trap_args *args)
 	mach_set_header(rep, req, *msglen);
 
 	rep->rep_retval = 0;
-
 	mach_set_trailer(rep, *msglen);
-
 	return (0);
 }
 
-int
-mach_port_move_member(struct mach_trap_args *args)
+static int
+mach_port_move_member(struct thread *td, mach_port_name_t member, mach_port_name_t after)
 {
-	mach_port_move_member_request_t *req = args->smsg;
-	mach_port_move_member_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
-	struct mach_emuldata *med = td->td_proc->p_emuldata;
-	mach_port_t member = req->req_member;
-	mach_port_t after = req->req_after;
 	struct mach_right *mrr;
 	struct mach_right *mrs;
+	struct mach_emuldata *med;
 
 	mrr = mach_right_check(member, td, MACH_PORT_TYPE_RECEIVE);
 	if (mrr == NULL)
-		return (mach_msg_error(args, EPERM));
+		return (EPERM);
 
 	mrs = mach_right_check(after, td, MACH_PORT_TYPE_PORT_SET);
 	if (mrs == NULL)
-		return (mach_msg_error(args, EPERM));
+		return (EPERM);
 
+	med = td->td_proc->p_emuldata;
 	rw_wlock(&med->med_rightlock);
 
 	/* Remove it from an existing port set */
@@ -477,12 +524,31 @@ mach_port_move_member(struct mach_trap_args *args)
 	mrr->mr_sethead = mrs;
 
 	rw_wunlock(&med->med_rightlock);
+	return (0);
+}
+
+int
+sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_mach_port_move_member_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; */
+
+	return (mach_port_move_member(td, uap->member, uap->after));
+}
+
+int
+mach_port_move_member_msg(struct mach_trap_args *args)
+{
+	mach_port_move_member_request_t *req = args->smsg;
+	mach_port_move_member_reply_t *rep = args->rmsg;
+	size_t *msglen = args->rsize;
+	int error;
+
+	if ((error = mach_port_move_member(args->td, req->req_member, req->req_after)) != 0)
+		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
-
 	rep->rep_retval = 0;
-
 	mach_set_trailer(rep, *msglen);
 
 	return (0);

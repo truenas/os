@@ -164,63 +164,43 @@ copyout_proc(struct proc *p, const void *kaddr, void *uaddr, size_t len)
 	return (error);
 }
 
-int
-mach_vm_map(struct mach_trap_args *args)
+static int
+mach_vm_map(struct thread *td, mach_vm_offset_t *address, mach_vm_size_t _size,
+			mach_vm_offset_t _mask __unused, int _flags, vm_prot_t cur_protection,
+			vm_prot_t max_protection, mach_vm_inherit_t inh)
 {
-	mach_vm_map_request_t *req = args->smsg;
-	mach_vm_map_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
-	struct proc *tp = ttd->td_proc;
-	vm_prot_t prot, protmax;
+	vm_map_t map;
 	vm_offset_t addr;
-	int flags, docow = 0;
 	size_t size;
-	vm_map_t map = &tp->p_vmspace->vm_map;
-
-#ifdef DEBUG_MACH_VM
-	printf("mach_vm_map(addr = %p, size = 0x%08lx, obj = 0x%x, "
-	    "mask = 0x%08lx, flags = 0x%x, offset = 0x%08llx, "
-	    "copy = %d, cur_prot = 0x%x, max_prot = 0x%x, inh = 0x%x);\n",
-	    (void *)req->req_address, (long)req->req_size, req->req_object.name,
-	    (long)req->req_mask, req->req_flags, (off_t)req->req_offset,
-	    req->req_copy, req->req_cur_protection, req->req_max_protection,
-	    req->req_inheritance);
-#endif
+	int flags;
+	int docow, error;
 
 	/* XXX Darwin fails on mapping a page at address 0 */
-	if (req->req_address == 0)
-		return (mach_msg_error(args, ENOMEM));
+	if ((_flags & MACH_VM_FLAGS_ANYWHERE) == 0 && *address == 0)
+		return (ENOMEM);
 
-	req->req_size = round_page(req->req_size);
-
+	size = round_page(_size);
+	map = &td->td_proc->p_vmspace->vm_map;
+	docow = error = 0;
+#if 0
 	/* Where Mach uses 0x00ff, we use 0x0100 */
 	if ((req->req_mask & (req->req_mask + 1)) || (req->req_mask == 0))
 		req->req_mask = 0;
 	else
 		req->req_mask += 1;
-
-	if (req->req_flags & MACH_VM_FLAGS_ANYWHERE) {
-		flags = MAP_ANON;
-	} else {
-		flags = MAP_ANON | MAP_FIXED;
-	}
-
-	prot = req->req_cur_protection;
-	protmax = req->req_max_protection;
-	size = round_page(req->req_size);
-#if 0
-	/* only doing anonymous mappings for now */
-	cup.pos = req->req_offset;
 #endif
+	flags = MAP_ANON;
+	if ((_flags & MACH_VM_FLAGS_ANYWHERE) == 0) {
+		flags |= MAP_FIXED;
+		addr = trunc_page(*address);
+	} else
+		addr = 0;
 	vm_map_lock(map);
-	if (vm_map_findspace(map,
-						 trunc_page(req->req_address),
-						 size, &addr)) {
-		vm_map_unlock(map);
-		return (mach_msg_error(args, ENOMEM));
+	if (vm_map_findspace(map, addr, size, &addr)) {
+		error = ENOMEM;
+		goto done;
 	}
-	switch(req->req_inheritance) {
+	switch(inh) {
 	case MACH_VM_INHERIT_SHARE:
 		flags |= MAP_INHERIT_SHARE;
 		break;
@@ -232,17 +212,60 @@ mach_vm_map(struct mach_trap_args *args)
 		break;
 	case MACH_VM_INHERIT_DONATE_COPY:
 	default:
-		uprintf("mach_vm_map: unsupported inheritance flag %d\n",
-		    req->req_inheritance);
+		uprintf("mach_vm_map: unsupported inheritance flag %d\n", inh);
 		break;
 	}
-
-	if (vm_map_insert(map, NULL, 0, addr, addr + size, prot, protmax, docow)) {
-		vm_map_unlock(map);
-		return (EFAULT);
+	if (vm_map_insert(map, NULL, 0, addr, addr + size, cur_protection,
+					  max_protection, docow)) {
+		error = EFAULT;
+		goto done;
 	}
+	*address = addr;
+done:
+	vm_map_unlock(map);
+	return (error);
+}
 
-	rep->rep_retval = addr;
+int
+sys__kernelrpc_mach_vm_map_trap(struct thread *td, struct _kernelrpc_mach_vm_map_trap_args *uap)
+{
+	int error;
+	vm_offset_t addr;
+
+	if ((error = copyin(uap->address, &addr, sizeof(addr))) != 0)
+		return (error);
+	error = mach_vm_map(td, &addr, uap->size, uap->mask, uap->flags, uap->cur_protection,
+						VM_PROT_ALL, VM_INHERIT_NONE);
+	if (error)
+		return (error);
+	return (copyout(&addr, uap->address, sizeof(addr)));
+}
+
+int
+mach_vm_map_msg(struct mach_trap_args *args)
+{
+	mach_vm_map_request_t *req = args->smsg;
+	mach_vm_map_reply_t *rep = args->rmsg;
+	size_t *msglen = args->rsize;
+	int error;
+
+#ifdef DEBUG_MACH_VM
+	printf("mach_vm_map(addr = %p, size = 0x%08lx, obj = 0x%x, "
+	    "mask = 0x%08lx, flags = 0x%x, offset = 0x%08llx, "
+	    "copy = %d, cur_prot = 0x%x, max_prot = 0x%x, inh = 0x%x);\n",
+	    (void *)req->req_address, (long)req->req_size, req->req_object.name,
+	    (long)req->req_mask, req->req_flags, (off_t)req->req_offset,
+	    req->req_copy, req->req_cur_protection, req->req_max_protection,
+	    req->req_inheritance);
+#endif
+
+	error = mach_vm_map(args->ttd, &req->req_address, req->req_size,
+						req->req_mask, req->req_flags, req->req_cur_protection,
+						req->req_max_protection, req->req_inheritance);
+	if (error)
+		return (mach_msg_error(args, error));
+
+	rep->rep_retval = req->req_address;
 	*msglen = sizeof(*rep);
 	mach_set_header(rep, req, *msglen);
 	mach_set_trailer(rep, *msglen);
@@ -286,7 +309,28 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 }
 
 int
-mach_vm_allocate_ipc(struct mach_trap_args *args)
+sys__kernelrpc_mach_vm_allocate_trap(struct thread *td, struct _kernelrpc_mach_vm_allocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; current task only */
+	mach_vm_offset_t *address = uap->address;
+	mach_vm_offset_t uaddr;
+	mach_vm_size_t size = uap->size;
+	int flags = uap->flags;
+	int error;
+
+	if ((error = copyin(address, &uaddr, sizeof(mach_vm_offset_t))))
+		return (error);
+
+	if ((error = mach_vm_allocate(&td->td_proc->p_vmspace->vm_map,
+								  &uaddr, size, flags)))
+		return (error);
+	if ((error = copyout(&uaddr, address, sizeof(mach_vm_offset_t))))
+		return (error);
+	return (0);
+}
+
+int
+mach_vm_allocate_msg(struct mach_trap_args *args)
 {
 	mach_vm_allocate_request_t *req = args->smsg;
 	mach_vm_allocate_reply_t *rep = args->rmsg;
@@ -322,14 +366,31 @@ mach_vm_allocate_ipc(struct mach_trap_args *args)
 	return (0);
 }
 
+static int
+mach_vm_deallocate(struct thread *td, vm_offset_t addr, size_t len)
+{
+	struct munmap_args cup;
+
+	cup.addr = (void *)addr;
+	cup.len = len;
+	return (sys_munmap(td, &cup));
+}
+
 int
-mach_vm_deallocate(struct mach_trap_args *args)
+sys__kernelrpc_mach_vm_deallocate_trap(struct thread *td, struct _kernelrpc_mach_vm_deallocate_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target; current task only */
+
+	return (mach_vm_deallocate(td, uap->address, uap->size));
+}
+
+int
+mach_vm_deallocate_msg(struct mach_trap_args *args)
 {
 	mach_vm_deallocate_request_t *req = args->smsg;
 	mach_vm_deallocate_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
 	struct thread *ttd = args->ttd;
-	struct munmap_args cup;
 	int error;
 
 #ifdef DEBUG_MACH_VM
@@ -337,10 +398,7 @@ mach_vm_deallocate(struct mach_trap_args *args)
 	    (void *)req->req_address, (long)req->req_size);
 #endif
 
-	cup.addr = (void *)req->req_address;
-	cup.len = req->req_size;
-
-	if ((error = sys_munmap(ttd, &cup)) != 0)
+	if ((error = mach_vm_deallocate(ttd, req->req_address, req->req_size)))
 		return (mach_msg_error(args, error));
 
 	rep->rep_retval = ttd->td_retval[0];
@@ -408,21 +466,36 @@ mach_vm_wire(struct mach_trap_args *args)
 }
 #endif
 
+static int
+mach_vm_protect(struct thread *td, vm_offset_t addr, size_t len, vm_prot_t prot)
+{
+	struct mprotect_args cup;
+
+	cup.addr = (void *)addr;
+	cup.len = len;
+	cup.prot = prot;
+
+	return (sys_mprotect(td, &cup));
+}
+
 int
-mach_vm_protect(struct mach_trap_args *args)
+sys__kernelrpc_mach_vm_protect_trap(struct thread *td, struct _kernelrpc_mach_vm_protect_trap_args *uap)
+{
+	/* mach_port_name_t target = uap->target */
+	/* int set_maximum = uap->set_maximum */
+
+	return (mach_vm_protect(td, uap->address, uap->size, uap->new_protection));
+}
+
+int
+mach_vm_protect_msg(struct mach_trap_args *args)
 {
 	mach_vm_protect_request_t *req = args->smsg;
 	mach_vm_protect_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
-	struct mprotect_args cup;
 	int error;
 
-	cup.addr = (void *)req->req_addr;
-	cup.len = req->req_size;
-	cup.prot = req->req_prot;
-
-	if ((error = sys_mprotect(ttd, &cup)) != 0)
+	if ((error = mach_vm_protect(args->ttd, req->req_addr, req->req_size, req->req_prot)) != 0)
 		return (mach_msg_error(args, error));
 
 	*msglen = sizeof(*rep);
