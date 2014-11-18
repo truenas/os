@@ -169,6 +169,7 @@
 #ifndef	_MACH_MACH_TYPES_H_
 #define _MACH_MACH_TYPES_H_
 
+#include <sys/types.h>
 #include <vm/vm.h>
 
 #include <mach/host_info.h>

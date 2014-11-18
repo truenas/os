@@ -26,6 +26,7 @@
 #ifndef	MACH_VM_TYPES_H_
 #define MACH_VM_TYPES_H_
 
+#include <sys/types.h>
 #include <machine/mach/vm_types.h>
 
 typedef vm_offset_t     pointer_t;

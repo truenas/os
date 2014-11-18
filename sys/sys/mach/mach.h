@@ -117,11 +117,6 @@ extern kern_return_t		vm_read_overwrite(mach_port_t,
 						  vm_size_t,
 						  vm_address_t,
 						  vm_size_t *);
-
-extern void			*sbrk(int);
-
-extern int			 brk(void *);
-
 /*
  * Prototypes for compatibility
  */

@@ -90,7 +90,7 @@ _netipx=	netipx
 .if ${MK_ICONV} == "yes"
 INCS+=		iconv.h
 .endif
-	
+
 
 # Define SHARED to indicate whether you want symbolic links to the system
 # source (``symlinks''), or a separate copy (``copies'').  ``symlinks'' is
@@ -239,8 +239,22 @@ copies:
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${DESTDIR}${INCLUDEDIR}/mach
 	cd ${.CURDIR}/mach ; \
-	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/mach
+.endif
+.if exists(${.CURDIR}/mach_debug)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/mach_debug
+	cd ${.CURDIR}/mach_debug ; \
+		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+		${DESTDIR}${INCLUDEDIR}/mach_debug
+.endif
+.if exists(${.CURDIR}/mach/device)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/mach/device
+	cd ${.CURDIR}/mach/device ; \
+		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
+		${DESTDIR}${INCLUDEDIR}/mach/device
 .endif
 .if exists(${.CURDIR}/../sys/sys/mach)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
@@ -248,6 +262,24 @@ copies:
 	cd ${.CURDIR}/../sys/sys/mach ; \
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/sys/mach
+.endif
+.if exists(${.CURDIR}/../sys/sys/mach_debug)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/sys/mach_debug
+	cd ${.CURDIR}/../sys/sys/mach_debug ; \
+		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+		${DESTDIR}${INCLUDEDIR}/sys/mach_debug
+.endif
+.if exists(${.CURDIR}/../sys/sys/mach/device)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/sys/mach/device
+	cd ${.CURDIR}/../sys/sys/mach/device ; \
+		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+		${DESTDIR}${INCLUDEDIR}/sys/mach/device
+.endif
+.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/machine/mach
 .endif
 .if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
