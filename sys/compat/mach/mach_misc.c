@@ -40,6 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/namei.h>
 #include <sys/dirent.h>
+#include <sys/eventhandler.h>
 #include <sys/proc.h>
 #include <sys/file.h>
 #include <sys/stat.h>
@@ -88,13 +89,51 @@ MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
 
 static int mach_cold = 1; /* Have we initialized COMPAT_MACH structures? */
 
+
+static void
+mach_thread_exit(void *arg, struct thread *td)
+{
+	struct mach_thread_emuldate *mte;
+
+	if ((td->td_pflags & TDP_MACHINITED) == 0)
+		return;
+
+	mte = td->td_emuldata;
+	free(mte, M_MACH);
+}
+
+static void
+mach_proc_exit(void *arg, struct proc *p)
+{
+	struct thread *td;
+	struct mach_emuldata *med;
+
+	/* There is only one lwp remaining... */
+	td = TAILQ_FIRST(&p->p_threads);
+	KASSERT(td != NULL, ("no threads in proc"));
+
+	if ((td->td_pflags & TDP_MACHINITED) == 0)
+		return;
+
+	med = p->p_emuldata;
+	free(med, M_MACH);
+}
+
+static eventhandler_tag mach_p_exit_tag;
+static eventhandler_tag mach_td_exit_tag;
+
+
 static void
 mach_init(void)
 {
 	mach_semaphore_init();
 	mach_message_init();
 	mach_port_init();
-
+	/* not a module - but keep it around in case */
+	mach_p_exit_tag = EVENTHANDLER_REGISTER(process_exit, mach_proc_exit,
+										  NULL, 1000);
+	mach_td_exit_tag = EVENTHANDLER_REGISTER(thread_dtor, mach_thread_exit, NULL,
+						  EVENTHANDLER_PRI_ANY);
 	mach_cold = 0;
 }
 
