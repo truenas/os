@@ -21,7 +21,7 @@
 
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2014 by Delphix. All rights reserved.
+ * Copyright (c) 2013 by Delphix. All rights reserved.
  * Copyright (c) 2013, Joyent, Inc. All rights reserved.
  */
 
@@ -1726,7 +1726,7 @@ vdev_raidz_child_done(zio_t *zio)
  *      vdevs have had errors, then create zio read operations to the parity
  *      columns' VDevs as well.
  */
-static void
+static int
 vdev_raidz_io_start(zio_t *zio)
 {
 	vdev_t *vd = zio->io_vd;
@@ -1756,8 +1756,8 @@ vdev_raidz_io_start(zio_t *zio)
 			    vdev_raidz_child_done, rc));
 		}
 
-		zio_execute(zio);
-		return;
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 
 	if (zio->io_type == ZIO_TYPE_WRITE) {
@@ -1789,8 +1789,8 @@ vdev_raidz_io_start(zio_t *zio)
 			    ZIO_FLAG_NODATA | ZIO_FLAG_OPTIONAL, NULL, NULL));
 		}
 
-		zio_execute(zio);
-		return;
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 
 	ASSERT(zio->io_type == ZIO_TYPE_READ);
@@ -1830,7 +1830,8 @@ vdev_raidz_io_start(zio_t *zio)
 		}
 	}
 
-	zio_execute(zio);
+	zio_interrupt(zio);
+	return (ZIO_PIPELINE_STOP);
 }
 
 

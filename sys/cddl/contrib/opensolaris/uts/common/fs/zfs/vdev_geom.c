@@ -850,7 +850,7 @@ vdev_geom_io_intr(struct bio *bp)
 	zio_interrupt(zio);
 }
 
-static void
+static int
 vdev_geom_io_start(zio_t *zio)
 {
 	vdev_t *vd;
@@ -865,8 +865,6 @@ vdev_geom_io_start(zio_t *zio)
 		/* XXPOLICY */
 		if (!vdev_readable(vd)) {
 			zio->io_error = SET_ERROR(ENXIO);
-			zio_interrupt(zio);
-			return;
 		} else {
 			switch (zio->io_cmd) {
 			case DKIOCFLUSHWRITECACHE:
@@ -882,16 +880,16 @@ vdev_geom_io_start(zio_t *zio)
 			}
 		}
 
-		zio_execute(zio);
-		return;
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	case ZIO_TYPE_FREE:
 		if (vd->vdev_notrim) {
 			zio->io_error = SET_ERROR(ENOTSUP);
 		} else if (!vdev_geom_bio_delete_disable) {
 			goto sendreq;
 		}
-		zio_execute(zio);
-		return;
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
 	}
 sendreq:
 	ASSERT(zio->io_type == ZIO_TYPE_READ ||
@@ -903,7 +901,7 @@ sendreq:
 	if (cp == NULL) {
 		zio->io_error = SET_ERROR(ENXIO);
 		zio_interrupt(zio);
-		return;
+		return (ZIO_PIPELINE_STOP);
 	}
 	bp = g_alloc_bio();
 	bp->bio_caller1 = zio;
@@ -932,6 +930,8 @@ sendreq:
 	bp->bio_done = vdev_geom_io_intr;
 
 	g_io_request(bp, cp);
+
+	return (ZIO_PIPELINE_STOP);
 }
 
 static void
