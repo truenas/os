@@ -1,3 +1,20 @@
+This is the mach_support branch. It adds support for a subset of the mach
+API as a precursor to supporting launchd.
+
+Rudimentary Mach IPC is supported through libmach provided one's kernel
+is compiled with COMPAT_MACH. The mach interface generator should be able
+to work with modern .defs files.
+
+Currently known to be missing are:
+ - AF_SYSTEM domain sockets and the event protocols
+ - The audit session system calls: audit_session_self and audit_session_join
+ - XPC
+   - The XPC library is closed source, launchd uses primarily xpc_dictionary_*,
+   	 xpc_pipe_reply, ad xpc_pipe_try_receive
+   - The XPC_JETSAM_BANDs are undefined and their meaning is unclear
+ 
+
+
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
 $FreeBSD$
