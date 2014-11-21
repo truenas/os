@@ -77,10 +77,10 @@ struct _os_redirect_assumes_s {
  */
 typedef bool (*os_log_callout_t)(_SIMPLE_STRING asl_message, void *ctx, const char *);
 
-#if 0
+
 #include <CrashReporterClient.h>
 #define os_set_crash_message(arg) CRSetCrashLogMessage(arg)
-#endif
+
 #define os_assumes(e) __extension__({ \
 	__typeof__(e) _e = os_fastpath(e); \
 	if (!_e) { \

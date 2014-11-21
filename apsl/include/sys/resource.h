@@ -67,6 +67,10 @@
 #include <sys/appleapiopts.h>
 #include <sys/cdefs.h>
 #include <sys/_types.h>
+
+#undef _SYS_RESOURCE_H_
+#include_next <sys/resource.h>
+
 #if 0
 #if __DARWIN_C_LEVEL >= __DARWIN_C_FULL
 #include <stdint.h>
@@ -371,7 +375,9 @@ struct	user32_rusage {
  * as a type rlim_t, we are permitted to define RLIM_SAVED_* in terms of
  * RLIM_INFINITY.
  */
+#if 0
 #define	RLIM_INFINITY	(((__uint64_t)1 << 63) - 1)	/* no limit */
+#endif
 #define	RLIM_SAVED_MAX	RLIM_INFINITY	/* Unrepresentable hard limit */
 #define	RLIM_SAVED_CUR	RLIM_INFINITY	/* Unrepresentable soft limit */
 
@@ -384,15 +390,21 @@ struct	user32_rusage {
 #define	RLIMIT_DATA	2		/* data segment size */
 #define	RLIMIT_STACK	3		/* stack size */
 #define	RLIMIT_CORE	4		/* core file size */
+#if 0
 #define	RLIMIT_AS	5		/* address space (resident set size) */
+#endif
 #if __DARWIN_C_LEVEL >= __DARWIN_C_FULL
+#if 0
 #define	RLIMIT_RSS	RLIMIT_AS	/* source compatibility alias */
+#endif
 #define	RLIMIT_MEMLOCK	6		/* locked-in-memory address space */
 #define	RLIMIT_NPROC	7		/* number of processes */
 #endif	/* __DARWIN_C_LEVEL >= __DARWIN_C_FULL */
 #define	RLIMIT_NOFILE	8		/* number of open files */
 #if __DARWIN_C_LEVEL >= __DARWIN_C_FULL
+#if 0
 #define	RLIM_NLIMITS	9		/* total number of resource limits */
+#endif
 #endif	/* __DARWIN_C_LEVEL >= __DARWIN_C_FULL */
 #define _RLIMIT_POSIX_FLAG	0x1000	/* Set bit for strict POSIX */
 
@@ -400,11 +412,12 @@ struct	user32_rusage {
  * A structure representing a resource limit.  The address of an instance
  * of this structure is the second parameter to getrlimit()/setrlimit().
  */
+#if 0
 struct rlimit {
 	rlim_t	rlim_cur;		/* current (soft) limit */
 	rlim_t	rlim_max;		/* maximum value for rlim_cur */
 };
-
+#endif
 #if __DARWIN_C_LEVEL >= __DARWIN_C_FULL
 /*
  * proc_rlimit_control()
@@ -491,16 +504,17 @@ __BEGIN_DECLS
 #if 0
 int	getpriority(int, id_t);
 #if __DARWIN_C_LEVEL >= __DARWIN_C_FULL
-int	getiopolicy_np(int, int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
 #endif /* __DARWIN_C_LEVEL >= __DARWIN_C_FULL */
 int	getrlimit(int, struct rlimit *) __DARWIN_ALIAS(getrlimit);
 int	getrusage(int, struct rusage *);
 int	setpriority(int, id_t, int);
 #if __DARWIN_C_LEVEL >= __DARWIN_C_FULL
-int	setiopolicy_np(int, int, int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
 #endif /* __DARWIN_C_LEVEL >= __DARWIN_C_FULL */
 int	setrlimit(int, const struct rlimit *) __DARWIN_ALIAS(setrlimit);
 #endif
+
+int	getiopolicy_np(int, int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
+int	setiopolicy_np(int, int, int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
 __END_DECLS
 
 #endif	/* !KERNEL */

@@ -25,7 +25,7 @@
 #define __TYPES_H_
 
 #include <sys/_types.h>
-
+#if 0
 #if __GNUC__ > 2 || __GNUC__ == 2 && __GNUC_MINOR__ >= 7
 #define __strfmonlike(fmtarg, firstvararg) \
 		__attribute__((__format__ (__strfmon__, fmtarg, firstvararg)))
@@ -35,7 +35,11 @@
 #define __strfmonlike(fmtarg, firstvararg)
 #define __strftimelike(fmtarg)
 #endif
-
+#endif
+#ifndef __deprecated
+#define __deprecated        __attribute__((deprecated))
+#endif
+typedef long                      __darwin_time_t;        /* time() */
 typedef	int		__darwin_nl_item;
 typedef	int		__darwin_wctrans_t;
 #ifdef __LP64__
