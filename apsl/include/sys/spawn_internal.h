@@ -40,12 +40,14 @@
 #ifndef	_SYS_SPAWN_INTERNAL_H_
 #define	_SYS_SPAWN_INTERNAL_H_
 
+typedef unsigned long         __darwin_size_t;        /* sizeof() */
 #include <sys/_types.h>		/* __offsetof(), __darwin_size_t */
 #include <sys/syslimits.h>	/* PATH_MAX */
 #include <sys/spawn.h>
 #include <mach/machine.h>
 #include <mach/port.h>
 #include <mach/exception_types.h>
+
 
 /*
  * Allowable posix_spawn() port action types

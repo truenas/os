@@ -20,6 +20,8 @@
  * 
  * @APPLE_LICENSE_HEADER_END@
  */
+#ifndef __SIMPLE_H_
+#define __SIMPLE_H_
 #include <sys/cdefs.h>
 #include <stdarg.h>
 #include <asl.h>
@@ -129,3 +131,4 @@ void _simple_sfree(_SIMPLE_STRING __b);
 void _simple_asl_log(int __level, const char *__facility, const char *__message);
 void _simple_asl_log_prog(int level, const char *facility, const char *message, const char *progname);
 __END_DECLS
+#endif

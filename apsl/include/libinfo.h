@@ -20,7 +20,7 @@
  * 
  * @APPLE_LICENSE_HEADER_END@
  */
-
+#include <rpc/rpc.h>
 #include <si_module.h>
 
 /*

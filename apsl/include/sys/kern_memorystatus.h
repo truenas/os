@@ -35,6 +35,7 @@
 #include <sys/proc.h>
 #endif
 #include <sys/param.h>
+typedef u_int64_t              user_addr_t;
 
 #define JETSAM_PRIORITY_REVISION                  2
 
