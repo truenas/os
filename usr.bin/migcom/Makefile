@@ -30,7 +30,7 @@ SRCS= error.c global.c header.c ident.c \
 #handler.c
 
 CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT
-
+CFLAGS+= -I${.CURDIR}/../../apsl/include
 
 .if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
 .PATH: i386
