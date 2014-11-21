@@ -85,10 +85,9 @@
 #ifndef	STD_TYPES_H_
 #define	STD_TYPES_H_
 
-#include <mach/boolean.h>
-#include <mach/kern_return.h>
-#include <mach/port.h>
-#include <mach/vm_types.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/port.h>
+#include <sys/mach/vm_types.h>
 
 #ifdef	MACH_KERNEL
 #include <ipc/ipc_port.h>

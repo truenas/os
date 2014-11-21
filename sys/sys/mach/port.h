@@ -87,8 +87,6 @@
 #define _MACH_PORT_H_
 
 #include <sys/cdefs.h>
-#include <stdint.h>
-#include <mach/boolean.h>
 #include <machine/mach/vm_types.h>
 
 /*
@@ -413,7 +411,7 @@ enum mach_port_guard_exception_codes {
 	kGUARD_EXC_INCORRECT_GUARD	= 1u << 4
 };
 
-#if	!__DARWIN_UNIX03 && !defined(_NO_PORT_T_FROM_MACH)
+#if	0 && !__DARWIN_UNIX03 && !defined(_NO_PORT_T_FROM_MACH)
 /*
  *  Mach 3.0 renamed everything to have mach_ in front of it.
  *  These types and macros are provided for backward compatibility

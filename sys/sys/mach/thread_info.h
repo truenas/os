@@ -93,9 +93,8 @@
 #ifndef	_MACH_THREAD_INFO_H_
 #define _MACH_THREAD_INFO_H_
 
-#include <mach/boolean.h>
-#include <mach/policy.h>
-#include <mach/time_value.h>
+#include <sys/mach/policy.h>
+#include <sys/mach/time_value.h>
 #include <machine/mach/vm_types.h>
 
 /*

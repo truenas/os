@@ -31,10 +31,9 @@
 #ifndef	_MACH_VM_REGION_H_
 #define _MACH_VM_REGION_H_
 
-#include <mach/boolean.h>
-#include <mach/vm_prot.h>
-#include <mach/vm_inherit.h>
-#include <mach/vm_behavior.h>
+#include <sys/mach/vm_prot.h>
+#include <sys/mach/vm_inherit.h>
+#include <sys/mach/vm_behavior.h>
 
 /*
  *	Types defined:

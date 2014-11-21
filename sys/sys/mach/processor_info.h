@@ -93,7 +93,7 @@
 #ifndef	_MACH_PROCESSOR_INFO_H_
 #define _MACH_PROCESSOR_INFO_H_
 
-#include <mach/machine.h>
+#include <sys/mach/machine.h>
 
 /*
  *	Generic information structure to allow for expansion.

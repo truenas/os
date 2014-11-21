@@ -102,8 +102,8 @@
  *	User-visible types used in the external memory
  *	management interface:
  */
-
-#include <mach/port.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/port.h>
 #include <machine/mach/vm_types.h>
 
 

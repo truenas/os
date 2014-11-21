@@ -85,8 +85,7 @@
  *	Definitions for scheduing policy.
  */
 
-#include <mach/boolean.h>
-#include <mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 /*
  *	Policy definitions.  Policies should be powers of 2,

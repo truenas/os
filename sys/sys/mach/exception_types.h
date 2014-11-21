@@ -2,6 +2,46 @@
 #define _MACH_EXCEPTION_TYPES_H_
 
 #include <machine/mach/exception.h>
+/*
+ *      Machine-independent exception definitions.
+ */
+
+#define EXC_BAD_ACCESS          1       /* Could not access memory */
+                /* Code contains kern_return_t describing error. */
+                /* Subcode contains bad memory address. */
+
+#define EXC_BAD_INSTRUCTION     2       /* Instruction failed */
+                /* Illegal or undefined instruction or operand */
+
+#define EXC_ARITHMETIC          3       /* Arithmetic exception */
+                /* Exact nature of exception is in code field */
+
+#define EXC_EMULATION           4       /* Emulation instruction */
+                /* Emulation support instruction encountered */
+                /* Details in code and subcode fields   */
+
+#define EXC_SOFTWARE            5       /* Software generated exception */
+                /* Exact exception is in code field. */
+                /* Codes 0 - 0xFFFF reserved to hardware */
+                /* Codes 0x10000 - 0x1FFFF reserved for OS emulation (Unix) */
+
+#define EXC_BREAKPOINT          6       /* Trace, breakpoint, etc. */
+                /* Details in code field. */
+
+#define EXC_SYSCALL             7       /* System calls. */
+
+#define EXC_MACH_SYSCALL        8       /* Mach system calls. */
+
+#define EXC_RPC_ALERT           9       /* RPC alert */
+ 
+#define EXC_CRASH               10      /* Abnormal process exit */
+
+#define EXC_RESOURCE            11      /* Hit resource consumption limit */
+                /* Exact resource is in code field. */
+
+#define EXC_GUARD               12      /* Violated guarded resource protections */
+
+#define EXC_MAX EXC_GUARD
 
 #define EXC_MASK_BAD_ACCESS             (1 << EXC_BAD_ACCESS)
 #define EXC_MASK_BAD_INSTRUCTION        (1 << EXC_BAD_INSTRUCTION)
@@ -33,8 +73,8 @@
 #define EXCEPTION_STATE				2
 #define EXCEPTION_STATE_IDENTITY	3
 
-#include <mach/port.h>
-#include <mach/thread_status.h>
+#include <sys/mach/port.h>
+#include <sys/mach/thread_status.h>
 #include <machine/mach/vm_types.h>
 /*
  * Exported types

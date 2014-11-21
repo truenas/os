@@ -65,13 +65,14 @@
 #ifndef	_MACH_TASK_INFO_H_
 #define	_MACH_TASK_INFO_H_
 
-#include <mach/message.h>
+#include <sys/mach/message.h>
 #include <machine/mach/vm_types.h>
-#include <mach/time_value.h>
-#include <mach/policy.h>
-#include <mach/vm_statistics.h> /* for vm_extmod_statistics_data_t */
+#include <sys/mach/time_value.h>
+#include <sys/mach/policy.h>
+#include <sys/mach/vm_statistics.h> /* for vm_extmod_statistics_data_t */
+#ifndef _KERNEL
 #include <Availability.h>
-
+#endif
 #include <sys/cdefs.h>
 
 /*

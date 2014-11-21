@@ -153,7 +153,6 @@
 #endif	/* MACH_KERNEL */
 
 #include <machine/mach/vm_types.h>
-#include <mach/boolean.h>
 
 /*
  *	For each host, there is a maximum possible number of

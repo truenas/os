@@ -105,9 +105,9 @@
 #ifndef	_MACH_HOST_INFO_H_
 #define	_MACH_HOST_INFO_H_
 
-#include <mach/vm_statistics.h>
-#include <mach/machine.h>
-#include <mach/time_value.h>
+#include <sys/mach/vm_statistics.h>
+#include <sys/mach/machine.h>
+#include <sys/mach/time_value.h>
 
 /*
  *	Generic information structure to allow for expansion.

@@ -148,11 +148,12 @@ typedef struct vm_purgeable_info        *vm_purgeable_info_t;
  *	so choose, but are expected to return the statistics
  *	in the following structure.
  */
-
+#if 0
 struct pmap_statistics {
 	integer_t	resident_count;	/* # of pages mapped (total)*/
 	integer_t	wired_count;	/* # of pages wired */
 };
 
 typedef struct pmap_statistics	*pmap_statistics_t;
+#endif
 #endif	/* VM_STATISTICS_H_ */

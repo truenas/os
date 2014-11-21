@@ -115,15 +115,17 @@
 #ifndef	_MACH_MESSAGE_H_
 #define _MACH_MESSAGE_H_
 
+#define DIPC 0
+
 #ifdef	MACH_KERNEL
 #include <dipc.h>
 #endif	/* MACH_KERNEL */
 #include <sys/cdefs.h>
 #include <sys/types.h>
-
-#include <mach/mach_types.h>
-#include <mach/kern_return.h>
-#include <mach/port.h>
+#include <sys/param.h>
+#include <vm/vm.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/port.h>
 
 
 /*

@@ -197,40 +197,28 @@
 #include <sys/mach/vm_region.h>
 #include <sys/mach/prof_types.h>
 
-
 #ifdef	_KERNEL
-#include <kern/task.h>		/* for task_port_array_t */
-#include <kern/thread.h>	/* for thread_port_array_t */
+#include <compat/mach/task.h>		/* for task_port_array_t */
+#if 0
+#include <compat/mach/thread.h>	/* for thread_port_array_t */
+#endif
 #include <compat/mach/processor.h>	/* for processor_array_t,
 				       processor_set_array_t,
 				       processor_set_name_array_t */
-#include <kern/syscall_emulation.h>
-				/* for emulation_vector_t */
 #include <compat/mach/ledger.h>	/* for ledger_t */
 
 
-typedef struct task                     *task_t, *task_name_t, *task_suspension_token_t;
-typedef struct thread           *thread_t, *thread_act_t;
-typedef struct ipc_space                *ipc_space_t;
+typedef struct task                     *task_name_t, *task_suspension_token_t;
 typedef struct coalition                *coalition_t;
 typedef struct host                     *host_t;
 typedef struct host                     *host_priv_t;
 typedef struct host                     *host_security_t;
-typedef struct processor                *processor_t;
-typedef struct processor_set            *processor_set_t;
 typedef struct processor_set            *processor_set_control_t;
 typedef struct semaphore                *semaphore_t;
-typedef struct ledger                   *ledger_t;
 typedef struct alarm                    *alarm_t;
 typedef struct clock                    *clock_serv_t;
 typedef struct clock                    *clock_ctrl_t;
 
-
-#include <norma_vm.h>
-#if	NORMA_VM
-#include <xmm/xmm_obj.h>
-typedef char		*inline_existence_map_t;
-#endif	/* NORMA_VM */
 
 #else	/* MACH_KERNEL */
 
@@ -240,14 +228,25 @@ typedef mach_port_t		task_name_t;
 typedef mach_port_t		lock_set_t;
 typedef mach_port_t		semaphore_t;
 typedef mach_port_t     ledger_t;
+typedef mach_port_t		processor_t;
 typedef mach_port_t		processor_set_t;
+typedef mach_port_t		processor_set_control_t;
+typedef mach_port_t		alarm_t;
+typedef mach_port_t		clock_serv_t;
+typedef mach_port_t		clock_ctrl_t;
+typedef mach_port_t		io_master_t;
 
 typedef mach_port_t             task_suspension_token_t;
+typedef mach_port_t             host_t;
+typedef mach_port_t             host_priv_t;
+typedef mach_port_t             host_security_t;
+typedef host_t                  host_name_t;
+typedef host_t                  host_name_port_t;
+
 
 typedef	task_port_t		*task_port_array_t;
 typedef mach_port_t		thread_port_t;
 typedef	thread_port_t		*thread_port_array_t;
-typedef mach_port_t		host_name_port_t;
 typedef mach_port_t		processor_set_control_port_t;
 typedef mach_port_t		*processor_port_array_t;
 typedef mach_port_t		processor_set_name_port_t;
@@ -273,7 +272,6 @@ typedef mach_port_t		*ledger_port_array_t;
 typedef mach_port_t    		ledger_port_t;
 typedef char			*user_subsystem_t;
 
-typedef struct processor                *processor_t;
 typedef natural_t       task_policy_flavor_t;
 typedef integer_t       *task_policy_t;
 
