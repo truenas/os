@@ -515,7 +515,7 @@ WriteServerHeader(FILE *file, statement_t *stats)
 		if (stat->stKind == skRoutine)
 			WriteServerRoutine(file, stat->stRoutine);
 	}
-	WriteDispatcher(file);
+
 	for (stat = stats; stat != stNULL; stat = stat->stNext) {
 		if (stat->stKind == skRoutine)
 			WriteServerRoutine(file, stat->stRoutine);
