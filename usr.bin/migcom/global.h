@@ -94,6 +94,13 @@
 
 #include "type.h"
 
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+#ifndef TRUE
+#define TRUE 1
+#endif
 extern boolean_t BeQuiet;   /* no warning messages */
 extern boolean_t BeVerbose; /* summarize types, routines */
 extern boolean_t BeDebug;   /* enters in the debug mode */

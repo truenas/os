@@ -102,8 +102,8 @@
 #define	_TYPE_H
 
 #include <sys/types.h>
+#include <sys/param.h>
 typedef u_int ipc_flags_t;
-#include <mach/boolean.h>
 #include "strdefs.h"
 
 

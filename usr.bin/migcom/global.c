@@ -104,6 +104,8 @@
  * 28-May-87  Richard Draves (rpd) at Carnegie-Mellon University
  *	Created.
  */
+#include <sys/types.h>
+#include <sys/param.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,6 +114,8 @@
 #include "global.h"
 #include "error.h"
 #include "mig_machine.h"
+
+
 
 boolean_t BeQuiet = FALSE;
 boolean_t BeVerbose = FALSE;
