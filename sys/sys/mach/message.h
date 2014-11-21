@@ -560,6 +560,76 @@ typedef struct
   security_token_t		msgh_sender;
 } mach_msg_security_trailer_t;
 
+/*
+ * The audit token is an opaque token which identifies
+ * Mach tasks and senders of Mach messages as subjects
+ * to the BSM audit system.  Only the appropriate BSM
+ * library routines should be used to interpret the
+ * contents of the audit token as the representation
+ * of the subject identity within the token may change
+ * over time.
+ */
+typedef struct
+{
+  unsigned int                  val[8];
+} audit_token_t;
+
+typedef struct 
+{
+  mach_msg_trailer_type_t       msgh_trailer_type;
+  mach_msg_trailer_size_t       msgh_trailer_size;
+  mach_port_seqno_t             msgh_seqno;
+  security_token_t              msgh_sender;
+  audit_token_t                 msgh_audit;
+} mach_msg_audit_trailer_t;
+
+typedef struct 
+{
+  mach_msg_trailer_type_t       msgh_trailer_type;
+  mach_msg_trailer_size_t       msgh_trailer_size;
+  mach_port_seqno_t             msgh_seqno;
+  security_token_t              msgh_sender;
+  audit_token_t                 msgh_audit;
+  mach_port_context_t           msgh_context;
+} mach_msg_context_trailer_t;
+
+typedef struct
+{
+  mach_port_name_t sender;
+} msg_labels_t;
+
+/* 
+   Trailer type to pass MAC policy label info as a mach message trailer.
+*/
+
+typedef struct
+{
+  mach_msg_trailer_type_t       msgh_trailer_type;
+  mach_msg_trailer_size_t       msgh_trailer_size;
+  mach_port_seqno_t             msgh_seqno;
+  security_token_t              msgh_sender;
+  audit_token_t                 msgh_audit;
+  mach_port_context_t           msgh_context;
+  int                           msgh_ad;
+  msg_labels_t                  msgh_labels;
+} mach_msg_mac_trailer_t;
+
+
+#define MACH_MSG_TRAILER_MINIMUM_SIZE  sizeof(mach_msg_trailer_t)
+
+/*
+ * These values can change from release to release - but clearly
+ * code cannot request additional trailer elements one was not
+ * compiled to understand.  Therefore, it is safe to use this
+ * constant when the same module specified the receive options.
+ * Otherwise, you run the risk that the options requested by
+ * another module may exceed the local modules notion of
+ * MAX_TRAILER_SIZE.
+ */
+
+typedef mach_msg_mac_trailer_t mach_msg_max_trailer_t;
+#define MAX_TRAILER_SIZE ((mach_msg_size_t)sizeof(mach_msg_max_trailer_t))
+
 #if	DIPC
 
 typedef struct 
@@ -581,8 +651,9 @@ typedef mach_msg_security_trailer_t mach_msg_format_0_trailer_t;
 
 #define MACH_MSG_TRAILER_FORMAT_0_SIZE sizeof(mach_msg_format_0_trailer_t)
 #define MACH_MSG_TRAILER_MINIMUM_SIZE  sizeof(mach_msg_trailer_t)
+#if 0
 #define MAX_TRAILER_SIZE 	       MACH_MSG_TRAILER_FORMAT_0_SIZE	
-
+#endif
 #define   KERNEL_SECURITY_TOKEN_VALUE  { {0, 1} }
 extern security_token_t KERNEL_SECURITY_TOKEN;
 
@@ -724,6 +795,11 @@ typedef integer_t mach_msg_option_t;
 #define MACH_RCV_TRAILER_NULL   0
 #define MACH_RCV_TRAILER_SEQNO  1
 #define MACH_RCV_TRAILER_SENDER 2
+#define MACH_RCV_TRAILER_AUDIT  3
+#define MACH_RCV_TRAILER_CTX    4
+#define MACH_RCV_TRAILER_AV     7
+#define MACH_RCV_TRAILER_LABELS 8
+
 
 #define MACH_RCV_TRAILER_TYPE(x)     (((x) & 0xf) << 28) 
 #define MACH_RCV_TRAILER_ELEMENTS(x) (((x) & 0xf) << 24)  

@@ -55,11 +55,11 @@
 #define	_MACH_H_
 
 
-#include <mach/mach_types.h>
-#include <mach/mach_interface.h>
-#include <mach/mach_port.h>
-#include <mach/port.h>
-#include <mach/mach_init.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/mach_interface.h>
+#include <sys/mach/mach_port.h>
+#include <sys/mach/port.h>
+#include <sys/mach/mach_init.h>
 
 /*
  * Standard prototypes

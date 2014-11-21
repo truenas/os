@@ -172,38 +172,59 @@
 #include <sys/types.h>
 #include <vm/vm.h>
 
-#include <mach/host_info.h>
-#include <mach/machine.h>
+#include <sys/mach/host_info.h>
+#include <sys/mach/machine.h>
 #include <machine/mach/vm_types.h>
-#include <mach/memory_object.h>
-#include <mach/port.h>
-#include <mach/processor_info.h>
-#include <mach/task_info.h>
-#include <mach/task_special_ports.h>
-#include <mach/thread_info.h>
-#include <mach/thread_special_ports.h>
-#include <mach/thread_status.h>
-#include <mach/time_value.h>
-#include <mach/clock_types.h>
-#include <mach/kern_return.h>
-#include <mach/vm_attributes.h>
-#include <mach/vm_inherit.h>
-#include <mach/vm_behavior.h>
-#include <mach/vm_prot.h>
-#include <mach/vm_statistics.h>
-#include <mach/vm_sync.h>
-#include <mach/vm_region.h>
-#include <mach/prof_types.h>
+#include <sys/mach/exception_types.h>
+#include <sys/mach/memory_object.h>
+#include <sys/mach/port.h>
+#include <sys/mach/processor_info.h>
+#include <sys/mach/task_info.h>
+#include <sys/mach/task_special_ports.h>
+#include <sys/mach/thread_info.h>
+#include <sys/mach/thread_special_ports.h>
+#include <sys/mach/thread_status.h>
+#include <sys/mach/time_value.h>
+#include <sys/mach/clock_types.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/mach_voucher_types.h>
+#include <sys/mach/vm_attributes.h>
+#include <sys/mach/vm_inherit.h>
+#include <sys/mach/vm_behavior.h>
+#include <sys/mach/vm_prot.h>
+#include <sys/mach/vm_statistics.h>
+#include <sys/mach/vm_sync.h>
+#include <sys/mach/vm_region.h>
+#include <sys/mach/prof_types.h>
 
-#ifdef	MACH_KERNEL
+
+#ifdef	_KERNEL
 #include <kern/task.h>		/* for task_port_array_t */
 #include <kern/thread.h>	/* for thread_port_array_t */
-#include <kern/processor.h>	/* for processor_array_t,
+#include <compat/mach/processor.h>	/* for processor_array_t,
 				       processor_set_array_t,
 				       processor_set_name_array_t */
 #include <kern/syscall_emulation.h>
 				/* for emulation_vector_t */
-#include <kern/ledger.h>	/* for ledger_t */
+#include <compat/mach/ledger.h>	/* for ledger_t */
+
+
+typedef struct task                     *task_t, *task_name_t, *task_suspension_token_t;
+typedef struct thread           *thread_t, *thread_act_t;
+typedef struct ipc_space                *ipc_space_t;
+typedef struct coalition                *coalition_t;
+typedef struct host                     *host_t;
+typedef struct host                     *host_priv_t;
+typedef struct host                     *host_security_t;
+typedef struct processor                *processor_t;
+typedef struct processor_set            *processor_set_t;
+typedef struct processor_set            *processor_set_control_t;
+typedef struct semaphore                *semaphore_t;
+typedef struct ledger                   *ledger_t;
+typedef struct alarm                    *alarm_t;
+typedef struct clock                    *clock_serv_t;
+typedef struct clock                    *clock_ctrl_t;
+
 
 #include <norma_vm.h>
 #if	NORMA_VM
@@ -212,7 +233,17 @@ typedef char		*inline_existence_map_t;
 #endif	/* NORMA_VM */
 
 #else	/* MACH_KERNEL */
+
+typedef mach_port_t		task_t;
 typedef mach_port_t		task_port_t;
+typedef mach_port_t		task_name_t;
+typedef mach_port_t		lock_set_t;
+typedef mach_port_t		semaphore_t;
+typedef mach_port_t     ledger_t;
+typedef mach_port_t		processor_set_t;
+
+typedef mach_port_t             task_suspension_token_t;
+
 typedef	task_port_t		*task_port_array_t;
 typedef mach_port_t		thread_port_t;
 typedef	thread_port_t		*thread_port_array_t;
@@ -232,14 +263,25 @@ typedef mach_port_t		security_port_t;
 typedef integer_t		ledger_item_t;
 #endif	/* MACH_KERNEL */
 
+typedef mach_port_t             exception_handler_t;
+typedef exception_handler_t     *exception_handler_array_t;
+typedef exception_handler_array_t exception_port_arrary_t;
+
+typedef processor_set_t         processor_set_name_t;
+typedef ledger_t                *ledger_array_t;
 typedef mach_port_t		*ledger_port_array_t;
 typedef mach_port_t    		ledger_port_t;
 typedef char			*user_subsystem_t;
+
+typedef struct processor                *processor_t;
+typedef natural_t       task_policy_flavor_t;
+typedef integer_t       *task_policy_t;
+
 
 /*
  *	Backwards compatibility, for those programs written
  *	before mach/{std,mach}_types.{defs,h} were set up.
  */
-#include <mach/std_types.h>
+#include <sys/mach/std_types.h>
 
 #endif	/* _MACH_MACH_TYPES_H_ */

@@ -164,6 +164,14 @@ typedef void	(*mig_stub_routine_t) (mach_msg_header_t *InHeadP,
 typedef mig_stub_routine_t mig_routine_t;
 
 /*
+ * Definition for MIG-generated server routine.  This routine takes a
+ * message, and returns the appropriate stub function for handling that
+ * message.
+ */
+typedef mig_routine_t (*mig_server_routine_t) (mach_msg_header_t *InHeadP);
+
+
+/*
  * Definition for server implementation routines.  This is the routine
  * called by the MIG-generated server stub routine.
  */
@@ -486,6 +494,16 @@ extern rpc_subsystem_t	mach_subsystem_join(
 				rpc_subsystem_t,
 				unsigned int *,
 				void *(* )(int));
+
+
+/* Allocate memory for out-of-line mig structures */
+extern void mig_allocate(vm_address_t *, vm_size_t);
+
+/* Deallocate memory used for out-of-line mig structures */
+extern void mig_deallocate(vm_address_t, vm_size_t);
+
+
+
 
 #endif	/* _MACH_RPC_H_ */
 

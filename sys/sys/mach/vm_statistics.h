@@ -116,6 +116,32 @@ struct vm_statistics {
 typedef struct vm_statistics	*vm_statistics_t;
 typedef struct vm_statistics	vm_statistics_data_t;
 
+struct vm_extmod_statistics {
+        int64_t task_for_pid_count;                     /* # of times task port was looked up */
+        int64_t task_for_pid_caller_count;      /* # of times this task called task_for_pid */
+        int64_t thread_creation_count;          /* # of threads created in task */
+        int64_t thread_creation_caller_count;   /* # of threads created by task */
+        int64_t thread_set_state_count;         /* # of register state sets in task */
+        int64_t thread_set_state_caller_count;  /* # of register state sets by task */
+} __attribute__((aligned(8)));
+
+typedef struct vm_extmod_statistics *vm_extmod_statistics_t;
+typedef struct vm_extmod_statistics vm_extmod_statistics_data_t;
+
+typedef struct vm_purgeable_stat {
+        uint64_t        count;
+        uint64_t        size;
+}vm_purgeable_stat_t;
+
+struct vm_purgeable_info {
+        vm_purgeable_stat_t fifo_data[8];
+        vm_purgeable_stat_t obsolete_data;
+        vm_purgeable_stat_t lifo_data[8];
+};
+
+typedef struct vm_purgeable_info        *vm_purgeable_info_t;
+
+
 /*
  *	Each machine dependent implementation is expected to
  *	keep certain statistics.  They may do this anyway they

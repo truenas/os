@@ -31,6 +31,7 @@
 
 #ifndef _MACH_EXCEPTION_H_
 #define _MACH_EXCEPTION_H_
+#include <sys/mach/exception_types.h>
 
 /* really should be in mach_signal.h or siginfo.h */
 #define MACH_BUS_ADRALN         1
@@ -44,33 +45,6 @@
 #define MACH_ILL_ILLTRP         2
 #define MACH_ILL_PRVOPC         3
 
-#define MACH_EXC_BAD_ACCESS		1
-#define MACH_EXC_BAD_INSTRUCTION	2
-#define MACH_EXC_ARITHMETIC		3
-#define MACH_EXC_EMULATION		4
-#define MACH_EXC_SOFTWARE		5
-#define MACH_EXC_BREAKPOINT		6
-#define MACH_EXC_SYSCALL		7
-#define MACH_EXC_MACH_SYSCALL	8
-#define MACH_EXC_RPC_ALERT		9
-#define MACH_EXC_CRASH			10
-#define MACH_EXC_RESOURCE		11
-#define MACH_EXC_GUARD			12
-#define MACH_EXC_MAX			MACH_EXC_GUARD
-
-#define MACH_EXC_MASK_BAD_ACCESS	(1 << MACH_EXC_BAD_ACCESS)
-#define MACH_EXC_MASK_BAD_INSTRUCTION	(1 << MACH_EXC_BAD_INSTRUCTION)
-#define MACH_EXC_MASK_ARITHMETIC	(1 << MACH_EXC_ARITHMETIC)
-#define MACH_EXC_MASK_EMULATION		(1 << MACH_EXC_EMULATION)
-#define MACH_EXC_MASK_SOFTWARE		(1 << MACH_EXC_SOFTWARE)
-#define MACH_EXC_MASK_BREAKPOINT	(1 << MACH_EXC_BREAKPOINT)
-#define MACH_EXC_MASK_SYSCALL		(1 << MACH_EXC_SYSCALL)
-#define MACH_EXC_MASK_MACH_SYSCALL	(1 << MACH_EXC_MACH_SYSCALL)
-#define MACH_EXC_MASK_RPC_ALERT		(1 << MACH_EXC_RPC_ALERT)
-#define MACH_EXC_MASK_CRASH			(1 << MACH_EXC_CRASH)
-#define MACH_EXC_MASK_RESOURCE		(1 << MACH_EXC_RESOURCE)
-#define MACH_EXC_MASK_GUARD			(1 << MACH_EXC_GUARD)
-
 /*
  * Exception codes. Values < 0x10000 are machine dependent, and
  * are defined in sys/<arch>/include/mach_machdep.h.
@@ -81,10 +55,6 @@
 #define MACH_SOFT_SIGNAL		0x10003
 
 /* Exception behaviors and associated messages Id */
-
-#define MACH_EXCEPTION_DEFAULT		1
-#define MACH_EXCEPTION_STATE		2
-#define MACH_EXCEPTION_STATE_IDENTITY	3
 
 #define MACH_EXC_RAISE_MSGID		2401
 #define MACH_EXC_RAISE_STATE_MSGID	2402

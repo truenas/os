@@ -22,14 +22,37 @@
  * MkLinux
  */
 
-#ifndef	_IPC_TYPES_H_
-#define	_IPC_TYPES_H_
+#ifndef _NDR_H_
+#define _NDR_H_
 
-#ifdef _KERNEL
-typedef struct ipc_space	*ipc_space_t;
-#else
-typedef mach_port_t             ipc_space_t;
-#endif
-typedef struct ipc_port		*ipc_port_t;
+typedef struct {
+    unsigned char       mig_vers;
+    unsigned char       if_vers;
+    unsigned char       reserved1;
+    unsigned char       mig_encoding;
+    unsigned char       int_rep;
+    unsigned char       char_rep;
+    unsigned char       float_rep;
+    unsigned char       reserved2;
+} NDR_record_t;
 
-#endif	/* _IPC_TYPES_H_ */
+/*
+ * MIG supported protocols for Network Data Representation
+ */
+#define  NDR_PROTOCOL_2_0      0
+
+/*
+ * NDR 2.0 format flag type definition and values.
+ */
+#define  NDR_INT_BIG_ENDIAN    0
+#define  NDR_INT_LITTLE_ENDIAN 1
+#define  NDR_FLOAT_IEEE        0
+#define  NDR_FLOAT_VAX         1
+#define  NDR_FLOAT_CRAY        2
+#define  NDR_FLOAT_IBM         3
+#define  NDR_CHAR_ASCII        0
+#define  NDR_CHAR_EBCDIC       1
+
+extern NDR_record_t NDR_record;
+
+#endif /* _NDR_H_ */
