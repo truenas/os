@@ -12,7 +12,9 @@ Currently known to be missing are:
    - The XPC library is closed source, launchd uses primarily xpc_dictionary_*,
    	 xpc_pipe_reply, ad xpc_pipe_try_receive
    - The XPC_JETSAM_BANDs are undefined and their meaning is unclear
- 
+   - XPC itself needs a newer version of libdispatch than is in ports, it is
+   	 unknown as to whether or not we need the portions of XPC that depend on
+	 libdispatch updates
 
 
 This is the top level of the FreeBSD source directory.  This file
