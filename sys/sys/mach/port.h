@@ -87,6 +87,8 @@
 #define _MACH_PORT_H_
 
 #include <sys/cdefs.h>
+#include <sys/types.h>
+#include <vm/vm.h>
 #include <machine/mach/vm_types.h>
 
 /*

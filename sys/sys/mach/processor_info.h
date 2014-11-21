@@ -99,6 +99,7 @@
  *	Generic information structure to allow for expansion.
  */
 typedef integer_t	*processor_info_t;	/* varying array of int. */
+typedef processor_info_t *processor_info_array_t;
 
 #define PROCESSOR_INFO_MAX	(1024)	/* max array size */
 typedef integer_t	processor_info_data_t[PROCESSOR_INFO_MAX];

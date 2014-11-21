@@ -262,6 +262,7 @@ typedef mach_port_t		security_port_t;
 typedef integer_t		ledger_item_t;
 #endif	/* MACH_KERNEL */
 
+typedef void * kmod_args_t;
 typedef mach_port_t             exception_handler_t;
 typedef exception_handler_t     *exception_handler_array_t;
 typedef exception_handler_array_t exception_port_arrary_t;

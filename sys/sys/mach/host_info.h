@@ -107,11 +107,13 @@
 
 #include <sys/mach/vm_statistics.h>
 #include <sys/mach/machine.h>
+
 #include <sys/mach/time_value.h>
 
 /*
  *	Generic information structure to allow for expansion.
  */
+typedef integer_t        *host_info64_t;         /* varying array of int. */
 typedef integer_t	*host_info_t;		/* varying array of int. */
 
 #define	HOST_INFO_MAX	(1024)		/* max array size */
