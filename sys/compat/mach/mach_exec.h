@@ -50,7 +50,7 @@ struct mach_emuldata {
 	struct mach_port *med_bootstrap;/* task bootstrap port */
 	struct mach_port *med_kernel;	/* task kernel port */
 	struct mach_port *med_host;	/* task host port */
-	struct mach_port *med_exc[MACH_EXC_MAX + 1];	/* Exception ports */
+	struct mach_port *med_exc[EXC_MAX + 1];	/* Exception ports */
 
 	int med_dirty_thid;		/* Thread id not yet initialized */
 	int med_suspend;		/* Suspend semaphore */

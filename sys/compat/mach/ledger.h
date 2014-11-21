@@ -24,9 +24,13 @@
 #ifndef _KERN_LEDGER_H_
 #define _KERN_LEDGER_H_
 
+#if 0
 #include <kern/lock.h>
 #include <ipc/ipc_port.h>
+#endif
+#include <sys/mach/ipc_types.h>
 
+#define decl_simple_lock_data(a,b)
 typedef integer_t ledger_item_t;
 
 #define LEDGER_ITEM_INFINITY	(~0)

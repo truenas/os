@@ -35,7 +35,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/signal.h>
-#include <sys/proc.h>
+
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
@@ -43,11 +43,6 @@
 /* clock_get_time */
 #define MACH_TIME_ABSOLUTE 0x00
 #define MACH_TIME_RELATIVE 0x01
-
-typedef struct {
-	unsigned int tv_sec;
-	int tv_nsec;
-} mach_timespec_t;
 
 typedef struct {
 	mach_msg_header_t req_msgh;

@@ -48,7 +48,6 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_services.h>
 
-#include <machine/mach_machdep.h>
 static sigset_t              contsigmask;
 
 static int mach_exception_hang = 0;
@@ -93,17 +92,17 @@ mach_trapsignal1(struct thread *td, struct ksiginfo *ksi)
 
 	switch (ksi->ksi_signo) {
 	case SIGILL:
-		exc_no = MACH_EXC_BAD_INSTRUCTION;
+		exc_no = EXC_BAD_INSTRUCTION;
 		break;
 	case SIGFPE:
-		exc_no = MACH_EXC_ARITHMETIC;
+		exc_no = EXC_ARITHMETIC;
 		break;
 	case SIGSEGV:
 	case SIGBUS:
-		exc_no = MACH_EXC_BAD_ACCESS;
+		exc_no = EXC_BAD_ACCESS;
 		break;
 	case SIGTRAP:
-		exc_no = MACH_EXC_BREAKPOINT;
+		exc_no = EXC_BREAKPOINT;
 		break;
 	default: /* SIGCHLD, SIGPOLL */
 		return (EINVAL);
@@ -247,7 +246,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 	    catcher_td, MACH_PORT_TYPE_SEND, 0);
 
 	switch (behavior) {
-	case MACH_EXCEPTION_DEFAULT: {
+	case EXCEPTION_DEFAULT: {
 		mach_exception_raise_request_t *req;
 
 		req = malloc(sizeof(*req), M_MACH, M_WAITOK | M_ZERO);
@@ -275,7 +274,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 		break;
 	}
 
-	case MACH_EXCEPTION_STATE: {
+	case EXCEPTION_STATE: {
 		mach_exception_raise_state_request_t *req;
 		int dc;
 
@@ -290,7 +289,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 		    sizeof(*req) - sizeof(req->req_trailer);
 		req->req_msgh.msgh_remote_port = kernel_mr->mr_name;
 		req->req_msgh.msgh_local_port = exc_mr->mr_name;
-		req->req_msgh.msgh_id = MACH_EXCEPTION_STATE;
+		req->req_msgh.msgh_id = EXCEPTION_STATE;
 		req->req_exc = exc;
 		req->req_codecount = 2;
 		memcpy(&req->req_code[0], code, sizeof(req->req_code));
@@ -305,7 +304,7 @@ mach_exception(struct thread *exc_td, int exc, int *code)
 		break;
 	}
 
-	case MACH_EXCEPTION_STATE_IDENTITY: {
+	case EXCEPTION_STATE_IDENTITY: {
 		mach_exception_raise_state_identity_request_t *req;
 		int dc;
 

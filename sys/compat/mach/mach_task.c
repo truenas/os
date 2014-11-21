@@ -328,7 +328,7 @@ mach_task_get_exception_ports(struct mach_trap_args *args)
 	rep->rep_masks_count = count;
 
 	j = 0;
-	for (i = 0; i <= MACH_EXC_MAX; i++) {
+	for (i = 0; i <= EXC_MAX; i++) {
 		if (med->med_exc[i] == NULL)
 			continue;
 
@@ -399,29 +399,29 @@ mach_task_set_exception_ports(struct mach_trap_args *args)
 	mp->mp_datatype = MACH_MP_EXC_INFO;
 
 	med = ttd->td_proc->p_emuldata;
-	if (req->req_mask & MACH_EXC_MASK_BAD_ACCESS)
-		update_exception_port(med, MACH_EXC_BAD_ACCESS, mp);
-	if (req->req_mask & MACH_EXC_MASK_BAD_INSTRUCTION)
-		update_exception_port(med, MACH_EXC_BAD_INSTRUCTION, mp);
-	if (req->req_mask & MACH_EXC_MASK_ARITHMETIC)
-		update_exception_port(med, MACH_EXC_ARITHMETIC, mp);
-	if (req->req_mask & MACH_EXC_MASK_EMULATION)
-		update_exception_port(med, MACH_EXC_EMULATION, mp);
-	if (req->req_mask & MACH_EXC_MASK_SOFTWARE)
-		update_exception_port(med, MACH_EXC_SOFTWARE, mp);
-	if (req->req_mask & MACH_EXC_MASK_BREAKPOINT)
-		update_exception_port(med, MACH_EXC_BREAKPOINT, mp);
-	if (req->req_mask & MACH_EXC_MASK_SYSCALL)
-		update_exception_port(med, MACH_EXC_SYSCALL, mp);
-	if (req->req_mask & MACH_EXC_MASK_MACH_SYSCALL)
-		update_exception_port(med, MACH_EXC_MACH_SYSCALL, mp);
-	if (req->req_mask & MACH_EXC_MASK_RPC_ALERT)
-		update_exception_port(med, MACH_EXC_RPC_ALERT, mp);
+	if (req->req_mask & EXC_MASK_BAD_ACCESS)
+		update_exception_port(med, EXC_BAD_ACCESS, mp);
+	if (req->req_mask & EXC_MASK_BAD_INSTRUCTION)
+		update_exception_port(med, EXC_BAD_INSTRUCTION, mp);
+	if (req->req_mask & EXC_MASK_ARITHMETIC)
+		update_exception_port(med, EXC_ARITHMETIC, mp);
+	if (req->req_mask & EXC_MASK_EMULATION)
+		update_exception_port(med, EXC_EMULATION, mp);
+	if (req->req_mask & EXC_MASK_SOFTWARE)
+		update_exception_port(med, EXC_SOFTWARE, mp);
+	if (req->req_mask & EXC_MASK_BREAKPOINT)
+		update_exception_port(med, EXC_BREAKPOINT, mp);
+	if (req->req_mask & EXC_MASK_SYSCALL)
+		update_exception_port(med, EXC_SYSCALL, mp);
+	if (req->req_mask & EXC_MASK_MACH_SYSCALL)
+		update_exception_port(med, EXC_MACH_SYSCALL, mp);
+	if (req->req_mask & EXC_MASK_RPC_ALERT)
+		update_exception_port(med, EXC_RPC_ALERT, mp);
 
 #ifdef DEBUG_MACH
-	if (req->req_mask & (MACH_EXC_ARITHMETIC |
-	    MACH_EXC_EMULATION | MACH_EXC_MASK_SYSCALL |
-	    MACH_EXC_MASK_MACH_SYSCALL | MACH_EXC_RPC_ALERT))
+	if (req->req_mask & (EXC_ARITHMETIC |
+	    EXC_EMULATION | EXC_MASK_SYSCALL |
+	    EXC_MASK_MACH_SYSCALL | EXC_RPC_ALERT))
 		printf("mach_set_exception_ports: some exceptions are "
 		    "not supported (mask %x)\n", req->req_mask);
 #endif
@@ -461,14 +461,14 @@ mach_task_info(struct mach_trap_args *args)
 		rufetch(tp, &ru);
 		PROC_LOCK(tp);
 
-		mtbi->mtbi_suspend_count = ru.ru_nvcsw + ru.ru_nivcsw;
-		mtbi->mtbi_virtual_size = ru.ru_ixrss;
-		mtbi->mtbi_resident_size = ru.ru_maxrss;
-		mtbi->mtbi_user_time.seconds = ru.ru_utime.tv_sec;
-		mtbi->mtbi_user_time.microseconds = ru.ru_utime.tv_usec;
-		mtbi->mtbi_system_time.seconds = ru.ru_stime.tv_sec;
-		mtbi->mtbi_system_time.microseconds = ru.ru_stime.tv_usec;
-		mtbi->mtbi_policy = 0;
+		mtbi->suspend_count = ru.ru_nvcsw + ru.ru_nivcsw;
+		mtbi->virtual_size = ru.ru_ixrss;
+		mtbi->resident_size = ru.ru_maxrss;
+		mtbi->user_time.seconds = ru.ru_utime.tv_sec;
+		mtbi->user_time.microseconds = ru.ru_utime.tv_usec;
+		mtbi->system_time.seconds = ru.ru_stime.tv_sec;
+		mtbi->system_time.microseconds = ru.ru_stime.tv_usec;
+		mtbi->policy = 0;
 
 		*msglen = sizeof(*rep) - sizeof(rep->rep_info) + sizeof(*mtbi);
 		break;

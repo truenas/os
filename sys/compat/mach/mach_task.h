@@ -1,4 +1,3 @@
-/*	$FreeBSD$ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
@@ -27,6 +26,7 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
+ * $FreeBSD$
  */
 
 #ifndef	_MACH_TASK_H_
@@ -141,15 +141,6 @@ typedef struct {
 
 /* task_info */
 
-#define MACH_TASK_BASIC_INFO 4
-struct mach_task_basic_info {
-	mach_integer_t mtbi_suspend_count;
-	mach_vm_size_t mtbi_virtual_size;
-	mach_vm_size_t mtbi_resident_size;
-	mach_time_value_t mtbi_user_time;
-	mach_time_value_t mtbi_system_time;
-	mach_policy_t mtbi_policy;
-};
 
 #define MACH_TASK_EVENTS_INFO 2
 struct mach_task_events_info {

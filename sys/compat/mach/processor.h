@@ -122,23 +122,23 @@
  *	Data structures for managing processors and sets of processors.
  */
 
+#if 0
 #include <cpus.h>
 #include <mach_host.h>
 
-#include <mach/boolean.h>
 #include <mach/kern_return.h>
-#include <mach/port.h>
-#include <kern/kern_types.h>
+#endif
+#include <sys/mach/port.h>
+#include <compat/mach/kern_types.h>
+#if 0
 #include <kern/cpu_number.h>
 #include <kern/lock.h>
 #include <kern/queue.h>
 #include <kern/sched.h>
-
-#if	NCPUS > 1
-#include <machine/ast_types.h>
-#endif	/* NCPUS > 1 */
+#endif
 
 struct processor_set {
+#ifdef notyet	
 	struct	run_queue	runq;		/* runq for this set */
 	queue_head_t		idle_queue;	/* idle processors */
 	int			idle_count;	/* how many ? */
@@ -170,6 +170,7 @@ struct processor_set {
 	policy_t		policy_default;	/* per set default */
 	policy_base_data_t	policy_base;	/* base attributes */
 	policy_limit_data_t	policy_limit;	/* limit attributes */
+#endif
 };
 
 #define PROCESSOR_SET_NULL	(processor_set_t)0
@@ -177,6 +178,7 @@ struct processor_set {
 extern struct processor_set	default_pset;
 
 struct processor {
+	#ifdef notyet
 #if	NCPUS > 1
 	struct run_queue runq;		/* local runq for this processor */
 #endif	/* NCPUS > 1*/
@@ -200,16 +202,19 @@ struct processor {
 	queue_chain_t	softclock_queue;/* cpus handling softclocks */
 #endif	/* NCPUS > 1 */
 	/* punt id data temporarily */
+	#endif
 };
 
 #define PROCESSOR_NULL	(processor_t)0
 
-extern struct processor	processor_array[NCPUS];
+#if 0
+extern struct processor	processor_array[MAXCPUS];
 
 /*
  *	Chain of all processor sets.
  */
 extern queue_head_t		all_psets;
+#endif
 extern int			all_psets_count;
 decl_mutex_data(extern,		all_psets_lock)
 
@@ -257,9 +262,9 @@ extern processor_t	master_processor;
  *	an array lookup and a memory reference.  It also allows us to save
  *	space if processor numbering gets too sparse.
  */
-
+#if 0
 extern processor_t	processor_ptr[NCPUS];
-
+#endif
 #define cpu_to_processor(i)	(processor_ptr[i])
 
 #define current_processor()	(processor_ptr[cpu_number()])

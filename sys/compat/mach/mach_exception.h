@@ -128,6 +128,7 @@ struct mach_exc_info {
 	int mei_behavior;
 };
 
+#include <sys/signalvar.h>
 void mach_trapsignal(struct thread *, struct ksiginfo *);
 int mach_trapsignal1(struct thread *, struct ksiginfo *);
 int mach_exception(struct thread *, int, int *);

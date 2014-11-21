@@ -29,8 +29,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_MACH_PORT_H_
-#define	_MACH_PORT_H_
+#ifndef	_COMPAT_MACH_PORT_H_
+#define	_COMPAT_MACH_PORT_H_
 #include <sys/lock.h>
 #include <sys/rwlock.h>
 #include <sys/mutex.h>
@@ -38,25 +38,7 @@
 #define MACH_PORT_REF(mp)	(mp)->mp_refcount++
 #define MACH_PORT_UNREF(mp)	if (--(mp)->mp_refcount <= 0) mach_port_put(mp)
 
-#define MACH_PORT_NULL			(struct mach_right *)0
-#define MACH_PORT_DEAD			(struct mach_right *)-1
 
-#define MACH_PORT_RIGHT_SEND		0
-#define MACH_PORT_RIGHT_RECEIVE		1
-#define MACH_PORT_RIGHT_SEND_ONCE	2
-#define MACH_PORT_RIGHT_PORT_SET	3
-#define MACH_PORT_RIGHT_DEAD_NAME	4
-#define MACH_PORT_RIGHT_NUMBER		5
-
-#define MACH_PORT_TYPE_SEND		(1 << (MACH_PORT_RIGHT_SEND + 16))
-#define MACH_PORT_TYPE_RECEIVE		(1 << (MACH_PORT_RIGHT_RECEIVE + 16))
-#define MACH_PORT_TYPE_SEND_ONCE	(1 << (MACH_PORT_RIGHT_SEND_ONCE + 16))
-#define MACH_PORT_TYPE_PORT_SET		(1 << (MACH_PORT_RIGHT_PORT_SET + 16))
-#define MACH_PORT_TYPE_DEAD_NAME	(1 << (MACH_PORT_RIGHT_DEAD_NAME + 16))
-#define MACH_PORT_TYPE_PORT_RIGHTS \
-    (MACH_PORT_TYPE_SEND | MACH_PORT_TYPE_RECEIVE | MACH_PORT_TYPE_SEND_ONCE)
-#define MACH_PORT_TYPE_PORT_OR_DEAD \
-    (MACH_PORT_TYPE_PORT_RIGHTS | MACH_PORT_TYPE_DEAD_NAME)
 #define MACH_PORT_TYPE_ALL_RIGHTS \
     (MACH_PORT_TYPE_PORT_OR_DEAD|MACH_PORT_TYPE_PORT_SET)
 #define MACH_PORT_TYPE_REF_RIGHTS \
@@ -132,34 +114,6 @@ typedef struct {
 #define MACH_PORT_RECEIVE_STATUS 2
 #define MACH_PORT_DNREQUESTS_SIZE 3
 
-typedef struct mach_port_status {
-	mach_port_name_t	mps_pset;
-	mach_port_seqno_t	mps_seqno;
-	mach_port_mscount_t	mps_mscount;
-	mach_port_msgcount_t	mps_qlimit;
-	mach_port_msgcount_t	mps_msgcount;
-	mach_port_rights_t	mps_sorights;
-	mach_boolean_t		mps_srights;
-	mach_boolean_t		mps_pdrequest;
-	mach_boolean_t		mps_nsrequest;
-	unsigned int		mps_flags;
-} mach_port_status_t;
-
-typedef struct mach_port_limits {
-	mach_port_msgcount_t	mpl_qlimit;
-} mach_port_limits_t;
-
-/*
- * Structure to define optional attributes for a newly
- * constructed port.
- */
-typedef struct mach_port_options {
-        uint32_t                flags;          /* Flags defining attributes for port */
-        mach_port_limits_t      mpl;            /* Message queue limit for port */
-        uint64_t                reserved[2];    /* Reserved */
-}mach_port_options_t;
-
-typedef mach_port_options_t *mach_port_options_ptr_t;
 
 typedef struct {
 	mach_msg_header_t req_msgh;
@@ -178,9 +132,6 @@ typedef struct {
 } mach_port_set_attributes_reply_t;
 
 /* port_get_attributes */
-
-#define MACH_PORT_QLIMIT_DEFAULT ((mach_port_msgcount_t) 5)
-#define MACH_PORT_QLIMIT_MAX ((mach_port_msgcount_t) 16)
 
 typedef struct {
 	mach_msg_header_t req_msgh;

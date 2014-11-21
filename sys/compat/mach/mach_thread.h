@@ -35,7 +35,6 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/signal.h>
-#include <sys/proc.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_message.h>

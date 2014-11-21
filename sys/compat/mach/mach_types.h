@@ -35,12 +35,9 @@
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 #include <vm/vm.h>
-
+#include <sys/mach/mach_types.h>
 #define DEBUG_MACH
 
-typedef int mach_port_t;
-typedef int mach_port_name_t;
-typedef int mach_port_type_t;
 typedef register_t mach_kern_return_t;
 typedef int mach_clock_res_t;
 typedef int mach_clock_id_t;
@@ -50,15 +47,11 @@ typedef int mach_absolute_time_t;
 typedef int mach_integer_t;
 typedef int mach_cpu_type_t;
 typedef int mach_cpu_subtype_t;
-typedef int mach_port_right_t;
-typedef register_t mach_vm_address_t;
 typedef int mach_vm_inherit_t;
 typedef int mach_vm_prot_t;
 typedef int mach_thread_state_flavor_t;
 typedef uint32_t mach_natural_t;
-typedef unsigned long mach_vm_size_t;
 typedef uint64_t mach_memory_object_size_t;
-typedef unsigned long mach_vm_offset_t;
 typedef uint64_t mach_memory_object_offset_t;
 typedef int mach_vm_region_flavor_t;
 typedef int mach_vm_behavior_t;
@@ -66,18 +59,11 @@ typedef int mach_vm_sync_t;
 typedef int mach_exception_type_t;
 typedef int mach_exception_behavior_t;
 typedef unsigned int mach_exception_mask_t;
-typedef int mach_port_flavor_t;
-typedef mach_natural_t mach_port_seqno_t;
-typedef mach_natural_t mach_port_mscount_t;
-typedef mach_natural_t mach_port_msgcount_t;
-typedef mach_natural_t mach_port_rights_t;
 typedef mach_natural_t mach_task_flavor_t;
 typedef mach_natural_t mach_thread_flavor_t;
 typedef int mach_policy_t;
 typedef int mach_vm_machine_attribute_val_t;
 typedef unsigned int mach_vm_machine_attribute_t;
-typedef mach_natural_t mach_port_urefs_t;
-typedef int mach_port_delta_t;
 
 #ifdef _KERNEL
 struct proc;

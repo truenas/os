@@ -29,16 +29,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_MACH_MESSAGE_H_
-#define	_MACH_MESSAGE_H_
-
-typedef unsigned int mach_msg_bits_t;
-typedef unsigned int mach_msg_size_t;
-typedef unsigned int mach_msg_id_t;
-typedef unsigned int mach_msg_timeout_t;
-typedef unsigned int mach_msg_option_t;
-typedef unsigned int mach_msg_type_name_t;
-typedef unsigned int mach_msg_type_number_t;
+#ifndef	_COMPAT_MACH_MESSAGE_H_
+#define	_COMPAT_MACH_MESSAGE_H_
 
 /*
  * Options
@@ -116,7 +108,6 @@ typedef unsigned int mach_msg_type_number_t;
 
 #define MACH_MSGH_BITS_REMOTE_MASK	0x000000ff
 #define MACH_MSGH_BITS_LOCAL_MASK	0x0000ff00
-#define MACH_MSGH_BITS_COMPLEX		0x80000000
 #define MACH_MSGH_LOCAL_BITS(bits)	(((bits) >> 8) & 0xff)
 #define MACH_MSGH_REMOTE_BITS(bits)	((bits) & 0xff)
 #define MACH_MSGH_REPLY_LOCAL_BITS(bits)	(((bits) << 8) & 0xff00)
@@ -129,7 +120,6 @@ typedef unsigned int mach_msg_type_number_t;
 #define MACH_MSG_TYPE_MAKE_SEND_ONCE	21
 #define MACH_MSG_TYPE_COPY_RECEIVE	22
 
-typedef unsigned int mach_msg_copy_options_t;
 
 #define MACH_MSG_PHYSICAL_COPY		0
 #define MACH_MSG_VIRTUAL_COPY   	1
@@ -138,8 +128,6 @@ typedef unsigned int mach_msg_copy_options_t;
 #define MACH_MSG_KALLOC_COPY_T		4
 #define MACH_MSG_PAGE_LIST_COPY_T	5
 
-typedef unsigned int mach_msg_descriptor_type_t;
-
 #define MACH_MSG_PORT_DESCRIPTOR 		0
 #define MACH_MSG_OOL_DESCRIPTOR  		1
 #define MACH_MSG_OOL_PORTS_DESCRIPTOR 		2
@@ -147,59 +135,9 @@ typedef unsigned int mach_msg_descriptor_type_t;
 
 #define MACH_MAX_MSG_LEN 65536
 
-typedef	struct {
-	mach_msg_bits_t	msgh_bits;
-	mach_msg_size_t	msgh_size;
-	mach_port_t	msgh_remote_port;
-	mach_port_t	msgh_local_port;
-	mach_msg_size_t msgh_reserved;
-	mach_msg_id_t	msgh_id;
-} mach_msg_header_t;
 
 #define MACH_MSG_TRAILER_FORMAT_0	0
-typedef u_int32_t mach_msg_trailer_type_t;
-typedef u_int32_t mach_msg_trailer_size_t;
-typedef struct {
-	mach_msg_trailer_type_t       msgh_trailer_type;
-	mach_msg_trailer_size_t       msgh_trailer_size;
-} mach_msg_trailer_t;
 
-typedef struct {
-	void*			pad1;
-	mach_msg_size_t		pad2;
-	unsigned int		pad3 : 24;
-	mach_msg_descriptor_type_t type : 8;
-} mach_msg_type_descriptor_t;
-
-typedef struct {
-	mach_port_t		name;
-	mach_msg_size_t		pad1;
-	unsigned int		pad2 : 16;
-	mach_msg_type_name_t	disposition : 8;
-	mach_msg_descriptor_type_t type : 8;
-} mach_msg_port_descriptor_t;
-
-typedef struct {
-	void *			address;
-	mach_msg_size_t		count;
-	mach_boolean_t		deallocate: 8;
-	mach_msg_copy_options_t	copy: 8;
-	mach_msg_type_name_t	disposition : 8;
-	mach_msg_descriptor_type_t type : 8;
-} mach_msg_ool_ports_descriptor_t;
-
-typedef struct {
-       void *			  address;
-       mach_msg_size_t		  size;
-       mach_boolean_t		  deallocate : 8;
-       mach_msg_copy_options_t	  copy : 8;
-       unsigned int		  pad1 : 8;
-       mach_msg_descriptor_type_t type : 8;
-} mach_msg_ool_descriptor_t;
-
-typedef struct {
-	mach_msg_size_t	msgh_descriptor_count;
-} mach_msg_body_t;
 
 #define MACH_REQMSG_OVERFLOW(args, test) \
     (((u_long)&test - (u_long)args->smsg) > args->ssize)
