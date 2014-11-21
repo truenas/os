@@ -1440,6 +1440,12 @@ struct rtprio_thread_args {
 	char lwpid_l_[PADL_(lwpid_t)]; lwpid_t lwpid; char lwpid_r_[PADR_(lwpid_t)];
 	char rtp_l_[PADL_(struct rtprio *)]; struct rtprio * rtp; char rtp_r_[PADR_(struct rtprio *)];
 };
+struct audit_session_self_args {
+	register_t dummy;
+};
+struct audit_session_join_args {
+	char port_l_[PADL_(uint32_t)]; uint32_t port; char port_r_[PADR_(uint32_t)];
+};
 struct sctp_peeloff_args {
 	char sd_l_[PADL_(int)]; int sd; char sd_r_[PADR_(int)];
 	char name_l_[PADL_(uint32_t)]; uint32_t name; char name_r_[PADR_(uint32_t)];
@@ -2146,6 +2152,8 @@ int	sys_abort2(struct thread *, struct abort2_args *);
 int	sys_thr_set_name(struct thread *, struct thr_set_name_args *);
 int	sys_aio_fsync(struct thread *, struct aio_fsync_args *);
 int	sys_rtprio_thread(struct thread *, struct rtprio_thread_args *);
+int	sys_audit_session_self(struct thread *, struct audit_session_self_args *);
+int	sys_audit_session_join(struct thread *, struct audit_session_join_args *);
 int	sys_sctp_peeloff(struct thread *, struct sctp_peeloff_args *);
 int	sys_sctp_generic_sendmsg(struct thread *, struct sctp_generic_sendmsg_args *);
 int	sys_sctp_generic_sendmsg_iov(struct thread *, struct sctp_generic_sendmsg_iov_args *);
@@ -2854,6 +2862,8 @@ int	freebsd7_shmctl(struct thread *, struct freebsd7_shmctl_args *);
 #define	SYS_AUE_thr_set_name	AUE_NULL
 #define	SYS_AUE_aio_fsync	AUE_NULL
 #define	SYS_AUE_rtprio_thread	AUE_RTPRIO
+#define	SYS_AUE_audit_session_self	AUE_NULL
+#define	SYS_AUE_audit_session_join	AUE_NULL
 #define	SYS_AUE_sctp_peeloff	AUE_NULL
 #define	SYS_AUE_sctp_generic_sendmsg	AUE_NULL
 #define	SYS_AUE_sctp_generic_sendmsg_iov	AUE_NULL
