@@ -145,6 +145,7 @@ static uma_zone_t iscsi_outstanding_zone;
 #define ISCSI_SESSION_LOCK(X)		mtx_lock(&X->is_lock)
 #define ISCSI_SESSION_UNLOCK(X)		mtx_unlock(&X->is_lock)
 #define ISCSI_SESSION_LOCK_ASSERT(X)	mtx_assert(&X->is_lock, MA_OWNED)
+#define ISCSI_SESSION_LOCK_ASSERT_NOT(X) mtx_assert(&X->is_lock, MA_NOTOWNED)
 
 static int	iscsi_ioctl(struct cdev *dev, u_long cmd, caddr_t arg,
 		    int mode, struct thread *td);
@@ -724,37 +725,46 @@ iscsi_receive_callback(struct icl_pdu *response)
 	switch (response->ip_bhs->bhs_opcode) {
 	case ISCSI_BHS_OPCODE_NOP_IN:
 		iscsi_pdu_handle_nop_in(response);
+		ISCSI_SESSION_UNLOCK(is);
 		break;
 	case ISCSI_BHS_OPCODE_SCSI_RESPONSE:
 		iscsi_pdu_handle_scsi_response(response);
+		/* Session lock dropped inside. */
+		ISCSI_SESSION_LOCK_ASSERT_NOT(is);
 		break;
 	case ISCSI_BHS_OPCODE_TASK_RESPONSE:
 		iscsi_pdu_handle_task_response(response);
+		ISCSI_SESSION_UNLOCK(is);
 		break;
 	case ISCSI_BHS_OPCODE_SCSI_DATA_IN:
 		iscsi_pdu_handle_data_in(response);
+		/* Session lock dropped inside. */
+		ISCSI_SESSION_LOCK_ASSERT_NOT(is);
 		break;
 	case ISCSI_BHS_OPCODE_LOGOUT_RESPONSE:
 		iscsi_pdu_handle_logout_response(response);
+		ISCSI_SESSION_UNLOCK(is);
 		break;
 	case ISCSI_BHS_OPCODE_R2T:
 		iscsi_pdu_handle_r2t(response);
+		ISCSI_SESSION_UNLOCK(is);
 		break;
 	case ISCSI_BHS_OPCODE_ASYNC_MESSAGE:
 		iscsi_pdu_handle_async_message(response);
+		ISCSI_SESSION_UNLOCK(is);
 		break;
 	case ISCSI_BHS_OPCODE_REJECT:
 		iscsi_pdu_handle_reject(response);
+		ISCSI_SESSION_UNLOCK(is);
 		break;
 	default:
 		ISCSI_SESSION_WARN(is, "received PDU with unsupported "
 		    "opcode 0x%x; reconnecting",
 		    response->ip_bhs->bhs_opcode);
 		iscsi_session_reconnect(is);
+		ISCSI_SESSION_UNLOCK(is);
 		icl_pdu_free(response);
 	}
-
-	ISCSI_SESSION_UNLOCK(is);
 }
 
 static void
@@ -855,8 +865,12 @@ iscsi_pdu_handle_scsi_response(struct icl_pdu *response)
 		ISCSI_SESSION_WARN(is, "bad itt 0x%x", bhssr->bhssr_initiator_task_tag);
 		icl_pdu_free(response);
 		iscsi_session_reconnect(is);
+		ISCSI_SESSION_UNLOCK(is);
 		return;
 	}
+
+	iscsi_outstanding_remove(is, io);
+	ISCSI_SESSION_UNLOCK(is);
 
 	if (bhssr->bhssr_response != BHSSR_RESPONSE_COMMAND_COMPLETED) {
 		ISCSI_SESSION_WARN(is, "service response 0x%x", bhssr->bhssr_response);
@@ -876,15 +890,7 @@ iscsi_pdu_handle_scsi_response(struct icl_pdu *response)
 		io->io_ccb->csio.scsi_status = bhssr->bhssr_status;
 	}
 
-	if (bhssr->bhssr_flags & BHSSR_FLAGS_RESIDUAL_OVERFLOW) {
-		ISCSI_SESSION_WARN(is, "target indicated residual overflow");
-		icl_pdu_free(response);
-		iscsi_session_reconnect(is);
-		return;
-	}
-
 	csio = &io->io_ccb->csio;
-
 	data_segment_len = icl_pdu_data_segment_length(response);
 	if (data_segment_len > 0) {
 		if (data_segment_len < sizeof(sense_len)) {
@@ -946,7 +952,6 @@ out:
 	}
 
 	xpt_done(io->io_ccb);
-	iscsi_outstanding_remove(is, io);
 	icl_pdu_free(response);
 }
 
@@ -989,7 +994,7 @@ iscsi_pdu_handle_data_in(struct icl_pdu *response)
 	struct iscsi_outstanding *io;
 	struct iscsi_session *is;
 	struct ccb_scsiio *csio;
-	size_t data_segment_len;
+	size_t data_segment_len, received;
 	
 	is = PDU_SESSION(response);
 	bhsdi = (struct iscsi_bhs_data_in *)response->ip_bhs;
@@ -998,6 +1003,7 @@ iscsi_pdu_handle_data_in(struct icl_pdu *response)
 		ISCSI_SESSION_WARN(is, "bad itt 0x%x", bhsdi->bhsdi_initiator_task_tag);
 		icl_pdu_free(response);
 		iscsi_session_reconnect(is);
+		ISCSI_SESSION_UNLOCK(is);
 		return;
 	}
 
@@ -1008,6 +1014,7 @@ iscsi_pdu_handle_data_in(struct icl_pdu *response)
 		 * but initiators and targets MUST be able to properly receive
 		 * 0 length data segments."
 		 */
+		ISCSI_SESSION_UNLOCK(is);
 		icl_pdu_free(response);
 		return;
 	}
@@ -1022,6 +1029,7 @@ iscsi_pdu_handle_data_in(struct icl_pdu *response)
 		    io->io_received, (size_t)ntohl(bhsdi->bhsdi_buffer_offset));
 		icl_pdu_free(response);
 		iscsi_session_reconnect(is);
+		ISCSI_SESSION_UNLOCK(is);
 		return;
 	}
 
@@ -1033,11 +1041,17 @@ iscsi_pdu_handle_data_in(struct icl_pdu *response)
 		    data_segment_len, io->io_received, csio->dxfer_len);
 		icl_pdu_free(response);
 		iscsi_session_reconnect(is);
+		ISCSI_SESSION_UNLOCK(is);
 		return;
 	}
 
-	icl_pdu_get_data(response, 0, csio->data_ptr + io->io_received, data_segment_len);
+	received = io->io_received;
 	io->io_received += data_segment_len;
+	if ((bhsdi->bhsdi_flags & BHSDI_FLAGS_S) != 0)
+		iscsi_outstanding_remove(is, io);
+	ISCSI_SESSION_UNLOCK(is);
+
+	icl_pdu_get_data(response, 0, csio->data_ptr + received, data_segment_len);
 
 	/*
 	 * XXX: Check DataSN.
@@ -1079,7 +1093,6 @@ iscsi_pdu_handle_data_in(struct icl_pdu *response)
 	}
 
 	xpt_done(io->io_ccb);
-	iscsi_outstanding_remove(is, io);
 	icl_pdu_free(response);
 }
 
