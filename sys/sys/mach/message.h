@@ -116,6 +116,11 @@
 #define _MACH_MESSAGE_H_
 
 #define DIPC 0
+#define MACH_ASSERT 0
+#define MACH_RT 0
+#define MACH_KDB 0
+#define NCPUS 1
+#define NORMA_VM 0
 
 #ifdef	MACH_KERNEL
 #include <dipc.h>

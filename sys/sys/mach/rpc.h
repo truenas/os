@@ -29,14 +29,13 @@
 #ifndef	_MACH_RPC_H_
 #define _MACH_RPC_H_
 
-#include <mach/boolean.h>
-#include <mach/kern_return.h>
-#include <mach/port.h>
-#include <mach/vm_types.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/port.h>
+#include <sys/mach/vm_types.h>
 
-#include <mach/mig_errors.h>
+#include <sys/mach/mig_errors.h>
 #include <machine/mach/rpc.h>
-#include <mach/ipc_common.h>
+#include <sys/mach/ipc_common.h>
 
 #ifdef	MACH_KERNEL
 #include <ipc/ipc_object.h>

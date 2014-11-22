@@ -107,10 +107,10 @@
 #ifndef	_MACH_MIG_ERRORS_H_
 #define _MACH_MIG_ERRORS_H_
 
-#include <mach/kern_return.h>
-#include <mach/message.h>
-#include <mach/rpc.h>
-#include <mach/vm_types.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/message.h>
+#include <sys/mach/rpc.h>
+#include <sys/mach/vm_types.h>
 
 /*
  *	These error codes should be specified as system 4, subsytem 2.
@@ -132,7 +132,7 @@
 #define MIG_SERVER_DIED		-308	/* server died */
 #define MIG_TRAILER_ERROR       -309    /* trailer has an unknown format */
 
-#include <mach/ndr.h>
+#include <sys/mach/ndr.h>
 
 typedef struct {
 	mach_msg_header_t	Head;

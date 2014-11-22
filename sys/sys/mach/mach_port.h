@@ -3,15 +3,15 @@
 
 /* Module mach_port */
 
-#include <string.h>
-#include <mach/ndr.h>
-#include <mach/boolean.h>
-#include <mach/kern_return.h>
-#include <mach/notify.h>
-#include <mach/mach_types.h>
-#include <mach/message.h>
-#include <mach/mig_errors.h>
-#include <mach/port.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
+#include <sys/mach/ndr.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/notify.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/message.h>
+#include <sys/mach/mig_errors.h>
+#include <sys/mach/port.h>
 
 #ifdef AUTOTEST
 #ifndef FUNCTION_PTR_T
@@ -29,11 +29,10 @@ typedef function_table_entry 	*function_table_t;
 #define	mach_port_MSG_COUNT	36
 #endif	/* mach_port_MSG_COUNT */
 
-#include <mach/std_types.h>
-#include <mach/mig.h>
-#include <mach/mig.h>
-#include <mach/mach_types.h>
-#include <mach_debug/mach_debug_types.h>
+#include <sys/mach/std_types.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach_debug/mach_debug_types.h>
 
 #ifdef __BeforeMigUserHeader
 __BeforeMigUserHeader

@@ -69,9 +69,18 @@
                          EXC_MASK_GUARD |                       \
                          EXC_MASK_MACHINE)
 
+
+
+
 #define EXCEPTION_DEFAULT			1
 #define EXCEPTION_STATE				2
 #define EXCEPTION_STATE_IDENTITY	3
+
+#define MACH_EXCEPTION_CODES            0x80000000
+/*      Send 64-bit code and subcode in the exception header */
+
+
+
 
 #include <sys/mach/port.h>
 #include <sys/mach/thread_status.h>

@@ -23,36 +23,14 @@
  */
 /* CMU_HIST */
 /*
- * Revision 2.4  91/06/25  10:30:50  rpd
- * 	Added ipc/ipc_port.h inside the kernel.
- * 	[91/05/27            rpd]
- * 
- * Revision 2.3  91/05/14  16:59:01  mrt
- * 	Correcting copyright
- * 
- * Revision 2.2  91/02/05  17:35:39  mrt
- * 	Changed to new Mach copyright
- * 	[91/02/01  17:20:57  mrt]
- * 
- * Revision 2.1  89/08/03  16:04:44  rwd
- * Created.
- * 
- * Revision 2.3  89/02/25  18:40:23  gm0w
- * 	Changes for cleanup.
- * 
- * Revision 2.2  89/01/15  16:31:59  rpd
- * 	Moved from kern/ to mach/.
- * 	[89/01/15  14:34:14  rpd]
- * 
- * Revision 2.2  89/01/12  07:59:07  rpd
+ * Revision 2.2  93/01/14  17:32:59  danner
  * 	Created.
- * 	[89/01/12  04:15:40  rpd]
- * 
+ * 	[92/12/10            af]
  */
-/* CMU_ENDHIST */
+/* CMU_END_HIST */
 /* 
  * Mach Operating System
- * Copyright (c) 1991,1990,1989,1988 Carnegie Mellon University
+ * Copyright (c) 1991,1990,1989 Carnegie Mellon University
  * All Rights Reserved.
  * 
  * Permission to use, copy, modify and distribute this software and its
@@ -75,21 +53,18 @@
  * any improvements or extensions that they make and grant Carnegie Mellon
  * the rights to redistribute these changes.
  */
+
 /*
- */
-/*
- *	Mach standard external interface type definitions.
- *
+ * At times, we need to know the size of a port in bits
  */
 
-#ifndef	STD_TYPES_H_
-#define	STD_TYPES_H_
-
-#include <sys/mach/kern_return.h>
-#include <sys/mach/port.h>
-#include <sys/mach/vm_types.h>
-#ifdef _KERNEL
-#define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
-#include <sys/mach/ipc/ipc_port.h>
+/* 64 bit machines */
+#if	defined(__alpha)
+#define	PORT_T_SIZE_IN_BITS	64
 #endif
-#endif	/* STD_TYPES_H_ */
+
+/* default, 32 bit machines */
+#if	!defined(PORT_T_SIZE_IN_BITS)
+#define	PORT_T_SIZE_IN_BITS	32
+#endif
+

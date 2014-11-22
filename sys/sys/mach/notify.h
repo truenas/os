@@ -91,9 +91,9 @@
 
 #include <sys/types.h>
 #include <vm/vm.h> /* boolean_t */
-#include <mach/port.h>
-#include <mach/message.h>
-#include <mach/ndr.h>
+#include <sys/mach/port.h>
+#include <sys/mach/message.h>
+#include <sys/mach/ndr.h>
 
 /*
  *  An alternative specification of the notification interface

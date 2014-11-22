@@ -225,8 +225,6 @@
 
 typedef struct mutex mutex_t;
 
-#define decl_mutex_data(a, b)
-
 typedef struct task {
 	#ifdef notyet
 	/* Synchronization/destruction information */

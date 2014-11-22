@@ -22,14 +22,10 @@
  * MkLinux
  */
 
+#ifdef _KERNEL
 #ifndef	_IPC_TYPES_H_
 #define	_IPC_TYPES_H_
-
-#ifdef _KERNEL
 typedef struct ipc_space	*ipc_space_t;
-#else
-typedef mach_port_t             ipc_space_t;
-#endif
 typedef struct ipc_port		*ipc_port_t;
-
 #endif	/* _IPC_TYPES_H_ */
+#endif

@@ -26,9 +26,9 @@
 
 #if 0
 #include <kern/lock.h>
-#include <ipc/ipc_port.h>
 #endif
-#include <sys/mach/ipc_types.h>
+#include <sys/mach/ipc/ipc_port.h>
+#include <sys/mach/ipc/ipc_types.h>
 
 #define decl_simple_lock_data(a,b)
 typedef integer_t ledger_item_t;

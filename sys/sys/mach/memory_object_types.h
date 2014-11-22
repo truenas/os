@@ -61,7 +61,7 @@
  *
  *	External memory management interface definition.
  */
-
+#if 0
 #ifndef	_MACH_MEMORY_OBJECT_TYPES_H_
 #define _MACH_MEMORY_OBJECT_TYPES_H_
 
@@ -70,11 +70,11 @@
  *	management interface:
  */
 
-#include <mach/port.h>
-#include <mach/message.h>
-#include <mach/vm_prot.h>
-#include <mach/vm_sync.h>
-#include <mach/vm_types.h>
+#include <sys/mach/port.h>
+#include <sys/mach/message.h>
+#include <sys/mach/vm_prot.h>
+#include <sys/mach/vm_sync.h>
+#include <sys/mach/vm_types.h>
 #include <machine/mach/vm_types.h>
 
 #include <sys/cdefs.h>
@@ -744,3 +744,6 @@ __END_DECLS
 #endif  /* KERNEL */
 
 #endif	/* _MACH_MEMORY_OBJECT_TYPES_H_ */
+#else
+#include <sys/mach/memory_object.h>
+#endif

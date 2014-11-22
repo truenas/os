@@ -23,36 +23,22 @@
  */
 /* CMU_HIST */
 /*
- * Revision 2.4  91/06/25  10:30:50  rpd
- * 	Added ipc/ipc_port.h inside the kernel.
- * 	[91/05/27            rpd]
- * 
- * Revision 2.3  91/05/14  16:59:01  mrt
+ * Revision 2.4  91/05/14  16:32:45  mrt
  * 	Correcting copyright
  * 
- * Revision 2.2  91/02/05  17:35:39  mrt
+ * Revision 2.3  91/02/05  17:21:42  mrt
  * 	Changed to new Mach copyright
- * 	[91/02/01  17:20:57  mrt]
+ * 	[91/02/01  15:45:16  mrt]
  * 
- * Revision 2.1  89/08/03  16:04:44  rwd
- * Created.
- * 
- * Revision 2.3  89/02/25  18:40:23  gm0w
- * 	Changes for cleanup.
- * 
- * Revision 2.2  89/01/15  16:31:59  rpd
- * 	Moved from kern/ to mach/.
- * 	[89/01/15  14:34:14  rpd]
- * 
- * Revision 2.2  89/01/12  07:59:07  rpd
- * 	Created.
- * 	[89/01/12  04:15:40  rpd]
+ * Revision 2.2  90/06/02  14:49:59  rpd
+ * 	Created for new IPC.
+ * 	[90/03/26  20:55:26  rpd]
  * 
  */
 /* CMU_ENDHIST */
 /* 
  * Mach Operating System
- * Copyright (c) 1991,1990,1989,1988 Carnegie Mellon University
+ * Copyright (c) 1991,1990,1989 Carnegie Mellon University
  * All Rights Reserved.
  * 
  * Permission to use, copy, modify and distribute this software and its
@@ -78,18 +64,29 @@
 /*
  */
 /*
- *	Mach standard external interface type definitions.
+ *	File:	ipc/ipc_init.h
+ *	Author:	Rich Draves
+ *	Date:	1989
  *
+ *	Declarations of functions to initialize the IPC system.
  */
 
-#ifndef	STD_TYPES_H_
-#define	STD_TYPES_H_
+#ifndef	_IPC_IPC_INIT_H_
+#define _IPC_IPC_INIT_H_
 
-#include <sys/mach/kern_return.h>
-#include <sys/mach/port.h>
-#include <sys/mach/vm_types.h>
-#ifdef _KERNEL
-#define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
-#include <sys/mach/ipc/ipc_port.h>
-#endif
-#endif	/* STD_TYPES_H_ */
+extern int ipc_space_max;
+extern int ipc_tree_entry_max;
+extern int ipc_port_max;
+extern int ipc_pset_max;
+
+/*
+ * Exported interfaces
+ */
+
+/* IPC initialization needed before creation of kernel task */
+extern void ipc_bootstrap(void);
+
+/* Remaining IPC initialization */
+extern void ipc_init(void);
+
+#endif	/* _IPC_IPC_INIT_H_ */

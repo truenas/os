@@ -90,6 +90,7 @@
 #include <sys/types.h>
 #include <vm/vm.h>
 #include <machine/mach/vm_types.h>
+#include <sys/mach/ipc/ipc_types.h>
 
 /*
  *	mach_port_name_t - the local identity for a Mach port
@@ -103,11 +104,7 @@
  *
  */
 
-typedef natural_t mach_port_t;
-typedef natural_t mach_port_name_t;
-typedef mach_port_name_t *mach_port_name_array_t;
-
-#ifdef	KERNEL
+#ifdef	_KERNEL
 
 /* 
  *	mach_port_t - a named port right
@@ -139,14 +136,11 @@ struct ipc_port ;
 
 #endif	/* MACH_KERNEL_PRIVATE */
 
-typedef struct ipc_port	        *ipc_port_t;
 
 #define IPC_PORT_NULL		((ipc_port_t) 0UL)
 #define IPC_PORT_DEAD		((ipc_port_t)~0UL)
 #define IPC_PORT_VALID(port) \
 	((port) != IPC_PORT_NULL && (port) != IPC_PORT_DEAD)
-
-typedef ipc_port_t 		mach_port_t;
 
 /*
  * Since the 32-bit and 64-bit representations of ~0 are different,
@@ -177,8 +171,15 @@ typedef ipc_port_t 		mach_port_t;
 #include <sys/_types.h>
 #include <sys/_types/_mach_port_t.h>
 #endif
+
+
 #endif	/* KERNEL */
 
+typedef natural_t mach_port_name_t;
+typedef natural_t mach_port_t;
+typedef mach_port_name_t *mach_port_name_array_t;
+
+typedef natural_t mach_port_index_t;
 typedef mach_port_t			*mach_port_array_t;
 
 /*

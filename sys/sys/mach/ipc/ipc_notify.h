@@ -23,36 +23,22 @@
  */
 /* CMU_HIST */
 /*
- * Revision 2.4  91/06/25  10:30:50  rpd
- * 	Added ipc/ipc_port.h inside the kernel.
- * 	[91/05/27            rpd]
- * 
- * Revision 2.3  91/05/14  16:59:01  mrt
+ * Revision 2.4  91/05/14  16:34:40  mrt
  * 	Correcting copyright
  * 
- * Revision 2.2  91/02/05  17:35:39  mrt
+ * Revision 2.3  91/02/05  17:22:39  mrt
  * 	Changed to new Mach copyright
- * 	[91/02/01  17:20:57  mrt]
+ * 	[91/02/01  15:48:56  mrt]
  * 
- * Revision 2.1  89/08/03  16:04:44  rwd
- * Created.
- * 
- * Revision 2.3  89/02/25  18:40:23  gm0w
- * 	Changes for cleanup.
- * 
- * Revision 2.2  89/01/15  16:31:59  rpd
- * 	Moved from kern/ to mach/.
- * 	[89/01/15  14:34:14  rpd]
- * 
- * Revision 2.2  89/01/12  07:59:07  rpd
- * 	Created.
- * 	[89/01/12  04:15:40  rpd]
+ * Revision 2.2  90/06/02  14:50:55  rpd
+ * 	Created for new IPC.
+ * 	[90/03/26  20:58:15  rpd]
  * 
  */
 /* CMU_ENDHIST */
 /* 
  * Mach Operating System
- * Copyright (c) 1991,1990,1989,1988 Carnegie Mellon University
+ * Copyright (c) 1991,1990,1989 Carnegie Mellon University
  * All Rights Reserved.
  * 
  * Permission to use, copy, modify and distribute this software and its
@@ -78,18 +64,45 @@
 /*
  */
 /*
- *	Mach standard external interface type definitions.
+ *	File:	ipc/ipc_notify.h
+ *	Author:	Rich Draves
+ *	Date:	1989
  *
+ *	Declarations of notification-sending functions.
  */
 
-#ifndef	STD_TYPES_H_
-#define	STD_TYPES_H_
+#ifndef	_IPC_IPC_NOTIFY_H_
+#define _IPC_IPC_NOTIFY_H_
 
-#include <sys/mach/kern_return.h>
-#include <sys/mach/port.h>
-#include <sys/mach/vm_types.h>
-#ifdef _KERNEL
-#define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
-#include <sys/mach/ipc/ipc_port.h>
-#endif
-#endif	/* STD_TYPES_H_ */
+/*
+ * Exported interfaces 
+ */
+
+/* Initialize the notification subsystem */
+extern void ipc_notify_init(void);
+
+/* Send a port-deleted notification */
+extern void ipc_notify_port_deleted(
+	ipc_port_t	port,
+	mach_port_t	name);
+
+/* Send a port-destroyed notification */
+extern void ipc_notify_port_destroyed(
+	ipc_port_t	port,
+	ipc_port_t	right);
+
+/* Send a no-senders notification */
+extern void ipc_notify_no_senders(
+	ipc_port_t		port,
+	mach_port_mscount_t	mscount);
+
+/* Send a send-once notification */
+extern void ipc_notify_send_once(
+	ipc_port_t		port);
+
+/* Send a dead-name notification */
+extern void ipc_notify_dead_name(
+	ipc_port_t	port,
+	mach_port_t	name);
+
+#endif	/* _IPC_IPC_NOTIFY_H_ */

@@ -170,6 +170,8 @@
 #define _MACH_MACH_TYPES_H_
 
 #include <sys/types.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
 #include <vm/vm.h>
 
 #include <sys/mach/host_info.h>
@@ -218,7 +220,6 @@ typedef struct semaphore                *semaphore_t;
 typedef struct alarm                    *alarm_t;
 typedef struct clock                    *clock_serv_t;
 typedef struct clock                    *clock_ctrl_t;
-
 
 #else	/* MACH_KERNEL */
 
