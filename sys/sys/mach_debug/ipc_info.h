@@ -66,8 +66,7 @@
 #ifndef	_MACH_DEBUG_IPC_INFO_H_
 #define _MACH_DEBUG_IPC_INFO_H_
 
-#include <mach/boolean.h>
-#include <mach/port.h>
+#include <sys/mach/port.h>
 #include <machine/mach/vm_types.h>
 
 /*

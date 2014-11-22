@@ -508,9 +508,9 @@
 278	AUE_STAT	STD	{ int nstat(char *path, struct nstat *ub); }
 279	AUE_FSTAT	STD	{ int nfstat(int fd, struct nstat *sb); }
 280	AUE_LSTAT	STD	{ int nlstat(char *path, struct nstat *ub); }
-281	AUE_NULL	UNIMPL	nosys
-282	AUE_NULL	UNIMPL	nosys
-283	AUE_NULL	UNIMPL	nosys
+281	AUE_NULL	NOSTD { uint32_t audit_session_self(void); }
+282	AUE_NULL	NOSTD { int audit_session_join(uint32_t port); }
+283	AUE_NULL	NOSTD { int audit_session_port(pid_t asid, void *portnamep); }
 284	AUE_NULL	UNIMPL	nosys
 285	AUE_NULL	UNIMPL	nosys
 286	AUE_NULL	UNIMPL	nosys
@@ -833,8 +833,8 @@
 465	AUE_NULL	NOSTD	{ int aio_fsync(int op, struct aiocb *aiocbp); }
 466	AUE_RTPRIO	STD	{ int rtprio_thread(int function, \
 				    lwpid_t lwpid, struct rtprio *rtp); }
-467	AUE_NULL	NOSTD { uint32_t audit_session_self(void); }
-468	AUE_NULL	NOSTD { int audit_session_join(uint32_t port); }
+467	AUE_NULL	UNIMPL nosys
+468	AUE_NULL	UNIMPL nosys
 469	AUE_NULL	UNIMPL	__getpath_fromfd
 470	AUE_NULL	UNIMPL	__getpath_fromaddr
 471	AUE_NULL	STD	{ int sctp_peeloff(int sd, uint32_t name); }

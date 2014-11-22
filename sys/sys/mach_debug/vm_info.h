@@ -64,11 +64,10 @@
 #ifndef	_MACH_DEBUG_VM_INFO_H_
 #define _MACH_DEBUG_VM_INFO_H_
 
-#include <mach/boolean.h>
 #include <machine/mach/vm_types.h>
-#include <mach/vm_inherit.h>
-#include <mach/vm_prot.h>
-#include <mach/memory_object_types.h>
+#include <sys/mach/vm_inherit.h>
+#include <sys/mach/vm_prot.h>
+#include <sys/mach/memory_object_types.h>
 
 #pragma pack(4)
 

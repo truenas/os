@@ -3877,6 +3877,7 @@ security/audit/audit_bsm.c	optional audit
 security/audit/audit_bsm_klib.c	optional audit
 security/audit/audit_pipe.c	optional audit
 security/audit/audit_syscalls.c	standard
+#security/audit/audit_session.c	standard
 security/audit/audit_trigger.c	optional audit
 security/audit/audit_worker.c	optional audit
 security/audit/bsm_domain.c	optional audit

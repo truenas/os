@@ -237,6 +237,9 @@
 #define	SYS_nstat	278
 #define	SYS_nfstat	279
 #define	SYS_nlstat	280
+#define	SYS_audit_session_self	281
+#define	SYS_audit_session_join	282
+#define	SYS_audit_session_port	283
 #define	SYS_preadv	289
 #define	SYS_pwritev	290
 #define	SYS_freebsd4_fhstatfs	297
@@ -391,8 +394,6 @@
 #define	SYS_thr_set_name	464
 #define	SYS_aio_fsync	465
 #define	SYS_rtprio_thread	466
-#define	SYS_audit_session_self	467
-#define	SYS_audit_session_join	468
 #define	SYS_sctp_peeloff	471
 #define	SYS_sctp_generic_sendmsg	472
 #define	SYS_sctp_generic_sendmsg_iov	473

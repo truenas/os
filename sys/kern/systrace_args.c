@@ -1504,6 +1504,26 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
+	/* audit_session_self */
+	case 281: {
+		*n_args = 0;
+		break;
+	}
+	/* audit_session_join */
+	case 282: {
+		struct audit_session_join_args *p = params;
+		uarg[0] = p->port; /* uint32_t */
+		*n_args = 1;
+		break;
+	}
+	/* audit_session_port */
+	case 283: {
+		struct audit_session_port_args *p = params;
+		iarg[0] = p->asid; /* pid_t */
+		uarg[1] = (intptr_t) p->portnamep; /* void * */
+		*n_args = 2;
+		break;
+	}
 	/* preadv */
 	case 289: {
 		struct preadv_args *p = params;
@@ -2719,18 +2739,6 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		iarg[1] = p->lwpid; /* lwpid_t */
 		uarg[2] = (intptr_t) p->rtp; /* struct rtprio * */
 		*n_args = 3;
-		break;
-	}
-	/* audit_session_self */
-	case 467: {
-		*n_args = 0;
-		break;
-	}
-	/* audit_session_join */
-	case 468: {
-		struct audit_session_join_args *p = params;
-		uarg[0] = p->port; /* uint32_t */
-		*n_args = 1;
 		break;
 	}
 	/* sctp_peeloff */
@@ -5814,6 +5822,32 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* audit_session_self */
+	case 281:
+		break;
+	/* audit_session_join */
+	case 282:
+		switch(ndx) {
+		case 0:
+			p = "uint32_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* audit_session_port */
+	case 283:
+		switch(ndx) {
+		case 0:
+			p = "pid_t";
+			break;
+		case 1:
+			p = "void *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* preadv */
 	case 289:
 		switch(ndx) {
@@ -7839,19 +7873,6 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		case 2:
 			p = "struct rtprio *";
-			break;
-		default:
-			break;
-		};
-		break;
-	/* audit_session_self */
-	case 467:
-		break;
-	/* audit_session_join */
-	case 468:
-		switch(ndx) {
-		case 0:
-			p = "uint32_t";
 			break;
 		default:
 			break;
@@ -9946,6 +9967,18 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* audit_session_self */
+	case 281:
+	/* audit_session_join */
+	case 282:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* audit_session_port */
+	case 283:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
 	/* preadv */
 	case 289:
 		if (ndx == 0 || ndx == 1)
@@ -10666,13 +10699,6 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* rtprio_thread */
 	case 466:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* audit_session_self */
-	case 467:
-	/* audit_session_join */
-	case 468:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

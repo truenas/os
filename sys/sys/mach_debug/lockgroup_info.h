@@ -34,7 +34,7 @@
 #ifndef	_MACH_DEBUG_LOCKGROUP_INFO_H_
 #define	_MACH_DEBUG_LOCKGROUP_INFO_H_
 
-#include <mach/mach_types.h>
+#include <sys/mach/mach_types.h>
 
 #define LOCKGROUP_MAX_NAME	64
 

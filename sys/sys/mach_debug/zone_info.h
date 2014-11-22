@@ -59,7 +59,6 @@
 #ifndef	_MACH_DEBUG_ZONE_INFO_H_
 #define _MACH_DEBUG_ZONE_INFO_H_
 
-#include <mach/boolean.h>
 #include <machine/mach/vm_types.h>
 
 /*
