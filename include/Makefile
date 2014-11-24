@@ -263,6 +263,13 @@ copies:
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/sys/mach
 .endif
+.if exists(${.CURDIR}/../sys/sys/mach/ipc)
+	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
+		${DESTDIR}${INCLUDEDIR}/sys/mach/ipc
+	cd ${.CURDIR}/../sys/sys/mach/ipc ; \
+	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
+		${DESTDIR}${INCLUDEDIR}/sys/mach/ipc
+.endif
 .if exists(${.CURDIR}/../sys/sys/mach_debug)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${DESTDIR}${INCLUDEDIR}/sys/mach_debug
@@ -277,14 +284,14 @@ copies:
 		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/sys/mach/device
 .endif
-.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach)
+.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${DESTDIR}${INCLUDEDIR}/machine/mach
 .endif
-.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach)
+.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${DESTDIR}${INCLUDEDIR}/machine/mach
-	cd ${.CURDIR}/../sys/${MACHINE_CPUARCH}/mach ; \
+	cd ${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach ; \
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/machine/mach
 .endif
