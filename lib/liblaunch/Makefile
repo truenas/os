@@ -2,6 +2,7 @@
 
 LIB=	launch
 
+.PATH: .
 .PATH: ../../sbin/launchd
 
 
@@ -13,13 +14,14 @@ CFLAGS+= ${MIG_FLAGS}
 CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
 CFLAGS+= -I${.CURDIR}/../../sbin/launchd
 
-helperServer.h helper.h launchd_helperServer.c: helper.defs
+helper.h launchd_helperServer.c helperServer.h: helper.defs
 	mig ${MIG_FLAGS} -header helper.h -sheader helperServer.h helper.defs
 job.h jobServer.c jobServer.h: job.defs
 	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
 
-SRCS=  launchd_helperServer.c jobServer.c
+SRCS=  jobServer.c launchd_helperServer.c
 SRCS+= libbootstrap.c liblaunch.c libvproc.c
+
 
 clean:
 	rm -f *.o *.so* *.So *.a *.po *User.c *Server.c job.h helper.h *Server.h launchd_helper.h *~
