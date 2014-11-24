@@ -348,6 +348,7 @@ WriteGlobalDecls(FILE *file)
 	if (UseEventLogger)
 		WriteLogDefines(file, "MACH_MSG_LOG_SERVER");
 	fprintf(file, "#define MIG_RETURN_ERROR(X, code)\t{\\\n");
+	fprintf(file, "\t\t\t\t((mig_reply_error_t *)X)->RetCode = code;\\\n");
 	fprintf(file, "\t\t\t\t((mig_reply_error_t *)X)->NDR = NDR_record;\\\n");
 	fprintf(file, "\t\t\t\treturn;\\\n");
 	fprintf(file, "\t\t\t\t}\n");
@@ -808,7 +809,7 @@ WriteVarDecls(FILE *file, routine_t *rt)
 
 	fprintf(file, "\tRequest *In0P = (Request *) InHeadP;\n");
 	for (i = 1; i <= rt->rtMaxRequestPos; i++)
-		fprintf(file, "\tRequest *In%dP;\n", i);
+		fprintf(file, "\tRequest *In%dP = NULL;\n", i);
 	fprintf(file, "\tReply *OutP = (Reply *) OutHeadP;\n");
 
 	/* if reply is variable, we may need msgh_size_delta and msgh_size */
@@ -1358,6 +1359,8 @@ WriteServerCallArg(FILE *file, register argument_t *arg)
 	string_t  msgfield =
 		(arg->argSuffix != strNULL) ? arg->argSuffix : arg->argMsgField;
 
+	if (BeVerbose)
+		fprintf(file, "\n/* begin WriteServerCallArg */\n");
 	if ((it->itInTrans != strNULL) &&
 		akCheck(arg->argKind, akbSendRcv) &&
 		!akCheck(arg->argKind, akbVarNeeded)) {
@@ -1365,9 +1368,9 @@ WriteServerCallArg(FILE *file, register argument_t *arg)
 		NeedClose = TRUE;
 	}
 
-	if (akCheckAll(arg->argKind, akbVarNeeded|akbServerArg))
+	if (akCheckAll(arg->argKind, akbVarNeeded|akbServerArg)) {
 		fprintf(file, "%s%s", at, arg->argVarName);
-	else if (akCheckAll(arg->argKind, akbSendRcv|akbSendKPD)) {
+	} else if (akCheckAll(arg->argKind, akbSendRcv|akbSendKPD)) {
 		if (!it->itInLine)
 			/* recast the void *, although it is not necessary */
 			fprintf(file, "(%s%s)%s(%s)", it->itTransType, star, at, InArgMsgField(arg, ""));
@@ -1378,15 +1381,18 @@ WriteServerCallArg(FILE *file, register argument_t *arg)
 				fprintf(file, "(ipc_port_t%s)%s(%s)", star, at, InArgMsgField(arg, ""));
 			else
 #endif
+			{
 				fprintf(file, "%s%s", at, InArgMsgField(arg, ""));
+			}
 	}
 	else if (akCheck(arg->argKind, akbSendRcv)) {
 		if (IS_OPTIONAL_NATIVE(it)) {
 			fprintf(file, "(%s ? ", InArgMsgField(arg, "__Present__"));
 			fprintf(file, "%s%s.__Real__%s : %s)", at, InArgMsgField(arg, ""), arg->argMsgField, it->itBadValue);
 		}
-		else
+		else {
 			fprintf(file, "%s%s", at, InArgMsgField(arg, ""));
+		}
 	}
 	else if (akCheckAll(arg->argKind, akbReturnSnd|akbReturnKPD)) {
 		if (!it->itInLine)
@@ -1407,6 +1413,8 @@ WriteServerCallArg(FILE *file, register argument_t *arg)
 
 	if (NeedClose)
 		fprintf(file, ")");
+	if (BeVerbose)
+		fprintf(file, "\n/* end WriteServerCallArg */\n");
 }
 
 /*
@@ -1421,6 +1429,8 @@ WriteConditionalCallArg(FILE *file, register argument_t *arg)
 	ipc_type_t *it = arg->argType;
 	boolean_t NeedClose = FALSE;
 
+	if (BeVerbose)
+		fprintf(file, "/* begin WriteConditionalCallArg */\n");
 	if ((it->itInTrans != strNULL) &&
 		akCheck(arg->argKind, akbSendRcv) &&
 		!akCheck(arg->argKind, akbVarNeeded))
@@ -1441,6 +1451,8 @@ WriteConditionalCallArg(FILE *file, register argument_t *arg)
 
 	if (NeedClose)
 		fprintf(file, ")");
+	if (BeVerbose)
+		fprintf(file, "/* end WriteConditionalCallArg */\n");
 }
 
 static void
@@ -1550,7 +1562,11 @@ WriteServerCall(FILE *file, routine_t *rt,  void (*func)())
 		NeedClose = TRUE;
 	}
 	fprintf(file, "%s(", rt->rtServerName);
+	if (BeVerbose)
+		fprintf(file, "\n/* before WriteServerCall's WriteList func=%p mask=%x */\n", func, akbServerArg);
 	WriteList(file, rt->rtArgs, func, akbServerArg, ", ", "");
+	if (BeVerbose)
+		fprintf(file, "\n/* after WriteServerCall's WriteList */\n");
 	if (NeedClose)
 		fprintf(file, ")");
 	fprintf(file, ");\n");
@@ -2728,10 +2744,13 @@ WriteRoutine(FILE *file, register routine_t *rt)
 			WriteCheckTrailerHead(file, rt, FALSE);
 		WriteServerCall(file, rt, WriteConditionalCallArg);
 		WriteRetCArgFinishError(file, rt);
-	}
+	} else
+		fprintf(file, "/* RetCArg=%p rtSimpleRequest=%u */\n", rt->rtRetCArg, rt->rtSimpleRequest);
 
 	WriteCheckRequestCall(file, rt);
+
 	WriteCheckRequestTrailerArgs(file, rt);
+
 
 	/*
 	 * Initialize the KPD records in the Reply structure with the
@@ -2747,7 +2766,9 @@ WriteRoutine(FILE *file, register routine_t *rt)
 	if (UseEventLogger)
 		WriteLogMsg(file, rt, LOG_SERVER, LOG_REQUEST);
 
+
 	WriteServerCall(file, rt, WriteServerCallArg);
+
 
 	WriteReverseList(file, rt->rtArgs, WriteDestroyArg, akbDestroy, "", "");
 
