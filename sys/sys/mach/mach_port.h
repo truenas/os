@@ -1,3 +1,5 @@
+
+#ifdef _KERNEL
 #ifndef	_mach_port_user_
 #define	_mach_port_user_
 
@@ -898,3 +900,4 @@ __AfterMigUserHeader
 #endif /* __AfterMigUserHeader */
 
 #endif	 /* _mach_port_user_ */
+#endif
