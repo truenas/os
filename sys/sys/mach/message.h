@@ -430,7 +430,7 @@ typedef struct
 #define MACH_MSG_BODY_NULL (mach_msg_body_t *) 0
 #define MACH_MSG_DESCRIPTOR_NULL (mach_msg_descriptor_t *) 0
 
-typedef	struct 
+typedef	struct __aligned(8)
 {
   mach_msg_bits_t	msgh_bits;
   mach_msg_size_t	msgh_size;

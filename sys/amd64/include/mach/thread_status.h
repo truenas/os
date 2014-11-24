@@ -124,15 +124,28 @@
  *	thread_syscall_state 
  */
 
-/*     THREAD_STATE_FLAVOR_LIST 0 */
-#define i386_THREAD_STATE	1
-#define i386_FLOAT_STATE	2
-#define i386_ISA_PORT_MAP_STATE	3
-#define i386_V86_ASSIST_STATE	4
-#define i386_REGS_SEGS_STATE	5
-#define THREAD_SYSCALL_STATE	6
-#define THREAD_STATE_NONE	7
-#define i386_SAVED_STATE	8
+/*
+ * THREAD_STATE_FLAVOR_LIST 0
+ *      these are the supported flavors
+ */
+#define x86_THREAD_STATE32              1
+#define x86_FLOAT_STATE32               2
+#define x86_EXCEPTION_STATE32           3
+#define x86_THREAD_STATE64              4
+#define x86_FLOAT_STATE64               5
+#define x86_EXCEPTION_STATE64           6
+#define x86_THREAD_STATE                7
+#define x86_FLOAT_STATE                 8
+#define x86_EXCEPTION_STATE             9
+#define x86_DEBUG_STATE32               10
+#define x86_DEBUG_STATE64               11
+#define x86_DEBUG_STATE                 12
+#define THREAD_STATE_NONE               13
+/* 14 and 15 are used for the internal x86_SAVED_STATE flavours */
+#define x86_AVX_STATE32                 16
+#define x86_AVX_STATE64                 17
+#define x86_AVX_STATE                   18
+
 
 /*
  * This structure is used for both

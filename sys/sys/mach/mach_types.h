@@ -182,6 +182,7 @@
 #include <sys/mach/port.h>
 #include <sys/mach/processor_info.h>
 #include <sys/mach/task_info.h>
+#include <sys/mach/task_policy.h>
 #include <sys/mach/task_special_ports.h>
 #include <sys/mach/thread_info.h>
 #include <sys/mach/thread_special_ports.h>
@@ -274,8 +275,6 @@ typedef mach_port_t		*ledger_port_array_t;
 typedef mach_port_t    		ledger_port_t;
 typedef char			*user_subsystem_t;
 
-typedef natural_t       task_policy_flavor_t;
-typedef integer_t       *task_policy_t;
 
 
 /*
