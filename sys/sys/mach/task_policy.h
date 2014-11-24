@@ -29,7 +29,7 @@
 #ifndef _MACH_TASK_POLICY_H_
 #define _MACH_TASK_POLICY_H_
 
-#include <mach/mach_types.h>
+#include <sys/mach/mach_types.h>
 
 /*
  * These are the calls for accessing the policy parameters
