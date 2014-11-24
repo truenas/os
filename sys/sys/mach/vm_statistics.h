@@ -111,6 +111,10 @@ struct vm_statistics {
 	integer_t	cow_faults;		/* # of copy-on-writes */
 	integer_t	lookups;		/* object cache lookups */
 	integer_t	hits;			/* object cache hits */
+
+	integer_t       purgeable_count;        /* # of pages purgeable */
+	integer_t       purges;                 /* # of pages purged */
+
 };
 
 typedef struct vm_statistics	*vm_statistics_t;
