@@ -338,9 +338,8 @@ rtCheckSimple(argument_t *args, u_int mask, boolean_t *simple)
 	boolean_t MustBeComplex = FALSE;
 
 	for (arg = args; arg != argNULL; arg = arg->argNext)
-		if (akCheck(arg->argKind, mask))
-		{
-			register ipc_type_t *it = arg->argType;
+		if (akCheck(arg->argKind, mask)) {
+			ipc_type_t *it = arg->argType;
 
 			if (IS_KERN_PROC_DATA(it))
 				MustBeComplex = TRUE;
@@ -495,21 +494,17 @@ rtCountArgDescriptors(argument_t *args, int *argcount)
 	if (argcount)
 		*argcount = 0;
 	for (arg = args; arg != argNULL; arg = arg->argNext)
-		if (akCheck(arg->argKind, akbServerArg))
-		{
+		if (akCheck(arg->argKind, akbServerArg)) {
 			if (RPCFixedArray(arg) ||
 				RPCPort(arg) ||
 				RPCVariableArray(arg) ||
-				RPCPortArray(arg))
-			{
+				RPCPortArray(arg)) {
 				count++;
 				if (argcount)
 					(*argcount)++;
 			}
-			else
-			{
-				if (argcount)
-				{
+			else {
+				if (argcount) {
 					if (arg->argType->itStruct && arg->argType->itNumber &&
 						(arg->argType->itSize >= 32))
 						*argcount += arg->argType->itNumber * (arg->argType->itSize / 32);
@@ -522,9 +517,7 @@ rtCountArgDescriptors(argument_t *args, int *argcount)
 }
 
 static int
-rtCountMask(args, mask)
-    argument_t *args;
-    u_int mask;
+rtCountMask(argument_t *args, u_int mask)
 {
 	register argument_t *arg;
 	int count = 0;
@@ -540,8 +533,7 @@ rtCountMask(args, mask)
 static void
 rtDefaultArgKind(routine_t *rt, argument_t *arg)
 {
-    if ((arg->argKind == akNone) &&
-		(rt->rtRequestPort == argNULL))
+    if ((arg->argKind == akNone) && (rt->rtRequestPort == argNULL))
 		arg->argKind = akRequestPort;
 
 	if (arg->argKind == akNone)
@@ -635,12 +627,7 @@ rtProcessSameCountFlag(register argument_t *arg)
 }
 
 static ipc_flags_t
-rtProcessCountInOutFlag(it, flags, kind, what, name)
-    register ipc_type_t *it;
-    register ipc_flags_t flags;
-    register arg_kind_t kind;
-    boolean_t *what;
-    string_t name;
+rtProcessCountInOutFlag(ipc_type_t *it, ipc_flags_t flags, arg_kind_t kind, boolean_t *what, string_t name)
 {
 	if (flags & flCountInOut) {
 		if (!akCheck(kind, akbReply)) {
@@ -928,8 +915,7 @@ rtSetArgDefaults(routine_t *rt, register argument_t *arg)
 	if (arg->argVarName == strNULL)
 		arg->argVarName = arg->argName;
 	if (arg->argMsgField == strNULL)
-		switch(akIdent(arg->argKind))
-		{
+		switch(akIdent(arg->argKind)) {
 		case akeRequestPort:
 			arg->argMsgField = "Head.msgh_request_port";
 			break;
@@ -997,8 +983,7 @@ rtAddCountArg(register argument_t *arg)
 
 	if (IS_MULTIPLE_KPD(it) && it->itElement->itVarArray) {
 		count->argName = strconcat(arg->argName, "Subs");
-    	count->argType = itMakeSubCountType(it->itKPD_Number, 
-											it->itVarArray, arg->argVarName);
+		count->argType = itMakeSubCountType(it->itKPD_Number, it->itVarArray, arg->argVarName);
 		count->argKind = akeSubCount;
 		arg->argSubCount = count;
     } else {
@@ -1023,6 +1008,7 @@ rtAddCountArg(register argument_t *arg)
 
 	if (arg->argType->itString) {
 	    /* C String gets no Count argument on either side. */
+		count->argKind = akAddFeature(count->argKind, akCheck(arg->argKind, akbSend) ? akbSendRcv : akbReturnRcv);
 		count->argVarName = (char *)0;
     } else {
 		/*
@@ -1166,18 +1152,13 @@ rtCheckRoutineArgs(routine_t *rt)
 		/* the arg may not have a type (if there was some error in parsing it),
 		   in which case we don't want to do these steps. */
 
-		if (it != itNULL)
-		{
-			arg->argFlags = rtProcessDeallocFlag(it, arg->argFlags, arg->argKind, 
-												 &arg->argDeallocate, arg->argVarName); 
-			arg->argFlags = rtProcessCountInOutFlag(it, arg->argFlags, arg->argKind, 
-													&arg->argCountInOut, arg->argVarName); 
+		if (it != itNULL) {
+			arg->argFlags = rtProcessDeallocFlag(it, arg->argFlags, arg->argKind, &arg->argDeallocate, arg->argVarName);
+			arg->argFlags = rtProcessCountInOutFlag(it, arg->argFlags, arg->argKind, &arg->argCountInOut, arg->argVarName);
 			rtProcessSameCountFlag(arg);
-			arg->argFlags = rtProcessPhysicalCopyFlag(it, arg->argFlags, arg->argKind, 
-													  arg->argVarName); 
+			arg->argFlags = rtProcessPhysicalCopyFlag(it, arg->argFlags, arg->argKind, arg->argVarName);
 			rtProcessRetCodeFlag(arg);
-			arg->argFlags = rtProcessOverwriteFlag(it, arg->argFlags, arg->argKind, 
-												   arg->argVarName); 
+			arg->argFlags = rtProcessOverwriteFlag(it, arg->argFlags, arg->argKind, arg->argVarName);
 			rtAugmentArgKind(arg);
 
 			/* args added here will get processed in later iterations */
@@ -1185,8 +1166,7 @@ rtCheckRoutineArgs(routine_t *rt)
 
 			if (arg->argDeallocate == d_MAYBE)
 				rtAddDeallocArg(arg);
-			if (it->itVarArray ||
-				(IS_MULTIPLE_KPD(it) && it->itElement->itVarArray))
+			if (it->itVarArray || (IS_MULTIPLE_KPD(it) && it->itElement->itVarArray))
 				rtAddCountArg(arg);
 			if (arg->argCountInOut)
 				rtAddCountInOutArg(arg);
@@ -1206,7 +1186,9 @@ rtCheckRoutineArgs(routine_t *rt)
 static boolean_t
 rtCheckTrailerType(register argument_t *arg)
 {
-    if (akIdent(arg->argKind) == akeSecToken) 
+    if (akIdent(arg->argKind) == akeSecToken ||
+		akIdent(arg->argKind) == akeAuditToken ||
+		akIdent(arg->argKind) == akeContextToken)
 		itCheckTokenType(arg->argVarName, arg->argType);
 
 	if (akIdent(arg->argKind) == akeMsgSeqno)
@@ -1271,26 +1253,19 @@ rtCheckArgTypes(routine_t *rt)
 static void
 rtCheckArgTrans(routine_t *rt)
 {
-	register argument_t *arg;
+	argument_t *arg;
 
 	/* the arg may not have a type (if there was some error in parsing it) */
 
-    for (arg = rt->rtArgs; arg != argNULL; arg = arg->argNext)
-    {
-		register ipc_type_t *it = arg->argType;
+    for (arg = rt->rtArgs; arg != argNULL; arg = arg->argNext) {
+		ipc_type_t *it = arg->argType;
 
-		if ((it != itNULL) &&
-			!streql(it->itServerType, it->itTransType))
-		{
-			if (akCheck(arg->argKind, akbSendRcv) &&
-				(it->itInTrans == strNULL))
-				warn("%s: argument has no in-translation function",
-					 arg->argName);
+		if ((it != itNULL) && !streql(it->itServerType, it->itTransType)) {
+			if (akCheck(arg->argKind, akbSendRcv) && (it->itInTrans == strNULL))
+				warn("%s: argument has no in-translation function", arg->argName);
 
-			if (akCheck(arg->argKind, akbReturnSnd) &&
-				(it->itOutTrans == strNULL))
-				warn("%s: argument has no out-translation function",
-					 arg->argName);
+			if (akCheck(arg->argKind, akbReturnSnd) && (it->itOutTrans == strNULL))
+				warn("%s: argument has no out-translation function", arg->argName);
 		}
 	}
 }
@@ -1323,6 +1298,7 @@ rtAddRetCode(routine_t *rt)
 static void
 rtProcessRetCode(routine_t *rt)
 {
+
 	if (!rt->rtOneWay && !rt->rtSimpleReply) {
 		register argument_t *arg = rt->rtRetCode;
 
@@ -1662,7 +1638,11 @@ rtAddByReference(register routine_t *rt)
 				arg->argCInOut->argByReferenceUser = TRUE;
 		}
 
-		if (akCheck(arg->argKind, akbReturnSnd) && it->itStruct) {
+		if ((akCheck(arg->argKind, akbReturnSnd) ||
+			(akCheck(arg->argKind, akbServerImplicit) &&
+			 akCheck(arg->argKind, akbReturnRcv) &&
+			 akCheck(arg->argKind, akbSendRcv)))
+			&& it->itStruct) {
 			arg->argByReferenceServer = TRUE;
 		}
 	}
@@ -1692,10 +1672,8 @@ rtAddSameCount(register routine_t *rt)
 			 * attribute to the master count!
 			 */
 			tmp_count->argKind = akeSameCount;
-			ref_count->argKind = akAddFeature(ref_count->argKind, 
-											  akCheck(my_count->argKind, akbVarNeeded));		
-			tmp_count->argKind = akAddFeature(tmp_count->argKind, 
-											  akCheck(my_count->argKind, akbVarNeeded));		
+			ref_count->argKind = akAddFeature(ref_count->argKind, akCheck(my_count->argKind, akbVarNeeded));
+			tmp_count->argKind = akAddFeature(tmp_count->argKind, akCheck(my_count->argKind, akbVarNeeded));
 			tmp_count->argNext = my_count->argNext;
 			tmp_count->argMultiplier = my_count->argMultiplier;
 			tmp_count->argType = my_count->argType;
@@ -1779,7 +1757,10 @@ rtCheckRoutine(register routine_t *rt)
 	 * kernel cannot change a message from simple to complex,
 	 * therefore SimpleSendReply and SimpleRcvReply become SimpleReply
 	 */
+#ifdef notyet
+	/* Setting this to true causes MIG to generate incorrect code */
 	rtCheckSimple(rt->rtArgs, akbRequest, &rt->rtSimpleRequest);
+#endif
 	rtCheckSimple(rt->rtArgs, akbReply, &rt->rtSimpleReply);
 
 	rt->rtRequestKPDs = rtCountKPDs(rt->rtArgs, akbSendKPD);
@@ -1798,10 +1779,8 @@ rtCheckRoutine(register routine_t *rt)
 			fatal("Overwrite option(s) do not match with the KernelUser personality\n");
 	}
 
-    rtCheckFit(rt, akbRequest, &rt->rtRequestFits, 
-			   &rt->rtRequestUsedLimit, &rt->rtRequestSizeKnown);
-    rtCheckFit(rt, akbReply, &rt->rtReplyFits, 
-			   &rt->rtReplyUsedLimit, &rt->rtReplySizeKnown);
+    rtCheckFit(rt, akbRequest, &rt->rtRequestFits, &rt->rtRequestUsedLimit, &rt->rtRequestSizeKnown);
+    rtCheckFit(rt, akbReply, &rt->rtReplyFits, &rt->rtReplyUsedLimit, &rt->rtReplySizeKnown);
 
 	rtCheckVariable(rt);
 	rtCheckDestroy(rt);
