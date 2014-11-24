@@ -34,6 +34,7 @@
 #include <mach/mach_time.h>
 #include <mach/exception.h>
 #include <sys/types.h>
+#include <sys/event.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/time.h>
@@ -75,9 +76,10 @@
 #include "vproc_internal.h"
 #include "jobServer.h"
 #include "job_reply.h"
-
+#if 0
 #include <xpc/launchd.h>
-
+#endif
+#include "shim.h"
 static mach_port_t ipc_port_set;
 static mach_port_t demand_port_set;
 static mach_port_t launchd_internal_port;

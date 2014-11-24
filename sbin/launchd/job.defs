@@ -28,6 +28,7 @@ subsystem job 400;
 #include <mach/std_types.defs>
 #include <mach/mach_types.defs>
 #include "job_types.defs"
+
 import "vproc.h";
 import "vproc_priv.h";
 import "vproc_internal.h";

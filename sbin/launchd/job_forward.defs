@@ -26,6 +26,7 @@ subsystem job_forward 400;
 import "vproc.h";
 import "vproc_priv.h";
 import "vproc_internal.h";
+import "core.h";
 
 userprefix vproc_mig_;
 serverprefix job_mig_;

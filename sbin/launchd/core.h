@@ -24,9 +24,12 @@
 #include "runtime.h"
 #include "bootstrap.h"
 #include "launch.h"
-#include <xpc/private.h>
+#include <xpc/xpc.h>
 
+#ifndef JOB_T_DEFINED
+#define JOB_T_DEFINED 
 typedef struct job_s *job_t;
+#endif
 typedef struct jobmgr_s *jobmgr_t;
 
 extern jobmgr_t root_jobmgr;

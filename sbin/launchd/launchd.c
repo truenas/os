@@ -40,6 +40,7 @@
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <net/if.h>
+#include <net/if_var.h>
 #include <netinet/in.h>
 #include <netinet/in_var.h>
 #include <netinet6/nd6.h>
@@ -81,6 +82,7 @@
 #include "runtime.h"
 #include "core.h"
 #include "ipc.h"
+#include "shim.h"
 
 #define LAUNCHD_CONF ".launchd.conf"
 
@@ -106,8 +108,8 @@ static void *update_thread(void *nothing);
 static void *crash_addr;
 static pid_t crash_pid;
 
-char *_launchd_database_dir;
-char *_launchd_log_dir;
+static const char *_launchd_database_dir;
+static const char *_launchd_log_dir;
 
 bool launchd_shutting_down;
 bool network_up;
@@ -182,7 +184,7 @@ main(int argc, char *const *argv)
 			}
 		}
 
-		char *extra = "";
+		const char *extra = "";
 		if (launchd_osinstaller) {
 			extra = " in the OS Installer";
 		} else if (sflag) {
@@ -230,7 +232,7 @@ main(int argc, char *const *argv)
 	} else {
 		launchd_uid = getuid();
 		launchd_var_available = true;
-		if (asprintf(&launchd_label, "com.apple.launchd.peruser.%u", launchd_uid) == 0) {
+		if (asprintf((char **)&launchd_label, "com.apple.launchd.peruser.%u", launchd_uid) == 0) {
 			launchd_label = "com.apple.launchd.peruser.unknown";
 		}
 
@@ -241,11 +243,11 @@ main(int argc, char *const *argv)
 			launchd_username = "(unknown)";
 		}
 
-		if (asprintf(&_launchd_database_dir, LAUNCHD_DB_PREFIX "/com.apple.launchd.peruser.%u", launchd_uid) == 0) {
+		if (asprintf((char **)&_launchd_database_dir, LAUNCHD_DB_PREFIX "/com.apple.launchd.peruser.%u", launchd_uid) == 0) {
 			_launchd_database_dir = "";
 		}
 
-		if (asprintf(&_launchd_log_dir, LAUNCHD_LOG_PREFIX "/com.apple.launchd.peruser.%u", launchd_uid) == 0) {
+		if (asprintf((char **)&_launchd_log_dir, LAUNCHD_LOG_PREFIX "/com.apple.launchd.peruser.%u", launchd_uid) == 0) {
 			_launchd_log_dir = "";
 		}
 
@@ -534,7 +536,7 @@ launchd_shutdown(void)
 
 	now = runtime_get_wall_time();
 
-	char *term_who = pid1_magic ? "System shutdown" : "Per-user launchd termination for ";
+	const char *term_who = pid1_magic ? "System shutdown" : "Per-user launchd termination for ";
 	launchd_syslog(LOG_INFO, "%s%s began", term_who, pid1_magic ? "" : launchd_username);
 
 	os_assert(jobmgr_shutdown(root_jobmgr) != NULL);

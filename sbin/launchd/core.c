@@ -16,8 +16,12 @@
  * @APPLE_APACHE_LICENSE_HEADER_END@
  */
 
+#define __APPLE_API_PRIVATE
+#define PRIVATE 1
+
 #include "config.h"
 #include "core.h"
+
 #include "internal.h"
 #include "helper.h"
 
@@ -49,12 +53,16 @@
 #include <sys/resource.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#if 0
 #include <sys/pipe.h>
+#endif
 #include <sys/mman.h>
+#include <sys/proc.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/kern_memorystatus.h>
 #include <net/if.h>
+#include <net/if_var.h>
 #include <netinet/in.h>
 #include <netinet/in_var.h>
 #include <netinet6/nd6.h>
@@ -78,19 +86,24 @@
 #include <glob.h>
 #include <System/sys/spawn.h>
 #include <System/sys/spawn_internal.h>
-#include <spawn.h>
+
+
 #include <spawn_private.h>
 #include <time.h>
 #include <libinfo.h>
 #include <os/assumes.h>
+#if 0
 #include <xpc/launchd.h>
+#endif
+#include <xpc/xpc.h>
 #include <asl.h>
 #include <_simple.h>
+#include <mach/mach_vm.h>
 
 #include <libproc.h>
 #include <libproc_internal.h>
 #include <System/sys/proc_info.h>
-#include <malloc/malloc.h>
+
 #include <pthread.h>
 #if HAVE_SANDBOX
 #define __APPLE_API_PRIVATE
@@ -123,10 +136,14 @@ extern int gL1CacheEnabled;
 #include "runtime.h"
 #include "ipc.h"
 #include "job.h"
+
 #include "jobServer.h"
 #include "job_reply.h"
 #include "job_forward.h"
+
 #include "mach_excServer.h"
+
+#include "shim.h"
 
 #define POSIX_SPAWN_IOS_INTERACTIVE 0
 
@@ -816,6 +833,8 @@ static struct priority_properties_t {
 	long long band;
 	int priority;
 } _launchd_priority_map[] = {
+	{ 0, 0}
+#if 0	
 	{ XPC_JETSAM_BAND_SUSPENDED, JETSAM_PRIORITY_IDLE },
 	{ XPC_JETSAM_BAND_BACKGROUND_OPPORTUNISTIC, JETSAM_PRIORITY_BACKGROUND_OPPORTUNISTIC },
 	{ XPC_JETSAM_BAND_BACKGROUND, JETSAM_PRIORITY_BACKGROUND },
@@ -828,6 +847,7 @@ static struct priority_properties_t {
 	{ XPC_JETSAM_BAND_ACCESSORY, JETSAM_PRIORITY_AUDIO_AND_ACCESSORY },
 	{ XPC_JETSAM_BAND_CRITICAL, JETSAM_PRIORITY_CRITICAL },
 	{ XPC_JETSAM_BAND_TELEPHONY, JETSAM_PRIORITY_TELEPHONY },
+#endif	
 };
 
 static const struct {
@@ -3695,7 +3715,7 @@ job_reap(job_t j)
 		td_sec = td / NSEC_PER_SEC;
 		td_usec = (td % NSEC_PER_SEC) / NSEC_PER_USEC;
 
-		job_log(j, LOG_DEBUG, "Exited %llu.%06llu seconds after the first signal was sent", td_sec, td_usec);
+		job_log(j, LOG_DEBUG, "Exited %zu.%06zu seconds after the first signal was sent", td_sec, td_usec);
 	}
 
 	int exit_status = WEXITSTATUS(j->last_exit_status);
@@ -4185,7 +4205,7 @@ job_callback_timer(job_t j, void *ident)
 			td /= NSEC_PER_SEC;
 			td -= j->clean_kill ? 0 : j->exit_timeout;
 
-			job_log(j, LOG_WARNING | LOG_CONSOLE, "Job has not died after being %skilled %llu seconds ago. Simulating exit.", j->clean_kill ? "cleanly " : "", td);
+			job_log(j, LOG_WARNING | LOG_CONSOLE, "Job has not died after being %skilled %zu seconds ago. Simulating exit.", j->clean_kill ? "cleanly " : "", td);
 			j->workaround9359725 = true;
 
 			// This basically has to be done off the main thread. We have no
