@@ -429,7 +429,7 @@ struct jobmgr_s {
 	uint32_t properties;
 	// XPC-specific properties.
 	char owner[MAXCOMLEN];
-	char *shortdesc;
+	const char *shortdesc;
 	mach_port_t req_bsport;
 	mach_port_t req_excport;
 	mach_port_t req_asport;
@@ -1203,12 +1203,12 @@ jobmgr_log_active_jobs(jobmgr_t jm)
 					continue;
 				}
 
-				char *dirty = "clean";
+				const char *dirty = "clean";
 				if (flags & PROC_DIRTY_IS_DIRTY) {
 					dirty = "dirty";
 				}
 
-				char *idle_exit = "idle-exit unsupported";
+				const char *idle_exit = "idle-exit unsupported";
 				if (flags & PROC_DIRTY_ALLOWS_IDLE_EXIT) {
 					idle_exit = "idle-exit supported";
 				}
@@ -2094,7 +2094,7 @@ job_new(jobmgr_t jm, const char *label, const char *prog, const char *const *arg
 	 * Maybe when we have Objective-C objects in libSystem, there can be a base
 	 * job type that anonymous and managed jobs inherit from...
 	 */
-	char *anon_or_legacy = (label == AUTO_PICK_ANONYMOUS_LABEL) ? "anonymous" : "mach_init";
+	const char *anon_or_legacy = (label == AUTO_PICK_ANONYMOUS_LABEL) ? "anonymous" : "mach_init";
 	if (unlikely(label == AUTO_PICK_LEGACY_LABEL || label == AUTO_PICK_ANONYMOUS_LABEL)) {
 		if (prog) {
 			bn = prog;
@@ -5045,7 +5045,7 @@ job_postfork_become_user(job_t j)
 	 * Nevertheless, this used to work in Tiger. See: 5425348
 	 */
 	if (j->groupname && !j->username) {
-		j->username = "root";
+		j->username = strdup("root");
 	}
 
 	if (j->username) {
@@ -7237,14 +7237,14 @@ machservice_drain_port(struct machservice *ms)
 	bool drain_one = ms->drain_one_on_crash;
 	bool drain_all = ms->drain_all_on_crash;
 
+	
 	if (!job_assumes(ms->job, (drain_one || drain_all) == true)) {
 		return;
 	}
 
 	job_log(ms->job, LOG_INFO, "Draining %s...", ms->name);
-
-	char req_buff[sizeof(union __RequestUnion__catch_mach_exc_subsystem) * 2];
-	char rep_buff[sizeof(union __ReplyUnion__catch_mach_exc_subsystem)];
+	char *req_buff = calloc(2, sizeof(union __RequestUnion__catch_mach_exc_subsystem));
+	char *rep_buff = calloc(1, sizeof(union __ReplyUnion__catch_mach_exc_subsystem));
 	mig_reply_error_t *req_hdr = (mig_reply_error_t *)&req_buff;
 	mig_reply_error_t *rep_hdr = (mig_reply_error_t *)&rep_buff;
 
@@ -8440,13 +8440,13 @@ job_mig_swap_integer(job_t j, vproc_gsk_t inkey, vproc_gsk_t outkey, int64_t inv
 				struct suspended_peruser *spi = NULL;
 				LIST_FOREACH(spi, &j->suspended_perusers, sle) {
 					if ((int64_t)(spi->j->mach_uid) == inval) {
-						job_log(j, LOG_WARNING, "Job tried to suspend per-user launchd for UID %lli twice.", inval);
+						job_log(j, LOG_WARNING, "Job tried to suspend per-user launchd for UID %zi twice.", inval);
 						break;
 					}
 				}
 
 				if (spi == NULL) {
-					job_log(j, LOG_INFO, "Job is suspending the per-user launchd for UID %lli.", inval);
+					job_log(j, LOG_INFO, "Job is suspending the per-user launchd for UID %zi.", inval);
 					spi = (struct suspended_peruser *)calloc(sizeof(struct suspended_peruser), 1);
 					if (job_assumes(j, spi != NULL)) {
 						/* Stop listening for events.
@@ -8478,13 +8478,13 @@ job_mig_swap_integer(job_t j, vproc_gsk_t inkey, vproc_gsk_t outkey, int64_t inv
 				if ((int64_t)(spi->j->mach_uid) == inval) {
 					spi->j->peruser_suspend_count--;
 					LIST_REMOVE(spi, sle);
-					job_log(j, LOG_INFO, "Job is resuming the per-user launchd for UID %lli.", inval);
+					job_log(j, LOG_INFO, "Job is resuming the per-user launchd for UID %zi.", inval);
 					break;
 				}
 			}
 
 			if (!job_assumes(j, spi != NULL)) {
-				job_log(j, LOG_WARNING, "Job tried to resume per-user launchd for UID %lli that it did not suspend.", inval);
+				job_log(j, LOG_WARNING, "Job tried to resume per-user launchd for UID %zi that it did not suspend.", inval);
 				kr = BOOTSTRAP_NOT_PRIVILEGED;
 			} else if (spi->j->peruser_suspend_count == 0) {
 				job_watch(spi->j);

@@ -109,9 +109,25 @@ typedef enum {
 #define XPC_SERVICE_TYPE_APP     0xDEADCAFE
 #define XPC_SERVICE_TYPE_ENTITLEMENT_ATTACH     0x00DEAD00
 
-#define IOPOL_TYPE_DISK  0
+/* I/O type */
+#define IOPOL_TYPE_DISK	0
+
+/* scope */
+#define IOPOL_SCOPE_PROCESS   0
 #define IOPOL_SCOPE_THREAD    1
-#define IOPOL_THROTTLE           3
+#define IOPOL_SCOPE_DARWIN_BG 2
+
+/* I/O Priority */
+#define IOPOL_DEFAULT		0
+#define IOPOL_IMPORTANT		1
+#define IOPOL_PASSIVE		2
+#define IOPOL_THROTTLE		3
+#define IOPOL_UTILITY		4
+#define IOPOL_STANDARD		5
+
+/* compatibility with older names */
+#define IOPOL_APPLICATION       IOPOL_STANDARD
+#define IOPOL_NORMAL            IOPOL_IMPORTANT
 
 
 const char *xpc_strerror(int error);
