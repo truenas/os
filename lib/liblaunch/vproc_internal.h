@@ -30,6 +30,7 @@
 #include "launch.h"
 #include "bootstrap_priv.h"
 #include "vproc.h"
+#include "core.h"
 
 typedef char * _internal_string_t;
 typedef char * logmsg_t;

@@ -25,6 +25,7 @@
 #include "ktrace.h"
 
 #include <mach/mach.h>
+#include <mach/mach_port.h>
 #include <libkern/OSByteOrder.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -176,9 +177,9 @@ enum {
 	LAUNCHD_USE_OTHER_FD,
 };
 struct _launch {
-	void	*sendbuf;
+	uint8_t	*sendbuf;
 	int	*sendfds;
-	void	*recvbuf;
+	uint8_t	*recvbuf;
 	int	*recvfds;
 	size_t	sendlen;
 	size_t	sendfdcnt;
@@ -205,9 +206,9 @@ _launch_init_globals(launch_globals_t globals)
 }
 
 #if !_LIBLAUNCH_HAS_ALLOC_ONCE
-launch_globals_t __launch_globals;
+static launch_globals_t __launch_globals;
 
-void
+static void
 _launch_globals_init(void)
 {
 	__launch_globals = calloc(1, sizeof(struct launch_globals_s));
@@ -695,9 +696,9 @@ launchd_close(launch_t lh, typeof(close) closefunc)
 #define ROUND_TO_64BIT_WORD_SIZE(x)	((x + 7) & ~7)
 
 size_t
-launch_data_pack(launch_data_t d, void *where, size_t len, int *fd_where, size_t *fd_cnt)
+launch_data_pack(launch_data_t d, uint8_t *where, size_t len, int *fd_where, size_t *fd_cnt)
 {
-	launch_data_t o_in_w = where;
+	launch_data_t o_in_w = (void *)where;
 	size_t i, rsz, node_data_len = sizeof(struct _launch_data);
 
 	if (node_data_len > len) {
@@ -783,9 +784,9 @@ launch_data_pack(launch_data_t d, void *where, size_t len, int *fd_where, size_t
 }
 
 launch_data_t
-launch_data_unpack(void *data, size_t data_size, int *fds, size_t fd_cnt, size_t *data_offset, size_t *fdoffset)
+launch_data_unpack(uint8_t *data, size_t data_size, int *fds, size_t fd_cnt, size_t *data_offset, size_t *fdoffset)
 {
-	launch_data_t r = data + *data_offset;
+	launch_data_t r = (void*)(data + *data_offset);
 	size_t i, tmpcnt;
 
 	//Check for integer underflow
@@ -811,7 +812,7 @@ launch_data_unpack(void *data, size_t data_size, int *fds, size_t fd_cnt, size_t
 			errno = EAGAIN;
 			return NULL;
 		}
-		r->_array = data + *data_offset;
+		r->_array = (void *)(data + *data_offset);
 		*data_offset += tmpcnt * sizeof(uint64_t);
 		for (i = 0; i < tmpcnt; i++) {
 			r->_array[i] = launch_data_unpack(data, data_size, fds, fd_cnt, data_offset, fdoffset);
@@ -1261,7 +1262,7 @@ launchd_msg_recv(launch_t lh, void (*cb)(launch_data_t, void *), void *context)
 	r = 0;
 
 	while (lh->recvlen > 0) {
-		struct launch_msg_header *lmhp = lh->recvbuf;
+		struct launch_msg_header *lmhp = (void *)lh->recvbuf;
 		uint64_t tmplen;
 		data_offset = sizeof(struct launch_msg_header);
 		fd_offset = 0;

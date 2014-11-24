@@ -27,12 +27,13 @@
 #include "vproc_priv.h"
 
 #include <mach/mach.h>
-#include <mach/vm_map.h>
+#include <mach/mach_port.h>
 #include <sys/types.h>
 #include <sys/syslog.h>
 #include <sys/stat.h>
 #include <pthread.h>
 #include <stdlib.h>
+
 
 #include "job.h"
 

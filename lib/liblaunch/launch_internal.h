@@ -95,8 +95,8 @@ bool launch_data_set_errno(launch_data_t, int);
 int launchd_msg_send(launch_t, launch_data_t);
 int launchd_msg_recv(launch_t, void (*)(launch_data_t, void *), void *);
 
-size_t launch_data_pack(launch_data_t d, void *where, size_t len, int *fd_where, size_t *fdslotsleft);
-launch_data_t launch_data_unpack(void *data, size_t data_size, int *fds, size_t fd_cnt, size_t *data_offset, size_t *fdoffset);
+size_t launch_data_pack(launch_data_t d, uint8_t *where, size_t len, int *fd_where, size_t *fdslotsleft);
+launch_data_t launch_data_unpack(uint8_t *data, size_t data_size, int *fds, size_t fd_cnt, size_t *data_offset, size_t *fdoffset);
 
 #pragma GCC visibility pop
 

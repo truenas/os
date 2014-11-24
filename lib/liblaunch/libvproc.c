@@ -26,7 +26,8 @@
 #include <dispatch/dispatch.h>
 #include <libproc.h>
 #include <mach/mach.h>
-#include <mach/vm_map.h>
+#include <mach/mach_port.h>
+#include <mach/mig.h>
 #include <sys/param.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,6 +41,7 @@
 #include <sys/syscall.h>
 #include <sys/event.h>
 #include <System/sys/fileport.h>
+
 #include <os/assumes.h>
 
 #if HAVE_QUARANTINE
@@ -197,7 +199,7 @@ vproc_transaction_begin(vproc_t vp __unused)
 
 void _vproc_transaction_end_flush(void);
 
-void
+static void
 _vproc_transaction_end_internal2(void *ctx)
 {
 	launch_globals_t globals = _launch_globals();
@@ -229,7 +231,7 @@ _vproc_transaction_end_internal(void *arg)
 	}
 }
 
-void
+static void
 _vproc_transaction_end_flush2(void *ctx __unused)
 {
 	_vproc_transaction_end_internal((void *)1);
@@ -756,7 +758,7 @@ _vprocmgr_log_drain(vproc_t vp __attribute__((unused)), pthread_mutex_t *mutex, 
 	struct timeval tv;
 	struct logmsg_s *lm;
 
-	if (!func) {
+		if (!func) {
 		return _vprocmgr_log_drain;
 	}
 
@@ -768,25 +770,39 @@ _vprocmgr_log_drain(vproc_t vp __attribute__((unused)), pthread_mutex_t *mutex, 
 
 	if (mutex) {
 		pthread_mutex_lock(mutex);
-	}
+		for (lm = (struct logmsg_s *)outdata; tmp_cnt > 0; lm = (void *)((uint64_t *)lm + lm->obj_sz/8)) {
+			lm->from_name = (char *)lm + lm->from_name_offset;
+			lm->about_name = (char *)lm + lm->about_name_offset;
+			lm->msg = (char *)lm + lm->msg_offset;
+			lm->session_name = (char *)lm + lm->session_name_offset;
 
-	for (lm = (struct logmsg_s *)outdata; tmp_cnt > 0; lm = ((void *)lm + lm->obj_sz)) {
-		lm->from_name = (char *)lm + lm->from_name_offset;
-		lm->about_name = (char *)lm + lm->about_name_offset;
-		lm->msg = (char *)lm + lm->msg_offset;
-		lm->session_name = (char *)lm + lm->session_name_offset;
+			tv.tv_sec = lm->when / USEC_PER_SEC;
+			tv.tv_usec = lm->when % USEC_PER_SEC;
 
-		tv.tv_sec = lm->when / USEC_PER_SEC;
-		tv.tv_usec = lm->when % USEC_PER_SEC;
+			func(&tv, lm->from_pid, lm->about_pid, lm->sender_uid, lm->sender_gid, lm->pri,
+				 lm->from_name, lm->about_name, lm->session_name, lm->msg);
 
-		func(&tv, lm->from_pid, lm->about_pid, lm->sender_uid, lm->sender_gid, lm->pri,
-				lm->from_name, lm->about_name, lm->session_name, lm->msg);
-
-		tmp_cnt -= lm->obj_sz;
-	}
-
-	if (mutex) {
+			tmp_cnt -= lm->obj_sz;
+		}
 		pthread_mutex_unlock(mutex);
+	} else {
+		/* the compiler can't tell that mutex isn't modified
+		* in the function so we duplicate :(
+		*/
+		for (lm = (struct logmsg_s *)outdata; tmp_cnt > 0; lm = (void *)((uint64_t *)lm + lm->obj_sz/8)) {
+			lm->from_name = (char *)lm + lm->from_name_offset;
+			lm->about_name = (char *)lm + lm->about_name_offset;
+			lm->msg = (char *)lm + lm->msg_offset;
+			lm->session_name = (char *)lm + lm->session_name_offset;
+
+			tv.tv_sec = lm->when / USEC_PER_SEC;
+			tv.tv_usec = lm->when % USEC_PER_SEC;
+
+			func(&tv, lm->from_pid, lm->about_pid, lm->sender_uid, lm->sender_gid, lm->pri,
+				 lm->from_name, lm->about_name, lm->session_name, lm->msg);
+
+			tmp_cnt -= lm->obj_sz;
+		}
 	}
 
 	if (outdata) {
@@ -981,7 +997,7 @@ union maxmsgsz {
 	union __ReplyUnion__helper_downcall_launchd_helper_subsystem rep;
 };
 
-const size_t vprocmgr_helper_maxmsgsz = sizeof(union maxmsgsz);
+static const size_t vprocmgr_helper_maxmsgsz = sizeof(union maxmsgsz);
 
 kern_return_t
 helper_recv_wait(mach_port_t p, int status)
