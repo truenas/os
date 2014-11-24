@@ -42,10 +42,12 @@
  * parameter to posix_spawnattr_setflags() or implicit returned in the value of
  * the second parameter to posix_spawnattr_getflags().
  */
+#ifndef __FreeBSD__
 #define	POSIX_SPAWN_RESETIDS		0x0001	/* [SPN] R[UG]ID not E[UG]ID */
 #define	POSIX_SPAWN_SETPGROUP		0x0002	/* [SPN] set non-parent PGID */
 #define	POSIX_SPAWN_SETSIGDEF		0x0004	/* [SPN] reset sigset default */
 #define	POSIX_SPAWN_SETSIGMASK		0x0008	/* [SPN] set signal mask */
+#endif
 
 #if 0	/* _POSIX_PRIORITY_SCHEDULING [PS] : not supported */
 #define	POSIX_SPAWN_SETSCHEDPARAM	0x0010

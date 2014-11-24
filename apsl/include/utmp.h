@@ -72,7 +72,6 @@
  */
 
 #include <_types.h>
-#include <sys/_types/_time_t.h>
 
 /* These files no longer exist in 10.5 and later */
 #define	_PATH_UTMP	"/var/run/utmp"
