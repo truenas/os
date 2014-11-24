@@ -57,6 +57,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libjail \
 	libkiconv \
 	libkvm \
+	${_liblaunch} \
 	${_libldns} \
 	liblzma \
 	${_libmagic} \
@@ -243,6 +244,8 @@ _libsmb=	libsmb
 _libproc=	libproc
 _librtld_db=	librtld_db
 .endif
+
+_liblaunch=	liblaunch
 
 .if ${MACHINE_CPUARCH} == "powerpc"
 _libproc=	libproc

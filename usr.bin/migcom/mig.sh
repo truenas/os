@@ -27,7 +27,9 @@ MD=""		# -MD, passed to cc
 CPP=""		# -cpp <path>, ignored
 CC="/usr/bin/cc"	# -cc <path>
 MIGCOM="/usr/bin/migcom"	# -migcom <path>
-SYSROOT="/"	# -isysroot <path>, ignored
+# This is a hack, and I'm not entirely sure it's
+# valid.
+SYSROOT=$(expr $(dirname $0) : "\(.*\)/usr/bin") || SYSROOT=""
 
 while [ $# -gt 1 ]
 do
@@ -55,10 +57,13 @@ do
 	-cpp)	if [ $# -le 2 ]; then usage ; fi ; shift 2 ;;
 	-cc)	if [ $# -le 2 ]; then usage ; fi ; CC="$2" ; shift 2 ;;
 	-migcom)	if [ $# -le 2 ]; then usage ; fi ; MIGCOM="$2" ; shift 2 ;;
-	-isysroot)	if [ $# -le 2 ]; then usage ; fi ; shift 2 ;;
+	-isysroot)	if [ $# -le 2 ]; then usage ; fi ; SYSROOT="$2" ; shift 2 ;;
 	-*)	CFLAGS="${CFLAGS} $1" ; shift ;;
     esac
 done
+
+CC="${SYSROOT}${CC}"
+MIGCOM="${SYSROOT}${MIGCOM}"
 
 if [ $# -ne 1 ]; then
     usage

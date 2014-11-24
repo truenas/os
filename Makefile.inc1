@@ -1319,6 +1319,8 @@ _texinfo=	gnu/usr.bin/texinfo/libtxi \
 		gnu/usr.bin/texinfo/makeinfo \
 		gnu/usr.bin/texinfo/install-info
 .endif
+_mig=	usr.bin/migcom
+
 #	Please document (add comment) why something is in 'bootstrap-tools'.
 #	Try to bound the building of the bootstrap-tool to just the
 #	FreeBSD versions that need the tool built at this stage of the build.
@@ -1459,7 +1461,9 @@ cross-tools: .MAKE
     usr.bin/xlint/lint1 usr.bin/xlint/lint2 usr.bin/xlint/xlint \
     ${_btxld} \
     ${_crunchide} \
-    ${_kgzip}
+    ${_kgzip} \
+    ${_mig} \
+    sys/boot/usb/tools
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,depend,all,install)"; \
 		cd ${.CURDIR}/${_tool} && \
 		${MAKE} DIRPRFX=${_tool}/ obj && \
