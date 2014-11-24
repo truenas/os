@@ -322,20 +322,20 @@ WriteBogusDefines(FILE *file)
 void
 WriteList(FILE *file, argument_t *args, void (*func)(), u_int mask, const char *between, const char *after)
 {
-  register argument_t *arg;
-  register boolean_t sawone = FALSE;
-  
-  for (arg = args; arg != argNULL; arg = arg->argNext)
-    if (akCheckAll(arg->argKind, mask)) {
-      if (sawone)
-        fprintf(file, "%s", between);
-      sawone = TRUE;
+	argument_t *arg;
+	boolean_t sawone = FALSE;
+
+	for (arg = args; arg != argNULL; arg = arg->argNext) {
+		if (akCheckAll(arg->argKind, mask)) {
+			if (sawone)
+				fprintf(file, "%s", between);
+			sawone = TRUE;
       
-      (*func)(file, arg);
-    }
-  
-  if (sawone)
-    fprintf(file, "%s", after);
+			(*func)(file, arg);
+		}
+	}
+	if (sawone)
+		fprintf(file, "%s", after);
 }
 
 static boolean_t
@@ -454,9 +454,9 @@ WriteFieldDeclPrim(FILE *file, argument_t *arg, const char *(*tfunc)(ipc_type_t 
      * parameter
      */
     if (it->itString)
-	    fprintf(file, "\t\t%s %sOffset; /* MiG doesn't use it */\n", 
-		(*tfunc)(count->argType), arg->argName);
-    
+		fprintf(file, "\t\t%s %sOffset; /* MiG doesn't use it */\n",
+				(*tfunc)(count->argType), arg->argName);
+
     if (!(arg->argFlags & flSameCount) && !it->itNoOptArray)
     /* in these cases we would have a count, which we don't want */
 		fprintf(file, "\t\t%s %s;\n", (*tfunc)(count->argType), 
@@ -843,17 +843,17 @@ void
 WriteCopyArg(FILE *file, argument_t *arg, const char *left, const char *right, ...)
 {
   va_list pvar;
-	va_list pv2;
   va_start(pvar, right);
   
   {
     ipc_type_t *it = arg->argType;
     if (it->itVarArray && !it->itString) {
-	  __va_copy(pv2,pvar);
       fprintf(file, "\t    (void)memcpy(");
       (void) SkipVFPrintf(file, left, pvar);
+	  va_end(pvar);
       fprintf(file, ", ");
-	    (void) SkipVFPrintf(file, right, pv2);
+	  va_start(pvar, right);
+	  (void) SkipVFPrintf(file, right, pvar);
       fprintf(file, ", %s);\n", arg->argCount->argVarName);
 	} else
       vWriteCopyType(file, it, left, right, pvar);
