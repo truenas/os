@@ -9,7 +9,7 @@
 PROG="$0"
 
 QUIET="-Q"	# -q or -Q
-VERBOSE="-V"	# -v or -V
+VERBOSE=""	# -v or -V
 EVLOG="-l"	# -l or -L
 ANSI="-k"	# -k or -K
 SERVSYM="-S"	# -S or -s
@@ -40,6 +40,8 @@ do
 	-K)	ANSI="-K" ; shift ;;
 	-s)	SERVSYM="-s" ; shift ;;
 	-S)	SERVSYM="-S" ; shift ;;
+	-V)	VERBOSE="-V" ; shift ;;
+	-v)	VERBOSE="-v" ; shift ;;
 	-split)	SPLIT="-split" ; shift ;;
 	-MD)	MD="-MD" ; shift ;;
 	-i)	if [ $# -le 2 ] ; then usage ; fi ; USERPREFIX="-i $2" ; shift 2 ;;
@@ -69,7 +71,7 @@ tmpfile=${TMPDIR:-/tmp}/migcom-$$.c
 ( echo "#line 1 \"${input_file}\"" ; cat ${input_file} ) > ${tmpfile}
 if ! ${CC} ${MD} ${CFLAGS} -E ${tmpfile} |
 	${MIGCOM} ${QUIET} ${EVLOG} ${ANSI} ${SERVSYM} \
-	    ${SPLIT} ${USERPREFIX} \
+	    ${SPLIT} ${USERPREFIX} ${VERBOSE} \
 	    ${USERRPC} ${SRVRPC} \
 	    ${USRHDR} ${SYSHDR} \
 	    ${IHDR} ${GHDR} \
