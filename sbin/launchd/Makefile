@@ -8,7 +8,7 @@ MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}
 CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
 CFLAGS+= -I${.CURDIR}/../../lib/liblaunch
-
+LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
 
 
 jobServer.h jobServer.c job.h: job.defs
@@ -34,6 +34,6 @@ SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
 
 
 clean:
-	rm -f *.o *Server.c *User.c job.h helper.d job_reply.h job_forward.h notify.h mach_excServer.h internal.h \
-	mach_exc.h *Server.h *~ cscope.*
+	rm -f *.o *Server.c *User.c job.h helper.d job_reply.h job_forward.h notify.h mach_excServer.h \
+	internal.h mach_exc.h *Server.h *~ cscope.*
 .include <bsd.prog.mk>

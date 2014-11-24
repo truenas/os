@@ -11,6 +11,27 @@
 #include <spawn.h>
 #include <mach/mach_port.h>
 #include <mach/mach_vm.h>
+#include <mach/host_priv.h>
+
+struct rusage_info_v1 {
+        uint8_t  ri_uuid[16];
+        uint64_t ri_user_time;
+        uint64_t ri_system_time;
+        uint64_t ri_pkg_idle_wkups;
+        uint64_t ri_interrupt_wkups;
+        uint64_t ri_pageins;
+        uint64_t ri_wired_size;
+        uint64_t ri_resident_size;      
+        uint64_t ri_phys_footprint;
+        uint64_t ri_proc_start_abstime;
+        uint64_t ri_proc_exit_abstime;
+        uint64_t ri_child_user_time;
+        uint64_t ri_child_system_time;
+        uint64_t ri_child_pkg_idle_wkups;
+        uint64_t ri_child_interrupt_wkups;
+        uint64_t ri_child_pageins;
+        uint64_t ri_child_elapsed_abstime;
+};
 
 #define RB_UPSDELAY (RB_PAUSE << 1)
 #define RB_SAFEBOOT (RB_PAUSE << 2)
@@ -146,7 +167,11 @@ int xpc_pipe_try_receive(mach_port_t, xpc_object_t *, mach_port_t *,
 
 kern_return_t xpc_call_wakeup(mach_port_t, int);
 void xpc_dictionary_get_audit_token(xpc_object_t, audit_token_t *);
-
+void xpc_dictionary_set_mach_recv(xpc_object_t, const char *, mach_port_t);
+void xpc_dictionary_set_mach_send(xpc_object_t, const char *, mach_port_t);
+mach_port_t xpc_dictionary_copy_mach_send(xpc_object_t, const char *);
+xpc_object_t xpc_copy_entitlements_for_pid(pid_t);
+xpc_object_t ld2xpc(launch_data_t);
 size_t malloc_size(void *);
 
 /* domain.defs */

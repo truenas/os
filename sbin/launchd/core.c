@@ -40,6 +40,7 @@
 #include <mach/host_reboot.h>
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <sys/endian.h>
 #include <sys/event.h>
 #include <sys/stat.h>
 #include <sys/ucred.h>
@@ -6334,9 +6335,9 @@ machservice_stamp_port(job_t j, struct machservice *ms)
 	(void)strncpy((char *)&ctx, prog, sizeof(ctx));
 #if __LITTLE_ENDIAN__
 #if __LP64__
-	ctx = OSSwapBigToHostInt64(ctx);
+	ctx = be64toh(ctx);
 #else
-	ctx = OSSwapBigToHostInt32(ctx);
+	ctx = be32toh(ctx);
 #endif
 #endif
 
