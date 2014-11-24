@@ -7,15 +7,17 @@
 #include <sys/mach/host_special_ports.h>
 #include <sys/proc_info.h>
 #include <sys/kern_event.h>
+#include <sys/fileport.h>
 #include <spawn.h>
 #include <mach/mach_port.h>
+#include <mach/mach_vm.h>
 
 #define RB_UPSDELAY (RB_PAUSE << 1)
 #define RB_SAFEBOOT (RB_PAUSE << 2)
 #define RB_UNIPROC (RB_PAUSE << 3)
 #define RB_ALTBOOT (RB_PAUSE << 4)
 
-typedef int xpc_service_type_t;
+typedef unsigned int xpc_service_type_t;
 
 typedef int xpc_jetsam_band_t;
 
@@ -26,6 +28,9 @@ typedef char event_name_t[64];
 
 #define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
 #define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
+#define NOTE_REAP 0x1
+#define NOTE_SIGNAL 0x2
+
 /*
  * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
  */
@@ -70,6 +75,7 @@ posix_spawnattr_getbinpref_np(const posix_spawnattr_t *restrict attr, size_t cou
 #define XPC_PROCESS_ROUTINE_KEY_OP "XPC process key op"
 #define XPC_PROCESS_ROUTINE_KEY_PID "XPC process key pid"
 #define XPC_PROCESS_ROUTINE_KEY_RCDATA "XPC process key rcdata"
+#define XPC_PROCESS_ROUTINE_KEY_SIGNAL "XPC process key signal"
 #define XPC_PROCESS_ROUTINE_KEY_PRIORITY_BAND "XPC process key priority band"
 #define XPC_PROCESS_ROUTINE_KEY_MEMORY_LIMIT "XPC process key memory limit"
 #define XPC_SERVICE_ENTITLEMENT_ATTACH "XPC service entitlement attach"
@@ -103,6 +109,7 @@ typedef enum {
 
 #define XPC_JETSAM_BAND_SUSPENDED 10
 #define XPC_JETSAM_BAND_LAST 20
+#define XPC_JETSAM_PRIORITY_RESERVED 1000
 
 #define XPC_SERVICE_TYPE_BUNDLED 0xBADDCAFE
 #define XPC_SERVICE_TYPE_LAUNCHD 0xBABECAFE
@@ -133,4 +140,30 @@ typedef enum {
 const char *xpc_strerror(int error);
 xpc_object_t xpc_copy_entitlement_for_token(const char *, audit_token_t *);
 int      setiopolicy_np(int, int, int);
+int xpc_pipe_routine_reply(xpc_object_t);
+int xpc_pipe_try_receive(mach_port_t, xpc_object_t *, mach_port_t *,
+						 boolean_t (*)(mach_msg_header_t *, mach_msg_header_t *), mach_msg_size_t, int);
+
+kern_return_t xpc_call_wakeup(mach_port_t, int);
+void xpc_dictionary_get_audit_token(xpc_object_t, audit_token_t *);
+
+size_t malloc_size(void *);
+
+/* domain.defs */
+kern_return_t
+xpc_domain_get_service_name(job_t j, event_name_t name);
+kern_return_t
+xpc_domain_load_services(job_t j, vm_offset_t services_buff, mach_msg_type_number_t services_sz);
+kern_return_t
+xpc_domain_check_in(job_t j, mach_port_t *bsport, mach_port_t *sbsport,
+	mach_port_t *excport, mach_port_t *asport, uint32_t *uid, uint32_t *gid,
+					int32_t *asid, vm_offset_t *ctx, mach_msg_type_number_t *ctx_sz);
+kern_return_t
+xpc_domain_set_environment(job_t j, mach_port_t rp, mach_port_t bsport, mach_port_t excport, vm_offset_t ctx, mach_msg_type_number_t ctx_sz);
+kern_return_t
+xpc_domain_import2(job_t j, mach_port_t reqport, mach_port_t dport);
+kern_return_t
+xpc_domain_add_services(job_t j, vm_offset_t services_buff, mach_msg_type_number_t services_sz);
+#define XPC_LPI_VERSION 20141120
+
 #endif

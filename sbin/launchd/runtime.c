@@ -123,7 +123,6 @@ bool launchd_apple_internal;
 bool launchd_flat_mach_namespace = true;
 bool launchd_malloc_log_stacks = false;
 bool launchd_use_gmalloc = false;
-bool launchd_log_per_user_shutdown = false;
 #if !TARGET_OS_EMBEDDED
 bool launchd_log_shutdown = true;
 #else
@@ -166,8 +165,10 @@ union internal_max_sz {
 };
 
 union xpc_domain_max_sz {
+#ifdef notyet
 	union __RequestUnion__xpc_domain_xpc_domain_subsystem req;
 	union __ReplyUnion__xpc_domain_xpc_domain_subsystem rep;
+#endif
 };
 
 union mach_exc_max_sz {
@@ -195,10 +196,11 @@ launchd_runtime_init(void)
 	os_assert_zero(launchd_mport_make_send(launchd_internal_port));
 
 	max_msg_size = sizeof(union vproc_mig_max_sz);
+#ifdef notyet
 	if (sizeof(union xpc_domain_max_sz) > max_msg_size) {
 		max_msg_size = sizeof(union xpc_domain_max_sz);
 	}
-
+#endif
 	os_assert_zero(runtime_add_mport(launchd_internal_port, launchd_internal_demux));
 	os_assert_zero(pthread_create(&kqueue_demand_thread, NULL, kqueue_demand_loop, NULL));
 	os_assert_zero(pthread_detach(kqueue_demand_thread));
@@ -1006,9 +1008,11 @@ launchd_mig_demux(mach_msg_header_t *request, mach_msg_header_t *reply)
 		if (request->msgh_id == MACH_NOTIFY_NO_SENDERS) {
 			launchd_syslog(LOG_DEBUG, "MACH_NOTIFY_NO_SENDERS");
 			result = notify_server(request, reply);
+#ifdef notyet
 		} else if (the_demux == job_server) {
 			launchd_syslog(LOG_DEBUG, "Trying domain subsystem...");
 			result = xpc_domain_server(request, reply);
+#endif
 		} else {
 			launchd_syslog(LOG_ERR, "Cannot handle MIG request with ID: 0x%x", request->msgh_id);
 		}

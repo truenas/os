@@ -10574,7 +10574,7 @@ xpc_event_get_event_name(job_t j, xpc_object_t request, xpc_object_t *reply)
 		return EXINVAL;
 	}
 
-	job_log(j, LOG_DEBUG, "Getting event name for stream/token: %s/0x%llu", stream, token);
+	job_log(j, LOG_DEBUG, "Getting event name for stream/token: %s/0x%zu", stream, token);
 
 	int result = ESRCH;
 	struct externalevent *event = externalevent_find(stream, token);
@@ -10590,7 +10590,7 @@ xpc_event_get_event_name(job_t j, xpc_object_t request, xpc_object_t *reply)
 	return result;
 }
 
-int
+static int
 xpc_event_copy_entitlements(job_t j, xpc_object_t request, xpc_object_t *reply)
 {
 	const char *stream = xpc_dictionary_get_string(request, XPC_EVENT_ROUTINE_KEY_STREAM);
@@ -10603,7 +10603,7 @@ xpc_event_copy_entitlements(job_t j, xpc_object_t request, xpc_object_t *reply)
 		return EXINVAL;
 	}
 
-	job_log(j, LOG_DEBUG, "Getting entitlements for stream/token: %s/0x%llu", stream, token);
+	job_log(j, LOG_DEBUG, "Getting entitlements for stream/token: %s/0x%zu", stream, token);
 
 	int result = ESRCH;
 	struct externalevent *event = externalevent_find(stream, token);
@@ -10799,7 +10799,7 @@ xpc_event_channel_look_up(job_t j, xpc_object_t request, xpc_object_t *reply)
 		return EXINVAL;
 	}
 
-	job_log(j, LOG_DEBUG, "Looking up channel for stream/token: %s/%llu", stream, token);
+	job_log(j, LOG_DEBUG, "Looking up channel for stream/token: %s/%zu", stream, token);
 
 	struct externalevent *ee = externalevent_find(stream, token);
 	if (!ee) {
@@ -10815,7 +10815,7 @@ xpc_event_channel_look_up(job_t j, xpc_object_t request, xpc_object_t *reply)
 		*reply = reply2;
 		error = 0;
 	} else {
-		job_log(j, LOG_ERR, "Could not find event channel for stream/token: %s/%llu: 0x%x: %s", stream, token, error, xpc_strerror(error));
+		job_log(j, LOG_ERR, "Could not find event channel for stream/token: %s/%zu: 0x%x: %s", stream, token, error, xpc_strerror(error));
 	}
 
 	return error;
@@ -10902,11 +10902,11 @@ xpc_event_provider_set_state(job_t j, xpc_object_t request, xpc_object_t *reply)
 		state = xpc_bool_get_value(xstate);
 	}
 
-	job_log(j, LOG_DEBUG, "Setting event state to %s for stream/token: %s/%llu", state ? "true" : "false", stream, token);
+	job_log(j, LOG_DEBUG, "Setting event state to %s for stream/token: %s/%zu", state ? "true" : "false", stream, token);
 
 	struct externalevent *ei = externalevent_find(stream, token);
 	if (!ei) {
-		job_log(j, LOG_ERR, "Could not find stream/token: %s/%llu", stream, token);
+		job_log(j, LOG_ERR, "Could not find stream/token: %s/%zu", stream, token);
 		return ESRCH;
 	}
 
@@ -10948,7 +10948,7 @@ xpc_event_demux(mach_port_t p, xpc_object_t request, xpc_object_t *reply)
 		}
 	}
 
-	job_log(j, LOG_DEBUG, "Incoming XPC event request: %llu", op);
+	job_log(j, LOG_DEBUG, "Incoming XPC event request: %zu", op);
 
 	int error = -1;
 	switch (op) {
@@ -10993,7 +10993,7 @@ xpc_event_demux(mach_port_t p, xpc_object_t request, xpc_object_t *reply)
 	return true;
 }
 
-uint64_t
+static uint64_t
 xpc_get_jetsam_entitlement(const char *key)
 {
 	uint64_t entitlement = 0;
@@ -11395,7 +11395,7 @@ xpc_process_demux(mach_port_t p, xpc_object_t request, xpc_object_t *reply)
 	runtime_record_caller_creds(&token);
 
 	job_t j = job_mig_intran(p);
-	job_log(j, LOG_DEBUG, "Incoming XPC process request: %llu", op);
+	job_log(j, LOG_DEBUG, "Incoming XPC process request: %zu", op);
 
 	int error = -1;
 	switch (op) {
@@ -11789,7 +11789,7 @@ jobmgr_init(bool sflag)
 	LIST_INIT(&s_needing_sessions);
 
 	os_assert((root_jobmgr = jobmgr_new(NULL, MACH_PORT_NULL, MACH_PORT_NULL, sflag, root_session_type, false, MACH_PORT_NULL)) != NULL);
-	os_assert((_s_xpc_system_domain = jobmgr_new_xpc_singleton_domain(root_jobmgr, "com.apple.xpc.system")) != NULL);
+	os_assert((_s_xpc_system_domain = jobmgr_new_xpc_singleton_domain(root_jobmgr, strdup("com.apple.xpc.system"))) != NULL);
 	_s_xpc_system_domain->req_asid = launchd_audit_session;
 	_s_xpc_system_domain->req_asport = launchd_audit_port;
 	_s_xpc_system_domain->shortdesc = "system";
