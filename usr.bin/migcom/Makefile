@@ -37,13 +37,15 @@ CFLAGS+= -I${.CURDIR}/../../apsl/include
 CFLAGS+= -I${.CURDIR}/i386
 .endif
 
+machine:
+	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include machine
 
-ident.c:
-	echo "#include \"alloc.h\" " >>${.TARGET}
+ident.c: machine
+	echo "#include \"alloc.h\" " >${.TARGET}
 	echo "const char *MigGenerationDate = \""`date`"\";" >>${.TARGET}
 	echo "const char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
 
-ident1.c: migcom
-	echo "char *MigGenerationDate = \""`date`"\";" >${.TARGET}
-	echo "char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
+clean:
+	rm -f ident.c *.o *~ *.gz cscope.* machine
+
 .include <bsd.prog.mk>
