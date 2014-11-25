@@ -24,7 +24,7 @@
 
 #ifndef	_KERN_KERN_TYPES_H_
 #define	_KERN_KERN_TYPES_H_
-
+#ifdef _KERNEL
 #include <sys/mach/port.h>
 
 typedef struct thread_shuttle		*thread_t;
@@ -37,5 +37,5 @@ typedef struct processor		*processor_t;
 typedef struct processor_set		*processor_set_t;
 typedef struct thread_activation	*thread_act_t;
 typedef struct subsystem		*subsystem_t;
-
+#endif
 #endif	/* _KERN_KERN_TYPES_H_ */

@@ -812,11 +812,12 @@ typedef integer_t mach_msg_option_t;
 #define MACH_RCV_TRAILER_ELEMENTS(x) (((x) & 0xf) << 24)  
 #define MACH_RCV_TRAILER_MASK 	     ((0xff << 24))
 
+#if 0
 extern mach_msg_trailer_size_t trailer_size[];
 
 #define GET_RCV_ELEMENTS(y) (((y) >> 24) & 0xf)
 #define REQUESTED_TRAILER_SIZE(y) (trailer_size[GET_RCV_ELEMENTS(y)])
-
+#endif
 /*
  *  Much code assumes that mach_msg_return_t == kern_return_t.
  *  This definition is useful for descriptive purposes.
