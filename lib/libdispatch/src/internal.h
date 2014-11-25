@@ -197,7 +197,9 @@ DISPATCH_EXPORT DISPATCH_NOTHROW void dispatch_atfork_child(void);
 #include <mach/host_info.h>
 #include <mach/notify.h>
 #include <mach/mach_vm.h>
+#ifndef __FreeBSD__
 #include <mach/vm_map.h>
+#endif
 #endif /* HAVE_MACH */
 #if HAVE_MALLOC_MALLOC_H
 #include <malloc/malloc.h>
@@ -663,7 +665,9 @@ extern bool _dispatch_safe_fork, _dispatch_child_of_unsafe_fork;
 	(MACH_MSGH_BITS_VOUCHER(bits) != MACH_MSGH_BITS_ZERO)
 #define msgh_voucher_port msgh_reserved
 #define mach_voucher_t mach_port_t
+#ifndef MACH_VOUCHER_NULL
 #define MACH_VOUCHER_NULL MACH_PORT_NULL
+#endif
 #define MACH_SEND_INVALID_VOUCHER 0x10000005
 #endif
 
@@ -725,5 +729,17 @@ mach_port_t _dispatch_get_mach_host_port(void);
 #include "io_internal.h"
 #endif
 #include "inline_internal.h"
+
+#ifdef __FreeBSD__
+#define kevent64_s kevent
+#define vm_page_size PAGE_SIZE
+#include <sys/proc.h>
+#include <compat/mach/mach_vm.h>
+/* XXX need to work out header situation */
+#define VM_MAKE_TAG(x) 0
+int mach_vm_map(mach_port_name_t, vm_offset_t *, vm_size_t, vm_offset_t, int, void *, int,
+				boolean_t, vm_prot_t, vm_prot_t, vm_inherit_t);
+#define VM_FLAGS_ANYWHERE MACH_VM_FLAGS_ANYWHERE
+#endif
 
 #endif /* __DISPATCH_INTERNAL__ */

@@ -2071,8 +2071,10 @@ _dispatch_disk_perform(void *ctxt)
 static void
 _dispatch_operation_advise(dispatch_operation_t op, size_t chunk_size)
 {
+#ifdef notyet
 	int err;
 	struct radvisory advise;
+
 	// No point in issuing a read advise for the next chunk if we are already
 	// a chunk ahead from reading the bytes
 	if (op->advise_offset > (off_t)(((size_t)op->offset + op->total) +
@@ -2086,6 +2088,7 @@ _dispatch_operation_advise(dispatch_operation_t op, size_t chunk_size)
 		// If this is the first time through, align the advised range to a
 		// page boundary
 		size_t pg_fraction = ((size_t)op->offset + chunk_size) % PAGE_SIZE;
+
 		advise.ra_count += (int)(pg_fraction ? PAGE_SIZE - pg_fraction : 0);
 	}
 	advise.ra_offset = op->advise_offset;
@@ -2097,6 +2100,7 @@ _dispatch_operation_advise(dispatch_operation_t op, size_t chunk_size)
 		// TODO: set disk status on error
 		default: (void)dispatch_assume_zero(err); break;
 	);
+#endif
 }
 
 static int

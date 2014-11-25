@@ -404,7 +404,7 @@ _dispatch_transform_from_utf16(dispatch_data_t data, int32_t byteOrder)
 			skip -= size;
 			return (bool)true;
 		} else if (skip > 0) {
-			src = (uint16_t *)(((uint8_t *)src) + skip);
+			src = (uint16_t *)(((uint16_t *)src) + skip/2);
 			size -= skip;
 			max = (size / 2);
 			skip = 0;

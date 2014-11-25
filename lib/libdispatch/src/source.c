@@ -1339,7 +1339,7 @@ struct dispatch_timer_s _dispatch_timer[] =  {
 		((sizeof(_dispatch_timer) / sizeof(_dispatch_timer[0])))
 
 #define DISPATCH_KEVENT_TIMER_UDATA(tidx) \
-		(uintptr_t)&_dispatch_kevent_timer[tidx]
+	(void *)(uintptr_t)&_dispatch_kevent_timer[tidx]
 #ifdef __LP64__
 #define DISPATCH_KEVENT_TIMER_UDATA_INITIALIZER(tidx) \
 		.udata = DISPATCH_KEVENT_TIMER_UDATA(tidx)

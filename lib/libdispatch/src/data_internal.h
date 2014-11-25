@@ -101,7 +101,7 @@ void dispatch_data_init(dispatch_data_t data, const void *buffer, size_t size,
 		dispatch_block_t destructor);
 void _dispatch_data_dispose(dispatch_data_t data);
 size_t _dispatch_data_debug(dispatch_data_t data, char* buf, size_t bufsiz);
-const dispatch_block_t _dispatch_data_destructor_inline;
+extern const dispatch_block_t _dispatch_data_destructor_inline;
 #define DISPATCH_DATA_DESTRUCTOR_INLINE (_dispatch_data_destructor_inline)
 
 #if !__OBJC2__
@@ -119,7 +119,7 @@ _dispatch_data_map_direct(dispatch_data_t dd)
 		offset = dd->records[0].from;
 		dd = dd->records[0].data_object;
 	}
-	return fastpath(_dispatch_data_leaf(dd)) ? (dd->buf + offset) : NULL;
+	return fastpath(_dispatch_data_leaf(dd)) ? (void *)((uint8_t *)dd->buf + offset) : NULL;
 }
 
 #endif // !__OBJC2__

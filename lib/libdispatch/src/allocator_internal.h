@@ -195,7 +195,7 @@ typedef unsigned long bitmap_t;
 // from sizeof(struct dispatch_continuation_s) to the cacheline size, so
 // unrelated continuations don't share cachelines. It'd be nice if
 // dispatch_continuation_s included this rounding/padding, but it doesn't.
-typedef char padded_continuation[DISPATCH_CONTINUATION_SIZE];
+typedef char padded_continuation[DISPATCH_CONTINUATION_SIZE] __aligned(8);
 
 // A dispatch_heap_t is the base address of an array of dispatch_magazine_s,
 // one magazine per CPU.
@@ -262,7 +262,7 @@ struct dispatch_magazine_s {
 	// This is the big array of continuations.
 	// This must start on a page boundary.
 	padded_continuation conts[SUPERMAPS_PER_MAGAZINE][BITMAPS_PER_SUPERMAP]
-			[CONTINUATIONS_PER_BITMAP];
+	[CONTINUATIONS_PER_BITMAP];
 
 	// Fill the unused space to exactly BYTES_PER_MAGAZINE
 #if AFTER_CONTS_PADDING > 0

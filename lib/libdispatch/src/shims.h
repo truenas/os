@@ -170,7 +170,9 @@ void __builtin_trap(void);
 #include "shims/getprogname.h"
 #include "shims/time.h"
 
-#ifdef __APPLE__
+#if __FreeBSD__
+#define _dispatch_clear_stack(s)
+#elif __APPLE__
 // Clear the stack before calling long-running thread-handler functions that
 // never return (and don't take arguments), to facilitate leak detection and
 // provide cleaner backtraces. <rdar://problem/9050566>

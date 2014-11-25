@@ -98,6 +98,12 @@ enum {
 		f & DISPATCH_TIMER_BACKGROUND ? DISPATCH_TIMER_QOS_BACKGROUND : \
 		DISPATCH_TIMER_QOS_NORMAL); })
 
+#ifdef __FreeBSD__
+#ifndef kevent64_s
+#define kevent64_s kevent
+#endif
+#endif
+
 struct dispatch_kevent_s {
 	TAILQ_ENTRY(dispatch_kevent_s) dk_list;
 	TAILQ_HEAD(, dispatch_source_refs_s) dk_sources;

@@ -112,6 +112,7 @@
 #define DISPATCH_EXPECT(x, v) (x)
 #endif
 
+#ifdef USE_DISPATCH_RETURNS_RETAINED_BLOCK
 #ifndef DISPATCH_RETURNS_RETAINED_BLOCK
 #if defined(__has_attribute)
 #if __has_attribute(ns_returns_retained)
@@ -122,6 +123,9 @@
 #else
 #define DISPATCH_RETURNS_RETAINED_BLOCK
 #endif
+#endif
+#else
+#define DISPATCH_RETURNS_RETAINED_BLOCK
 #endif
 
 #if defined(__has_feature) && defined(__has_extension)

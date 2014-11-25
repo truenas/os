@@ -819,7 +819,7 @@ _dispatch_block_get_data(const dispatch_block_t db)
 	x += sizeof(voucher_t);
 #endif
 	// x points to base of captured dispatch_block_private_data_s structure
-	dispatch_block_private_data_t dbpd = (dispatch_block_private_data_t)x;
+	dispatch_block_private_data_t dbpd = (dispatch_block_private_data_t)(uintptr_t)x;
 	if (dbpd->dbpd_magic != DISPATCH_BLOCK_PRIVATE_DATA_MAGIC) {
 		DISPATCH_CRASH("Corruption of dispatch block object");
 	}

@@ -160,8 +160,6 @@ const struct dispatch_tsd_indexes_s dispatch_tsd_indexes = {
 	.dti_voucher_index = dispatch_voucher_key,
 	.dti_qos_class_index = dispatch_priority_key,
 };
-#else // DISPATCH_USE_DIRECT_TSD
-#error Not implemented on this platform
 #endif // DISPATCH_USE_DIRECT_TSD
 
 // 6618342 Contact the team that owns the Instrument DTrace probe before

@@ -15,15 +15,15 @@
 
 /* Define to 1 if you have the declaration of `NOTE_NONE', and to 0 if you
    don't. */
-#define HAVE_DECL_NOTE_NONE 1
+#define HAVE_DECL_NOTE_NONE 0
 
 /* Define to 1 if you have the declaration of `NOTE_REAP', and to 0 if you
    don't. */
-#define HAVE_DECL_NOTE_REAP 1
+#define HAVE_DECL_NOTE_REAP 0
 
 /* Define to 1 if you have the declaration of `NOTE_SIGNAL', and to 0 if you
    don't. */
-#define HAVE_DECL_NOTE_SIGNAL 1
+#define HAVE_DECL_NOTE_SIGNAL 0
 
 /* Define to 1 if you have the declaration of `POSIX_SPAWN_START_SUSPENDED',
    and to 0 if you don't. */
@@ -39,11 +39,11 @@
 
 /* Define to 1 if you have the declaration of `VQ_UPDATE', and to 0 if you
    don't. */
-#define HAVE_DECL_VQ_UPDATE 1
+#define HAVE_DECL_VQ_UPDATE 0
 
 /* Define to 1 if you have the declaration of `VQ_VERYLOWDISK', and to 0 if
    you don't. */
-#define HAVE_DECL_VQ_VERYLOWDISK 1
+#define HAVE_DECL_VQ_VERYLOWDISK 0
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -61,10 +61,10 @@
 #define HAVE_LEAKS 1
 
 /* Define to 1 if you have the <libkern/OSAtomic.h> header file. */
-#define HAVE_LIBKERN_OSATOMIC_H 1
+#define HAVE_LIBKERN_OSATOMIC_H 0
 
 /* Define to 1 if you have the <libkern/OSCrossEndian.h> header file. */
-#define HAVE_LIBKERN_OSCROSSENDIAN_H 1
+#define HAVE_LIBKERN_OSCROSSENDIAN_H 0
 
 /* Define to 1 if you have the <libproc_internal.h> header file. */
 #define HAVE_LIBPROC_INTERNAL_H 1
@@ -79,7 +79,7 @@
 #define HAVE_MALLOC_CREATE_ZONE 1
 
 /* Define to 1 if you have the <malloc/malloc.h> header file. */
-#define HAVE_MALLOC_MALLOC_H 1
+#define HAVE_MALLOC_MALLOC_H 0
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -94,7 +94,7 @@
 #define HAVE_PTHREAD_KEY_INIT_NP 1
 
 /* Define to 1 if you have the <pthread_machdep.h> header file. */
-#define HAVE_PTHREAD_MACHDEP_H 1
+#define HAVE_PTHREAD_MACHDEP_H 0
 
 /* Define to 1 if you have the `pthread_main_np' function. */
 #define HAVE_PTHREAD_MAIN_NP 1
@@ -103,13 +103,13 @@
 /* #undef HAVE_PTHREAD_NP_H */
 
 /* Define if pthread work queues are present */
-#define HAVE_PTHREAD_WORKQUEUES 1
+#define HAVE_PTHREAD_WORKQUEUES 0
 
 /* Define to 1 if you have the `pthread_workqueue_setdispatch_np' function. */
-#define HAVE_PTHREAD_WORKQUEUE_SETDISPATCH_NP 1
+#define HAVE_PTHREAD_WORKQUEUE_SETDISPATCH_NP 0
 
 /* Define to 1 if you have the `_pthread_workqueue_init' function. */
-#define HAVE__PTHREAD_WORKQUEUE_INIT 1
+#define HAVE__PTHREAD_WORKQUEUE_INIT 0
 
 /* Define to 1 if you have the <pthread/qos.h> header file. */
 #define HAVE_PTHREAD_QOS_H 1
@@ -133,7 +133,7 @@
 #define HAVE_SYS_CDEFS_H 1
 
 /* Define to 1 if you have the <sys/guarded.h> header file. */
-#define HAVE_SYS_GUARDED_H 1
+#define HAVE_SYS_GUARDED_H 0
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1
@@ -173,7 +173,7 @@
 #define STDC_HEADERS 1
 
 /* Define to use non-portable pthread TSD optimizations for Mac OS X) */
-#define USE_APPLE_TSD_OPTIMIZATIONS 1
+#define USE_APPLE_TSD_OPTIMIZATIONS 0
 
 /* Define to tag libdispatch_init as a constructor */
 /* #undef USE_LIBDISPATCH_INIT_CONSTRUCTOR */

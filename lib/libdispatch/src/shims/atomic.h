@@ -90,7 +90,8 @@ typedef enum _dispatch_atomic_memory_order
 		default: (void**)(p)))
 #endif
 
-#if __has_extension(c_atomic) && __has_extension(c_generic_selections)
+/* clang lies on FreeBSD */
+#if !__FreeBSD__ && __has_extension(c_atomic) && __has_extension(c_generic_selections)
 #pragma mark -
 #pragma mark c11
 
