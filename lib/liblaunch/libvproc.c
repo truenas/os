@@ -37,10 +37,12 @@
 #include <pthread.h>
 #include <signal.h>
 #include <assert.h>
-#include <libkern/OSAtomic.h>
 #include <sys/syscall.h>
 #include <sys/event.h>
 #include <System/sys/fileport.h>
+
+#include <sys/types.h>
+#include <machine/atomic.h>
 
 #include <os/assumes.h>
 
@@ -98,7 +100,7 @@ vprocmgr_lookup_vproc(const char *label)
 vproc_t
 vproc_retain(vproc_t vp)
 {
-	int32_t orig = OSAtomicAdd32(1, &vp->refcount) - 1;	
+	int32_t orig = atomic_fetchadd_int(&vp->refcount, 1) - 1;
 	if (orig <= 0) {
 		_vproc_set_crash_log_message("Under-retain / over-release of vproc_t.");
 		abort();
@@ -110,7 +112,7 @@ vproc_retain(vproc_t vp)
 void
 vproc_release(vproc_t vp)
 {
-	int32_t newval = OSAtomicAdd32(-1, &vp->refcount);
+	int32_t newval = atomic_fetchadd_int(&vp->refcount, -1);
 	if (newval < 0) {
 		_vproc_set_crash_log_message("Over-release of vproc_t.");
 		abort();
