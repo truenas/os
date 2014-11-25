@@ -3,16 +3,12 @@
 LIB=	mach
 
 .PATH: mach
-CFLAGS+= -I${.CURDIR}/../../include -I. 
+.PATH: ${MACHINE_CPUARCH}
+.PATH: ${MACHINE_CPUARCH}/sys
 
-.if ${MACHINE_CPUARCH} == "amd64"
-.PATH: amd64
-.PATH: amd64/sys
-CFLAGS+=	-I./amd64
 
-.else
-# unsupported
-.endif
+machine:
+	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include machine
 
 .for _dir in ${.CURDIR}/../.. ${.CURDIR}/../../sys ${.CURDIR}/../../.. /sys /usr/src/sys
 .if !defined(SYSDIR) && exists(${_dir}/kern/)
@@ -28,11 +24,12 @@ SRCS=			\
 	mach_init.c \
 	mach_misc.c
 
+
 MACH_OBJS = 	syscalls.o	
 
 SRCS+= ${MACH_OBJS:C/.o$/.S/}
 
-
+CFLAGS+= -I${.CURDIR}/../../include -I. -I./${MACHINE_CPUARCH} -I${.CURDIR}
 CFLAGS+= -I${SYSDIR}
 CFLAGS+= -fPIC
 
