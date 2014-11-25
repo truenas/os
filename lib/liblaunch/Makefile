@@ -14,12 +14,12 @@ MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck 
 CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
 
-helper.h launchd_helperServer.c helperServer.h: helper.defs machine
+helper.h launchd_helperUser.c helperServer.h: helper.defs machine
 	mig ${MIG_FLAGS} -header helper.h -sheader helperServer.h ${.CURDIR}/helper.defs
-job.h jobServer.c jobServer.h: job.defs machine
+job.h jobUser.c jobServer.h: job.defs machine
 	mig ${MIG_FLAGS} -sheader jobServer.h ${.CURDIR}/job.defs
 
-SRCS=  jobUser.c launchd_helperServer.c
+SRCS=  jobUser.c launchd_helperUser.c
 SRCS+= libbootstrap.c liblaunch.c libvproc.c
 
 machine:
