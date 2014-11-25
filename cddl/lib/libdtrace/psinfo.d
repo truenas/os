@@ -86,7 +86,6 @@ translator lwpsinfo_t < struct thread *T > {
 	pr_wchan = (uintptr_t)T->td_wchan;
 };
 
-/*
 inline psinfo_t *curpsinfo = xlate <psinfo_t *> (curthread->td_proc);
 #pragma D attributes Stable/Stable/Common curpsinfo
 #pragma D binding "1.0" curpsinfo
@@ -94,5 +93,4 @@ inline psinfo_t *curpsinfo = xlate <psinfo_t *> (curthread->td_proc);
 inline lwpsinfo_t *curlwpsinfo = xlate <lwpsinfo_t *> (curthread);
 #pragma D attributes Stable/Stable/Common curlwpsinfo
 #pragma D binding "1.0" curlwpsinfo
-*/
 
