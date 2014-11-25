@@ -221,6 +221,7 @@ typedef struct semaphore                *semaphore_t;
 typedef struct alarm                    *alarm_t;
 typedef struct clock                    *clock_serv_t;
 typedef struct clock                    *clock_ctrl_t;
+typedef processor_set_t         processor_set_name_t;
 
 #else	/* MACH_KERNEL */
 
@@ -262,6 +263,7 @@ typedef mach_port_t		lock_set_port_t;
 typedef mach_port_t		semaphore_port_t;
 typedef mach_port_t		security_port_t;
 typedef integer_t		ledger_item_t;
+typedef processor_set_t         processor_set_name_t;
 typedef processor_set_name_t *processor_set_name_array_t;
 typedef processor_t *processor_array_t;
 
@@ -274,7 +276,6 @@ typedef int kmod_t;
 typedef int kmod_control_flavor_t;
 
 typedef mach_port_t UNDServerRef;
-typedef processor_set_t         processor_set_name_t;
 typedef ledger_t                *ledger_array_t;
 typedef mach_port_t		*ledger_port_array_t;
 typedef mach_port_t    		ledger_port_t;
