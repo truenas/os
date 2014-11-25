@@ -29,7 +29,8 @@ SRCS= error.c global.c header.c ident.c \
 	statement.c string.c type.c user.c utils.c
 #handler.c
 
-CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT
+CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
+CFLAGS+= -DYY_NO_UNPUT -DYY_NO_INPUT
 CFLAGS+= -I${.CURDIR}/../../apsl/include
 
 .if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
@@ -38,7 +39,7 @@ CFLAGS+= -I${.CURDIR}/i386
 .endif
 
 machine:
-	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include machine
+	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include ${.CURDIR}/machine
 
 ident.c: machine
 	echo "#include \"alloc.h\" " >${.TARGET}
