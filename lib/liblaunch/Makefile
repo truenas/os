@@ -11,7 +11,7 @@ BASE_INCLUDE= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I.
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
-CFLAGS+= ${MIG_FLAGS}
+CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck 
 CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
 
 helper.h launchd_helperServer.c helperServer.h: helper.defs machine
@@ -19,7 +19,7 @@ helper.h launchd_helperServer.c helperServer.h: helper.defs machine
 job.h jobServer.c jobServer.h: job.defs machine
 	mig ${MIG_FLAGS} -sheader jobServer.h ${.CURDIR}/job.defs
 
-SRCS=  jobServer.c launchd_helperServer.c
+SRCS=  jobUser.c launchd_helperServer.c
 SRCS+= libbootstrap.c liblaunch.c libvproc.c
 
 machine:
