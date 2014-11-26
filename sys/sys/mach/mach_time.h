@@ -29,7 +29,7 @@
 #ifndef	_MACH_MACH_TIME_H_
 #define	_MACH_MACH_TIME_H_
 
-#include <mach/mach_types.h>
+#include <sys/mach/mach_types.h>
 
 #include <sys/cdefs.h>
 
