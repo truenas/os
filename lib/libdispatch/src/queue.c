@@ -856,7 +856,7 @@ _dispatch_root_queue_init_pthread_pool(dispatch_root_queue_context_t qc,
 	(void)dispatch_assume(pqc->dpq_thread_mediator.dsema_port);
 #elif USE_POSIX_SEM
 	/* XXXRW: POSIX semaphores don't support LIFO? */
-	int ret = sem_init(&pqc->dpq_thread_mediator.dsema_sem), 0, 0);
+	int ret = sem_init(&pqc->dpq_thread_mediator.dsema_sem, 0, 0);
 	(void)dispatch_assume_zero(ret);
 #endif
 }

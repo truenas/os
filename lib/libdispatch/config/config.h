@@ -179,10 +179,10 @@
 /* #undef USE_LIBDISPATCH_INIT_CONSTRUCTOR */
 
 /* Define to use Mach semaphores */
-#define USE_MACH_SEM 1
+#define USE_MACH_SEM 0
 
 /* Define to use POSIX semaphores */
-/* #undef USE_POSIX_SEM */
+#define USE_POSIX_SEM 1
 
 /* Version number of package */
 #define VERSION "1.2"

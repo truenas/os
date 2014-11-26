@@ -9,11 +9,12 @@ CFLAGS+=	-I./os -I./private -I${.CURDIR} -I${.CURDIR}/../../include -I${.CURDIR}
 CFLAGS+=	-I${.CURDIR}/../../apsl/include -fblocks
 CFLAGS+=	-D__APPLE__ -DTARGET_CPU_X86=1 -DDISPATCH_USE_DTRACE=0
 
-protocolServer.c protocol.h protocolServer.h:
-	mig -user /dev/null -server protocolServer.c -header protocol.h \
+protocolServer.c protocolUser.c protocol.h protocolServer.h:
+	mig -user protocolUser.c -server protocolServer.c -header protocol.h \
 	-sheader protocolServer.h ${.CURDIR}/src/protocol.defs
 
 SRCS =  			\
+	protocolUser.c \
 	protocolServer.c \
 	allocator.c		\
 	apply.c			\
@@ -36,5 +37,6 @@ SRCS+=	resolver.c
 # voucher.c
 
 clean:
-	rm -f *.o *.So *.po *~ protocol.h protocolServer.c protocolServer.h
+	rm -f *.o *.So *.po *~ protocol.h protocolServer.c protocolServer.h protocolUser.c \
+	*.so* *.a
 .include <bsd.lib.mk>

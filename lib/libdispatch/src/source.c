@@ -136,7 +136,7 @@ dispatch_source_create(dispatch_source_type_t type,
 	dk->dk_kevent.ident = handle;
 	dk->dk_kevent.flags |= EV_ADD|EV_ENABLE;
 	dk->dk_kevent.fflags |= (uint32_t)mask;
-	dk->dk_kevent.udata = (void *)(uintptr_t)dk;
+	dk->dk_kevent.udata = (uintptr_t)dk;
 	TAILQ_INIT(&dk->dk_sources);
 
 	ds->ds_dkev = dk;
@@ -1327,7 +1327,7 @@ typedef struct dispatch_timer_s {
 		DISPATCH_TIMER_INITIALIZER(DISPATCH_TIMER_INDEX( \
 		DISPATCH_TIMER_KIND_##kind, DISPATCH_TIMER_QOS_##qos))
 
-struct dispatch_timer_s _dispatch_timer[] =  {
+static struct dispatch_timer_s _dispatch_timer[] =  {
 	DISPATCH_TIMER_INIT(WALL, NORMAL),
 	DISPATCH_TIMER_INIT(WALL, CRITICAL),
 	DISPATCH_TIMER_INIT(WALL, BACKGROUND),
@@ -1339,7 +1339,7 @@ struct dispatch_timer_s _dispatch_timer[] =  {
 		((sizeof(_dispatch_timer) / sizeof(_dispatch_timer[0])))
 
 #define DISPATCH_KEVENT_TIMER_UDATA(tidx) \
-	(void *)(uintptr_t)&_dispatch_kevent_timer[tidx]
+	(uintptr_t)&_dispatch_kevent_timer[tidx]
 #ifdef __LP64__
 #define DISPATCH_KEVENT_TIMER_UDATA_INITIALIZER(tidx) \
 		.udata = DISPATCH_KEVENT_TIMER_UDATA(tidx)
@@ -1362,7 +1362,7 @@ struct dispatch_timer_s _dispatch_timer[] =  {
 		DISPATCH_KEVENT_TIMER_INITIALIZER(DISPATCH_TIMER_INDEX( \
 		DISPATCH_TIMER_KIND_##kind, DISPATCH_TIMER_QOS_##qos))
 
-struct dispatch_kevent_s _dispatch_kevent_timer[] = {
+static struct dispatch_kevent_s _dispatch_kevent_timer[] = {
 	DISPATCH_KEVENT_TIMER_INIT(WALL, NORMAL),
 	DISPATCH_KEVENT_TIMER_INIT(WALL, CRITICAL),
 	DISPATCH_KEVENT_TIMER_INIT(WALL, BACKGROUND),
@@ -1385,7 +1385,7 @@ struct dispatch_kevent_s _dispatch_kevent_timer[] = {
 #define DISPATCH_KEVENT_TIMEOUT_INIT(qos, note) \
 		DISPATCH_KEVENT_TIMEOUT_INITIALIZER(DISPATCH_TIMER_QOS_##qos, note)
 
-struct kevent64_s _dispatch_kevent_timeout[] = {
+static struct kevent64_s _dispatch_kevent_timeout[] = {
 	DISPATCH_KEVENT_TIMEOUT_INIT(NORMAL, 0),
 	DISPATCH_KEVENT_TIMEOUT_INIT(CRITICAL, NOTE_CRITICAL),
 	DISPATCH_KEVENT_TIMEOUT_INIT(BACKGROUND, NOTE_BACKGROUND),
@@ -2707,7 +2707,7 @@ _dispatch_kevent_mach_msg_drain(struct kevent64_s *ke)
 		} else if (kr == MACH_RCV_TOO_LARGE) {
 			_dispatch_log("BUG in libdispatch client: "
 					"_dispatch_kevent_mach_msg_drain: dropped message too "
-					"large to fit in memory: id = 0x%x, size = %lld",
+					"large to fit in memory: id = 0x%x, size = %zd",
 					hdr->msgh_id, ke->ext[1]);
 			kr = MACH_MSG_SUCCESS;
 		}
@@ -4127,7 +4127,7 @@ static inline mach_msg_header_t*
 _dispatch_mach_msg_get_msg(dispatch_mach_msg_t dmsg)
 {
 	return dmsg->dmsg_destructor ? dmsg->dmsg_msg :
-			(mach_msg_header_t*)dmsg->dmsg_buf;
+		(mach_msg_header_t*)(uintptr_t)dmsg->dmsg_buf;
 }
 
 mach_msg_header_t*
@@ -4397,8 +4397,8 @@ static size_t
 _dispatch_timer_debug_attr(dispatch_source_t ds, char* buf, size_t bufsiz)
 {
 	dispatch_source_refs_t dr = ds->ds_refs;
-	return dsnprintf(buf, bufsiz, "timer = { target = 0x%llx, deadline = 0x%llx,"
-			" last_fire = 0x%llx, interval = 0x%llx, flags = 0x%lx }, ",
+	return dsnprintf(buf, bufsiz, "timer = { target = 0x%zx, deadline = 0x%zx,"
+			" last_fire = 0x%zx, interval = 0x%zx, flags = 0x%lx }, ",
 			ds_timer(dr).target, ds_timer(dr).deadline, ds_timer(dr).last_fire,
 			ds_timer(dr).interval, ds_timer(dr).flags);
 }

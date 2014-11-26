@@ -111,6 +111,8 @@ voucher_get_mach_voucher(voucher_t voucher);
 #define MACH_RCV_VOUCHER 0
 #endif // VOUCHER_USE_MACH_VOUCHER
 
+extern voucher_activity_mode_t _voucher_activity_mode;
+
 void _voucher_init(void);
 void _voucher_atfork_child(void);
 void _voucher_activity_heap_pressure_warn(void);
@@ -579,7 +581,6 @@ typedef struct _voucher_activity_metadata_s {
 _voucher_activity_tracepoint_t _voucher_activity_tracepoint_get_slow(
 		unsigned int slots);
 extern _voucher_activity_t _voucher_activity_default;
-extern voucher_activity_mode_t _voucher_activity_mode;
 
 #if DISPATCH_DEBUG && DISPATCH_VOUCHER_ACTIVITY_DEBUG
 #define _dispatch_voucher_activity_debug(msg, act, ...) \

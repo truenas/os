@@ -197,9 +197,7 @@ DISPATCH_EXPORT DISPATCH_NOTHROW void dispatch_atfork_child(void);
 #include <mach/host_info.h>
 #include <mach/notify.h>
 #include <mach/mach_vm.h>
-#ifndef __FreeBSD__
 #include <mach/vm_map.h>
-#endif
 #endif /* HAVE_MACH */
 #if HAVE_MALLOC_MALLOC_H
 #include <malloc/malloc.h>
@@ -731,22 +729,20 @@ mach_port_t _dispatch_get_mach_host_port(void);
 #include "inline_internal.h"
 
 #ifdef __FreeBSD__
-#define kevent64_s kevent
 #define vm_page_size PAGE_SIZE
 #include <sys/proc.h>
-#include <compat/mach/mach_vm.h>
+#include <mach/mach_port.h>
 /* XXX need to work out header situation */
 #define VM_MAKE_TAG(x) 0
-int mach_vm_map(mach_port_name_t, vm_offset_t *, vm_size_t, vm_offset_t, int, void *, int,
-				boolean_t, vm_prot_t, vm_prot_t, vm_inherit_t);
-#define VM_FLAGS_ANYWHERE MACH_VM_FLAGS_ANYWHERE
 #define O_SYMLINK       0x200000        /* allow open of a symlink */
 struct radvisory {
        off_t   ra_offset;
        int     ra_count;
 };
 #define F_RDADVISE      44              /* Issue an advisory read async with no copy to user */
-
+#define KERN_OSVERSION  __FreeBSD_version
+#define malloc_zone_pressure_relief(a, b)
+#define mach_vm_round_page round_page
 #endif
 
 #endif /* __DISPATCH_INTERNAL__ */

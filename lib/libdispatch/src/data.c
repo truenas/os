@@ -533,7 +533,7 @@ retry:
 	} else {
 		vm_addr = (uintptr_t)dd->buf;
 	}
-	flags = VM_PROT_DEFAULT|VM_PROT_IS_MASK|MAP_MEM_VM_COPY;
+	flags = (vm_prot_t)(VM_PROT_DEFAULT|VM_PROT_IS_MASK|MAP_MEM_VM_COPY);
 	mos = vm_size;
 	kr = mach_make_memory_entry_64(mach_task_self(), &mos, vm_addr, flags,
 			&mep, MACH_PORT_NULL);
