@@ -16,7 +16,12 @@ Currently known to be missing are:
    	 unknown as to whether or not we need the portions of XPC that depend on
 	 libdispatch updates
 
-
+- kevent64
+- MACH_SEND_NOTIFY
+- EVFILT_MACHPORT
+- EVFILT_VM
+	- NOTE_VM_PRESSURE
+	- NOTE_VM_ERROR
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
 $FreeBSD$
