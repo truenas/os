@@ -1250,8 +1250,8 @@ dispatch_mach_msg_get_context(mach_msg_header_t *msg)
 	mach_msg_context_trailer_t *tp;
 	void *context = NULL;
 
-	tp = (mach_msg_context_trailer_t *)((uint8_t *)msg +
-			round_msg(msg->msgh_size));
+	tp = (mach_msg_context_trailer_t *)((uint64_t *)msg +
+			round_msg(msg->msgh_size)/8);
 	if (tp->msgh_trailer_size >=
 			(mach_msg_size_t)sizeof(mach_msg_context_trailer_t)) {
 		context = (void *)(uintptr_t)tp->msgh_context;

@@ -97,7 +97,7 @@
 #define HAVE_PTHREAD_MACHDEP_H 0
 
 /* Define to 1 if you have the `pthread_main_np' function. */
-#define HAVE_PTHREAD_MAIN_NP 1
+#define HAVE_PTHREAD_MAIN_NP 0
 
 /* Define to 1 if you have the <pthread_np.h> header file. */
 /* #undef HAVE_PTHREAD_NP_H */

@@ -1506,8 +1506,8 @@ dispatch_pthread_root_queue_create(const char *label, unsigned long flags,
 	dq = _dispatch_alloc(DISPATCH_VTABLE(queue_root), dqs +
 			sizeof(struct dispatch_root_queue_context_s) +
 			sizeof(struct dispatch_pthread_root_queue_context_s));
-	qc = (void*)dq + dqs;
-	pqc = (void*)qc + sizeof(struct dispatch_root_queue_context_s);
+	qc = (void*)((uint8_t *)dq + dqs);
+	pqc = (void*)((uint8_t *)qc + sizeof(struct dispatch_root_queue_context_s));
 
 	_dispatch_queue_init(dq);
 	if (label) {

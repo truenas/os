@@ -136,7 +136,7 @@ dispatch_source_create(dispatch_source_type_t type,
 	dk->dk_kevent.ident = handle;
 	dk->dk_kevent.flags |= EV_ADD|EV_ENABLE;
 	dk->dk_kevent.fflags |= (uint32_t)mask;
-	dk->dk_kevent.udata = (uintptr_t)dk;
+	dk->dk_kevent.udata = (void *)(uintptr_t)dk;
 	TAILQ_INIT(&dk->dk_sources);
 
 	ds->ds_dkev = dk;

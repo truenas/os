@@ -161,7 +161,7 @@ dispatch_data_create(const void* buffer, size_t size, dispatch_queue_t queue,
 		destructor = DISPATCH_DATA_DESTRUCTOR_FREE;
 	} else if (destructor == DISPATCH_DATA_DESTRUCTOR_INLINE) {
 		data = _dispatch_data_alloc(0, size);
-		buffer = memcpy((void*)data + sizeof(struct dispatch_data_s), buffer,
+		buffer = memcpy((void*)((uint8_t *)data + sizeof(struct dispatch_data_s)), buffer,
 				size);
 		destructor = DISPATCH_DATA_DESTRUCTOR_NONE;
 	} else {
@@ -197,7 +197,7 @@ dispatch_data_create_alloc(size_t size, void** buffer_ptr)
 		goto out;
 	}
 	data = _dispatch_data_alloc(0, size);
-	buffer = (void*)data + sizeof(struct dispatch_data_s);
+	buffer = (void*)((uint8_t *)data + sizeof(struct dispatch_data_s));
 	_dispatch_data_init(data, buffer, size, NULL,
 			DISPATCH_DATA_DESTRUCTOR_NONE);
 out:
@@ -368,7 +368,7 @@ dispatch_data_create_map(dispatch_data_t dd, const void **buffer_ptr,
 	}
 	if (_dispatch_data_leaf(dd)) {
 		_dispatch_data_retain(data);
-		buffer = dd->buf + offset;
+		buffer = (uint8_t *)dd->buf + offset;
 		goto out;
 	}
 	// Composite data object, copy the represented buffers
@@ -380,8 +380,8 @@ dispatch_data_create_map(dispatch_data_t dd, const void **buffer_ptr,
 	}
 	dispatch_data_apply(dd, ^(dispatch_data_t region DISPATCH_UNUSED,
 			size_t off, const void* buf, size_t len) {
-		memcpy((void*)buffer + off, buf, len);
-		return (bool)true;
+			memcpy((void*)((uint8_t *)buffer + off), buf, len);
+			return (bool)true;
 	});
 	data = dispatch_data_create(buffer, size, NULL,
 			DISPATCH_DATA_DESTRUCTOR_FREE);
@@ -409,7 +409,7 @@ _dispatch_data_apply(dispatch_data_t dd, size_t offset, size_t from,
 		dd = dd->records[0].data_object;
 	}
 	if (_dispatch_data_leaf(dd)) {
-		buffer = dd->buf + from;
+		buffer = (uint8_t *)dd->buf + from;
 		return _dispatch_client_callout3(ctxt, data, offset, buffer, size,
 				applier);
 	}

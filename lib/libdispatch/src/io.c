@@ -2169,7 +2169,7 @@ _dispatch_operation_perform(dispatch_operation_t op)
 			goto error;
 		}
 	}
-	void *buf = op->buf + op->buf_len;
+	void *buf = (uint8_t *)op->buf + op->buf_len;
 	size_t len = op->buf_siz - op->buf_len;
 	off_t off = (off_t)((size_t)op->offset + op->total);
 	ssize_t processed = -1;
@@ -2351,7 +2351,7 @@ _dispatch_io_debug_attr(dispatch_io_t channel, char* buf, size_t bufsiz)
 	dispatch_queue_t target = channel->do_targetq;
 	return dsnprintf(buf, bufsiz, "type = %s, fd = 0x%x, %sfd_entry = %p, "
 			"queue = %p, target = %s[%p], barrier_queue = %p, barrier_group = "
-			"%p, err = 0x%x, low = 0x%zx, high = 0x%zx, interval%s = %llu ",
+			"%p, err = 0x%x, low = 0x%zx, high = 0x%zx, interval%s = %zu ",
 			channel->params.type == DISPATCH_IO_STREAM ? "stream" : "random",
 			channel->fd_actual, channel->atomic_flags & DIO_STOPPED ?
 			"stopped, " : channel->atomic_flags & DIO_CLOSED ? "closed, " : "",
@@ -2384,9 +2384,9 @@ _dispatch_operation_debug_attr(dispatch_operation_t op, char* buf,
 	dispatch_queue_t oqtarget = op->op_q ? op->op_q->do_targetq : NULL;
 	return dsnprintf(buf, bufsiz, "type = %s %s, fd = 0x%x, fd_entry = %p, "
 			"channel = %p, queue = %p -> %s[%p], target = %s[%p], "
-			"offset = %lld, length = %zu, done = %zu, undelivered = %zu, "
+			"offset = %zd, length = %zu, done = %zu, undelivered = %zu, "
 			"flags = %u, err = 0x%x, low = 0x%zx, high = 0x%zx, "
-			"interval%s = %llu ", op->params.type == DISPATCH_IO_STREAM ?
+			"interval%s = %zu ", op->params.type == DISPATCH_IO_STREAM ?
 			"stream" : "random", op->direction == DOP_DIR_READ ? "read" :
 			"write", op->fd_entry ? op->fd_entry->fd : -1, op->fd_entry,
 			op->channel, op->op_q, oqtarget && oqtarget->dq_label ?
