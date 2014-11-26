@@ -2071,7 +2071,6 @@ _dispatch_disk_perform(void *ctxt)
 static void
 _dispatch_operation_advise(dispatch_operation_t op, size_t chunk_size)
 {
-#ifdef notyet
 	int err;
 	struct radvisory advise;
 
@@ -2100,7 +2099,6 @@ _dispatch_operation_advise(dispatch_operation_t op, size_t chunk_size)
 		// TODO: set disk status on error
 		default: (void)dispatch_assume_zero(err); break;
 	);
-#endif
 }
 
 static int

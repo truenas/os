@@ -740,6 +740,13 @@ mach_port_t _dispatch_get_mach_host_port(void);
 int mach_vm_map(mach_port_name_t, vm_offset_t *, vm_size_t, vm_offset_t, int, void *, int,
 				boolean_t, vm_prot_t, vm_prot_t, vm_inherit_t);
 #define VM_FLAGS_ANYWHERE MACH_VM_FLAGS_ANYWHERE
+#define O_SYMLINK       0x200000        /* allow open of a symlink */
+struct radvisory {
+       off_t   ra_offset;
+       int     ra_count;
+};
+#define F_RDADVISE      44              /* Issue an advisory read async with no copy to user */
+
 #endif
 
 #endif /* __DISPATCH_INTERNAL__ */
