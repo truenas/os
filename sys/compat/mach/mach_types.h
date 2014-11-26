@@ -87,11 +87,6 @@ void mach_e_thread_init(struct thread *td);
  */
 typedef void *mach_cproc_t;
 
-typedef struct mach_timebase_info {
-	u_int32_t	numer;
-	u_int32_t	denom;
-} *mach_timebase_info_t;
-
 typedef struct {
 	u_int8_t       mig_vers;
 	u_int8_t       if_vers;
