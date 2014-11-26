@@ -43,9 +43,10 @@ typedef unsigned int xpc_service_type_t;
 typedef int xpc_jetsam_band_t;
 
 typedef char event_name_t[64];
+#define vm_allocate mach_vm_allocate
+#define vm_deallocate mach_vm_deallocate
 
 #define     O_EVTONLY       0x8000          /* descriptor requested for event notifications only */
-#define EVFILT_MACHPORT         (-8)	/* Mach portsets */
 
 #define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
 #define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
