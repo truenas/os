@@ -9,7 +9,9 @@ CFLAGS+= ${MIG_FLAGS}
 CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
 CFLAGS+= -I${.CURDIR}/../../lib/liblaunch
 LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
-
+LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
+LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach
+LDFLAGS+= -pthread
 
 jobServer.h jobServer.c job.h: job.defs
 	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
