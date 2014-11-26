@@ -17,9 +17,9 @@ jobServer.h jobServer.c job.h: job.defs
 	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
 helper.h launchd_helperServer.c: helper.defs
 	mig ${MIG_FLAGS} -header helper.h -sheader launchd_helperServer.h helper.defs
-job_reply.h job_replyServer.c job_replyServer.h: job_reply.defs
+job_reply.h job_replyUser.c job_replyServer.c job_replyServer.h: job_reply.defs
 	mig ${MIG_FLAGS} -sheader job_replyServer.h job_reply.defs
-job_forward.h job_forwardServer.c job_forwardServer.h: job_forward.defs
+job_forward.h job_forwardUser.c job_forwardServer.c job_forwardServer.h: job_forward.defs
 	mig ${MIG_FLAGS} -sheader job_forwardServer.h job_forward.defs
 notify.h notifyServer.c notifyServer.h: notify.defs
 	mig ${MIG_FLAGS} -sheader notifyServer.h notify.defs
@@ -31,11 +31,10 @@ internal.h internalServer.h internalServer.c:
 
 
 SRCS= jobServer.c launchd_helperServer.c mach_excServer.c internalServer.c
-SRCS+= job_forwardServer.c job_replyServer.c notifyServer.c
+SRCS+= job_forwardUser.c job_forwardServer.c job_replyUser.c job_replyServer.c notifyServer.c
 SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
 
 
-clean:
-	rm -f *.o *Server.c *User.c job.h helper.d job_reply.h job_forward.h notify.h mach_excServer.h \
+CLEANFILES+= *Server.c *User.c job.h helper.h job_reply.h job_forward.h notify.h \
 	internal.h mach_exc.h *Server.h *~ cscope.*
 .include <bsd.prog.mk>
