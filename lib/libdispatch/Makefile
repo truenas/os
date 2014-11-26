@@ -29,7 +29,8 @@ SRCS =  			\
 	semaphore.c		\
 	source.c		\
 	time.c			\
-	transform.c
+	transform.c		\
+	voucher.c
 
 SRCS+=	resolver.c
 
