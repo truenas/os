@@ -53,12 +53,12 @@
 #include <stdlib.h>
 #include <sys/queue.h>
 
-#include <mach.h>
+#include <mach/mach.h>
 #include <mach/boolean.h>
 #include <mach/kern_return.h>
 #include <mach/message.h>
 #include <mach/mig_errors.h>
-#include <mach/port.h>
+#include <mach/mach_port.h>
 #include <mach/mach_vm.h>
 
 #define LIBMACH_OPTIONS	(MACH_SEND_INTERRUPT|MACH_RCV_INTERRUPT)
@@ -213,7 +213,7 @@ static void
 mach_msg_destroy_memory(vm_offset_t addr, vm_size_t size)
 {
     if (size != 0)
-	(void) vm_deallocate(mach_task_self(), addr, size);
+	(void) mach_vm_deallocate(mach_task_self(), addr, size);
 }
 
 /*
@@ -335,14 +335,14 @@ mach_msg_server_once(
     register mach_msg_return_t mr;
     register kern_return_t kr;
 
-    if ((kr = vm_allocate(mach_task_self(),
+    if ((kr = mach_vm_allocate(mach_task_self(),
 		     (vm_address_t *)&bufRequest,
 		     max_size + MAX_TRAILER_SIZE,
 		     TRUE)) != KERN_SUCCESS)
       goto cleanup;
     allocatedRequest = TRUE;
 
-    if ((kr = vm_allocate(mach_task_self(),
+    if ((kr = mach_vm_allocate(mach_task_self(),
 		     (vm_address_t *)&bufReply,
 		     max_size + MAX_TRAILER_SIZE,
 		     TRUE)) != KERN_SUCCESS)
@@ -442,11 +442,11 @@ mach_msg_server_once(
 
 cleanup:
         if ( allocatedRequest == TRUE )  
-	    (void)vm_deallocate(mach_task_self(),
+	    (void)mach_vm_deallocate(mach_task_self(),
 			    (vm_address_t) bufRequest,
 			    max_size + MAX_TRAILER_SIZE);
         if ( allocatedReply == TRUE ) 
-	    (void)vm_deallocate(mach_task_self(),
+	    (void)mach_vm_deallocate(mach_task_self(),
 			    (vm_address_t) bufReply,
 			    max_size + MAX_TRAILER_SIZE);
         return kr;
@@ -471,14 +471,14 @@ mach_msg_server(
     register mach_msg_return_t mr;
     register kern_return_t kr;
 
-    if ((kr = vm_allocate(mach_task_self(),
+    if ((kr = mach_vm_allocate(mach_task_self(),
 		     (vm_address_t *)&bufRequest,
 		     max_size + MAX_TRAILER_SIZE,
 		     TRUE)) != KERN_SUCCESS)
       goto cleanup;
     allocatedRequest = TRUE;
 
-    if ((kr = vm_allocate(mach_task_self(),
+    if ((kr = mach_vm_allocate(mach_task_self(),
 		     (vm_address_t *)&bufReply,
 		     max_size + MAX_TRAILER_SIZE,
 		     TRUE)) != KERN_SUCCESS)
@@ -565,11 +565,11 @@ mach_msg_server(
 
 cleanup:
         if ( allocatedRequest == TRUE )
-	    (void)vm_deallocate(mach_task_self(),
+	    (void)mach_vm_deallocate(mach_task_self(),
 				(vm_address_t) bufRequest,
 				max_size + MAX_TRAILER_SIZE);
         if ( allocatedReply == TRUE )
-	    (void)vm_deallocate(mach_task_self(),
+	    (void)mach_vm_deallocate(mach_task_self(),
 				(vm_address_t) bufReply,
 				max_size + MAX_TRAILER_SIZE);
     }

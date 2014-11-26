@@ -2,7 +2,7 @@
 #include <sys/types.h>
 #include <sys/errno.h>
 
-#include <mach.h>
+#include <mach/mach.h>
 #include <mach/boolean.h>
 #include <mach/mach_traps.h>
 #include <mach/mach_init.h>
@@ -59,14 +59,14 @@ mach_port_mod_refs(mach_port_name_t target, mach_port_name_t name,
 }
 
 kern_return_t
-vm_allocate(mach_port_name_t target, vm_address_t *addr, vm_size_t size, int flags)
+mach_vm_allocate(mach_port_name_t target, vm_address_t *addr, vm_size_t size, int flags)
 {
 
 	return (_kernelrpc_mach_vm_allocate_trap(target, addr, size, flags));
 }
 
 kern_return_t
-vm_deallocate(mach_port_name_t target, vm_address_t addr, vm_size_t size)
+mach_vm_deallocate(mach_port_name_t target, vm_address_t addr, vm_size_t size)
 {
 
 	return (_kernelrpc_mach_vm_deallocate_trap(target, addr, size));
