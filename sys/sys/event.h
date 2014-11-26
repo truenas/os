@@ -32,17 +32,20 @@
 #include <sys/queue.h> 
 
 #define EVFILT_READ		(-1)
-#define EVFILT_WRITE		(-2)
+#define EVFILT_WRITE	(-2)
 #define EVFILT_AIO		(-3)	/* attached to aio requests */
-#define EVFILT_VNODE		(-4)	/* attached to vnodes */
+#define EVFILT_VNODE	(-4)	/* attached to vnodes */
 #define EVFILT_PROC		(-5)	/* attached to struct proc */
-#define EVFILT_SIGNAL		(-6)	/* attached to struct proc */
-#define EVFILT_TIMER		(-7)	/* timers */
-/*	EVFILT_NETDEV		(-8)	   no longer supported */
+#define EVFILT_SIGNAL	(-6)	/* attached to struct proc */
+#define EVFILT_TIMER	(-7)	/* timers */
+#define EVFILT_PROCDESC	(-8)	/* attached to process descriptors */
 #define EVFILT_FS		(-9)	/* filesystem events */
 #define EVFILT_LIO		(-10)	/* attached to lio requests */
 #define EVFILT_USER		(-11)	/* User events */
-#define EVFILT_SYSCOUNT		11
+#define EVFILT_SENDFILE	(-12)	/* attached to sendfile requests */
+#define	EVFILT_MACHPORT	(-13)	/* Mach portsets */
+#define EVFILT_VM		(-14)	/* Virtual Memory events */
+#define EVFILT_SYSCOUNT	14
 
 #define EV_SET(kevp_, a, b, c, d, e, f) do {	\
 	struct kevent *kevp = (kevp_);		\
@@ -54,6 +57,18 @@
 	(kevp)->udata = (f);			\
 } while(0)
 
+#define EV_SET64(kevp, a, b, c, d, e, f, g, h) do {	\
+	struct kevent64_s *__kevp__ = (kevp);		\
+	__kevp__->ident = (a);				\
+	__kevp__->filter = (b);				\
+	__kevp__->flags = (c);				\
+	__kevp__->fflags = (d);				\
+	__kevp__->data = (e);				\
+	__kevp__->udata = (f);				\
+	__kevp__->ext[0] = (g);				\
+	__kevp__->ext[1] = (h);				\
+} while(0)
+
 struct kevent {
 	uintptr_t	ident;		/* identifier for this event */
 	short		filter;		/* filter for event */
@@ -61,6 +76,16 @@ struct kevent {
 	u_int		fflags;
 	intptr_t	data;
 	void		*udata;		/* opaque user data identifier */
+};
+
+struct kevent64_s {
+	uint64_t	ident;		/* identifier for this event */
+	int16_t		filter;		/* filter for event */
+	uint16_t	flags;		/* general flags */
+	uint32_t	fflags;		/* filter-specific flags */
+	int64_t		data;		/* filter-specific data */
+	uint64_t	udata;		/* opaque user data identifier */
+	uint64_t	ext[2];		/* filter-specific extensions */
 };
 
 /* actions */
@@ -131,6 +156,16 @@ struct kevent {
 #define	NOTE_TRACK	0x00000001		/* follow across forks */
 #define	NOTE_TRACKERR	0x00000002		/* could not track child */
 #define	NOTE_CHILD	0x00000004		/* am a child process */
+
+
+/*
+ * data/hint fflags for EVFILT_VM, shared with userspace.
+ */
+#define NOTE_VM_PRESSURE			0x80000000              /* will react on memory pressure */
+#define NOTE_VM_PRESSURE_TERMINATE		0x40000000              /* will quit on memory pressure, possibly after cleaning up dirty state */
+#define NOTE_VM_PRESSURE_SUDDEN_TERMINATE	0x20000000		/* will quit immediately on memory pressure */
+#define NOTE_VM_ERROR				0x10000000              /* there was an error */
+
 
 /* additional flags for EVFILT_TIMER */
 #define NOTE_SECONDS		0x00000001	/* data is seconds	*/
@@ -280,6 +315,10 @@ int     kqueue(void);
 int     kevent(int kq, const struct kevent *changelist, int nchanges,
 	    struct kevent *eventlist, int nevents,
 	    const struct timespec *timeout);
+int     kevent64(int kq, const struct kevent64_s *changelist,
+		    int nchanges, struct kevent64_s *eventlist,
+		    int nevents, unsigned int flags,
+		    const struct timespec *timeout);
 __END_DECLS
 
 #endif /* !_KERNEL */
