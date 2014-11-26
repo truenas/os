@@ -86,7 +86,6 @@ enum obj_type { OBJT_DEFAULT, OBJT_SWAP, OBJT_VNODE, OBJT_DEVICE, OBJT_PHYS,
 		OBJT_DEAD, OBJT_SG, OBJT_MGTDEVICE };
 typedef u_char objtype_t;
 
-#ifdef _KERNEL
 union vm_map_object;
 typedef union vm_map_object vm_map_object_t;
 
@@ -99,7 +98,6 @@ typedef struct vm_map *vm_map_t;
 struct vm_object;
 typedef struct vm_object *vm_object_t;
 
-#endif
 #ifndef _KERNEL
 /*
  * This is defined in <sys/types.h> for the kernel so that non-vm kernel

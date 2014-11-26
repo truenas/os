@@ -2,6 +2,6 @@
 #define _MACH_VM_TYPES_H_ 
 #include <sys/mach/vm_types.h>
 
-typedef mach_port_t vm_map_t;
+typedef natural_t mach_vm_map_t; /* mach_port_t */
 
 #endif

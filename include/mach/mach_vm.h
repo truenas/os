@@ -51,14 +51,14 @@ extern
 kern_return_t mach_vm_allocate
 #if	defined(LINTLIBRARY)
     (target, address, size, flags)
-	vm_map_t target;
+	mach_vm_map_t target;
 	mach_vm_address_t *address;
 	mach_vm_size_t size;
 	int flags;
 { return mach_vm_allocate(target, address, size, flags); }
 #else
 (
-	vm_map_t target,
+	mach_vm_map_t target,
 	mach_vm_address_t *address,
 	mach_vm_size_t size,
 	int flags
@@ -74,13 +74,13 @@ extern
 kern_return_t mach_vm_deallocate
 #if	defined(LINTLIBRARY)
     (target, address, size)
-	vm_map_t target;
+	mach_vm_map_t target;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 { return mach_vm_deallocate(target, address, size); }
 #else
 (
-	vm_map_t target,
+	mach_vm_map_t target,
 	mach_vm_address_t address,
 	mach_vm_size_t size
 );
@@ -95,7 +95,7 @@ extern
 kern_return_t mach_vm_protect
 #if	defined(LINTLIBRARY)
     (target_task, address, size, set_maximum, new_protection)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	boolean_t set_maximum;
@@ -103,7 +103,7 @@ kern_return_t mach_vm_protect
 { return mach_vm_protect(target_task, address, size, set_maximum, new_protection); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	boolean_t set_maximum,
@@ -120,14 +120,14 @@ extern
 kern_return_t mach_vm_inherit
 #if	defined(LINTLIBRARY)
     (target_task, address, size, new_inheritance)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	vm_inherit_t new_inheritance;
 { return mach_vm_inherit(target_task, address, size, new_inheritance); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	vm_inherit_t new_inheritance
@@ -143,7 +143,7 @@ extern
 kern_return_t mach_vm_read
 #if	defined(LINTLIBRARY)
     (target_task, address, size, data, dataCnt)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	vm_offset_t *data;
@@ -151,7 +151,7 @@ kern_return_t mach_vm_read
 { return mach_vm_read(target_task, address, size, data, dataCnt); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	vm_offset_t *data,
@@ -168,13 +168,13 @@ extern
 kern_return_t mach_vm_read_list
 #if	defined(LINTLIBRARY)
     (target_task, data_list, count)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_read_entry_t data_list;
 	natural_t count;
 { return mach_vm_read_list(target_task, data_list, count); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_read_entry_t data_list,
 	natural_t count
 );
@@ -189,14 +189,14 @@ extern
 kern_return_t mach_vm_write
 #if	defined(LINTLIBRARY)
     (target_task, address, data, dataCnt)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	vm_offset_t data;
 	mach_msg_type_number_t dataCnt;
 { return mach_vm_write(target_task, address, data, dataCnt); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	vm_offset_t data,
 	mach_msg_type_number_t dataCnt
@@ -212,14 +212,14 @@ extern
 kern_return_t mach_vm_copy
 #if	defined(LINTLIBRARY)
     (target_task, source_address, size, dest_address)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t source_address;
 	mach_vm_size_t size;
 	mach_vm_address_t dest_address;
 { return mach_vm_copy(target_task, source_address, size, dest_address); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t source_address,
 	mach_vm_size_t size,
 	mach_vm_address_t dest_address
@@ -235,7 +235,7 @@ extern
 kern_return_t mach_vm_read_overwrite
 #if	defined(LINTLIBRARY)
     (target_task, address, size, data, outsize)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	mach_vm_address_t data;
@@ -243,7 +243,7 @@ kern_return_t mach_vm_read_overwrite
 { return mach_vm_read_overwrite(target_task, address, size, data, outsize); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	mach_vm_address_t data,
@@ -260,14 +260,14 @@ extern
 kern_return_t mach_vm_msync
 #if	defined(LINTLIBRARY)
     (target_task, address, size, sync_flags)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	vm_sync_t sync_flags;
 { return mach_vm_msync(target_task, address, size, sync_flags); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	vm_sync_t sync_flags
@@ -283,14 +283,14 @@ extern
 kern_return_t mach_vm_behavior_set
 #if	defined(LINTLIBRARY)
     (target_task, address, size, new_behavior)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	vm_behavior_t new_behavior;
 { return mach_vm_behavior_set(target_task, address, size, new_behavior); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	vm_behavior_t new_behavior
@@ -306,7 +306,7 @@ extern
 kern_return_t mach_vm_map
 #if	defined(LINTLIBRARY)
     (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t *address;
 	mach_vm_size_t size;
 	mach_vm_offset_t mask;
@@ -320,7 +320,7 @@ kern_return_t mach_vm_map
 { return mach_vm_map(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t *address,
 	mach_vm_size_t size,
 	mach_vm_offset_t mask,
@@ -343,7 +343,7 @@ extern
 kern_return_t mach_vm_machine_attribute
 #if	defined(LINTLIBRARY)
     (target_task, address, size, attribute, value)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	mach_vm_size_t size;
 	vm_machine_attribute_t attribute;
@@ -351,7 +351,7 @@ kern_return_t mach_vm_machine_attribute
 { return mach_vm_machine_attribute(target_task, address, size, attribute, value); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	vm_machine_attribute_t attribute,
@@ -368,12 +368,12 @@ extern
 kern_return_t mach_vm_remap
 #if	defined(LINTLIBRARY)
     (target_task, target_address, size, mask, flags, src_task, src_address, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t *target_address;
 	mach_vm_size_t size;
 	mach_vm_offset_t mask;
 	int flags;
-	vm_map_t src_task;
+	mach_vm_map_t src_task;
 	mach_vm_address_t src_address;
 	boolean_t copy;
 	vm_prot_t *cur_protection;
@@ -382,12 +382,12 @@ kern_return_t mach_vm_remap
 { return mach_vm_remap(target_task, target_address, size, mask, flags, src_task, src_address, copy, cur_protection, max_protection, inheritance); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t *target_address,
 	mach_vm_size_t size,
 	mach_vm_offset_t mask,
 	int flags,
-	vm_map_t src_task,
+	mach_vm_map_t src_task,
 	mach_vm_address_t src_address,
 	boolean_t copy,
 	vm_prot_t *cur_protection,
@@ -405,14 +405,14 @@ extern
 kern_return_t mach_vm_page_query
 #if	defined(LINTLIBRARY)
     (target_map, offset, disposition, ref_count)
-	vm_map_t target_map;
+	mach_vm_map_t target_map;
 	mach_vm_offset_t offset;
 	integer_t *disposition;
 	integer_t *ref_count;
 { return mach_vm_page_query(target_map, offset, disposition, ref_count); }
 #else
 (
-	vm_map_t target_map,
+	mach_vm_map_t target_map,
 	mach_vm_offset_t offset,
 	integer_t *disposition,
 	integer_t *ref_count
@@ -428,7 +428,7 @@ extern
 kern_return_t mach_vm_region_recurse
 #if	defined(LINTLIBRARY)
     (target_task, address, size, nesting_depth, info, infoCnt)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t *address;
 	mach_vm_size_t *size;
 	natural_t *nesting_depth;
@@ -437,7 +437,7 @@ kern_return_t mach_vm_region_recurse
 { return mach_vm_region_recurse(target_task, address, size, nesting_depth, info, infoCnt); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t *address,
 	mach_vm_size_t *size,
 	natural_t *nesting_depth,
@@ -455,7 +455,7 @@ extern
 kern_return_t mach_vm_region
 #if	defined(LINTLIBRARY)
     (target_task, address, size, flavor, info, infoCnt, object_name)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t *address;
 	mach_vm_size_t *size;
 	vm_region_flavor_t flavor;
@@ -465,7 +465,7 @@ kern_return_t mach_vm_region
 { return mach_vm_region(target_task, address, size, flavor, info, infoCnt, object_name); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t *address,
 	mach_vm_size_t *size,
 	vm_region_flavor_t flavor,
@@ -484,7 +484,7 @@ extern
 kern_return_t _mach_make_memory_entry
 #if	defined(LINTLIBRARY)
     (target_task, size, offset, permission, object_handle, parent_handle)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	memory_object_size_t *size;
 	memory_object_offset_t offset;
 	vm_prot_t permission;
@@ -493,7 +493,7 @@ kern_return_t _mach_make_memory_entry
 { return _mach_make_memory_entry(target_task, size, offset, permission, object_handle, parent_handle); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	memory_object_size_t *size,
 	memory_object_offset_t offset,
 	vm_prot_t permission,
@@ -511,14 +511,14 @@ extern
 kern_return_t mach_vm_purgable_control
 #if	defined(LINTLIBRARY)
     (target_task, address, control, state)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	vm_purgable_t control;
 	int *state;
 { return mach_vm_purgable_control(target_task, address, control, state); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	vm_purgable_t control,
 	int *state
@@ -534,7 +534,7 @@ extern
 kern_return_t mach_vm_page_info
 #if	defined(LINTLIBRARY)
     (target_task, address, flavor, info, infoCnt)
-	vm_map_t target_task;
+	mach_vm_map_t target_task;
 	mach_vm_address_t address;
 	vm_page_info_flavor_t flavor;
 	vm_page_info_t info;
@@ -542,7 +542,7 @@ kern_return_t mach_vm_page_info
 { return mach_vm_page_info(target_task, address, flavor, info, infoCnt); }
 #else
 (
-	vm_map_t target_task,
+	mach_vm_map_t target_task,
 	mach_vm_address_t address,
 	vm_page_info_flavor_t flavor,
 	vm_page_info_t info,

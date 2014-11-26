@@ -173,7 +173,7 @@ type thread_array_t = ^array[] of thread_t;
 type thread_act_array_t = ^array[] of thread_act_t;
 type act_params_t = array[6] of int;
 
-type vm_map_t = mach_port_t
+type mach_vm_map_t = mach_port_t
 #if	KERNEL_SERVER
 		intran: vm_map_t convert_port_to_map(mach_port_t)
 		destructor: vm_map_deallocate(vm_map_t)
@@ -181,7 +181,7 @@ type vm_map_t = mach_port_t
 		;
 
 type vm_task_entry_t = mach_port_t
-		cusertype: vm_map_t
+		cusertype: mach_vm_map_t
 #if	KERNEL_SERVER
 		intran: vm_map_t convert_port_entry_to_map(mach_port_t)
 		destructor: vm_map_deallocate(vm_map_t)
