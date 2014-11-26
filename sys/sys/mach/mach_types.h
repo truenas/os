@@ -199,6 +199,7 @@
 #include <sys/mach/vm_sync.h>
 #include <sys/mach/vm_region.h>
 #include <sys/mach/prof_types.h>
+#include <sys/mach/host_notify.h>
 
 #ifdef	_KERNEL
 #include <compat/mach/task.h>		/* for task_port_array_t */
@@ -246,6 +247,7 @@ typedef mach_port_t             host_security_t;
 typedef host_t                  host_name_t;
 typedef host_t                  host_name_port_t;
 
+typedef mach_port_t           clock_reply_t;
 
 typedef	task_port_t		*task_port_array_t;
 typedef mach_port_t		thread_port_t;
@@ -262,6 +264,7 @@ typedef	thread_act_port_t	*thread_act_port_array_t;
 typedef mach_port_t		lock_set_port_t;
 typedef mach_port_t		semaphore_port_t;
 typedef mach_port_t		security_port_t;
+typedef mach_port_t		mem_entry_name_port_t;
 typedef integer_t		ledger_item_t;
 typedef processor_set_t         processor_set_name_t;
 typedef processor_set_name_t *processor_set_name_array_t;

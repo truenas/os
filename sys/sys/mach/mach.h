@@ -112,11 +112,6 @@ extern kern_return_t		device_read_overwrite(mach_port_t,
 						      vm_address_t,
 						      mach_msg_type_number_t *);
 
-extern kern_return_t		vm_read_overwrite(mach_port_t,
-						  vm_address_t,
-						  vm_size_t,
-						  vm_address_t,
-						  vm_size_t *);
 /*
  * Prototypes for compatibility
  */

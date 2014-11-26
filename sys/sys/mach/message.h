@@ -779,12 +779,18 @@ typedef integer_t mach_msg_option_t;
 
 #define	MACH_SEND_MSG		0x00000001
 #define	MACH_RCV_MSG		0x00000002
+#define MACH_RCV_LARGE          0x00000004      /* report large message sizes */
+#define MACH_RCV_LARGE_IDENTITY 0x00000008      /* identify source of large messages */
+
 
 #define MACH_SEND_TIMEOUT	0x00000010
 #define MACH_SEND_INTERRUPT	0x00000040	/* libmach implements */
 #define MACH_SEND_CANCEL	0x00000080
 #define MACH_SEND_ALWAYS	0x00010000	/* internal use only */
-#define MACH_SEND_TRAILER	0x00020000	
+#define MACH_SEND_TRAILER	0x00020000
+#define MACH_SEND_NOTIFY	0x00040000	/* arm send-possible notify */
+
+
 #if	DIPC
 #define MACH_SEND_LOCAL_QUEUE	0x00040000	/* internal use only */
 #endif	/* DIPC */
@@ -812,12 +818,36 @@ typedef integer_t mach_msg_option_t;
 #define MACH_RCV_TRAILER_ELEMENTS(x) (((x) & 0xf) << 24)  
 #define MACH_RCV_TRAILER_MASK 	     ((0xff << 24))
 
-#if 0
-extern mach_msg_trailer_size_t trailer_size[];
 
 #define GET_RCV_ELEMENTS(y) (((y) >> 24) & 0xf)
-#define REQUESTED_TRAILER_SIZE(y) (trailer_size[GET_RCV_ELEMENTS(y)])
-#endif
+
+/* 
+ * XXXMAC: note that in the case of MACH_RCV_TRAILER_LABELS, 
+ * we just fall through to mach_msg_max_trailer_t.
+ * This is correct behavior since mach_msg_max_trailer_t is defined as
+ * mac_msg_mac_trailer_t which is used for the LABELS trailer.
+ * It also makes things work properly if MACH_RCV_TRAILER_LABELS is ORed 
+ * with one of the other options.
+ */
+
+#define REQUESTED_TRAILER_SIZE_NATIVE(y)                        \
+        ((mach_msg_trailer_size_t)                              \
+         ((GET_RCV_ELEMENTS(y) == MACH_RCV_TRAILER_NULL) ?      \
+          sizeof(mach_msg_trailer_t) :                          \
+          ((GET_RCV_ELEMENTS(y) == MACH_RCV_TRAILER_SEQNO) ?    \
+           sizeof(mach_msg_seqno_trailer_t) :                   \
+          ((GET_RCV_ELEMENTS(y) == MACH_RCV_TRAILER_SENDER) ?   \
+           sizeof(mach_msg_security_trailer_t) :                \
+           ((GET_RCV_ELEMENTS(y) == MACH_RCV_TRAILER_AUDIT) ?   \
+            sizeof(mach_msg_audit_trailer_t) :                  \
+            ((GET_RCV_ELEMENTS(y) == MACH_RCV_TRAILER_CTX) ?    \
+             sizeof(mach_msg_context_trailer_t) :               \
+             ((GET_RCV_ELEMENTS(y) == MACH_RCV_TRAILER_AV) ?    \
+              sizeof(mach_msg_mac_trailer_t) :                  \
+             sizeof(mach_msg_max_trailer_t))))))))
+
+#define REQUESTED_TRAILER_SIZE(y) REQUESTED_TRAILER_SIZE_NATIVE(y)
+
 /*
  *  Much code assumes that mach_msg_return_t == kern_return_t.
  *  This definition is useful for descriptive purposes.

@@ -31,7 +31,7 @@
 
 typedef vm_offset_t     pointer_t;
 typedef vm_offset_t     vm_address_t;
-
+typedef int    vm_purgable_t;
 
 #endif	/* MACH_VM_TYPES_H_ */
 

@@ -29,6 +29,25 @@
 #define HOST_MAX_SPECIAL_PORT           (16 + HOST_MAX_SPECIAL_KERNEL_PORT)
                                         /* room to grow here as well */
 
+
+
+/*
+ * Definitions for ease of use.
+ *
+ * In the get call, the host parameter can be any host, but will generally
+ * be the local node host port. In the set call, the host must the per-node
+ * host port for the node being affected.
+ */
+#define host_get_host_port(host, port)	\
+	(host_get_special_port((host), 	\
+	HOST_LOCAL_NODE, HOST_PORT, (port)))
+#define host_set_host_port(host, port) (KERN_INVALID_ARGUMENT)
+
+#define host_get_host_priv_port(host, port)	\
+	(host_get_special_port((host), 		\
+	HOST_LOCAL_NODE, HOST_PRIV_PORT, (port)))
+#define host_set_host_priv_port(host, port) (KERN_INVALID_ARGUMENT)
+
 /*
  * Special node identifier to always represent the local node.
  */

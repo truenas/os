@@ -138,4 +138,6 @@
  */
 #define VM_PROT_WANTS_COPY	((vm_prot_t) 0x10)
 
+#define VM_PROT_IS_MASK          ((vm_prot_t) 0x40)
+
 #endif	/* VM_PROT_H_ */

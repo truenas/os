@@ -156,4 +156,13 @@ typedef struct thread_basic_info  *thread_basic_info_t;
 #define THREAD_SCHED_RR_INFO		11
 #define THREAD_SCHED_FIFO_INFO		12
 
+/*
+ *      Constant definitions for thread_switch trap.
+ */
+
+#define SWITCH_OPTION_NONE              0
+#define SWITCH_OPTION_DEPRESS           1
+#define SWITCH_OPTION_WAIT              2
+
+
 #endif	/* _MACH_THREAD_INFO_H_ */

@@ -86,9 +86,19 @@ struct tvalspec {
 typedef struct tvalspec	tvalspec_t;
 typedef struct tvalspec mach_timespec_t;
 
-#define NSEC_PER_USEC	1000		/* nanoseconds per microsecond */
-#define USEC_PER_SEC	1000000		/* microseconds per second */
-#define NSEC_PER_SEC	1000000000	/* nanoseconds per second */
+
+#ifdef NSEC_PER_SEC
+#undef NSEC_PER_SEC
+#endif
+#ifdef USEC_PER_SEC
+#undef USEC_PER_SEC
+#endif
+#ifdef NSEC_PER_USEC
+#undef NSEC_PER_USEC
+#endif
+#define NSEC_PER_USEC	1000ll		/* nanoseconds per microsecond */
+#define USEC_PER_SEC	1000000ll	/* microseconds per second */
+#define NSEC_PER_SEC	1000000000ll /* nanoseconds per second */
 #define BAD_TVALSPEC(t)							\
 	((t)->tv_nsec < 0 || (t)->tv_nsec >= NSEC_PER_SEC)
 

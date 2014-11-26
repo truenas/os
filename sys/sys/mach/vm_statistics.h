@@ -147,6 +147,68 @@ typedef struct vm_purgeable_info        *vm_purgeable_info_t;
 
 
 /*
+ * VM allocation flags:
+ * 
+ * VM_FLAGS_FIXED
+ *      (really the absence of VM_FLAGS_ANYWHERE)
+ *      Allocate new VM region at the specified virtual address, if possible.
+ * 
+ * VM_FLAGS_ANYWHERE
+ *      Allocate new VM region anywhere it would fit in the address space.
+ *
+ * VM_FLAGS_PURGABLE
+ *      Create a purgable VM object for that new VM region.
+ *
+ * VM_FLAGS_NO_PMAP_CHECK
+ *      (for DEBUG kernel config only, ignored for other configs)
+ *      Do not check that there is no stale pmap mapping for the new VM region.
+ *      This is useful for kernel memory allocations at bootstrap when building
+ *      the initial kernel address space while some memory is already in use.
+ *
+ * VM_FLAGS_OVERWRITE
+ *      The new VM region can replace existing VM regions if necessary
+ *      (to be used in combination with VM_FLAGS_FIXED).
+ *
+ * VM_FLAGS_NO_CACHE
+ *      Pages brought in to this VM region are placed on the speculative
+ *      queue instead of the active queue.  In other words, they are not
+ *      cached so that they will be stolen first if memory runs low.
+ */
+#define VM_FLAGS_FIXED          0x0000
+#define VM_FLAGS_ANYWHERE       0x0001
+#define VM_FLAGS_PURGABLE       0x0002
+#define VM_FLAGS_NO_CACHE       0x0010
+#define VM_FLAGS_OVERWRITE      0x4000  /* delete any existing mappings first */
+/*
+ * VM_FLAGS_SUPERPAGE_MASK
+ *      3 bits that specify whether large pages should be used instead of
+ *      base pages (!=0), as well as the requested page size.
+ */
+#define VM_FLAGS_SUPERPAGE_MASK 0x70000 /* bits 0x10000, 0x20000, 0x40000 */
+#define VM_FLAGS_RETURN_DATA_ADDR       0x100000 /* Return address of target data, rather than base of page */
+#define VM_FLAGS_ALIAS_MASK     0xFF000000
+#define VM_GET_FLAGS_ALIAS(flags, alias)                        \
+                (alias) = ((flags) & VM_FLAGS_ALIAS_MASK) >> 24 
+#define VM_SET_FLAGS_ALIAS(flags, alias)                        \
+                (flags) = (((flags) & ~VM_FLAGS_ALIAS_MASK) |   \
+                (((alias) & ~VM_FLAGS_ALIAS_MASK) << 24))
+
+/* These are the flags that we accept from user-space */
+#define VM_FLAGS_USER_ALLOCATE  (VM_FLAGS_FIXED |               \
+                                 VM_FLAGS_ANYWHERE |            \
+                                 VM_FLAGS_PURGABLE |            \
+                                 VM_FLAGS_NO_CACHE |            \
+                                 VM_FLAGS_OVERWRITE |           \
+                                 VM_FLAGS_SUPERPAGE_MASK |      \
+                                 VM_FLAGS_ALIAS_MASK)
+#define VM_FLAGS_USER_MAP       (VM_FLAGS_USER_ALLOCATE |       \
+                                 VM_FLAGS_RETURN_DATA_ADDR)
+#define VM_FLAGS_USER_REMAP     (VM_FLAGS_FIXED |    \
+                                 VM_FLAGS_ANYWHERE | \
+                                 VM_FLAGS_OVERWRITE| \
+                                 VM_FLAGS_RETURN_DATA_ADDR)
+
+/*
  *	Each machine dependent implementation is expected to
  *	keep certain statistics.  They may do this anyway they
  *	so choose, but are expected to return the statistics

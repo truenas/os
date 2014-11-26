@@ -65,4 +65,23 @@ typedef struct vm_region_basic_info		 vm_region_basic_info_data_t;
 #define VM_REGION_BASIC_INFO_COUNT		\
 	(sizeof(vm_region_basic_info_data_t)/sizeof(int))
 
+struct mach_vm_read_entry {
+        mach_vm_address_t address;
+        mach_vm_size_t size;
+};
+
+struct vm_read_entry {
+        vm_address_t    address;
+        vm_size_t       size;
+};
+
+#define VM_MAP_ENTRY_MAX  (256)
+
+typedef struct mach_vm_read_entry       mach_vm_read_entry_t[VM_MAP_ENTRY_MAX];
+typedef struct vm_read_entry            vm_read_entry_t[VM_MAP_ENTRY_MAX];
+
+typedef int      *vm_region_recurse_info_t;
+typedef int vm_page_info_flavor_t;
+typedef int *vm_page_info_t;
+
 #endif	/*_MACH_VM_REGION_H_*/
