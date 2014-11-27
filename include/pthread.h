@@ -287,7 +287,7 @@ int		pthread_setschedparam(pthread_t, int,
 			const struct sched_param *);
 #ifdef HAVE_MACH
 #include <mach/port.h>
-mach_port_t pthread_mach_thread_np(pthread_t);
+mach_port_t pthread_mach_thread_np(uintptr_t);
 #endif
 
 #if __XSI_VISIBLE
