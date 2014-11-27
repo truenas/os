@@ -174,6 +174,26 @@ struct kevent64_s {
 #define NOTE_NSECONDS		0x00000008	/* data is nanoseconds  */
 #define NOTE_ABSOLUTE		0x00000010	/* absolute timeout     */
 
+
+
+#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
+#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
+
+/*
+ * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
+ */
+#define NOTE_EXIT_DETAIL_MASK		0x00070000
+#define	NOTE_EXIT_DECRYPTFAIL		0x00010000
+#define	NOTE_EXIT_MEMORY		0x00020000
+#define NOTE_EXIT_CSERROR		0x00040000
+
+/*
+ * Flag indicating hint is a signal.  Used by EVFILT_SIGNAL, and also
+ * shared by EVFILT_PROC  (all knotes attached to p->p_klist)
+ */
+#define NOTE_SIGNAL	0x08000000
+
+
 struct knote;
 SLIST_HEAD(klist, knote);
 struct kqueue;
@@ -202,11 +222,6 @@ struct knlist {
 
 #define	KNLIST_EMPTY(list)		SLIST_EMPTY(&(list)->kl_list)
 
-/*
- * Flag indicating hint is a signal.  Used by EVFILT_SIGNAL, and also
- * shared by EVFILT_PROC  (all knotes attached to p->p_klist)
- */
-#define NOTE_SIGNAL	0x08000000
 
 /*
  * Hint values for the optional f_touch event filter.  If f_touch is not set 

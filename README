@@ -22,6 +22,17 @@ Currently known to be missing are:
 - EVFILT_VM
 	- NOTE_VM_PRESSURE
 	- NOTE_VM_ERROR
+
+#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
+#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
+/*
+ * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
+ */
+#define NOTE_EXIT_DETAIL_MASK		0x00070000
+#define	NOTE_EXIT_DECRYPTFAIL		0x00010000 
+#define	NOTE_EXIT_MEMORY		0x00020000
+#define NOTE_EXIT_CSERROR		0x00040000
+
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
 $FreeBSD$
