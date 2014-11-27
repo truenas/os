@@ -114,10 +114,10 @@ mach_absolute_time(void)
 }
 
 mach_port_t
-pthread_mach_thread_np(pthread_t self)
+pthread_mach_thread_np(uintptr_t self)
 {
 
-	if (self != pthread_self()) {
+	if ((pthread_t)self != pthread_self()) {
 		printf("invalid pthread_mach_thread_np usage");
 		abort();
 	}
