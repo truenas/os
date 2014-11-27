@@ -13,26 +13,6 @@
 #include <mach/mach_vm.h>
 #include <mach/host_priv.h>
 
-struct rusage_info_v1 {
-        uint8_t  ri_uuid[16];
-        uint64_t ri_user_time;
-        uint64_t ri_system_time;
-        uint64_t ri_pkg_idle_wkups;
-        uint64_t ri_interrupt_wkups;
-        uint64_t ri_pageins;
-        uint64_t ri_wired_size;
-        uint64_t ri_resident_size;      
-        uint64_t ri_phys_footprint;
-        uint64_t ri_proc_start_abstime;
-        uint64_t ri_proc_exit_abstime;
-        uint64_t ri_child_user_time;
-        uint64_t ri_child_system_time;
-        uint64_t ri_child_pkg_idle_wkups;
-        uint64_t ri_child_interrupt_wkups;
-        uint64_t ri_child_pageins;
-        uint64_t ri_child_elapsed_abstime;
-};
-
 #define RB_UPSDELAY (RB_PAUSE << 1)
 #define RB_SAFEBOOT (RB_PAUSE << 2)
 #define RB_UNIPROC (RB_PAUSE << 3)
@@ -140,7 +120,14 @@ typedef enum {
 #define IOPOL_NORMAL            IOPOL_IMPORTANT
 
 int      setiopolicy_np(int, int, int);
-size_t malloc_size(void *);
+
+extern size_t sallocx(void *, int);
+static inline size_t
+malloc_size(void * ptr)
+{
+
+	return (sallocx(ptr, 0));
+}
 
 const char *xpc_strerror(int error);
 xpc_object_t xpc_copy_entitlement_for_token(const char *, audit_token_t *);
