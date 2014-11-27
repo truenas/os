@@ -3,12 +3,16 @@ PROG= launchd
 
 .PATH:
 .PATH: support
+.PATH: uuid
+
 BASE_INCLUDE= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR} 
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
 CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
 CFLAGS+= -I${.CURDIR}/../../lib/liblaunch
+CFLAGS+= -DHAVE_INTTYPES_H
+
 LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
 LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
 LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach
@@ -34,8 +38,10 @@ internal.h internalServer.h internalServer.c internalUser.c:
 SRCS= jobServer.c launchd_helperServer.c mach_excServer.c internalServer.c
 SRCS+= job_forwardUser.c  job_replyUser.c job_replyServer.c notifyServer.c
 SRCS+= internalUser.c
-SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
+SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c pack.c unpack.c
+
 SRCS+= assumes.c
+SRCS+= clear.c copy.c gen_uuid.c isnull.c unparse.c
 
 
 CLEANFILES+= *Server.c *User.c job.h helper.h job_reply.h job_forward.h notify.h \
