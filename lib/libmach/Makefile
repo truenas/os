@@ -31,6 +31,6 @@ SRCS+= ${MACH_OBJS:C/.o$/.S/}
 
 CFLAGS+= -I${.CURDIR}/../../include -I. -I./${MACHINE_CPUARCH} -I${.CURDIR}
 CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include
-CFLAGS+= -fPIC
+CFLAGS+= -fPIC -DPRIVATE
 
 .include <bsd.lib.mk>

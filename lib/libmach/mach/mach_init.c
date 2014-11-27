@@ -9,6 +9,7 @@
 #include <mach/mach_port.h>
 #include <stdbool.h>
 
+#include <machine/mach/ndr_def.h>
 static void mach_init(void) __attribute__((constructor));
 mach_port_t mach_reply_port(void);
 
