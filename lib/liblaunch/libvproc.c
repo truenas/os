@@ -1032,6 +1032,7 @@ launch_wait(mach_port_t port)
 	return status;
 }
 
+#ifndef __FreeBSD__
 launch_data_t
 launch_socket_service_check_in(void)
 {
@@ -1077,3 +1078,4 @@ launch_socket_service_check_in(void)
 
 	return reply;
 }
+#endif
