@@ -22,7 +22,12 @@ SYSDIR=	${_dir}
 SRCS=			\
 	mach_msg.c	\
 	mach_init.c \
-	mach_misc.c
+	mach_misc.c	\
+	mig_allocate.c \
+	mig_deallocate.c \
+	mig_reply_setup.c	\
+	mig_strncpy.c \
+	mig_support.c
 
 
 MACH_OBJS = 	syscalls.o	
