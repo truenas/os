@@ -94,3 +94,16 @@ mach_port_move_member(mach_port_name_t target, mach_port_name_t member, mach_por
 
 	return (_kernelrpc_mach_port_move_member_trap(target, member, after));
 }
+
+#include <time.h>
+#include <mach/mach_time.h>
+uint64_t
+mach_absolute_time(void)
+{
+	struct timespec tp;
+
+	if (clock_gettime(CLOCK_REALTIME_FAST, &tp))
+		return (0);
+
+	return (tp.tv_sec*NSEC_PER_SEC + tp.tv_nsec);
+}

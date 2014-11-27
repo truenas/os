@@ -20,8 +20,9 @@ SYSDIR=	${_dir}
 .endif
 
 SRCS=			\
-	mach_msg.c	\
+	mach_error_string.c \
 	mach_init.c \
+	mach_msg.c	\
 	mach_misc.c	\
 	mig_allocate.c \
 	mig_deallocate.c \
