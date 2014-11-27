@@ -116,9 +116,14 @@
 #if HAVE_RESPONSIBILITY
 #include <responsibility.h>
 #endif
-#if !TARGET_OS_EMBEDDED
+
+#if __FreeBSD__
+static int gL1CacheEnabled;
+#elif !TARGET_OS_EMBEDDED
 extern int gL1CacheEnabled;
 #endif
+
+
 #if HAVE_SYSTEMSTATS
 #include <systemstats/systemstats.h>
 #endif
