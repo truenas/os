@@ -30,6 +30,7 @@
 #define _SPAWN_H_
 
 #include <sys/cdefs.h>
+#include <sys/types.h>
 #include <sys/_types.h>
 #include <sys/_sigset.h>
 
@@ -114,9 +115,9 @@ int posix_spawnattr_setsigdefault(posix_spawnattr_t * __restrict,
 int posix_spawnattr_setsigmask(posix_spawnattr_t * __restrict,
     const sigset_t * __restrict);
 int posix_spawnattr_setbinpref_np(posix_spawnattr_t * __restrict, int count,
-	int *pref, int * __restrict);
+	int *pref, size_t * __restrict);
 int posix_spawnattr_getbinpref_np(const posix_spawnattr_t * __restrict,
-	int count, int *pref, int * __restrict);
+	int count, int *pref, size_t * __restrict);
 __END_DECLS
 
 #endif /* !_SPAWN_H_ */
