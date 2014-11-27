@@ -144,10 +144,6 @@ _dispatch_thread_getspecific(pthread_key_t k)
 #define _dispatch_thread_port() ((mach_port_t)_dispatch_thread_getspecific(\
 		_PTHREAD_TSD_SLOT_MACH_THREAD_SELF))
 #else
-#ifdef __FreeBSD__
-/* XXX */
-int pthread_mach_thread_np(mach_port_t);
-#endif
 #define _dispatch_thread_port() (pthread_mach_thread_np(_dispatch_thread_self()))
 #endif
 #endif

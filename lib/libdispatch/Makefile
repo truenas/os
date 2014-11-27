@@ -5,8 +5,9 @@ LIB= dispatch
 .PATH: src
 .PATH: resolver
 
-CFLAGS+=	-I./os -I./private -I${.CURDIR} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
-CFLAGS+=	-I${.CURDIR}/../../apsl/include -fblocks
+CFLAGS+=	-I${.CURDIR}/../../apsl/include -I./os -I./private
+CFLAGS+=	-I${.CURDIR} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
+CFLAGS+=	-fblocks
 CFLAGS+=	-D__APPLE__ -DTARGET_CPU_X86=1 -DDISPATCH_USE_DTRACE=0
 CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0
 

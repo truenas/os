@@ -113,7 +113,7 @@
 #endif
 
 #ifndef DISPATCH_RETURNS_RETAINED_BLOCK
-#if defined(__has_attribute)
+#if !__FreeBSD__ && defined(__has_attribute)
 #if __has_attribute(ns_returns_retained)
 #define DISPATCH_RETURNS_RETAINED_BLOCK __attribute__((__ns_returns_retained__))
 #else
