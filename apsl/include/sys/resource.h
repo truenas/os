@@ -63,6 +63,8 @@
 
 #ifndef _SYS_RESOURCE_H_
 #define	_SYS_RESOURCE_H_
+#include <Availability.h>
+
 
 #include <sys/appleapiopts.h>
 #include <sys/cdefs.h>
