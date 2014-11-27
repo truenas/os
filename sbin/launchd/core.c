@@ -86,9 +86,10 @@
 #include <ctype.h>
 #include <glob.h>
 #include <spawn.h>
+#include <spawn_private.h>
+#include <sys/spawn_internal.h>
 #include <System/sys/spawn.h>
 #include <System/sys/spawn_internal.h>
-
 
 #include <spawn_private.h>
 #include <time.h>
@@ -826,7 +827,9 @@ static void job_set_exception_port(job_t j, mach_port_t port);
 static kern_return_t job_mig_spawn_internal(job_t j, vm_offset_t indata, mach_msg_type_number_t indataCnt, mach_port_t asport, job_t *outj);
 static void job_open_shutdown_transaction(job_t ji);
 static void job_close_shutdown_transaction(job_t ji);
+#ifndef __FreeBSD__
 static launch_data_t job_do_legacy_ipc_request(job_t j, launch_data_t request, mach_port_t asport);
+#endif
 static void job_setup_per_user_directory(job_t j, uid_t uid, const char *path);
 static void job_setup_per_user_directories(job_t j, uid_t uid, const char *label);
 static void job_update_jetsam_properties(job_t j, xpc_jetsam_band_t band, uint64_t user_data);
@@ -834,6 +837,26 @@ static void job_update_jetsam_memory_limit(job_t j, int32_t limit);
 
 #if TARGET_OS_EMBEDDED
 static bool job_import_defaults(launch_data_t pload);
+#endif
+
+#ifdef __FreeBSD__
+__private_extern__ void search_set_flags(si_mod_t *si, const char *name, uint32_t flag);
+
+si_mod_t *
+si_search(void)
+{
+	static si_mod_t *search = NULL;
+
+	if (search == NULL) search = si_module_with_name("search");
+
+	return search;
+}
+
+void
+si_search_module_set_flags(const char *name, uint32_t flag)
+{
+	search_set_flags(si_search(), name, flag);
+}
 #endif
 
 static struct priority_properties_t {
@@ -11638,6 +11661,7 @@ job_mig_spawn2(job_t j, mach_port_t rp, vm_offset_t indata, mach_msg_type_number
 	return kr;
 }
 
+#ifndef __FreeBSD__
 launch_data_t
 job_do_legacy_ipc_request(job_t j, launch_data_t request, mach_port_t asport __attribute__((unused)))
 {
@@ -11787,6 +11811,7 @@ out_bad:
 
 	return BOOTSTRAP_NO_MEMORY;
 }
+#endif
 
 void
 jobmgr_init(bool sflag)
