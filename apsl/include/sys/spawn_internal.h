@@ -42,6 +42,7 @@
 
 typedef unsigned long         __darwin_size_t;        /* sizeof() */
 #include <sys/_types.h>		/* __offsetof(), __darwin_size_t */
+#include <sys/param.h>
 #include <sys/syslimits.h>	/* PATH_MAX */
 #include <sys/spawn.h>
 #include <mach/machine.h>

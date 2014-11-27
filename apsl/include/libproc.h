@@ -36,8 +36,6 @@
 
 #include <Availability.h>
 
-typedef void *rusage_info_t;
-
 /*
  * This header file contains private interfaces to obtain process information.  
  * These interfaces are subject to change in future releases.
