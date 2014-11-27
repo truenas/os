@@ -48,19 +48,6 @@ typedef char event_name_t[64];
 
 #define     O_EVTONLY       0x8000          /* descriptor requested for event notifications only */
 
-#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
-#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
-#define NOTE_REAP 0x1
-#define NOTE_SIGNAL 0x2
-
-/*
- * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
- */
-#define NOTE_EXIT_DETAIL_MASK		0x00070000
-#define	NOTE_EXIT_DECRYPTFAIL		0x00010000 
-#define	NOTE_EXIT_MEMORY		0x00020000
-#define NOTE_EXIT_CSERROR		0x00040000
-
 #define        _CS_DARWIN_USER_TEMP_DIR                65537
 #define EBADARCH	86	/* Bad CPU type in executable */
 
