@@ -397,7 +397,6 @@ log_kevent_struct(int level, struct kevent *kev_base, int indx)
 			}
 
 			FFLAGIF(NOTE_EXIT)
-			else FFLAGIF(NOTE_REAP)
 			else FFLAGIF(NOTE_FORK)
 			else FFLAGIF(NOTE_EXEC)
 			else FFLAGIF(NOTE_SIGNAL)
