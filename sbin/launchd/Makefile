@@ -5,7 +5,8 @@ PROG= launchd
 .PATH: support
 .PATH: uuid
 
-BASE_INCLUDE= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR} 
+BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
+BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
@@ -40,7 +41,12 @@ SRCS+= job_forwardUser.c  job_replyUser.c job_replyServer.c notifyServer.c
 SRCS+= internalUser.c
 SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c pack.c unpack.c
 
-SRCS+= assumes.c
+
+#support
+SRCS+= assumes.c libproc.c posix_spawn.c getiopolicy_np.c
+SRCS+= si_module.c search_module.c si_data.c cache_module.c file_module.c
+
+#uuid
 SRCS+= clear.c copy.c gen_uuid.c isnull.c unparse.c
 
 
