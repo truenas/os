@@ -51,13 +51,7 @@ typedef char event_name_t[64];
 #define        _CS_DARWIN_USER_TEMP_DIR                65537
 #define EBADARCH	86	/* Bad CPU type in executable */
 
-int
-posix_spawnattr_setbinpref_np(posix_spawnattr_t *restrict attr, size_t count, cpu_type_t *pref,
-         size_t *restrict ocount);
 
-int
-posix_spawnattr_getbinpref_np(const posix_spawnattr_t *restrict attr, size_t count, cpu_type_t *pref,
-         size_t * restrict ocount);
 #define VQ_UPDATE VQ_FLAG0100
 #define EXNOMEM		120
 #define EXINVAL		121

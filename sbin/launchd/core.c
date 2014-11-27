@@ -85,6 +85,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <glob.h>
+#include <spawn.h>
 #include <System/sys/spawn.h>
 #include <System/sys/spawn_internal.h>
 

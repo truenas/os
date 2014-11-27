@@ -33,6 +33,15 @@ Currently known to be missing are:
 #define	NOTE_EXIT_MEMORY		0x00020000
 #define NOTE_EXIT_CSERROR		0x00040000
 
+int
+posix_spawnattr_setbinpref_np(posix_spawnattr_t *restrict attr, size_t count, cpu_type_t *pref,
+         size_t *restrict ocount);
+
+int
+posix_spawnattr_getbinpref_np(const posix_spawnattr_t *restrict attr, size_t count, cpu_type_t *pref,
+							  size_t * restrict ocount);
+
+
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
 $FreeBSD$
