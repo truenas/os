@@ -302,7 +302,7 @@ typedef integer_t mach_msg_id_t;
 
 #define MACH_MSG_SIZE_NULL (mach_msg_size_t *) 0
 
-typedef unsigned int mach_msg_type_name_t;
+typedef uint8_t mach_msg_type_name_t;
 
 #define MACH_MSG_TYPE_MOVE_RECEIVE	16	/* Must hold receive rights */
 #define MACH_MSG_TYPE_MOVE_SEND		17	/* Must hold send rights */
