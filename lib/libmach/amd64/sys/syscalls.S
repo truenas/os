@@ -38,7 +38,7 @@
 	MACH_RSYSCALL(macx_triggers)	;
 	MACH_RSYSCALL(swtch_pri)	;
 	MACH_RSYSCALL(swtch)	;
-	RSYSCALL(mach_thread_switch)	;
+	MACH_RSYSCALL(thread_switch)	;
 	MACH_RSYSCALL(clock_sleep_trap)	;
 	RSYSCALL(mach_timebase_info)	;
 	RSYSCALL(mach_wait_until)	;

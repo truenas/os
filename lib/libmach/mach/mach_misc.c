@@ -11,6 +11,11 @@
 #include <mach/mach_port.h>
 #include <mach/mach_vm.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define HAVE_MACH
+#include <pthread.h>
 
 kern_return_t
 mach_port_allocate(mach_port_name_t target, mach_port_right_t right,
@@ -106,4 +111,16 @@ mach_absolute_time(void)
 		return (0);
 
 	return (tp.tv_sec*NSEC_PER_SEC + tp.tv_nsec);
+}
+
+mach_port_t
+pthread_mach_thread_np(pthread_t self)
+{
+
+	if (self != pthread_self()) {
+		printf("invalid pthread_mach_thread_np usage");
+		abort();
+	}
+
+	return (thread_self_trap());
 }
