@@ -46,6 +46,7 @@
  * analyzer, and enables them to be added to Cocoa collections.
  * See <os/object.h> for details.
  */
+
 OS_OBJECT_DECL(dispatch_object);
 #define DISPATCH_DECL(name) OS_OBJECT_DECL_SUBCLASS(name, dispatch_object)
 #define DISPATCH_GLOBAL_OBJECT(type, object) ((OS_OBJECT_BRIDGE type)&(object))

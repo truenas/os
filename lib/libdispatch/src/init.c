@@ -151,6 +151,7 @@ const struct voucher_offsets_s voucher_offsets = {
 const struct voucher_offsets_s voucher_offsets = {
 	.vo_version = 0,
 };
+int dispatch_voucher_key;
 #endif // VOUCHER_USE_MACH_VOUCHER
 
 #if DISPATCH_USE_DIRECT_TSD
@@ -561,7 +562,7 @@ _dispatch_syslog(const char *msg)
 static inline void
 _dispatch_vsyslog(const char *msg, va_list ap)
 {
-	vsyslog(LOG_NOTICE, msg, *ap_ptr);
+	vsyslog(LOG_NOTICE, msg, ap);
 }
 #endif // DISPATCH_USE_SIMPLE_ASL
 
@@ -722,6 +723,7 @@ _dispatch_call_block_and_release(void *block)
 #pragma mark _dispatch_block_create no_objc
 
 #if !USE_OBJC
+struct dispatch_queue_attr_s _dispatch_queue_attr_concurrent;
 
 // The compiler hides the name of the function it generates, and changes it if
 // we try to reference it directly, but the linker still sees it.
