@@ -132,6 +132,7 @@ FBSD_1.0 {
 	jail_attach;
 	kenv;
 	kevent;
+	kevent64;
 	kill;
 	kldfind;
 	kldfirstmod;
@@ -666,6 +667,8 @@ FBSDprivate_1.0 {
 	__sys_kenv;
 	_kevent;
 	__sys_kevent;
+	_kevent64;
+	__sys_kevent64;
 	_kill;
 	__sys_kill;
 	_kldfind;
