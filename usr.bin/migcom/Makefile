@@ -46,7 +46,6 @@ ident.c: machine
 	echo "const char *MigGenerationDate = \""`date`"\";" >>${.TARGET}
 	echo "const char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
 
-clean:
-	rm -f ident.c *.o *~ *.gz cscope.* machine
+CLEANFILES+= ident.c *.o *~ *.gz cscope.* ${.CURDIR}/machine
 
 .include <bsd.prog.mk>
