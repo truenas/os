@@ -124,7 +124,7 @@ int	kern_jail(struct thread *td, struct jail *j);
 int	kern_jail_get(struct thread *td, struct uio *options, int flags);
 int	kern_jail_set(struct thread *td, struct uio *options, int flags);
 int	kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
-	    struct kevent_copyops *k_ops, const struct timespec *timeout);
+		struct kevent_copyops *k_ops, const struct timespec *timeout, int v1);
 int	kern_kldload(struct thread *td, const char *file, int *fileid);
 int	kern_kldstat(struct thread *td, int fileid, struct kld_file_stat *stat);
 int	kern_kldunload(struct thread *td, int fileid, int flags);

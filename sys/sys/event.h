@@ -286,8 +286,8 @@ struct knote {
 };
 struct kevent_copyops {
 	void	*arg;
-	int	(*k_copyout)(void *arg, struct kevent *kevp, int count);
-	int	(*k_copyin)(void *arg, struct kevent *kevp, int count);
+	int	(*k_copyout)(void *arg, void *kevp, int count);
+	int	(*k_copyin)(void *arg, void *kevp, int count);
 };
 
 struct thread;

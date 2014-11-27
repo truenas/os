@@ -1075,6 +1075,15 @@ struct kevent_args {
 	char nevents_l_[PADL_(int)]; int nevents; char nevents_r_[PADR_(int)];
 	char timeout_l_[PADL_(const struct timespec *)]; const struct timespec * timeout; char timeout_r_[PADR_(const struct timespec *)];
 };
+struct kevent64_args {
+	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
+	char changelist_l_[PADL_(const struct kevent64_s *)]; const struct kevent64_s * changelist; char changelist_r_[PADR_(const struct kevent64_s *)];
+	char nchanges_l_[PADL_(int)]; int nchanges; char nchanges_r_[PADR_(int)];
+	char eventlist_l_[PADL_(struct kevent64_s *)]; struct kevent64_s * eventlist; char eventlist_r_[PADR_(struct kevent64_s *)];
+	char nevents_l_[PADL_(int)]; int nevents; char nevents_r_[PADR_(int)];
+	char flags_l_[PADL_(unsigned int)]; unsigned int flags; char flags_r_[PADR_(unsigned int)];
+	char timeout_l_[PADL_(const struct timespec *)]; const struct timespec * timeout; char timeout_r_[PADR_(const struct timespec *)];
+};
 struct extattr_set_fd_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char attrnamespace_l_[PADL_(int)]; int attrnamespace; char attrnamespace_r_[PADR_(int)];
@@ -2074,6 +2083,7 @@ int	sys_getresuid(struct thread *, struct getresuid_args *);
 int	sys_getresgid(struct thread *, struct getresgid_args *);
 int	sys_kqueue(struct thread *, struct kqueue_args *);
 int	sys_kevent(struct thread *, struct kevent_args *);
+int	sys_kevent64(struct thread *, struct kevent64_args *);
 int	sys_extattr_set_fd(struct thread *, struct extattr_set_fd_args *);
 int	sys_extattr_get_fd(struct thread *, struct extattr_get_fd_args *);
 int	sys_extattr_delete_fd(struct thread *, struct extattr_delete_fd_args *);
@@ -2785,6 +2795,7 @@ int	freebsd7_shmctl(struct thread *, struct freebsd7_shmctl_args *);
 #define	SYS_AUE_getresgid	AUE_GETRESGID
 #define	SYS_AUE_kqueue	AUE_KQUEUE
 #define	SYS_AUE_kevent	AUE_NULL
+#define	SYS_AUE_kevent64	AUE_NULL
 #define	SYS_AUE_extattr_set_fd	AUE_EXTATTR_SET_FD
 #define	SYS_AUE_extattr_get_fd	AUE_EXTATTR_GET_FD
 #define	SYS_AUE_extattr_delete_fd	AUE_EXTATTR_DELETE_FD

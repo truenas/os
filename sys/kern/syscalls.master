@@ -661,7 +661,11 @@
 367	AUE_NULL	UNIMPL	__cap_get_file
 368	AUE_NULL	UNIMPL	__cap_set_fd
 369	AUE_NULL	UNIMPL	__cap_set_file
-370	AUE_NULL	UNIMPL	nosys
+370	AUE_NULL	STD { int kevent64(int fd, \
+				    const struct kevent64_s *changelist, \
+				    int nchanges, struct kevent64_s *eventlist, \
+				    int nevents, unsigned int flags, \
+				    const struct timespec *timeout); }
 371	AUE_EXTATTR_SET_FD	STD	{ ssize_t extattr_set_fd(int fd, \
 				    int attrnamespace, const char *attrname, \
 				    void *data, size_t nbytes); }

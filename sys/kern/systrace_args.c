@@ -2026,6 +2026,19 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 6;
 		break;
 	}
+	/* kevent64 */
+	case 370: {
+		struct kevent64_args *p = params;
+		iarg[0] = p->fd; /* int */
+		uarg[1] = (intptr_t) p->changelist; /* const struct kevent64_s * */
+		iarg[2] = p->nchanges; /* int */
+		uarg[3] = (intptr_t) p->eventlist; /* struct kevent64_s * */
+		iarg[4] = p->nevents; /* int */
+		uarg[5] = p->flags; /* unsigned int */
+		uarg[6] = (intptr_t) p->timeout; /* const struct timespec * */
+		*n_args = 7;
+		break;
+	}
 	/* extattr_set_fd */
 	case 371: {
 		struct extattr_set_fd_args *p = params;
@@ -6668,6 +6681,34 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* kevent64 */
+	case 370:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "const struct kevent64_s *";
+			break;
+		case 2:
+			p = "int";
+			break;
+		case 3:
+			p = "struct kevent64_s *";
+			break;
+		case 4:
+			p = "int";
+			break;
+		case 5:
+			p = "unsigned int";
+			break;
+		case 6:
+			p = "const struct timespec *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* extattr_set_fd */
 	case 371:
 		switch(ndx) {
@@ -10274,6 +10315,11 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	case 362:
 	/* kevent */
 	case 363:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* kevent64 */
+	case 370:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

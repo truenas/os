@@ -90,8 +90,10 @@ MTX_SYSINIT(kq_global, &kq_global, "kqueue order", MTX_DEF);
 
 TASKQUEUE_DEFINE_THREAD(kqueue);
 
-static int	kevent_copyout(void *arg, struct kevent *kevp, int count);
-static int	kevent_copyin(void *arg, struct kevent *kevp, int count);
+static int	kevent_copyout(void *arg, void *kevp, int count);
+static int	kevent_copyin(void *arg, void *kevp, int count);
+static int	kevent64_copyout(void *arg, void *kevp, int count);
+static int	kevent64_copyin(void *arg,void *kevp, int count);
 static int	kqueue_register(struct kqueue *kq, struct kevent *kev,
 		    struct thread *td, int waitok);
 static int	kqueue_acquire(struct file *fp, struct kqueue **kqp);
@@ -762,6 +764,39 @@ done2:
 }
 
 #ifndef _SYS_SYSPROTO_H_
+struct kevent64_args {
+	int fd;
+	struct kevent64_s *changelist;
+	int nchanges;
+	struct kevent64_s *eventlist;
+	int nevents;
+	const struct timespec *timeout;
+};
+#endif
+int
+sys_kevent64(struct thread *td, struct kevent64_args *uap)
+{
+	struct timespec ts, *tsp;
+	struct kevent_copyops k_ops = { uap,
+					kevent64_copyout,
+					kevent64_copyin};
+	int error;
+
+	if (uap->timeout != NULL) {
+		error = copyin(uap->timeout, &ts, sizeof(ts));
+		if (error)
+			return (error);
+		tsp = &ts;
+	} else
+		tsp = NULL;
+
+	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
+			&k_ops, tsp, 1);
+
+	return (error);
+}
+
+#ifndef _SYS_SYSPROTO_H_
 struct kevent_args {
 	int	fd;
 	const struct kevent *changelist;
@@ -809,7 +844,7 @@ sys_kevent(struct thread *td, struct kevent_args *uap)
 #endif
 
 	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
-	    &k_ops, tsp);
+			&k_ops, tsp, 0);
 
 #ifdef KTRACE
 	if (ktruioin != NULL) {
@@ -827,7 +862,22 @@ sys_kevent(struct thread *td, struct kevent_args *uap)
  * Copy 'count' items into the destination list pointed to by uap->eventlist.
  */
 static int
-kevent_copyout(void *arg, struct kevent *kevp, int count)
+kevent64_copyout(void *arg, void *kevp, int count)
+{
+	struct kevent64_args *uap;
+	int error;
+
+	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
+	uap = (struct kevent64_args *)arg;
+
+	error = copyout(kevp, uap->eventlist, count * sizeof(struct kevent64_s));
+	if (error == 0)
+		uap->eventlist += count;
+	return (error);
+}
+
+static int
+kevent_copyout(void *arg, void *kevp, int count)
 {
 	struct kevent_args *uap;
 	int error;
@@ -835,7 +885,7 @@ kevent_copyout(void *arg, struct kevent *kevp, int count)
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
 	uap = (struct kevent_args *)arg;
 
-	error = copyout(kevp, uap->eventlist, count * sizeof *kevp);
+	error = copyout(kevp, uap->eventlist, count * sizeof(struct kevent));
 	if (error == 0)
 		uap->eventlist += count;
 	return (error);
@@ -845,7 +895,22 @@ kevent_copyout(void *arg, struct kevent *kevp, int count)
  * Copy 'count' items from the list pointed to by uap->changelist.
  */
 static int
-kevent_copyin(void *arg, struct kevent *kevp, int count)
+kevent64_copyin(void *arg, void *kevp, int count)
+{
+	struct kevent64_args *uap;
+	int error;
+
+	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
+	uap = (struct kevent64_args *)arg;
+
+	error = copyin(uap->changelist, kevp, count * sizeof(struct kevent64_s));
+	if (error == 0)
+		uap->changelist += count;
+	return (error);
+}
+
+static int
+kevent_copyin(void *arg, void *kevp, int count)
 {
 	struct kevent_args *uap;
 	int error;
@@ -853,7 +918,7 @@ kevent_copyin(void *arg, struct kevent *kevp, int count)
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
 	uap = (struct kevent_args *)arg;
 
-	error = copyin(uap->changelist, kevp, count * sizeof *kevp);
+	error = copyin(uap->changelist, kevp, count * sizeof(struct kevent));
 	if (error == 0)
 		uap->changelist += count;
 	return (error);
@@ -861,7 +926,8 @@ kevent_copyin(void *arg, struct kevent *kevp, int count)
 
 int
 kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
-    struct kevent_copyops *k_ops, const struct timespec *timeout)
+	struct kevent_copyops *k_ops, const struct timespec *timeout,
+	int v1)
 {
 	struct kevent keva[KQ_NEVENTS];
 	struct kevent *kevp, *changes;
@@ -884,7 +950,38 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 		goto done_norel;
 
 	nerrors = 0;
-
+	if (v1) {
+		struct kevent64_s keva[KQ_NEVENTS];
+		struct kevent64_s *kevp, *changes;
+		while (nchanges > 0) {
+			n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
+			error = k_ops->k_copyin(k_ops->arg, keva, n);
+			if (error)
+				goto done;
+			changes = keva;
+			for (i = 0; i < n; i++) {
+				kevp = &changes[i];
+				if (!kevp->filter)
+					continue;
+				kevp->flags &= ~EV_SYSFLAGS;
+				error = kqueue_register(kq, (struct kevent *)kevp, td, 1);
+				if (error || (kevp->flags & EV_RECEIPT)) {
+					if (nevents != 0) {
+						kevp->flags = EV_ERROR;
+						kevp->data = error;
+						(void) k_ops->k_copyout(k_ops->arg,
+												kevp, 1);
+						nevents--;
+						nerrors++;
+					} else {
+						goto done;
+					}
+				}
+			}
+			nchanges -= n;
+		}
+		goto check_errors;
+	}
 	while (nchanges > 0) {
 		n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
 		error = k_ops->k_copyin(k_ops->arg, keva, n);
@@ -912,6 +1009,7 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 		}
 		nchanges -= n;
 	}
+check_errors:
 	if (nerrors) {
 		td->td_retval[0] = nerrors;
 		error = 0;
