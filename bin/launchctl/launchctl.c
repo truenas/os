@@ -32,10 +32,16 @@
 #include <CoreFoundation/CFPriv.h>
 #include <CoreFoundation/CFLogUtilities.h>
 #include <TargetConditionals.h>
+#ifdef __FreeBSD__
+#define IOKitWaitQuiet(a, b) bzero(b, sizeof(mach_timespec_t))
+#else
 #include <IOKit/IOKitLib.h>
+#endif
 #include <NSSystemDirectories.h>
 #include <mach/mach.h>
+#ifndef __FreeBSD__
 #include <mach-o/getsect.h>
+#endif
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <sys/time.h>
@@ -49,6 +55,10 @@
 #include <sys/param.h>
 #include <sys/mount.h>
 #include <sys/reboot.h>
+#include <net/if.h>
+#ifdef __FreeBSD__
+#include <net/if_var.h>
+#endif
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/in_var.h>
@@ -67,19 +77,31 @@
 #include <glob.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#ifndef __FreeBSD__
 #include <dns_sd.h>
+#include <bootfiles.h>
+#endif
 #include <paths.h>
 #include <utmpx.h>
-#include <bootfiles.h>
 #include <sysexits.h>
+#ifdef __FreeBSD__
+#include <libutil.h>
+#else
 #include <util.h>
+#endif
 #include <spawn.h>
-#include <sys/syslimits.h>
+#include <limits.h>
 #include <fnmatch.h>
 #include <os/assumes.h>
 #include <dlfcn.h>
 #if HAVE_SYSTEMSTATS
 #include <systemstats/systemstats.h>
+#endif
+
+#ifdef __FreeBSD__
+#include <sys/wait.h>
+#define _PATH_UTMPX             "/var/run/utmpx"
+#include <sys/sockio.h>
 #endif
 
 #if HAVE_LIBAUDITD
@@ -117,7 +139,7 @@ extern char **environ;
 
 struct load_unload_state {
 	launch_data_t pass1;
-	char *session_type;
+	const char *session_type;
 	bool editondisk:1, load:1, forceload:1;
 };
 
@@ -142,13 +164,15 @@ static CFPropertyListRef CreateMyPropertyListFromCachedFile(const char *posixfil
 static bool require_jobs_from_cache(void);
 #endif
 static CFPropertyListRef CreateMyPropertyListFromFile(const char *);
+#ifndef __FreeBSD__
 static CFPropertyListRef CFPropertyListCreateFromFile(CFURLRef plistURL);
+#endif
 static void WriteMyPropertyListToFile(CFPropertyListRef, const char *);
 static bool path_goodness_check(const char *path, bool forceload);
 static void readpath(const char *, struct load_unload_state *);
 static void readfile(const char *, struct load_unload_state *);
 static int _fd(int);
-static int demux_cmd(int argc, char *const argv[]);
+static int demux_cmd(int argc, const char *const argv[]);
 static void submit_job_pass(launch_data_t jobs);
 static void do_mgroup_join(int fd, int family, int socktype, int protocol, const char *mgroup);
 static mach_port_t str2bsport(const char *s);
@@ -195,39 +219,39 @@ typedef enum {
 
 static void do_BootCache_magic(BootCache_action_t what);
 
-static int bootstrap_cmd(int argc, char *const argv[]);
-static int load_and_unload_cmd(int argc, char *const argv[]);
+static int bootstrap_cmd(int argc, const char *const argv[]);
+static int load_and_unload_cmd(int argc, const char *const argv[]);
 //static int reload_cmd(int argc, char *const argv[]);
-static int start_stop_remove_cmd(int argc, char *const argv[]);
-static int submit_cmd(int argc, char *const argv[]);
-static int list_cmd(int argc, char *const argv[]);
+static int start_stop_remove_cmd(int argc, const char *const argv[]);
+static int submit_cmd(int argc, const char *const argv[]);
+static int list_cmd(int argc, const char *const argv[]);
 
-static int setenv_cmd(int argc, char *const argv[]);
-static int unsetenv_cmd(int argc, char *const argv[]);
-static int getenv_and_export_cmd(int argc, char *const argv[]);
-static int wait4debugger_cmd(int argc, char *const argv[]);
+static int setenv_cmd(int argc, const char *const argv[]);
+static int unsetenv_cmd(int argc, const char *const argv[]);
+static int getenv_and_export_cmd(int argc, const char *const argv[]);
+static int wait4debugger_cmd(int argc, const char *const argv[]);
 
-static int limit_cmd(int argc, char *const argv[]);
-static int stdio_cmd(int argc, char *const argv[]);
-static int fyi_cmd(int argc, char *const argv[]);
-static int logupdate_cmd(int argc, char *const argv[]);
-static int umask_cmd(int argc, char *const argv[]);
-static int getrusage_cmd(int argc, char *const argv[]);
-static int bsexec_cmd(int argc, char *const argv[]);
+static int limit_cmd(int argc, const char *const argv[]);
+static int stdio_cmd(int argc, const char *const argv[]);
+static int fyi_cmd(int argc, const char *const argv[]);
+static int logupdate_cmd(int argc, const char *const argv[]);
+static int umask_cmd(int argc, const char *const argv[]);
+static int getrusage_cmd(int argc, const char *const argv[]);
+static int bsexec_cmd(int argc, const char *const argv[]);
 static int _bslist_cmd(mach_port_t bport, unsigned int depth, bool show_job, bool local_only);
-static int bslist_cmd(int argc, char *const argv[]);
+static int bslist_cmd(int argc, const char *const argv[]);
 static int _bstree_cmd(mach_port_t bsport, unsigned int depth, bool show_jobs);
-static int bstree_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)));
-static int managerpid_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)));
-static int manageruid_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)));
-static int managername_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)));
-static int asuser_cmd(int argc, char * const argv[]);
-static int exit_cmd(int argc, char *const argv[]) __attribute__((noreturn));
-static int help_cmd(int argc, char *const argv[]);
+static int bstree_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)));
+static int managerpid_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)));
+static int manageruid_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)));
+static int managername_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)));
+static int asuser_cmd(int argc, const char * const argv[]);
+static int exit_cmd(int argc, const char *const argv[]) __attribute__((noreturn));
+static int help_cmd(int argc, const char *const argv[]);
 
 static const struct {
 	const char *name;
-	int (*func)(int argc, char *const argv[]);
+	int (*func)(int argc, const char *const argv[]);
 	const char *desc;
 } cmds[] = {
 	{ "load",			load_and_unload_cmd,	"Load configuration files and/or directories" },
@@ -272,14 +296,16 @@ static bool _launchctl_system_context;
 static bool _launchctl_uid0_context;
 static bool _launchctl_system_bootstrap;
 static bool _launchctl_peruser_bootstrap;
+#ifndef __FreeBSD__
 static bool _launchctl_verbose_boot = false;
+#endif
 static bool _launchctl_startup_debugging = false;
 
 static bool _launchctl_overrides_db_changed = false;
 static CFMutableDictionaryRef _launchctl_overrides_db = NULL;
 
-static char *_launchctl_job_overrides_db_path;
-static char *_launchctl_managername = NULL;
+static const char *_launchctl_job_overrides_db_path;
+static const char *_launchctl_managername = NULL;
 
 #if READ_JETSAM_DEFAULTS
 static CFDictionaryRef _launchctl_jetsam_defaults = NULL;
@@ -390,7 +416,7 @@ main(int argc, char *const argv[])
 			}
 
 			if (i > 0) {
-				demux_cmd(i, argv2);
+				demux_cmd(i, (const char **)argv2);
 			}
 
 			free(l);
@@ -402,14 +428,14 @@ main(int argc, char *const argv[])
 	}
 
 	if (argc > 0) {
-		exit(demux_cmd(argc, argv));
+		exit(demux_cmd(argc, (const char **)argv));
 	}
 
 	exit(EXIT_SUCCESS);
 }
 
 int
-demux_cmd(int argc, char *const argv[])
+demux_cmd(int argc, const char *const argv[])
 {
 	size_t i;
 
@@ -495,7 +521,7 @@ read_launchd_conf(void)
 		}
 
 		if (i > 0) {
-			demux_cmd(i, av);
+			demux_cmd(i, (const char **)av);
 		}
 	}
 
@@ -503,6 +529,7 @@ read_launchd_conf(void)
 #endif // !TARGET_OS_EMBEDDED
 }
 
+#ifndef __FreeBSD__
 static CFPropertyListRef
 CFPropertyListCreateFromFile(CFURLRef plistURL)
 {	
@@ -535,9 +562,10 @@ CFPropertyListCreateFromFile(CFURLRef plistURL)
 
 	return plist;
 }
+#endif
 
 int
-unsetenv_cmd(int argc, char *const argv[])
+unsetenv_cmd(int argc, const char *const argv[])
 {
 	launch_data_t resp, tmp, msg;
 
@@ -565,7 +593,7 @@ unsetenv_cmd(int argc, char *const argv[])
 }
 
 int
-setenv_cmd(int argc, char *const argv[])
+setenv_cmd(int argc, const char *const argv[])
 {
 	launch_data_t resp, tmp, tmpv, msg;
 
@@ -617,11 +645,11 @@ print_key_value(launch_data_t obj, const char *key, void *context)
 }
 
 int
-getenv_and_export_cmd(int argc, char *const argv[])
+getenv_and_export_cmd(int argc, const char *const argv[])
 {
 	launch_data_t resp;
 	bool is_csh = false;
-	char *k;
+	const char *k;
 
 	if (!strcmp(argv[0], "export")) {
 		char *s = getenv("SHELL");
@@ -639,7 +667,7 @@ getenv_and_export_cmd(int argc, char *const argv[])
 		if (!strcmp(argv[0], "export")) {
 			launch_data_dict_iterate(resp, print_launchd_env, &is_csh);
 		} else {
-			launch_data_dict_iterate(resp, print_key_value, k);
+			launch_data_dict_iterate(resp, print_key_value, (void *)k);
 		}
 		launch_data_free(resp);
 		return 0;
@@ -651,7 +679,7 @@ getenv_and_export_cmd(int argc, char *const argv[])
 }
 
 int
-wait4debugger_cmd(int argc, char * const argv[])
+wait4debugger_cmd(int argc, const char * const argv[])
 {
 	if (argc != 3) {
 		launchctl_log(LOG_ERR, "%s usage: debug <label> <value>", argv[0]);
@@ -2064,7 +2092,7 @@ CF2launch_data(CFTypeRef cfr)
 }
 
 int
-help_cmd(int argc, char *const argv[])
+help_cmd(int argc, const char *const argv[])
 {
 	size_t i, l, cmdwidth = 0;
 
@@ -2090,7 +2118,7 @@ help_cmd(int argc, char *const argv[])
 }
 
 int
-exit_cmd(int argc __attribute__((unused)), char *const argv[] __attribute__((unused)))
+exit_cmd(int argc __attribute__((unused)), const char *const argv[] __attribute__((unused)))
 {
 	exit(0);
 }
@@ -2466,7 +2494,7 @@ system_specific_bootstrap(bool sflag)
 
 	_vproc_set_global_on_demand(true);
 
-	char *load_launchd_items[] = { "load", "-D", "all", NULL };
+	const char *load_launchd_items[] = { "load", "-D", "all", NULL };
 	int load_launchd_items_cnt = 3;
 
 	if (is_safeboot()) {
@@ -2518,13 +2546,13 @@ do_BootCache_magic(BootCache_action_t what)
 }
 
 int
-bootstrap_cmd(int argc, char *const argv[])
+bootstrap_cmd(int argc, const char *const argv[])
 {
 	char *session = NULL;
 	bool sflag = false;
 	int ch;
 
-	while ((ch = getopt(argc, argv, "sS:")) != -1) {
+	while ((ch = getopt(argc, (char **)argv, "sS:")) != -1) {
 		switch (ch) {
 		case 's':
 			sflag = true;
@@ -2550,7 +2578,7 @@ bootstrap_cmd(int argc, char *const argv[])
 		_launchctl_system_bootstrap = true;
 		system_specific_bootstrap(sflag);
 	} else {
-		char *load_launchd_items[] = {
+		const char *load_launchd_items[] = {
 			"load", 
 			"-S",
 			session,
@@ -2629,7 +2657,7 @@ bootstrap_cmd(int argc, char *const argv[])
 }
 
 int
-load_and_unload_cmd(int argc, char *const argv[])
+load_and_unload_cmd(int argc, const char *const argv[])
 {
 	NSSearchPathEnumerationState es = 0;
 	char nspath[PATH_MAX * 2]; /* safe side, we need to append */
@@ -2644,7 +2672,7 @@ load_and_unload_cmd(int argc, char *const argv[])
 		lus.load = true;
 	}
 
-	while ((ch = getopt(argc, argv, "wFS:D:")) != -1) {
+	while ((ch = getopt(argc, (char **)argv, "wFS:D:")) != -1) {
 		switch (ch) {
 		case 'w':
 			lus.editondisk = true;
@@ -2855,7 +2883,7 @@ submit_job_pass(launch_data_t jobs)
 }
 
 int
-start_stop_remove_cmd(int argc, char *const argv[])
+start_stop_remove_cmd(int argc, const char *const argv[])
 {
 	launch_data_t resp, msg;
 	const char *lmsgcmd = LAUNCH_KEY_STOPJOB;
@@ -2987,7 +3015,7 @@ print_obj(launch_data_t obj, const char *key, void *context __attribute__((unuse
 }
 
 int
-list_cmd(int argc, char *const argv[])
+list_cmd(int argc, const char *const argv[])
 {
 	if (_launchctl_is_managed) {
 		/* This output is meant for a command line, so don't print anything if
@@ -3000,7 +3028,7 @@ list_cmd(int argc, char *const argv[])
 	int r = 0;
 
 	bool plist_output = false;
-	char *label = NULL;	
+	const char *label = NULL;
 	if (argc > 3) {
 		launchctl_log(LOG_ERR, "usage: %s list [-x] [label]", getprogname());
 		return 1;
@@ -3063,14 +3091,14 @@ list_cmd(int argc, char *const argv[])
 }
 
 int
-stdio_cmd(int argc __attribute__((unused)), char *const argv[])
+stdio_cmd(int argc __attribute__((unused)), const char *const argv[])
 {
 	launchctl_log(LOG_ERR, "%s %s: This sub-command no longer does anything", getprogname(), argv[0]);
 	return 1;
 }
 
 int
-fyi_cmd(int argc, char *const argv[])
+fyi_cmd(int argc, const char *const argv[])
 {
 	launch_data_t resp, msg;
 	const char *lmsgk = NULL;
@@ -3112,7 +3140,7 @@ fyi_cmd(int argc, char *const argv[])
 }
 
 int
-logupdate_cmd(int argc, char *const argv[])
+logupdate_cmd(int argc, const char *const argv[])
 {
 	int64_t inval, outval;
 	bool badargs = false, maskmode = false, onlymode = false, levelmode = false;
@@ -3245,7 +3273,7 @@ lim2str(rlim_t val, char *buf)
 	if (val == RLIM_INFINITY)
 		strcpy(buf, "unlimited");
 	else
-		sprintf(buf, "%lld", val);
+		sprintf(buf, "%zd", val);
 	return buf;
 }
 
@@ -3264,7 +3292,7 @@ str2lim(const char *buf, rlim_t *res)
 }
 
 int
-limit_cmd(int argc, char *const argv[])
+limit_cmd(int argc, const char *const argv[])
 {
 	char slimstr[100];
 	char hlimstr[100];
@@ -3375,7 +3403,7 @@ limit_cmd(int argc, char *const argv[])
 }
 
 int
-umask_cmd(int argc, char *const argv[])
+umask_cmd(int argc, const char *const argv[])
 {
 	bool badargs = false;
 	char *endptr;
@@ -3432,7 +3460,7 @@ setup_system_context(void)
 }
 
 int
-submit_cmd(int argc, char *const argv[])
+submit_cmd(int argc, const char *const argv[])
 {
 	launch_data_t msg = launch_data_alloc(LAUNCH_DATA_DICTIONARY);
 	launch_data_t job = launch_data_alloc(LAUNCH_DATA_DICTIONARY);
@@ -3441,7 +3469,7 @@ submit_cmd(int argc, char *const argv[])
 
 	launch_data_dict_insert(job, launch_data_new_bool(false), LAUNCH_JOBKEY_ONDEMAND);
 
-	while ((ch = getopt(argc, argv, "l:p:o:e:")) != -1) {
+	while ((ch = getopt(argc, (char **)argv, "l:p:o:e:")) != -1) {
 		switch (ch) {
 		case 'l':
 			launch_data_dict_insert(job, launch_data_new_string(optarg), LAUNCH_JOBKEY_LABEL);
@@ -3493,7 +3521,7 @@ submit_cmd(int argc, char *const argv[])
 }
 
 int
-getrusage_cmd(int argc, char *const argv[])
+getrusage_cmd(int argc, const char *const argv[])
 {
 	launch_data_t resp, msg;
 	bool badargs = false;
@@ -3607,7 +3635,7 @@ str2bsport(const char *s)
 }
 
 int
-bsexec_cmd(int argc, char *const argv[])
+bsexec_cmd(int argc, const char *const argv[])
 {
 	kern_return_t result;
 	mach_port_t bport;
@@ -3675,7 +3703,7 @@ _bslist_cmd(mach_port_t bport, unsigned int depth, bool show_job, bool local_onl
 }
 
 int
-bslist_cmd(int argc, char *const argv[])
+bslist_cmd(int argc, const char *const argv[])
 {
 	if (_launchctl_is_managed) {
 		/* This output is meant for a command line, so don't print anything if
@@ -3734,7 +3762,7 @@ _bstree_cmd(mach_port_t bsport, unsigned int depth, bool show_jobs)
 	_bslist_cmd(bsport, depth, show_jobs, true);
 
 	for (i = 0; i < cnt; i++) {
-		char *type = NULL;
+		const char *type = NULL;
 		if (child_props[i] & BOOTSTRAP_PROPERTY_PERUSER) {
 			type = "Per-user";
 		} else if (child_props[i] & BOOTSTRAP_PROPERTY_EXPLICITSUBSET) {
@@ -3761,7 +3789,7 @@ _bstree_cmd(mach_port_t bsport, unsigned int depth, bool show_jobs)
 }
 
 int
-bstree_cmd(int argc, char * const argv[])
+bstree_cmd(int argc, const char * const argv[])
 {
 	if (_launchctl_is_managed) {
 		/* This output is meant for a command line, so don't print anything if
@@ -3785,7 +3813,7 @@ bstree_cmd(int argc, char * const argv[])
 }
 
 int
-managerpid_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)))
+managerpid_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)))
 {
 	int64_t manager_pid = 0;
 	vproc_err_t verr = vproc_swap_integer(NULL, VPROC_GSK_MGR_PID, NULL, (int64_t *)&manager_pid);
@@ -3799,7 +3827,7 @@ managerpid_cmd(int argc __attribute__((unused)), char * const argv[] __attribute
 }
 
 int
-manageruid_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)))
+manageruid_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)))
 {
 	int64_t manager_uid = 0;
 	vproc_err_t verr = vproc_swap_integer(NULL, VPROC_GSK_MGR_UID, NULL, (int64_t *)&manager_uid);
@@ -3813,9 +3841,9 @@ manageruid_cmd(int argc __attribute__((unused)), char * const argv[] __attribute
 }
 
 int
-managername_cmd(int argc __attribute__((unused)), char * const argv[] __attribute__((unused)))
+managername_cmd(int argc __attribute__((unused)), const char * const argv[] __attribute__((unused)))
 {
-	char *manager_name = NULL;
+	const char *manager_name = NULL;
 	vproc_err_t verr = vproc_swap_string(NULL, VPROC_GSK_MGR_NAME, NULL, &manager_name);
 	if (verr) {
 		launchctl_log(LOG_NOTICE, "Unknown job manager!");
@@ -3823,13 +3851,13 @@ managername_cmd(int argc __attribute__((unused)), char * const argv[] __attribut
 	}
 
 	launchctl_log(LOG_NOTICE, "%s", manager_name);
-	free(manager_name);
+	free((void *)manager_name);
 
 	return 0;
 }
 
 int
-asuser_cmd(int argc, char * const argv[])
+asuser_cmd(int argc, const char * const argv[])
 {
 	/* This code plays fast and loose with Mach ports. Do NOT use it as any sort
 	 * of reference for port handling. Or really anything else in this file.
@@ -4178,6 +4206,9 @@ path_check(const char *path)
 bool
 is_safeboot(void)
 {
+#ifdef __FreeBSD__
+	return false;
+#else
 	int sbmib[] = { CTL_KERN, KERN_SAFEBOOT };
 	uint32_t sb = 0;
 	size_t sbsz = sizeof(sb);
@@ -4187,11 +4218,15 @@ is_safeboot(void)
 	}
 
 	return (bool)sb;
+#endif
 }
 
 bool
 is_netboot(void)
 {
+#ifdef __FreeBSD__
+	return false;
+#else
 	int nbmib[] = { CTL_KERN, KERN_NETBOOT };
 	uint32_t nb = 0;
 	size_t nbsz = sizeof(nb);
@@ -4201,6 +4236,7 @@ is_netboot(void)
 	}
 
 	return (bool)nb;
+#endif
 }
 
 void
@@ -4328,6 +4364,7 @@ skip_sysctl_tool:
 	(void)fclose(sf);
 }
 
+#ifndef __FreeBSD__
 static CFStringRef
 copySystemBuildVersion(void)
 {
@@ -4357,10 +4394,12 @@ copySystemBuildVersion(void)
 
     return build;
 }
+#endif
 
 void
 do_sysversion_sysctl(void)
 {
+#ifndef __FreeBSD__
 	int mib[] = { CTL_KERN, KERN_OSVERSION };
 	CFStringRef buildvers;
 	char buf[1024];
@@ -4384,10 +4423,11 @@ do_sysversion_sysctl(void)
 	}
 
 	CFRelease(buildvers);
+#endif
 }
 
 void
-do_application_firewall_magic(int sfd, launch_data_t thejob)
+do_application_firewall_magic(int sfd __unused, launch_data_t thejob)
 {
 	const char *prog = NULL, *partialprog = NULL;
 	char *path, *pathtmp, **pathstmp;
@@ -4444,9 +4484,11 @@ do_application_firewall_magic(int sfd, launch_data_t thejob)
 		/* The networking team has asked us to ignore the failure of this API if
 		 * errno == ENOPROTOOPT.
 		 */
+#ifndef __FreeBSD__
 		if (setsockopt(sfd, SOL_SOCKET, SO_EXECPATH, prog, (socklen_t)(strlen(prog) + 1)) == -1 && errno != ENOPROTOOPT) {
 			(void)os_assumes_zero(errno);
 		}
+#endif
 	}
 }
 
@@ -4496,6 +4538,7 @@ preheat_page_cache_hack(void)
 void
 do_bootroot_magic(void)
 {
+#ifndef __FreeBSD__
 	const char *kextcache_tool[] = { "kextcache", "-U", "/", NULL };
 	CFTypeRef bootrootProp;
 	io_service_t chosen;
@@ -4525,11 +4568,13 @@ do_bootroot_magic(void)
 	if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == EX_OSFILE) {
 		(void)reboot(RB_AUTOBOOT);
 	}
+#endif
 }
 
 void
 do_file_init(void)
 {
+#ifndef __FreeBSD__
 	struct stat sb;
 
 	if (stat("/AppleInternal", &sb) == 0 && stat("/var/db/disableAppleInternal", &sb) == -1) {
@@ -4546,4 +4591,5 @@ do_file_init(void)
 	if (stat("/var/db/.launchd_shutdown_debugging", &sb) == 0 && _launchctl_verbose_boot) {
 		_launchctl_startup_debugging = true;
 	}
+#endif
 }
