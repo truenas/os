@@ -1,7 +1,7 @@
 .include <src.opts.mk>
 PROG= launchd
 
-.PATH:
+.PATH: .
 .PATH: support
 .PATH: uuid
 
@@ -10,8 +10,7 @@ BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
-CFLAGS+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../../contrib/openbsm
-CFLAGS+= -I${.CURDIR}/../../lib/liblaunch
+CFLAGS+= -I${.CURDIR}/../../contrib/openbsm -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -DHAVE_INTTYPES_H
 
 LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
