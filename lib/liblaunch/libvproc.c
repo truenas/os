@@ -895,7 +895,7 @@ out:
 }
 
 vproc_err_t
-vproc_swap_string(vproc_t vp, vproc_gsk_t key, const char *instr, char **outstr)
+vproc_swap_string(vproc_t vp, vproc_gsk_t key, const char *instr, const char **outstr)
 {
 	launch_data_t instr_data = instr ? launch_data_new_string(instr) : NULL;
 	launch_data_t outstr_data = NULL;
