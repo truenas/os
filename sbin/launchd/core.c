@@ -120,7 +120,7 @@
 #endif
 
 #if __FreeBSD__
-static int gL1CacheEnabled;
+extern int gL1CacheEnabled;
 #elif !TARGET_OS_EMBEDDED
 extern int gL1CacheEnabled;
 #endif
@@ -840,23 +840,7 @@ static bool job_import_defaults(launch_data_t pload);
 #endif
 
 #ifdef __FreeBSD__
-__private_extern__ void search_set_flags(si_mod_t *si, const char *name, uint32_t flag);
 
-si_mod_t *
-si_search(void)
-{
-	static si_mod_t *search = NULL;
-
-	if (search == NULL) search = si_module_with_name("search");
-
-	return search;
-}
-
-void
-si_search_module_set_flags(const char *name, uint32_t flag)
-{
-	search_set_flags(si_search(), name, flag);
-}
 #endif
 
 static struct priority_properties_t {

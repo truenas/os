@@ -15,6 +15,7 @@ CFLAGS+= -DHAVE_INTTYPES_H
 
 LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
 LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
+LDFLAGS+= -L${.CURDIR}/../../lib/libosxsupport -losxsupport
 LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach -lutil
 LDFLAGS+= -pthread
 
@@ -38,15 +39,9 @@ internal.h internalServer.h internalServer.c internalUser.c:
 SRCS= jobServer.c launchd_helperServer.c mach_excServer.c internalServer.c
 SRCS+= job_forwardUser.c  job_replyUser.c job_replyServer.c notifyServer.c
 SRCS+= internalUser.c
-SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c pack.c unpack.c
+SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
 
 
-#support
-SRCS+= assumes.c libproc.c posix_spawn.c getiopolicy_np.c
-SRCS+= si_module.c search_module.c si_data.c cache_module.c file_module.c
-
-#uuid
-SRCS+= clear.c copy.c gen_uuid.c isnull.c unparse.c
 
 
 CLEANFILES+= *Server.c *User.c job.h helper.h job_reply.h job_forward.h notify.h \
