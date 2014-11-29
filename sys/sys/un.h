@@ -48,7 +48,7 @@ struct sockaddr_un {
 	unsigned char	sun_len;	/* sockaddr len including null */
 	sa_family_t	sun_family;	/* AF_UNIX */
 	char	sun_path[104];		/* path name (gag) */
-};
+} __aligned(8);
 
 #if __BSD_VISIBLE
 
