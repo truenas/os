@@ -116,7 +116,7 @@ vproc_swap_complex(vproc_t vp, vproc_gsk_t key,
 __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_4_0)
 vproc_err_t
 vproc_swap_string(vproc_t vp, vproc_gsk_t key,
-	const char *instr, char **outstr);
+	const char *instr, const char **outstr);
 
 __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_NA)
 vproc_err_t
