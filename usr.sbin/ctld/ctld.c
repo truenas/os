@@ -2256,15 +2256,6 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (dont_daemonize == false) {
-		log_debugx("daemonizing");
-		if (daemon(0, 0) == -1) {
-			log_warn("cannot daemonize");
-			pidfile_remove(newconf->conf_pidfh);
-			exit(1);
-		}
-	}
-
 	/* Schedule iSNS update */
 	if (!TAILQ_EMPTY(&newconf->conf_isns))
 		set_timeout((newconf->conf_isns_period + 2) / 3, false);
