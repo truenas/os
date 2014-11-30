@@ -96,7 +96,9 @@
 #define OS_ALIGNED(n) __attribute__((__aligned__((n))))
 #define OS_FORMAT_PRINTF(x,y) __attribute__((__format__(printf,x,y)))
 #define OS_EXPORT extern __attribute__((__visibility__("default")))
+#ifndef OS_INLINE
 #define OS_INLINE static __inline__
+#endif
 #define OS_EXPECT(x, v) __builtin_expect((x), (v))
 #else
 #define OS_NORETURN
@@ -132,7 +134,9 @@
 #define OS_ALIGNED(n)
 #define OS_FORMAT_PRINTF(x,y)
 #define OS_EXPORT extern
+#ifndef OS_INLINE
 #define OS_INLINE static inline
+#endif
 #define OS_EXPECT(x, v) (x)
 #endif
 
