@@ -19,10 +19,11 @@ LDFLAGS+= -L${.CURDIR}/../../lib/libosxsupport -losxsupport
 LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach -lutil
 LDFLAGS+= -pthread
 
-jobServer.h jobServer.c job.h: job.defs
+jobServer.h jobServer.c job.h: job.defs helper.h
 	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
-helper.h launchd_helperServer.c: helper.defs
-	mig ${MIG_FLAGS} -header helper.h -sheader launchd_helperServer.h helper.defs
+helper.h launchd_helperServer.h: helper.defs
+	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header helper.h \
+	-sheader launchd_helperServer.h helper.defs
 job_reply.h job_replyUser.c job_replyServer.c job_replyServer.h: job_reply.defs
 	mig ${MIG_FLAGS} -sheader job_replyServer.h job_reply.defs
 job_forward.h job_forwardUser.c job_forwardServer.h: job_forward.defs
@@ -36,7 +37,7 @@ internal.h internalServer.h internalServer.c internalUser.c:
 
 
 
-SRCS= jobServer.c launchd_helperServer.c mach_excServer.c internalServer.c
+SRCS= jobServer.c mach_excServer.c internalServer.c
 SRCS+= job_forwardUser.c  job_replyUser.c job_replyServer.c notifyServer.c
 SRCS+= internalUser.c
 SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
