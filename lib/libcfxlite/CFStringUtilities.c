@@ -26,6 +26,7 @@
 	Responsibility: Aki Inoue
 */
 
+#include <CoreFoundation/CFBase.h>
 #include "CFInternal.h"
 #include <CoreFoundation/CFStringEncodingConverterExt.h>
 #include <CoreFoundation/CFUniChar.h>
@@ -136,11 +137,11 @@ CFStringRef CFStringConvertEncodingToIANACharSetName(CFStringEncoding encoding) 
 
 
         if (NULL != name) {
-            CFIndex value = encoding;
+            CFIndex lvalue = encoding;
 
             if (NULL == mappingTable) mappingTable = CFDictionaryCreateMutable(NULL, 0, NULL, &kCFTypeDictionaryValueCallBacks);
 
-            CFDictionaryAddValue(mappingTable, (const void*)value, (const void*)name);
+            CFDictionaryAddValue(mappingTable, (const void*)lvalue, (const void*)name);
             CFRelease(name);
         }
     }
@@ -561,7 +562,7 @@ static inline CFIndex __extendLocationForward(CFIndex location, CFStringInlineBu
     return location;
 }
 
-CF_PRIVATE CFComparisonResult _CFCompareStringsWithLocale(CFStringInlineBuffer *str1, CFRange str1Range, CFStringInlineBuffer *str2, CFRange str2Range, CFOptionFlags options, const void *compareLocale) {
+CF_PRIVATE_EXTERN CFComparisonResult _CFCompareStringsWithLocale(CFStringInlineBuffer *str1, CFRange str1Range, CFStringInlineBuffer *str2, CFRange str2Range, CFOptionFlags options __unused, const void *compareLocale __unused) {
     const UniChar *characters1;
     const UniChar *characters2;
     CFComparisonResult compResult = kCFCompareEqualTo;

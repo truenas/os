@@ -39,6 +39,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __FreeBSD__
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
 // -------- -------- -------- -------- -------- -------- -------- --------
 
 struct __CFAllocator {
@@ -393,8 +396,14 @@ const CFAllocatorRef kCFAllocatorNull = &__kCFAllocatorNull;
 const CFAllocatorRef kCFAllocatorUseContext = (CFAllocatorRef)0x03ab;
 #undef kCFAllocatorSystemDefaultGCRefZero
 #undef kCFAllocatorDefaultGCRefZero
-const CFAllocatorRef kCFAllocatorSystemDefaultGCRefZero = (CFAllocatorRef)0x03ad;
-const CFAllocatorRef kCFAllocatorDefaultGCRefZero = (CFAllocatorRef)0x03af;
+static const CFAllocatorRef kCFAllocatorSystemDefaultGCRefZero = (CFAllocatorRef)0x03ad;
+static const CFAllocatorRef kCFAllocatorDefaultGCRefZero = (CFAllocatorRef)0x03af;
+
+CF_PRIVATE_EXTERN CFAllocatorRef __CFAllocatorGetAllocator(CFTypeRef cf);
+CF_PRIVATE_EXTERN void __CFAllocatorInitialize(void);
+CF_PRIVATE_EXTERN void __CFAllocatorDeallocate(CFTypeRef cf);
+CF_PRIVATE_EXTERN void __CFNullInitialize(void);
+CF_PRIVATE_EXTERN void CFCollection_non_gc_storage_error(void);
 
 static CFStringRef __CFAllocatorCopyDescription(CFTypeRef cf) {
     CFAllocatorRef self = (CFAllocatorRef)cf;
@@ -404,12 +413,12 @@ static CFStringRef __CFAllocatorCopyDescription(CFTypeRef cf) {
 // remember to release value returned from copydescr function when this happens
 }
 
-CF_PRIVATE CFAllocatorRef __CFAllocatorGetAllocator(CFTypeRef cf) {
+CF_PRIVATE_EXTERN CFAllocatorRef __CFAllocatorGetAllocator(CFTypeRef cf) {
     CFAllocatorRef allocator = (CFAllocatorRef)cf;
     return (kCFAllocatorUseContext == allocator->_allocator) ? allocator : allocator->_allocator;
 }
 
-CF_PRIVATE void __CFAllocatorDeallocate(CFTypeRef cf) {
+CF_PRIVATE_EXTERN void __CFAllocatorDeallocate(CFTypeRef cf) {
     CFAllocatorRef self = (CFAllocatorRef)cf;
     CFAllocatorRef allocator = self->_allocator;
     CFAllocatorReleaseCallBack releaseFunc = __CFAllocatorGetReleaseFunction(&self->_context);
@@ -443,7 +452,9 @@ static const CFRuntimeClass __CFAllocatorClass = {
     NULL,	// equal
     NULL,	// hash
     NULL,	// 
-    __CFAllocatorCopyDescription
+    __CFAllocatorCopyDescription,
+	NULL,
+	NULL
 };
 
 static void _CFAllocatorSetInstanceTypeIDAndIsa(struct __CFAllocator *memory) {
@@ -451,7 +462,7 @@ static void _CFAllocatorSetInstanceTypeIDAndIsa(struct __CFAllocator *memory) {
     memory->_base._cfisa = __CFISAForTypeID(__kCFAllocatorTypeID);
 }
 
-CF_PRIVATE void __CFAllocatorInitialize(void) {
+CF_PRIVATE_EXTERN void __CFAllocatorInitialize(void) {
     __kCFAllocatorTypeID = _CFRuntimeRegisterClass(&__CFAllocatorClass);
 
     _CFAllocatorSetInstanceTypeIDAndIsa(&__kCFAllocatorSystemDefault);
@@ -853,10 +864,12 @@ static const CFRuntimeClass __CFNullClass = {
     NULL,
     NULL,
     __CFNullCopyFormattingDescription,
-    __CFNullCopyDescription
+    __CFNullCopyDescription,
+	NULL,
+	NULL
 };
 
-CF_PRIVATE void __CFNullInitialize(void) {
+CF_PRIVATE_EXTERN void __CFNullInitialize(void) {
     __kCFNullTypeID = _CFRuntimeRegisterClass(&__CFNullClass);
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFNull, __kCFNullTypeID);
 }
@@ -865,7 +878,7 @@ CFTypeID CFNullGetTypeID(void) {
     return __kCFNullTypeID;
 }
 
-void CFCollection_non_gc_storage_error(void) { }
+CF_PRIVATE_EXTERN void CFCollection_non_gc_storage_error(void) { }
 
 
 void _CFRuntimeSetCFMPresent(void *addr) {
@@ -876,8 +889,9 @@ void _CFRuntimeSetCFMPresent(void *addr) {
 
 /* Keep this assembly at the bottom of the source file! */
 
+CF_PRIVATE_EXTERN void __HALT(void);
 
-extern void __HALT() {
+CF_PRIVATE_EXTERN void __HALT(void) {
 #if defined(__ppc__)
     __asm__("trap");
 #elif defined(__i386__) || defined(__x86_64__)

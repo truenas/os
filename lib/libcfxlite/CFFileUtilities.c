@@ -63,8 +63,8 @@
 #endif
 
 CF_INLINE int openAutoFSNoWait() {
-#if DEPLOYMENT_TARGET_WINDOWS
-    return -1;
+#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_FREEBSD
+	return -1;
 #else
     return (__CFProphylacticAutofsAccess ? open("/dev/autofs_nowait", 0) : -1);
 #endif
@@ -74,33 +74,33 @@ CF_INLINE void closeAutoFSNoWait(int fd) {
     if (-1 != fd) close(fd);
 }
 
-CF_PRIVATE CFStringRef _CFCopyExtensionForAbstractType(CFStringRef abstractType) {
+CF_PRIVATE_EXTERN CFStringRef _CFCopyExtensionForAbstractType(CFStringRef abstractType) {
     return (abstractType ? (CFStringRef)CFRetain(abstractType) : NULL);
 }
 
 
-CF_PRIVATE Boolean _CFCreateDirectory(const char *path) {
+CF_PRIVATE_EXTERN Boolean _CFCreateDirectory(const char *path) {
     int no_hang_fd = openAutoFSNoWait();
     int ret = ((mkdir(path, 0777) == 0) ? true : false);
     closeAutoFSNoWait(no_hang_fd);
     return ret;
 }
 
-CF_PRIVATE Boolean _CFRemoveDirectory(const char *path) {
+CF_PRIVATE_EXTERN Boolean _CFRemoveDirectory(const char *path) {
     int no_hang_fd = openAutoFSNoWait();
     int ret = ((rmdir(path) == 0) ? true : false);
     closeAutoFSNoWait(no_hang_fd);
     return ret;
 }
 
-CF_PRIVATE Boolean _CFDeleteFile(const char *path) {
+CF_PRIVATE_EXTERN Boolean _CFDeleteFile(const char *path) {
     int no_hang_fd = openAutoFSNoWait();
     int ret = unlink(path) == 0;
     closeAutoFSNoWait(no_hang_fd);
     return ret;
 }
 
-CF_PRIVATE Boolean _CFReadBytesFromPathAndGetFD(CFAllocatorRef alloc, const char *path, void **bytes, CFIndex *length, CFIndex maxLength, int extraOpenFlags, int *fd) {    // maxLength is the number of bytes desired, or 0 if the whole file is desired regardless of length.
+CF_PRIVATE_EXTERN Boolean _CFReadBytesFromPathAndGetFD(CFAllocatorRef alloc, const char *path, void **bytes, CFIndex *length, CFIndex maxLength, int extraOpenFlags, int *fd) {    // maxLength is the number of bytes desired, or 0 if the whole file is desired regardless of length.
     struct statinfo statBuf;
     
     *bytes = NULL;
@@ -216,13 +216,13 @@ CF_PRIVATE Boolean _CFWriteBytesToFile(CFURLRef url, const void *bytes, CFIndex 
 /* On Mac OS 8/9, one of dirSpec and dirURL must be non-NULL.  On all other platforms, one of path and dirURL must be non-NULL
 If both are present, they are assumed to be in-synch; that is, they both refer to the same directory.  */
 /* Lately, dirSpec appears to be (rightfully) unused. */
-CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, char *dirPath, void *dirSpec, CFURLRef dirURL, CFStringRef matchingAbstractType) {
+CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, char *dirPath, void *dirSpec __unused, CFURLRef dirURL, CFStringRef matchingAbstractType) {
     CFMutableArrayRef files = NULL;
     Boolean releaseBase = false;
     CFIndex pathLength = dirPath ? strlen(dirPath) : 0;
     // MF:!!! Need to use four-letter type codes where appropriate.
     CFStringRef extension = (matchingAbstractType ? _CFCopyExtensionForAbstractType(matchingAbstractType) : NULL);
-    CFIndex targetExtLen = (extension ? CFStringGetLength(extension) : 0);
+    size_t targetExtLen = (extension ? CFStringGetLength(extension) : 0);
 
 #if DEPLOYMENT_TARGET_WINDOWS
     // This is a replacement for 'dirent' below, and also uses wchar_t to support unicode paths
@@ -386,9 +386,11 @@ CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, 
     struct dirent buffer;
     struct dirent *dp;
     int err;
-   
+#if DEPLOYMENT_TARGET_FREEBSD
+	int no_hang_fd = -1;
+#else	
     int no_hang_fd = __CFProphylacticAutofsAccess ? open("/dev/autofs_nowait", 0) : -1;
- 
+#endif 
     DIR *dirp = opendir(dirPath);
     if (!dirp) {
         if (extension) {
@@ -506,7 +508,7 @@ CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, 
     return files;
 }
 
-CF_PRIVATE SInt32 _CFGetPathProperties(CFAllocatorRef alloc, char *path, Boolean *exists, SInt32 *posixMode, int64_t *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents) {
+CF_PRIVATE_EXTERN SInt32 _CFGetPathProperties(CFAllocatorRef alloc, char *path, Boolean *exists, SInt32 *posixMode, SInt64 *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents) {
     Boolean fileExists;
     Boolean isDirectory = false;
     
@@ -594,7 +596,7 @@ CF_PRIVATE SInt32 _CFGetPathProperties(CFAllocatorRef alloc, char *path, Boolean
     return 0;
 }
 
-CF_PRIVATE SInt32 _CFGetFileProperties(CFAllocatorRef alloc, CFURLRef pathURL, Boolean *exists, SInt32 *posixMode, int64_t *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents) {
+CF_PRIVATE_EXTERN SInt32 _CFGetFileProperties(CFAllocatorRef alloc, CFURLRef pathURL, Boolean *exists, SInt32 *posixMode, SInt64 *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents) {
     
     char path[CFMaxPathSize];
 
@@ -656,11 +658,11 @@ static Boolean _hasNet(CFStringRef path) {
     #define IS_SLASH(C)	((C) == '/')
 #endif
 
-CF_PRIVATE UniChar _CFGetSlash() {
+CF_PRIVATE_EXTERN UniChar _CFGetSlash(void) {
     return CFPreferredSlash;
 }
 
-CF_PRIVATE CFStringRef _CFGetSlashStr() {
+CF_PRIVATE_EXTERN CFStringRef _CFGetSlashStr(void) {
     return CFPreferredSlashStr;
 }
 
@@ -695,7 +697,7 @@ CF_PRIVATE Boolean _CFIsAbsolutePath(UniChar *unichars, CFIndex length) {
     return false;
 }
 
-CF_PRIVATE Boolean _CFStripTrailingPathSlashes(UniChar *unichars, CFIndex *length) {
+CF_INLINE Boolean _CFStripTrailingPathSlashes(UniChar *unichars, CFIndex *length) {
     Boolean destHasDrive = (1 < *length) && HAS_DRIVE(unichars);
     CFIndex oldLength = *length;
     while (((destHasDrive && 3 < *length) || (!destHasDrive && 1 < *length)) && IS_SLASH(unichars[*length - 1])) {

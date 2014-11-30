@@ -30,7 +30,7 @@
 #include <CoreFoundation/CFError_Private.h>
 #include "CFInternal.h"
 #include <CoreFoundation/CFPriv.h>
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_FREEBSD
 #include <mach/mach_error.h>
 #endif
 
@@ -134,7 +134,7 @@ static CFStringRef __CFErrorCopyDescription(CFTypeRef cf) {
 
 /* This is the description you get for %@; we tone it down a bit from what you get in __CFErrorCopyDescription().
 */
-static CFStringRef __CFErrorCopyFormattingDescription(CFTypeRef cf, CFDictionaryRef formatOptions) {
+static CFStringRef __CFErrorCopyFormattingDescription(CFTypeRef cf, CFDictionaryRef formatOptions __unused) {
     CFErrorRef err = (CFErrorRef)cf;
     return CFErrorCopyDescription(err);     // No need to release, since we are returning from a Copy function
 }
@@ -157,10 +157,14 @@ static const CFRuntimeClass __CFErrorClass = {
     __CFErrorEqual,
     __CFErrorHash,
     __CFErrorCopyFormattingDescription,
-    __CFErrorCopyDescription
+    __CFErrorCopyDescription,
+	NULL,
+	NULL
 };
 
-CF_PRIVATE void __CFErrorInitialize(void) {
+CF_PRIVATE_EXTERN void __CFErrorInitialize(void);
+
+CF_PRIVATE_EXTERN void __CFErrorInitialize(void) {
     __kCFErrorTypeID = _CFRuntimeRegisterClass(&__CFErrorClass);
 }
 
@@ -465,7 +469,7 @@ static CFTypeRef _CFErrorPOSIXCallBack(CFErrorRef err, CFStringRef key) {
     return errStr;
 }
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_FREEBSD
 /* Built-in callback for Mach domain.
 */
 static CFTypeRef _CFErrorMachCallBack(CFErrorRef err, CFStringRef key) {
@@ -493,7 +497,7 @@ static void _CFErrorInitializeCallBackTable(void) {
         // Note, even though the table looks like it was initialized, we go on to register the items on this thread as well, since otherwise we might consult the table before the items are actually registered.
     }
     CFErrorSetCallBackForDomain(kCFErrorDomainPOSIX, _CFErrorPOSIXCallBack);
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED    
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_FREEBSD
     CFErrorSetCallBackForDomain(kCFErrorDomainMach, _CFErrorMachCallBack);
 #endif
 }

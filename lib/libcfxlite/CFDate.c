@@ -35,11 +35,14 @@
 #include "CFInternal.h"
 #include <math.h>
 #include <dispatch/dispatch.h>
+#include <mach/mach_time.h>
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #include <sys/time.h>
 #endif
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+CF_PRIVATE_EXTERN void __CFDateInitialize(void);
 #define DEFINE_CFDATE_FUNCTIONS 1
 
 /* cjk: The Julian Date for the reference date is 2451910.5,
@@ -50,7 +53,7 @@
 const CFTimeInterval kCFAbsoluteTimeIntervalSince1970 = 978307200.0L;
 const CFTimeInterval kCFAbsoluteTimeIntervalSince1904 = 3061152000.0L;
 
-CF_PRIVATE double __CFTSRRate = 0.0;
+static double __CFTSRRate = 0.0;
 static double __CF1_TSRRate = 0.0;
 
 CF_PRIVATE uint64_t __CFTimeIntervalToTSR(CFTimeInterval ti) {
@@ -98,7 +101,7 @@ CFAbsoluteTime CFAbsoluteTimeGetCurrent(void) {
     return ret;
 }
 
-CF_PRIVATE void __CFDateInitialize(void) {
+CF_PRIVATE_EXTERN void __CFDateInitialize(void) {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI
     struct mach_timebase_info info;
     mach_timebase_info(&info);
@@ -111,7 +114,7 @@ CF_PRIVATE void __CFDateInitialize(void) {
     }
     __CFTSRRate = (double)freq.QuadPart;
     __CF1_TSRRate = 1.0 / __CFTSRRate;
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     struct timespec res;
     if (clock_getres(CLOCK_MONOTONIC, &res) != 0) {
         HALT;
@@ -157,7 +160,9 @@ static const CFRuntimeClass __CFDateClass = {
     __CFDateEqual,
     __CFDateHash,
     NULL,       //
-    __CFDateCopyDescription
+    __CFDateCopyDescription,
+	NULL,
+	NULL
 };
 
 CFTypeID CFDateGetTypeID(void) {

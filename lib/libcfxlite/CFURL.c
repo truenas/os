@@ -36,7 +36,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #if DEPLOYMENT_TARGET_MACOSX
 #include <CoreFoundation/CFNumberFormatter.h>
 #endif
@@ -46,6 +46,9 @@
 #include <sys/syslog.h>
 #include <CoreFoundation/CFURLPriv.h>
 #endif
+
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsign-compare"
 
 #ifndef DEBUG_URL_MEMORY_USAGE
 // enables various statistical counters which can be displayed with __CFURLDumpMemRecord().
@@ -303,6 +306,7 @@ CF_INLINE void _setAdditionalDataFlags(struct __CFURL* url, UInt32 additionalDat
     }
 }
 
+#ifdef SHOW_UNUSED
 CF_INLINE void _setResourceInfo ( struct __CFURL* url, void* resourceInfo )
 {
     // Must be atomic
@@ -311,6 +315,7 @@ CF_INLINE void _setResourceInfo ( struct __CFURL* url, void* resourceInfo )
 	CFRetain( resourceInfo );
     }
 }
+#endif
 
 CF_INLINE UInt32 _getSchemeTypeFromFlags(UInt32 flags)
 {
@@ -490,9 +495,11 @@ CF_INLINE Boolean isALPHA(UniChar ch) {
     return (ch <= 127) ? ((sURLValidCharacters[ch] & ALPHA) != 0) : false;
 }
 
+#ifdef SHOW_UNUSED
 CF_INLINE Boolean isPathLegalCharacter(UniChar ch) {
     return (ch <= 127) ? ((sURLValidCharacters[ch] & PATHVALID) != 0) : false;
 }
+#endif
 
 CF_INLINE Boolean isHexDigit(UniChar ch) {
     return (ch <= 127) ? ((sURLValidCharacters[ch] & HEXDIGIT) != 0) : false;
@@ -919,7 +926,7 @@ static CFStringRef CreateStringFromFileSystemRepresentationByAddingPercentEscape
 }
 
 // Returns NULL if str cannot be converted for whatever reason, str if str contains no characters in need of escaping, or a newly-created string with the appropriate % escape codes in place.  Caller must always release the returned string.
-CF_INLINE CFStringRef _replacePathIllegalCharacters(CFStringRef str, CFAllocatorRef alloc, Boolean preserveSlashes) {
+CF_INLINE CFStringRef _replacePathIllegalCharacters(CFStringRef str, CFAllocatorRef alloc __unused, Boolean preserveSlashes) {
     CFStringRef result = NULL;
     STACK_BUFFER_DECL(char, buffer, PATH_MAX);
     if ( CFStringGetCString(str, buffer, PATH_MAX, kCFStringEncodingUTF8) ) {
@@ -1394,17 +1401,17 @@ CF_EXPORT CFStringRef CFURLCreateStringByAddingPercentEscapes(CFAllocatorRef all
                 // FIXME: once CFString supports finding glyph boundaries walk by glyph boundaries instead of by unichars
                 if ( encoding == kCFStringEncodingUTF8 && CFCharacterSetIsSurrogateHighCharacter(ch) && idx + 1 < length && CFCharacterSetIsSurrogateLowCharacter(__CFStringGetCharacterFromInlineBufferQuick(&buf, idx+1)) ) {
                     UniChar surrogate[2];
-                    uint8_t *currByte;
+                    uint8_t *currByte0;
                     
                     surrogate[0] = ch;
                     surrogate[1] = __CFStringGetCharacterFromInlineBufferQuick(&buf, idx+1);
                     // Aki sez it should never take more than 6 bytes
                     if (CFStringEncodingUnicodeToBytes(kCFStringEncodingUTF8, 0, surrogate, 2, NULL, bytes, 6, &byteLength) == kCFStringEncodingConversionSuccess) {
                         endPtr = bytePtr + byteLength;
-                        for ( currByte = bytes; currByte < endPtr; currByte++ ) {
+                        for ( currByte0 = bytes; currByte0 < endPtr; currByte0++ ) {
                             charBuffer[charBufferIndex++] = '%';
-                            charBuffer[charBufferIndex++] = hexchars[*currByte >> 4];
-                            charBuffer[charBufferIndex++] = hexchars[*currByte & 0x0f];
+                            charBuffer[charBufferIndex++] = hexchars[*currByte0 >> 4];
+                            charBuffer[charBufferIndex++] = hexchars[*currByte0 & 0x0f];
                         }
                         idx++; // We consumed 2 characters, not 1
                     }
@@ -1509,7 +1516,7 @@ static CFStringRef CreateTruncatedURLString(CFAllocatorRef alloc, CFStringRef ur
     return ( result );
 }
 
-static CFStringRef  __CFURLCopyFormattingDescription(CFTypeRef  cf, CFDictionaryRef formatOptions) {
+static CFStringRef  __CFURLCopyFormattingDescription(CFTypeRef  cf, CFDictionaryRef formatOptions __unused) {
     CFStringRef result;
     CFURLRef  url = (CFURLRef)cf;
     __CFGenericValidateType(cf, CFURLGetTypeID());
@@ -1627,6 +1634,8 @@ static const CFRuntimeClass __CFURLClass = {
     NULL,                               // refcount
 };
 
+CF_PRIVATE void __CFURLInitialize(void);
+
 CF_PRIVATE void __CFURLInitialize(void) {
     __kCFURLTypeID = _CFRuntimeRegisterClass(&__CFURLClass);
 }
@@ -1641,6 +1650,7 @@ CFTypeID CFURLGetTypeID(void) {
     return __kCFURLTypeID;
 }
 
+#ifdef SHOW_UNUSED
 CF_PRIVATE void CFShowURL(CFURLRef url) {
     if (!url) {
         fprintf(stdout, "(null)\n");
@@ -1662,7 +1672,7 @@ CF_PRIVATE void CFShowURL(CFURLRef url) {
     }
     fprintf(stdout, "\tFlags: 0x%x\n}\n", (unsigned int)url->_flags);
 }
-
+#endif
 
 /***************************************************/
 /* URL creation and String/Data creation from URLS */
@@ -2222,7 +2232,7 @@ CF_EXPORT Boolean _CFURLInitWithFileSystemRepresentation(CFURLRef uninitializedU
     Boolean result = false;
     if ( bufLen > 0 ) {
         CFAllocatorRef alloc = CFGetAllocator(uninitializedURL);
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
         struct __CFURL *url = (struct __CFURL *)uninitializedURL;
         Boolean isAbsolute = bufLen && (*buffer == '/');
         Boolean addedPercentEncoding;
@@ -2313,7 +2323,7 @@ CFURLRef CFURLCreateWithBytes(CFAllocatorRef allocator, const uint8_t *URLBytes,
     return ( result );
 }
 
-CFDataRef CFURLCreateData(CFAllocatorRef allocator, CFURLRef  url, CFStringEncoding encoding, Boolean escapeWhitespace) {
+CFDataRef CFURLCreateData(CFAllocatorRef allocator, CFURLRef  url, CFStringEncoding encoding, Boolean escapeWhitespace __unused) {
     CFDataRef result = NULL;
     if ( url ) {
         CFStringRef myStr = CFURLGetString(url);
@@ -3777,6 +3787,7 @@ CF_EXPORT void __CFURLSetReservedPtr(CFURLRef  url, void *ptr) {
     _setReserved ( (struct __CFURL*) url, ptr );
 }
 
+#ifdef SHOW_UNUSED
 CF_EXPORT void *__CFURLResourceInfoPtr(CFURLRef url) {
     return _getResourceInfo(url);
 }
@@ -3784,6 +3795,7 @@ CF_EXPORT void *__CFURLResourceInfoPtr(CFURLRef url) {
 CF_EXPORT void __CFURLSetResourceInfoPtr(CFURLRef url, void *ptr) {
     _setResourceInfo ( (struct __CFURL*) url, ptr );
 }
+#endif
 
 /* File system stuff */
 
@@ -3845,7 +3857,7 @@ static CFStringRef WindowsPathToURLPath(CFStringRef path, CFAllocatorRef alloc, 
     return str;
 }
 
-static CFStringRef POSIXPathToURLPath(CFStringRef path, CFAllocatorRef alloc, Boolean isDirectory, Boolean isAbsolute, Boolean *posixAndUrlPathsMatch) {
+static CFStringRef POSIXPathToURLPath(CFStringRef path, CFAllocatorRef alloc __unused, Boolean isDirectory, Boolean isAbsolute, Boolean *posixAndUrlPathsMatch) {
     Boolean addedPercentEncoding;
     CFStringRef pathString = NULL;
     STACK_BUFFER_DECL(char, buffer, PATH_MAX);
@@ -3873,7 +3885,7 @@ static CFStringRef URLPathToPOSIXPath(CFStringRef path, CFAllocatorRef allocator
     return result;
 }
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 static Boolean CanonicalFileURLStringToFileSystemRepresentation(CFStringRef str, UInt8 *inBuffer, CFIndex inBufferLen)
 {
     size_t fileURLPrefixLength;
@@ -4186,7 +4198,7 @@ CF_EXPORT CFStringRef CFURLCopyFileSystemPath(CFURLRef anURL, CFURLPathStyle pat
     
     CFStringRef result = NULL;
     CFAllocatorRef alloc = CFGetAllocator(anURL);
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     Boolean isCanonicalFileURL = false;
     
     if ( (pathStyle == kCFURLPOSIXPathStyle) && (CFURLGetBaseURL(anURL) == NULL) ) {
@@ -4289,13 +4301,13 @@ CFStringRef CFURLCreateStringWithFileSystemPath(CFAllocatorRef allocator, CFURLR
 }
 
 Boolean CFURLGetFileSystemRepresentation(CFURLRef url, Boolean resolveAgainstBase, uint8_t *buffer, CFIndex bufLen) {
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_WINDOWS
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_FREEBSD
     CFAllocatorRef alloc = CFGetAllocator(url);
     CFStringRef path;
 
     if (!url) return false;
 #endif
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     if ( !resolveAgainstBase || (CFURLGetBaseURL(url) == NULL) ) {
         if (!CF_IS_OBJC(__kCFURLTypeID, url)) {
             // We can grope the ivars
@@ -5090,6 +5102,7 @@ CFURLRef CFURLCreateFilePathURL(CFAllocatorRef alloc, CFURLRef url, CFErrorRef *
 }
 
 #endif
+#pragma clang diagnostic ignored "-Wunused-parameter"
 
 
 CFURLRef CFURLCreateFileReferenceURL(CFAllocatorRef alloc, CFURLRef url, CFErrorRef *error) { return NULL; }

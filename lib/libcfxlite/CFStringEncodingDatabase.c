@@ -797,7 +797,11 @@ static const char *__CFOtherNameList[] = {
 };
 #endif /* DEPLOYMENT_TARGET_MACOSX */
 
-CF_PRIVATE CFStringEncoding __CFStringEncodingGetMostCompatibleMacScript(CFStringEncoding encoding) {
+CF_PRIVATE CFStringEncoding __CFStringEncodingGetMostCompatibleMacScript(CFStringEncoding encoding
+#ifdef __FreeBSD__
+__unused
+#endif																		 
+	) {
 #if DEPLOYMENT_TARGET_MACOSX
     switch (encoding & 0x0F00) {
         case 0: return encoding & 0xFF; break; // Mac scripts

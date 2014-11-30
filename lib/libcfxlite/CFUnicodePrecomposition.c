@@ -34,6 +34,8 @@
 #include "CFInternal.h"
 #include "CFUniCharPriv.h"
 
+#pragma clang diagnostic ignored "-Wcast-align"
+
 // Canonical Precomposition
 static UTF32Char *__CFUniCharPrecompSourceTable = NULL;
 static uint32_t __CFUniCharPrecompositionTableLength = 0;

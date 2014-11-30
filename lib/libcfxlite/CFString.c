@@ -55,7 +55,9 @@
 #define LONG_DOUBLE_SUPPORT 0
 #endif
 
-
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wunused-parameter"
 
 #define USE_STRING_ROM 0
 
@@ -64,7 +66,7 @@
 #define INSTRUMENT_SHARED_STRINGS 0
 #endif
 
-CF_PRIVATE const CFStringRef __kCFLocaleCollatorID;
+static const CFStringRef __kCFLocaleCollatorID;
 
 #if INSTRUMENT_SHARED_STRINGS
 #include <sys/stat.h> /* for umask() */
@@ -127,7 +129,7 @@ static Boolean __CFConstantStringTableBeingFreed = false;
 
 
 // This section is for CFString compatibility and other behaviors...
-
+#ifndef __FreeBSD__
 static CFOptionFlags _CFStringCompatibilityMask = 0;
 
 void _CFStringSetCompatibility(CFOptionFlags mask) {
@@ -137,11 +139,11 @@ void _CFStringSetCompatibility(CFOptionFlags mask) {
 CF_INLINE Boolean __CFStringGetCompatibility(CFOptionFlags mask) {
     return (_CFStringCompatibilityMask & mask) == mask;
 }
-
+#endif
 
 
 // Two constant strings used by CFString; these are initialized in CFStringInitialize
-CONST_STRING_DECL(kCFEmptyString, "")
+static CONST_STRING_DECL(kCFEmptyString, "")
 
 // This is separate for C++
 struct __notInlineMutable {
@@ -364,8 +366,9 @@ CF_INLINE Boolean __CFStrIsExternalMutable(CFStringRef str)	{return str->variant
 CF_INLINE Boolean __CFStrHasContentsAllocator(CFStringRef str)	{return (str->base._cfinfo[CF_INFO_BITS] & __kCFHasContentsAllocatorMask) == __kCFHasContentsAllocator;}
 CF_INLINE void __CFStrSetIsFixed(CFMutableStringRef str)		    {str->variants.notInlineMutable.isFixedCapacity = 1;}
 CF_INLINE void __CFStrSetIsExternalMutable(CFMutableStringRef str)	    {str->variants.notInlineMutable.isExternalMutable = 1;}
+#ifdef SHOW_UNUSED
 CF_INLINE void __CFStrSetHasGap(CFMutableStringRef str)			    {str->variants.notInlineMutable.hasGap = 1;}
-
+#endif
 // If capacity is provided externally, we only change it when we need to grow beyond it
 CF_INLINE Boolean __CFStrCapacityProvidedExternally(CFStringRef str)   		{return str->variants.notInlineMutable.capacityProvidedExternally;}
 CF_INLINE void __CFStrSetCapacityProvidedExternally(CFMutableStringRef str)	{str->variants.notInlineMutable.capacityProvidedExternally = 1;}
@@ -421,7 +424,7 @@ static CFStringEncoding __CFDefaultFileSystemEncoding = kCFStringEncodingInvalid
 CFStringEncoding __CFDefaultEightBitStringEncoding = kCFStringEncodingInvalidId;
 
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || __FreeBSD__
 #define __defaultEncoding kCFStringEncodingMacRoman
 #elif DEPLOYMENT_TARGET_WINDOWS
 #define __defaultEncoding kCFStringEncodingWindowsLatin1
@@ -1199,10 +1202,15 @@ static const CFRuntimeClass __CFStringClass = {
     __CFStringEqual,
     __CFStringHash,
     __CFStringCopyFormattingDescription,
-    __CFStringCopyDescription
+    __CFStringCopyDescription,
+	NULL,
+	NULL
 };
 
-CF_PRIVATE void __CFStringInitialize(void) {
+/* extern private */
+void __CFStringInitialize(void);
+
+void __CFStringInitialize(void) {
     __kCFStringTypeID = _CFRuntimeRegisterClass(&__CFStringClass);
 }
 
@@ -1917,12 +1925,12 @@ CFMutableStringRef  CFStringCreateMutableCopy(CFAllocatorRef alloc, CFIndex maxL
     return newString;
 }
 
-
+#ifdef SHOW_UNUSED
 CF_PRIVATE void _CFStrSetDesiredCapacity(CFMutableStringRef str, CFIndex len) {
     __CFAssertIsStringAndMutable(str);
     __CFStrSetDesiredCapacity(str, len);
 }
-
+#endif
 
 /* This one is for CF
 */
@@ -2955,7 +2963,6 @@ Boolean CFStringFindWithOptionsAndLocale(CFStringRef string, CFStringRef stringT
                             if ((1 == strBuf1Len) && (1 == strBuf2Len)) { // normal case
                                 if (*strBuf1 != *strBuf2) break;
                             } else {
-                                CFIndex delta;
 
                                 if (!caseInsensitive && (strBuf1Len != strBuf2Len)) break;
                                 if (memcmp(strBuf1, strBuf2, sizeof(UTF32Char) * __CFMin(strBuf1Len, strBuf2Len))) break;
@@ -6166,7 +6173,6 @@ static void __CFStringAppendFormatCore(CFMutableStringRef outputString, CFString
 	case CFFormatObjectType:
 	    if (specs[curSpec].configDictIndex != -1) { // config dict
 		CFTypeRef object = NULL;
-		CFStringRef innerFormat = NULL;
 
 		switch (values[specs[curSpec].mainArgNum].type) {
 		    case CFFormatLongType:

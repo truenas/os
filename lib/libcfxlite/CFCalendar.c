@@ -33,6 +33,8 @@
 #include "CFPriv.h"
 #include <unicode/ucal.h>
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+
 #define BUFFER_SIZE 512
 
 struct __CFCalendar {
@@ -80,10 +82,15 @@ static const CFRuntimeClass __CFCalendarClass = {
     __CFCalendarEqual,
     __CFCalendarHash,
     NULL,	// 
-    __CFCalendarCopyDescription
+    __CFCalendarCopyDescription,
+	NULL,
+	NULL
 };
 
-CF_PRIVATE void __CFCalendarInitialize(void) {
+CF_PRIVATE_EXTERN void __CFCalendarInitialize(void);
+CF_PRIVATE_EXTERN UCalendar *__CFCalendarCreateUCalendar(CFStringRef calendarID, CFStringRef localeID, CFTimeZoneRef tz);
+
+CF_PRIVATE_EXTERN void __CFCalendarInitialize(void) {
     __kCFCalendarTypeID = _CFRuntimeRegisterClass(&__CFCalendarClass);
 }
 
@@ -92,7 +99,7 @@ CFTypeID CFCalendarGetTypeID(void) {
     return __kCFCalendarTypeID;
 }
 
-CF_PRIVATE UCalendar *__CFCalendarCreateUCalendar(CFStringRef calendarID, CFStringRef localeID, CFTimeZoneRef tz) {
+CF_PRIVATE_EXTERN UCalendar *__CFCalendarCreateUCalendar(CFStringRef calendarID, CFStringRef localeID, CFTimeZoneRef tz) {
     if (calendarID) {
 	CFDictionaryRef components = CFLocaleCreateComponentsFromLocaleIdentifier(kCFAllocatorSystemDefault, localeID);
 	CFMutableDictionaryRef mcomponents = CFDictionaryCreateMutableCopy(kCFAllocatorSystemDefault, 0, components);
@@ -250,6 +257,7 @@ void CFCalendarSetMinimumDaysInFirstWeek(CFCalendarRef calendar, CFIndex mwd) {
     if (calendar->_cal) ucal_setAttribute(calendar->_cal, UCAL_MINIMAL_DAYS_IN_FIRST_WEEK, mwd);
 }
 
+#ifdef SHOW_UNUSED
 CFDateRef CFCalendarCopyGregorianStartDate(CFCalendarRef calendar) {
     CF_OBJC_FUNCDISPATCHV(CFCalendarGetTypeID(), CFDateRef, calendar, _gregorianStartDate);
     __CFGenericValidateType(calendar, CFCalendarGetTypeID());
@@ -285,7 +293,7 @@ void CFCalendarSetGregorianStartDate(CFCalendarRef calendar, CFDateRef date) {
 	if (calendar->_cal) ucal_setGregorianChange(calendar->_cal, udate, &status);
     }
 }
-
+#endif
 
 static UCalendarDateFields __CFCalendarGetICUFieldCode(CFCalendarUnit unit) {
     switch (unit) {
@@ -501,7 +509,7 @@ static Boolean __validUnits(CFCalendarUnit smaller, CFCalendarUnit bigger) {
     }
     return false;
 };
-
+#ifdef SHOW_UNUSED
 static CFRange __CFCalendarGetRangeOfUnit1(CFCalendarRef calendar, CFCalendarUnit smallerUnit, CFCalendarUnit biggerUnit, CFAbsoluteTime at) {
     CFRange range = {kCFNotFound, kCFNotFound};
     if (!__validUnits(smallerUnit, biggerUnit)) return range;
@@ -601,6 +609,7 @@ static CFRange __CFCalendarGetRangeOfUnit1(CFCalendarRef calendar, CFCalendarUni
     }
     return range;
 }
+#endif
 
 static CFRange __CFCalendarGetRangeOfUnit2(CFCalendarRef calendar, CFCalendarUnit smallerUnit, CFCalendarUnit biggerUnit, CFAbsoluteTime at) __attribute__((noinline));
 static CFRange __CFCalendarGetRangeOfUnit2(CFCalendarRef calendar, CFCalendarUnit smallerUnit, CFCalendarUnit biggerUnit, CFAbsoluteTime at) {
@@ -826,7 +835,7 @@ CFIndex CFCalendarGetOrdinalityOfUnit(CFCalendarRef calendar, CFCalendarUnit sma
     return result;
 }
 
-Boolean _CFCalendarComposeAbsoluteTimeV(CFCalendarRef calendar, /* out */ CFAbsoluteTime *atp, const char *componentDesc, int *vector, int count) {
+static Boolean _CFCalendarComposeAbsoluteTimeV(CFCalendarRef calendar, /* out */ CFAbsoluteTime *atp, const char *componentDesc, int *vector, int count) {
     if (!calendar->_cal) __CFCalendarSetupCal(calendar);
     if (calendar->_cal) {
 	UErrorCode status = U_ZERO_ERROR;
@@ -868,7 +877,7 @@ Boolean _CFCalendarComposeAbsoluteTimeV(CFCalendarRef calendar, /* out */ CFAbso
     return false;
 }
 
-Boolean _CFCalendarDecomposeAbsoluteTimeV(CFCalendarRef calendar, CFAbsoluteTime at, const char *componentDesc, int **vector, int count) {
+static Boolean _CFCalendarDecomposeAbsoluteTimeV(CFCalendarRef calendar, CFAbsoluteTime at, const char *componentDesc, int **vector, int count) {
     if (!calendar->_cal) __CFCalendarSetupCal(calendar);
     if (calendar->_cal) {
 	UErrorCode status = U_ZERO_ERROR;
@@ -890,7 +899,7 @@ Boolean _CFCalendarDecomposeAbsoluteTimeV(CFCalendarRef calendar, CFAbsoluteTime
     return false;
 }
 
-Boolean _CFCalendarAddComponentsV(CFCalendarRef calendar, /* inout */ CFAbsoluteTime *atp, CFOptionFlags options, const char *componentDesc, int *vector, int count) {
+static Boolean _CFCalendarAddComponentsV(CFCalendarRef calendar, /* inout */ CFAbsoluteTime *atp, CFOptionFlags options, const char *componentDesc, int *vector, int count) {
     if (!calendar->_cal) __CFCalendarSetupCal(calendar);
     if (calendar->_cal) {
 	UErrorCode status = U_ZERO_ERROR;
@@ -917,7 +926,7 @@ Boolean _CFCalendarAddComponentsV(CFCalendarRef calendar, /* inout */ CFAbsolute
     return false;
 }
 
-Boolean _CFCalendarGetComponentDifferenceV(CFCalendarRef calendar, CFAbsoluteTime startingAT, CFAbsoluteTime resultAT, CFOptionFlags options, const char *componentDesc, int **vector, int count) {
+static Boolean _CFCalendarGetComponentDifferenceV(CFCalendarRef calendar, CFAbsoluteTime startingAT, CFAbsoluteTime resultAT, CFOptionFlags options, const char *componentDesc, int **vector, int count) {
     if (!calendar->_cal) __CFCalendarSetupCal(calendar);
     if (calendar->_cal) {
 	UErrorCode status = U_ZERO_ERROR;

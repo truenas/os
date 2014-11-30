@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include "CFInternal.h"
 
+#pragma clang diagnostic ignored "-Wsign-compare"
 
 typedef struct {
     int64_t high;

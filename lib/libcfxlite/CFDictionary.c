@@ -124,8 +124,19 @@ static const CFRuntimeClass __CFDictionaryClass = {
     __CFDictionaryEqual,
     __CFDictionaryHash,
     NULL,        //
-    __CFDictionaryCopyDescription
+    __CFDictionaryCopyDescription,
+	NULL,
+	NULL
 };
+
+/* XXX these should be extern private */
+CFHashRef __CFDictionaryCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, const_any_pointer_t *vlist, CFIndex numValues);
+Boolean CFDictionaryGetKeyIfPresent(CFHashRef hc, const_any_pointer_t key, const_any_pointer_t *actualkey);
+CF_EXPORT unsigned long _CFDictionaryFastEnumeration(CFHashRef hc, struct __objcFastEnumerationStateEquivalent *state, void *stackbuffer, unsigned long count);
+CF_EXPORT Boolean _CFDictionaryIsMutable(CFHashRef hc);
+CF_EXPORT CFIndex _CFDictionaryGetKVOBit(CFHashRef hc); 
+CF_EXPORT void _CFDictionarySetKVOBit(CFHashRef hc, CFIndex bit);
+
 
 CFTypeID CFDictionaryGetTypeID(void) {
     if (_kCFRuntimeNotATypeID == __kCFDictionaryTypeID) __kCFDictionaryTypeID = _CFRuntimeRegisterClass(&__CFDictionaryClass);
@@ -225,7 +236,7 @@ static CFBasicHashRef __CFDictionaryCreateGeneric(CFAllocatorRef allocator, cons
 }
 
 #if CFDictionary
-CF_PRIVATE CFHashRef __CFDictionaryCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, const_any_pointer_t *vlist, CFIndex numValues) {
+CFHashRef __CFDictionaryCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, const_any_pointer_t *vlist, CFIndex numValues) {
 #endif
 #if CFSet || CFBag
 CF_PRIVATE CFHashRef __CFDictionaryCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, CFIndex numValues) {
@@ -284,7 +295,7 @@ CFHashRef CFDictionaryCreate(CFAllocatorRef allocator, const_any_pointer_t *klis
 }
 
 #if CFDictionary
-CFMutableHashRef CFDictionaryCreateMutable(CFAllocatorRef allocator, CFIndex capacity, const CFDictionaryKeyCallBacks *keyCallBacks, const CFDictionaryValueCallBacks *valueCallBacks) {
+CFMutableHashRef CFDictionaryCreateMutable(CFAllocatorRef allocator, CFIndex capacity __unused, const CFDictionaryKeyCallBacks *keyCallBacks, const CFDictionaryValueCallBacks *valueCallBacks) {
 #endif
 #if CFSet || CFBag
 CFMutableHashRef CFDictionaryCreateMutable(CFAllocatorRef allocator, CFIndex capacity, const CFDictionaryKeyCallBacks *keyCallBacks) {
@@ -333,7 +344,7 @@ CFHashRef CFDictionaryCreateCopy(CFAllocatorRef allocator, CFHashRef other) {
     return (CFHashRef)ht;
 }
 
-CFMutableHashRef CFDictionaryCreateMutableCopy(CFAllocatorRef allocator, CFIndex capacity, CFHashRef other) {
+CFMutableHashRef CFDictionaryCreateMutableCopy(CFAllocatorRef allocator, CFIndex capacity __unused, CFHashRef other) {
     CFTypeID typeID = CFDictionaryGetTypeID();
     CFAssert1(other, __kCFLogAssertion, "%s(): other CFDictionary cannot be NULL", __PRETTY_FUNCTION__);
     __CFGenericValidateType(other, typeID);

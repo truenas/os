@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#pragma clang diagnostic ignored "-Wcast-align"
 
 #define BITSPERBYTE	8	/* (CHAR_BIT * sizeof(unsigned char)) */
 #define LOG_BPB		3
@@ -145,8 +146,9 @@ CF_INLINE void __CFCSetPutIsInverted(CFMutableCharacterSetRef cset, Boolean isIn
 CF_INLINE void __CFCSetPutHasHashValue(CFMutableCharacterSetRef cset, Boolean hasHash) {(hasHash ? (cset->_base._cfinfo[CF_INFO_BITS] |= __kCFCharSetHasHashValue) : (cset->_base._cfinfo[CF_INFO_BITS] &= ~__kCFCharSetHasHashValue));}
 CF_INLINE void __CFCSetPutClassType(CFMutableCharacterSetRef cset, UInt32 classType) {cset->_base._cfinfo[CF_INFO_BITS] &= ~__kCFCharSetClassTypeMask;  cset->_base._cfinfo[CF_INFO_BITS] |= classType;}
 
+#ifdef SHOW_UNUSED
 CF_PRIVATE Boolean __CFCharacterSetIsMutable(CFCharacterSetRef cset) {return __CFCSetIsMutable(cset);}
-
+#endif
 /* Inline contents accessor macros
 */
 CF_INLINE CFCharacterSetPredefinedSet __CFCSetBuiltinType(CFCharacterSetRef cset) {return cset->_variants._builtin._type;}
@@ -469,7 +471,7 @@ CF_INLINE uint32_t __CFCSetGetCompactBitmapSize(const uint8_t *compactBitmap) {
 
 /* Take a private "set" structure and make a bitmap from it.  Return the bitmap.  THE CALLER MUST RELEASE THE RETURNED MEMORY as necessary.
 */
-
+#ifdef SHOW_UNUSED
 CF_INLINE void __CFCSetBitmapProcessManyCharacters(unsigned char *map, unsigned n, unsigned m, Boolean isInverted) {
     if (isInverted) {
         __CFCSetBitmapRemoveCharactersInRange(map, n, m);
@@ -477,6 +479,7 @@ CF_INLINE void __CFCSetBitmapProcessManyCharacters(unsigned char *map, unsigned 
         __CFCSetBitmapAddCharactersInRange(map, n, m);
     }
 }
+#endif
 
 CF_INLINE void __CFExpandCompactBitmap(const uint8_t *src, uint8_t *dst) {
     const uint8_t *srcBody = src + __kCFCompactBitmapNumPages;
@@ -494,7 +497,6 @@ CF_INLINE void __CFExpandCompactBitmap(const uint8_t *src, uint8_t *dst) {
         dst += __kCFCompactBitmapPageSize;
     }
 }
-
 
 static void __CFCheckForExpandedSet(CFCharacterSetRef cset) {
     static int8_t __CFNumberOfPlanesForLogging = -1;
@@ -1292,12 +1294,15 @@ static const CFRuntimeClass __CFCharacterSetClass = {
     __CFCharacterSetEqual,
     __CFCharacterSetHash,
     NULL,      // 
-    __CFCharacterSetCopyDescription
+    __CFCharacterSetCopyDescription,
+	NULL,
+	NULL
 };
+CF_PRIVATE_EXTERN void __CFCharacterSetInitialize(void);
 
 static bool __CFCheckForExapendedSet = false;
 
-CF_PRIVATE void __CFCharacterSetInitialize(void) {
+CF_PRIVATE_EXTERN void __CFCharacterSetInitialize(void) {
     const char *checkForExpandedSet = __CFgetenv("__CF_DEBUG_EXPANDED_SET");
 
     __kCFCharacterSetTypeID = _CFRuntimeRegisterClass(&__CFCharacterSetClass);
@@ -1722,7 +1727,9 @@ Boolean CFCharacterSetIsSurrogatePairMember(CFCharacterSetRef theSet, UniChar su
     return CFCharacterSetIsLongCharacterMember(theSet, CFCharacterSetGetLongCharacterForSurrogatePair(surrogateHigh, surrogateLow));
 }
 
-
+#ifdef __FreeBSD__
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
 static inline CFCharacterSetRef __CFCharacterSetGetExpandedSetForNSCharacterSet(const void *characterSet) {
     CF_OBJC_FUNCDISPATCHV(__kCFCharacterSetTypeID, CFCharacterSetRef , (NSCharacterSet *)characterSet, _expandedCFCharacterSet);
     return NULL;

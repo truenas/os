@@ -126,7 +126,7 @@ CF_EXPORT void _CFMachPortInstallNotifyPort(CFRunLoopRef rl, CFStringRef mode);
 #endif
 
 
-CF_PRIVATE CFIndex __CFActiveProcessorCount();
+CF_PRIVATE CFIndex __CFActiveProcessorCount(void);
 
 #ifndef CLANG_ANALYZER_NORETURN
 #if __has_feature(attribute_analyzer_noreturn)
@@ -178,7 +178,7 @@ CF_PRIVATE CFIndex __CFActiveProcessorCount();
 #define __kCFLogAssertion	3
 
 // This CF-only log function uses no CF functionality, so it may be called anywhere within CF - including thread teardown or prior to full CF setup
-CF_PRIVATE void _CFLogSimple(int32_t lev, char *format, ...);
+CF_PRIVATE void _CFLogSimple(int32_t lev, const char *format, ...);
 
 #if defined(DEBUG)
 extern void __CFGenericValidateType_(CFTypeRef cf, CFTypeID type, const char *func);
@@ -309,7 +309,7 @@ extern Boolean __CFStringScanHex(CFStringInlineBuffer *buf, SInt32 *indexPtr, un
 
 extern const char *__CFgetenv(const char *n);
 
-CF_PRIVATE Boolean __CFProcessIsRestricted();
+CF_PRIVATE Boolean __CFProcessIsRestricted(void);
 
 // This is really about the availability of C99. We don't have that on Windows, but we should everywhere else.
 #if DEPLOYMENT_TARGET_WINDOWS
@@ -321,7 +321,7 @@ CF_PRIVATE Boolean __CFProcessIsRestricted();
 
 CF_EXPORT void * __CFConstantStringClassReferencePtr;
 
-#ifdef __CONSTANT_CFSTRINGS__
+#if defined(__CONSTANT_CFSTRINGS__) 
 
 #define CONST_STRING_DECL(S, V) const CFStringRef S = (const CFStringRef)__builtin___CFStringMakeConstantString(V);
 #define PE_CONST_STRING_DECL(S, V) CF_PRIVATE const CFStringRef S = (const CFStringRef)__builtin___CFStringMakeConstantString(V);
@@ -382,8 +382,9 @@ extern CFTypeRef CFMakeUncollectable(CFTypeRef cf);
 
 CF_PRIVATE void _CFRaiseMemoryException(CFStringRef reason);
 
+#ifndef __FreeBSD__
 CF_PRIVATE Boolean __CFProphylacticAutofsAccess;
-
+#endif
 
 #if DEPLOYMENT_TARGET_MACOSX
 
@@ -480,6 +481,27 @@ CF_INLINE Boolean __CFSpinLockTry(volatile CFSpinLock_t *lock) {
     return (__sync_val_compare_and_swap(lock, 0, ~0) == 0);
 }
 
+#elif defined(__FreeBSD__)
+#include <machine/atomic.h>
+
+typedef int32_t CFSpinLock_t;
+#define CFSpinLockInit 0
+#define CF_SPINLOCK_INIT_FOR_STRUCTS(X) (X = CFSpinLockInit)
+
+CF_INLINE void __CFSpinLock(volatile CFSpinLock_t *lock) {
+    while (atomic_cmpset_int(lock, 0, ~0) != 0) {
+	sleep(0);
+    }
+}
+
+CF_INLINE void __CFSpinUnlock(volatile CFSpinLock_t *lock) {
+    atomic_set_acq_int(lock, 0);
+}
+
+CF_INLINE Boolean __CFSpinLockTry(volatile CFSpinLock_t *lock) {
+    return (atomic_cmpset_int(lock, 0, ~0) == 0);
+}
+
 #else
 
 #warning CF spin locks not defined for this platform -- CF is not thread-safe
@@ -537,26 +559,26 @@ CF_EXPORT Boolean _CFReadBytesFromFile(CFAllocatorRef alloc, CFURLRef url, void 
 
 CF_EXPORT Boolean _CFWriteBytesToFile(CFURLRef url, const void *bytes, CFIndex length);
 
-CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, char *dirPath, void *dirSpec, CFURLRef dirURL, CFStringRef matchingAbstractType);
+CF_PRIVATE_EXTERN CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, char *dirPath, void *dirSpec, CFURLRef dirURL, CFStringRef matchingAbstractType);
     /* On Mac OS 8/9, one of dirSpec, dirPath and dirURL must be non-NULL */
     /* On all other platforms, one of path and dirURL must be non-NULL */
     /* If both are present, they are assumed to be in-synch; that is, they both refer to the same directory.  */
     /* alloc may be NULL */
     /* return value is CFArray of CFURLs */
 
-CF_PRIVATE SInt32 _CFGetPathProperties(CFAllocatorRef alloc, char *path, Boolean *exists, SInt32 *posixMode, SInt64 *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents);
+CF_PRIVATE_EXTERN SInt32 _CFGetPathProperties(CFAllocatorRef alloc, char *path, Boolean *exists, SInt32 *posixMode, SInt64 *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents);
     /* alloc may be NULL */
     /* any of exists, posixMode, size, modTime, and dirContents can be NULL.  Usually it is not a good idea to pass NULL for exists, since interpretting the other values sometimes requires that you know whether the file existed or not.  Except for dirContents, it is pretty cheap to compute any of these things as loing as one of them must be computed. */
 
-CF_PRIVATE SInt32 _CFGetFileProperties(CFAllocatorRef alloc, CFURLRef pathURL, Boolean *exists, SInt32 *posixMode, SInt64 *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents);
+CF_PRIVATE_EXTERN SInt32 _CFGetFileProperties(CFAllocatorRef alloc, CFURLRef pathURL, Boolean *exists, SInt32 *posixMode, SInt64 *size, CFDateRef *modTime, SInt32 *ownerID, CFArrayRef *dirContents);
     /* alloc may be NULL */
     /* any of exists, posixMode, size, modTime, and dirContents can be NULL.  Usually it is not a good idea to pass NULL for exists, since interpretting the other values sometimes requires that you know whether the file existed or not.  Except for dirContents, it is pretty cheap to compute any of these things as loing as one of them must be computed. */
 
 
 /* ==================== Simple path manipulation ==================== */
 
-CF_EXPORT UniChar _CFGetSlash();
-CF_PRIVATE CFStringRef _CFGetSlashStr();
+CF_PRIVATE_EXTERN UniChar _CFGetSlash(void);
+CF_PRIVATE_EXTERN CFStringRef _CFGetSlashStr(void);
 CF_EXPORT Boolean _CFIsAbsolutePath(UniChar *unichars, CFIndex length);
 CF_PRIVATE void _CFAppendTrailingPathSlash2(CFMutableStringRef path);
 CF_PRIVATE void _CFAppendConditionalTrailingPathSlash2(CFMutableStringRef path);
@@ -680,7 +702,7 @@ extern void *__CFLookupCoreServicesInternalFunction(const char *name);
 CF_PRIVATE CFComparisonResult _CFCompareStringsWithLocale(CFStringInlineBuffer *str1, CFRange str1Range, CFStringInlineBuffer *str2, CFRange str2Range, CFOptionFlags options, const void *compareLocale);
 
 
-CF_PRIVATE CFArrayRef _CFBundleCopyUserLanguages();
+CF_PRIVATE CFArrayRef _CFBundleCopyUserLanguages(void);
 
 
 // This should only be used in CF types, not toll-free bridged objects!
@@ -695,7 +717,7 @@ CF_INLINE CFAllocatorRef __CFGetAllocator(CFTypeRef cf) {	// !!! Use with CF typ
     if (__builtin_expect(__CFBitfieldGetValue(((const CFRuntimeBase *)cf)->_cfinfo[CF_INFO_BITS], 7, 7), 1)) {
 	return kCFAllocatorSystemDefault;
     }
-    return *(CFAllocatorRef *)((char *)cf - sizeof(CFAllocatorRef));
+    return *(CFAllocatorRef *)(uintptr_t)((char *)cf - sizeof(CFAllocatorRef));
 }
 
 /* !!! Avoid #importing objc.h; e.g. converting this to a .m file */

@@ -31,6 +31,9 @@
 #include "CFInternal.h"
 #include <string.h>
 
+#undef CF_PRIVATE
+#define CF_PRIVATE static
+
 
 const CFArrayCallBacks kCFTypeArrayCallBacks = {0, __CFTypeCollectionRetain, __CFTypeCollectionRelease, CFCopyDescription, CFEqual};
 static const CFArrayCallBacks __kCFNullArrayCallBacks = {0, NULL, NULL, NULL, NULL};
@@ -45,7 +48,7 @@ enum {
 
 CF_INLINE CFIndex __CFArrayDequeRoundUpCapacity(CFIndex capacity) {
     if (capacity < 4) return 4;
-    return __CFMin((1 << flsl(capacity)), __CF_MAX_BUCKETS_PER_DEQUE);
+    return __CFMin((1UL << flsl(capacity)), __CF_MAX_BUCKETS_PER_DEQUE);
 }
 
 struct __CFArrayDeque {
@@ -74,6 +77,11 @@ enum {		/* Bits 2-3 */
     __kCFArrayHasCustomCallBacks = 3	/* callbacks are at end of header */
 };
 
+void __CFArrayInitialize(void);
+CFArrayRef __CFArrayCreateTransfer(CFAllocatorRef allocator, const void **values, CFIndex numValues);
+
+void _CFArraySortValues(CFMutableArrayRef array, CFComparatorFunction comparator, void *context);
+
 /*
     Bits 4 & 5 are reserved for GC use.
     Bit 4, if set, indicates that the array is weak.
@@ -92,9 +100,11 @@ CF_INLINE bool hasBeenFinalized(CFTypeRef collection) {
     return __CFBitfieldGetValue(((const CFRuntimeBase *)collection)->_cfinfo[CF_INFO_BITS], 5, 5) != 0;
 }
 
+#if DEPLOYMENT_TARGET_MACOSX
 CF_INLINE void markFinalized(CFTypeRef collection) {
     __CFBitfieldSetValue(((CFRuntimeBase *)collection)->_cfinfo[CF_INFO_BITS], 5, 5, 1);
 }
+#endif
 
 CF_INLINE CFIndex __CFArrayGetType(CFArrayRef array) {
     return __CFBitfieldGetValue(((const CFRuntimeBase *)array)->_cfinfo[CF_INFO_BITS], 1, 0);
@@ -122,10 +132,10 @@ CF_INLINE void __CFArraySetCount(CFArrayRef array, CFIndex v) {
 CF_INLINE struct __CFArrayBucket *__CFArrayGetBucketsPtr(CFArrayRef array) {
     switch (__CFArrayGetType(array)) {
     case __kCFArrayImmutable:
-	return (struct __CFArrayBucket *)((uint8_t *)array + __CFArrayGetSizeOfType(((CFRuntimeBase *)array)->_cfinfo[CF_INFO_BITS]));
+		return (struct __CFArrayBucket *)(uintptr_t)((uint8_t *)array + __CFArrayGetSizeOfType(((CFRuntimeBase *)array)->_cfinfo[CF_INFO_BITS]));
     case __kCFArrayDeque: {
 	struct __CFArrayDeque *deque = (struct __CFArrayDeque *)array->_store;
-        return (struct __CFArrayBucket *)((uint8_t *)deque + sizeof(struct __CFArrayDeque) + deque->_leftIdx * sizeof(struct __CFArrayBucket));
+	return (struct __CFArrayBucket *)(uintptr_t)((uint8_t *)deque + sizeof(struct __CFArrayDeque) + deque->_leftIdx * sizeof(struct __CFArrayBucket));
     }
     }
     return NULL;
@@ -153,10 +163,10 @@ CF_PRIVATE CFArrayCallBacks *__CFArrayGetCallBacks(CFArrayRef array) {
     }
     switch (__CFArrayGetType(array)) {
     case __kCFArrayImmutable:
-	result = (CFArrayCallBacks *)((uint8_t *)array + sizeof(struct __CFArray));
+		result = (CFArrayCallBacks *)(uintptr_t)((uint8_t *)array + sizeof(struct __CFArray));
 	break;
     case __kCFArrayDeque:
-	result = (CFArrayCallBacks *)((uint8_t *)array + sizeof(struct __CFArray));
+		result = (CFArrayCallBacks *)(uintptr_t)((uint8_t *)array + sizeof(struct __CFArray));
 	break;
     }
     return result;
@@ -352,10 +362,12 @@ static const CFRuntimeClass __CFArrayClass = {
     __CFArrayEqual,
     __CFArrayHash,
     NULL,	// 
-    __CFArrayCopyDescription
+    __CFArrayCopyDescription,
+	NULL,  // reclaim
+	NULL  // refcount
 };
 
-CF_PRIVATE void __CFArrayInitialize(void) {
+void __CFArrayInitialize(void) {
     __kCFArrayTypeID = _CFRuntimeRegisterClass(&__CFArrayClass);
 }
 
@@ -418,7 +430,7 @@ static CFArrayRef __CFArrayInit(CFAllocatorRef allocator, UInt32 flags, CFIndex 
     return (CFArrayRef)memory;
 }
 
-CF_PRIVATE CFArrayRef __CFArrayCreateTransfer(CFAllocatorRef allocator, const void **values, CFIndex numValues) {
+CFArrayRef __CFArrayCreateTransfer(CFAllocatorRef allocator, const void **values, CFIndex numValues) {
     CFAssert2(0 <= numValues, __kCFLogAssertion, "%s(): numValues (%d) cannot be less than zero", __PRETTY_FUNCTION__, numValues);
     UInt32 flags = __kCFArrayImmutable;
     __CFBitfieldSetValue(flags, 31, 2, 0);
@@ -616,6 +628,7 @@ void CFArrayGetValues(CFArrayRef array, CFRange range, const void **values) {
     }
 }
 
+#if 0
 CF_EXPORT unsigned long _CFArrayFastEnumeration(CFArrayRef array, struct __objcFastEnumerationStateEquivalent *state, void *stackbuffer, unsigned long count) {
     CHECK_FOR_MUTATION(array);
     if (array->_count == 0) return 0;
@@ -641,6 +654,7 @@ CF_EXPORT unsigned long _CFArrayFastEnumeration(CFArrayRef array, struct __objcF
     }
     return 0;
 }
+#endif
 
 
 void CFArrayApplyFunction(CFArrayRef array, CFRange range, CFArrayApplierFunction applier, void *context) {
@@ -780,7 +794,7 @@ static void __CFArrayRepositionDequeRegions(CFMutableArrayRef array, CFRange ran
     CFIndex cnt, futureCnt, numNewElems;
     CFIndex L, A, B, C, R;
 
-    buckets = (struct __CFArrayBucket *)((uint8_t *)deque + sizeof(struct __CFArrayDeque));
+    buckets = (struct __CFArrayBucket *)(uintptr_t)((uint8_t *)deque + sizeof(struct __CFArrayDeque));
     cnt = __CFArrayGetCount(array);
     futureCnt = cnt - range.length + newCount;
 
@@ -801,7 +815,7 @@ static void __CFArrayRepositionDequeRegions(CFMutableArrayRef array, CFRange ran
         Boolean collectableMemory = CF_IS_COLLECTABLE_ALLOCATOR(allocator);
 	struct __CFArrayDeque *newDeque = (struct __CFArrayDeque *)CFAllocatorAllocate(allocator, size, isStrongMemory(array) ? __kCFAllocatorGCScannedMemory : 0);
 	if (__CFOASafe) __CFSetLastAllocationEventName(newDeque, "CFArray (store-deque)");
-	struct __CFArrayBucket *newBuckets = (struct __CFArrayBucket *)((uint8_t *)newDeque + sizeof(struct __CFArrayDeque));
+	struct __CFArrayBucket *newBuckets = (struct __CFArrayBucket *)(uintptr_t)((uint8_t *)newDeque + sizeof(struct __CFArrayDeque));
 	CFIndex oldL = L;
 	CFIndex newL = (capacity - futureCnt) / 2;
 	CFIndex oldC0 = oldL + A + B;
@@ -859,7 +873,7 @@ static void __CFArrayRepositionDequeRegions(CFMutableArrayRef array, CFRange ran
     }
 }
 
-static void __CFArrayHandleOutOfMemory(CFTypeRef obj, CFIndex numBytes) {
+static void __CFArrayHandleOutOfMemory(CFTypeRef obj __unused, CFIndex numBytes) {
     CFStringRef msg = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("Attempt to allocate %ld bytes for CFArray failed"), numBytes);
     {
         CFLog(kCFLogLevelCritical, CFSTR("%@"), msg);
@@ -984,7 +998,7 @@ void _CFArrayReplaceValues(CFMutableArrayRef array, CFRange range, const void **
 	if (0) {
 	} else {	// Deque
 	    struct __CFArrayDeque *deque = (struct __CFArrayDeque *)array->_store;
-	    struct __CFArrayBucket *raw_buckets = (struct __CFArrayBucket *)((uint8_t *)deque + sizeof(struct __CFArrayDeque));
+	    struct __CFArrayBucket *raw_buckets = (struct __CFArrayBucket *)(uintptr_t)((uint8_t *)deque + sizeof(struct __CFArrayDeque));
 	    objc_memmove_collectable(raw_buckets + deque->_leftIdx + range.location, newv, newCount * sizeof(struct __CFArrayBucket));
 	}
     }
@@ -1018,7 +1032,7 @@ CF_INLINE void __CFZSort(CFMutableArrayRef array, CFRange range, CFComparatorFun
     }
 }
 
-CF_PRIVATE void _CFArraySortValues(CFMutableArrayRef array, CFComparatorFunction comparator, void *context) {
+void _CFArraySortValues(CFMutableArrayRef array, CFComparatorFunction comparator, void *context) {
     CFRange range = {0, CFArrayGetCount(array)};
     if (range.length < 2) {
         return;

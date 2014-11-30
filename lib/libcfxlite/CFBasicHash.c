@@ -51,6 +51,13 @@
 #define ENABLE_DTRACE_PROBES 0
 #endif
 
+#ifdef __FreeBSD__
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wsign-compare"
+#undef CF_INLINE
+#define CF_INLINE static
+#endif
+
 /*
 // dtrace -h -s foo.d
 // Note: output then changed by casts of the arguments
@@ -390,7 +397,7 @@ CF_PRIVATE Boolean CFBasicHashHasStrongKeys(CFConstBasicHashRef ht) {
     return false;
 #endif
 }
-
+#ifdef SHOW_UNUSED
 CF_INLINE Boolean __CFBasicHashHasWeakValues(CFConstBasicHashRef ht) {
 #if DEPLOYMENT_TARGET_MACOSX
     return ht->bits.weak_values ? true : false;
@@ -406,6 +413,7 @@ CF_INLINE Boolean __CFBasicHashHasWeakKeys(CFConstBasicHashRef ht) {
     return false;
 #endif
 }
+#endif
 
 CF_INLINE Boolean __CFBasicHashHasHashCache(CFConstBasicHashRef ht) {
 #if DEPLOYMENT_TARGET_MACOSX
@@ -543,7 +551,7 @@ CF_INLINE uintptr_t __CFBasicHashGetKey(CFConstBasicHashRef ht, CFIndex idx) {
     return __CFBasicHashGetValue(ht, idx);
 }
 
-CF_INLINE void __CFBasicHashSetKey(CFBasicHashRef ht, CFIndex idx, uintptr_t stack_key, Boolean ignoreOld, Boolean literal) {
+static void __CFBasicHashSetKey(CFBasicHashRef ht, CFIndex idx, uintptr_t stack_key, Boolean ignoreOld, Boolean literal) {
     if (0 == ht->bits.keys_offset) HALT;
     CFBasicHashValue *keyp = &(__CFBasicHashGetKeys(ht)[idx]);
     uintptr_t old_key = ignoreOld ? 0 : keyp->neutral;
@@ -1039,7 +1047,7 @@ CF_PRIVATE void CFBasicHashGetElements(CFConstBasicHashRef ht, CFIndex buffersle
         CFBasicHashBucket bkt = CFBasicHashGetBucket(ht, idx);
         if (0 < bkt.count) {
             used--;
-            for (CFIndex cnt = bkt.count; cnt-- && offset < bufferslen;) {
+            for (CFIndex cidx = bkt.count; cidx-- && offset < bufferslen;) {
                 if (weak_values) { weak_values[offset] = bkt.weak_value; }
                 if (weak_keys) { weak_keys[offset] = bkt.weak_key; }
                 offset++;
@@ -1538,13 +1546,13 @@ CF_PRIVATE CFStringRef CFBasicHashCopyDescription(CFConstBasicHashRef ht, Boolea
     CFStringAppendFormat(result, NULL, CFSTR("%@}\n"), prefix);
     return result;
 }
-
+#ifndef __FreeBSD__
 CF_PRIVATE void CFBasicHashShow(CFConstBasicHashRef ht) {
     CFStringRef str = CFBasicHashCopyDescription(ht, true, CFSTR(""), CFSTR("\t"), false);
     CFShow(str);
     CFRelease(str);
 }
-
+#endif
 CF_PRIVATE Boolean __CFBasicHashEqual(CFTypeRef cf1, CFTypeRef cf2) {
     CFBasicHashRef ht1 = (CFBasicHashRef)cf1;
     CFBasicHashRef ht2 = (CFBasicHashRef)cf2;
@@ -1587,7 +1595,9 @@ static const CFRuntimeClass __CFBasicHashClass = {
     __CFBasicHashEqual,
     __CFBasicHashHash,
     NULL,        //
-    __CFBasicHashCopyDescription
+    __CFBasicHashCopyDescription,
+	NULL,
+	NULL
 };
 
 CF_PRIVATE CFTypeID CFBasicHashGetTypeID(void) {

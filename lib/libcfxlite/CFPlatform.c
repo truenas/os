@@ -49,6 +49,9 @@
 
 #endif
 
+
+CF_PRIVATE_EXTERN CFURLRef CFCopyHomeDirectoryURL(void);
+
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_WINDOWS
 #define kCFPlatformInterfaceStringEncoding	kCFStringEncodingUTF8
 #else
@@ -169,7 +172,7 @@ const char *_CFProcessPath(void) {
 }
 #endif
 
-#if DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #include <unistd.h>
 
 const char *_CFProcessPath(void) {
@@ -282,7 +285,7 @@ CF_EXPORT CFStringRef CFCopyUserName(void) {
     return result;
 }
 
-CFURLRef CFCopyHomeDirectoryURL(void) {
+CF_PRIVATE_EXTERN CFURLRef CFCopyHomeDirectoryURL(void) {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     uid_t euid;
     __CFGetUGIDs(&euid, NULL);
@@ -555,12 +558,13 @@ CF_PRIVATE void __CFFinalizeWindowsThreadData() {
 
 #endif
 
-#if DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 
 static pthread_key_t __CFTSDIndexKey;
+CF_PRIVATE_EXTERN void __CFTSDPosixInitialize(void);
 
 // Called from CFRuntime's startup code, on Linux only
-CF_PRIVATE void __CFTSDLinuxInitialize() {
+CF_PRIVATE_EXTERN void __CFTSDPosixInitialize(void) {
     (void)pthread_key_create(&__CFTSDIndexKey, __CFTSDFinalize);
 }
 
@@ -569,7 +573,7 @@ CF_PRIVATE void __CFTSDLinuxInitialize() {
 static void __CFTSDSetSpecific(void *arg) {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI
     _pthread_setspecific_direct(CF_TSD_KEY, arg);
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     pthread_setspecific(__CFTSDIndexKey, arg);
 #elif DEPLOYMENT_TARGET_WINDOWS
     TlsSetValue(__CFTSDIndexKey, arg);
@@ -579,7 +583,7 @@ static void __CFTSDSetSpecific(void *arg) {
 static void *__CFTSDGetSpecific() {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI
     return _pthread_getspecific_direct(CF_TSD_KEY);
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     return pthread_getspecific(__CFTSDIndexKey);
 #elif DEPLOYMENT_TARGET_WINDOWS
     return TlsGetValue(__CFTSDIndexKey);

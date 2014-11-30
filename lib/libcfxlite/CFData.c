@@ -34,12 +34,12 @@
 
 
 #if __LP64__
-#define CFDATA_MAX_SIZE	    ((1ULL << 42) - 1)
+#define CFDATA_MAX_SIZE	    ((1UL << 42) - 1)
 #else
 #define CFDATA_MAX_SIZE	    ((1ULL << 31) - 1)
 #endif
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI 
 #import <mach/mach.h>
 CF_INLINE unsigned long __CFPageSize() { return vm_page_size; }
 #elif DEPLOYMENT_TARGET_WINDOWS
@@ -48,7 +48,7 @@ CF_INLINE unsigned long __CFPageSize() {
     GetSystemInfo(&sysInfo);
     return sysInfo.dwPageSize;
 }
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || __FreeBSD__
 #include <unistd.h>
 CF_INLINE unsigned long __CFPageSize() {
     return (unsigned long)getpagesize();
@@ -131,7 +131,7 @@ CF_INLINE CFIndex __CFDataLength(CFDataRef data) {
     return data->_length;
 }
 
-CF_INLINE void __CFDataSetLength(CFMutableDataRef data, CFIndex v) {
+CF_INLINE void __CFDataSetLength(CFMutableDataRef data __unused, CFIndex v __unused) {
     /* for a CFData, _bytesUsed == _length */
 }
 
@@ -139,13 +139,15 @@ CF_INLINE CFIndex __CFDataCapacity(CFDataRef data) {
     return data->_capacity;
 }
 
-CF_INLINE void __CFDataSetCapacity(CFMutableDataRef data, CFIndex v) {
+CF_INLINE void __CFDataSetCapacity(CFMutableDataRef data __unused, CFIndex v __unused) {
     /* for a CFData, _bytesNum == _capacity */
 }
 
+#ifdef SHOW_UNUSED
 CF_INLINE CFIndex __CFDataNumBytesUsed(CFDataRef data) {
     return data->_length;
 }
+#endif
 
 CF_INLINE void __CFDataSetNumBytesUsed(CFMutableDataRef data, CFIndex v) {
     data->_length = v;
@@ -160,9 +162,9 @@ CF_INLINE void __CFDataSetNumBytes(CFMutableDataRef data, CFIndex v) {
 }
 
 #if __LP64__
-#define CHUNK_SIZE (1ULL << 29)
-#define LOW_THRESHOLD (1ULL << 20)
-#define HIGH_THRESHOLD (1ULL << 32)
+#define CHUNK_SIZE (1L << 29)
+#define LOW_THRESHOLD (1L << 20)
+#define HIGH_THRESHOLD (1L << 32)
 #else
 #define CHUNK_SIZE (1ULL << 26)
 #define LOW_THRESHOLD (1ULL << 20)
@@ -190,9 +192,9 @@ CF_INLINE CFIndex __CFDataNumBytesForCapacity(CFIndex capacity) {
     return capacity;
 }
 
-static void __CFDataHandleOutOfMemory(CFTypeRef obj, CFIndex numBytes) {
+static void __CFDataHandleOutOfMemory(CFTypeRef obj __unused, CFIndex numBytes) {
     CFStringRef msg;
-    if(0 < numBytes && numBytes <= CFDATA_MAX_SIZE) {
+    if(0 < numBytes && numBytes <= (long)CFDATA_MAX_SIZE) {
 	msg = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("Attempt to allocate %ld bytes for NS/CFData failed"), numBytes);
     } else {
 	msg = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("Attempt to allocate %ld bytes for NS/CFData failed. Maximum size: %lld"), numBytes, CFDATA_MAX_SIZE);
@@ -331,10 +333,14 @@ static const CFRuntimeClass __CFDataClass = {
     __CFDataEqual,
     __CFDataHash,
     NULL,	// 
-    __CFDataCopyDescription
+    __CFDataCopyDescription,
+	NULL,
+	NULL
 };
 
-CF_PRIVATE void __CFDataInitialize(void) {
+void __CFDataInitialize(void);
+
+void __CFDataInitialize(void) {
     __kCFDataTypeID = _CFRuntimeRegisterClass(&__CFDataClass);
 }
 
@@ -356,7 +362,7 @@ static CFMutableDataRef __CFDataInit(CFAllocatorRef allocator, CFOptionFlags fla
     Boolean noCopy = bytesDeallocator != NULL;
     Boolean isMutable = ((flags & __kCFMutable) != 0);
     Boolean isGrowable = ((flags & __kCFGrowable) != 0);
-    Boolean allocateInline = !isGrowable && !noCopy && capacity < INLINE_BYTES_THRESHOLD;
+    Boolean allocateInline = !isGrowable && !noCopy && capacity < (long)INLINE_BYTES_THRESHOLD;
     allocator = (allocator == NULL) ? __CFGetDefaultAllocator() : allocator;
     Boolean useAllocator = (allocator != kCFAllocatorSystemDefault && allocator != kCFAllocatorMalloc && allocator != kCFAllocatorMallocZone);
     
@@ -515,8 +521,8 @@ void CFDataGetBytes(CFDataRef data, CFRange range, uint8_t *buffer) {
 /* Allocates new block of data with at least numNewValues more bytes than the current length. If clear is true, the new bytes up to at least the new length with be zeroed. */
 static void __CFDataGrow(CFMutableDataRef data, CFIndex numNewValues, Boolean clear) {
     CFIndex oldLength = __CFDataLength(data);
-    CFIndex newLength = oldLength + numNewValues;
-    if (newLength > CFDATA_MAX_SIZE || newLength < 0) __CFDataHandleOutOfMemory(data, newLength * sizeof(uint8_t));
+	CFIndex newLength = oldLength + numNewValues;
+    if (newLength > (long)CFDATA_MAX_SIZE || newLength < 0) __CFDataHandleOutOfMemory(data, newLength * sizeof(uint8_t));
     CFIndex capacity = __CFDataRoundUpCapacity(newLength);
     CFIndex numBytes = __CFDataNumBytesForCapacity(capacity);
     CFAllocatorRef allocator = CFGetAllocator(data);
@@ -643,7 +649,7 @@ void CFDataReplaceBytes(CFMutableDataRef data, CFRange range, const uint8_t *new
 
 #define REVERSE_BUFFER(type, buf, len) { \
     type tmp; \
-    for(int i = 0; i < (len)/2; i++) { \
+    for(typeof(len) i = 0; i < (len)/2; i++) {	\
 	tmp = (buf)[i]; \
 	(buf)[i] = (buf)[(len) - i - 1]; \
 	(buf)[(len) - i - 1] = tmp; \
@@ -658,7 +664,7 @@ static void _computeGoodSubstringShift(const uint8_t *needle, int needleLength, 
     suff[needleLength - 1] = needleLength;
     f = g = needleLength - 1;
     for (i = needleLength - 2; i >= 0; --i) {
-        if (i > g && suff[i + needleLength - 1 - f] < i - g)
+        if (i > g && suff[i + needleLength - 1 - f] < (unsigned long)i - g)
             suff[i] = suff[i + needleLength - 1 - f];
         else {
             if (i < g)
@@ -676,9 +682,9 @@ static void _computeGoodSubstringShift(const uint8_t *needle, int needleLength, 
         shift[i] = needleLength;
     j = 0;
     for (i = needleLength - 1; i >= 0; --i)
-        if (suff[i] == i + 1)
+        if (suff[i] == (unsigned long)i + 1)
             for (; j < needleLength - 1 - i; ++j)
-                if (shift[j] == needleLength)
+                if (shift[j] == (unsigned long)needleLength)
                     shift[j] = needleLength - 1 - i;
     // Set the amount of shift necessary to move each of the suffix matches found into a position where it overlaps with the suffix. If there are duplicate matches the latest one is the one that should take effect.
     for (i = 0; i <= needleLength - 2; ++i)
@@ -698,7 +704,7 @@ static const uint8_t * __CFDataSearchBoyerMoore(const CFDataRef data, const uint
     }
     
     if(backwards) {
-	for (int i = 0; i < sizeof(badCharacterShift) / sizeof(*badCharacterShift); i++)
+	for (unsigned long i = 0; i < sizeof(badCharacterShift) / sizeof(*badCharacterShift); i++)
 	    badCharacterShift[i] = needleLength;
 	
 	for (int i = needleLength - 1; i >= 0; i--)
@@ -715,10 +721,10 @@ static const uint8_t * __CFDataSearchBoyerMoore(const CFDataRef data, const uint
 	REVERSE_BUFFER(unsigned long, goodSubstringShift, needleLength);
 	free(needleCopy);
     } else {
-	for (int i = 0; i < sizeof(badCharacterShift) / sizeof(*badCharacterShift); i++)
+	for (unsigned long i = 0; i < sizeof(badCharacterShift) / sizeof(*badCharacterShift); i++)
 	    badCharacterShift[i] = needleLength;
 	
-	for (int i = 0; i < needleLength; i++)
+	for (unsigned long i = 0; i < needleLength; i++)
 	    badCharacterShift[needle[i]] = needleLength - i- 1;
 	
 	_computeGoodSubstringShift(needle, needleLength, goodSubstringShift, suffixLengths);
@@ -770,8 +776,8 @@ static const uint8_t * __CFDataSearchBoyerMoore(const CFDataRef data, const uint
 CFRange _CFDataFindBytes(CFDataRef data, CFDataRef dataToFind, CFRange searchRange, CFDataSearchFlags compareOptions) {
     const uint8_t *fullHaystack = CFDataGetBytePtr(data);
     const uint8_t *needle = CFDataGetBytePtr(dataToFind);
-    unsigned long fullHaystackLength = CFDataGetLength(data);
-    unsigned long needleLength = CFDataGetLength(dataToFind);
+    long fullHaystackLength = CFDataGetLength(data);
+    long needleLength = CFDataGetLength(dataToFind);
     
     if(compareOptions & kCFDataSearchAnchored) {
 	if(searchRange.length > needleLength) {

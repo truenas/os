@@ -32,6 +32,8 @@ CFData read/write routines
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+
 
 #include "CFInternal.h"
 #include <CoreFoundation/CFBase.h>
@@ -42,7 +44,7 @@ CFData read/write routines
 #include <CoreFoundation/CFNumber.h>
 #include <string.h>
 #include <ctype.h>
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -118,7 +120,7 @@ static CFDictionaryRef _CFFileURLCreatePropertiesFromResource(CFAllocatorRef all
 
     Boolean exists;
     SInt32 posixMode;
-    int64_t size;
+    SInt64 size;
     CFDateRef modTime = NULL, *modTimePtr = NULL;
     CFArrayRef contents = NULL, *contentsPtr = NULL;
     SInt32 ownerID;
@@ -251,14 +253,14 @@ static Boolean _CFFileURLWritePropertiesToResource(CFURLRef url, CFDictionaryRef
                 CFNumberRef modeNum = (CFNumberRef)value;
                 CFNumberGetValue(modeNum, kCFNumberSInt32Type, &mode);
             } else {
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #define MODE_TYPE mode_t
 #elif DEPLOYMENT_TARGET_WINDOWS
 #define MODE_TYPE uint16_t
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
-                const MODE_TYPE *modePtr = (const MODE_TYPE *)CFDataGetBytePtr((CFDataRef)value);
+                const MODE_TYPE *modePtr = (const MODE_TYPE *)(uintptr_t)CFDataGetBytePtr((CFDataRef)value);
                 mode = *modePtr;
             }
             err = chmod(cPath, mode);

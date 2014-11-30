@@ -35,10 +35,11 @@
 #include <CoreFoundation/CFNumberFormatter.h>
 #include <CoreFoundation/CFDateFormatter.h>
 #include <sys/types.h>
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_FREEBSD
 #include <unistd.h>
 #endif
 
+CF_PRIVATE void _CFApplicationPreferencesDomainHasChanged(CFPreferencesDomainRef changedDomain);
 static Boolean _CFApplicationPreferencesSynchronizeNoLock(_CFApplicationPreferences *self);
 void _CFPreferencesDomainSetMultiple(CFPreferencesDomainRef domain, CFDictionaryRef dict);
 static void updateDictRep(_CFApplicationPreferences *self);
@@ -57,7 +58,7 @@ CFPropertyListRef CFPreferencesCopyAppValue(CFStringRef key, CFStringRef appName
     return standardPrefs ? _CFApplicationPreferencesCreateValueForKey2(standardPrefs, key) : NULL;
 }
 
-CF_EXPORT Boolean CFPreferencesAppBooleanValue(CFStringRef key, CFStringRef appName, Boolean *keyExistsAndHasValidFormat) {
+static Boolean CFPreferencesAppBooleanValue(CFStringRef key, CFStringRef appName, Boolean *keyExistsAndHasValidFormat) {
     CFPropertyListRef value;
     Boolean result, valid;
     CFTypeID typeID = 0;
@@ -106,7 +107,7 @@ CF_EXPORT Boolean CFPreferencesAppBooleanValue(CFStringRef key, CFStringRef appN
     return result;
 }
 
-CF_PRIVATE CFIndex CFPreferencesAppIntegerValue(CFStringRef key, CFStringRef appName, Boolean *keyExistsAndHasValidFormat) {
+static CFIndex CFPreferencesAppIntegerValue(CFStringRef key, CFStringRef appName, Boolean *keyExistsAndHasValidFormat) {
     CFPropertyListRef value;
     CFIndex result;
     CFTypeID typeID = 0;
@@ -225,7 +226,7 @@ void CFPreferencesFlushCaches(void) {
 }
 
 // quick message to indicate that the given domain has changed, and we should go through and invalidate any dictReps that involve this domain.
-void _CFApplicationPreferencesDomainHasChanged(CFPreferencesDomainRef changedDomain) {
+CF_PRIVATE void _CFApplicationPreferencesDomainHasChanged(CFPreferencesDomainRef changedDomain) {
     CFAllocatorRef alloc = __CFPreferencesAllocator();
     __CFSpinLock(&__CFApplicationPreferencesLock);
     if(__CFStandardUserPreferences) {  // only grovel over the prefs if there's something there to grovel
@@ -264,7 +265,7 @@ static void __addKeysAndValues(const void *key, const void *value, void *context
     CFDictionarySetValue((CFMutableDictionaryRef)context, key, value);
 }
 
-static CFMutableDictionaryRef computeDictRep(_CFApplicationPreferences *self, Boolean skipC0C0A) {
+static CFMutableDictionaryRef computeDictRep(_CFApplicationPreferences *self, Boolean skipC0C0A __unused) {
     CFAllocatorRef alloc = __CFPreferencesAllocator();
     CFMutableArrayRef searchList = self->_search;
     CFIndex idx;
@@ -290,7 +291,7 @@ static CFMutableDictionaryRef computeDictRep(_CFApplicationPreferences *self, Bo
     return dictRep;
 }
 
-CFTypeRef _CFApplicationPreferencesSearchDownToDomain(_CFApplicationPreferences *self, CFPreferencesDomainRef stopper, CFStringRef key) {
+CFTypeRef _CFApplicationPreferencesSearchDownToDomain(_CFApplicationPreferences *self __unused, CFPreferencesDomainRef stopper __unused, CFStringRef key __unused) {
     return NULL;
 }
 
@@ -302,13 +303,13 @@ void _CFApplicationPreferencesUpdate(_CFApplicationPreferences *self) {
 }
 
 CF_EXPORT CFDictionaryRef _CFApplicationPreferencesCopyRepresentation(_CFApplicationPreferences *self);
-
+#ifdef SHOW_UNUSED
 CF_PRIVATE CFDictionaryRef __CFApplicationPreferencesCopyCurrentState(void) {
     _CFApplicationPreferences *self = _CFStandardApplicationPreferences(kCFPreferencesCurrentApplication);
     CFDictionaryRef result = _CFApplicationPreferencesCopyRepresentation(self);
     return result;
 }
-
+#endif
 // CACHING here - we will only return a value as current as the last time computeDictRep() was called
 static CFTypeRef _CFApplicationPreferencesCreateValueForKey2(_CFApplicationPreferences *self, CFStringRef defaultName) {
     CFTypeRef result;
@@ -370,7 +371,7 @@ Boolean _CFApplicationPreferencesSynchronize(_CFApplicationPreferences *self) {
 }
 
 // appName should not be kCFPreferencesCurrentApplication going in to this call
-_CFApplicationPreferences *_CFApplicationPreferencesCreateWithUser(CFStringRef userName, CFStringRef appName) {
+_CFApplicationPreferences *_CFApplicationPreferencesCreateWithUser(CFStringRef userName __unused, CFStringRef appName) {
     CFAllocatorRef alloc = __CFPreferencesAllocator();
     _CFApplicationPreferences *self = (_CFApplicationPreferences*)CFAllocatorAllocate(alloc, sizeof(_CFApplicationPreferences), 0);
     if (self) {

@@ -36,6 +36,7 @@
 #include "CFBasicHash.h"
 #include <CoreFoundation/CFString.h>
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
 
 #define CFDictionary 0
 #define CFSet 0
@@ -92,7 +93,7 @@ static const CFSetCallBacks __kCFNullSetCallBacks = {0, NULL, NULL, NULL, NULL, 
 #define CFHashValueCallBacks CFSetCallBacks
 #endif
 
-
+	
 typedef uintptr_t any_t;
 typedef const void * const_any_pointer_t;
 typedef void * any_pointer_t;
@@ -124,8 +125,13 @@ static const CFRuntimeClass __CFSetClass = {
     __CFSetEqual,
     __CFSetHash,
     NULL,        //
-    __CFSetCopyDescription
+    __CFSetCopyDescription,
+	NULL,
+	NULL
 };
+
+CF_PRIVATE_EXTERN CFHashRef __CFSetCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, CFIndex numValues);
+
 
 CFTypeID CFSetGetTypeID(void) {
     if (_kCFRuntimeNotATypeID == __kCFSetTypeID) __kCFSetTypeID = _CFRuntimeRegisterClass(&__CFSetClass);
@@ -228,7 +234,7 @@ static CFBasicHashRef __CFSetCreateGeneric(CFAllocatorRef allocator, const CFHas
 CF_PRIVATE CFHashRef __CFSetCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, const_any_pointer_t *vlist, CFIndex numValues) {
 #endif
 #if CFSet || CFBag
-CF_PRIVATE CFHashRef __CFSetCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, CFIndex numValues) {
+CF_PRIVATE_EXTERN CFHashRef __CFSetCreateTransfer(CFAllocatorRef allocator, const_any_pointer_t *klist, CFIndex numValues) {
     const_any_pointer_t *vlist = klist;
 #endif
     CFTypeID typeID = CFSetGetTypeID();
@@ -503,6 +509,7 @@ void CFSetApplyFunction(CFHashRef hc, CFSetApplierFunction applier, any_pointer_
         });
 }
 
+#ifdef SHOW_UNUSED
 // This function is for Foundation's benefit; no one else should use it.
 CF_EXPORT unsigned long _CFSetFastEnumeration(CFHashRef hc, struct __objcFastEnumerationStateEquivalent *state, void *stackbuffer, unsigned long count) {
     if (CF_IS_OBJC(__kCFSetTypeID, hc)) return 0;
@@ -516,7 +523,7 @@ CF_EXPORT Boolean _CFSetIsMutable(CFHashRef hc) {
     __CFGenericValidateType(hc, __kCFSetTypeID);
     return CFBasicHashIsMutable((CFBasicHashRef)hc);
 }
-
+#endif
 // This function is for Foundation's benefit; no one else should use it.
 CF_EXPORT void _CFSetSetCapacity(CFMutableHashRef hc, CFIndex cap) {
     if (CF_IS_OBJC(__kCFSetTypeID, hc)) return;
@@ -525,7 +532,7 @@ CF_EXPORT void _CFSetSetCapacity(CFMutableHashRef hc, CFIndex cap) {
     CFAssert3(CFSetGetCount(hc) <= cap, __kCFLogAssertion, "%s(): desired capacity (%ld) is less than count (%ld)", __PRETTY_FUNCTION__, cap, CFSetGetCount(hc));
     CFBasicHashSetCapacity((CFBasicHashRef)hc, cap);
 }
-
+#ifdef SHOW_UNUSED
 CF_INLINE CFIndex __CFSetGetKVOBit(CFHashRef hc) {
     return __CFBitfieldGetValue(((CFRuntimeBase *)hc)->_cfinfo[CF_INFO_BITS], 0, 0);
 }
@@ -543,7 +550,7 @@ CF_EXPORT CFIndex _CFSetGetKVOBit(CFHashRef hc) {
 CF_EXPORT void _CFSetSetKVOBit(CFHashRef hc, CFIndex bit) {
     __CFSetSetKVOBit(hc, bit);
 }
-
+#endif
 
 #if !defined(CF_OBJC_KVO_WILLCHANGE)
 #define CF_OBJC_KVO_WILLCHANGE(obj, key)

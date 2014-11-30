@@ -48,6 +48,8 @@
 #include "../Tests/CFCountingAllocator.c"
 #endif
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+
 static CFURLRef _CFPreferencesURLForStandardDomainWithSafetyLevel(CFStringRef domainName, CFStringRef userName, CFStringRef hostName, unsigned long safeLevel);
 
 struct __CFPreferencesDomain {
@@ -164,7 +166,7 @@ CF_PRIVATE CFStringRef _CFPreferencesGetByHostIdentifierString(void) {
 
 #else
 
-CF_PRIVATE CFStringRef _CFPreferencesGetByHostIdentifierString(void) {
+static CFStringRef _CFPreferencesGetByHostIdentifierString(void) {
     return CFSTR("");
 }
 
@@ -240,7 +242,9 @@ static CFURLRef  _preferencesDirectoryForUserHost(CFStringRef  userName, CFStrin
 
 static Boolean __CFPreferencesWritesXML = true;
 
-Boolean __CFPreferencesShouldWriteXML(void) {
+CF_PRIVATE Boolean __CFPreferencesShouldWriteXML(void);
+
+CF_PRIVATE Boolean __CFPreferencesShouldWriteXML(void) {
     return __CFPreferencesWritesXML;
 }
 
@@ -421,8 +425,12 @@ static const CFRuntimeClass __CFPreferencesDomainClass = {
     NULL,
     NULL,
     NULL,      // 
-    __CFPreferencesDomainCopyDescription
+    __CFPreferencesDomainCopyDescription,
+	NULL,
+	NULL
 };
+
+CF_PRIVATE void __CFPreferencesDomainInitialize(void);
 
 /* This is called once at CFInitialize() time. */
 CF_PRIVATE void __CFPreferencesDomainInitialize(void) {
@@ -467,8 +475,8 @@ static CFStringRef  _CFPreferencesStandardDomainCacheKey(CFStringRef  domainName
 
 static CFURLRef _CFPreferencesURLForStandardDomainWithSafetyLevel(CFStringRef domainName, CFStringRef userName, CFStringRef hostName, unsigned long safeLevel) {
     CFURLRef theURL = NULL;
-    CFAllocatorRef prefAlloc = __CFPreferencesAllocator();
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_WINDOWS
+    CFAllocatorRef prefAlloc = __CFPreferencesAllocator();
     CFURLRef prefDir = _preferencesDirectoryForUserHostSafetyLevel(userName, hostName, safeLevel);
     CFStringRef  appName;
     CFStringRef  fileName;
@@ -725,9 +733,11 @@ CF_PRIVATE void _CFPreferencesDomainSetIsWorldReadable(CFPreferencesDomainRef do
     }
 }
 
+#ifdef SHOW_UNUSED
 CF_PRIVATE void *_CFPreferencesDomainCopyDictFunc(CFPreferencesDomainRef domain) {
     return domain->_callBacks->copyDomainDictionary;
 }
+#endif
 
 void _CFPreferencesDomainSetDictionary(CFPreferencesDomainRef domain, CFDictionaryRef dict) {
     CFAllocatorRef alloc = __CFPreferencesAllocator();

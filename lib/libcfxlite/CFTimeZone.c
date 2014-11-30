@@ -40,14 +40,14 @@
 #include <string.h>
 #include <unicode/ucal.h>
 #include <CoreFoundation/CFDateFormatter.h>
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
 #endif
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED
 #include <tzfile.h>
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #ifndef TZDIR
 #define TZDIR	"/usr/share/zoneinfo" /* Time zone object file directory */
 #endif /* !defined TZDIR */
@@ -68,7 +68,7 @@ struct tzhead {
 };
 #endif
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #define TZZONELINK	TZDEFAULT
 #define TZZONEINFO	TZDIR "/"
 #elif DEPLOYMENT_TARGET_WINDOWS
@@ -79,7 +79,7 @@ static void __InitTZStrings(void);
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
 
-#if DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_LINUX 
 // Symbol aliases
 CF_EXPORT CFStringRef const kCFDateFormatterTimeZone __attribute__((weak, alias ("kCFDateFormatterTimeZoneKey")));
 #endif
@@ -95,6 +95,9 @@ static CFSpinLock_t __CFTimeZoneCompatibilityMappingLock = CFSpinLockInit;
 static CFArrayRef __CFKnownTimeZoneList = NULL;
 static CFMutableDictionaryRef __CFTimeZoneCache = NULL;
 static CFSpinLock_t __CFTimeZoneGlobalLock = CFSpinLockInit;
+
+CF_PRIVATE_EXTERN void __CFTimeZoneInitialize(void);
+
 
 #if DEPLOYMENT_TARGET_WINDOWS
 static CFDictionaryRef __CFTimeZoneWinToOlsonDict = NULL;
@@ -161,7 +164,7 @@ static CFMutableArrayRef __CFCopyWindowsTimeZoneList() {
     RegCloseKey(hkResult);
     return result;
 }
-#elif DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 static CFMutableArrayRef __CFCopyRecursiveDirectoryList() {
     CFMutableArrayRef result = CFArrayCreateMutable(kCFAllocatorSystemDefault, 0, &kCFTypeArrayCallBacks);
 #if DEPLOYMENT_TARGET_WINDOWS
@@ -174,7 +177,7 @@ static CFMutableArrayRef __CFCopyRecursiveDirectoryList() {
 
     for (; 0 <= fd;) {
         uint8_t buffer[4096];
-        ssize_t len = read(fd, buffer, sizeof(buffer));
+        typeof(sizeof(buffer)) len = read(fd, buffer, sizeof(buffer));
         if (len <= 0) break;
 	if (len < sizeof(buffer)) {
 	    // assumes that partial read only occurs at the end of the file
@@ -273,7 +276,7 @@ CF_INLINE Boolean __CFTZPeriodIsDST(const CFTZPeriod *period) {
     return (Boolean)__CFBitfieldGetValue(period->info, 17, 17);
 }
 
-static CFComparisonResult __CFCompareTZPeriods(const void *val1, const void *val2, void *context) {
+static CFComparisonResult __CFCompareTZPeriods(const void *val1, const void *val2, void *context __unused) {
     CFTZPeriod *tzp1 = (CFTZPeriod *)val1;
     CFTZPeriod *tzp2 = (CFTZPeriod *)val2;
     // we treat equal as less than, as the code which uses the
@@ -476,10 +479,12 @@ static const CFRuntimeClass __CFTimeZoneClass = {
     __CFTimeZoneEqual,
     __CFTimeZoneHash,
     NULL,	//
-    __CFTimeZoneCopyDescription
+    __CFTimeZoneCopyDescription,
+	NULL,
+	NULL
 };
 
-CF_PRIVATE void __CFTimeZoneInitialize(void) {
+CF_PRIVATE_EXTERN void __CFTimeZoneInitialize(void) {
     __kCFTimeZoneTypeID = _CFRuntimeRegisterClass(&__CFTimeZoneClass);
 }
 
@@ -803,7 +808,13 @@ CFTimeZoneRef CFTimeZoneCopySystem(void) {
     return tz;
 }
 
+#ifdef SHOW_UNUSED
 static CFIndex __noteCount = 0;
+
+CFIndex _CFTimeZoneGetNoteCount(void) {
+    return __noteCount;
+}
+#endif
 
 void CFTimeZoneResetSystem(void) {
     __CFTimeZoneLockGlobal();
@@ -815,10 +826,6 @@ void CFTimeZoneResetSystem(void) {
     __CFTimeZoneSystem = NULL;
     __CFTimeZoneUnlockGlobal();
     if (tz) CFRelease(tz);
-}
-
-CFIndex _CFTimeZoneGetNoteCount(void) {
-    return __noteCount;
 }
 
 CFTimeZoneRef CFTimeZoneCopyDefault(void) {
@@ -954,7 +961,7 @@ CFDictionaryRef CFTimeZoneCopyAbbreviationDictionary(void) {
     return dict;
 }
 
-void _removeFromCache(const void *key, const void *value, void *context) {
+static void _removeFromCache(const void *key, const void *value __unused, void *context __unused) {
     CFDictionaryRemoveValue(__CFTimeZoneCache, (CFStringRef)key);
 }
 

@@ -46,6 +46,13 @@
 #include <CoreFoundation/CFStringDefaultEncoding.h>
 #endif
 
+#pragma clang diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wcast-align"
+
+static int __CFProphylacticAutofsAccess = false;
+
+CF_PRIVATE_EXTERN void __CFStrConvertBytesToUnicode(const uint8_t *bytes, UniChar *buffer, CFIndex numChars);
+
 static bool __CFWantsToUseASCIICompatibleConversion = false;
 CF_INLINE UInt32 __CFGetASCIICompatibleFlag(void) { return __CFWantsToUseASCIICompatibleConversion; }
 
@@ -91,7 +98,7 @@ CF_PRIVATE void __CFSetCharToUniCharFunc(Boolean (*func)(UInt32 flags, UInt8 ch,
     }
 }
 
-CF_PRIVATE void __CFStrConvertBytesToUnicode(const uint8_t *bytes, UniChar *buffer, CFIndex numChars) {
+CF_PRIVATE_EXTERN void __CFStrConvertBytesToUnicode(const uint8_t *bytes, UniChar *buffer, CFIndex numChars) {
     CFIndex idx;
     for (idx = 0; idx < numChars; idx++) buffer[idx] = __CFCharToUniCharTable[bytes[idx]];
 }

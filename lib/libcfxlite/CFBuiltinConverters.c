@@ -33,6 +33,8 @@
 #include "CFStringEncodingConverterPriv.h"
 #include "CFInternal.h"
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+
 #define ParagraphSeparator 0x2029
 #define ASCIINewLine 0x0a
 static int8_t __CFMapsParagraphSeparator = -1;

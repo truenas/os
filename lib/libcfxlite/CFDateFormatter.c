@@ -40,6 +40,9 @@
 #include <math.h>
 #include <float.h>
 
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsign-compare"
+
 
 typedef CF_ENUM(CFIndex, CFDateFormatterAmbiguousYearHandling) {
     kCFDateFormatterAmbiguousYearFailToParse = 0, // fail the parse; the default formatter behavior
@@ -101,7 +104,7 @@ static Boolean useTemplatePatternGenerator(const char *localeName, void(^work)(U
 }
     
 
-CFStringRef CFDateFormatterCreateDateFormatFromTemplate(CFAllocatorRef allocator, CFStringRef tmplate, CFOptionFlags options, CFLocaleRef locale) {
+CFStringRef CFDateFormatterCreateDateFormatFromTemplate(CFAllocatorRef allocator, CFStringRef tmplate, CFOptionFlags options __unused, CFLocaleRef locale) {
     if (allocator) __CFGenericValidateType(allocator, CFAllocatorGetTypeID());
     if (locale) __CFGenericValidateType(locale, CFLocaleGetTypeID());
     Boolean tmplateIsString = (CFStringGetTypeID() == CFGetTypeID(tmplate));
@@ -683,16 +686,16 @@ static void __ResetUDateFormat(CFDateFormatterRef df, Boolean goingToHaveCustomF
             CFIndex cnt = CFStringGetLength(formatString);
             CFAssert1(cnt <= 1024, __kCFLogAssertion, "%s(): format string too long", __PRETTY_FUNCTION__);
             if (df->_format != formatString && cnt <= 1024) {
-                STACK_BUFFER_DECL(UChar, ubuffer, cnt);
+                STACK_BUFFER_DECL(UChar, ubuffer0, cnt);
                 const UChar *ustr = (UChar *)CFStringGetCharactersPtr((CFStringRef)formatString);
                 if (NULL == ustr) {
-                    CFStringGetCharacters(formatString, CFRangeMake(0, cnt), (UniChar *)ubuffer);
-                    ustr = ubuffer;
+                    CFStringGetCharacters(formatString, CFRangeMake(0, cnt), (UniChar *)ubuffer0);
+                    ustr = ubuffer0;
                 }
-                UErrorCode status = U_ZERO_ERROR;
+                UErrorCode status0 = U_ZERO_ERROR;
 //            __cficu_udat_applyPattern(df->_df, false, ustr, cnt, &status);
                 __cficu_udat_applyPattern(df->_df, false, ustr, cnt);
-                if (U_SUCCESS(status)) {
+                if (U_SUCCESS(status0)) {
                     if (df->_format) CFRelease(df->_format);
                     df->_format = (CFStringRef)CFStringCreateCopy(CFGetAllocator(df), formatString);
                 }
@@ -727,7 +730,9 @@ static const CFRuntimeClass __CFDateFormatterClass = {
     NULL,
     NULL,
     NULL,        //
-    __CFDateFormatterCopyDescription
+    __CFDateFormatterCopyDescription,
+	NULL,
+	NULL
 };
 
 static void __CFDateFormatterInitialize(void) {
@@ -1389,7 +1394,7 @@ static UDate __CFDateFormatterCorrectTimeToARangeAroundCurrentDate(UCalendar *ca
     return __CFDateFormatterCorrectTimeWithTarget(calendar, at, currEraOrCentury+offset, isEra, status);
 }
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_WINDOWS
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_FREEBSD
 static int32_t __CFDateFormatterGetMaxYearGivenJapaneseEra(UCalendar *calendar, int32_t era, UErrorCode *status) {
     int32_t years = 0;
     __cficu_ucal_clear(calendar);
@@ -1442,7 +1447,7 @@ static Boolean __CFDateFormatterHandleAmbiguousYear(CFDateFormatterRef formatter
             }
         }
     } else if (calendar_id == kCFCalendarIdentifierJapanese) { // ??? need more work
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_WINDOWS
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_FREEBSD
         __cficu_ucal_clear(cal);
         __cficu_ucal_set(cal, UCAL_ERA, 1);
         __cficu_udat_parseCalendar(df, cal, ustr, length, NULL, status);

@@ -32,6 +32,9 @@
 #include <math.h>
 #include <float.h>
 
+#undef CF_PRIVATE
+#define CF_PRIVATE static
+
 
 #if DEPLOYMENT_TARGET_WINDOWS
 #define isnan(A) _isnan(A)
@@ -60,7 +63,7 @@ static CFStringRef __CFBooleanCopyDescription(CFTypeRef cf) {
     return CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("<CFBoolean %p [%p]>{value = %s}"), cf, CFGetAllocator(cf), (boolean == kCFBooleanTrue) ? "true" : "false");
 }
 
-CF_PRIVATE CFStringRef __CFBooleanCopyFormattingDescription(CFTypeRef cf, CFDictionaryRef formatOptions) {
+CF_PRIVATE CFStringRef __CFBooleanCopyFormattingDescription(CFTypeRef cf, CFDictionaryRef formatOptions __unused) {
     CFBooleanRef boolean = (CFBooleanRef)cf;
     return (CFStringRef)CFRetain((boolean == kCFBooleanTrue) ? CFSTR("true") : CFSTR("false"));
 }
@@ -70,7 +73,7 @@ static CFHashCode __CFBooleanHash(CFTypeRef cf) {
     return (boolean == kCFBooleanTrue) ? _CFHashInt(1) : _CFHashInt(0);
 }
 
-static void __CFBooleanDeallocate(CFTypeRef cf) {
+static void __CFBooleanDeallocate(CFTypeRef cf __unused) {
     CFAssert(false, __kCFLogAssertion, "Deallocated CFBoolean!");
 }
 
@@ -85,10 +88,19 @@ static const CFRuntimeClass __CFBooleanClass = {
     NULL,
     __CFBooleanHash,
     __CFBooleanCopyFormattingDescription,
-    __CFBooleanCopyDescription
+    __CFBooleanCopyDescription,
+	NULL,
+	NULL	
 };
 
-CF_PRIVATE void __CFBooleanInitialize(void) {
+/* XXX these should be extern private */
+CF_EXPORT CFNumberType _CFNumberGetType2(CFNumberRef number);
+void __CFBooleanInitialize(void);
+CFStringRef __CFNumberCreateFormattingDescription(CFAllocatorRef allocator, CFTypeRef cf, CFDictionaryRef formatOptions __unused);
+void __CFNumberInitialize(void);
+
+
+void __CFBooleanInitialize(void) {
     __kCFBooleanTypeID = _CFRuntimeRegisterClass(&__CFBooleanClass);
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFBooleanTrue, __kCFBooleanTypeID);
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFBooleanFalse, __kCFBooleanTypeID);
@@ -138,7 +150,6 @@ static CFComparisonResult CFNumberCompare_old(struct __CFNumber_old * number1, s
 
 #endif
 
-
 #define __CFAssertIsNumber(cf) __CFGenericValidateType(cf, __kCFNumberTypeID)
 #define __CFAssertIsValidNumberType(type) CFAssert2((0 < type && type <= kCFNumberMaxType) || (type == kCFNumberSInt128Type), __kCFLogAssertion, "%s(): bad CFNumber type %d", __PRETTY_FUNCTION__, type);
 
@@ -151,7 +162,7 @@ static CFComparisonResult CFNumberCompare_old(struct __CFNumber_old * number1, s
 #define BITSFORDOUBLEPOSINF	((uint64_t)0x7ff0000000000000ULL)
 #define BITSFORDOUBLENEGINF	((uint64_t)0xfff0000000000000ULL)
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || __FreeBSD__
 #define FLOAT_POSITIVE_2_TO_THE_64	0x1.0p+64L
 #define FLOAT_NEGATIVE_2_TO_THE_127	-0x1.0p+127L
 #define FLOAT_POSITIVE_2_TO_THE_127	0x1.0p+127L
@@ -292,26 +303,25 @@ static const CFSInt128Struct neg_powersOf10[] = {
 static void emit128(char *buffer, const CFSInt128Struct *in, Boolean forcePlus) {
     CFSInt128Struct tmp = *in;
     if (isNeg128(&tmp)) {
-	neg128(&tmp, &tmp);
-	*buffer++ = '-';
+		neg128(&tmp, &tmp);
+		*buffer++ = '-';
     } else if (forcePlus) {
-	*buffer++ = '+';
+		*buffer++ = '+';
     }
     Boolean doneOne = false;
-    int idx;
-    for (idx = 0; idx < sizeof(powersOf10) / sizeof(powersOf10[0]); idx++) {
-	int count = 0;
+    for (unsigned long idx = 0; idx < sizeof(powersOf10) / sizeof(powersOf10[0]); idx++) {
+		int count = 0;
         while (cmp128(&powersOf10[idx], &tmp) <= 0) {
-	    add128(&tmp, &tmp, (CFSInt128Struct *)&neg_powersOf10[idx]);
-	    count++;
-	}
-	if (0 != count || doneOne) {
-	    *buffer++ = '0' + count;
-	    doneOne = true;
-	}
+			add128(&tmp, &tmp, (CFSInt128Struct *)&neg_powersOf10[idx]);
+			count++;
+		}
+		if (0 != count || doneOne) {
+			*buffer++ = '0' + count;
+			doneOne = true;
+		}
     }
     if (!doneOne) {
-	*buffer++ = '0';
+		*buffer++ = '0';
     }
     *buffer = '\0';
 }
@@ -389,7 +399,7 @@ static const struct {
     uint16_t lgByteSize:3;	// base-2 log byte size of public type
     uint16_t unused:6;
 } __CFNumberTypeTable[] = {
-    /* 0 */			{0, 0, 0, 0},
+    /* 0 */			{0, 0, 0, 0, 0},
 
     /* kCFNumberSInt8Type */	{kCFNumberSInt8Type, 0, 0, 0, 0},
     /* kCFNumberSInt16Type */	{kCFNumberSInt16Type, 0, 0, 1, 0},
@@ -437,9 +447,9 @@ CF_INLINE CFNumberType __CFNumberGetType(CFNumberRef num) {
 #define CVT128ToInt(SRC_TYPE, DST_TYPE, DST_MIN, DST_MAX) do { \
         SRC_TYPE sv; memmove(&sv, data, sizeof(SRC_TYPE)); \
 	DST_TYPE dv; Boolean noLoss = false; \
-	if (0 < sv.high || (0 == sv.high && (int64_t)DST_MAX < sv.low)) { \
+	if (0 < sv.high || (0 == sv.high && (uint64_t)DST_MAX < sv.low)) { \
 	    dv = DST_MAX; \
-	} else if (sv.high < -1 || (-1 == sv.high && sv.low < (int64_t)DST_MIN)) { \
+	} else if (sv.high < -1 || (-1 == sv.high && sv.low < (uint64_t)DST_MIN)) { \
 	    dv = DST_MIN; \
 	} else { \
 	    dv = (DST_TYPE)sv.low; \
@@ -467,7 +477,7 @@ static Boolean __CFNumberGetValue(CFNumberRef number, CFNumberType type, void *v
 	    if (0 == __CFNumberTypeTable[ntype].storageBit) {
 		CVT(int64_t, int8_t, INT8_MIN, INT8_MAX);
 	    } else {
-		CVT128ToInt(CFSInt128Struct, int8_t, INT8_MIN, INT8_MAX);
+			CVT128ToInt(CFSInt128Struct, int8_t, INT8_MIN, INT8_MAX);
 	    }
 	}
 	return true;
@@ -892,7 +902,7 @@ CFLog(kCFLogLevelWarning, CFSTR("*** TEST FAIL in __CFNumberCopyFormattingDescri
     return result;
 }
 
-CF_PRIVATE CFStringRef __CFNumberCreateFormattingDescription(CFAllocatorRef allocator, CFTypeRef cf, CFDictionaryRef formatOptions) {
+CFStringRef __CFNumberCreateFormattingDescription(CFAllocatorRef allocator, CFTypeRef cf, CFDictionaryRef formatOptions __unused) {
     CFNumberRef number = (CFNumberRef)cf;
     CFNumberType type = __CFNumberGetType(number);
     if (__CFNumberTypeTable[type].floatBit) {
@@ -905,7 +915,7 @@ CF_PRIVATE CFStringRef __CFNumberCreateFormattingDescription(CFAllocatorRef allo
     return CFStringCreateWithFormat(allocator, NULL, CFSTR("%s"), buffer);
 }
 
-static CFStringRef __CFNumberCopyFormattingDescription_new(CFTypeRef cf, CFDictionaryRef formatOptions) {
+static CFStringRef __CFNumberCopyFormattingDescription_new(CFTypeRef cf, CFDictionaryRef formatOptions __unused) {
     CFNumberRef number = (CFNumberRef)cf;
     CFNumberType type = __CFNumberGetType(number);
     if (__CFNumberTypeTable[type].floatBit) {
@@ -1003,11 +1013,13 @@ static const CFRuntimeClass __CFNumberClass = {
     __CFNumberEqual,
     __CFNumberHash,
     __CFNumberCopyFormattingDescription,
-    __CFNumberCopyDescription
+    __CFNumberCopyDescription,
+	NULL,
+	NULL	
 };
 
 
-CF_PRIVATE void __CFNumberInitialize(void) {
+void __CFNumberInitialize(void) {
     __kCFNumberTypeID = _CFRuntimeRegisterClass(&__CFNumberClass);
 
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFNumberNaN, __kCFNumberTypeID);
@@ -1216,7 +1228,7 @@ CFLog(kCFLogLevelWarning, CFSTR("*** TEST FAIL 2 in CFNumberGetValue: BYTES NOT 
     return r;
 }
 
-static CFComparisonResult CFNumberCompare_new(CFNumberRef number1, CFNumberRef number2, void *context) {
+static CFComparisonResult CFNumberCompare_new(CFNumberRef number1, CFNumberRef number2, void *context __unused) {
     CF_OBJC_FUNCDISPATCHV(__kCFNumberTypeID, CFComparisonResult, (NSNumber *)number1, compare:(NSNumber *)number2);
     CF_OBJC_FUNCDISPATCHV(__kCFNumberTypeID, CFComparisonResult, (NSNumber *)number2, _reverseCompare:(NSNumber *)number1);
     __CFAssertIsNumber(number1);

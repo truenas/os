@@ -49,6 +49,11 @@
 extern void _CFGetFrameworkPath(wchar_t *path, int maxLength);
 #endif
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wpointer-arith"
+#pragma clang diagnostic ignored "-Wcast-align"
+
+
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED
 #define __kCFCharacterSetDir "/System/Library/CoreServices"
 #elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_EMBEDDED_MINI
@@ -122,7 +127,7 @@ static const void *__CFGetSectDataPtr(const char *segname, const char *sectname,
 
 // Memory map the file
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 CF_INLINE void __CFUniCharCharacterSetPath(char *cpath) {
 #elif DEPLOYMENT_TARGET_WINDOWS
 CF_INLINE void __CFUniCharCharacterSetPath(wchar_t *wpath) {
@@ -186,7 +191,7 @@ void __AddBitmapStateForName(const wchar_t *bitmapName) {
 }
 #endif
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 static bool __CFUniCharLoadBytesFromFile(const char *fileName, const void **bytes, int64_t *fileSize) {
 #elif DEPLOYMENT_TARGET_WINDOWS
 static bool __CFUniCharLoadBytesFromFile(const wchar_t *fileName, const void **bytes, int64_t *fileSize) {
@@ -252,7 +257,7 @@ static bool __CFUniCharLoadBytesFromFile(const wchar_t *fileName, const void **b
 
 #endif // USE_MACHO_SEGMENT
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 static bool __CFUniCharLoadFile(const char *bitmapName, const void **bytes, int64_t *fileSize) {
 #elif DEPLOYMENT_TARGET_WINDOWS
 static bool __CFUniCharLoadFile(const wchar_t *bitmapName, const void **bytes, int64_t *fileSize) {
@@ -266,7 +271,7 @@ static bool __CFUniCharLoadFile(const wchar_t *bitmapName, const void **bytes, i
 
     return *bytes ? true : false;
 #else
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     char cpath[MAXPATHLEN];
     __CFUniCharCharacterSetPath(cpath);
     strlcat(cpath, bitmapName, MAXPATHLEN);
@@ -287,9 +292,11 @@ static bool __CFUniCharLoadFile(const wchar_t *bitmapName, const void **bytes, i
 }
 
 // Bitmap functions
+#ifdef SHOW_UNUSED
 CF_INLINE bool isControl(UTF32Char theChar, uint16_t charset, const void *data) { // ISO Control
     return (((theChar <= 0x001F) || (theChar >= 0x007F && theChar <= 0x009F)) ? true : false);
 }
+#endif
 
 CF_INLINE bool isWhitespace(UTF32Char theChar, uint16_t charset, const void *data) { // Space
     return (((theChar == 0x0020) || (theChar == 0x0009) || (theChar == 0x00A0) || (theChar == 0x1680) || (theChar >= 0x2000 && theChar <= 0x200B) || (theChar == 0x202F) || (theChar == 0x205F) || (theChar == 0x3000)) ? true : false);
@@ -346,7 +353,7 @@ static __CFUniCharBitmapData *__CFUniCharBitmapDataArray = NULL;
 
 static CFSpinLock_t __CFUniCharBitmapLock = CFSpinLockInit;
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #if !defined(CF_UNICHAR_BITMAP_FILE)
 #if USE_MACHO_SEGMENT
 #define CF_UNICHAR_BITMAP_FILE "__csbitmaps"
@@ -430,10 +437,12 @@ static bool __CFUniCharLoadBitmapData(void) {
     return true;
 }
 
-CF_PRIVATE const char *__CFUniCharGetUnicodeVersionString(void) {
+#ifdef SHOW_UNUSED
+static inline const char *__CFUniCharGetUnicodeVersionString(void) {
     if (NULL == __CFUniCharBitmapDataArray) __CFUniCharLoadBitmapData();
     return __CFUniCharUnicodeVersionString;
 }
+#endif
 
 bool CFUniCharIsMemberOf(UTF32Char theChar, uint32_t charset) {
     charset = __CFUniCharMapCompatibilitySetID(charset);
@@ -651,7 +660,7 @@ static const void **__CFUniCharMappingTables = NULL;
 
 static CFSpinLock_t __CFUniCharMappingTableLock = CFSpinLockInit;
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #if __CF_BIG_ENDIAN__
 #if USE_MACHO_SEGMENT
 #define MAPPING_TABLE_FILE "__data"
@@ -1015,7 +1024,8 @@ caseFoldRetry:
     }
 }
 
-CFIndex CFUniCharMapTo(UniChar theChar, UniChar *convertedChar, CFIndex maxLength, uint16_t ctype, uint32_t flags) {
+#ifdef SHOW_UNUSED
+static CFIndex CFUniCharMapTo(UniChar theChar, UniChar *convertedChar, CFIndex maxLength, uint16_t ctype, uint32_t flags) {
     if (ctype == kCFUniCharCaseFold + 1) { // kCFUniCharDecompose
         if (CFUniCharIsDecomposableCharacter(theChar, false)) {
             UTF32Char buffer[MAX_DECOMPOSED_LENGTH];
@@ -1032,6 +1042,7 @@ CFIndex CFUniCharMapTo(UniChar theChar, UniChar *convertedChar, CFIndex maxLengt
         return CFUniCharMapCaseTo(theChar, convertedChar, maxLength, ctype, flags, NULL);
     }
 }
+#endif
 
 CF_INLINE bool __CFUniCharIsMoreAbove(UTF16Char *buffer, CFIndex length) {
     UTF32Char currentChar;
@@ -1180,7 +1191,7 @@ static int __CFUniCharUnicodePropertyTableCount = 0;
 
 static CFSpinLock_t __CFUniCharPropTableLock = CFSpinLockInit;
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #if USE_MACHO_SEGMENT
 #define PROP_DB_FILE "__properties"
 #else

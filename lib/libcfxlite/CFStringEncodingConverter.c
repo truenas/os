@@ -37,6 +37,8 @@
 #include "CFStringEncodingConverterPriv.h"
 #include <stdlib.h>
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+
 typedef CFIndex (*_CFToBytesProc)(const void *converter, uint32_t flags, const UniChar *characters, CFIndex numChars, uint8_t *bytes, CFIndex maxByteLen, CFIndex *usedByteLen);
 typedef CFIndex (*_CFToUnicodeProc)(const void *converter, uint32_t flags, const uint8_t *bytes, CFIndex numBytes, UniChar *characters, CFIndex maxCharLen, CFIndex *usedCharLen);
 
@@ -604,7 +606,7 @@ static const _CFEncodingConverter *__CFGetConverter(uint32_t encoding) {
 	case kCFStringEncodingUTF8: commonConverterSlot = (const _CFEncodingConverter **)&(commonConverters[0]); break;
 
 	    /* the swith here should avoid possible bootstrap issues in the default: case below when invoked from CFStringGetSystemEncoding() */
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 	case kCFStringEncodingMacRoman: commonConverterSlot = (const _CFEncodingConverter **)&(commonConverters[1]); break;
 #elif DEPLOYMENT_TARGET_WINDOWS
 	case kCFStringEncodingWindowsLatin1: commonConverterSlot = (const _CFEncodingConverter **)(&(commonConverters[1])); break;
@@ -853,11 +855,11 @@ uint32_t CFStringEncodingBytesToUnicode(uint32_t encoding, uint32_t flags, const
     return theResult;
 }
 
-CF_PRIVATE bool CFStringEncodingIsValidEncoding(uint32_t encoding) {
+CF_PRIVATE_EXTERN bool CFStringEncodingIsValidEncoding(uint32_t encoding) {
     return (CFStringEncodingGetConverter(encoding) ? true : false);
 }
 
-CF_PRIVATE CFIndex CFStringEncodingCharLengthForBytes(uint32_t encoding, uint32_t flags, const uint8_t *bytes, CFIndex numBytes) {
+CF_PRIVATE_EXTERN CFIndex CFStringEncodingCharLengthForBytes(uint32_t encoding, uint32_t flags, const uint8_t *bytes, CFIndex numBytes) {
     const _CFEncodingConverter *converter = __CFGetConverter(encoding);
 
     if (converter) {
@@ -901,11 +903,11 @@ CF_PRIVATE CFIndex CFStringEncodingCharLengthForBytes(uint32_t encoding, uint32_
     return 0;
 }
 
-CF_PRIVATE CFIndex CFStringEncodingByteLengthForCharacters(uint32_t encoding, uint32_t flags, const UniChar *characters, CFIndex numChars) {
+CF_PRIVATE_EXTERN CFIndex CFStringEncodingByteLengthForCharacters(uint32_t encoding, uint32_t flags, const UniChar *characters, CFIndex numChars) {
     const _CFEncodingConverter *converter = __CFGetConverter(encoding);
 
     if (converter) {
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
         if (kCFStringEncodingConverterICU == converter->definition->encodingClass) return __CFStringEncodingICUByteLength((const char *)converter->toBytes, flags, characters, numChars);
 #endif
 
@@ -936,7 +938,7 @@ void CFStringEncodingRegisterFallbackProcedures(uint32_t encoding, CFStringEncod
     }
 }
 
-CF_PRIVATE const CFStringEncodingConverter *CFStringEncodingGetConverter(uint32_t encoding) {
+CF_PRIVATE_EXTERN const CFStringEncodingConverter *CFStringEncodingGetConverter(uint32_t encoding) {
     const _CFEncodingConverter *converter = __CFGetConverter(encoding);
 
     return ((NULL == converter) ? NULL : converter->definition);
@@ -984,13 +986,13 @@ static void __CFStringEncodingFliterDupes(CFStringEncoding *encodings, CFIndex n
     }
 }
 
-CF_PRIVATE const CFStringEncoding *CFStringEncodingListOfAvailableEncodings(void) {
+CF_PRIVATE_EXTERN const CFStringEncoding *CFStringEncodingListOfAvailableEncodings(void) {
     static const CFStringEncoding *encodings = NULL;
 
     if (NULL == encodings) {
         CFStringEncoding *list = (CFStringEncoding *)__CFBuiltinEncodings;
         CFIndex numICUConverters = 0, numPlatformConverters = 0;
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
         CFStringEncoding *icuConverters = __CFStringEncodingCreateICUEncodings(NULL, &numICUConverters);
 #else
         CFStringEncoding *icuConverters = NULL;

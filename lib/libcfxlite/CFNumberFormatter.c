@@ -35,6 +35,7 @@
 #include <math.h>
 #include <float.h>
 
+#pragma clang diagnostic ignored "-Wcast-align"
 
 static void __CFNumberFormatterCustomize(CFNumberFormatterRef formatter);
 static CFStringRef __CFNumberFormatterCreateCompressedString(CFStringRef inString, Boolean isFormat, CFRange *rangep);
@@ -84,7 +85,9 @@ static const CFRuntimeClass __CFNumberFormatterClass = {
     NULL,
     NULL,
     NULL,	// 
-    __CFNumberFormatterCopyDescription
+    __CFNumberFormatterCopyDescription,
+	NULL,
+	NULL
 };
 
 static void __CFNumberFormatterInitialize(void) {
@@ -998,10 +1001,10 @@ CFTypeRef CFNumberFormatterCopyProperty(CFNumberFormatterRef formatter, CFString
 	    if (NULL == cstr) {
 	        return NULL;
 	    }
-	    UErrorCode status = U_ZERO_ERROR;
-	    UNumberFormat *nf = __cficu_unum_open(UNUM_CURRENCY, NULL, 0, cstr, NULL, &status);
+	    UErrorCode status0 = U_ZERO_ERROR;
+	    UNumberFormat *nf = __cficu_unum_open(UNUM_CURRENCY, NULL, 0, cstr, NULL, &status0);
 	    if (NULL != nf) {
-		cnt = __cficu_unum_getTextAttribute(nf, UNUM_CURRENCY_CODE, ubuffer, BUFFER_SIZE, &status);
+		cnt = __cficu_unum_getTextAttribute(nf, UNUM_CURRENCY_CODE, ubuffer, BUFFER_SIZE, &status0);
 		__cficu_unum_close(nf);
 	    }
 	}

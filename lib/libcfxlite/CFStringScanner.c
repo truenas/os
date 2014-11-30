@@ -63,7 +63,7 @@ CF_INLINE UniChar __CFStringGetFirstNonSpaceCharacterFromInlineBuffer(CFStringIn
 
 /* result is int64_t or int, depending on doLonglong
 */
-CF_PRIVATE Boolean __CFStringScanInteger(CFStringInlineBuffer *buf, CFTypeRef locale, SInt32 *indexPtr, Boolean doLonglong, void *result) {
+CF_PRIVATE_EXTERN Boolean __CFStringScanInteger(CFStringInlineBuffer *buf, CFTypeRef locale __unused, SInt32 *indexPtr, Boolean doLonglong, void *result) {
     Boolean doingLonglong = false;	/* Set to true if doLonglong, and we overflow an int... */
     Boolean neg = false;
     int intResult = 0;
@@ -175,7 +175,7 @@ static const unsigned char __CFNumberSet[16] = {
     0X00, // 0, 0, 0, 0, 0, 0, 0, 0  //  x   y   z   {   |   }   ~  del
 };
 
-CF_PRIVATE Boolean __CFStringScanDouble(CFStringInlineBuffer *buf, CFTypeRef locale, SInt32 *indexPtr, double *resultPtr) {
+CF_PRIVATE_EXTERN Boolean __CFStringScanDouble(CFStringInlineBuffer *buf, CFTypeRef locale __unused, SInt32 *indexPtr, double *resultPtr) {
     #define STACK_BUFFER_SIZE 256
     #define ALLOC_CHUNK_SIZE 256 // first and subsequent malloc size.  Should be greater than STACK_BUFFER_SIZE
     char localCharBuffer[STACK_BUFFER_SIZE];
