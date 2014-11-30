@@ -20,7 +20,7 @@ helper.h launchd_helperUser.c helperServer.h: helper.defs machine
 job.h jobUser.c jobServer.h: job.defs machine
 	mig ${MIG_FLAGS} -sheader jobServer.h ${.CURDIR}/job.defs
 
-SRCS=  jobUser.c launchd_helperUser.c
+SRCS=  jobUser.c launchd_helperUser.c launchd_helperServer.c
 SRCS+= libbootstrap.c liblaunch.c libvproc.c
 
 machine:
