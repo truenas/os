@@ -1048,8 +1048,8 @@ void __CFInitialize(void) {
 #ifdef notyet
         __CFStorageInitialize();
         __CFTreeInitialize();
-        __CFURLInitialize();
 #endif        
+        __CFURLInitialize();
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS
         __CFBundleInitialize();
         __CFPFactoryInitialize();
