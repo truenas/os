@@ -621,6 +621,7 @@ ctlferegister(struct cam_periph *periph, void *arg)
 			  "notify CCBs, status 0x%x\n", __func__, status);
 		return (CAM_REQ_CMP_ERR);
 	}
+	STAILQ_INSERT_TAIL(&bus_softc->lun_softc_list, softc, links);
 	return (CAM_REQ_CMP);
 }
 
@@ -1553,7 +1554,7 @@ ctlfe_onoffline(void *arg, int online)
 		printf("%s: unable to create path!\n", __func__);
 		return;
 	}
-	ccb = (union ccb *)malloc(sizeof(*ccb), M_TEMP, M_NOWAIT | M_ZERO);
+	ccb = xpt_alloc_ccb_nowait();
 	if (ccb == NULL) {
 		printf("%s: unable to malloc CCB!\n", __func__);
 		xpt_free_path(path);
@@ -1699,10 +1700,7 @@ ctlfe_onoffline(void *arg, int online)
 	}
 
 	xpt_free_path(path);
-
-	free(ccb, M_TEMP);
-
-	return;
+	xpt_free_ccb(ccb);
 }
 
 static void
@@ -1773,9 +1771,6 @@ ctlfe_online(void *arg)
 		       "cam_periph_alloc()\n", __func__, (entry != NULL) ?
 		       entry->status_text : "Unknown", status);
 		free(lun_softc, M_CTLFE);
-	} else {
-		STAILQ_INSERT_TAIL(&bus_softc->lun_softc_list, lun_softc, links);
-		ctlfe_onoffline(arg, /*online*/ 1);
 	}
 
 	xpt_free_path(path);
@@ -1881,8 +1876,6 @@ ctlfe_lun_enable(void *arg, int lun_id)
 		       "cam_periph_alloc()\n", __func__, (entry != NULL) ?
 		       entry->status_text : "Unknown", status);
 		free(softc, M_CTLFE);
-	} else {
-		STAILQ_INSERT_TAIL(&bus_softc->lun_softc_list, softc, links);
 	}
 
 	xpt_free_path(path);
