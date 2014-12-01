@@ -76,9 +76,7 @@
 #include "vproc_internal.h"
 #include "jobServer.h"
 #include "job_reply.h"
-#if 0
 #include <xpc/launchd.h>
-#endif
 #include "shim.h"
 static mach_port_t ipc_port_set;
 static mach_port_t demand_port_set;
@@ -971,11 +969,13 @@ launchd_exc_runtime_once(mach_port_t port, mach_msg_size_t rcv_msg_size, mach_ms
 }
 
 void
-runtime_record_caller_creds(audit_token_t *token)
+runtime_record_caller_creds(audit_token_t *token __unused)
 {
+#ifdef notyet
 	(void)memcpy(&ldc_token, token, sizeof(*token));
 	audit_token_to_au32(*token, NULL, &ldc.euid,&ldc.egid, &ldc.uid, &ldc.gid,
-		&ldc.pid, &ldc.asid, NULL);
+						&ldc.pid, &ldc.asid, NULL);
+#endif
 }
 
 struct ldcred *
