@@ -15,7 +15,7 @@ MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck 
 CFLAGS+= -I${.CURDIR}/../../contrib/openbsm
 
-helper.h launchd_helperUser.c helperServer.h: helper.defs machine
+helper.h launchd_helperUser.c launchd_helperServer.c helperServer.h: helper.defs machine
 	mig ${MIG_FLAGS} -header helper.h -sheader helperServer.h ${.CURDIR}/helper.defs
 job.h jobUser.c jobServer.h: job.defs machine
 	mig ${MIG_FLAGS} -sheader jobServer.h ${.CURDIR}/job.defs
