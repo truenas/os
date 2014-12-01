@@ -95,10 +95,7 @@
 #include <time.h>
 #include <libinfo.h>
 #include <os/assumes.h>
-#if 0
 #include <xpc/launchd.h>
-#endif
-#include <xpc/xpc.h>
 #include <asl.h>
 #include <_simple.h>
 #include <mach/mach_vm.h>
@@ -119,12 +116,9 @@
 #include <responsibility.h>
 #endif
 
-#if __FreeBSD__
-extern int gL1CacheEnabled;
-#elif !TARGET_OS_EMBEDDED
+#if !TARGET_OS_EMBEDDED
 extern int gL1CacheEnabled;
 #endif
-
 
 #if HAVE_SYSTEMSTATS
 #include <systemstats/systemstats.h>
@@ -839,9 +833,6 @@ static void job_update_jetsam_memory_limit(job_t j, int32_t limit);
 static bool job_import_defaults(launch_data_t pload);
 #endif
 
-#ifdef __FreeBSD__
-
-#endif
 
 static struct priority_properties_t {
 	long long band;
@@ -7059,7 +7050,9 @@ jobmgr_find_xpc_per_session_domain(jobmgr_t jm, au_asid_t asid)
 		(void)jobmgr_assumes_zero(jmi, launchd_mport_make_send(root_jobmgr->jm_port));
 		jmi->shortdesc = "per-session";
 		jmi->req_bsport = root_jobmgr->jm_port;
+#ifdef notyet
 		(void)jobmgr_assumes_zero(jmi, audit_session_port(asid, &jmi->req_asport));
+#endif
 		jmi->req_asid = asid;
 		jmi->req_euid = -1;
 		jmi->req_egid = -1;
@@ -8826,12 +8819,14 @@ jobmgr_lookup_per_user_context_internal(job_t j, uid_t which_user, mach_port_t *
 
 			if (setaudit_addr(&auinfo, sizeof(auinfo)) == 0) {
 				job_log(ji, LOG_DEBUG, "Created new security session for per-user launchd: %u", auinfo.ai_asid);
+#ifdef notyet
 				(void)job_assumes(ji, (ji->asport = audit_session_self()) != MACH_PORT_NULL);
 
 				/* Kinda lame that we have to do this, but we can't create an
 				 * audit session without joining it.
 				 */
 				(void)job_assumes(ji, audit_session_join(launchd_audit_port));
+#endif
 				ji->asid = auinfo.ai_asid;
 			} else {
 				job_log(ji, LOG_WARNING, "Could not set audit session!");
@@ -10330,7 +10325,7 @@ xpc_domain_set_environment(job_t j, mach_port_t rp, mach_port_t bsport, mach_por
 		jobmgr_remove(jm);
 		return BOOTSTRAP_NO_MEMORY;
 	}
-
+#ifdef notyet
 #if !TARGET_OS_EMBEDDED
 	if (jobmgr_assumes_zero(jm, audit_session_port(ldc->asid, &jm->req_asport)) != 0) {
 		jm->error = EPERM;
@@ -10341,7 +10336,7 @@ xpc_domain_set_environment(job_t j, mach_port_t rp, mach_port_t bsport, mach_por
 #else
 	jm->req_asport = MACH_PORT_DEAD;
 #endif
-
+#endif
 	struct waiting4attach *w4ai = NULL;
 	struct waiting4attach *w4ait = NULL;
 	LIST_FOREACH_SAFE(w4ai, &_launchd_domain_waiters, le, w4ait) {
