@@ -5,6 +5,7 @@ LIB=	xpc
 
 
 BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
+BASE_INCLUDE= -I${.CURDIR}/../libnv
 BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I.
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 CFLAGS+= ${BASE_INCLUDE} -fblocks

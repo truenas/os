@@ -6,33 +6,51 @@
 #include <machine/atomic.h>
 
 
-struct _xpc_type_s {
-};
+__private_extern__ int
+nvlist_exists_object(const nvlist_t *nv, const char *key)
+{
 
-typedef const struct _xpc_type_s xt;
-xt _xpc_type_array;
-xt _xpc_type_bool;
-xt _xpc_type_connection;
-xt _xpc_type_data;
-xt _xpc_type_date;
-xt _xpc_type_dictionary;
-xt _xpc_type_endpoint;
-xt _xpc_type_error;
-xt _xpc_type_fd;
-xt _xpc_type_int64;
-xt _xpc_type_uint64;
-xt _xpc_type_shmem;
-xt _xpc_type_string;
-xt _xpc_type_uuid;
+	return (nvlist_exists_type(nv, key, NV_TYPE_PTR));
+}
 
+__private_extern__ void
+nvlist_add_object(nvlist_t *nv, const char *key, xpc_object_t xobj)
+{
 
-struct _xpc_bool_s {
-};
+	nvlist_add_number_type(nv, key, (uint64_t)xobj, NV_TYPE_PTR);
+}
 
-typedef const struct _xpc_bool_s xb;
+__private_extern__ xpc_object_t
+nvlist_get_object(const nvlist_t *nv, const char *key)
+{
 
-xb _xpc_bool_true;
-xb _xpc_bool_false;
+	return ((xpc_object_t)nvlist_get_number(nv, key));
+}
+
+__private_extern__ xpc_object_t
+nvlist_move_object(const nvlist_t *nv, const char *key)
+{
+
+	return ((xpc_object_t)nvlist_get_number(nv, key));
+}
+
+static void
+xpc_nvlist_destroy(nvlist_t *nv)
+{
+	void *cookiep;
+	const char *key;
+	xpc_object_t tmp;
+	int type;
+
+	cookiep = NULL;
+	while ((key = nvlist_next(nv, &type, &cookiep)) != NULL) {
+		if (nvlist_exists_type(nv, key, NV_TYPE_PTR)) {
+			tmp = (void *)nvlist_get_number(nv, key);
+			xpc_release(tmp);
+		}
+	}
+	nvlist_destroy(nv);
+}
 
 static void
 xpc_object_destroy(struct xpc_object *xo)
@@ -41,10 +59,9 @@ xpc_object_destroy(struct xpc_object *xo)
 	if (xo->xo_nv_packed != NULL)
 		free(xo->xo_nv_packed);
 	if (xo->xo_nv != NULL)
-		nvlist_destroy(xo->xo_nv);
+		xpc_nvlist_destroy(xo->xo_nv);
 	free(xo);
 }
-	
 
 xpc_object_t
 xpc_retain(xpc_object_t obj)
@@ -65,35 +82,6 @@ xpc_release(xpc_object_t obj)
 	if (atomic_fetchadd_int(&xo->xo_refcnt, -1) > 1)
 		return;
 	xpc_object_destroy(xo);
-}
-
-static xpc_type_t xpc_typemap[] = {
-	NULL,
-	XPC_TYPE_DICTIONARY,
-	XPC_TYPE_ARRAY,
-	XPC_TYPE_BOOL,
-	XPC_TYPE_CONNECTION,
-	XPC_TYPE_ENDPOINT,
-	NULL,
-	NULL,
-	XPC_TYPE_INT64,
-	XPC_TYPE_UINT64,
-	XPC_TYPE_DATE,
-	XPC_TYPE_DATA,
-	XPC_TYPE_STRING,
-	XPC_TYPE_UUID,
-	XPC_TYPE_FD,
-	XPC_TYPE_SHMEM,
-	XPC_TYPE_ERROR,
-};
-
-xpc_type_t
-xpc_get_type(xpc_object_t obj)
-{
-	struct xpc_object *xo;
-
-	xo = obj;
-	return (xpc_typemap[xo->xo_xpc_type]);
 }
 
 static const char *xpc_errors[] = {

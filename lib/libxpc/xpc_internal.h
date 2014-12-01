@@ -43,6 +43,13 @@ struct xpc_object {
 #define xo_str xo_u.str
 #define xo_bool xo_u.b
 #define xo_uint xo_u.ui
+#define xo_int xo_u.i
 #define xo_ptr xo_u.ptr
 __private_extern__ struct xpc_object *_xpc_prim_create(int type, xpc_u value, size_t size);
 __private_extern__ nvlist_t *xpc2nv(xpc_object_t obj);
+__private_extern__ void nv_release_entry(nvlist_t *nv, const char *key);
+__private_extern__ int nvlist_exists_object(const nvlist_t *nv, const char *key);
+__private_extern__ void nvlist_add_object(nvlist_t *nv, const char *key, xpc_object_t xobj);
+__private_extern__ xpc_object_t nvlist_get_object(const nvlist_t *nv, const char *key);
+__private_extern__ xpc_object_t nvlist_move_object(const nvlist_t *nv, const char *key);
+	

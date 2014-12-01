@@ -25,10 +25,8 @@ xpc_array_create(const xpc_object_t *objects, size_t count)
 void
 xpc_array_set_value(xpc_object_t xarray, size_t index, xpc_object_t value)
 {
-	struct xpc_object *xo, *xotmp;
-	const xpc_object_t *tmp;
+	struct xpc_object *xo;
 	char buf[9];
-	size_t size;
 
 	xo = xarray;
 	if (index >= (size_t)xo->xo_size)
@@ -36,13 +34,9 @@ xpc_array_set_value(xpc_object_t xarray, size_t index, xpc_object_t value)
 	
 	snprintf(buf, 8, "%u", (uint32_t)index);
 
-	if (nvlist_exists_type(xo->xo_nv, buf, NV_TYPE_BINARY)) {
-		tmp = nvlist_get_binary(xo->xo_nv, buf, &size);
-		xotmp = *tmp;
-		xpc_release(xotmp);
-	}
+	nv_release_entry(xo->xo_nv, buf);
 	xpc_retain(value);
-	nvlist_add_binary(xo->xo_nv, buf, &value, sizeof(uint64_t));
+	nvlist_add_object(xo->xo_nv, buf, value);
 }
 	
 void
@@ -55,7 +49,7 @@ xpc_array_append_value(xpc_object_t xarray, xpc_object_t value)
 	snprintf(buf, 8, "%u", (uint32_t)xo->xo_size);
 	xo->xo_size++;
 	xpc_retain(value);
-	nvlist_add_binary(xo->xo_nv, buf, &value, sizeof(uint64_t));
+	nvlist_add_object(xo->xo_nv, buf, value);
 }
 
 
@@ -63,16 +57,12 @@ xpc_object_t
 xpc_array_get_value(xpc_object_t xarray, size_t index)
 {
 	struct xpc_object *xo;
-	const xpc_object_t *tmp;
 	char buf[9];
-	size_t size;
 
 	snprintf(buf, 8, "%u", (uint32_t)index);
 
 	xo = xarray;
-	if ((tmp = nvlist_get_binary(xo->xo_nv, buf, &size)) != NULL)
-		return (*tmp);
-	return (NULL);
+	return (nvlist_get_object(xo->xo_nv, buf));
 }
 
 void
@@ -87,7 +77,8 @@ xpc_array_set_bool(xpc_object_t xarray, size_t index, bool value)
 	xo = xarray;
 	val.b = value;
 	xotmp = _xpc_prim_create(_XPC_TYPE_BOOL, val, 0);
-	nvlist_add_binary(xo->xo_nv, buf, &xotmp, sizeof(uint64_t));
+	nv_release_entry(xo->xo_nv, buf);
+	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
 
 
@@ -103,7 +94,8 @@ xpc_array_set_int64(xpc_object_t xarray, size_t index, int64_t value)
 	xo = xarray;
 	val.i = value;
 	xotmp = _xpc_prim_create(_XPC_TYPE_INT64, val, 0);
-	nvlist_add_binary(xo->xo_nv, buf, &xotmp, sizeof(uint64_t));
+	nv_release_entry(xo->xo_nv, buf);
+	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
 
 void
@@ -118,8 +110,8 @@ xpc_array_set_uint64(xpc_object_t xarray, size_t index, uint64_t value)
 	xo = xarray;
 	val.ui = value;
 	xotmp = _xpc_prim_create(_XPC_TYPE_UINT64, val, 0);
-	nvlist_add_binary(xo->xo_nv, buf, &xotmp, sizeof(uint64_t));	
-
+	nv_release_entry(xo->xo_nv, buf);
+	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
 
 
@@ -135,5 +127,6 @@ xpc_array_set_string(xpc_object_t xarray, size_t index, const char *string)
 	xo = xarray;
 	val.str = strdup(string);
 	xotmp = _xpc_prim_create(_XPC_TYPE_STRING, val, 0);
-	nvlist_add_binary(xo->xo_nv, buf, &xotmp, sizeof(uint64_t));
+	nv_release_entry(xo->xo_nv, buf);
+	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
