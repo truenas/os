@@ -16,7 +16,8 @@ CFLAGS+= -DHAVE_INTTYPES_H
 LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
 LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
 LDFLAGS+= -L${.CURDIR}/../../lib/libosxsupport -losxsupport
-LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach -lutil
+LDFLAGS+= -L${.CURDIR}/../../lib/libxpc -lxpc
+LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach -lutil -lnv
 LDFLAGS+= -pthread
 
 jobServer.h jobServer.c job.h: job.defs helper.h
