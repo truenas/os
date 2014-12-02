@@ -31,7 +31,7 @@ xpc_array_set_value(xpc_object_t xarray, size_t index, xpc_object_t value)
 	xo = xarray;
 	if (index >= (size_t)xo->xo_size)
 		return;
-	
+
 	snprintf(buf, 8, "%u", (uint32_t)index);
 
 	nv_release_entry(xo->xo_nv, buf);
@@ -71,13 +71,21 @@ xpc_array_set_bool(xpc_object_t xarray, size_t index, bool value)
 	struct xpc_object *xo, *xotmp;
 	char buf[9];
 	xpc_u val;
-
-	snprintf(buf, 8, "%u", (uint32_t)index);
+	uint32_t eidx;
 
 	xo = xarray;
+	if (index == XPC_ARRAY_APPEND) {
+		eidx = xo->xo_size;
+		xo->xo_size++;
+	} else
+		eidx = (uint32_t)index;
+
+	snprintf(buf, 8, "%u", (uint32_t)eidx);
+
 	val.b = value;
 	xotmp = _xpc_prim_create(_XPC_TYPE_BOOL, val, 0);
-	nv_release_entry(xo->xo_nv, buf);
+	if (index != XPC_ARRAY_APPEND)
+		nv_release_entry(xo->xo_nv, buf);
 	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
 
@@ -88,13 +96,20 @@ xpc_array_set_int64(xpc_object_t xarray, size_t index, int64_t value)
 	struct xpc_object *xo, *xotmp;
 	char buf[9];
 	xpc_u val;
-
-	snprintf(buf, 8, "%u", (uint32_t)index);
+	uint32_t eidx;
 
 	xo = xarray;
+	if (index == XPC_ARRAY_APPEND) {
+		eidx = xo->xo_size;
+		xo->xo_size++;
+	} else
+		eidx = (uint32_t)index;
+
+	snprintf(buf, 8, "%u", (uint32_t)eidx);
 	val.i = value;
 	xotmp = _xpc_prim_create(_XPC_TYPE_INT64, val, 0);
-	nv_release_entry(xo->xo_nv, buf);
+	if (index != XPC_ARRAY_APPEND)
+		nv_release_entry(xo->xo_nv, buf);
 	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
 
@@ -104,13 +119,20 @@ xpc_array_set_uint64(xpc_object_t xarray, size_t index, uint64_t value)
 	struct xpc_object *xo, *xotmp;
 	char buf[9];
 	xpc_u val;
-
-	snprintf(buf, 8, "%u", (uint32_t)index);
+	uint32_t eidx;
 
 	xo = xarray;
+	if (index == XPC_ARRAY_APPEND) {
+		eidx = xo->xo_size;
+		xo->xo_size++;
+	} else
+		eidx = (uint32_t)index;
+
+	snprintf(buf, 8, "%u", eidx);
 	val.ui = value;
 	xotmp = _xpc_prim_create(_XPC_TYPE_UINT64, val, 0);
-	nv_release_entry(xo->xo_nv, buf);
+	if (index != XPC_ARRAY_APPEND)
+		nv_release_entry(xo->xo_nv, buf);
 	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
 
@@ -121,12 +143,20 @@ xpc_array_set_string(xpc_object_t xarray, size_t index, const char *string)
 	struct xpc_object *xo, *xotmp;
 	char buf[9];
 	xpc_u val;
-
-	snprintf(buf, 8, "%u", (uint32_t) index);
+	uint32_t eidx;
 
 	xo = xarray;
+	if (index == XPC_ARRAY_APPEND) {
+		eidx = xo->xo_size;
+		xo->xo_size++;
+	} else
+		eidx = (uint32_t)index;
+
+	snprintf(buf, 8, "%u", eidx);
+
 	val.str = strdup(string);
 	xotmp = _xpc_prim_create(_XPC_TYPE_STRING, val, 0);
-	nv_release_entry(xo->xo_nv, buf);
+	if (index != XPC_ARRAY_APPEND)
+		nv_release_entry(xo->xo_nv, buf);
 	nvlist_add_object(xo->xo_nv, buf, xotmp);
 }
