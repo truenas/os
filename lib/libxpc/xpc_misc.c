@@ -1,10 +1,11 @@
-
 #include <sys/types.h>
 #include <mach/mach.h>
 #include <xpc/launchd.h>
 #include "xpc_internal.h"
 #include <machine/atomic.h>
+#include <assert.h>
 
+static void nvlist_add_prim(nvlist_t *nv, const char *key, xpc_object_t xobj);
 
 __private_extern__ int
 nvlist_exists_object(const nvlist_t *nv, const char *key)
@@ -35,6 +36,58 @@ nvlist_move_object(const nvlist_t *nv, const char *key)
 }
 
 static void
+xpc_nvlist_add_nvlist_type(nvlist_t *nv, const char *key, nvlist_t *nvval, int type)
+{
+	void *cookiep;
+	const char *ikey;
+	int itype;
+	xpc_object_t tmp;
+
+	cookiep = NULL;
+	while ((ikey = nvlist_next(nvval, &itype, &cookiep)) != NULL) {
+		if (itype == NV_TYPE_PTR) {
+			tmp = nvlist_get_object(nvval, ikey);
+			nvlist_add_prim(nvval, ikey, tmp);
+		}
+	}
+	nvlist_add_nvlist_type(nv, key, nvval, type);
+}
+
+static void
+nvlist_add_prim(nvlist_t *nv, const char *key, xpc_object_t xobj)
+{
+	struct xpc_object *xo;
+
+	xo = xobj;
+	switch (xo->xo_xpc_type) {
+	case _XPC_TYPE_BOOL:
+		nvlist_add_bool(nv, key, xo->xo_bool);
+		break;
+	case _XPC_TYPE_ENDPOINT:
+		nvlist_add_number_type(nv, key, xo->xo_uint, NV_TYPE_ENDPOINT);
+		break;
+	case _XPC_TYPE_INT64:
+		nvlist_add_number_type(nv, key, xo->xo_uint, NV_TYPE_INT64);
+		break;
+	case _XPC_TYPE_UINT64:
+		nvlist_add_number_type(nv, key, xo->xo_uint, NV_TYPE_UINT64);
+		break;
+	case _XPC_TYPE_STRING:
+		nvlist_add_string(nv, key, xo->xo_str);
+		break;
+	case _XPC_TYPE_DICTIONARY:
+		xpc_nvlist_add_nvlist_type(nv, key, xo->xo_nv, NV_TYPE_NVLIST_DICTIONARY);
+		break;
+	case _XPC_TYPE_ARRAY:
+		xpc_nvlist_add_nvlist_type(nv, key, xo->xo_nv, NV_TYPE_NVLIST_ARRAY);
+		break;
+	default:
+		printf("unsupported serialization type %u\n", xo->xo_xpc_type);
+		abort();
+	}
+}
+
+static void
 xpc_nvlist_destroy(nvlist_t *nv)
 {
 	void *cookiep;
@@ -44,12 +97,36 @@ xpc_nvlist_destroy(nvlist_t *nv)
 
 	cookiep = NULL;
 	while ((key = nvlist_next(nv, &type, &cookiep)) != NULL) {
-		if (nvlist_exists_type(nv, key, NV_TYPE_PTR)) {
-			tmp = (void *)nvlist_get_number(nv, key);
+		if (type == NV_TYPE_PTR) {
+			tmp = nvlist_get_object(nv, key);
 			xpc_release(tmp);
 		}
 	}
 	nvlist_destroy(nv);
+}
+
+static void *
+xpc_nvlist_pack(const nvlist_t *nv, size_t *size)
+{
+	nvlist_t *clone;
+	void *cookiep, *packed;
+	const char *key;
+	xpc_object_t tmp;
+	int type;
+
+	if ((clone = nvlist_clone(nv)) == NULL)
+		return (NULL);
+
+	cookiep = NULL;
+	while ((key = nvlist_next(clone, &type, &cookiep)) != NULL) {
+		if (type == NV_TYPE_PTR) {
+			tmp = nvlist_get_object(clone, key);
+			nvlist_add_prim(clone, key, tmp);
+		}
+	}
+	packed = nvlist_pack(clone, size);
+	nvlist_destroy(clone);
+	return (packed);
 }
 
 static void
@@ -181,4 +258,33 @@ xpc_copy_entitlement_for_token(const char *key __unused, audit_token_t *token __
 
 	val.b = true;
 	return (_xpc_prim_create(_XPC_TYPE_BOOL, val,0));
+}
+
+struct xpc_message
+{
+	mach_msg_header_t header;
+	char data[0];
+	mach_msg_trailer_t trailer;
+};
+
+int
+xpc_pipe_routine_reply(xpc_object_t xobj)
+{
+	struct xpc_object *xo;
+	void *packed;
+	size_t size, msg_size;
+	struct xpc_message *message;
+
+	xo = xobj;
+	assert(xo->xo_xpc_type == _XPC_TYPE_DICTIONARY);
+	if ((packed = xpc_nvlist_pack(xo->xo_nv, &size)) == NULL)
+		return (EXNOMEM);
+	msg_size = size + sizeof(mach_msg_header_t) + sizeof(mach_msg_trailer_t);
+	if ((message = malloc(msg_size)) == NULL)
+		return (EXNOMEM);
+	memcpy(&message->data, packed, size);
+	message->header.msgh_size = msg_size;
+	message->header.msgh_remote_port = 0; /* lookup up send port in object */
+	message->header.msgh_local_port = MACH_PORT_NULL;
+	return (mach_msg_send(&message->header));
 }

@@ -10,7 +10,7 @@ xpc_array_create(const xpc_object_t *objects, size_t count)
 	nvlist_t *nv;
 	xpc_u val;
 
-	if ((nv = nvlist_create(0)) == NULL)
+	if ((nv = nvlist_create_type(0, NV_TYPE_NVLIST_ARRAY)) == NULL)
 		return (NULL);
 
 	val.nv = nv;

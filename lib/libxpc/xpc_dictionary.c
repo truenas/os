@@ -3,6 +3,7 @@
 #include <mach/mach.h>
 #include <xpc/launchd.h>
 #include "xpc_internal.h"
+#include <assert.h>
 
 #define NVLIST_XPC_TYPE		"__XPC_TYPE"
 
@@ -36,42 +37,35 @@ static struct xpc_object *
 nv2xpc(const nvlist_t *nv)
 {
 	struct xpc_object *xo;
-	nvlist_t *nvtmp;
+	const nvlist_t *nvtmp;
+	nvlist_t *clone;
 	void *cookiep;
 	const char *key;
-	int type, nvtype;
+	int type;
 	xpc_u val;
 
-	type = nvlist_get_number(nv, NVLIST_XPC_TYPE);
-	if ((nvtmp = nvlist_clone(nv)) == NULL)
+	val.nv = clone = nvlist_clone(nv);
+	if (clone == NULL)
 		return (NULL);
 
-	if (type == _XPC_TYPE_DICTIONARY || type == _XPC_TYPE_ARRAY) {
-		val.nv = nvtmp;
-		xo = _xpc_prim_create(type, val, nvcount(nvtmp));
-	} else {
-		/* XXX this won't handle opaque data */
-		cookiep = NULL;
-		nvlist_free_number(nvtmp, NVLIST_XPC_TYPE);
-		key = nvlist_next(nvtmp, &nvtype, &cookiep);
-		val.ui = nvlist_get_number(nvtmp, key);
-		xo = _xpc_prim_create(type, val, 0);
+	assert(nvlist_type(nv) == NV_TYPE_NVLIST_DICTIONARY ||
+		   nvlist_type(nv) == NV_TYPE_NVLIST_ARRAY);
+	cookiep = NULL;
+	while ((key = nvlist_next(clone, &type, &cookiep)) != NULL) {
+		if (type == NV_TYPE_NVLIST_ARRAY || type == NV_TYPE_NVLIST_DICTIONARY) {
+			nvtmp = nvlist_get_nvlist(clone, key);
+			nvlist_add_object(clone, key, nv2xpc(nvtmp));
+		}
 	}
 
+	if (nvlist_type(nv) == NV_TYPE_NVLIST_DICTIONARY)
+		xo = _xpc_prim_create(_XPC_TYPE_DICTIONARY, val, nvcount(nv));
+	else if (nvlist_type(nv) == NV_TYPE_NVLIST_ARRAY)
+		xo = _xpc_prim_create(_XPC_TYPE_ARRAY, val, nvcount(nv));
+	else
+		abort(); /* unreached */
+
 	return (xo);
-}
-
-__private_extern__ nvlist_t *
-xpc2nv(xpc_object_t obj)
-{
-	nvlist_t *clone;
-	struct xpc_object *xo;
-
-	xo = obj;
-	if ((clone = nvlist_clone(xo->xo_nv)) == NULL)
-		return (NULL);
-	nvlist_add_number(clone, NVLIST_XPC_TYPE, xo->xo_xpc_type);
-	return (clone);
 }
 
 xpc_object_t
@@ -81,7 +75,7 @@ xpc_dictionary_create(const char * const *keys, const xpc_object_t *values, size
 	nvlist_t *nv;
 	xpc_u val;
 
-	if ((nv = nvlist_create(0)) == NULL)
+	if ((nv = nvlist_create_type(0, NV_TYPE_NVLIST_DICTIONARY)) == NULL)
 		return (NULL);
 	val.nv = nv;
 	xo = _xpc_prim_create(_XPC_TYPE_DICTIONARY, val, count);
