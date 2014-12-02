@@ -117,7 +117,7 @@ nvpair_t *nvlist_takev_nvpair(nvlist_t *nvl, const char *namefmt, va_list nameap
 
 nvpair_t *nvpair_createf_null(const char *namefmt, ...) __printflike(1, 2);
 nvpair_t *nvpair_createf_bool(bool value, const char *namefmt, ...) __printflike(2, 3);
-nvpair_t *nvpair_createf_number(uint64_t value, const char *namefmt, ...) __printflike(2, 3);
+nvpair_t *nvpair_createf_number_type(uint64_t value, int type, const char *namefmt, ...) __printflike(3, 4);
 nvpair_t *nvpair_createf_string(const char *value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_createf_nvlist_type(const nvlist_t *value, int type, const char *namefmt, ...) __printflike(3, 4);
 nvpair_t *nvpair_createf_descriptor(int value, const char *namefmt, ...) __printflike(2, 3);

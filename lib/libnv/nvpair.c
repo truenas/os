@@ -757,7 +757,14 @@ nvpair_t *
 nvpair_create_number(const char *name, uint64_t value)
 {
 
-	return (nvpair_createf_number(value, "%s", name));
+	return (nvpair_create_number_type(name, NV_TYPE_NUMBER, value));
+}
+
+nvpair_t *
+nvpair_create_number_type(const char *name, uint64_t value, int type)
+{
+
+	return (nvpair_createf_number_type(value, type, "%s", name));
 }
 
 nvpair_t *
@@ -851,13 +858,13 @@ nvpair_createf_bool(bool value, const char *namefmt, ...)
 }
 
 nvpair_t *
-nvpair_createf_number(uint64_t value, const char *namefmt, ...)
+nvpair_createf_number_type(uint64_t value, int type, const char *namefmt, ...)
 {
 	va_list nameap;
 	nvpair_t *nvp;
 
 	va_start(nameap, namefmt);
-	nvp = nvpair_createv_number(value, namefmt, nameap);
+	nvp = nvpair_createv_number_type(value, type, namefmt, nameap);
 	va_end(nameap);
 
 	return (nvp);

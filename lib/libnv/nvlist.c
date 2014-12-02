@@ -1388,7 +1388,7 @@ nvlist_addv_number(nvlist_t *nvl, uint64_t value, const char *namefmt,
 		return;
 	}
 
-	nvp = nvpair_createv_number(value, namefmt, nameap);
+	nvp = nvpair_createv_number_type(value, NV_TYPE_NUMBER, namefmt, nameap);
 	if (nvp == NULL)
 		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
 	else
