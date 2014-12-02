@@ -29,14 +29,13 @@ typedef union {
 } xpc_u;	
 
 
+#define _XPC_FROM_WIRE 0x1
 struct xpc_object {
 	uint8_t xo_xpc_type;
-	uint8_t xo_nv_type;
+	uint16_t xo_flags;
 	volatile uint32_t xo_refcnt;
 	size_t xo_size;
-	size_t xo_nv_packed_size;
 	xpc_u xo_u;
-	void *xo_nv_packed;
 	audit_token_t *xo_audit_token;
 };
 #define xo_nv xo_u.nv
@@ -46,10 +45,11 @@ struct xpc_object {
 #define xo_int xo_u.i
 #define xo_ptr xo_u.ptr
 __private_extern__ struct xpc_object *_xpc_prim_create(int type, xpc_u value, size_t size);
+__private_extern__ struct xpc_object *_xpc_prim_create_flags(int type, xpc_u value, size_t size, uint16_t flags);
 __private_extern__ nvlist_t *xpc2nv(xpc_object_t obj);
 __private_extern__ void nv_release_entry(nvlist_t *nv, const char *key);
 __private_extern__ int nvlist_exists_object(const nvlist_t *nv, const char *key);
 __private_extern__ void nvlist_add_object(nvlist_t *nv, const char *key, xpc_object_t xobj);
 __private_extern__ xpc_object_t nvlist_get_object(const nvlist_t *nv, const char *key);
 __private_extern__ xpc_object_t nvlist_move_object(const nvlist_t *nv, const char *key);
-	
+__private_extern__ size_t nvcount(const nvlist_t *nv);

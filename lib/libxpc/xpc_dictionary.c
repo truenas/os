@@ -18,21 +18,6 @@ nv_release_entry(nvlist_t *nv, const char *key)
 	}
 }
 
-static size_t
-nvcount(const nvlist_t *nv)
-{
-	void *cookiep;
-	const char *key;
-	size_t count;
-	int type;
-
-	count = 0;
-	cookiep = NULL;
-	while ((key = nvlist_next(nv, &type, &cookiep)) != NULL)
-		count++;
-	return (count);
-}
-	
 static struct xpc_object *
 nv2xpc(const nvlist_t *nv)
 {
@@ -95,7 +80,7 @@ xpc_dictionary_create_reply(xpc_object_t original)
 	xpc_u val;
 
 	xo_orig = original;
-	if (xo_orig->xo_nv_packed_size == 0)
+	if ((xo_orig->xo_flags & _XPC_FROM_WIRE) == 0)
 		return (NULL);
 	if ((nv = nvlist_clone(xo_orig->xo_nv)) == NULL)
 		return (NULL);
@@ -104,14 +89,7 @@ xpc_dictionary_create_reply(xpc_object_t original)
 		nvlist_destroy(nv);
 		return (NULL);
 	}
-	/* did not come from the wire
-	* or has already had a reply created
-	*/
-
-	free(xo_orig->xo_nv_packed);	
-	xo->xo_size = xo_orig->xo_size;
-	xo_orig->xo_nv_packed_size = 0;
-	xo_orig->xo_nv_packed = NULL;
+	xo_orig->xo_flags &= ~_XPC_FROM_WIRE;
 	return (xo);
 }
 

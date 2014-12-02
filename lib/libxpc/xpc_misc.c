@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <sys/errno.h>
 #include <mach/mach.h>
 #include <xpc/launchd.h>
 #include "xpc_internal.h"
@@ -33,6 +34,21 @@ nvlist_move_object(const nvlist_t *nv, const char *key)
 {
 
 	return ((xpc_object_t)nvlist_get_number(nv, key));
+}
+
+__private_extern__ size_t
+nvcount(const nvlist_t *nv)
+{
+	void *cookiep;
+	const char *key;
+	size_t count;
+	int type;
+
+	count = 0;
+	cookiep = NULL;
+	while ((key = nvlist_next(nv, &type, &cookiep)) != NULL)
+		count++;
+	return (count);
 }
 
 static void
@@ -106,7 +122,7 @@ xpc_nvlist_destroy(nvlist_t *nv)
 }
 
 static void *
-xpc_nvlist_pack(const nvlist_t *nv, size_t *size)
+xpc_nvlist_pack(const nvlist_t *nv, void *buf, size_t *size)
 {
 	nvlist_t *clone;
 	void *cookiep, *packed;
@@ -124,7 +140,7 @@ xpc_nvlist_pack(const nvlist_t *nv, size_t *size)
 			nvlist_add_prim(clone, key, tmp);
 		}
 	}
-	packed = nvlist_pack(clone, size);
+	packed = nvlist_pack_buffer(clone, buf, size);
 	nvlist_destroy(clone);
 	return (packed);
 }
@@ -133,8 +149,6 @@ static void
 xpc_object_destroy(struct xpc_object *xo)
 {
 	
-	if (xo->xo_nv_packed != NULL)
-		free(xo->xo_nv_packed);
 	if (xo->xo_nv != NULL)
 		xpc_nvlist_destroy(xo->xo_nv);
 	free(xo);
@@ -260,31 +274,114 @@ xpc_copy_entitlement_for_token(const char *key __unused, audit_token_t *token __
 	return (_xpc_prim_create(_XPC_TYPE_BOOL, val,0));
 }
 
-struct xpc_message
-{
+struct xpc_message {
 	mach_msg_header_t header;
 	char data[0];
 	mach_msg_trailer_t trailer;
 };
+#define MAX_RECV 8192
+#define XPC_RECV_SIZE MAX_RECV-sizeof(mach_msg_header_t)-sizeof(mach_msg_trailer_t)
+struct xpc_recv_message {
+	mach_msg_header_t header;
+	char data[XPC_RECV_SIZE];
+	mach_msg_trailer_t trailer;
+};
 
+#define XPC_RPORT "XPC remote port"
 int
 xpc_pipe_routine_reply(xpc_object_t xobj)
 {
 	struct xpc_object *xo;
-	void *packed;
 	size_t size, msg_size;
 	struct xpc_message *message;
+	kern_return_t kr;
+	int err;
 
 	xo = xobj;
 	assert(xo->xo_xpc_type == _XPC_TYPE_DICTIONARY);
-	if ((packed = xpc_nvlist_pack(xo->xo_nv, &size)) == NULL)
-		return (EXNOMEM);
-	msg_size = size + sizeof(mach_msg_header_t) + sizeof(mach_msg_trailer_t);
+	size = nvlist_size(xo->xo_nv);
+	msg_size = size + sizeof(mach_msg_header_t);
 	if ((message = malloc(msg_size)) == NULL)
-		return (EXNOMEM);
-	memcpy(&message->data, packed, size);
+		return (ENOMEM);
+	if (xpc_nvlist_pack(xo->xo_nv, &message->data, &size) == NULL)
+		return (EINVAL);
+
 	message->header.msgh_size = msg_size;
-	message->header.msgh_remote_port = 0; /* lookup up send port in object */
+	message->header.msgh_remote_port = xpc_dictionary_copy_mach_send(xobj, XPC_RPORT);
 	message->header.msgh_local_port = MACH_PORT_NULL;
-	return (mach_msg_send(&message->header));
+	kr = mach_msg_send(&message->header);
+	if (kr != KERN_SUCCESS)
+		err = (kr == KERN_INVALID_TASK) ? EPIPE : EINVAL;
+	else
+		err = 0;
+	free(message);
+	return (err);
+}
+
+int
+xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t *rcvport,
+	boolean_t (*demux)(mach_msg_header_t *, mach_msg_header_t *), mach_msg_size_t msgsize __unused,
+	int flags __unused)
+{
+	struct xpc_recv_message message;
+	mach_msg_header_t *request;
+	kern_return_t kr;
+	mig_reply_error_t response;
+	mach_msg_trailer_t *tr;
+	int data_size;
+	struct xpc_object *xo;
+	audit_token_t *auditp;
+	xpc_u val;
+
+	request = &message.header;
+	/* should be size - but what about arbitrary XPC data? */
+	request->msgh_size = MAX_RECV;
+	request->msgh_local_port = portset;
+	kr = mach_msg_receive(request);
+	*rcvport = request->msgh_remote_port;
+	if (demux(request, (mach_msg_header_t *)&response)) {
+		(void)mach_msg_send((mach_msg_header_t *)&response);
+		/*  can't do anything with the return code
+		* just tell the caller this has been handled
+		*/
+		return (TRUE);
+	}
+	data_size = request->msgh_size;
+	val.nv = nvlist_unpack(&message.data, data_size);
+	/* is padding for alignment enforced in the kernel?*/
+	tr = (mach_msg_trailer_t *)(uintptr_t)(((uint8_t *)request) + sizeof(request) + data_size);
+	xo = _xpc_prim_create_flags(_XPC_TYPE_DICTIONARY, val, nvcount(val.nv), _XPC_FROM_WIRE);
+	switch(tr->msgh_trailer_type) {
+	case MACH_RCV_TRAILER_AUDIT:
+	case MACH_RCV_TRAILER_CTX:
+	case MACH_RCV_TRAILER_LABELS:
+		auditp = &((mach_msg_audit_trailer_t *)tr)->msgh_audit;
+	default:
+		auditp = NULL;
+	}
+	if (auditp) {
+		xo->xo_audit_token = malloc(sizeof(*auditp));
+		memcpy(xo->xo_audit_token, auditp, sizeof(*auditp));
+	}
+	xpc_dictionary_set_mach_send(xo, XPC_RPORT, request->msgh_remote_port);
+	*requestobj = xo;
+	return (0);
+}
+
+int
+xpc_call_wakeup(mach_port_t rport, int retcode)
+{
+	mig_reply_error_t msg;
+	int err;
+	kern_return_t kr;
+
+	msg.Head.msgh_remote_port = rport;
+	msg.RetCode = retcode;
+	kr = mach_msg_send(&msg.Head);
+	if (kr != KERN_SUCCESS)
+		err = (kr == KERN_INVALID_TASK) ? EPIPE : EINVAL;
+	else
+		err = 0;
+
+	return (err);
 }

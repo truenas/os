@@ -21,6 +21,7 @@ xt _xpc_type_uint64;
 xt _xpc_type_shmem;
 xt _xpc_type_string;
 xt _xpc_type_uuid;
+xt _xpc_type_double;
 
 
 struct _xpc_bool_s {
@@ -56,16 +57,22 @@ static xpc_type_t xpc_typemap[] = {
 __private_extern__ struct xpc_object *
 _xpc_prim_create(int type, xpc_u value, size_t size)
 {
+
+	return (_xpc_prim_create_flags(type, value, size, 0));
+}
+
+__private_extern__ struct xpc_object *
+_xpc_prim_create_flags(int type, xpc_u value, size_t size, uint16_t flags)
+{
 	struct xpc_object *xo;
 
 	if ((xo = malloc(sizeof(*xo))) == NULL)
 		return (NULL);
 	xo->xo_size = size;
 	xo->xo_xpc_type = type;
+	xo->xo_flags = flags;
 	xo->xo_u = value;
 	xo->xo_refcnt = 1;
-	xo->xo_nv_packed = NULL;
-	xo->xo_nv_packed_size = 0;
 
 	return (xo);
 }
