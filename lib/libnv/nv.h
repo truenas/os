@@ -86,6 +86,7 @@ void nvlist_fdump(const nvlist_t *nvl, FILE *fp);
 
 size_t		 nvlist_size(const nvlist_t *nvl);
 void		*nvlist_pack(const nvlist_t *nvl, size_t *sizep);
+void		*nvlist_pack_buffer(const nvlist_t *nvl, void *buf, size_t *sizep);
 nvlist_t	*nvlist_unpack(const void *buf, size_t size);
 
 int nvlist_send(int sock, const nvlist_t *nvl);

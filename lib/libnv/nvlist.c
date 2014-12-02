@@ -603,7 +603,7 @@ nvlist_pack_header(const nvlist_t *nvl, unsigned char *ptr, size_t *leftp)
 }
 
 void *
-nvlist_xpack(const nvlist_t *nvl, int64_t *fdidxp, size_t *sizep)
+nvlist_xpack(const nvlist_t *nvl, void *ubuf, int64_t *fdidxp, size_t *sizep)
 {
 	unsigned char *buf, *ptr;
 	size_t left, size;
@@ -617,7 +617,13 @@ nvlist_xpack(const nvlist_t *nvl, int64_t *fdidxp, size_t *sizep)
 	}
 
 	size = nvlist_size(nvl);
-	buf = malloc(size);
+	if (ubuf) {
+		if (sizep == NULL || *sizep != size)
+			return (NULL);
+		else
+			buf = ubuf;
+	} else
+		buf = malloc(size);
 	if (buf == NULL)
 		return (NULL);
 
@@ -694,6 +700,13 @@ void *
 nvlist_pack(const nvlist_t *nvl, size_t *sizep)
 {
 
+	return (nvlist_pack_buffer(nvl, NULL, sizep));
+}
+
+void *
+nvlist_pack_buffer(const nvlist_t *nvl, void *ubuf, size_t *sizep)
+{
+
 	NVLIST_ASSERT(nvl);
 
 	if (nvl->nvl_error != 0) {
@@ -706,7 +719,7 @@ nvlist_pack(const nvlist_t *nvl, size_t *sizep)
 		return (NULL);
 	}
 
-	return (nvlist_xpack(nvl, NULL, sizep));
+	return (nvlist_xpack(nvl, ubuf, NULL, sizep));
 }
 
 static bool
@@ -883,7 +896,7 @@ nvlist_send(int sock, const nvlist_t *nvl)
 	data = NULL;
 	fdidx = 0;
 
-	data = nvlist_xpack(nvl, &fdidx, &datasize);
+	data = nvlist_xpack(nvl, NULL, &fdidx, &datasize);
 	if (data == NULL)
 		goto out;
 
