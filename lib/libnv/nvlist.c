@@ -199,6 +199,16 @@ nvlist_empty(const nvlist_t *nvl)
 	return (nvlist_first_nvpair(nvl) == NULL);
 }
 
+int
+nvlist_type(const nvlist_t *nvl)
+{
+
+	NVLIST_ASSERT(nvl);
+	PJDLOG_ASSERT(nvl->nvl_error == 0);
+
+	return (nvl->nvl_type);
+}
+
 static void
 nvlist_report_missing(int type, const char *namefmt, va_list nameap)
 {

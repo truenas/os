@@ -77,6 +77,7 @@ nvlist_t	*nvlist_create_type(int flags, int type);
 void		 nvlist_destroy(nvlist_t *nvl);
 int		 nvlist_error(const nvlist_t *nvl);
 bool		 nvlist_empty(const nvlist_t *nvl);
+int		 nvlist_type(const nvlist_t *nvl);
 
 nvlist_t *nvlist_clone(const nvlist_t *nvl);
 
