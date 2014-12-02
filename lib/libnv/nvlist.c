@@ -76,6 +76,7 @@ struct nvlist {
 	int		 nvl_magic;
 	int		 nvl_error;
 	int		 nvl_flags;
+	int		 nvl_type;
 	nvpair_t	*nvl_parent;
 	struct nvl_head	 nvl_head;
 };
@@ -93,12 +94,20 @@ struct nvlist_header {
 	uint8_t		nvlh_magic;
 	uint8_t		nvlh_version;
 	uint8_t		nvlh_flags;
+	uint8_t		nvlh_type;
 	uint64_t	nvlh_descriptors;
 	uint64_t	nvlh_size;
 } __packed;
 
 nvlist_t *
 nvlist_create(int flags)
+{
+
+	return (nvlist_create_type(flags, NV_TYPE_NVLIST));
+}
+
+nvlist_t *
+nvlist_create_type(int flags, int type)
 {
 	nvlist_t *nvl;
 
@@ -108,6 +117,7 @@ nvlist_create(int flags)
 	nvl->nvl_error = 0;
 	nvl->nvl_flags = flags;
 	nvl->nvl_parent = NULL;
+	nvl->nvl_type = type;
 	TAILQ_INIT(&nvl->nvl_head);
 	nvl->nvl_magic = NVLIST_MAGIC;
 
@@ -385,6 +395,8 @@ nvlist_dump(const nvlist_t *nvl, int fd)
 			dprintf(fd, " [%s]\n", nvpair_get_string(nvp));
 			break;
 		case NV_TYPE_NVLIST:
+		case NV_TYPE_NVLIST_ARRAY:
+		case NV_TYPE_NVLIST_DICTIONARY:
 			dprintf(fd, "\n");
 			nvl = nvpair_get_nvlist(nvp);
 			if (nvlist_dump_error_check(nvl, fd, level + 1)) {
@@ -449,7 +461,9 @@ nvlist_size(const nvlist_t *nvl)
 	while (nvp != NULL) {
 		size += nvpair_header_size();
 		size += strlen(nvpair_name(nvp)) + 1;
-		if (nvpair_type(nvp) == NV_TYPE_NVLIST) {
+		if (nvpair_type(nvp) == NV_TYPE_NVLIST_ARRAY ||
+			nvpair_type(nvp) == NV_TYPE_NVLIST_DICTIONARY ||
+			nvpair_type(nvp) == NV_TYPE_NVLIST) {
 			size += sizeof(struct nvlist_header);
 			size += nvpair_header_size() + 1;
 			nvl = nvpair_get_nvlist(nvp);
@@ -489,6 +503,8 @@ nvlist_xdescriptors(const nvlist_t *nvl, int *descs, int level)
 			descs++;
 			break;
 		case NV_TYPE_NVLIST:
+		case NV_TYPE_NVLIST_ARRAY:
+		case NV_TYPE_NVLIST_DICTIONARY:
 			descs = nvlist_xdescriptors(nvpair_get_nvlist(nvp),
 			    descs, level + 1);
 			break;
@@ -534,6 +550,8 @@ nvlist_xndescriptors(const nvlist_t *nvl, int level)
 			ndescs++;
 			break;
 		case NV_TYPE_NVLIST:
+		case NV_TYPE_NVLIST_ARRAY:
+		case NV_TYPE_NVLIST_DICTIONARY:
 			ndescs += nvlist_xndescriptors(nvpair_get_nvlist(nvp),
 			    level + 1);
 			break;
@@ -560,6 +578,7 @@ nvlist_pack_header(const nvlist_t *nvl, unsigned char *ptr, size_t *leftp)
 	nvlhdr.nvlh_magic = NVLIST_HEADER_MAGIC;
 	nvlhdr.nvlh_version = NVLIST_HEADER_VERSION;
 	nvlhdr.nvlh_flags = nvl->nvl_flags;
+	nvlhdr.nvlh_type = (uint8_t)nvl->nvl_type;
 #if BYTE_ORDER == BIG_ENDIAN
 	nvlhdr.nvlh_flags |= NV_FLAG_BIG_ENDIAN;
 #endif
@@ -625,6 +644,8 @@ nvlist_xpack(const nvlist_t *nvl, int64_t *fdidxp, size_t *sizep)
 			ptr = nvpair_pack_string(nvp, ptr, &left);
 			break;
 		case NV_TYPE_NVLIST:
+		case NV_TYPE_NVLIST_ARRAY:
+		case NV_TYPE_NVLIST_DICTIONARY:
 			nvl = nvpair_get_nvlist(nvp);
 			nvp = nvlist_first_nvpair(nvl);
 			ptr = nvlist_pack_header(nvl, ptr, &left);
@@ -737,6 +758,7 @@ nvlist_unpack_header(nvlist_t *nvl, const unsigned char *ptr, size_t nfds,
 		*isbep = (((int)nvlhdr.nvlh_flags & NV_FLAG_BIG_ENDIAN) != 0);
 	*leftp -= sizeof(nvlhdr);
 
+	nvl->nvl_type = nvlhdr.nvlh_type;
 	return (ptr);
 failed:
 	errno = EINVAL;
@@ -786,6 +808,8 @@ nvlist_xunpack(const void *buf, size_t size, const int *fds, size_t nfds)
 			ptr = nvpair_unpack_string(isbe, nvp, ptr, &left);
 			break;
 		case NV_TYPE_NVLIST:
+		case NV_TYPE_NVLIST_ARRAY:
+		case NV_TYPE_NVLIST_DICTIONARY:
 			ptr = nvpair_unpack_nvlist(isbe, nvp, ptr, &left, nfds,
 			    &tmpnvl);
 			nvlist_set_parent(tmpnvl, nvp);
@@ -1176,7 +1200,16 @@ void
 nvlist_add_nvlist(nvlist_t *nvl, const char *name, const nvlist_t *value)
 {
 
-	nvlist_addf_nvlist(nvl, value, "%s", name);
+	nvlist_addf_nvlist_type(nvl, value, NV_TYPE_NVLIST, "%s", name);
+}
+
+void
+nvlist_add_nvlist_type(nvlist_t *nvl, const char *name, const nvlist_t *value, int type)
+{
+
+	PJDLOG_ASSERT(type <= NV_TYPE_NVLIST_MAX && type >= NV_TYPE_NVLIST_MIN);
+
+	nvlist_addf_nvlist_type(nvl, value, type, "%s", name);
 }
 
 void
@@ -1252,6 +1285,17 @@ nvlist_addf_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
 
 	va_start(nameap, namefmt);
 	nvlist_addv_nvlist(nvl, value, namefmt, nameap);
+	va_end(nameap);
+}
+
+void
+nvlist_addf_nvlist_type(nvlist_t *nvl, const nvlist_t *value, int type, const char *namefmt,
+    ...)
+{
+	va_list nameap;
+
+	va_start(nameap, namefmt);
+	nvlist_addv_nvlist_type(nvl, value, type, namefmt, nameap);
 	va_end(nameap);
 }
 
@@ -1366,6 +1410,14 @@ nvlist_addv_string(nvlist_t *nvl, const char *value, const char *namefmt,
 
 void
 nvlist_addv_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
+	va_list nameap)
+{
+
+	nvlist_addv_nvlist_type(nvl, value, NV_TYPE_NVLIST, namefmt, nameap);
+}
+
+void
+nvlist_addv_nvlist_type(nvlist_t *nvl, const nvlist_t *value, int type, const char *namefmt,
     va_list nameap)
 {
 	nvpair_t *nvp;
@@ -1375,7 +1427,7 @@ nvlist_addv_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
 		return;
 	}
 
-	nvp = nvpair_createv_nvlist(value, namefmt, nameap);
+	nvp = nvpair_createv_nvlist_type(value, type, namefmt, nameap);
 	if (nvp == NULL)
 		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
 	else
@@ -1512,6 +1564,14 @@ void
 nvlist_movev_nvlist(nvlist_t *nvl, nvlist_t *value, const char *namefmt,
     va_list nameap)
 {
+
+	nvlist_movev_nvlist_type(nvl, value, NV_TYPE_NVLIST, namefmt, nameap);
+}
+
+void
+nvlist_movev_nvlist_type(nvlist_t *nvl, nvlist_t *value, int type, const char *namefmt,
+    va_list nameap)
+{
 	nvpair_t *nvp;
 
 	if (nvlist_error(nvl) != 0) {
@@ -1521,7 +1581,7 @@ nvlist_movev_nvlist(nvlist_t *nvl, nvlist_t *value, const char *namefmt,
 		return;
 	}
 
-	nvp = nvpair_movev_nvlist(value, namefmt, nameap);
+	nvp = nvpair_movev_nvlist_type(value, type, namefmt, nameap);
 	if (nvp == NULL)
 		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
 	else

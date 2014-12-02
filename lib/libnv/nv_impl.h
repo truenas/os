@@ -42,10 +42,12 @@ typedef struct nvpair nvpair_t;
 #define	NV_TYPE_NVLIST_UP		255
 
 #define	NV_TYPE_FIRST		NV_TYPE_NULL
-#define	NV_TYPE_LAST		NV_TYPE_ENDPOINT
+#define	NV_TYPE_LAST		NV_TYPE_NVLIST_DICTIONARY
 
 #define NV_TYPE_NUMBER_MIN NV_TYPE_NUMBER
 #define NV_TYPE_NUMBER_MAX NV_TYPE_ENDPOINT
+#define NV_TYPE_NVLIST_MIN NV_TYPE_NVLIST
+#define NV_TYPE_NVLIST_MAX NV_TYPE_NVLIST_DICTIONARY
 
 
 
@@ -86,11 +88,13 @@ nvpair_t *nvpair_create_string(const char *name, const char *value);
 nvpair_t *nvpair_create_stringf(const char *name, const char *valuefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_create_stringv(const char *name, const char *valuefmt, va_list valueap) __printflike(2, 0);
 nvpair_t *nvpair_create_nvlist(const char *name, const nvlist_t *value);
+nvpair_t *nvpair_create_nvlist_type(const char *name, const nvlist_t *value, int type);
 nvpair_t *nvpair_create_descriptor(const char *name, int value);
 nvpair_t *nvpair_create_binary(const char *name, const void *value, size_t size);
 
 nvpair_t *nvpair_move_string(const char *name, char *value);
 nvpair_t *nvpair_move_nvlist(const char *name, nvlist_t *value);
+nvpair_t *nvpair_move_nvlist_type(const char *name, nvlist_t *value, int type);
 nvpair_t *nvpair_move_descriptor(const char *name, int value);
 nvpair_t *nvpair_move_binary(const char *name, void *value, size_t size);
 
@@ -115,7 +119,7 @@ nvpair_t *nvpair_createf_null(const char *namefmt, ...) __printflike(1, 2);
 nvpair_t *nvpair_createf_bool(bool value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_createf_number(uint64_t value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_createf_string(const char *value, const char *namefmt, ...) __printflike(2, 3);
-nvpair_t *nvpair_createf_nvlist(const nvlist_t *value, const char *namefmt, ...) __printflike(2, 3);
+nvpair_t *nvpair_createf_nvlist_type(const nvlist_t *value, int type, const char *namefmt, ...) __printflike(3, 4);
 nvpair_t *nvpair_createf_descriptor(int value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_createf_binary(const void *value, size_t size, const char *namefmt, ...) __printflike(3, 4);
 
@@ -124,17 +128,17 @@ nvpair_t *nvpair_createv_bool(bool value, const char *namefmt, va_list nameap) _
 nvpair_t *nvpair_createv_number(uint64_t value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_createv_number_type(uint64_t value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
 nvpair_t *nvpair_createv_string(const char *value, const char *namefmt, va_list nameap) __printflike(2, 0);
-nvpair_t *nvpair_createv_nvlist(const nvlist_t *value, const char *namefmt, va_list nameap) __printflike(2, 0);
+nvpair_t *nvpair_createv_nvlist_type(const nvlist_t *value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
 nvpair_t *nvpair_createv_descriptor(int value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_createv_binary(const void *value, size_t size, const char *namefmt, va_list nameap) __printflike(3, 0);
 
 nvpair_t *nvpair_movef_string(char *value, const char *namefmt, ...) __printflike(2, 3);
-nvpair_t *nvpair_movef_nvlist(nvlist_t *value, const char *namefmt, ...) __printflike(2, 3);
+nvpair_t *nvpair_movef_nvlist_type(nvlist_t *value, int type, const char *namefmt, ...) __printflike(3, 4);
 nvpair_t *nvpair_movef_descriptor(int value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_movef_binary(void *value, size_t size, const char *namefmt, ...) __printflike(3, 4);
 
 nvpair_t *nvpair_movev_string(char *value, const char *namefmt, va_list nameap) __printflike(2, 0);
-nvpair_t *nvpair_movev_nvlist(nvlist_t *value, const char *namefmt, va_list nameap) __printflike(2, 0);
+nvpair_t *nvpair_movev_nvlist_type(nvlist_t *value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
 nvpair_t *nvpair_movev_descriptor(int value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_movev_binary(void *value, size_t size, const char *namefmt, va_list nameap) __printflike(3, 0);
 
