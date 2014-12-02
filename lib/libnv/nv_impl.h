@@ -82,7 +82,6 @@ nvpair_t *nvpair_clone(const nvpair_t *nvp);
 
 nvpair_t *nvpair_create_null(const char *name);
 nvpair_t *nvpair_create_bool(const char *name, bool value);
-nvpair_t *nvpair_create_number(const char *name, uint64_t value);
 nvpair_t *nvpair_create_number_type(const char *name, uint64_t value, int type);
 nvpair_t *nvpair_create_string(const char *name, const char *value);
 nvpair_t *nvpair_create_stringf(const char *name, const char *valuefmt, ...) __printflike(2, 3);

@@ -754,13 +754,6 @@ nvpair_create_bool(const char *name, bool value)
 }
 
 nvpair_t *
-nvpair_create_number(const char *name, uint64_t value)
-{
-
-	return (nvpair_create_number_type(name, NV_TYPE_NUMBER, value));
-}
-
-nvpair_t *
 nvpair_create_number_type(const char *name, uint64_t value, int type)
 {
 
