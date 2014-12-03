@@ -28,13 +28,6 @@
 extern int __iopolicysys(int, struct _iopol_param_t *);
 
 int
-__iopolicysys(int a __unused, struct _iopol_param_t *b __unused)
-{
-
-	return (ENOSYS);
-}
-
-int
 getiopolicy_np(int iotype, int scope)
 {
 	int policy, error;
