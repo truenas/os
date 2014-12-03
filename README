@@ -40,6 +40,7 @@ proc_set_dirty
 proc_setpcontrol
 proc_terminate
 proc_track_dirty
+needing __proc_info system call to be implemented
 
 extended posix_spawnattr calls in support/posix_spawn.c are not expected
 to actually work yet, among others
@@ -55,6 +56,8 @@ posix_spawnattr_getbinpref_np(const posix_spawnattr_t *restrict attr, size_t cou
 
 I/O priority setting functionality - system call:
 __iopolicysys
+
+
 
 
 This is the top level of the FreeBSD source directory.  This file
