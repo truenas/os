@@ -34,12 +34,6 @@ proc_terminate
 proc_track_dirty
 needing __proc_info system call to be implemented
 
-extended posix_spawnattr calls in support/posix_spawn.c are not expected
-to actually work yet, among others:
-- posix_spawnattr_setbinpref_np
-- posix_spawnattr_getbinpref_np
-
-
 XML plist configuration
 
 
@@ -55,17 +49,22 @@ per-user & per-session launchds (xpc domain system in domain.defs)
 
 libUCL (YAML & JSON) configuration
 
+extended posix_spawnattr calls in support/posix_spawn.c are not expected
+to actually work yet, among others:
+- posix_spawnattr_setbinpref_np
+- posix_spawnattr_getbinpref_np
+
+
 
 v2 or later:
 - AF_SYSTEM domain sockets and the event protocols
- - XPC
-   - The XPC_JETSAM_BANDs are unsupported
+
+- XPC_JETSAM_BANDs (handle memory pressure)
 
 I/O priority setting functionality - system call:
-__iopolicysys - getiopolicy_np / setiopolicy_np
-
-
-
+__iopolicysys supports:
+	- getiopolicy_np
+	- setiopolicy_np
 
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
