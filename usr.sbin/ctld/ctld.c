@@ -642,10 +642,11 @@ static int
 parse_addr_port(char *arg, const char *def_port, struct addrinfo **ai)
 {
 	struct addrinfo hints;
-	char *addr, *ch;
+	char *str, *addr, *ch;
 	const char *port;
 	int error, colons = 0;
 
+	str = arg = strdup(arg);
 	if (arg[0] == '[') {
 		/*
 		 * IPv6 address in square brackets, perhaps with port.
@@ -658,8 +659,10 @@ parse_addr_port(char *arg, const char *def_port, struct addrinfo **ai)
 			port = def_port;
 		} else if (arg[0] == ':') {
 			port = arg + 1;
-		} else
+		} else {
+			free(str);
 			return (1);
+		}
 	} else {
 		/*
 		 * Either IPv6 address without brackets - and without
@@ -686,9 +689,8 @@ parse_addr_port(char *arg, const char *def_port, struct addrinfo **ai)
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	error = getaddrinfo(addr, port, &hints, ai);
-	if (error != 0)
-		return (1);
-	return (0);
+	free(str);
+	return ((error != 0) ? 1 : 0);
 }
 
 int
