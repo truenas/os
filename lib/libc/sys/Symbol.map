@@ -132,7 +132,6 @@ FBSD_1.0 {
 	jail_attach;
 	kenv;
 	kevent;
-	kevent64;
 	kill;
 	kldfind;
 	kldfirstmod;
@@ -399,6 +398,9 @@ FBSD_1.3 {
 
 FBSD_1.4 {
 	ppoll;
+	kevent64;
+	__iopolicysys;
+	__proc_info;
 };
 
 FBSDprivate_1.0 {
@@ -657,6 +659,8 @@ FBSDprivate_1.0 {
 	__sys_getuid;
 	_ioctl;
 	__sys_ioctl;
+	___iopolicysys;
+	__sys___iopolicysys;
 	_issetugid;
 	__sys_issetugid;
 	_jail;
@@ -831,6 +835,8 @@ FBSDprivate_1.0 {
 	__sys_preadv;
 	_procctl;
 	__sys_procctl;
+	___proc_info;
+	__sys___proc_info;
 	_profil;
 	__sys_profil;
 	_pselect;

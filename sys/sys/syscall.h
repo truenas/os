@@ -229,6 +229,8 @@
 #define	SYS_aio_read	255
 #define	SYS_aio_write	256
 #define	SYS_lio_listio	257
+#define	SYS___proc_info	258
+#define	SYS___iopolicysys	259
 #define	SYS_getdents	272
 #define	SYS_lchmod	274
 #define	SYS_netbsd_lchown	275

@@ -1437,6 +1437,26 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 4;
 		break;
 	}
+	/* __proc_info */
+	case 258: {
+		struct __proc_info_args *p = params;
+		iarg[0] = p->callnum; /* int */
+		iarg[1] = p->pid; /* int */
+		iarg[2] = p->flavor; /* int */
+		uarg[3] = p->arg; /* uint64_t */
+		uarg[4] = (intptr_t) p->buffer; /* void * */
+		iarg[5] = p->buffersize; /* int */
+		*n_args = 6;
+		break;
+	}
+	/* __iopolicysys */
+	case 259: {
+		struct __iopolicysys_args *p = params;
+		iarg[0] = p->cmd; /* int */
+		uarg[1] = (intptr_t) p->param; /* struct _iopol_param_t * */
+		*n_args = 2;
+		break;
+	}
 	/* getdents */
 	case 272: {
 		struct getdents_args *p = params;
@@ -5722,6 +5742,44 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* __proc_info */
+	case 258:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "int";
+			break;
+		case 3:
+			p = "uint64_t";
+			break;
+		case 4:
+			p = "void *";
+			break;
+		case 5:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* __iopolicysys */
+	case 259:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "struct _iopol_param_t *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* getdents */
 	case 272:
 		switch(ndx) {
@@ -9965,6 +10023,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* lio_listio */
 	case 257:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* __proc_info */
+	case 258:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* __iopolicysys */
+	case 259:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

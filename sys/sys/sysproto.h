@@ -778,6 +778,18 @@ struct lio_listio_args {
 	char nent_l_[PADL_(int)]; int nent; char nent_r_[PADR_(int)];
 	char sig_l_[PADL_(struct sigevent *)]; struct sigevent * sig; char sig_r_[PADR_(struct sigevent *)];
 };
+struct __proc_info_args {
+	char callnum_l_[PADL_(int)]; int callnum; char callnum_r_[PADR_(int)];
+	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
+	char flavor_l_[PADL_(int)]; int flavor; char flavor_r_[PADR_(int)];
+	char arg_l_[PADL_(uint64_t)]; uint64_t arg; char arg_r_[PADR_(uint64_t)];
+	char buffer_l_[PADL_(void *)]; void * buffer; char buffer_r_[PADR_(void *)];
+	char buffersize_l_[PADL_(int)]; int buffersize; char buffersize_r_[PADR_(int)];
+};
+struct __iopolicysys_args {
+	char cmd_l_[PADL_(int)]; int cmd; char cmd_r_[PADR_(int)];
+	char param_l_[PADL_(struct _iopol_param_t *)]; struct _iopol_param_t * param; char param_r_[PADR_(struct _iopol_param_t *)];
+};
 struct getdents_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char buf_l_[PADL_(char *)]; char * buf; char buf_r_[PADR_(char *)];
@@ -2012,6 +2024,8 @@ int	sys_lchown(struct thread *, struct lchown_args *);
 int	sys_aio_read(struct thread *, struct aio_read_args *);
 int	sys_aio_write(struct thread *, struct aio_write_args *);
 int	sys_lio_listio(struct thread *, struct lio_listio_args *);
+int	sys___proc_info(struct thread *, struct __proc_info_args *);
+int	sys___iopolicysys(struct thread *, struct __iopolicysys_args *);
 int	sys_getdents(struct thread *, struct getdents_args *);
 int	sys_lchmod(struct thread *, struct lchmod_args *);
 int	sys_lutimes(struct thread *, struct lutimes_args *);
@@ -2720,6 +2734,8 @@ int	freebsd7_shmctl(struct thread *, struct freebsd7_shmctl_args *);
 #define	SYS_AUE_aio_read	AUE_NULL
 #define	SYS_AUE_aio_write	AUE_NULL
 #define	SYS_AUE_lio_listio	AUE_NULL
+#define	SYS_AUE___proc_info	AUE_NULL
+#define	SYS_AUE___iopolicysys	AUE_NULL
 #define	SYS_AUE_getdents	AUE_O_GETDENTS
 #define	SYS_AUE_lchmod	AUE_LCHMOD
 #define	SYS_AUE_lutimes	AUE_LUTIMES

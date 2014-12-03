@@ -181,6 +181,8 @@ MIASM =  \
 	aio_read.o \
 	aio_write.o \
 	lio_listio.o \
+	__proc_info.o \
+	__iopolicysys.o \
 	getdents.o \
 	lchmod.o \
 	netbsd_lchown.o \

@@ -480,8 +480,10 @@
 257	AUE_NULL	NOSTD	{ int lio_listio(int mode, \
 				    struct aiocb * const *acb_list, \
 				    int nent, struct sigevent *sig); }
-258	AUE_NULL	UNIMPL	nosys
-259	AUE_NULL	UNIMPL	nosys
+258 AUE_NULL	STD		{ int __proc_info(int callnum, int pid, \
+					int flavor, uint64_t arg, void * buffer, \
+					int buffersize); }
+259 AUE_NULL	STD		{ int __iopolicysys(int cmd, struct _iopol_param_t * param); }
 260	AUE_NULL	UNIMPL	nosys
 261	AUE_NULL	UNIMPL	nosys
 262	AUE_NULL	UNIMPL	nosys
