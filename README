@@ -5,20 +5,11 @@ Rudimentary Mach IPC is supported through libmach provided one's kernel
 is compiled with COMPAT_MACH. The mach interface generator should be able
 to work with modern .defs files.
 
-Currently known to be missing are:
- - AF_SYSTEM domain sockets and the event protocols
- - The audit session system calls: audit_session_self and audit_session_join
- - XPC
-   - The XPC_JETSAM_BANDs are unsupported
+Missing features ordered by version of launchd by which they'll be supported:
 
-- MACH_SEND_NOTIFY
-
+v0:
 kevent flags:
 - EVFILT_MACHPORT
-- EVFILT_VM
-	- NOTE_VM_PRESSURE
-	- NOTE_VM_ERROR
-
 #define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
 #define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
 /*
@@ -29,6 +20,7 @@ kevent flags:
 #define	NOTE_EXIT_MEMORY		0x00020000
 #define NOTE_EXIT_CSERROR		0x00040000
 
+- MACH_SEND_NOTIFY
 
 libproc functions:
 proc_get_dirty
@@ -43,19 +35,34 @@ proc_track_dirty
 needing __proc_info system call to be implemented
 
 extended posix_spawnattr calls in support/posix_spawn.c are not expected
-to actually work yet, among others
+to actually work yet, among others:
+- posix_spawnattr_setbinpref_np
+- posix_spawnattr_getbinpref_np
 
-int
-posix_spawnattr_setbinpref_np(posix_spawnattr_t *restrict attr, size_t count, cpu_type_t *pref,
-         size_t *restrict ocount);
 
-int
-posix_spawnattr_getbinpref_np(const posix_spawnattr_t *restrict attr, size_t count, cpu_type_t *pref,
-							  size_t * restrict ocount);
+XML plist configuration
 
+
+v1:
+kevent flags needed by (at least) libdispatch:
+- EVFILT_VM
+	- NOTE_VM_PRESSURE
+	- NOTE_VM_ERROR
+
+per-user & per-session launchds (xpc domain system in domain.defs)
+ - The audit session system calls: audit_session_self, audit_session_join,
+   and audit_session_port
+
+libUCL (YAML & JSON) configuration
+
+
+v2 or later:
+- AF_SYSTEM domain sockets and the event protocols
+ - XPC
+   - The XPC_JETSAM_BANDs are unsupported
 
 I/O priority setting functionality - system call:
-__iopolicysys
+__iopolicysys - getiopolicy_np / setiopolicy_np
 
 
 
