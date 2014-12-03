@@ -5,6 +5,8 @@ PROG= launchd
 .PATH: support
 .PATH: uuid
 
+MK_MAN= no
+
 BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
 BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
@@ -20,11 +22,11 @@ LDFLAGS+= -L${.CURDIR}/../../lib/libxpc -lxpc
 LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach -lutil -lnv
 LDFLAGS+= -pthread
 
-jobServer.h jobServer.c job.h: job.defs helper.h
-	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
 helper.h launchd_helperServer.h: helper.defs
 	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header helper.h \
 	-sheader launchd_helperServer.h helper.defs
+jobServer.h jobServer.c job.h: job.defs helper.h
+	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
 job_reply.h job_replyUser.c job_replyServer.c job_replyServer.h: job_reply.defs
 	mig ${MIG_FLAGS} -sheader job_replyServer.h job_reply.defs
 job_forward.h job_forwardUser.c job_forwardServer.h: job_forward.defs
@@ -33,7 +35,7 @@ notify.h notifyServer.c notifyServer.h: notify.defs
 	mig ${MIG_FLAGS} -sheader notifyServer.h notify.defs
 mach_excServer.h mach_excServer.c: mach_exc.defs
 	mig ${MIG_FLAGS} -sheader mach_excServer.h mach_exc.defs
-internal.h internalServer.h internalServer.c internalUser.c:
+internal.h internalServer.h internalServer.c internalUser.c: internal.defs
 	mig ${MIG_FLAGS} -sheader internalServer.h internal.defs
 
 
