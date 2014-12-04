@@ -10,17 +10,6 @@ Missing features ordered by version of launchd by which they'll be supported:
 v0:
 kevent flags:
 - EVFILT_MACHPORT
-#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
-#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
-/*
- * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
- */
-#define NOTE_EXIT_DETAIL_MASK		0x00070000
-#define	NOTE_EXIT_DECRYPTFAIL		0x00010000 
-#define	NOTE_EXIT_MEMORY		0x00020000
-#define NOTE_EXIT_CSERROR		0x00040000
-
-- MACH_SEND_NOTIFY
 
 libproc functions:
 proc_get_dirty
@@ -38,6 +27,11 @@ XML plist configuration
 
 
 v1:
+Retrofit CMU kernel ipc infrastructure
+
+Support:
+- MACH_SEND_NOTIFY
+
 kevent flags needed by (at least) libdispatch:
 - EVFILT_VM
 	- NOTE_VM_PRESSURE
@@ -57,6 +51,7 @@ to actually work yet, among others:
 
 
 v2 or later:
+
 - AF_SYSTEM domain sockets and the event protocols
 
 - XPC_JETSAM_BANDs (handle memory pressure)
@@ -65,6 +60,19 @@ I/O priority setting functionality - system call:
 __iopolicysys supports:
 	- getiopolicy_np
 	- setiopolicy_np
+
+
+- except NOTE_EXIT_MEMORY of questionable relevance
+#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
+#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
+/*
+ * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
+ */
+#define NOTE_EXIT_DETAIL_MASK		0x00070000
+#define	NOTE_EXIT_DECRYPTFAIL		0x00010000 
+#define	NOTE_EXIT_MEMORY		0x00020000
+#define NOTE_EXIT_CSERROR		0x00040000
+
 
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
