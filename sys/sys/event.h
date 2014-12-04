@@ -209,6 +209,7 @@ struct knlist {
 
 
 #ifdef _KERNEL
+#include "opt_compat_mach.h"
 
 /*
  * Flags for knote call
@@ -238,7 +239,7 @@ struct filterops {
 	int	(*f_attach)(struct knote *kn);
 	void	(*f_detach)(struct knote *kn);
 	int	(*f_event)(struct knote *kn, long hint);
-	void	(*f_touch)(struct knote *kn, struct kevent *kev, u_long type);
+	void	(*f_touch)(struct knote *kn, struct kevent64_s *kev, u_long type);
 };
 
 /*
@@ -253,7 +254,7 @@ struct knote {
 	struct			knlist *kn_knlist;	/* f_attach populated */
 	TAILQ_ENTRY(knote)	kn_tqe;
 	struct			kqueue *kn_kq;	/* which queue we are on */
-	struct 			kevent kn_kevent;
+	struct 			kevent64_s kn_kevent;
 	int			kn_status;	/* protected by kq lock */
 #define KN_ACTIVE	0x01			/* event has been triggered */
 #define KN_QUEUED	0x02			/* event is on queue */
@@ -272,6 +273,10 @@ struct knote {
 		struct		aiocblist *p_aio;	/* AIO job pointer */
 		struct		aioliojob *p_lio;	/* LIO job pointer */ 
 		sbintime_t	*p_nexttime;	/* next timer event fires at */
+#ifdef COMPAT_MACH
+		struct		ipc_pset *p_pset;
+#endif
+		void		*p_v;		/* generic other pointer */
 	} kn_ptr;
 	struct			filterops *kn_fop;
 	void			*kn_hook;
@@ -315,7 +320,7 @@ extern void	knlist_cleardel(struct knlist *knl, struct thread *td,
 #define knlist_delete(knl, td, islocked)			\
 		knlist_cleardel((knl), (td), (islocked), 1)
 extern void	knote_fdclose(struct thread *p, int fd);
-extern int 	kqfd_register(int fd, struct kevent *kev, struct thread *p,
+extern int 	kqfd_register(int fd, struct kevent64_s *kev, struct thread *p,
 		    int waitok);
 extern int	kqueue_add_filteropts(int filt, struct filterops *filtops);
 extern int	kqueue_del_filteropts(int filt);

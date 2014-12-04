@@ -30,6 +30,8 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_ktrace.h"
+#include "opt_kqueue.h"
+#include "opt_compat_mach.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -94,7 +96,7 @@ static int	kevent_copyout(void *arg, void *kevp, int count);
 static int	kevent_copyin(void *arg, void *kevp, int count);
 static int	kevent64_copyout(void *arg, void *kevp, int count);
 static int	kevent64_copyin(void *arg,void *kevp, int count);
-static int	kqueue_register(struct kqueue *kq, struct kevent *kev,
+static int	kqueue_register(struct kqueue *kq, struct kevent64_s *kev,
 		    struct thread *td, int waitok);
 static int	kqueue_acquire(struct file *fp, struct kqueue **kqp);
 static void	kqueue_release(struct kqueue *kq, int locked);
@@ -104,7 +106,7 @@ static void	kqueue_task(void *arg, int pending);
 static int	kqueue_scan(struct kqueue *kq, int maxevents,
 		    struct kevent_copyops *k_ops,
 		    const struct timespec *timeout,
-		    struct kevent *keva, struct thread *td);
+		    struct kevent64_s *keva, struct thread *td);
 static void 	kqueue_wakeup(struct kqueue *kq);
 static struct filterops *kqueue_fo_find(int filt);
 static void	kqueue_fo_release(int filt);
@@ -153,7 +155,7 @@ static int	filt_timer(struct knote *kn, long hint);
 static int	filt_userattach(struct knote *kn);
 static void	filt_userdetach(struct knote *kn);
 static int	filt_user(struct knote *kn, long hint);
-static void	filt_usertouch(struct knote *kn, struct kevent *kev,
+static void	filt_usertouch(struct knote *kn, struct kevent64_s *kev,
 		    u_long type);
 
 static struct filterops file_filtops = {
@@ -184,6 +186,11 @@ static struct filterops user_filtops = {
 	.f_event = filt_user,
 	.f_touch = filt_usertouch,
 };
+
+#ifdef COMPAT_MACH
+/* Mach portset filter */
+extern struct filterops machport_filtops;
+#endif
 
 static uma_zone_t	knote_zone;
 static atomic_uint	kq_ncallouts = ATOMIC_VAR_INIT(0);
@@ -290,7 +297,18 @@ static struct {
 	{ &null_filtops },			/* former EVFILT_NETDEV */
 	{ &fs_filtops },			/* EVFILT_FS */
 	{ &null_filtops },			/* EVFILT_LIO */
-	{ &user_filtops },			/* EVFILT_USER */
+	{ &user_filtops, 1 },			/* EVFILT_USER */
+	{ &null_filtops },			/* EVFILT_SENDFILE */
+#if HAVE_EVFILT_MACHPORT
+	{ &machport_filtops },		/* EVFILT_MACHPORT */
+#else
+	{ &null_filtops },
+#endif
+#ifdef HAVE_EVFILT_VM
+	{ &vm_filtops },			/* EVFILT_VM */
+#else
+	{ &null_filtops },
+#endif
 };
 
 /*
@@ -458,7 +476,7 @@ knote_fork(struct knlist *list, int pid)
 {
 	struct kqueue *kq;
 	struct knote *kn;
-	struct kevent kev;
+	struct kevent64_s kev;
 	int error;
 
 	if (list == NULL)
@@ -674,7 +692,7 @@ filt_user(struct knote *kn, __unused long hint)
 }
 
 static void
-filt_usertouch(struct knote *kn, struct kevent *kev, u_long type)
+filt_usertouch(struct knote *kn, struct kevent64_s *kev, u_long type)
 {
 	u_int ffctrl;
 
@@ -930,7 +948,9 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 	int v1)
 {
 	struct kevent keva[KQ_NEVENTS];
-	struct kevent *kevp, *changes;
+	struct kevent *changes;
+	struct kevent64_s keva64[KQ_NEVENTS];
+	struct kevent64_s kevtmp, *kevp;
 	struct kqueue *kq;
 	struct file *fp;
 	cap_rights_t rights;
@@ -951,20 +971,19 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 
 	nerrors = 0;
 	if (v1) {
-		struct kevent64_s keva[KQ_NEVENTS];
 		struct kevent64_s *kevp, *changes;
 		while (nchanges > 0) {
 			n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
-			error = k_ops->k_copyin(k_ops->arg, keva, n);
+			error = k_ops->k_copyin(k_ops->arg, keva64, n);
 			if (error)
 				goto done;
-			changes = keva;
+			changes = keva64;
 			for (i = 0; i < n; i++) {
 				kevp = &changes[i];
 				if (!kevp->filter)
 					continue;
 				kevp->flags &= ~EV_SYSFLAGS;
-				error = kqueue_register(kq, (struct kevent *)kevp, td, 1);
+				error = kqueue_register(kq, kevp, td, 1);
 				if (error || (kevp->flags & EV_RECEIPT)) {
 					if (nevents != 0) {
 						kevp->flags = EV_ERROR;
@@ -982,6 +1001,8 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 		}
 		goto check_errors;
 	}
+	kevtmp.ext[0] = 0;
+	kevtmp.ext[1] = 0;
 	while (nchanges > 0) {
 		n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
 		error = k_ops->k_copyin(k_ops->arg, keva, n);
@@ -989,9 +1010,11 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 			goto done;
 		changes = keva;
 		for (i = 0; i < n; i++) {
-			kevp = &changes[i];
+			kevp = (struct kevent64_s *)&changes[i];
 			if (!kevp->filter)
 				continue;
+			memcpy(&kevtmp, &changes[i], sizeof(struct kevent));
+			kevp = &kevtmp;
 			kevp->flags &= ~EV_SYSFLAGS;
 			error = kqueue_register(kq, kevp, td, 1);
 			if (error || (kevp->flags & EV_RECEIPT)) {
@@ -1015,8 +1038,12 @@ check_errors:
 		error = 0;
 		goto done;
 	}
-
-	error = kqueue_scan(kq, nevents, k_ops, timeout, keva, td);
+	if (v1 == 0)
+		for (i = 0; i < nevents; i++) {
+			memcpy(&keva64[i], &keva[i], sizeof(struct kevent));
+			keva64[i].ext[0] = keva64[i].ext[1] = 0;
+		}
+	error = kqueue_scan(kq, nevents, k_ops, timeout, keva64, td);
 done:
 	kqueue_release(kq, 0);
 done_norel:
@@ -1109,7 +1136,7 @@ kqueue_fo_release(int filt)
  * hold any mutexes.
  */
 static int
-kqueue_register(struct kqueue *kq, struct kevent *kev, struct thread *td, int waitok)
+kqueue_register(struct kqueue *kq, struct kevent64_s *kev, struct thread *td, int waitok)
 {
 	struct filterops *fops;
 	struct file *fp;
@@ -1481,9 +1508,9 @@ kqueue_task(void *arg, int pending)
  */
 static int
 kqueue_scan(struct kqueue *kq, int maxevents, struct kevent_copyops *k_ops,
-    const struct timespec *tsp, struct kevent *keva, struct thread *td)
+    const struct timespec *tsp, struct kevent64_s *keva, struct thread *td)
 {
-	struct kevent *kevp;
+	struct kevent64_s *kevp;
 	struct knote *kn, *marker;
 	sbintime_t asbt, rsbt;
 	int count, error, haskqglobal, influx, nkev, touch;
@@ -2418,7 +2445,7 @@ knote_free(struct knote *kn)
  * Register the kev w/ the kq specified by fd.
  */
 int 
-kqfd_register(int fd, struct kevent *kev, struct thread *td, int waitok)
+kqfd_register(int fd, struct kevent64_s *kev, struct thread *td, int waitok)
 {
 	struct kqueue *kq;
 	struct file *fp;
