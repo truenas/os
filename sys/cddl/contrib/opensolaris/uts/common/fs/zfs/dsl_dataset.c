@@ -407,8 +407,10 @@ dsl_dataset_hold_obj(dsl_pool_t *dp, uint64_t dsobj, void *tag,
 			err = zap_contains(mos, dsobj, DS_FIELD_LARGE_BLOCKS);
 			if (err == 0)
 				ds->ds_large_blocks = B_TRUE;
-			else
+			else {
 				ASSERT3U(err, ==, ENOENT);
+				err = 0;
+			}
 		}
 
 		if (err == 0) {
