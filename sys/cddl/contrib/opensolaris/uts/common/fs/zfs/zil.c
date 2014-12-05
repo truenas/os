@@ -655,7 +655,7 @@ zil_claim(const char *osname, void *txarg)
 		 * case it can not have a ZIL.
 		 */
 		if (error != EBUSY) {
-			cmn_err(CE_WARN, "can't open objset for %s, error %u",
+			cmn_err(CE_WARN, "zil_claim: can't open objset for %s, error %u",
 			    osname, error);
 		}
 		return (0);
@@ -715,7 +715,8 @@ zil_check_log_chain(const char *osname, void *tx)
 
 	error = dmu_objset_hold(osname, FTAG, &os);
 	if (error != 0) {
-		cmn_err(CE_WARN, "can't open objset for %s", osname);
+		cmn_err(CE_WARN, "zil_check_log_chain: can't open objset for %s, error %u",
+		    osname, error);
 		return (0);
 	}
 
