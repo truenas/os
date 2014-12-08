@@ -90,7 +90,7 @@
 #include <sys/types.h>
 #include <vm/vm.h>
 #include <machine/mach/vm_types.h>
-#include <sys/mach/ipc/ipc_types.h>
+
 
 /*
  *	mach_port_name_t - the local identity for a Mach port
@@ -136,6 +136,9 @@ struct ipc_port ;
 
 #endif	/* MACH_KERNEL_PRIVATE */
 
+typedef struct ipc_port *ipc_port_t;
+typedef ipc_port_t		mach_port_t;
+
 
 #define IPC_PORT_NULL		((ipc_port_t) 0UL)
 #define IPC_PORT_DEAD		((ipc_port_t)~0UL)
@@ -146,9 +149,6 @@ struct ipc_port ;
  * Since the 32-bit and 64-bit representations of ~0 are different,
  * explicitly handle MACH_PORT_DEAD
  */
-
-#define CAST_MACH_PORT_TO_NAME(x) ((mach_port_name_t)(uintptr_t)(x))
-#define CAST_MACH_NAME_TO_PORT(x) ((x) == MACH_PORT_DEAD ? (mach_port_t)IPC_PORT_DEAD : (mach_port_t)(uintptr_t)(x))
 
 #else	/* KERNEL */
 
@@ -171,15 +171,13 @@ struct ipc_port ;
 #include <sys/_types.h>
 #include <sys/_types/_mach_port_t.h>
 #endif
-
+typedef natural_t mach_port_t;
 
 #endif	/* KERNEL */
 
 typedef natural_t mach_port_name_t;
-typedef natural_t mach_port_t;
 typedef mach_port_name_t *mach_port_name_array_t;
 
-typedef natural_t mach_port_index_t;
 typedef mach_port_t			*mach_port_array_t;
 
 /*
@@ -191,11 +189,17 @@ typedef mach_port_t			*mach_port_array_t;
  *  that a port right was present, but it died.
  */
 
-#define MACH_PORT_NULL		0  /* intentional loose typing */
-#define MACH_PORT_DEAD		((mach_port_name_t) ~0)
+#define MACH_PORT_NULL		((mach_port_t)0)
+#define MACH_PORT_DEAD		((mach_port_t) ~0)
 #define MACH_PORT_VALID(name)				\
 		(((name) != MACH_PORT_NULL) && 		\
 		 ((name) != MACH_PORT_DEAD))
+
+#define MACH_PORT_NAME_NULL		0  /* intentional loose typing */
+#define MACH_PORT_NAME_DEAD		((mach_port_name_t) ~0)
+#define MACH_PORT_NAME_VALID(name)			\
+		(((name) != MACH_PORT_NAME_NULL) && 		\
+		 ((name) != MACH_PORT_NAME_DEAD))
 
 
 /*
@@ -226,8 +230,16 @@ typedef mach_port_t			*mach_port_array_t;
 #define	MACH_PORT_MAKE(index, gen)	(index)
 
 #endif	/* NO_PORT_GEN */
+#define MACH_PORT_MAKEB(index, bits)    \
+                MACH_PORT_MAKE(index, IE_BITS_GEN(bits))
+
+#define MACH_PORT_VALID(name)   \
+                (((name) != MACH_PORT_NULL) && ((name) != MACH_PORT_DEAD))
 
 
+
+#include <sys/mach/ipc/port.h>
+#include <sys/mach/std_types.h>
 /*
  *  These are the different rights a task may have for a port.
  *  The MACH_PORT_RIGHT_* definitions are used as arguments
@@ -430,5 +442,11 @@ typedef mach_port_name_t	*port_name_array_t;
 		((port_t)(name) != PORT_NULL && (port_t)(name) != PORT_DEAD)
 
 #endif	/* !__DARWIN_UNIX03 && !_NO_PORT_T_FROM_MACH */
+
+
+#define CAST_MACH_PORT_TO_NAME(x) ((mach_port_name_t)(uintptr_t)(x))
+#define CAST_MACH_NAME_TO_PORT(x) ((x) == MACH_PORT_NAME_DEAD ? (mach_port_t)IPC_PORT_DEAD : (mach_port_t)(uintptr_t)(x))
+
+
 
 #endif	/* _MACH_PORT_H_ */

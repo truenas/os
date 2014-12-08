@@ -84,12 +84,130 @@
 
 #ifndef	STD_TYPES_H_
 #define	STD_TYPES_H_
-
+#define DIPC 0
+#define MACH_KDB 0
+#define MACH_COUNTERS 0
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/vm_types.h>
 #ifdef _KERNEL
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
-#include <sys/mach/ipc/ipc_port.h>
+#define assert(exp) KASSERT(exp, (#exp))
+#define mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF)
+#define MACH_IPC_DEBUG 0
+#define MACH_DEBUG 0
+#define MACH_MACHINE_ROUTINES 0
+#define BYTE_SIZE NBBY
+#define THREAD_NULL NULL
+#define XK_PROXY 0
+#define NORMA_IPC 0
+#define VM_MAP_COPYIN_OPT_SRC_DESTROY 0
+#define VM_MAP_COPYIN_OPT_STEAL_PAGES 0
+#define VM_MAP_COPYIN_OPT_STEAL_PAGES 0
+#define VM_MAP_REMOVE_WAIT_FOR_KWIRE 0
+#define VM_MAP_REMOVE_INTERRUPTIBLE 0
+#define page_aligned(addr) ((addr & PAGE_MASK) == 0)
+
+/* XXX FIX THIS */
+#define current_space() NULL
+#define zinit(size1, sizemax, size2, name) uma_zcreate(name, size1, NULL, NULL, NULL, NULL, 0, 0)
+#define zone_change(zone, flag, val)
+#define kalloc(size) malloc(size, M_DEVBUF, M_WAITOK)
+#define KALLOC(size, rt) ((vm_offset_t)malloc(size, M_DEVBUF, M_WAITOK))
+#define kfree(ptr, size) free((void *)(ptr), M_DEVBUF)
+#define KFREE(ptr, size, rt) free((void *)(ptr), M_DEVBUF)
+#define copyinmsg copyin
+#define copyoutmsg copyout
+/* drop reference */
+#define vm_allocate(a, b, c, d) 0
+#define vm_deallocate(map, pa, size) 0
+#define vm_map_copyin_page_list(map, addr, length, options, etc0, etc1) 0
+#define vm_map_deallocate(map)
+#define vm_object_pager_wakeup(map)
+#define ds_notify(map) 0
+#define ds_master_notify(map) 0
+#define vm_map_copy_steal_pages(copy)
+#define thread_deallocate(thread)
+#define task_name_deallocate(task)
+#define subsystem_deallocate(sub)
+#define assert_wait(a, b)
+#define vm_map_copy_discard(map)
+#define cpu_number() curcpu
+#define vm_map_copy_overwrite(a, b, c, d) 0
+#define vm_map_copyin(a, b, c, d, e) 0
+#define vm_map_copyout(a, b, c) 0
+#define copyoutmap(a, b, c, d) 0
+#define copyinmap(a, b, c, d) 0
+
+#define decl_simple_lock_data(a, b) struct mtx b;
+	
+#include <vm/vm.h>
+
+#define VM_MAP_COPY_PAGE_LIST_MAX	20
+#define	VM_MAP_COPY_PAGE_LIST_MAX_SIZE	(VM_MAP_COPY_PAGE_LIST_MAX * PAGE_SIZE)
+
+struct vm_map_copy {
+	int			type;
+#define VM_MAP_COPY_ENTRY_LIST		1
+#define VM_MAP_COPY_OBJECT		2
+#define VM_MAP_COPY_PAGE_LIST		3
+#define VM_MAP_COPY_KERNEL_BUFFER	4
+	vm_offset_t		offset;
+	vm_size_t		size;
+	union {
+#if 0		
+	    struct vm_map_header	hdr;	/* ENTRY_LIST */
+#endif		
+	    struct {				/* OBJECT */
+	    	vm_object_t		object;
+		vm_size_t		index;	/* record progress as pages
+						 * are moved from object to
+						 * page list; must be zero
+						 * when first invoking
+						 * vm_map_object_to_page_list
+						 */
+	    } c_o;
+	    struct {				/* PAGE_LIST */
+		int			npages;
+			boolean_t		page_loose;
+#if 0			
+		vm_map_copy_cont_t	cont;
+			vm_map_copyin_args_t	cont_args;
+#endif			
+		vm_page_t		page_list[VM_MAP_COPY_PAGE_LIST_MAX];
+	    } c_p;
+	    struct {				/* KERNEL_BUFFER */
+		vm_offset_t		kdata;
+		vm_size_t		kalloc_size;  /* size of this copy_t */
+	    } c_k;
+	} c_u;
+};
+
+#define cpy_hdr			c_u.hdr
+
+#define cpy_object		c_u.c_o.object
+#define	cpy_index		c_u.c_o.index
+
+#define cpy_page_list		c_u.c_p.page_list
+#define cpy_npages		c_u.c_p.npages
+#define cpy_page_loose		c_u.c_p.page_loose
+#define cpy_cont		c_u.c_p.cont
+#define cpy_cont_args		c_u.c_p.cont_args
+
+#define cpy_kdata		c_u.c_k.kdata
+#define cpy_kalloc_size		c_u.c_k.kalloc_size
+
+#define	VM_MAP_COPY_NULL	((vm_map_copy_t) 0)
+
+
+typedef struct vm_map_copy *vm_map_copy_t;
+#include <sys/mach/macro_help.h>
+
 #endif
 #endif	/* STD_TYPES_H_ */

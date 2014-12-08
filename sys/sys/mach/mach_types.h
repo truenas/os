@@ -202,27 +202,30 @@
 #include <sys/mach/host_notify.h>
 
 #ifdef	_KERNEL
-#include <compat/mach/task.h>		/* for task_port_array_t */
+
 #if 0
 #include <compat/mach/thread.h>	/* for thread_port_array_t */
 #endif
-#include <compat/mach/processor.h>	/* for processor_array_t,
-				       processor_set_array_t,
-				       processor_set_name_array_t */
-#include <compat/mach/ledger.h>	/* for ledger_t */
+
+
+#define __MigTypeCheck 1
+#define __MigKernelSpecificCode 1
 
 
 typedef struct task                     *task_name_t, *task_suspension_token_t;
+typedef struct thread_shuttle *thread_t, *thread_act_t;
 typedef struct coalition                *coalition_t;
 typedef struct host                     *host_t;
 typedef struct host                     *host_priv_t;
 typedef struct host                     *host_security_t;
-typedef struct processor_set            *processor_set_control_t;
+typedef struct processor_set            *processor_set_t, *processor_set_control_t;
 typedef struct semaphore                *semaphore_t;
 typedef struct alarm                    *alarm_t;
 typedef struct clock                    *clock_serv_t;
 typedef struct clock                    *clock_ctrl_t;
+typedef struct ledger					*ledger_t;
 typedef processor_set_t         processor_set_name_t;
+
 
 #else	/* MACH_KERNEL */
 
@@ -247,8 +250,6 @@ typedef mach_port_t             host_security_t;
 typedef host_t                  host_name_t;
 typedef host_t                  host_name_port_t;
 
-typedef mach_port_t           clock_reply_t;
-
 typedef	task_port_t		*task_port_array_t;
 typedef mach_port_t		thread_port_t;
 typedef	thread_port_t		*thread_port_array_t;
@@ -271,6 +272,11 @@ typedef processor_set_name_t *processor_set_name_array_t;
 typedef processor_t *processor_array_t;
 
 #endif	/* MACH_KERNEL */
+typedef mach_port_t           clock_reply_t;
+typedef        mach_port_t             mem_entry_name_port_t;
+typedef ledger_t               *ledger_array_t;
+typedef thread_act_t            *thread_act_array_t;
+
 
 typedef void * kmod_args_t;
 typedef mach_port_t             exception_handler_t;
@@ -278,11 +284,12 @@ typedef exception_handler_t     *exception_handler_array_t;
 typedef int kmod_t;
 typedef int kmod_control_flavor_t;
 
+
 typedef mach_port_t UNDServerRef;
-typedef ledger_t                *ledger_array_t;
 typedef mach_port_t		*ledger_port_array_t;
 typedef mach_port_t    		ledger_port_t;
 typedef char			*user_subsystem_t;
+
 
 
 
@@ -291,5 +298,50 @@ typedef char			*user_subsystem_t;
  *	before mach/{std,mach}_types.{defs,h} were set up.
  */
 #include <sys/mach/std_types.h>
+#include <compat/mach/processor.h>	/* for processor_array_t,
+				       processor_set_array_t,
+				       processor_set_name_array_t */
+#include <compat/mach/task.h>
 
+#ifdef __MIG_check__Request__vm_map_subsystem__
+#include <sys/mach/ipc/ipc_kmsg.h>
+#include <sys/mach/mach_vm_server.h>
+
+int mach_vm_map_page_query(vm_map_t target_map, vm_offset_t offset, integer_t *disposition, integer_t *ref_count);
+int mach_vm_mapped_pages_info(vm_map_t task, page_address_array_t *pages, mach_msg_type_number_t *pagesCnt);
+
+
+#define vm_copy(a0, a1, a2, a3) mach_vm_copy(a0, a1, a2, a3)
+#define vm_map(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) mach_vm_map(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+#define vm_inherit(a0, a1, a2, a3) mach_vm_inherit(a0, a1, a2, a3)
+#define vm_map_64(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) mach_vm_map(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+#define vm_msync(a0, a1, a2, a3) mach_vm_msync(a0, a1, a2, a3)
+#define vm_protect(a0, a1, a2, a3, a4) mach_vm_protect(a0, a1, a2, a3, a4)
+#define vm_read(target_task, address, size, data, dataCnt) mach_vm_read(target_task, address, size, data, dataCnt)
+#ifdef notyet
+#define vm_read_list(target_task, data_list, count) mach_vm_read_list(target_task, (mach_vm_read_entry_t)&data_list, count)
+#endif
+#define vm_read_overwrite(target_task, address, size, data, outsize) mach_vm_read_overwrite(target_task, address, size, data, outsize)
+#define vm_region(a0, a1, a2, a3, a4, a5, a6) mach_vm_region(a0, a1, a2, a3, a4, a5, a6)
+#define vm_map(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) mach_vm_map(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+#define vm_write(target_task, address, data, dataCnt) mach_vm_write(target_task, address, data, dataCnt)
+#define vm_machine_attribute(target_task, address, size, attribute, value) mach_vm_machine_attribute(target_task, address, size, attribute, value)
+#define vm_purgable_control(target_task, address, control, state) mach_vm_purgable_control(target_task, address, control, state)
+#define vm_behavior_set(target_task, address, size, new_behavior) mach_vm_behavior_set(target_task, address, size, new_behavior) 
+#define vm_remap(target_task, target_address, size, mask, flags, src_task, src_address, copy, cur_protection, max_protection, inheritance) mach_vm_remap(target_task, target_address, size, mask, flags, src_task, src_address, copy, cur_protection, max_protection, inheritance)
+#define vm_region_64(target_task, address, size, flavor, info, infoCnt, object_name)  mach_vm_region(target_task, address, size, flavor, info, infoCnt, object_name)
+#define vm_region_recurse(target_task, address, size, nesting_depth, info, infoCnt) mach_vm_region_recurse(target_task, address, size, nesting_depth, info, infoCnt)
+#define vm_region_recurse_64(target_task, address, size, nesting_depth, info, infoCnt) mach_vm_region_recurse(target_task, address, size, nesting_depth, info, infoCnt)
+#define vm_map_page_query(target_map, offset, disposition, ref_count) mach_vm_map_page_query(target_map, offset, disposition, ref_count)
+#define vm_mapped_pages_info(task, pages, pagesCnt) mach_vm_mapped_pages_info(task, pages, pagesCnt)
+
+#endif
+#ifdef __MIG_check__Request__host_priv_subsystem__
+#include <sys/mach/ipc/ipc_kmsg.h>
+#include <sys/mach/mach_vm_server.h>
+int mach_vm_wire_32(host_priv_t host_priv, vm_map_t task, vm_address_t address, vm_size_t size, vm_prot_t desired_access);
+
+#define vm_wire(host_priv, task, address, size, desired_access) mach_vm_wire_32(host_priv, task, address, size, desired_access)	
+
+#endif
 #endif	/* _MACH_MACH_TYPES_H_ */

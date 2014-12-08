@@ -444,14 +444,14 @@ extern void ipc_kmsg_put_to_kernel(
 extern mach_msg_return_t ipc_kmsg_copyin_header(
 	mach_msg_header_t	*msg,
 	ipc_space_t		space,
-	mach_port_t		notify);
+	mach_port_name_t		notify);
 
 /* Copyin port rights and out-of-line memory from a user message */
 extern mach_msg_return_t ipc_kmsg_copyin(
 	ipc_kmsg_t	kmsg,
 	ipc_space_t	space,
 	vm_map_t	map,
-	mach_port_t	notify);
+	mach_port_name_t	notify);
 
 /* Copyin port rights and out-of-line memory from a kernel message */
 extern void ipc_kmsg_copyin_from_kernel(
@@ -461,21 +461,21 @@ extern void ipc_kmsg_copyin_from_kernel(
 extern mach_msg_return_t ipc_kmsg_copyout_header(
 	mach_msg_header_t	*msg,
 	ipc_space_t		space,
-	mach_port_t		notify);
+	mach_port_name_t		notify);
 
 /* Copyout a port right returning a name */
 extern mach_msg_return_t ipc_kmsg_copyout_object(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	mach_port_t		*namep);
+	mach_port_name_t		*namep);
 
 /* Copyout the header and body to a user message */
 extern mach_msg_return_t ipc_kmsg_copyout(
 	ipc_kmsg_t		kmsg,
 	ipc_space_t		space,
 	vm_map_t		map,
-	mach_port_t		notify,
+	mach_port_name_t		notify,
 	mach_msg_body_t		*slist);
 
 /* Copyout port rights and out-of-line memory from the body of a message */

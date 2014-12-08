@@ -318,7 +318,7 @@ typedef unsigned int mach_msg_copy_options_t;
 #define MACH_MSG_VIRTUAL_COPY   	1
 #define MACH_MSG_ALLOCATE		2
 #define MACH_MSG_OVERWRITE		3
-#ifdef  MACH_KERNEL
+#ifdef  _KERNEL
 #define MACH_MSG_KALLOC_COPY_T		4
 #define MACH_MSG_PAGE_LIST_COPY_T	5
 #if	DIPC
@@ -362,11 +362,16 @@ typedef struct
 
 typedef struct
 {
-  mach_port_t			name;
-  mach_msg_size_t		pad1;
-  unsigned int			pad2 : 16;
-  mach_msg_type_name_t		disposition : 8;
-  mach_msg_descriptor_type_t	type : 8;
+	mach_port_t			name;
+#if !defined(_KERNEL) && defined(__LP64__)	
+	mach_msg_size_t		pad1;
+#endif	
+	unsigned int			pad2 : 16;
+	mach_msg_type_name_t		disposition : 8;
+	mach_msg_descriptor_type_t	type : 8;
+#if defined(_KERNEL)
+	uint32_t			pad_end;
+#endif	
 } mach_msg_port_descriptor_t;
 
 typedef struct
@@ -785,10 +790,10 @@ typedef integer_t mach_msg_option_t;
 
 #define MACH_SEND_TIMEOUT	0x00000010
 #define MACH_SEND_INTERRUPT	0x00000040	/* libmach implements */
-#define MACH_SEND_CANCEL	0x00000080
+#define MACH_SEND_NOTIFY	0x00000080
 #define MACH_SEND_ALWAYS	0x00010000	/* internal use only */
 #define MACH_SEND_TRAILER	0x00020000
-#define MACH_SEND_NOTIFY	0x00040000	/* arm send-possible notify */
+
 
 
 #if	DIPC
@@ -820,6 +825,20 @@ typedef integer_t mach_msg_option_t;
 
 
 #define GET_RCV_ELEMENTS(y) (((y) >> 24) & 0xf)
+
+#ifdef _KERNEL
+/* The options that the kernel honors when passed from user space */
+#define MACH_SEND_USER		 (MACH_SEND_MSG | \
+				  MACH_SEND_TIMEOUT | MACH_SEND_NOTIFY | \
+				  MACH_SEND_TRAILER)
+
+#define MACH_RCV_USER		 (MACH_RCV_MSG | \
+				  MACH_RCV_TIMEOUT | MACH_RCV_OVERWRITE | \
+				  MACH_RCV_LARGE | MACH_RCV_LARGE_IDENTITY | \
+				  MACH_RCV_TRAILER_MASK)
+
+#define MACH_MSG_OPTION_USER	 (MACH_SEND_USER | MACH_RCV_USER)
+#endif
 
 /* 
  * XXXMAC: note that in the case of MACH_RCV_TRAILER_LABELS, 
@@ -962,9 +981,9 @@ extern mach_msg_return_t	mach_msg_overwrite_trap(
 					mach_msg_option_t option,
 					mach_msg_size_t send_size,
 					mach_msg_size_t rcv_size,
-					mach_port_t rcv_name,
+					mach_port_name_t rcv_name,
 					mach_msg_timeout_t timeout,
-					mach_port_t notify,
+					mach_port_name_t notify,
 					mach_msg_header_t *rcv_msg,
 					mach_msg_size_t rcv_limit);
 
@@ -973,9 +992,9 @@ extern mach_msg_return_t	mach_msg_overwrite(
 					mach_msg_option_t option,
 					mach_msg_size_t send_size,
 					mach_msg_size_t rcv_size,
-					mach_port_t rcv_name,
+					mach_port_name_t rcv_name,
 					mach_msg_timeout_t timeout,
-					mach_port_t notify,
+					mach_port_name_t notify,
 					mach_msg_header_t *rcv_msg,
 					mach_msg_size_t rcv_limit);
 
@@ -984,17 +1003,17 @@ extern mach_msg_return_t	mach_msg_trap(
 					mach_msg_option_t option,
 					mach_msg_size_t send_size,
 					mach_msg_size_t rcv_size,
-					mach_port_t rcv_name,
+					mach_port_name_t rcv_name,
 					mach_msg_timeout_t timeout,
-					mach_port_t notify);
+					mach_port_name_t notify);
 
 extern mach_msg_return_t	mach_msg(
 					mach_msg_header_t *msg,
 					mach_msg_option_t option,
 					mach_msg_size_t send_size,
 					mach_msg_size_t rcv_size,
-					mach_port_t rcv_name,
+					mach_port_name_t rcv_name,
 					mach_msg_timeout_t timeout,
-					mach_port_t notify);
+					mach_port_name_t notify);
 
 #endif	/* _MACH_MESSAGE_H_ */

@@ -95,6 +95,7 @@
 #include <mach_kdb.h>
 #endif
 
+#include <vm/uma.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/message.h>
 #if 0
@@ -141,11 +142,9 @@ typedef struct ipc_object *ipc_object_t;
 #define	IOT_PORT		0
 #define IOT_PORT_SET		1
 #define IOT_NUMBER		2		/* number of types used */
-#if 0
-extern zone_t ipc_object_zones[IOT_NUMBER];
-#endif
+extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 #define	io_alloc(otype)		\
-		((ipc_object_t) zalloc(ipc_object_zones[(otype)]))
+	((ipc_object_t) uma_zalloc(ipc_object_zones[(otype)], M_WAITOK))
 
 #if	DIPC || MACH_ASSERT
 /*
@@ -159,9 +158,8 @@ extern void	io_free(
 
 #else	/* DIPC || MACH_ASSERT */
 #define	io_free(otype, io)	\
-		zfree(ipc_object_zones[(otype)], (vm_offset_t) (io))
+		uma_zfree(ipc_object_zones[(otype)], (io))
 #endif	/* DIPC || MACH_ASSERT */
-
 /*
  * Here we depend on the ipc_object being first within the ipc_common_data,
  * which is first within the rpc_common_data, which in turn must be first
@@ -183,13 +181,13 @@ extern void	io_free(
 #else	/* DIPC  && NCPUS == 1 */
 
 #define io_lock_init(io) \
-	mutex_init(&((rpc_common_t)(io))->rcd_io_lock_data, ETAP_IPC_RPC)
+	mtx_init(&((rpc_common_t)(io))->rcd_io_lock_data, "ETAP_IPC_RPC", NULL, MTX_DEF)
 #define	io_lock(io) \
-	mutex_lock(&((rpc_common_t)(io))->rcd_io_lock_data)
+	mtx_lock(&((rpc_common_t)(io))->rcd_io_lock_data)
 #define	io_lock_try(io) \
-	mutex_try(&((rpc_common_t)(io))->rcd_io_lock_data)
+	mtx_trylock(&((rpc_common_t)(io))->rcd_io_lock_data)
 #define	io_unlock(io) \
-	mutex_unlock(&((rpc_common_t)(io))->rcd_io_lock_data)
+	mtx_unlock(&((rpc_common_t)(io))->rcd_io_lock_data)
 
 #endif	/* DIPC && NCPUS == 1 */
 
@@ -248,7 +246,7 @@ extern void ipc_object_release(
 /* Look up an object in a space */
 extern kern_return_t ipc_object_translate(
 	ipc_space_t		space,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	mach_port_right_t	right,
 	ipc_object_t		*objectp);
 
@@ -256,12 +254,12 @@ extern kern_return_t ipc_object_translate(
 extern kern_return_t
 ipc_object_alloc_dead(
 	ipc_space_t	space,
-	mach_port_t 	*namep);
+	mach_port_name_t 	*namep);
 
 /*  Allocate a dead-name entry, with a specific name */
 extern kern_return_t ipc_object_alloc_dead_name(
 	ipc_space_t	space,
-	mach_port_t	name);
+	mach_port_name_t	name);
 
 /* Allocate an object */
 extern kern_return_t ipc_object_alloc(
@@ -269,7 +267,7 @@ extern kern_return_t ipc_object_alloc(
 	ipc_object_type_t	otype,
 	mach_port_type_t	type,
 	mach_port_urefs_t	urefs,
-	mach_port_t		*namep,
+	mach_port_name_t		*namep,
 	ipc_object_t		*objectp);
 
 /* Allocate an object, with a specific name */
@@ -278,7 +276,7 @@ extern kern_return_t ipc_object_alloc_name(
 	ipc_object_type_t	otype,
 	mach_port_type_t	type,
 	mach_port_urefs_t	urefs,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_object_t		*objectp);
 
 /* Convert a send type name to a received type name */
@@ -288,7 +286,7 @@ extern mach_msg_type_name_t ipc_object_copyin_type(
 /* Copyin a capability from a space */
 extern kern_return_t ipc_object_copyin(
 	ipc_space_t		space,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	mach_msg_type_name_t	msgt_name,
 	ipc_object_t		*objectp);
 
@@ -308,7 +306,7 @@ extern kern_return_t ipc_object_copyout(
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
 	boolean_t		overflow,
-	mach_port_t		*namep);
+	mach_port_name_t		*namep);
 
 /* Copyout a capability with a name, placing it into a space */
 extern kern_return_t ipc_object_copyout_name(
@@ -316,20 +314,20 @@ extern kern_return_t ipc_object_copyout_name(
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
 	boolean_t		overflow,
-	mach_port_t		name);
+	mach_port_name_t		name);
 
 /* Translate/consume the destination right of a message */
 extern void ipc_object_copyout_dest(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	mach_port_t		*namep);
+	mach_port_name_t		*namep);
 
 /* Rename an entry in a space */
 extern kern_return_t ipc_object_rename(
 	ipc_space_t	space,
-	mach_port_t	oname,
-	mach_port_t	nname);
+	mach_port_name_t	oname,
+	mach_port_name_t	nname);
 
 #if	MACH_RT
 /* Determine if an object is real-time */

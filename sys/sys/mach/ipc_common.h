@@ -59,7 +59,7 @@ typedef struct ipc_common_data {
 	struct ipc_object	icd_object;
 	ipc_kobject_t		icd_kobject;
 	struct rpc_subsystem *	icd_subsystem;
-	mach_port_t		icd_receiver_name;
+	mach_port_name_t		icd_receiver_name;
 } *ipc_common_t;
 
 #endif	/* _MACH_IPC_COMMON_H_ */

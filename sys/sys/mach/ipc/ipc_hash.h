@@ -86,10 +86,11 @@
 #ifndef	_IPC_IPC_HASH_H_
 #define _IPC_IPC_HASH_H_
 
+#include <sys/mach/kern_return.h>
+#if 0
 #include <mach/boolean.h>
-#include <mach/kern_return.h>
 #include <mach_debug/hash_info.h>
-
+#endif
 /*
  * Exported interfaces
  */
@@ -98,21 +99,21 @@
 extern boolean_t ipc_hash_lookup(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_t		*namep,
+	mach_port_name_t		*namep,
 	ipc_entry_t		*entryp);
 
 /* Insert an entry into the appropriate reverse hash table */
 extern void ipc_hash_insert(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_entry_t		entry);
 
 /* Delete an entry from the appropriate reverse hash table */
 extern void ipc_hash_delete(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_entry_t		entry);
 
 /*
@@ -125,14 +126,14 @@ extern void ipc_hash_delete(
 extern void ipc_hash_global_delete(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_tree_entry_t	entry);
 
 /* Lookup (space, obj) in local hash table */
 extern boolean_t ipc_hash_local_lookup(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_t		*namep,
+	mach_port_name_t		*namep,
 	ipc_entry_t		*entryp);
 
 /* Inserts an entry into the local reverse hash table */
@@ -145,9 +146,9 @@ extern void ipc_hash_local_insert(
 /* Initialize the reverse hash table implementation */
 extern void ipc_hash_init(void);
 
-#include <mach_ipc_debug.h>
 
 #if	MACH_IPC_DEBUG
+#include <mach_ipc_debug.h>
 
 extern natural_t ipc_hash_info(
 	hash_info_bucket_t	*info,

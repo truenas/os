@@ -517,24 +517,6 @@ compat/linux/linux_util.c	optional	compat_linux32
 dev/amr/amr_linux.c		optional	compat_linux32 amr
 dev/mfi/mfi_linux.c		optional	compat_linux32 mfi
 
-compat/mach/mach_bootstrap.c	optional  compat_mach
-compat/mach/mach_clock.c        optional  compat_mach
-compat/mach/mach_errno.c        optional  compat_mach
-compat/mach/mach_exception.c    optional  compat_mach
-compat/mach/mach_host.c         optional  compat_mach
-compat/mach/mach_iokit.c        optional  compat_mach
-compat/mach/mach_message.c      optional  compat_mach
-compat/mach/mach_misc.c         optional  compat_mach
-compat/mach/mach_notify.c       optional  compat_mach
-compat/mach/mach_port.c         optional  compat_mach
-compat/mach/mach_semaphore.c    optional  compat_mach
-compat/mach/mach_services.c     optional  compat_mach
-compat/mach/mach_services_names.c     optional  compat_mach
-compat/mach/mach_syscalls.c     optional  compat_mach
-compat/mach/mach_sysent.c       optional  compat_mach
-compat/mach/mach_task.c         optional  compat_mach
-compat/mach/mach_thread.c       optional  compat_mach
-compat/mach/mach_vm.c           optional  compat_mach
 amd64/mach/mach_machdep.c		optional  compat_mach
 
 #

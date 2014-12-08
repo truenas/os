@@ -67,7 +67,7 @@ static uma_zone_t mach_message_zone;
 
 static inline int mach_msg_send(struct thread *, mach_msg_header_t *, int *, size_t);
 static inline int mach_msg_recv(struct thread *, mach_msg_header_t *,
-    int, size_t, unsigned int, mach_port_t);
+    int, size_t, unsigned int, mach_port_name_t);
 static inline
     struct thread *mach_get_target_task(struct thread *, struct mach_port *);
 static inline void mach_drop_rights(struct mach_right *, int);
@@ -92,7 +92,8 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 	} */
 	size_t send_size, recv_size;
 	mach_msg_header_t *msg;
-	int error, opt;
+	int error;
+	mach_msg_option_t option = uap->option;
 
 	DPRINTF(("mach_msg_overwrite_trap("
 		   "td=%p, msg=%p, option=%d, send_size=%u, rcv_size=%u, \n"
@@ -101,9 +102,10 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 		   uap->timeout, uap->notify, uap->rcv_msg, uap->scatter_list_size));
 	send_size = uap->send_size;
 	recv_size = uap->rcv_size;
-	opt = uap->option;
 	error = 0;
 
+
+	option &= MACH_MSG_OPTION_USER;
 	/* XXX not safe enough: lots of big messages will kill us */
 	if (send_size > MACH_MAX_MSG_LEN) {
 		td->td_retval[0] = MACH_SEND_TOO_LARGE;
@@ -120,10 +122,10 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 	 * send fail, then we skip recieve.
 	 */
 	msg = uap->msg;
-	if (opt & MACH_SEND_MSG)
-		error = mach_msg_send(td, msg, &opt, send_size);
+	if (option & MACH_SEND_MSG)
+		error = mach_msg_send(td, msg, &option, send_size);
 
-	if ((opt & MACH_RCV_MSG) && (error == MACH_MSG_SUCCESS)) {
+	if ((option & MACH_RCV_MSG) && (error == MACH_MSG_SUCCESS)) {
 		/*
 		 * Find a buffer for the reply.
 		 */
@@ -136,7 +138,7 @@ sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_ar
 			return (0);
 		}
 
-		error = mach_msg_recv(td, msg, opt, recv_size,
+		error = mach_msg_recv(td, msg, option, recv_size,
 		    uap->timeout, uap->rcv_name);
 	}
 
@@ -187,7 +189,7 @@ mach_msg_send(struct thread *td, mach_msg_header_t *msg, int *option, size_t sen
 	ln = sm->msgh_local_port;
 	rn = sm->msgh_remote_port;
 
-	DPRINTF(("mach_msg_send: local_port=%u remote_port=%u",
+	DPRINTF(("mach_msg_send: local_port=%p remote_port=%p",
 		   ln, rn));
 	if (ln)
 		lr = mach_right_check(ln, td, MACH_PORT_TYPE_ALL_RIGHTS);
@@ -408,7 +410,7 @@ out1:
  * Receive a Mach message. This returns a Mach message error code.
  */
 static inline int
-mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv_size, unsigned int timeout, mach_port_t mn)
+mach_msg_recv(struct thread *td, mach_msg_header_t *urm, int option, size_t recv_size, unsigned int timeout, mach_port_name_t mn)
 {
 	struct mach_port *mp;
 #if defined(DEBUG_MACH_MSG) || defined(KTRACE)

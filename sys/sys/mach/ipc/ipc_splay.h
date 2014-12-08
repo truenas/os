@@ -83,13 +83,15 @@
 #ifndef	_IPC_IPC_SPLAY_H_
 #define _IPC_IPC_SPLAY_H_
 
-#include <mach/port.h>
+#include <sys/mach/port.h>
+#if 0
 #include <kern/assert.h>
 #include <kern/macro_help.h>
-#include <ipc/ipc_entry.h>
+#endif
+#include <sys/mach/ipc/ipc_entry.h>
 
 typedef struct ipc_splay_tree {
-	mach_port_t ist_name;		/* name used in last lookup */
+	mach_port_name_t ist_name;		/* name used in last lookup */
 	ipc_tree_entry_t ist_root;	/* root of middle tree */
 	ipc_tree_entry_t ist_ltree;	/* root of left tree */
 	ipc_tree_entry_t *ist_ltreep;	/* pointer into left tree */
@@ -107,30 +109,30 @@ extern void ipc_splay_tree_init(
 /* Pick a random entry in a splay tree */
 extern boolean_t ipc_splay_tree_pick(
 	ipc_splay_tree_t	splay,
-	mach_port_t		*namep,
+	mach_port_name_t		*namep,
 	ipc_tree_entry_t	*entryp);
 
 /* Find an entry in a splay tree */
 extern ipc_tree_entry_t ipc_splay_tree_lookup(
 	ipc_splay_tree_t	splay,
-	mach_port_t		name);
+	mach_port_name_t		name);
 
 /* Insert a new entry into a splay tree */
 extern void ipc_splay_tree_insert(
 	ipc_splay_tree_t	splay,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_tree_entry_t	entry);
 
 /* Delete an entry from a splay tree */
 extern void ipc_splay_tree_delete(
 	ipc_splay_tree_t	splay,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_tree_entry_t	entry);
 
 /* Split a splay tree */
 extern void ipc_splay_tree_split(
 	ipc_splay_tree_t	splay,
-	mach_port_t		name,
+	mach_port_name_t		name,
 	ipc_splay_tree_t	entry);
 
 /* Join two splay trees */
@@ -141,9 +143,9 @@ extern void ipc_splay_tree_join(
 /* Do a bounded splay tree lookup */
 extern void ipc_splay_tree_bounds(
 	ipc_splay_tree_t	splay,
-	mach_port_t		name,
-	mach_port_t		*lowerp, 
-	mach_port_t		*upperp);
+	mach_port_name_t		name,
+	mach_port_name_t		*lowerp, 
+	mach_port_name_t		*upperp);
 
 /* Initialize a symmetric order traversal of a splay tree */
 extern ipc_tree_entry_t ipc_splay_traverse_start(

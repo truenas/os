@@ -55,6 +55,10 @@ __FBSDID("$FreeBSD$");
 #include <compat/darwin/darwin_exec.h>
 #endif
 
+#include <sys/mach/mach_port_server.h>
+
+#if 0
+
 /* Right and port zones, list of all rights and its lock */
 static uma_zone_t mach_port_zone;
 static uma_zone_t mach_right_zone;
@@ -63,58 +67,6 @@ struct mach_port *mach_bootstrap_port;
 struct mach_port *mach_clock_port;
 struct mach_port *mach_io_master_port;
 struct mach_port *mach_saved_bootstrap_port;
-
-int
-sys_mach_reply_port(struct thread *td, struct mach_reply_port_args *uap)
-{
-	struct mach_right *mr;
-
-	mr = mach_right_get(mach_port_get(), td, MACH_PORT_TYPE_RECEIVE, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-
-	return (0);
-}
-
-int
-sys_mach_thread_self_trap(struct thread *td, struct mach_thread_self_trap_args *uap)
-{
-	struct mach_thread_emuldata *mle;
-	struct mach_right *mr;
-
-	mle = td->td_emuldata;
-	mr = mach_right_get(mle->mle_kernel, td, MACH_PORT_TYPE_SEND, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-
-	return (0);
-}
-
-
-int
-sys_mach_task_self_trap(struct thread *td, struct mach_task_self_trap_args *uap)
-{
-	struct mach_emuldata *med;
-	struct mach_right *mr;
-
-	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
-	mr = mach_right_get(med->med_kernel, td, MACH_PORT_TYPE_SEND, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-
-	return (0);
-}
-
-
-int
-sys_mach_host_self_trap(struct thread *td, struct mach_host_self_trap_args *uap)
-{
-	struct mach_emuldata *med;
-	struct mach_right *mr;
-
-	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
-	mr = mach_right_get(med->med_host, td, MACH_PORT_TYPE_SEND, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-
-	return (0);
-}
 
 static void
 mach_port_deallocate(struct thread *td, mach_port_t mn)
@@ -167,14 +119,6 @@ mach_port_destroy(struct thread *td, mach_port_name_t name)
 }
 
 int
-sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *uap)
-{
-	/* mach_port_name_t target = uap->target; */
-
-	return (mach_port_destroy(td, uap->name));
-}
-
-int
 mach_port_destroy_msg(struct mach_trap_args *args)
 {
 	mach_port_destroy_request_t *req = args->smsg;
@@ -195,7 +139,7 @@ mach_port_destroy_msg(struct mach_trap_args *args)
 	return (0);
 }
 
-static int
+int
 mach_port_allocate(struct thread *td, mach_port_right_t right, struct mach_right **mr)
 {
 	struct mach_port *mp;
@@ -224,18 +168,6 @@ mach_port_allocate(struct thread *td, mach_port_right_t right, struct mach_right
 }
 
 int
-sys__kernelrpc_mach_port_allocate_trap(struct thread *td, struct _kernelrpc_mach_port_allocate_trap_args *uap)
-{
-	/* mach_port_name_t target = uap->target; */
-	struct mach_right *mr;
-	int error;
-
-	if ((error = mach_port_allocate(td, uap->right, &mr)) != 0)
-		return (error);
-	return (copyout(&mr->mr_name, uap->name, sizeof(*uap->name)));
-}
-
-int
 mach_port_allocate_msg(struct mach_trap_args *args)
 {
 	mach_port_allocate_request_t *req = args->smsg;
@@ -258,7 +190,7 @@ mach_port_allocate_msg(struct mach_trap_args *args)
 	return (0);
 }
 
-static int
+int
 mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
 	mach_msg_type_name_t disposition)
 {
@@ -296,13 +228,7 @@ mach_port_insert_right(struct thread *td, mach_port_t name, mach_port_t right,
 	if (nmr == NULL)
 		return (EPERM);
 	return (0);
-}
 
-int
-sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
-{
-
-	return (mach_port_insert_right(td, uap->name, uap->poly, uap->polyPoly));
 }
 
 int
@@ -963,7 +889,7 @@ mach_right_put_exclocked(struct mach_right *mr, int right)
  * Check that a process has a given right.
  */
 struct mach_right *
-mach_right_check(mach_port_t mn, struct thread *td, int type)
+mach_right_check(mach_port_name_t mn, struct thread *td, int type)
 {
 	struct mach_right *cmr;
 	struct mach_emuldata *med;
@@ -1078,3 +1004,5 @@ mach_debug_port(void)
 }
 
 #endif /* DEBUG_MACH */
+
+#endif

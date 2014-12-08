@@ -79,6 +79,7 @@
 #define MACH_EXCEPTION_CODES            0x80000000
 /*      Send 64-bit code and subcode in the exception header */
 
+#define FIRST_EXCEPTION		1	/* ZERO is illegal */
 
 
 
@@ -102,5 +103,13 @@ typedef thread_state_flavor_t           *exception_flavor_array_t;
 typedef mach_port_t                     *exception_port_array_t;
 typedef mach_exception_data_type_t      mach_exception_code_t;
 typedef mach_exception_data_type_t      mach_exception_subcode_t;
+
+
+
+struct exception_action{
+	struct ipc_port		*port;		/* exception port */
+	thread_state_flavor_t	flavor;		/* state flavor to send */
+	exception_behavior_t	behavior;	/* exception type to raise */
+};
 
 #endif

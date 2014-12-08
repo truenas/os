@@ -61,20 +61,22 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
-#include <mach/mach_types.h>
+#include <sys/mach/mach_types.h>
+#ifndef _KERNEL
 #include <stdarg.h>
-
+#endif
 
 /*
  *	Kernel-related ports; how a task/thread controls itself
  */
 
 __BEGIN_DECLS
-extern mach_port_t mach_host_self(void);
-extern mach_port_t mach_thread_self(void);
+extern mach_port_name_t mach_host_self(void);
+extern mach_port_name_t mach_thread_self(void);
 #if 0
 extern kern_return_t host_page_size(host_t, vm_size_t *);
 #endif
+#ifndef _KERNEL
 extern mach_port_t	mach_task_self_;
 #define	mach_task_self() mach_task_self_
 #define	current_task()	mach_task_self()
@@ -83,6 +85,16 @@ __END_DECLS
 #include <mach/mach_traps.h>
 __BEGIN_DECLS
 
+/*
+ *	fprintf_stderr uses vprintf_stderr_func to produce
+ *	error messages, this can be overridden by a user
+ *	application to point to a user-specified output function
+ */
+extern int (*vprintf_stderr_func)(const char *format, va_list ap);
+#else
+extern mach_port_name_t mach_task_self(void);
+
+#endif
 /*
  *	Other important ports in the Mach user environment
  */
@@ -99,13 +111,6 @@ extern	mach_port_t	bootstrap_port;
 #define SERVICE_SLOT		2
 
 #define	MACH_PORTS_SLOTS_USED	3
-
-/*
- *	fprintf_stderr uses vprintf_stderr_func to produce
- *	error messages, this can be overridden by a user
- *	application to point to a user-specified output function
- */
-extern int (*vprintf_stderr_func)(const char *format, va_list ap);
 
 __END_DECLS
 

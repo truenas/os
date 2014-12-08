@@ -100,7 +100,7 @@ typedef struct {
 	mach_msg_trailer_t rep_trailer;
 } mach_error_reply_t;
 
-int mach_msg_error(struct mach_trap_args *, int);
+int mach_msg_error(void *, int);
 int mach_iokit_error(struct mach_trap_args *, int);
 
 #endif	/* _MACH_ERRNO_H_ */

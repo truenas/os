@@ -573,9 +573,8 @@ type UNDServerRef = mach_port_t;
 
 #if KERNEL_SERVER
 #ifdef	MACH_KERNEL_PRIVATE
-simport <ipc/ipc_voucher.h>;	/* for voucher conversions */
+simport <sys/mach/ipc/ipc_voucher.h>;	/* for voucher conversions */
 simport <kern/ipc_kobject.h>;	/* for null conversion */
-simport <kern/ipc_tt.h>;	/* for task/thread conversion */
 simport <kern/ipc_host.h>;	/* for host/processor/pset conversions */
 simport <kern/ipc_sync.h>;      /* for lock_set and semaphore conversions */
 simport <kern/ledger.h>;	/* for ledger conversions */
@@ -585,13 +584,18 @@ simport <kern/sync_sema.h>;	/* for semaphore conversions */
 simport <vm/memory_object.h>;	/* for memory object type conversions */
 simport <vm/vm_map.h>;		/* for vm_map conversions */
 #endif	/* MACH_KERNEL_PRIVATE */
+simport <sys/mach/ipc_sync.h>;      /* for lock_set and semaphore conversions */
+simport <sys/mach/ipc/ipc_voucher.h>;	/* for voucher conversions */
+simport <sys/mach/ipc_host.h>;	/* for host/processor/pset conversions */
+simport <sys/mach/ipc_tt.h>;	/* for task/thread conversion */
 
-simport <kern/ipc_mig.h>;	/* pick up kernel-specific MIG things */
+
+simport <sys/mach/ipc_mig.h>;	/* pick up kernel-specific MIG things */
 
 #endif /* KERNEL_SERVER */
 
-import <mach/mig.h>;
-import <mach/mach_types.h>;
+import <sys/mach/mig.h>;
+import <sys/mach/mach_types.h>;
 
 #endif	/* _MACH_MACH_TYPES_DEFS_ */
 

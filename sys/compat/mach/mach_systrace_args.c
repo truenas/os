@@ -275,23 +275,23 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		struct mach_task_name_for_pid_args *p = params;
 		iarg[0] = p->target_tport; /* mach_port_name_t */
 		iarg[1] = p->pid; /* int */
-		uarg[2] = (intptr_t) p->tn; /* mach_port_t * */
+		uarg[2] = (intptr_t) p->tn; /* mach_port_name_t * */
 		*n_args = 3;
 		break;
 	}
 	/* mach_task_for_pid */
 	case 45: {
 		struct mach_task_for_pid_args *p = params;
-		iarg[0] = p->target_tport; /* mach_port_t */
+		iarg[0] = p->target_tport; /* mach_port_name_t */
 		iarg[1] = p->pid; /* int */
-		uarg[2] = (intptr_t) p->t; /* mach_port_t * */
+		uarg[2] = (intptr_t) p->t; /* mach_port_name_t * */
 		*n_args = 3;
 		break;
 	}
 	/* mach_pid_for_task */
 	case 46: {
 		struct mach_pid_for_task_args *p = params;
-		iarg[0] = p->t; /* mach_port_t */
+		iarg[0] = p->t; /* mach_port_name_t */
 		uarg[1] = (intptr_t) p->pid; /* int * */
 		*n_args = 2;
 		break;
@@ -320,7 +320,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		iarg[0] = p->hi_water; /* int */
 		iarg[1] = p->low_water; /* int */
 		iarg[2] = p->flags; /* int */
-		iarg[3] = p->alert_port; /* mach_port_t */
+		iarg[3] = p->alert_port; /* mach_port_name_t */
 		*n_args = 4;
 		break;
 	}
@@ -882,7 +882,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 2:
-			p = "mach_port_t *";
+			p = "mach_port_name_t *";
 			break;
 		default:
 			break;
@@ -892,13 +892,13 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	case 45:
 		switch(ndx) {
 		case 0:
-			p = "mach_port_t";
+			p = "mach_port_name_t";
 			break;
 		case 1:
 			p = "int";
 			break;
 		case 2:
-			p = "mach_port_t *";
+			p = "mach_port_name_t *";
 			break;
 		default:
 			break;
@@ -908,7 +908,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	case 46:
 		switch(ndx) {
 		case 0:
-			p = "mach_port_t";
+			p = "mach_port_name_t";
 			break;
 		case 1:
 			p = "int *";
@@ -962,7 +962,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 3:
-			p = "mach_port_t";
+			p = "mach_port_name_t";
 			break;
 		default:
 			break;

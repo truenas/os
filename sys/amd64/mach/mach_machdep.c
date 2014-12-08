@@ -67,7 +67,7 @@ cpu_mach_thread_set_state(struct thread *td, int flavor, void *state)
 }
 
 int
-cpu_mach_vm_machine_attribute(struct thread *td, vm_offset_t addr, size_t size, int *valp)
+cpu_mach_vm_machine_attribute(vm_map_t map, vm_offset_t addr, size_t size, int *valp)
 {
 
 	return (EINVAL);

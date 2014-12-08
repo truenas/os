@@ -138,6 +138,11 @@
 #endif
 
 struct processor_set {
+	decl_mutex_data(,	lock)		/* lock for everything else */
+	boolean_t		active;		/* is pset in use */
+	struct ipc_port	*	pset_self;	/* port for operations */
+	struct ipc_port *	pset_name_self;	/* port for information */
+
 #ifdef notyet	
 	struct	run_queue	runq;		/* runq for this set */
 	queue_head_t		idle_queue;	/* idle processors */
@@ -152,10 +157,6 @@ struct processor_set {
 	int			thread_count;	/* how many */
 	int			ref_count;	/* structure ref count */
 	queue_chain_t		all_psets;	/* link for all_psets */
-	boolean_t		active;		/* is pset in use */
-	decl_mutex_data(,	lock)		/* lock for everything else */
-	struct ipc_port	*	pset_self;	/* port for operations */
-	struct ipc_port *	pset_name_self;	/* port for information */
 	int			max_priority;	/* maximum priority */
 	int			policies;	/* bit vector for policies */
 	int			set_quantum;	/* current default quantum */
@@ -270,16 +271,11 @@ extern processor_t	processor_ptr[NCPUS];
 #define current_processor()	(processor_ptr[cpu_number()])
 #define current_processor_set()	(current_processor()->processor_set)
 
-/* Compatibility -- will go away */
-
-#define cpu_state(slot_num)	(processor_ptr[slot_num]->state)
-#define cpu_idle(slot_num)	(cpu_state(slot_num) == PROCESSOR_IDLE)
-
 /* Useful lock macros */
 
-#define	pset_lock(pset)		mutex_lock(&(pset)->lock)
-#define	pset_lock_try(pset)	mutex_try(&(pset)->lock)
-#define pset_unlock(pset)	mutex_unlock(&(pset)->lock)
+#define	pset_lock(pset)		mtx_lock(&(pset)->lock)
+#define	pset_lock_try(pset)	mtx_trylock(&(pset)->lock)
+#define pset_unlock(pset)	mtx_unlock(&(pset)->lock)
 
 #define processor_lock(pr)	simple_lock(&(pr)->lock)
 #define processor_unlock(pr)	simple_unlock(&(pr)->lock)

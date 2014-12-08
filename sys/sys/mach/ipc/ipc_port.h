@@ -368,7 +368,7 @@ typedef struct ipc_port_request {
 	} notify;
 
 	union {
-		mach_port_t name;
+		mach_port_name_t name;
 		struct ipc_table_size *size;
 	} name;
 } *ipc_port_request_t;
@@ -387,16 +387,16 @@ typedef struct ipc_port_request {
  *	when it is taken.
  */
 
-extern struct mutex ipc_port_multiple_lock_data;
+extern struct mtx ipc_port_multiple_lock_data;
 
 #define	ipc_port_multiple_lock_init()					\
-		mutex_init(&ipc_port_multiple_lock_data, ETAP_IPC_PORT_MULT)
+		mutex_init(&ipc_port_multiple_lock_data, "ETAP_IPC_PORT_MULT")
 
 #define	ipc_port_multiple_lock()					\
-		mutex_lock(&ipc_port_multiple_lock_data)
+		mtx_lock(&ipc_port_multiple_lock_data)
 
 #define	ipc_port_multiple_unlock()					\
-		mutex_unlock(&ipc_port_multiple_lock_data)
+		mtx_unlock(&ipc_port_multiple_lock_data)
 
 /*
  *	The port timestamp facility provides timestamps
@@ -408,13 +408,13 @@ decl_mutex_data(extern,ipc_port_timestamp_lock_data)
 extern ipc_port_timestamp_t ipc_port_timestamp_data;
 
 #define	ipc_port_timestamp_lock_init()					\
-		mutex_init(&ipc_port_timestamp_lock_data, ETAP_IPC_PORT_TIME)
+		mutex_init(&ipc_port_timestamp_lock_data, "ETAP_IPC_PORT_TIME")
 
 #define	ipc_port_timestamp_lock()					\
-		mutex_lock(&ipc_port_timestamp_lock_data)
+		mtx_lock(&ipc_port_timestamp_lock_data)
 
 #define	ipc_port_timestamp_unlock()					\
-		mutex_unlock(&ipc_port_timestamp_lock_data)
+		mtx_unlock(&ipc_port_timestamp_lock_data)
 
 /* Retrieve a port timestamp value */
 extern ipc_port_timestamp_t ipc_port_timestamp(void);
@@ -442,7 +442,7 @@ extern ipc_port_timestamp_t ipc_port_timestamp(void);
 extern kern_return_t
 ipc_port_dnrequest(
 	ipc_port_t			port,
-	mach_port_t			name,
+	mach_port_name_t			name,
 	ipc_port_t			soright,
 	ipc_port_request_index_t	*indexp);
 
@@ -454,7 +454,7 @@ extern kern_return_t ipc_port_dngrow(
 /* Cancel a dead-name request and return the send-once right */
 extern ipc_port_t ipc_port_dncancel(
 	ipc_port_t			port,
-	mach_port_t			name,
+	mach_port_name_t			name,
 	ipc_port_request_index_t	index);
 
 #define	ipc_port_dnrename(port, index, oname, nname)			\
@@ -510,18 +510,18 @@ extern void ipc_port_clear_receiver(
 extern void ipc_port_init(
 	ipc_port_t	port,
 	ipc_space_t	space,
-	mach_port_t	name);
+	mach_port_name_t	name);
 
 /* Allocate a port */
 extern kern_return_t ipc_port_alloc(
 	ipc_space_t	space,
-	mach_port_t	*namep,
+	mach_port_name_t	*namep,
 	ipc_port_t	*portp);
 
 /* Allocate a port, with a specific name */
 extern kern_return_t ipc_port_alloc_name(
 	ipc_space_t	space,
-	mach_port_t	name,
+	mach_port_name_t	name,
 	ipc_port_t	*portp);
 
 /* Generate dead name notifications */
@@ -543,7 +543,7 @@ ipc_port_check_circularity(
 /* Make a send-once notify port from a receive right */
 extern ipc_port_t ipc_port_lookup_notify(
 	ipc_space_t	space, 
-	mach_port_t 	name);
+	mach_port_name_t 	name);
 
 /* Make a naked send right from a receive right */
 extern ipc_port_t ipc_port_make_send(
@@ -554,7 +554,7 @@ extern ipc_port_t ipc_port_copy_send(
 	ipc_port_t	port);
 
 /* Copyout a naked send right */
-extern mach_port_t ipc_port_copyout_send(
+extern mach_port_name_t ipc_port_copyout_send(
 	ipc_port_t	sright,
 	ipc_space_t	space);
 

@@ -25,13 +25,16 @@
 #ifndef IPC_PRINT_H
 #define	IPC_PRINT_H
 
+#if 0
 #include <mach_kdb.h>
-#include <ipc/ipc_pset.h>
+#endif
+
+#include <sys/mach/ipc/ipc_pset.h>
 
 extern void ipc_pset_print(
 			ipc_pset_t	pset);
 
-#include <ipc/ipc_port.h>
+#include <sys/mach/ipc/ipc_port.h>
 
 #if     MACH_KDB
 #include <ddb/db_expr.h>
@@ -42,7 +45,7 @@ extern void ipc_port_print(
 			db_expr_t	count,
 			char		*modif);
 
-#include <ipc/ipc_kmsg.h>
+#include <sys/mach/ipc/ipc_kmsg.h>
 
 extern void	ipc_kmsg_print(
 			ipc_kmsg_t      kmsg);

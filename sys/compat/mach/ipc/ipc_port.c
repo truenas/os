@@ -186,30 +186,40 @@
  *	Functions to manipulate IPC ports.
  */
 
+#if 0
 #include <dipc.h>
 #include <norma_vm.h>
 #include <mach_kdb.h>
 #include <zone_debug.h>
 #include <mach_assert.h>
+#endif
 
-#include <mach/port.h>
-#include <mach/kern_return.h>
+
+#include <sys/mach/port.h>
+#include <sys/mach/kern_return.h>
+#if 0
 #include <kern/lock.h>
 #include <kern/ipc_sched.h>
-#include <kern/ipc_kobject.h>
 #include <kern/ipc_subsystem.h>
+
 #include <kern/thread_pool.h>
 #include <kern/misc_protos.h>
-#include <ipc/ipc_entry.h>
-#include <ipc/ipc_space.h>
-#include <ipc/ipc_object.h>
-#include <ipc/ipc_port.h>
-#include <ipc/ipc_pset.h>
-#include <ipc/ipc_thread.h>
-#include <ipc/ipc_mqueue.h>
-#include <ipc/ipc_notify.h>
-#include <ipc/ipc_print.h>
-#include <ipc/ipc_table.h>
+#endif
+#include <sys/mach/ipc_kobject.h>
+#include <sys/mach/ipc/ipc_entry.h>
+#include <sys/mach/ipc/ipc_space.h>
+#include <sys/mach/ipc/ipc_object.h>
+#include <sys/mach/ipc/ipc_port.h>
+#include <sys/mach/ipc/ipc_pset.h>
+#include <sys/mach/ipc/ipc_thread.h>
+#include <sys/mach/ipc/ipc_mqueue.h>
+#include <sys/mach/ipc/ipc_notify.h>
+#include <sys/mach/ipc/ipc_print.h>
+#include <sys/mach/ipc/ipc_table.h>
+#include <sys/mach/ipc/ipc_voucher.h>
+#include <sys/mach/thread.h>
+#include <sys/mach/rpc.h>
+
 #if	DIPC
 #include <dipc/special_ports.h>
 #include <dipc/dipc_port.h>
@@ -225,7 +235,6 @@
 #include <ddb/db_command.h>
 #include <ddb/db_expr.h>
 #endif	/* MACH_KDB */
-#include <string.h>
 
 decl_mutex_data(,	ipc_port_multiple_lock_data)
 decl_mutex_data(,	ipc_port_timestamp_lock_data)
@@ -276,7 +285,7 @@ ipc_port_timestamp(void)
 kern_return_t
 ipc_port_dnrequest(
 	ipc_port_t			port,
-	mach_port_t			name,
+	mach_port_name_t			name,
 	ipc_port_t			soright,
 	ipc_port_request_index_t	*indexp)
 {
@@ -285,9 +294,9 @@ ipc_port_dnrequest(
 
 	assert(ip_active(port));
 #if	DIPC
-	assert(soright == DIPC_FAKE_DNREQUEST || name != MACH_PORT_NULL);
+	assert(soright == DIPC_FAKE_DNREQUEST || name != MACH_PORT_NAME_NULL);
 #else	/*DIPC*/
-	assert(name != MACH_PORT_NULL);
+	assert(name != MACH_PORT_NAME_NULL);
 #endif	/*DIPC*/
 	assert(soright != IP_NULL);
 
@@ -300,7 +309,7 @@ ipc_port_dnrequest(
 		return KERN_NO_SPACE;
 
 	ipr = &table[index];
-	assert(ipr->ipr_name == MACH_PORT_NULL);
+	assert(ipr->ipr_name == MACH_PORT_NAME_NULL);
 
 	table->ipr_next = ipr->ipr_next;
 	ipr->ipr_name = name;
@@ -406,7 +415,7 @@ ipc_port_dngrow(
 		for (i = osize; i < nsize; i++) {
 			ipc_port_request_t ipr = &ntable[i];
 
-			ipr->ipr_name = MACH_PORT_NULL;
+			ipr->ipr_name = MACH_PORT_NAME_NULL;
 			ipr->ipr_next = free;
 			free = i;
 		}
@@ -445,14 +454,14 @@ ipc_port_dngrow(
 ipc_port_t
 ipc_port_dncancel(
 	ipc_port_t			port,
-	mach_port_t			name,
+	mach_port_name_t			name,
 	ipc_port_request_index_t	index)
 {
 	ipc_port_request_t ipr, table;
 	ipc_port_t dnrequest;
 
 	assert(ip_active(port));
-	assert(name != MACH_PORT_NULL);
+	assert(name != MACH_PORT_NAME_NULL);
 	assert(index != 0);
 
 	table = port->ip_dnrequests;
@@ -464,7 +473,7 @@ ipc_port_dncancel(
 
 	/* return ipr to the free list inside the table */
 
-	ipr->ipr_name = MACH_PORT_NULL;
+	ipr->ipr_name = MACH_PORT_NAME_NULL;
 	ipr->ipr_next = table->ipr_next;
 	table->ipr_next = index;
 
@@ -666,7 +675,7 @@ void
 ipc_port_init(
 	ipc_port_t	port,
 	ipc_space_t	space,
-	mach_port_t	name)
+	mach_port_name_t	name)
 {
 	/* port->ip_kobject doesn't have to be initialized */
 
@@ -685,9 +694,9 @@ ipc_port_init(
 	port->ip_seqno = 0;
 	port->ip_msgcount = 0;
 	port->ip_qlimit = MACH_PORT_QLIMIT_DEFAULT;
-
+#if 0
 	thread_pool_init(&port->ip_thread_pool);
-
+#endif
 	port->ip_subsystem = RPC_SUBSYSTEM_NULL;
 	
 	port->ip_flags = 0;
@@ -735,11 +744,11 @@ ipc_port_init(
 kern_return_t
 ipc_port_alloc(
 	ipc_space_t	space,
-	mach_port_t	*namep,
+	mach_port_name_t	*namep,
 	ipc_port_t	*portp)
 {
 	ipc_port_t port;
-	mach_port_t name;
+	mach_port_name_t name;
 	kern_return_t kr;
 
 	kr = ipc_object_alloc(space, IOT_PORT,
@@ -775,7 +784,7 @@ ipc_port_alloc(
 kern_return_t
 ipc_port_alloc_name(
 	ipc_space_t	space,
-	mach_port_t	name,
+	mach_port_name_t	name,
 	ipc_port_t	*portp)
 {
 	ipc_port_t port;
@@ -813,10 +822,10 @@ ipc_port_dnnotify(
 
 	for (index = 1; index < size; index++) {
 		ipc_port_request_t	ipr = &dnrequests[index];
-		mach_port_t		name = ipr->ipr_name;
+		mach_port_name_t		name = ipr->ipr_name;
 		ipc_port_t		soright;
 
-		if (name == MACH_PORT_NULL)
+		if (name == MACH_PORT_NAME_NULL)
 #if	DIPC
 		    if (ipr->ipr_soright != DIPC_FAKE_DNREQUEST)
 #endif	/* DIPC */
@@ -859,8 +868,9 @@ ipc_port_destroy(
 	ipc_kmsg_t kmsg;
 	ipc_thread_t sender;
 	ipc_port_request_t dnrequests;
+#if 0	
 	thread_pool_t thread_pool;
-
+#endif
 	assert(ip_active(port));
 	/* port->ip_receiver_name is garbage */
 	/* port->ip_receiver/port->ip_destination is garbage */
@@ -876,7 +886,7 @@ ipc_port_destroy(
 		port->ip_pdrequest = IP_NULL;
 
 		/* make port be in limbo */
-		port->ip_receiver_name = MACH_PORT_NULL;
+		port->ip_receiver_name = MACH_PORT_NAME_NULL;
 		port->ip_destination = IP_NULL;
 		ip_unlock(port);
 
@@ -895,7 +905,7 @@ ipc_port_destroy(
 		assert(port->ip_mscount == 0);
 		assert(port->ip_seqno == 0);
 		assert(port->ip_pdrequest == IP_NULL);
-		assert(port->ip_receiver_name == MACH_PORT_NULL);
+		assert(port->ip_receiver_name == MACH_PORT_NAME_NULL);
 		assert(port->ip_destination == IP_NULL);
 
 		/* fall through and destroy the port */
@@ -929,11 +939,11 @@ ipc_port_destroy(
 			dipc_special_port_destroy(port);
 	}
 #endif	/* DIPC */
-
+#if 0
 	/* wakeup any threads waiting on this pool port for an activation */
 	if ((thread_pool = &port->ip_thread_pool) != THREAD_POOL_NULL)
 		thread_pool_wakeup(thread_pool);
-
+#endif
 	/* throw away no-senders request */
 
 	nsrequest = port->ip_nsrequest;
@@ -1025,7 +1035,7 @@ ipc_port_check_circularity(
 	ip_lock(port);
 	if (ip_lock_try(dest)) {
 		if (!ip_active(dest) ||
-		    (dest->ip_receiver_name != MACH_PORT_NULL) ||
+		    (dest->ip_receiver_name != MACH_PORT_NAME_NULL) ||
 		    (dest->ip_destination == IP_NULL))
 			goto not_circular;
 
@@ -1046,7 +1056,7 @@ ipc_port_check_circularity(
 		ip_lock(base);
 
 		if (!ip_active(base) ||
-		    (base->ip_receiver_name != MACH_PORT_NULL) ||
+		    (base->ip_receiver_name != MACH_PORT_NAME_NULL) ||
 		    (base->ip_destination == IP_NULL))
 			break;
 
@@ -1063,7 +1073,7 @@ ipc_port_check_circularity(
 		/* port (== base) is in limbo */
 
 		assert(ip_active(port));
-		assert(port->ip_receiver_name == MACH_PORT_NULL);
+		assert(port->ip_receiver_name == MACH_PORT_NAME_NULL);
 		assert(port->ip_destination == IP_NULL);
 
 		while (dest != IP_NULL) {
@@ -1072,7 +1082,7 @@ ipc_port_check_circularity(
 			/* dest is in transit or in limbo */
 
 			assert(ip_active(dest));
-			assert(dest->ip_receiver_name == MACH_PORT_NULL);
+			assert(dest->ip_receiver_name == MACH_PORT_NAME_NULL);
 
 			next = dest->ip_destination;
 			ip_unlock(dest);
@@ -1096,7 +1106,7 @@ ipc_port_check_circularity(
 	/* port is in limbo */
 
 	assert(ip_active(port));
-	assert(port->ip_receiver_name == MACH_PORT_NULL);
+	assert(port->ip_receiver_name == MACH_PORT_NAME_NULL);
 	assert(port->ip_destination == IP_NULL);
 
 	ip_reference(dest);
@@ -1110,7 +1120,7 @@ ipc_port_check_circularity(
 		/* port is in transit */
 
 		assert(ip_active(port));
-		assert(port->ip_receiver_name == MACH_PORT_NULL);
+		assert(port->ip_receiver_name == MACH_PORT_NAME_NULL);
 		assert(port->ip_destination != IP_NULL);
 
 		next = port->ip_destination;
@@ -1121,7 +1131,7 @@ ipc_port_check_circularity(
 	/* base is not in transit */
 
 	assert(!ip_active(base) ||
-	       (base->ip_receiver_name != MACH_PORT_NULL) ||
+	       (base->ip_receiver_name != MACH_PORT_NAME_NULL) ||
 	       (base->ip_destination == IP_NULL));
 	ip_unlock(base);
 
@@ -1140,7 +1150,7 @@ ipc_port_check_circularity(
 ipc_port_t
 ipc_port_lookup_notify(
 	ipc_space_t	space,
-	mach_port_t	name)
+	mach_port_name_t	name)
 {
 	ipc_port_t port;
 	ipc_entry_t entry;
@@ -1237,12 +1247,12 @@ ipc_port_copy_send(
  *		Nothing locked.
  */
 
-mach_port_t
+mach_port_name_t
 ipc_port_copyout_send(
 	ipc_port_t	sright,
 	ipc_space_t	space)
 {
-	mach_port_t name;
+	mach_port_name_t name;
 
 	if (IP_VALID(sright)) {
 		kern_return_t kr;
@@ -1253,12 +1263,12 @@ ipc_port_copyout_send(
 			ipc_port_release_send(sright);
 
 			if (kr == KERN_INVALID_CAPABILITY)
-				name = MACH_PORT_DEAD;
+				name = MACH_PORT_NAME_DEAD;
 			else
-				name = MACH_PORT_NULL;
+				name = MACH_PORT_NAME_NULL;
 		}
 	} else
-		name = (mach_port_t) sright;
+		name = CAST_MACH_PORT_TO_NAME(sright);
 
 	return name;
 }
@@ -1301,11 +1311,13 @@ ipc_port_release_send(
 		mscount = port->ip_mscount;
 		ip_unlock(port);
 		ipc_notify_no_senders(nsrequest, mscount);
+#if 0		
 		/*
 		 * Check that there are no other locks taken, because
 		 * [norma_]ipc_notify_no_senders routines may block.
 		 */
 		check_simple_locks();
+#endif		
 	} else
 		ip_unlock(port);
 }
@@ -1388,7 +1400,7 @@ ipc_port_release_receive(
 
 	ip_lock(port);
 	assert(ip_active(port));
-	assert(port->ip_receiver_name == MACH_PORT_NULL);
+	assert(port->ip_receiver_name == MACH_PORT_NAME_NULL);
 	dest = port->ip_destination;
 
 	ipc_port_destroy(port); /* consumes ref, unlocks */
@@ -1443,7 +1455,7 @@ ipc_port_dealloc_special(
 {
 	ip_lock(port);
 	assert(ip_active(port));
-	assert(port->ip_receiver_name != MACH_PORT_NULL);
+	assert(port->ip_receiver_name != MACH_PORT_NAME_NULL);
 	assert(port->ip_receiver == space);
 
 	/*
@@ -1451,7 +1463,7 @@ ipc_port_dealloc_special(
 	 *	the ipc_space_kernel check in ipc_mqueue_send.
 	 */
 
-	port->ip_receiver_name = MACH_PORT_NULL;
+	port->ip_receiver_name = MACH_PORT_NAME_NULL;
 	port->ip_receiver = IS_NULL;
 
 	/* relevant part of ipc_port_clear_receiver */
@@ -1461,6 +1473,13 @@ ipc_port_dealloc_special(
 	ipc_port_destroy(port);
 }
 
+
+
+void
+ipc_voucher_release(ipc_voucher_t voucher)
+{
+	;
+}
 
 #if	MACH_ASSERT
 /*
@@ -1625,7 +1644,7 @@ ipc_port_print(
 
 	if (!ip_active(port)) {
 		iprintf("timestamp=0x%x", port->ip_timestamp);
-	} else if (port->ip_receiver_name == MACH_PORT_NULL) {
+	} else if (port->ip_receiver_name == MACH_PORT_NAME_NULL) {
 		iprintf("destination=0x%x (", port->ip_destination);
 		if (port->ip_destination != MACH_PORT_NULL &&
 		    (task = db_task_from_space(port->ip_destination->
@@ -1727,7 +1746,7 @@ ipc_port_print(
 ipc_port_t
 ipc_name_to_data(
 	task_t		task,
-	mach_port_t	name)
+	mach_port_name_t	name)
 {
 	ipc_space_t	space;
 	ipc_entry_t	entry;
@@ -2240,7 +2259,7 @@ db_port_walk(
 			continue;
 		}
 
-		if (port->ip_receiver_name == MACH_PORT_NULL) {
+		if (port->ip_receiver_name == MACH_PORT_NAME_NULL) {
 			iprintf("%s  0x%x, no receiver, refcnt %d\n",
 				port, refs);
 			++no_receiver;

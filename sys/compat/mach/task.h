@@ -202,19 +202,22 @@
 #include <sys/mach/port.h>
 #include <sys/mach/time_value.h>
 #include <sys/mach/message.h>
+
 #if 0
 #include <sys/mach/mach_param.h>
 #endif
 #include <sys/mach/task_info.h>
 #include <sys/mach/exception.h>
+
 #include <compat/mach/kern_types.h>
+
 #if 0
 #include <mach_prof.h>
 #include <kern/lock.h>
-#include <kern/queue.h>
 #include <kern/syscall_emulation.h>
 #include <vm/vm_map.h>
 #endif
+#include <sys/mach/queue.h>
 #include <machine/mach/task.h>
 
 #define MACH_HOST 1
@@ -223,15 +226,70 @@
 #define FAST_TAS 0
 #define TASK_SWAPPER  0
 
-typedef struct mutex mutex_t;
+#include <sys/mach/mach_param.h>
+
+extern ipc_port_t convert_task_to_port(task_t);
+extern ipc_port_t convert_task_name_to_port(task_name_t);
+extern ipc_port_t convert_task_suspension_token_to_port(task_suspension_token_t task);
+
+/* Convert from a port (in this case, an SO right to a task's resume port) to a task. */
+extern task_suspension_token_t convert_port_to_task_suspension_token(ipc_port_t port);
+
 
 typedef struct task {
-	#ifdef notyet
 	/* Synchronization/destruction information */
 	decl_mutex_data(,lock)		/* Task's lock */
 	int		ref_count;	/* Number of references to me */
 	boolean_t	active;		/* Task has not been terminated */
 	boolean_t	kernel_loaded;	/* Created with kernel_task_create() */
+
+	struct ipc_space *itk_space;
+
+	decl_mutex_data(,itk_lock_data)
+
+	/* IPC structures */
+	struct exception_action exc_actions[EXC_TYPES_COUNT];
+		 			/* a send right each valid element  */
+	struct ipc_port *itk_self;	/* not a right, doesn't hold ref */
+	struct ipc_port *itk_nself;	/* not a right, doesn't hold ref */
+	struct ipc_port *itk_sself;	/* a send right */
+	struct ipc_port *itk_host;	/* a send right */
+	struct ipc_port *itk_bootstrap;	/* a send right */
+	struct ipc_port *itk_seatbelt;	/* a send right */
+	struct ipc_port *itk_gssd;	/* yet another send right */
+	struct ipc_port *itk_debug_control; /* send right for debugmode communications */
+	struct ipc_port *itk_task_access; /* and another send right */ 
+	struct ipc_port *itk_resume;	/* a receive right to resume this task */
+	struct ipc_port *itk_registered[TASK_PORT_REGISTER_MAX];
+					/* all send rights */
+
+        /* Ledgers */
+	struct proc *itk_p;
+
+	/* Active activations in this task */
+	int		thr_act_count;
+	int		res_act_count;
+	struct mtx		act_list_lock;	/* XXX act_list lock */
+	int		priority;		/* for new threads */
+	int		max_priority;		/* maximum priority */
+	int		sched_data;		/* for use by policy */
+	int		policy;			/* scheduling policy */
+	processor_set_t	processor_set;	/* processor set for new threads */
+
+	/* Task security token */
+	security_token_t sec_token;
+	/* Synchronizer ownership information */
+	queue_head_t	semaphore_list;		/* list of owned semaphores   */
+	int		semaphores_owned;	/* number of semaphores owned */
+	
+	
+#ifdef notyet	/* Active activations in this task */
+	queue_head_t	thr_acts;	/* list of thread_activations */
+	int		thr_act_count;
+	queue_head_t	thr_acts;	/* list of thread_activations */
+	int		res_act_count;
+	mutex_t		act_list_lock;	/* XXX act_list lock */
+
 
 	/* Miscellaneous */
 	vm_map_t	map;		/* Address space description */
@@ -251,13 +309,7 @@ typedef struct task {
 	queue_chain_t	swapped_tasks;	/* list of non-resident tasks */
 #endif	/* TASK_SWAPPER */
 
-	/* Active activations in this task */
-	int		thr_act_count;
-	queue_head_t	thr_acts;	/* list of thread_activations */
-	int		res_act_count;
-	mutex_t		act_list_lock;	/* XXX act_list lock */
 
-	processor_set_t	processor_set;	/* processor set for new threads */
 #if	MACH_HOST
 	boolean_t	may_assign;	/* can assigned pset be changed? */
 	boolean_t	assign_active;	/* waiting for may_assign */
@@ -265,13 +317,6 @@ typedef struct task {
 
 	/* User-visible scheduling information */
 	int		user_stop_count;	/* outstanding stops */
-	int		priority;		/* for new threads */
-	int		max_priority;		/* maximum priority */
-	int		sched_data;		/* for use by policy */
-	int		policy;			/* scheduling policy */
-
-        /* Task security token */
-        security_token_t sec_token;
         
 	/* Statistics */
 	time_value_t	total_user_time;
@@ -284,35 +329,17 @@ typedef struct task {
 	struct prof_data *profil_buffer;/* profile struct if so */
 #endif	/* MACH_PROF */
 
-	/* IPC structures */
-	decl_mutex_data(,itk_lock_data)
-	struct ipc_port *itk_self;	/* not a right, doesn't hold ref */
-	struct ipc_port *itk_sself;	/* a send right */
-	struct exception_action exc_actions[EXC_TYPES_COUNT];
-		 			/* a send right each valid element  */
-	struct ipc_port *itk_bootstrap;	/* a send right */
-	struct ipc_port *itk_registered[TASK_PORT_REGISTER_MAX];
-					/* all send rights */
-
-	struct ipc_space *itk_space;
 
 	/* RPC subsystem information */
 	queue_head_t	subsystem_list;	/* list of subsystems */
 	int		subsystem_count;/* number of subsystems */
 
-	/* Synchronizer ownership information */
-	queue_head_t	semaphore_list;		/* list of owned semaphores   */
 	queue_head_t	lock_set_list;		/* list of owned lock sets    */
-	int		semaphores_owned;	/* number of semaphores owned */
 	int 		lock_sets_owned;	/* number of lock sets owned  */
 
 	/* User space system call emulation support */
 	struct 	eml_dispatch	*eml_dispatch;
 
-        /* Ledgers */
-	struct ipc_port	*wired_ledger_port;
-	struct ipc_port *paged_ledger_port;
-        
 #if	NORMA_TASK
 	long		child_node;	/* if != -1, node for new children */
 #endif	/* NORMA_TASK */
@@ -329,14 +356,14 @@ typedef struct task {
 typedef	mach_port_t *task_array_t;
 typedef	mach_port_t *task_port_array_t;
 
-#define task_lock(task)		mutex_lock(&(task)->lock)
-#define task_lock_try(task)	mutex_try(&(task)->lock)
-#define task_unlock(task)	mutex_unlock(&(task)->lock)
+#define task_lock(task)		mtx_lock(&(task)->lock)
+#define task_lock_try(task)	mtx_trylock(&(task)->lock)
+#define task_unlock(task)	mtx_unlock(&(task)->lock)
 
 #define	itk_lock_init(task)	mutex_init(&(task)->itk_lock_data, \
-					   ETAP_THREAD_TASK_ITK)
-#define	itk_lock(task)		mutex_lock(&(task)->itk_lock_data)
-#define	itk_unlock(task)	mutex_unlock(&(task)->itk_lock_data)
+					   "ETAP_THREAD_TASK_ITK")
+#define	itk_lock(task)		mtx_lock(&(task)->itk_lock_data)
+#define	itk_unlock(task)	mtx_unlock(&(task)->itk_lock_data)
 
 /*
  *	Internal only routines

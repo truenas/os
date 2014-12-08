@@ -59,6 +59,7 @@ struct mach_emuldata {
 
 struct mach_thread_emuldata {
 	struct mach_port *mle_kernel;	/* Thread's kernel port */
+	thread_t mle_thread;
 };
 
 struct ps_strings;

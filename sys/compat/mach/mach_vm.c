@@ -61,9 +61,27 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
+#include <sys/mach/mach_vm_server.h>
+#include <sys/mach/vm_map_server.h>
+#include <sys/mach/host_priv_server.h>
 /*
  * Like copyin(), but operates on an arbitrary process.
  */
+
+
+static int
+copyin_vm_map(vm_map_t map __unused, const void *uaddr __unused, void *kaddr __unused, size_t len __unused)
+{
+
+	return (0);
+}
+
+static int
+copyout_vm_map(vm_map_t map __unused, const void *kaddr __unused, void *uaddr __unused, size_t len __unused)
+{
+
+	return (0);
+}
 
 int
 copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
@@ -164,12 +182,12 @@ copyout_proc(struct proc *p, const void *kaddr, void *uaddr, size_t len)
 	return (error);
 }
 
-static int
-mach_vm_map(struct thread *td, mach_vm_offset_t *address, mach_vm_size_t _size,
-			mach_vm_offset_t _mask __unused, int _flags, vm_prot_t cur_protection,
-			vm_prot_t max_protection, mach_vm_inherit_t inh)
+int
+mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
+			mach_vm_offset_t _mask __unused, int _flags, mem_entry_name_port_t object __unused,
+			memory_object_offset_t offset __unused, boolean_t copy __unused,
+			vm_prot_t cur_protection, vm_prot_t max_protection, vm_inherit_t inh)
 {
-	vm_map_t map;
 	vm_offset_t addr;
 	size_t size;
 	int flags;
@@ -180,7 +198,6 @@ mach_vm_map(struct thread *td, mach_vm_offset_t *address, mach_vm_size_t _size,
 		return (ENOMEM);
 
 	size = round_page(_size);
-	map = &td->td_proc->p_vmspace->vm_map;
 	docow = error = 0;
 #if 0
 	/* Where Mach uses 0x00ff, we use 0x0100 */
@@ -226,21 +243,7 @@ done:
 	return (error);
 }
 
-int
-sys__kernelrpc_mach_vm_map_trap(struct thread *td, struct _kernelrpc_mach_vm_map_trap_args *uap)
-{
-	int error;
-	vm_offset_t addr;
-
-	if ((error = copyin(uap->address, &addr, sizeof(addr))) != 0)
-		return (error);
-	error = mach_vm_map(td, &addr, uap->size, uap->mask, uap->flags, uap->cur_protection,
-						VM_PROT_ALL, VM_INHERIT_NONE);
-	if (error)
-		return (error);
-	return (copyout(&addr, uap->address, sizeof(addr)));
-}
-
+#if 0
 int
 mach_vm_map_msg(struct mach_trap_args *args)
 {
@@ -272,6 +275,7 @@ mach_vm_map_msg(struct mach_trap_args *args)
 
 	return (0);
 }
+#endif
 
 int
 mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
@@ -308,27 +312,7 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 	return (0);
 }
 
-int
-sys__kernelrpc_mach_vm_allocate_trap(struct thread *td, struct _kernelrpc_mach_vm_allocate_trap_args *uap)
-{
-	/* mach_port_name_t target = uap->target; current task only */
-	mach_vm_offset_t *address = uap->address;
-	mach_vm_offset_t uaddr;
-	mach_vm_size_t size = uap->size;
-	int flags = uap->flags;
-	int error;
-
-	if ((error = copyin(address, &uaddr, sizeof(mach_vm_offset_t))))
-		return (error);
-
-	if ((error = mach_vm_allocate(&td->td_proc->p_vmspace->vm_map,
-								  &uaddr, size, flags)))
-		return (error);
-	if ((error = copyout(&uaddr, address, sizeof(mach_vm_offset_t))))
-		return (error);
-	return (0);
-}
-
+#if 0
 int
 mach_vm_allocate_msg(struct mach_trap_args *args)
 {
@@ -365,25 +349,19 @@ mach_vm_allocate_msg(struct mach_trap_args *args)
 
 	return (0);
 }
+#endif
 
-static int
-mach_vm_deallocate(struct thread *td, vm_offset_t addr, size_t len)
+int
+mach_vm_deallocate(vm_map_t target __unused, mach_vm_address_t addr, mach_vm_size_t len)
 {
 	struct munmap_args cup;
 
 	cup.addr = (void *)addr;
 	cup.len = len;
-	return (sys_munmap(td, &cup));
+	return (sys_munmap(curthread, &cup));
 }
 
-int
-sys__kernelrpc_mach_vm_deallocate_trap(struct thread *td, struct _kernelrpc_mach_vm_deallocate_trap_args *uap)
-{
-	/* mach_port_name_t target = uap->target; current task only */
-
-	return (mach_vm_deallocate(td, uap->address, uap->size));
-}
-
+#if 0
 int
 mach_vm_deallocate_msg(struct mach_trap_args *args)
 {
@@ -408,7 +386,7 @@ mach_vm_deallocate_msg(struct mach_trap_args *args)
 
 	return (0);
 }
-
+#endif
 /*
  * XXX This server message Id clashes with bootstrap_look_up.
  * Is there a way to resolve this easily?
@@ -466,8 +444,9 @@ mach_vm_wire(struct mach_trap_args *args)
 }
 #endif
 
-static int
-mach_vm_protect(struct thread *td, vm_offset_t addr, size_t len, vm_prot_t prot)
+int
+mach_vm_protect(vm_map_t target_task __unused, vm_offset_t addr, size_t len,
+				boolean_t setmax __unused, vm_prot_t prot)
 {
 	struct mprotect_args cup;
 
@@ -475,18 +454,10 @@ mach_vm_protect(struct thread *td, vm_offset_t addr, size_t len, vm_prot_t prot)
 	cup.len = len;
 	cup.prot = prot;
 
-	return (sys_mprotect(td, &cup));
+	return (sys_mprotect(curthread, &cup));
 }
 
-int
-sys__kernelrpc_mach_vm_protect_trap(struct thread *td, struct _kernelrpc_mach_vm_protect_trap_args *uap)
-{
-	/* mach_port_name_t target = uap->target */
-	/* int set_maximum = uap->set_maximum */
-
-	return (mach_vm_protect(td, uap->address, uap->size, uap->new_protection));
-}
-
+#if 0
 int
 mach_vm_protect_msg(struct mach_trap_args *args)
 {
@@ -504,6 +475,7 @@ mach_vm_protect_msg(struct mach_trap_args *args)
 
 	return (0);
 }
+#endif
 
 #ifdef USE_OBSOLETE
 int
@@ -551,37 +523,77 @@ sys_mach_map_fd(struct thread *td, struct mach_map_fd_args *uap)
 #endif
 
 int
-mach_vm_inherit(struct mach_trap_args *args)
+mach_vm_inherit(vm_map_t target_task, mach_vm_address_t address, mach_vm_size_t size,
+				vm_inherit_t new_inheritance)
 {
-	mach_vm_inherit_request_t *req = args->smsg;
-	mach_vm_inherit_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
 	struct minherit_args cup;
 	int error;
 
-	cup.addr = (void *)req->req_addr;
-	cup.len = req->req_size;
+	cup.addr = (void *)address;
+	cup.len = size;
 	/* Flags map well between Mach and NetBSD */
-	cup.inherit = req->req_inh;
+	cup.inherit = new_inheritance;
 
-	if ((error = sys_minherit(ttd, &cup)) != 0)
-		return (mach_msg_error(args, error));
-
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-	mach_set_trailer(rep, *msglen);
+	if ((error = sys_minherit(curthread, &cup)) != 0)
+		return (mach_msg_error(NULL, error));
 
 	return (0);
 }
 
 int
-mach_make_memory_entry_64(struct mach_trap_args *args)
+mach_vm_map_page_query(
+	vm_map_t target_map,
+	vm_offset_t offset,
+	integer_t *disposition,
+	integer_t *ref_count
+)
 {
-	mach_make_memory_entry_64_request_t *req = args->smsg;
-	mach_make_memory_entry_64_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+_mach_make_memory_entry(
+	vm_map_t target_task,
+	memory_object_size_t *size,
+	memory_object_offset_t offset,
+	vm_prot_t permission,
+	mem_entry_name_port_t *object_handle,
+	mem_entry_name_port_t parent_handle
+)
+{	
+
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_make_memory_entry(vm_map_t target_task, vm_size_t *size,
+					   vm_offset_t offset, vm_prot_t permission,
+					   mem_entry_name_port_t *object_handle,
+					   mem_entry_name_port_t parent_handle)
+{	
+
+	return (KERN_NOT_SUPPORTED);
+}
+
+
+int
+mach_make_memory_entry_64(vm_map_t target_task, memory_object_size_t *size,
+						  memory_object_offset_t offset, vm_prot_t permission,
+						  mach_port_t *object_handle,
+						  mem_entry_name_port_t parent_handle)
+{	
+
+	return (KERN_NOT_SUPPORTED);
+}
+
+
+#ifdef notyet
+int
+mach_make_memory_entry(vm_map_t target_task, memory_object_size_t *size,
+					   memory_object_offset_t offset, vm_prot_t permission,
+					   mem_entry_name_port_t *object_handle,
+					   mem_entry_name_port_t parent_handle)
+{
 	struct mach_port *mp;
 	struct mach_right *mr;
 	struct mach_memory_entry *mme;
@@ -592,13 +604,13 @@ mach_make_memory_entry_64(struct mach_trap_args *args)
 	mp = mach_port_get();
 	mp->mp_flags |= (MACH_MP_INKERNEL | MACH_MP_DATA_ALLOCATED);
 	mp->mp_datatype = MACH_MP_MEMORY_ENTRY;
-
+	
 	mme = malloc(sizeof(*mme), M_MACH, M_WAITOK);
 	mme->mme_proc = td->td_proc;
 	mme->mme_offset = req->req_offset;
 	mme->mme_size = req->req_size;
 	mp->mp_data = mme;
-
+	
 	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
 
 	*msglen = sizeof(*rep);
@@ -606,7 +618,7 @@ mach_make_memory_entry_64(struct mach_trap_args *args)
 	mach_add_port_desc(rep, mr->mr_name);
 
 	rep->rep_size = req->req_size;
-
+	
 	mach_set_trailer(rep, *msglen);
 
 	return (0);
@@ -670,6 +682,7 @@ mach_vm_region(struct mach_trap_args *args)
 	return (0);
 }
 
+
 int
 mach_vm_region_64(struct mach_trap_args *args)
 {
@@ -718,7 +731,7 @@ mach_vm_region_64(struct mach_trap_args *args)
 	rbi->offset = vme->offset;
 	rbi->behavior = MACH_VM_BEHAVIOR_DEFAULT; /* XXX What is it? */
 	rbi->user_wired_count = vme->wired_count;
-
+	
 	/* XXX Why this? */
 	*(short *)((u_long)&rbi->user_wired_count + sizeof(short)) = 1;
 
@@ -726,72 +739,58 @@ mach_vm_region_64(struct mach_trap_args *args)
 
 	return (0);
 }
+#endif
 
 int
-mach_vm_msync(struct mach_trap_args *args)
+mach_vm_msync(vm_map_t target_task __unused, mach_vm_address_t addr, mach_vm_size_t size,
+		vm_sync_t flags)
 {
-	mach_vm_msync_request_t *req = args->smsg;
-	mach_vm_msync_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
 	struct msync_args cup;
 	int error;
 
-	cup.addr = (void *)req->req_addr;
-	cup.len = req->req_size;
+	cup.addr = (void *)addr;
+	cup.len = size;
 	cup.flags = 0;
-	if (req->req_flags & MACH_VM_SYNC_ASYNCHRONOUS)
+	if (flags & MACH_VM_SYNC_ASYNCHRONOUS)
 		cup.flags |= MS_ASYNC;
-	if (req->req_flags & MACH_VM_SYNC_SYNCHRONOUS)
+	if (flags & MACH_VM_SYNC_SYNCHRONOUS)
 		cup.flags |= MS_SYNC;
-	if (req->req_flags & MACH_VM_SYNC_INVALIDATE)
+	if (flags & MACH_VM_SYNC_INVALIDATE)
 		cup.flags |= MS_INVALIDATE;
-
-	error = sys_msync(ttd, &cup);
-
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-
-	rep->rep_retval = native_to_mach_errno[error];
-
-	mach_set_trailer(rep, *msglen);
-
+	error = sys_msync(curthread, &cup);
+	
+	if (error)
+		return (mach_msg_error(NULL, error));
 	return (0);
 }
 
 /* XXX Do it for remote task */
 int
-mach_vm_copy(struct mach_trap_args *args)
+mach_vm_copy(vm_map_t target_task, mach_vm_address_t src, mach_vm_size_t size,
+		mach_vm_address_t dst)
+		
 {
-	mach_vm_copy_request_t *req = args->smsg;
-	mach_vm_copy_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
 	char *tmpbuf;
 	int error;
-	char *src, *dst;
-	size_t size;
 
 #ifdef DEBUG_MACH_VM
 	printf("mach_vm_copy: src = 0x%08lx, size = 0x%08lx, addr = 0x%08lx\n",
 	    (long)req->req_src, (long)req->req_size, (long)req->req_addr);
 #endif
-	if ((req->req_src & (PAGE_SIZE - 1)) ||
-	    (req->req_addr & (PAGE_SIZE - 1)) ||
-	    (req->req_size & (PAGE_SIZE - 1)))
-		return (mach_msg_error(args, EINVAL));
+	if ((src & (PAGE_SIZE - 1)) ||
+	    (dst & (PAGE_SIZE - 1)) ||
+	    (size & (PAGE_SIZE - 1)))
+		return (mach_msg_error(NULL, EINVAL));
 
-	src = (void *)req->req_src;
-	dst = (void *)req->req_addr;
-	size = (size_t)req->req_size;
 
 	tmpbuf = malloc(PAGE_SIZE, M_TEMP, M_WAITOK);
 
 	/* Is there an easy way of dealing with that efficiently? */
 	do {
-		if ((error = copyin(src, tmpbuf, PAGE_SIZE)) != 0)
+		if ((error = copyin((void*)src, tmpbuf, PAGE_SIZE)) != 0)
 			goto out;
 
-		if ((error = copyout(tmpbuf, dst, PAGE_SIZE)) != 0)
+		if ((error = copyout(tmpbuf, (void *)dst, PAGE_SIZE)) != 0)
 			goto out;
 
 		src += PAGE_SIZE;
@@ -799,41 +798,30 @@ mach_vm_copy(struct mach_trap_args *args)
 		size -= PAGE_SIZE;
 	} while (size > 0);
 
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-
-	rep->rep_retval = 0;
-
-	mach_set_trailer(rep, *msglen);
 
 	free(tmpbuf, M_TEMP);
 	return (0);
 
 out:
 	free(tmpbuf, M_TEMP);
-	return (mach_msg_error(args, error));
+	return (mach_msg_error(NULL, error));
 }
 
 int
-mach_vm_read(struct mach_trap_args *args)
+mach_vm_read(vm_map_t map, mach_vm_address_t addr, mach_vm_size_t size,
+			 vm_offset_t *data, mach_msg_type_number_t *dataCnt)
 {
-	mach_vm_read_request_t *req = args->smsg;
-	mach_vm_read_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *td = args->td;
-	vm_map_t map = &curproc->p_vmspace->vm_map;
 	caddr_t tbuf;
-	vm_offset_t srcaddr, dstaddr;
+	vm_offset_t dstaddr;
 	vm_prot_t prot, protmax;
-	size_t size;
 	int error;
 
-	size = round_page(req->req_size);
+	size = round_page(size);
 	prot = VM_PROT_READ|VM_PROT_WRITE;
 	protmax = VM_PROT_ALL;
 
 	if ((error = mach_vm_allocate(map, &dstaddr, size, 0)))
-		return (mach_msg_error(args, ENOMEM));
+		return (mach_msg_error(NULL, ENOMEM));
 	/*
 	 * Copy the data from the target process to the current process
 	 * This is reasonable for small chunk of data, but we should
@@ -841,98 +829,67 @@ mach_vm_read(struct mach_trap_args *args)
 	 */
 	tbuf = malloc(size, M_MACH, M_WAITOK);
 
-	srcaddr = req->req_addr;
-	if ((error = copyin_proc(td->td_proc, (caddr_t)srcaddr, tbuf, size)) != 0) {
-		printf("copyin_proc error = %d, addr = %lx, size = %zx\n", error, srcaddr, size);
+	if ((error = copyin_vm_map(map, (caddr_t)addr, tbuf, size)) != 0) {
+		printf("copyin_proc error = %d, addr = %lx, size = %zx\n", error, addr, size);
 		free(tbuf, M_MACH);
-		return (mach_msg_error(args, EFAULT));
+		return (mach_msg_error(NULL, EFAULT));
 	}
 
 	if ((error = copyout(tbuf, (void *)dstaddr, size)) != 0) {
 		printf("copyout error = %d\n", error);
 		free(tbuf, M_MACH);
-		return (mach_msg_error(args, EFAULT));
+		return (mach_msg_error(NULL, EFAULT));
 	}
 
 	if (error == 0)
 		ktrmool(tbuf, size, (void *)va);
 
 	free(tbuf, M_MACH);
-
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-	mach_add_ool_desc(rep, (void *)dstaddr, size);
-
-	rep->rep_count = size;
-	mach_set_trailer(rep, *msglen);
 	return (0);
 }
 
 int
-mach_vm_write(struct mach_trap_args *args)
+mach_vm_write(vm_map_t target_task, mach_vm_address_t address, vm_offset_t data,
+	mach_msg_type_number_t dataCnt)
 {
-	mach_vm_write_request_t *req = args->smsg;
-	mach_vm_write_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
-	size_t size;
-	void *addr;
+	size_t size = dataCnt;
 	char *tbuf;
 	int error;
-
-#ifdef DEBUG_MACH
-	if (req->req_body.msgh_descriptor_count != 1)
-		printf("mach_vm_write: OOL descriptor count is not 1\n");
-#endif
 
 	/*
 	 * Copy the data from the current process to the target process
 	 * This is reasonable for small chunk of data, but we should
 	 * remap COW for areas bigger than a page.
 	 */
-	size = req->req_data.size;
 	tbuf = malloc(size, M_MACH, M_WAITOK);
 
-	if ((error = copyin(req->req_data.address, tbuf, size)) != 0) {
+	if ((error = copyin((void *)address, tbuf, size)) != 0) {
 		printf("copyin error = %d\n", error);
 		free(tbuf, M_MACH);
-		return (mach_msg_error(args, EFAULT));
+		return (mach_msg_error(NULL, EFAULT));
 	}
 
-	addr = (void *)req->req_addr;
-	if ((error = copyout_proc(ttd->td_proc, tbuf, addr, size)) != 0) {
+	if ((error = copyout_vm_map(target_task, tbuf, (void *)data, size)) != 0) {
 		printf("copyout_proc error = %d\n", error);
 		free(tbuf, M_MACH);
-		return (mach_msg_error(args, EFAULT));
+		return (mach_msg_error(NULL, EFAULT));
 	}
 
-	if (error == 0)
-		ktrmool(tbuf, size, (void *)addr);
-
 	free(tbuf, M_MACH);
-
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-
-	rep->rep_retval = 0;
-
-	mach_set_trailer(rep, *msglen);
 
 	return (0);
 }
 
 int
-mach_vm_machine_attribute(struct mach_trap_args *args)
+mach_vm_machine_attribute(vm_map_t target_task, mach_vm_address_t addr, mach_vm_size_t size,
+						  vm_machine_attribute_t attribute, vm_machine_attribute_val_t *valuep)
 {
-	mach_vm_machine_attribute_request_t *req = args->smsg;
-	mach_vm_machine_attribute_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
 	int error = 0;
-	int attribute, value;
+	vm_machine_attribute_val_t value;
 
-	attribute = req->req_attribute;
-	value = req->req_value;
+
+	if ((error = copyin(valuep, &value, sizeof(value))))
+		return (mach_msg_error(NULL, error));
 
 	switch (attribute) {
 	case MACH_MATTR_CACHE:
@@ -941,12 +898,11 @@ mach_vm_machine_attribute(struct mach_trap_args *args)
 		case MACH_MATTR_VAL_DCACHE_FLUSH:
 		case MACH_MATTR_VAL_ICACHE_FLUSH:
 		case MACH_MATTR_VAL_CACHE_SYNC:
-			error = cpu_mach_vm_machine_attribute(ttd,
-			    req->req_addr, req->req_size, &value);
+			error = cpu_mach_vm_machine_attribute(target_task, addr, size, &value);
 			break;
 		default:
 #ifdef DEBUG_MACH
-			printf("unimplemented value %d\n", req->req_value);
+			printf("unimplemented value %d\n", value);
 #endif
 			error = EINVAL;
 			break;
@@ -957,20 +913,213 @@ mach_vm_machine_attribute(struct mach_trap_args *args)
 	case MACH_MATTR_REPLICATE:
 	default:
 #ifdef DEBUG_MACH
-		printf("unimplemented attribute %d\n", req->req_attribute);
+		printf("unimplemented attribute %d\n", attribute);
 #endif
 		error = EINVAL;
 		break;
 	}
 
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
 
-	rep->rep_retval = native_to_mach_errno[error];
-	if (error != 0)
-		rep->rep_value = value;
+	if (error)
+		return (native_to_mach_errno[error]);
 
-	mach_set_trailer(rep, *msglen);
+	return (copyout(&value, valuep, sizeof(value)));
+}
 
-	return (0);
+int
+mach_vm_behavior_set(vm_map_t target_task, mach_vm_address_t address, mach_vm_size_t size, vm_behavior_t new_behavior)
+{
+
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_page_info(vm_map_t target_task, mach_vm_address_t address,
+				  vm_page_info_flavor_t flavor, vm_page_info_t info,
+				  mach_msg_type_number_t *infoCnt)
+{
+
+		return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_page_query(
+	vm_map_t target_map,
+	mach_vm_offset_t offset,
+	integer_t *disposition,
+	integer_t *ref_count
+)
+{
+
+		return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_purgable_control(
+	vm_map_t target_task,
+	mach_vm_address_t address,
+	vm_purgable_t control,
+	int *state
+	)
+{
+
+	return (KERN_NOT_SUPPORTED);
+}
+	
+int
+mach_vm_read_list(
+	vm_map_t target_task,
+	mach_vm_read_entry_t data_list,
+	natural_t count
+	)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+
+int
+vm_read_list(
+	vm_map_t target_task,
+	vm_read_entry_t data_list,
+	natural_t count
+	)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_read_overwrite(
+	vm_map_t target_task,
+	mach_vm_address_t address,
+	mach_vm_size_t size,
+	mach_vm_address_t data,
+	mach_vm_size_t *outsize
+)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_region(
+	vm_map_t target_task,
+	mach_vm_address_t *address,
+	mach_vm_size_t *size,
+	vm_region_flavor_t flavor,
+	vm_region_info_t info,
+	mach_msg_type_number_t *infoCnt,
+	mach_port_t *object_name
+	)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_region_info(
+	vm_map_t task,
+	vm_address_t address,
+	vm_info_region_t *region,
+	vm_info_object_array_t *objects,
+	mach_msg_type_number_t *objectsCnt
+)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_region_info_64(
+	vm_map_t task,
+	vm_address_t address,
+	vm_info_region_64_t *region,
+	vm_info_object_array_t *objects,
+	mach_msg_type_number_t *objectsCnt
+)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_region_recurse(
+	vm_map_t target_task,
+	mach_vm_address_t *address,
+	mach_vm_size_t *size,
+	natural_t *nesting_depth,
+	vm_region_recurse_info_t info,
+	mach_msg_type_number_t *infoCnt
+	)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_mapped_pages_info(
+	vm_map_t task,
+	page_address_array_t *pages,
+	mach_msg_type_number_t *pagesCnt
+)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+	
+int
+mach_vm_remap(
+	vm_map_t target_task,
+	mach_vm_address_t *target_address,
+	mach_vm_size_t size,
+	mach_vm_offset_t mask,
+	int flags,
+	vm_map_t src_task,
+	mach_vm_address_t src_address,
+	boolean_t copy,
+	vm_prot_t *cur_protection,
+	vm_prot_t *max_protection,
+	vm_inherit_t inheritance
+	)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_wire(
+	host_priv_t host_priv,
+	vm_map_t task,
+	mach_vm_address_t address,
+	mach_vm_size_t size,
+	vm_prot_t desired_access
+)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+mach_vm_wire_32(
+	host_priv_t host_priv,
+	vm_map_t task,
+	vm_address_t address,
+	vm_size_t size,
+	vm_prot_t desired_access
+)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+task_wire(vm_map_t target_task, boolean_t must_wire)
+{
+
+	return (KERN_NOT_SUPPORTED);
+}
+
+int
+vm_allocate_cpm
+(
+	host_priv_t host_priv,
+	vm_map_t task,
+	vm_address_t *address,
+	vm_size_t size,
+	int flags
+)
+{
+
+	return (KERN_NOT_SUPPORTED);
 }

@@ -288,7 +288,7 @@ struct mach_right *mach_right_get(struct mach_port *,
 void mach_right_put(struct mach_right *, int);
 void mach_right_put_shlocked(struct mach_right *, int);
 void mach_right_put_exclocked(struct mach_right *, int);
-struct mach_right *mach_right_check(mach_port_t, struct thread *, int);
+struct mach_right *mach_right_check(mach_port_name_t, struct thread *, int);
 
 /* In-kernel Mach port description */
 struct mach_port {
@@ -324,6 +324,11 @@ void mach_port_put(struct mach_port *);
 void mach_remove_recvport(struct mach_port *);
 void mach_add_recvport(struct mach_port *, struct thread *);
 int mach_port_check(struct mach_port *);
+#if 0
+int mach_port_allocate(struct thread *td, mach_port_right_t right, struct mach_right **mr);
+int mach_port_insert_right(struct thread *td, mach_port_name_t name, mach_port_name_t right, mach_msg_type_name_t disposition);
+#endif
+	
 #ifdef DEBUG_MACH
 void mach_debug_port(void);
 #endif

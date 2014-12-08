@@ -188,15 +188,15 @@ struct _kernelrpc_mach_port_unguard_trap_args {
 struct mach_task_name_for_pid_args {
 	char target_tport_l_[PADL_(mach_port_name_t)]; mach_port_name_t target_tport; char target_tport_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
-	char tn_l_[PADL_(mach_port_t *)]; mach_port_t * tn; char tn_r_[PADR_(mach_port_t *)];
+	char tn_l_[PADL_(mach_port_name_t *)]; mach_port_name_t * tn; char tn_r_[PADR_(mach_port_name_t *)];
 };
 struct mach_task_for_pid_args {
-	char target_tport_l_[PADL_(mach_port_t)]; mach_port_t target_tport; char target_tport_r_[PADR_(mach_port_t)];
+	char target_tport_l_[PADL_(mach_port_name_t)]; mach_port_name_t target_tport; char target_tport_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
-	char t_l_[PADL_(mach_port_t *)]; mach_port_t * t; char t_r_[PADR_(mach_port_t *)];
+	char t_l_[PADL_(mach_port_name_t *)]; mach_port_name_t * t; char t_r_[PADR_(mach_port_name_t *)];
 };
 struct mach_pid_for_task_args {
-	char t_l_[PADL_(mach_port_t)]; mach_port_t t; char t_r_[PADR_(mach_port_t)];
+	char t_l_[PADL_(mach_port_name_t)]; mach_port_name_t t; char t_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int *)]; int * pid; char pid_r_[PADR_(int *)];
 };
 struct mach_macx_swapon_args {
@@ -213,7 +213,7 @@ struct mach_macx_triggers_args {
 	char hi_water_l_[PADL_(int)]; int hi_water; char hi_water_r_[PADR_(int)];
 	char low_water_l_[PADL_(int)]; int low_water; char low_water_r_[PADR_(int)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
-	char alert_port_l_[PADL_(mach_port_t)]; mach_port_t alert_port; char alert_port_r_[PADR_(mach_port_t)];
+	char alert_port_l_[PADL_(mach_port_name_t)]; mach_port_name_t alert_port; char alert_port_r_[PADR_(mach_port_name_t)];
 };
 struct mach_macx_backing_store_suspend_args {
 	char suspend_l_[PADL_(int)]; int suspend; char suspend_r_[PADR_(int)];

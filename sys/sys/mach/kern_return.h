@@ -342,8 +342,8 @@
 		/* Allow an orphaned activation to continue executing.
 		 */
 
-#define	KERN_NO_THREAD			46
-		/* Empty thread activation (No thread linked to it)
+#define	KERN_NOT_SUPPORTED			46
+		/* Unsupported operation
 		 */
 
 #define	KERN_NODE_DOWN			47

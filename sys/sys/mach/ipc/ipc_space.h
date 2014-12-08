@@ -86,16 +86,21 @@
 #ifndef	_IPC_IPC_SPACE_H_
 #define _IPC_IPC_SPACE_H_
 
+#if 0
 #include <mach_kdb.h>
 
 #include <mach/boolean.h>
-#include <mach/kern_return.h>
 #include <kern/macro_help.h>
 #include <kern/lock.h>
 #include <kern/zalloc.h>
-#include <ipc/ipc_entry.h>
-#include <ipc/ipc_splay.h>
-#include <ipc/ipc_types.h>
+#endif
+
+#include <sys/mach/kern_return.h>
+
+#include <vm/uma.h>
+#include <sys/mach/ipc/ipc_entry.h>
+#include <sys/mach/ipc/ipc_splay.h>
+#include <sys/mach/ipc/ipc_types.h>
 
 /*
  *	Every task has a space of IPC capabilities.
@@ -134,10 +139,10 @@ struct ipc_space {
 
 #define	IS_NULL			((ipc_space_t) 0)
 
-extern zone_t ipc_space_zone;
+extern uma_zone_t ipc_space_zone;
 
-#define is_alloc()		((ipc_space_t) zalloc(ipc_space_zone))
-#define	is_free(is)		zfree(ipc_space_zone, (vm_offset_t) (is))
+#define is_alloc()		((ipc_space_t) uma_zalloc(ipc_space_zone, M_WAITOK))
+#define	is_free(is)		uma_zfree(ipc_space_zone, (is))
 
 extern ipc_space_t ipc_space_kernel;
 extern ipc_space_t ipc_space_reply;
@@ -151,37 +156,37 @@ extern ipc_space_t default_pager_space;
 #define is_fast_space(is)	((is)->is_fast)
 
 #define	is_ref_lock_init(is)	mutex_init(&(is)->is_ref_lock_data, \
-					   ETAP_IPC_IS_REF)
+					   "ETAP_IPC_IS_REF")
 
 #define	ipc_space_reference_macro(is)					\
 MACRO_BEGIN								\
-	mutex_lock(&(is)->is_ref_lock_data);				\
+	mtx_lock(&(is)->is_ref_lock_data);				\
 	assert((is)->is_references > 0);				\
 	(is)->is_references++;						\
-	mutex_unlock(&(is)->is_ref_lock_data);				\
+	mtx_unlock(&(is)->is_ref_lock_data);				\
 MACRO_END
 
 #define	ipc_space_release_macro(is)					\
 MACRO_BEGIN								\
 	ipc_space_refs_t _refs;						\
 									\
-	mutex_lock(&(is)->is_ref_lock_data);				\
+	mtx_lock(&(is)->is_ref_lock_data);				\
 	assert((is)->is_references > 0);				\
 	_refs = --(is)->is_references;					\
-	mutex_unlock(&(is)->is_ref_lock_data);				\
+	mtx_unlock(&(is)->is_ref_lock_data);				\
 									\
 	if (_refs == 0)							\
-		is_free(is);						\
+		is_free(is);		\
 MACRO_END
 
-#define	is_lock_init(is)	mutex_init(&(is)->is_lock_data, ETAP_IPC_IS)
+#define	is_lock_init(is)	mutex_init(&(is)->is_lock_data, "ETAP_IPC_IS")
 
-#define	is_read_lock(is)	mutex_lock(&(is)->is_lock_data)
-#define is_read_unlock(is)	mutex_unlock(&(is)->is_lock_data)
+#define	is_read_lock(is)	mtx_lock(&(is)->is_lock_data)
+#define is_read_unlock(is)	mtx_unlock(&(is)->is_lock_data)
 
-#define	is_write_lock(is)	mutex_lock(&(is)->is_lock_data)
-#define	is_write_lock_try(is)	mutex_try(&(is)->is_lock_data)
-#define is_write_unlock(is)	mutex_unlock(&(is)->is_lock_data)
+#define	is_write_lock(is)	mtx_lock(&(is)->is_lock_data)
+#define	is_write_lock_try(is)	mtx_trylock(&(is)->is_lock_data)
+#define is_write_unlock(is)	mtx_unlock(&(is)->is_lock_data)
 
 #define	is_write_to_read_lock(is)
 

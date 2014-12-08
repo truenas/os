@@ -56,9 +56,13 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
-static int max_threads_per_proc = 1500;
+#include <sys/mach/ipc/ipc_kmsg.h>
+#include <sys/mach/thread.h>
+
 #define MT_SETRUNNABLE 0x1
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#ifdef notyet
 /*
  * Am assuming that Mach lacks the concept of uninterruptible
  * sleep - this may need to be changed back to what is in pci_pass.c
@@ -85,6 +89,8 @@ _intr_tdsigwakeup(struct thread *td, int intrval)
 	thread_unlock(td);
 	return (rc);
 }
+#endif
+#if 0
 static int
 _create_thread(struct thread *td, int (*func)(void *), void *args, struct thread **rettd, int flags)
 {
@@ -170,28 +176,23 @@ fail:
 #endif
 	return (error);
 }
-
+#endif
 
 int
-sys_mach_thread_switch(struct thread *td, struct mach_thread_switch_args *uap)
+mach_thread_switch(struct thread *td, mach_port_name_t thread_name, int option, mach_msg_timeout_t option_time)
 {
-	/* {
-		syscallarg(mach_port_name_t) thread_name;
-		syscallarg(int) option;
-		syscallarg(mach_msg_timeout_t) option_time;
-	} */
 	int timeout;
 	struct mach_emuldata *med;
 
 	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
-	timeout = uap->option_time * hz / 1000;
+	timeout = option_time * hz / 1000;
 
 	/*
 	 * The day we will be able to find out the struct proc from
 	 * the port number, try to use preempt() to call the right thread.
 	 * [- but preempt() is for _involuntary_ context switches.]
 	 */
-	switch(uap->option) {
+	switch(option) {
 	case MACH_SWITCH_OPTION_NONE:
 		sched_relinquish(curthread);
 		break;
@@ -214,24 +215,16 @@ sys_mach_thread_switch(struct thread *td, struct mach_thread_switch_args *uap)
 		break;
 
 	default:
-		uprintf("sys_mach_syscall_thread_switch(): unknown option %d\n",		    uap->option);
+		uprintf("sys_mach_syscall_thread_switch(): unknown option %d\n", option);
 		break;
 	}
 	return (0);
 }
 
 int
-sys_mach_swtch_pri(struct thread *td, struct mach_swtch_pri_args *uap)
+mach_swtch_pri(struct thread *td, int pri)
 {
-	/* {
-		syscallarg(int) pri;
-	} */
 
-	/*
-	 * Copied from preempt(9). We cannot just call preempt
-	 * because we want to return mi_switch(9) return value.
-	 * XXX no return value on FreeBSD
-	 */
 	thread_lock(td);
 	if (td->td_state == TDS_RUNNING)
 		td->td_proc->p_stats->p_cru.ru_nivcsw++;	/* XXXSMP */
@@ -241,16 +234,7 @@ sys_mach_swtch_pri(struct thread *td, struct mach_swtch_pri_args *uap)
 	return (0);
 }
 
-int
-sys_mach_swtch(struct thread *td, struct mach_swtch_args *v)
-{
-	struct mach_swtch_pri_args cup;
-
-	cup.pri = 0;
-
-	return (sys_mach_swtch_pri(td, &cup));
-}
-
+#if 0
 int
 mach_thread_policy(struct mach_trap_args *args)
 {
@@ -569,4 +553,30 @@ mach_thread_set_policy(struct mach_trap_args *args)
 	rep->rep_retCode = 0;
 	return (0);
 }
+#endif
 
+void
+thread_go(thread_t thread)
+{
+	/* XXX */
+}
+
+void
+thread_block(void (*continuation)(void))
+{
+	/* XXX */
+}
+
+void
+thread_will_wait_with_timeout(thread_t thread, int timeout)
+{
+
+
+}
+
+
+void
+thread_will_wait(thread_t thread)
+{
+	/* XXX */
+}

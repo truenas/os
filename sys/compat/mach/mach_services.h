@@ -64,6 +64,7 @@ int mach_port_set_attributes(struct mach_trap_args *);
 int mach_port_insert_member(struct mach_trap_args *);
 int mach_task_terminate(struct mach_trap_args *);
 int mach_task_threads(struct mach_trap_args *);
+#if 0
 int mach_ports_lookup(struct mach_trap_args *);
 int mach_task_info(struct mach_trap_args *);
 int mach_task_suspend(struct mach_trap_args *);
@@ -97,3 +98,4 @@ int mach_vm_map_msg(struct mach_trap_args *);
 int mach_vm_machine_attribute(struct mach_trap_args *);
 int mach_vm_region_64(struct mach_trap_args *);
 int mach_make_memory_entry_64(struct mach_trap_args *);
+#endif

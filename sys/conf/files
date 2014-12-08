@@ -247,6 +247,60 @@ compat/freebsd32/freebsd32_ioctl.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_misc.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_syscalls.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_sysent.c	optional compat_freebsd32
+compat/mach/host_priv_server.c	optional  compat_mach
+compat/mach/mach_host_server.c	optional  compat_mach
+compat/mach/mach_port_server.c	optional  compat_mach
+compat/mach/mach_vm_server.c	optional  compat_mach
+compat/mach/task_server.c		optional  compat_mach
+compat/mach/vm_map_server.c		optional  compat_mach
+compat/mach/clock_server.c		optional  compat_mach
+
+#compat/mach/mach_bootstrap.c	optional  compat_mach
+compat/mach/mach_clock.c        optional  compat_mach
+compat/mach/mach_convert.c		optional  compat_mach
+compat/mach/mach_errno.c        optional  compat_mach
+#compat/mach/mach_exception.c    optional  compat_mach
+compat/mach/mach_host.c         optional  compat_mach
+compat/mach/mach_host_priv.c    optional  compat_mach
+#compat/mach/mach_iokit.c        optional  compat_mach
+#compat/mach/mach_message.c      optional  compat_mach
+compat/mach/mach_misc.c         optional  compat_mach
+#compat/mach/mach_notify.c       optional  compat_mach
+#compat/mach/mach_port.c         optional  compat_mach
+compat/mach/mach_processor.c         optional  compat_mach
+compat/mach/mach_semaphore.c    optional  compat_mach
+#compat/mach/mach_services.c     optional  compat_mach
+compat/mach/mach_services_names.c     optional  compat_mach
+compat/mach/mach_syscalls.c     optional  compat_mach
+compat/mach/mach_sysent.c       optional  compat_mach
+compat/mach/mach_task.c         optional  compat_mach
+compat/mach/mach_thread.c       optional  compat_mach
+compat/mach/mach_vm.c           optional  compat_mach
+
+compat/mach/mach_traps.c        optional  compat_mach
+
+compat/mach/ipc/ipc_entry.c		optional  compat_mach
+compat/mach/ipc/ipc_hash.c		optional  compat_mach
+compat/mach/ipc/ipc_init.c		optional  compat_mach
+compat/mach/ipc/ipc_kmsg.c		optional  compat_mach
+compat/mach/ipc/ipc_kobject.c	optional  compat_mach
+compat/mach/ipc/ipc_mqueue.c	optional  compat_mach
+compat/mach/ipc/ipc_notify.c	optional  compat_mach
+compat/mach/ipc/ipc_object.c	optional  compat_mach
+compat/mach/ipc/ipc_port.c		optional  compat_mach
+compat/mach/ipc/ipc_pset.c		optional  compat_mach
+compat/mach/ipc/ipc_right.c		optional  compat_mach
+compat/mach/ipc/ipc_space.c		optional  compat_mach
+compat/mach/ipc/ipc_splay.c		optional  compat_mach
+compat/mach/ipc/ipc_table.c		optional  compat_mach
+compat/mach/ipc/ipc_thread.c	optional  compat_mach
+compat/mach/ipc/mach_debug.c	optional  compat_mach
+compat/mach/ipc/mach_msg.c		optional  compat_mach
+compat/mach/ipc/mach_port.c		optional  compat_mach
+compat/mach/kern/ipc_tt.c		optional  compat_mach
+compat/mach/kern/task.c		optional  compat_mach
+
+
 contrib/altq/altq/altq_cbq.c		optional altq
 contrib/altq/altq/altq_cdnr.c		optional altq
 contrib/altq/altq/altq_hfsc.c		optional altq

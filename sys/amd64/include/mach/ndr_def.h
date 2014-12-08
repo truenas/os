@@ -1,4 +1,4 @@
-#include <mach/ndr.h>
+#include <sys/mach/ndr.h>
 
 NDR_record_t NDR_record = {
         0,                      /* mig_reserved */

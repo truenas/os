@@ -83,6 +83,11 @@
 
 #ifndef	_IPC_IPC_MQUEUE_H_
 #define _IPC_IPC_MQUEUE_H_
+
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/event.h>
+
 #if 0
 #include <mach_assert.h>
 #include <dipc.h>
@@ -98,6 +103,8 @@
 #include <sys/mach/ipc/ipc_thread.h>
 #include <sys/mach/ipc/ipc_object.h>
 #include <sys/mach/ipc/ipc_types.h>
+#define TRACE_BUFFER 0
+#define TR_DECL(x)
 
 typedef struct ipc_mqueue {
 #if	DIPC
@@ -107,6 +114,7 @@ typedef struct ipc_mqueue {
 #endif	/* DIPC */
 	struct ipc_kmsg_queue imq_messages;
 	struct ipc_thread_queue imq_threads;
+	struct knlist imq_note;
 } *ipc_mqueue_t;
 
 #define	IMQ_NULL		((ipc_mqueue_t) 0)
@@ -120,11 +128,11 @@ typedef struct ipc_mqueue {
 #define	imq_lock_addr(mq)	(&(mq)->imq_lock_data)
 #else	/* DIPC */
 #define	imq_lock_init(mq)	mutex_init(&(mq)->imq_lock_data, \
-					   ETAP_IPC_MQUEUE)
-#define	imq_lock(mq)		mutex_lock(&(mq)->imq_lock_data)
-#define	imq_lock_try(mq)	mutex_try(&(mq)->imq_lock_data)
-#define	imq_unlock(mq)		mutex_unlock(&(mq)->imq_lock_data)
-#define	imq_lock_addr(mq)	(mutex_lock_addr((mq)->imq_lock_data))
+					   "ETAP_IPC_MQUEUE")
+#define	imq_lock(mq)		mtx_lock(&(mq)->imq_lock_data)
+#define	imq_lock_try(mq)	mtx_trylock(&(mq)->imq_lock_data)
+#define	imq_unlock(mq)		mtx_unlock(&(mq)->imq_lock_data)
+#define	imq_lock_addr(mq)	mtx_lock((mq)->imq_lock_data)
 #endif	/* DIPC */
 
 #define	IMQ_NULL_CONTINUE	((void (*)(void)) 0)
@@ -162,7 +170,7 @@ extern mach_msg_return_t ipc_mqueue_deliver(
 /* Convert a name in a space to a message queue */
 extern mach_msg_return_t ipc_mqueue_copyin(
 	ipc_space_t	space,
-	mach_port_t	name,
+	mach_port_name_t	name,
 	ipc_mqueue_t	*mqueuep,
 	ipc_object_t	*objectp);
 

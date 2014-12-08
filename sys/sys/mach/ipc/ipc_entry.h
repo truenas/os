@@ -81,9 +81,7 @@
 
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
-#if 0
-#include <kern/zalloc.h>
-#endif
+#include <vm/uma.h>
 #include <sys/mach/port.h>
 #include <sys/mach/ipc/ipc_table.h>
 #include <sys/mach/ipc/ipc_types.h>
@@ -158,7 +156,7 @@ typedef struct ipc_entry {
 
 typedef struct ipc_tree_entry {
 	struct ipc_entry ite_entry;
-	mach_port_t ite_name;
+	mach_port_name_t ite_name;
 	struct ipc_space *ite_space;
 	struct ipc_tree_entry *ite_lchild;
 	struct ipc_tree_entry *ite_rchild;
@@ -170,11 +168,11 @@ typedef struct ipc_tree_entry {
 #define	ite_object	ite_entry.ie_object
 #define	ite_request	ite_entry.ie_request
 #define	ite_next	ite_entry.hash.tree
-#if 0
-extern zone_t ipc_tree_entry_zone;
-#endif
-#define ite_alloc()	((ipc_tree_entry_t) zalloc(ipc_tree_entry_zone))
-#define	ite_free(ite)	zfree(ipc_tree_entry_zone, (vm_offset_t) (ite))
+
+extern uma_zone_t ipc_tree_entry_zone;
+
+#define ite_alloc()	((ipc_tree_entry_t) uma_zalloc(ipc_tree_entry_zone, M_WAITOK))
+#define	ite_free(ite)	uma_zfree(ipc_tree_entry_zone, (ite))
 
 /*
  * Exported interfaces
@@ -183,32 +181,32 @@ extern zone_t ipc_tree_entry_zone;
 /* Search for entry in a space by name */
 extern ipc_entry_t ipc_entry_lookup(
 	ipc_space_t	space,
-	mach_port_t	name);
+	mach_port_name_t	name);
 
 /* Allocate an entry in a space */
 extern kern_return_t ipc_entry_get(
 	ipc_space_t	space,
 	boolean_t	is_send_once,
-	mach_port_t	*namep,
+	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp);
 
 /* Allocate an entry in a space, growing the space if necessary */
 extern kern_return_t ipc_entry_alloc(
 	ipc_space_t	space,
 	boolean_t	is_send_once,
-	mach_port_t	*namep,
+	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp);
 
 /* Allocate/find an entry in a space with a specific name */
 extern kern_return_t ipc_entry_alloc_name(
 	ipc_space_t	space,
-	mach_port_t	name,
+	mach_port_name_t	name,
 	ipc_entry_t	*entryp);
 
 /* Deallocate an entry from a space */
 extern void ipc_entry_dealloc(
 	ipc_space_t	space,
-	mach_port_t	name,
+	mach_port_name_t	name,
 	ipc_entry_t	entry);
 
 /* Grow the table in a space */

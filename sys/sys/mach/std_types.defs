@@ -142,8 +142,8 @@ type mach_port_send_once_t =		MACH_MSG_TYPE_PORT_SEND_ONCE
 type mach_port_poly_t = polymorphic
 	ctype: mach_port_t;
 
-import <mach/std_types.h>;
-import <mach/mig.h>;
+import <sys/mach/std_types.h>;
+import <sys/mach/mig.h>;
 
 #endif	/* _MACH_STD_TYPES_DEFS_ */
 

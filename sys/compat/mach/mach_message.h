@@ -121,13 +121,6 @@
 #define MACH_MSG_TYPE_COPY_RECEIVE	22
 
 
-#define MACH_MSG_PHYSICAL_COPY		0
-#define MACH_MSG_VIRTUAL_COPY   	1
-#define MACH_MSG_ALLOCATE		2
-#define MACH_MSG_OVERWRITE		3
-#define MACH_MSG_KALLOC_COPY_T		4
-#define MACH_MSG_PAGE_LIST_COPY_T	5
-
 #define MACH_MSG_PORT_DESCRIPTOR 		0
 #define MACH_MSG_OOL_DESCRIPTOR  		1
 #define MACH_MSG_OOL_PORTS_DESCRIPTOR 		2
@@ -198,7 +191,7 @@ int mach_ool_copyin(struct thread *, const void *, void **, size_t, int);
 int mach_ool_copyout(struct thread *, const void *, void **, size_t, int);
 void mach_set_trailer(void *, size_t);
 void mach_set_header(void *, void *, size_t);
-void mach_add_port_desc(void *, mach_port_name_t);
+void mach_add_port_desc(void *, mach_port_t);
 void mach_add_ool_ports_desc(void *, void *, int);
 void mach_add_ool_desc(void *, void *, size_t);
 void mach_message_init(void);

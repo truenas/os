@@ -87,15 +87,19 @@
 #ifndef	_IPC_IPC_PSET_H_
 #define _IPC_IPC_PSET_H_
 
-#include <mach/port.h>
-#include <mach/kern_return.h>
+#include <sys/mach/port.h>
+#include <sys/mach/kern_return.h>
+#if 0
 #include <kern/ipc_kobject.h>
-#include <ipc/ipc_object.h>
-#include <ipc/ipc_mqueue.h>
+#endif
+#include <sys/mach/ipc/ipc_object.h>
+#include <sys/mach/ipc/ipc_mqueue.h>
+#if 0
 #include <kern/thread_pool.h>
 #include <kern/rpc_common.h>
 
 #include <mach_kdb.h>
+#endif
 
 typedef struct ipc_pset {
 
@@ -105,7 +109,7 @@ typedef struct ipc_pset {
 	 */
 	struct rpc_common_data	pset_comm;
 
-	mach_port_t		ips_local_name;
+	mach_port_name_t		ips_local_name;
 	struct ipc_mqueue	ips_messages;
 } *ipc_pset_t;
 
@@ -129,13 +133,13 @@ typedef struct ipc_pset {
 /* Allocate a port set */
 extern kern_return_t ipc_pset_alloc(
 	ipc_space_t	space,
-	mach_port_t	*namep,
+	mach_port_name_t	*namep,
 	ipc_pset_t	*psetp);
 
 /* Allocate a port set, with a specific name */
 extern kern_return_t ipc_pset_alloc_name(
 	ipc_space_t	space,
-	mach_port_t	name,
+	mach_port_name_t	name,
 	ipc_pset_t	*psetp);
 
 /* Remove a port from a port set */

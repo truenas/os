@@ -50,6 +50,34 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
+#include <sys/mach/task_server.h>
+
+#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
+int
+semaphore_create(
+	task_t task,
+	semaphore_t *semaphore,
+	int policy,
+	int value
+)
+UNSUPPORTED;
+
+int
+semaphore_destroy(
+	task_t task,
+	semaphore_t semaphore
+	)
+UNSUPPORTED;
+
+
+void
+semaphore_dereference(semaphore_t semaphore)
+{
+	;
+}
+
+
+#if 0
 /* Semaphore list, lock, zones */
 static LIST_HEAD(mach_semaphore_list, mach_semaphore) mach_semaphore_list;
 static struct rwlock mach_semaphore_list_lock;
@@ -73,7 +101,7 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 	struct mach_semaphore *ms;
 	struct mach_waiting_thread *mwtd;
 	struct mach_right *mr;
-	mach_port_t mn;
+	mach_port_name_t mn;
 	int blocked = 0;
 
 	mn = uap->wait_name;
@@ -430,5 +458,7 @@ sys_mach_semaphore_signal_all_trap(struct thread *td, struct mach_semaphore_sign
 
 	return (0);
 }
+
+#endif
 
 

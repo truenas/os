@@ -86,7 +86,13 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
 
+void
+mach_e_thread_init(struct thread *td)
+{
 
+}
+
+#ifdef notyet
 static int mach_cold = 1; /* Have we initialized COMPAT_MACH structures? */
 
 
@@ -259,6 +265,7 @@ mach_e_thread_init(struct thread *td)
 	td->td_emuldata = mle;
 	td->td_pflags |= TDP_MACHINITED;
 }
+#endif
 
 
 int
@@ -363,54 +370,6 @@ sys_mk_timer_cancel(struct thread *td, struct mk_timer_cancel_args *uap)
 
 	DPRINTF(("sys_mach_timer_cancel(0x%x, %p);\n",
 	    uap->name, uap->result_time));
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach_port_mod_refs_trap_args *uap)
-{
-	/*
-	  mach_port_name_t target = uap->target;
-	  mach_port_name_t *name = uap->name;
-	  mach_port_right_t right = uap->right;
-	  mach_port_delta_t delta = uap->delta;
-	*/
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_insert_member_trap(struct thread *td, struct _kernelrpc_mach_port_insert_member_trap_args *uap)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_extract_member_trap(struct thread *td, struct _kernelrpc_mach_port_extract_member_trap_args *uap)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_construct_trap(struct thread *td, struct _kernelrpc_mach_port_construct_trap_args *uap)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_destruct_trap(struct thread *td, struct _kernelrpc_mach_port_destruct_trap_args *uap)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_guard_trap(struct thread *td, struct _kernelrpc_mach_port_guard_trap_args *uap)
-{
-	return (ENOSYS);
-}
-
-int
-sys__kernelrpc_mach_port_unguard_trap(struct thread *td, struct _kernelrpc_mach_port_unguard_trap_args *uap)
-{
 	return (ENOSYS);
 }
 

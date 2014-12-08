@@ -27,15 +27,13 @@
 #ifdef _KERNEL
 #include <sys/mach/port.h>
 
-typedef struct thread_shuttle		*thread_t;
 typedef	mach_port_t			*thread_array_t;
 typedef	mach_port_t			*thread_port_array_t;
 typedef mach_port_t			thread_act_port_t;
 typedef	thread_act_port_t		*thread_act_port_array_t;
 typedef struct task			*task_t;
+typedef struct clock *mach_clock_t;
 typedef struct processor		*processor_t;
-typedef struct processor_set		*processor_set_t;
-typedef struct thread_activation	*thread_act_t;
 typedef struct subsystem		*subsystem_t;
 #endif
 #endif	/* _KERN_KERN_TYPES_H_ */

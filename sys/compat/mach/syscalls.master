@@ -162,10 +162,10 @@
 			    mach_vm_offset_t offset, mach_vm_offset_t *va, \
 			    mach_boolean_t findspace, mach_vm_size_t size); }
 44  AUE_NULL	STD     { int mach_task_name_for_pid(mach_port_name_t target_tport, \
-						  int pid, mach_port_t *tn); }
-45	AUE_NULL	STD		{ int mach_task_for_pid(mach_port_t target_tport, \
-						  int pid, mach_port_t *t); }
-46	AUE_NULL	STD		{ int mach_pid_for_task(mach_port_t t, int *pid); }
+						  int pid, mach_port_name_t *tn); }
+45	AUE_NULL	STD		{ int mach_task_for_pid(mach_port_name_t target_tport, \
+						  int pid, mach_port_name_t *t); }
+46	AUE_NULL	STD		{ int mach_pid_for_task(mach_port_name_t t, int *pid); }
 47  AUE_NULL	UNIMPL	nosys
 48	AUE_NULL	STD		{ int mach_macx_swapon( \
 			    char *name, int flags, int size, int priority); }
@@ -173,7 +173,7 @@
 			    char *name, int flags); }
 50  AUE_NULL	UNIMPL	nosys
 51	AUE_NULL	STD		{ int mach_macx_triggers(int hi_water, int low_water, \
-			  	  int flags, mach_port_t alert_port); }
+			  	  int flags, mach_port_name_t alert_port); }
 52  AUE_NULL	STD		{ int mach_macx_backing_store_suspend(int suspend); }
 53  AUE_NULL	STD		{ int mach_macx_backing_store_recovery(int pid); }
 54  AUE_NULL	UNIMPL	nosys

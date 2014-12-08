@@ -84,7 +84,7 @@ extern void ipc_notify_init(void);
 /* Send a port-deleted notification */
 extern void ipc_notify_port_deleted(
 	ipc_port_t	port,
-	mach_port_t	name);
+	mach_port_name_t	name);
 
 /* Send a port-destroyed notification */
 extern void ipc_notify_port_destroyed(
@@ -103,6 +103,6 @@ extern void ipc_notify_send_once(
 /* Send a dead-name notification */
 extern void ipc_notify_dead_name(
 	ipc_port_t	port,
-	mach_port_t	name);
+	mach_port_name_t	name);
 
 #endif	/* _IPC_IPC_NOTIFY_H_ */

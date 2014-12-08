@@ -129,30 +129,16 @@ int native_to_mach_errno[] = {
 };
 
 int
-mach_msg_error(struct mach_trap_args *args, int error)
+mach_msg_error(void * arg __unused, int error)
 {
-	mach_msg_header_t *req = args->smsg;
-	mach_error_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
 
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-
-	rep->rep_retval = native_to_mach_errno[error];
-
-	mach_set_trailer(rep, *msglen);
-
-#ifdef DEBUG_MACH
-	if (error != 0)
-		printf("failure in kernel service %d (err %x, native %d)\n",
-		    req->msgh_id, (int)rep->rep_retval, error);
-#endif
-	return (0);
+	return (native_to_mach_errno[error]);
 }
 
 int
-mach_iokit_error(struct mach_trap_args *args, int error)
+mach_iokit_error(struct mach_trap_args *args __unused, int error)
 {
+#if 0
 	mach_msg_header_t *req = args->smsg;
 	mach_error_reply_t *rep = args->rmsg;
 	size_t *msglen = args->rsize;
@@ -170,4 +156,6 @@ mach_iokit_error(struct mach_trap_args *args, int error)
 	mach_set_trailer(rep, *msglen);
 
 	return (0);
+#endif
+	return (error);
 }

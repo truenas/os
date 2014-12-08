@@ -19,9 +19,6 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
  * 
  */
-/*
- * MkLinux
- */
 
 #ifndef	MACH_VM_TYPES_H_
 #define MACH_VM_TYPES_H_

@@ -259,5 +259,7 @@ typedef struct {
 int cpu_mach_thread_get_state(struct thread *, int, void *, int *);
 int cpu_mach_thread_set_state(struct thread *, int, void *);
 int cpu_mach_create_thread(void *);
+int mach_thread_switch(struct thread *td, mach_port_name_t therad_name, int option, mach_msg_timeout_t option_time);
+int mach_swtch_pri(struct thread *td, int pri);
 
 #endif /* _MACH_THREAD_H_ */

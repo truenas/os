@@ -73,11 +73,17 @@
 
 #ifndef	_IPC_IPC_THREAD_H_
 #define _IPC_IPC_THREAD_H_
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/proc.h>
 
-#if 0
-#include <kern/thread.h>
-#endif
-typedef struct thread * ipc_thread_t;
+typedef	struct timer_elt	timer_elt_data_t;
+
+typedef thread_t ipc_thread_t;
+
+#define counter(x)
+
 
 #define	ITH_NULL		THREAD_NULL
 

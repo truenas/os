@@ -56,4 +56,6 @@ typedef struct {
 	mach_msg_trailer_t rep_trailer;
 } mach_clock_get_time_reply_t;
 
+int mach_timebase_info(mach_timebase_info_t infop);
+int mach_clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, int sleep_nsec, mach_timespec_t *wakeup_time);
 #endif /* _MACH_CLOCK_H_ */

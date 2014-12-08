@@ -116,7 +116,7 @@
 typedef struct {
     mach_msg_header_t	not_header;
     NDR_record_t	NDR;
-    mach_port_t not_port;/* MACH_MSG_TYPE_PORT_NAME */
+    mach_port_name_t not_port;/* MACH_MSG_TYPE_PORT_NAME */
     mach_msg_format_0_trailer_t trailer;
 } mach_port_deleted_notification_t;
 
@@ -142,7 +142,7 @@ typedef struct {
 typedef struct {
     mach_msg_header_t	not_header;
     NDR_record_t	NDR;
-    mach_port_t not_port;/* MACH_MSG_TYPE_PORT_NAME */
+    mach_port_name_t not_port;/* MACH_MSG_TYPE_PORT_NAME */
     mach_msg_format_0_trailer_t trailer;
 } mach_dead_name_notification_t;
 

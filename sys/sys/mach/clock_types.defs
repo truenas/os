@@ -37,7 +37,7 @@
 #ifndef	_MACH_CLOCK_TYPES_DEFS_
 #define _MACH_CLOCK_TYPES_DEFS_
 
-#include <mach/std_types.defs>
+#include <sys/mach/std_types.defs>
 
 type clock_serv_t = mach_port_t
 		cusertype: clock_serv_t
@@ -66,7 +66,7 @@ type alarm_type_t = int;
 type clock_res_t = int;
 type clock_id_t = int;
 
-import <mach/mach_types.h>;
+import <sys/mach/mach_types.h>;
 
 #endif	/* _MACH_CLOCK_TYPES_DEFS_ */
 
