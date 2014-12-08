@@ -105,7 +105,7 @@ type symtab_name_t = c_string[*:32];
 type lockgroup_info_t = struct[63] of integer_t;
 type lockgroup_info_array_t = array[] of lockgroup_info_t;
 
-import <mach_debug/mach_debug_types.h>;
+import <sys/mach_debug/mach_debug_types.h>;
 
 #endif	/* _MACH_DEBUG_MACH_DEBUG_TYPES_DEFS_ */
 
