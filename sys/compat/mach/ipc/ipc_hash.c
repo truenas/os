@@ -457,7 +457,7 @@ ipc_hash_local_lookup(
 		ipc_entry_t entry = &table[index];
 
 		if (entry->ie_object == obj) {
-			*namep = MACH_PORT_MAKEB(index, entry->ie_bits);
+			*namep = entry->ie_name;
 			*entryp = entry;
 			return TRUE;
 		}
