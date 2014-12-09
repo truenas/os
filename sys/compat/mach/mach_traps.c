@@ -53,15 +53,19 @@ __FBSDID("$FreeBSD$");
 #include <sys/mach/mach_types.h>
 #include <sys/mach/ipc/ipc_types.h>
 #include <sys/mach/ipc/ipc_kmsg.h>
+#include <sys/mach/ipc/mach_msg.h>
 #include <sys/mach/thread.h>
 #include <sys/mach/mach_port_server.h>
 #include <sys/mach/mach_vm_server.h>
+#include <sys/mach/task_server.h>
+
+#include <sys/mach/mach_init.h>
 
 
 #pragma clang diagnostic ignored "-Wunused-parameter"
 
 int
-sys_mach_clock_sleep_trap(struct thread *td, struct mach_clock_sleep_trap_args *uap)
+sys_mach_clock_sleep_trap(struct thread *td __unused, struct mach_clock_sleep_trap_args *uap)
 {
 
 	return (mach_clock_sleep(uap->clock_name, uap->sleep_type, uap->sleep_sec, uap->sleep_nsec, uap->wakeup_time));
@@ -75,16 +79,22 @@ sys_mach_timebase_info(struct thread *td __unused, struct mach_timebase_info_arg
 }
 
 int
-sys_mach_msg_overwrite_trap(struct thread *td, struct mach_msg_overwrite_trap_args *uap)
+sys_mach_msg_overwrite_trap(struct thread *td __unused, struct mach_msg_overwrite_trap_args *uap)
 {
 
-	return (0);
+	return (mach_msg_overwrite_trap(uap->msg, uap->option, uap->send_size, uap->rcv_size,
+								   uap->rcv_name, uap->timeout, uap->notify, uap->rcv_msg,
+									uap->scatter_list_size));
 }
 
 int
-sys_mach_msg_trap(struct thread *td, struct mach_msg_trap_args *uap)
+sys_mach_msg_trap(struct thread *td __unused, struct mach_msg_trap_args *uap)
 {
-	return (0);
+	struct mach_msg_overwrite_trap_args uap0;
+
+	bcopy(uap, &uap0, sizeof(*uap));
+	uap0.rcv_msg = NULL;
+	return (sys_mach_msg_overwrite_trap(td, &uap0));
 }
 	
 int
@@ -96,7 +106,7 @@ sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_
 int
 sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_trap_args *uap)
 {
-	return (0);
+	return (ENOSYS);
 }
 
 int
@@ -148,42 +158,26 @@ sys_mach_swtch(struct thread *td, struct mach_swtch_args *v)
 }
 
 int
-sys_mach_reply_port(struct thread *td, struct mach_reply_port_args *uap)
+sys_mach_reply_port(struct thread *td, struct mach_reply_port_args *uap __unused)
 {
-#ifdef notyet	
-	struct mach_right *mr;
 
-	mr = mach_right_get(mach_port_get(), td, MACH_PORT_TYPE_RECEIVE, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-#endif
+	td->td_retval[0] = mach_reply_port();
 	return (0);
 }
 
 int
 sys_mach_thread_self_trap(struct thread *td, struct mach_thread_self_trap_args *uap)
 {
-#ifdef notyet
-	struct mach_thread_emuldata *mle;
-	struct mach_right *mr;
 
-	mle = td->td_emuldata;
-	mr = mach_right_get(mle->mle_kernel, td, MACH_PORT_TYPE_SEND, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-#endif
+	td->td_retval[0] = mach_thread_self();
 	return (0);
 }
 
 int
 sys_mach_task_self_trap(struct thread *td, struct mach_task_self_trap_args *uap)
 {
-#ifdef notyet
-	struct mach_emuldata *med;
-	struct mach_right *mr;
 
-	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
-	mr = mach_right_get(med->med_kernel, td, MACH_PORT_TYPE_SEND, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-#endif
+	td->td_retval[0] = mach_task_self();
 	return (0);
 }
 
@@ -191,15 +185,15 @@ sys_mach_task_self_trap(struct thread *td, struct mach_task_self_trap_args *uap)
 int
 sys_mach_host_self_trap(struct thread *td, struct mach_host_self_trap_args *uap)
 {
+	ipc_port_t port;
+	kern_return_t kr;
 
-#ifdef notyet
-	struct mach_emuldata *med;
-	struct mach_right *mr;
+	if ((kr = task_get_host_port(current_task(), &port)) != KERN_SUCCESS)
+		goto done;
+	kr = ipc_port_copyout_send(port, current_task()->itk_space);
 
-	med = (struct mach_emuldata *)td->td_proc->p_emuldata;
-	mr = mach_right_get(med->med_host, td, MACH_PORT_TYPE_SEND, 0);
-	td->td_retval[0] = (register_t)mr->mr_name;
-#endif
+done:
+	td->td_retval[0] = kr;
 	return (0);
 }
 
@@ -213,6 +207,7 @@ sys__kernelrpc_mach_port_allocate_trap(struct thread *td __unused, struct _kerne
 
 	if ((error = mach_port_allocate(space, uap->right, &name)) != 0)
 		return (error);
+	
 	return (copyout(&name, uap->name, sizeof(*uap->name)));
 }
 
