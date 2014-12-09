@@ -142,10 +142,6 @@
 #if 0
 #include <kern/misc_protos.h>
 #endif
-#if	DIPC
-#include <dipc/dipc_port.h>
-#include <dipc/dipc_counters.h>
-#endif	/*DIPC*/
 
 #define assert_static CTASSERT 
 #pragma clang diagnostic ignored "-Wuninitialized"
@@ -619,41 +615,6 @@ mach_port_allocate_qos(
 					qosp, namep);
 	return (kr);
 }
-
-#ifdef SHOW_UNUSED
-/*
- *	Routine:	mach_port_allocate_subsystem [kernel call]
- *	Purpose:
- *		Allocates a receive right in a space.  Like
- *		mach_port_allocate, except that the caller specifies an
- *		RPC subsystem that is to be used to implement RPC's to the
- *		port.
- *	Conditions:
- *		Nothing locked.
- *	Returns:
- *		KERN_SUCCESS		The right is allocated.
- *		KERN_INVALID_TASK	The space is null.
- *		KERN_INVALID_TASK	The space is dead.
- *		KERN_RESOURCE_SHORTAGE	Couldn't allocate memory.
- *		KERN_NO_SPACE		No room in space for another right.
- *		KERN_INVALID_ARGUMENT	bogus subsystem
- */
-
-kern_return_t
-mach_port_allocate_subsystem(
-	ipc_space_t		space,
-	subsystem_t		subsystem,
-	mach_port_name_t		*namep)
-{
-	kern_return_t		kr;
-	ipc_port_t		port;
-	mach_port_qos_t		qos = qos_template;
-
-	kr = mach_port_allocate_full (space, MACH_PORT_RIGHT_RECEIVE,
-					subsystem, &qos, namep);
-	return (kr);
-}
-#endif
 
 /*
  *	Routine:	mach_port_allocate_full [kernel call]
@@ -1530,27 +1491,8 @@ mach_port_get_attributes(
                 statusp->mps_mscount = port->ip_mscount;
                 statusp->mps_qlimit = port->ip_qlimit;
                 statusp->mps_msgcount = port->ip_msgcount;
-#if	DIPC
-		if (DIPC_IS_DIPC_PORT(port))
-			statusp->mps_sorights = port->ip_sorights +
-				port->ip_remote_sorights;
-		else
-			statusp->mps_sorights = port->ip_sorights;
-		if (IP_NMS(port)) {
-			/*
-			 *	When NMS detection is enabled,
-			 *	the sright count is valid.
-			 */
-			statusp->mps_srights = port->ip_srights > 0 ?
-				MACH_PORT_SRIGHTS_PRESENT :
-					MACH_PORT_SRIGHTS_NONE;
-		} else {
-			statusp->mps_srights = MACH_PORT_SRIGHTS_NO_INFO;
-		}
-#else	/* DIPC */
                 statusp->mps_sorights = port->ip_sorights;
                 statusp->mps_srights = port->ip_srights > 0;
-#endif	/* DIPC */
                 statusp->mps_pdrequest = port->ip_pdrequest != IP_NULL;
                 statusp->mps_nsrequest = port->ip_nsrequest != IP_NULL;
 		statusp->mps_flags = port->ip_flags;

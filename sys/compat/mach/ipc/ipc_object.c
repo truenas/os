@@ -80,13 +80,12 @@
  *
  *	Functions to manipulate IPC objects.
  */
-#if 0
-#include <dipc.h>
-#include <mach_rt.h>
 
-#include <mach/boolean.h>
-#include <kern/misc_protos.h>
-#endif
+#include <sys/cdefs.h>
+
+#include <sys/types.h>
+#include <sys/file.h>
+
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/message.h>
@@ -98,10 +97,6 @@
 #include <sys/mach/ipc/ipc_right.h>
 #include <sys/mach/ipc/ipc_notify.h>
 #include <sys/mach/ipc/ipc_pset.h>
-#if	DIPC
-#include <dipc/dipc_error.h>
-#include <dipc/dipc_port.h>
-#endif	/* DIPC */
 
 uma_zone_t ipc_object_zones[IOT_NUMBER];
 
@@ -304,7 +299,7 @@ ipc_object_alloc(
 	}
 
 	io_lock_init(object);
-	*namep = CAST_MACH_PORT_TO_NAME(object);
+
 	kr = ipc_entry_alloc(space,
 		type == MACH_PORT_TYPE_SEND_ONCE, namep, &entry);
 	if (kr != KERN_SUCCESS) {
@@ -670,11 +665,9 @@ ipc_object_copyout(
 			assert(entry->ie_bits & MACH_PORT_TYPE_SEND_RECEIVE);
 			break;
 		}
-
-		name = CAST_MACH_PORT_TO_NAME(object);
 		kr = ipc_entry_get(space, 
 			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
-			&name, &entry);
+						   &name, &entry, object);
 		if (kr != KERN_SUCCESS) {
 			/* unlocks/locks space, so must start again */
 
@@ -843,9 +836,6 @@ ipc_object_copyout_dest(
 
 		assert(port->ip_srights > 0);
 		if (--port->ip_srights == 0 &&
-#if	DIPC
-		    (!DIPC_IS_DIPC_PORT(port) || (port->ip_transit == 0)) &&
-#endif	/* DIPC */
 		    port->ip_nsrequest != IP_NULL) {
 			nsrequest = port->ip_nsrequest;
 			port->ip_nsrequest = IP_NULL;
@@ -941,92 +931,6 @@ ipc_object_rename(
 	/* space is unlocked */
 	return kr;
 }
-
-#if	DIPC || MACH_ASSERT
-/*
- *	Check whether the object is a port; if so, and if it
- *	has a dipc_port extension, then deallocate the dipc_port
- *	before deallocating the port.
- */
-void
-io_free(
-	unsigned int	otype,
-	ipc_object_t	object)
-{
-	ipc_port_t	port;
-#if	DIPC
-	dipc_return_t	dr;
-#endif	/* DIPC */
-
-	if (otype == IOT_PORT) {
-		port = (ipc_port_t) object;
-#if	DIPC
-		ip_lock(port);
-		/*
-		 * It is possible that another thread has gone through
-		 * the uid table and gotten a complete reference to this
-		 * port before we get the lock back.  In that case, just
-		 * return
-		 */
-		if (object->io_references != 0) {
-			ip_unlock(port);
-			return;
-		}
-		if (DIPC_IS_DIPC_PORT(port)) {
-			assert(!ip_active(port) || port->ip_proxy == TRUE);
-			/*
-			 *	Attempt to tear down DIPC state.  Races are
-			 *	possible here with DIPC interrupt-level
-			 *	activities; in that case, bail out in the
-			 *	knowledge that some other user of the port
-			 *	will wind up freeing it.
-			 */
-			dr = dipc_port_free(port);
-			if (dr == DIPC_IN_USE)
-				return;
-			assert(dr == DIPC_SUCCESS);
-		} else {
-			ip_unlock_absolute(port);
-		}
-#endif	/* DIPC */
-#if	MACH_ASSERT
-		ipc_port_track_dealloc(port);
-#endif	/* MACH_ASSERT */
-	}
-	uma_zfree(ipc_object_zones[otype], (vm_offset_t) object);
-}
-#endif	/* DIPC || MACH_ASSERT */
-
-#if	MACH_RT
-/*
- *	Routine:	ipc_object_is_rt
- *	Purpose:
- *		Determine if an object is a real-time object.
- *	Conditions:
- *		Nothing locked.
- */
-
-boolean_t
-ipc_object_is_rt(
-	ipc_object_t	object)
-{
-	assert(IO_VALID(object));
-	
-	switch (io_otype(object)) {
-	    case IOT_PORT:
-		return IP_RT((ipc_port_t) object);
-	    case IOT_PORT_SET:
-		return FALSE;
-	    default:
-#if MACH_ASSERT
-		assert(FALSE);
-#else
-		panic("ipc_object_is_rt: strange object type");
-#endif
-	}
-	return FALSE;
-}
-#endif	/* MACH_RT */
 
 #if	MACH_KDB
 #include <mach_kdb.h>

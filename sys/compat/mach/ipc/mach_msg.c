@@ -194,16 +194,6 @@
 #include <kern/kalloc.h>
 #include <kern/thread_swap.h>
 #endif
-#if	MACH_RT
-#include <kern/rtalloc.h>
-#endif	/* MACH_RT */
-
-#if	DIPC
-#include <dipc/dipc_funcs.h>
-#include <dipc/dipc_port.h>
-#endif	/* DIPC */
-
-#define THREAD_SWAPPER 0
 
 /*
  * Forward declarations
@@ -289,15 +279,7 @@ mach_msg_send(
 
 	if (mr != MACH_MSG_SUCCESS)
 		return mr;
-#if 0
-	if (option & MACH_SEND_CANCEL) {
-		if (notify == MACH_PORT_NULL)
-			mr = MACH_SEND_INVALID_NOTIFY;
-		else
-			mr = ipc_kmsg_copyin(kmsg, space, map, notify);
-	} else
-#endif		
-		mr = ipc_kmsg_copyin(kmsg, space, map, MACH_PORT_NAME_NULL);
+	mr = ipc_kmsg_copyin(kmsg, space, map, MACH_PORT_NAME_NULL);
 	if (mr != MACH_MSG_SUCCESS) {
 		ikm_free(kmsg);
 		return mr;
@@ -361,21 +343,11 @@ mach_msg_receive(
 	mach_msg_return_t mr;
 	mach_msg_body_t *slist;
 	mach_msg_format_0_trailer_t *trailer;
-#if	MACH_RT
-	boolean_t slist_rt;
-#endif	/* MACH_RT */
-
 	mr = ipc_mqueue_copyin(space, rcv_name, &mqueue, &object);
 	if (mr != MACH_MSG_SUCCESS) {
 		return mr;
 	}
 	/* hold ref for object; mqueue is locked */
-
-#if	MACH_RT
-	/* NOTE: This only works for true ports, and not port sets */
-	slist_rt = ipc_object_is_rt(object);
-#endif	/* MACH_RT */
-
 	/*
  	 * If MACH_RCV_OVERWRITE was specified, both receive_msg (msg)
 	 * and receive_msg_size (slist_size) need to be non NULL.
@@ -422,9 +394,6 @@ mach_msg_receive(
 
 	if (mr != MACH_MSG_SUCCESS) {
 		if (mr == MACH_RCV_TOO_LARGE || mr == MACH_RCV_SCATTER_SMALL
-#if	DIPC
-		    || mr == MACH_RCV_TRANSPORT_ERROR
-#endif	/* DIPC */
 		    ) {
 			if (msg_receive_error(kmsg, msg, option, seqno, space)
 			    == MACH_RCV_INVALID_DATA)
@@ -451,9 +420,6 @@ mach_msg_receive(
 	}
 	if (mr != MACH_MSG_SUCCESS) {
 		if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR
-#if	DIPC
-			|| mr == MACH_RCV_TRANSPORT_ERROR
-#endif	/* DIPC */
 		    ) {
 			if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header.msgh_size +
 			   trailer->msgh_trailer_size) == MACH_RCV_INVALID_DATA)
@@ -680,14 +646,14 @@ mach_msg_overwrite_trap(
 	mach_msg_header_t	*rcv_msg,
     mach_msg_size_t		scatter_list_size)
 {
-	register mach_msg_header_t *hdr;		 
-
+	mach_msg_header_t *hdr;
 	mach_msg_return_t  mr = MACH_MSG_SUCCESS;
+
 	/* mask out some of the options before entering the hot path */
 	mach_msg_option_t  masked_option = 
 		option & ~(MACH_SEND_TRAILER|MACH_RCV_TRAILER_MASK);
 
-#if	ENABLE_HOTPATH
+#if	0 && ENABLE_HOTPATH
 	/* BEGINNING OF HOT PATH */
 	if (masked_option == (MACH_SEND_MSG|MACH_RCV_MSG) && enable_hotpath) {
 		register ipc_thread_t self = current_thread();
@@ -740,9 +706,6 @@ mach_msg_overwrite_trap(
 		 *		client doesn't find a blocked server thread and
 		 *		server finds waiting messages and can't block.
 		 */
-#if 0
-	fast_get:
-#endif		
 		/*
 		 *	optimized ipc_kmsg_get
 		 *
@@ -754,18 +717,6 @@ mach_msg_overwrite_trap(
 		    (send_size & 3) ||
 		    (send_size > (IKM_SAVED_MSG_SIZE - MAX_TRAILER_SIZE)) ||
 		    !ikm_cache_get(&kmsg)) {
-#if	HOTPATH_DEBUG
-			if (send_size < sizeof(mach_msg_header_t)) {
-			    HOT(c_mmot_smallsendsize++);
-			} else if (send_size & 3) {
-			    HOT(c_mmot_oddsendsize++);
-			} else if (send_size >
-				(IKM_SAVED_MSG_SIZE - MAX_TRAILER_SIZE)) {
-			    HOT(c_mmot_bigsendsize++);
-			} else if (!kmsg) {
-			    HOT(c_mmot_ikm_cache_miss++);
-			}
-#endif
 			goto slow_get;
 		}
 
@@ -974,15 +925,6 @@ mach_msg_overwrite_trap(
 				goto kernel_send;
 			}
 
-#if	DIPC
-			if (IP_IS_REMOTE(dest_port)) {
-				ip_unlock(reply_port);
-				ip_unlock(dest_port);
-				HOT(c_mmot_cold_012++);
-				goto slow_send;
-		        }
-#endif	/* DIPC */
-
 			if (dest_port->ip_msgcount >= dest_port->ip_qlimit) {
 				HOT(c_mmot_cold_013++);
 				goto abort_request_send_receive;
@@ -1106,14 +1048,6 @@ mach_msg_overwrite_trap(
 			/* make sure we can queue to the destination */
 
 			assert(dest_port->ip_receiver != ipc_space_kernel);
-#if	DIPC
-			if (IP_IS_REMOTE(dest_port)) {
-				ip_unlock(dest_port);
-				is_write_unlock(space);
-				HOT(c_mmot_cold_023++);
-				goto slow_send;
-			}
-#endif	/* DIPC */
 
 			/* optimized ipc_entry_lookup/ipc_mqueue_copyin */
 
@@ -1230,9 +1164,6 @@ mach_msg_overwrite_trap(
 
 		assert(ip_active(dest_port));
 		assert(dest_port->ip_receiver != ipc_space_kernel);
-#if	DIPC
-		assert(! IP_IS_REMOTE(dest_port));
-#endif	/* DIPC */
 		assert((dest_port->ip_msgcount < dest_port->ip_qlimit) ||
 		       (MACH_MSGH_BITS_REMOTE(hdr->msgh_bits) ==
 						MACH_MSG_TYPE_PORT_SEND_ONCE));
@@ -1241,10 +1172,6 @@ mach_msg_overwrite_trap(
 	    {
 		register ipc_mqueue_t dest_mqueue;
 		register ipc_thread_t receiver;
-#if	THREAD_SWAPPER
-		thread_act_t rcv_act;
-#endif
-
 	    {
 		register ipc_pset_t dest_pset;
 
@@ -1295,68 +1222,6 @@ mach_msg_overwrite_trap(
 			goto abort_send_receive;
 		}
 #endif
-		
-#if	THREAD_SWAPPER
-		/*
-		 * Receiver looks okay -- is it swapped in?
-		 */
-		rpc_lock(receiver);
-		rcv_act = receiver->top_act;
-		if (rcv_act->swap_state != TH_SW_IN &&
-			rcv_act->swap_state != TH_SW_UNSWAPPABLE) {
-			rpc_unlock(receiver);
-			HOT(c_mmot_rcvr_swapped++);
-			goto fall_off;
-		}
-
-		/*
-		 * Make sure receiver stays swapped in (if we can).
-		 */
-		if (!act_lock_try(rcv_act)) {	/* out of order! */
-			rpc_unlock(receiver);
-			HOT(c_mmot_rcvr_locked++);
-			goto fall_off;
-		}
-		
-		/*
-		 * Check for task swapping in progress affecting
-		 * receiver.  Since rcv_act is attached to a shuttle,
-		 * its swap_state is covered by shuttle's thread_lock()
-		 * (sigh).
-		 */
-		s = splsched();
-		thread_lock(receiver);
-		/*
-		 * Re-check swap_state now that we hold thread_lock().
-		 */
-		if ((rcv_act->swap_state != TH_SW_IN &&
-			rcv_act->swap_state != TH_SW_UNSWAPPABLE) ||
-		 	rcv_act->ast & AST_SWAPOUT) {
-			thread_unlock(receiver);
-			splx(s);
-			act_unlock(rcv_act);
-			rpc_unlock(receiver);
-			HOT(c_mmot_rcvr_tswapped++);
-			goto fall_off;
-		}
-
-		/*
-		 * We don't need to make receiver unswappable here -- holding
-		 * act_lock() of rcv_act is sufficient to prevent either thread
-		 * or task swapping from changing its state (see swapout_scan(),
-		 * task_swapout()).  Don't release lock till receiver's state
-		 * is consistent.  Its task may then be marked for swapout,
-		 * but that's life.
-		 */
-
-		thread_unlock(receiver);
-		splx(s);
-
-		rpc_unlock(receiver);
-		/*
-		 * NB:  act_lock(rcv_act) still held
-		 */
-#endif	/* THREAD_SWAPPER */
 
 		/* At this point we are committed to do the "handoff". */
 		c_mach_msg_trap_switch_fast++;
@@ -1441,9 +1306,6 @@ mach_msg_overwrite_trap(
 #endif	/* NCPUS > 1 */
 			thread_unlock(receiver);
 			assert( receiver != self );
-#if	THREAD_SWAPPER
-			act_unlock(rcv_act);
-#endif	/* THREAD_SWAPPER */
 	
 			/*
 			 * Prepare self (the sender) to block.
@@ -1527,24 +1389,6 @@ mach_msg_overwrite_trap(
 		assert(kmsg != IKM_NULL);
 		dest_port = (ipc_port_t)kmsg->ikm_header.msgh_remote_port;
 
-#if	DIPC
-		if (KMSG_IN_DIPC(kmsg)) {
-			mr = ipc_mqueue_finish_receive(&kmsg, dest_port, option,
-							MACH_MSG_SIZE_MAX);
-
-			if (mr == MACH_RCV_TRANSPORT_ERROR) {
-				if (msg_receive_error(kmsg,
-				    (rcv_msg != MACH_MSG_NULL) ? rcv_msg : msg,
-					option, self->ith_seqno, space)
-				    == MACH_RCV_INVALID_DATA) {
-					mr = MACH_RCV_INVALID_DATA;
-				}
-			}
-
-			if (mr != MACH_MSG_SUCCESS)
-				return(mr);
-		} else
-#endif	/* DIPC */
 			{
 			ip_lock(dest_port);
 			assert(dest_port->ip_msgcount > 0);
@@ -1574,9 +1418,6 @@ mach_msg_overwrite_trap(
 
 		reply_size = send_size + trailer->msgh_trailer_size;
 		if ((rcv_size < reply_size)
-#if	DIPC
-		    || KMSG_IS_DIPC_FORMAT(kmsg)
-#endif	/* DIPC */
 						) {
 			HOT(c_mmot_g_slow_copyout6++);
 			goto slow_copyout;
@@ -1673,10 +1514,6 @@ mach_msg_overwrite_trap(
 				dest_name = MACH_PORT_NAME_NULL;
 
 			if ((--dest_port->ip_srights == 0) &&
-#if	DIPC
-			    (!DIPC_IS_DIPC_PORT(dest_port) || 
-			     (dest_port->ip_transit == 0)) &&
-#endif	/* DIPC */
 			    (dest_port->ip_nsrequest != IP_NULL)) {
 				ipc_port_t nsrequest;
 				mach_port_mscount_t mscount;
@@ -1806,10 +1643,6 @@ mach_msg_overwrite_trap(
 		 * user and free kmsg.  Must check ikm_cache after
 		 * copyoutmsg.  Inlined ipc_kmsg_put() here.
 		 */
-#if	DIPC
-		assert(!KMSG_IN_DIPC(kmsg));
-#endif	/* DIPC */
-
 		mr = MACH_MSG_SUCCESS;
 		if (copyoutmsg((char *) &kmsg->ikm_header,
 				(char *)(rcv_msg ? rcv_msg : msg),
@@ -1891,9 +1724,6 @@ mach_msg_overwrite_trap(
 		}
 
 		if (ip_active(dest_port) &&
-#if	DIPC
-		    (! IP_IS_REMOTE(dest_port)) &&
-#endif	/* DIPC */
 		    ((dest_port->ip_msgcount < dest_port->ip_qlimit) ||
 		     (MACH_MSGH_BITS_REMOTE(hdr->msgh_bits) ==
 					MACH_MSG_TYPE_PORT_SEND_ONCE)))
@@ -2087,17 +1917,6 @@ mach_msg_overwrite_trap(
 		/* rcv_mqueue is unlocked */
 		ipc_object_release(rcv_object);
 
-#if	DIPC
-		if (mr == MACH_RCV_TRANSPORT_ERROR) {
-			if (msg_receive_error(temp_kmsg,
-				(rcv_msg != MACH_MSG_NULL) ? rcv_msg : msg,
-				option, temp_seqno, space)
-			    == MACH_RCV_INVALID_DATA) {
-				mr = MACH_RCV_INVALID_DATA;
-			}
-		}
-#endif	/* DIPC */
-
 		if (mr != MACH_MSG_SUCCESS) {
 			return(mr);
 		}
@@ -2140,9 +1959,6 @@ mach_msg_overwrite_trap(
 				      MACH_PORT_NAME_NULL, MACH_MSG_BODY_NULL);
 		if (mr != MACH_MSG_SUCCESS) {
 			if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR
-#if	DIPC
-				|| mr == MACH_RCV_TRANSPORT_ERROR
-#endif	/* DIPC */
 			    ) {
 				if (ipc_kmsg_put(msg, kmsg, reply_size) == 
 							MACH_RCV_INVALID_DATA)

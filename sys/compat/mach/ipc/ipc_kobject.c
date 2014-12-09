@@ -303,9 +303,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	ipc_port_t *destp;
 	mach_msg_format_0_trailer_t *trailer;
 	register mig_hash_t *ptr;
-#if	MACH_RT
-	boolean_t reply_rt;
-#endif	/* MACH_RT */
 
 	/* Only fetch current thread if ETAP is configured */
 	ETAP_DATA_LOAD(th, current_thread());
@@ -341,16 +338,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	if ((reply_size += MAX_TRAILER_SIZE) < IKM_SAVED_MSG_SIZE)
 		reply_size = IKM_SAVED_MSG_SIZE;
 
-#if	MACH_RT
-	reply_rt =
-		IP_VALID((ipc_port_t)request->ikm_header.msgh_local_port) ?
-		IP_RT((ipc_port_t)request->ikm_header.msgh_local_port) :
-		FALSE;
-	    
-	if (reply_rt)
-		reply = ikm_rtalloc(reply_size);
-	else
-#endif	/* MACH_RT */
 		reply = ikm_alloc(reply_size);
 
 	if (reply == IKM_NULL) {
@@ -360,10 +347,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	}
 
 	ikm_init(reply, reply_size);
-#if	DIPC
-	reply->ikm_handle = HANDLE_NULL;
-#endif	/* DIPC */
-
 	/*
 	 * Initialize reply message.
 	 */
@@ -379,10 +362,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		OutP->Head.msgh_remote_port = InP->msgh_local_port;
 		OutP->Head.msgh_local_port  = MACH_PORT_NULL;
 		OutP->Head.msgh_id = InP->msgh_id + 100;
-#if	MACH_RT
-		if (reply_rt)
-			KMSG_MARK_RT(reply);
-#endif	/* MACH_RT */
 #undef	InP
 #undef	OutP
 	}

@@ -224,11 +224,6 @@ ipc_bootstrap(void)
 	kr = ipc_space_create_special(&ipc_space_reply);
 	assert(kr == KERN_SUCCESS);
 
-#if	DIPC
-	kr = ipc_space_create_special(&ipc_space_remote);
-	assert(kr == KERN_SUCCESS);
-#endif	/* DIPC */
-
 	/* initialize modules with hidden data structures */
 
 #if	MACH_ASSERT
@@ -247,10 +242,6 @@ ipc_bootstrap(void)
 #define MSG_OOL_SIZE_SMALL 2049
 vm_size_t msg_ool_size_small;
 
-#if	MACH_RT
-vm_size_t msg_ool_size_small_rt;
-#endif	/* MACH_RT */
-
 /*
  *	Routine:	ipc_init
  *	Purpose:
@@ -264,9 +255,6 @@ ipc_init(void)
 	kern_return_t retval;
 	vm_offset_t min, max;
 	extern vm_size_t kalloc_max_prerounded;
-#if	MACH_RT
-	extern vm_size_t rtalloc_max_prerounded;
-#endif	/* MACH_RT */
 
 	retval = kmem_suballoc(kernel_map, &min, ipc_kernel_map_size,
 			       TRUE, TRUE, &ipc_kernel_map);
@@ -294,13 +282,6 @@ ipc_init(void)
 		msg_ool_size_small = MSG_OOL_SIZE_SMALL;
 	}
 #endif
-#if	MACH_RT
-	/*
-	 * Real-time IPC, on the other hand, requires that all out-of-line
-	 * data be obtained from rtalloc'ed buffers.
-	 */
-	msg_ool_size_small_rt = rtalloc_max_prerounded;
-#endif	/* MACH_RT */
 #ifdef notyet
 	/* XXX allocate initial host ports etc */
 	ipc_host_init();

@@ -205,21 +205,10 @@
 #include <sys/mach/ipc/ipc_space.h>
 #include <sys/mach/thread.h>
 
-#if	DIPC
-#include <ddb/tr.h>
-#include <dipc/dipc_kmsg.h>
-#include <dipc/dipc_port.h>
-#include <dipc/dipc_funcs.h>
-#include <dipc/dipc_counters.h>
-#include <dipc/dipc_error.h>
-#include <dipc/port_table.h>
-#endif	/* DIPC */
 
 #define TR_ENABLE 0
-#if	!DIPC
 #define	dstat_decl(foo)
 #define	dstat(foo)
-#endif	/* !DIPC */
 
 /*
  *	Routine:	ipc_mqueue_init
@@ -331,19 +320,6 @@ ipc_mqueue_changed(
  *		MACH_SEND_INTERRUPTED	Caller still has message.
  */
 
-#if	DIPC
-/*
- *	The error returns now also include:
- *		DIPC conversion errors	Caller still has message.
- *		DIPC transport errors	Caller still has message.
- */
-dstat_decl(unsigned int		c_imq_send_msgs = 0;)
-dstat_decl(unsigned int		c_imq_send_remote = 0;)
-dstat_decl(unsigned int		c_imq_send_convert = 0;)
-dstat_decl(unsigned int		c_imq_send_block = 0;)
-dstat_decl(unsigned int		c_imq_send_dipc_send = 0;)
-#endif	/* DIPC */
-
 mach_msg_return_t
 ipc_mqueue_send(
 	ipc_kmsg_t		kmsg,
@@ -387,10 +363,6 @@ ipc_mqueue_send(
 		return MACH_MSG_SUCCESS;
 	}
 
-#if	DIPC
-	dstat(++c_imq_send_msgs);
-#endif	/* DIPC */
-
 	for (;;) {
 		ipc_thread_t self;
 
@@ -414,159 +386,6 @@ ipc_mqueue_send(
 			ipc_kmsg_destroy(kmsg);
 			return MACH_MSG_SUCCESS;
 		}
-
-#if	DIPC
-		if (DIPC_IS_DIPC_PORT(port)) {
-			dipc_return_t	dr;
-			mach_msg_return_t	mr = MACH_MSG_SUCCESS;
-
-			dstat(++c_imq_send_remote);
-
-			/*
-			 *	Convert the message to DIPC_FORMAT if the
-			 *	port requires it and the message hasn't
-			 *	already been converted.  A case of
-			 *	particular interest is the mach_msg fast
-			 *	path, which will deposit a !DIPC_FORMAT
-			 *	message here that requires conversion.
-			 *	We could optimize that case by converting
-			 *	messages before acquiring the port lock
-			 *	and entering this loop; but we don't know
-			 *	whether the optimization is worthwhile.
-			 */
-			if (port->ip_dipc->dip_ms_convert == TRUE
-			    && !KMSG_IS_DIPC_FORMAT(kmsg)) {
-				ip_unlock(port);
-				dstat(++c_imq_send_convert);
-				dr = dipc_kmsg_copyin(kmsg);
-				assert(dr == DIPC_SUCCESS ||
-							dr == DIPC_PORT_DEAD);
-				ip_lock(port);
-				/*
-				 *	The port could have migrated back
-				 *	to this node or died while it was
-				 *	unlocked; recheck.
-				 */
-				assert(port->ip_receiver != ipc_space_kernel);
-				assert((kmsg->ikm_header.msgh_bits &
-					MACH_MSGH_BITS_CIRCULAR) == 0);
-				continue;
-			}
-
-			/*
-			 *	The receive right could be migrating
-			 *	to this node, in which case we have
-			 *	to wait for the state to change before
-			 *	continuing.  This check catches ALL
-			 *	messages being enqueued to this port,
-			 *	not just remote messages.
-			 */
-			while (port->ip_dipc->dip_ms_block == TRUE) {
-				if ((option & MACH_SEND_TIMEOUT) &&
-				    (timeout == 0)) {
-					ip_unlock(port);
-					return MACH_SEND_TIMED_OUT;
-				}
-				dstat(++c_imq_send_block);
-				assert_wait((event_t)port, TRUE);
-				if ((option & MACH_SEND_TIMEOUT) &&
-				    (timeout != 0))
-					thread_set_timeout((timeout*hz) / 1000);
-				ip_unlock(port);
-				thread_block(0);
-				if ((option & MACH_SEND_TIMEOUT) &&
-				    (timeout != 0)) {
-					/* XXX */
-#if 0					
-					sleep(&current_thread()->timer, timeout*hz);					
-
-#endif
-				}					
-				switch (current_thread()->wait_result) {
-				  case THREAD_AWAKENED:
-					break;
-				  case THREAD_TIMED_OUT:
-					return MACH_SEND_TIMED_OUT;
-				  case THREAD_INTERRUPTED:
-					return MACH_SEND_INTERRUPTED;
-				  default:
-					panic("ipc_mqueue_send: wait_result\n");
-				}
-				ip_lock(port);
-			}
-
-			/*
-			 *	At this point, the message is ready to go
-			 *	and the port is clear for enqueueing.  We
-			 *	still hold the port lock so the port state
-			 *	can't change.  However, the port might still
-			 *	be local.  Two cases:
-			 *		- port migrated back here while we
-			 *		  had the port unlocked, somewhere
-			 *		- port is migrating but the message
-			 *		  containing the port hasn't been
-			 *		  processed yet
-			 *	If the port is still local, we must bail out
-			 *	and do a local enqueue, which should succeed
-			 *	because we will continue to hold the port lock.
-			 */
-			if (port->ip_proxy == FALSE)
-				goto local_delivery;
-
-			/*
-			 *	The port is locked and remote;
-			 *	the message has the correct format;
-			 *	we can hand off directly to dipc_mqueue_send.
-			 */
-			dstat(++c_imq_send_dipc_send);
-			mr = dipc_mqueue_send(kmsg, option, timeout);
-			/* port was unlocked on SUCCESS by dipc_mqueue_send */
-
-			switch (mr) {
-			  case MACH_MSG_SUCCESS:
-				return MACH_MSG_SUCCESS;
-
-			  case MACH_SEND_TRANSPORT_ERROR:
-			  case MACH_SEND_INVALID_DEST:
-				/*
-				 * destroy the port (unless it has already
-				 * been destroyed) since it is either dead
-				 * or unusable.  The !ip_active check at the
-				 * beginning of the loop will drop the extra
-				 * port reference and destroy the kmsg.
-				 */
-				if (ip_active(port)) {
-					ip_reference(port);
-					ipc_port_destroy(port);
-
-					/*
-					 * ipc_port_destroy consumed the
-					 * reference and the lock.
-					 * This kmsg should still hold a
-					 * port ref.
-					 */
-					ip_lock(port);
-				}
-				continue;
-
-			  case MACH_SEND_PORT_MIGRATED:
-				/* port migrated here.  Send locally. */
-				continue;
-
-			  case MACH_SEND_INTERRUPTED:
-			  case MACH_SEND_TIMED_OUT:
-				ip_unlock(port);
-				return mr;
-
-			  default:
-				ip_unlock(port);
-				printf("ipc_mqueue_send: invalid mr 0x%x\n",mr);
-				panic("ipc_mqueue_send");
-			}
-		}
-
-	    local_delivery:
-#endif	/* DIPC */
 
 		/*
 		 *  Don't block if:
@@ -706,64 +525,12 @@ ipc_mqueue_deliver(
 	assert(IP_VALID(port));
 	assert(ip_active(port));
 
-#if	DIPC
-	/*
-	 * This is a DIPC message bound for a local kernel port.
-	 * The case of a local message going to a local kernel
-	 * port is caught at the beginning of ipc_mqueue_send.
-	 *
-	 * All DIPC messages bound for kernel ports get queued on the
-	 * dipc_kernel_port.  A set of kernel threads is responsible for
-	 * receiving the messages and executing the required actions.
-	 */
-	if (port->ip_receiver == ipc_space_kernel) {
-		dstat_decl(extern unsigned int c_dkp_length;)
-		dstat_decl(extern unsigned int c_dkp_enqueued;)
-
-		mqueue = &dipc_kernel_port->ip_messages;
-		if (thread_context == FALSE) {
-			if (!ip_lock_try(dipc_kernel_port)) {
-				ip_unlock(port);
-				TR_IPC_MQEX("exit: kmsg 0x%x !lock dipc_kport",
-					    kmsg);
-				return MACH_MSG_IPC_KERNEL;
-			}
-		} else
-			ip_lock(dipc_kernel_port);
-		assert(dipc_kernel_port->ip_pset == IPS_NULL);
-		if (thread_context == FALSE) {
-			if (!imq_lock_try(mqueue)) {
-				ip_unlock(dipc_kernel_port);
-				ip_unlock(port);
-				TR_IPC_MQEX("exit: kmsg 0x%x can't lock dkmq",
-					    kmsg);
-				return MACH_MSG_IPC_KERNEL;
-			}
-		} else
-			imq_lock(mqueue);
-		dstat(++c_dkp_length);
-		dstat(++c_dkp_enqueued);
-		dipc_kernel_port->ip_msgcount++;
-		ip_unlock(dipc_kernel_port);
-	} else
-#endif	/* DIPC */
 	{
 		pset = port->ip_pset;
 		if (pset == IPS_NULL)
 			mqueue = &port->ip_messages;
 		else
 			mqueue = &pset->ips_messages;
-
-#if	DIPC
-		if (thread_context == FALSE) {
-			if (!imq_lock_try(mqueue)) {
-				ip_unlock(port);
-				TR_IPC_MQEX("exit: kmsg 0x%x can't lock mqueue",
-					    kmsg);
-				return MACH_MSG_IPC_KERNEL;
-			}
-		} else
-#endif	/* DIPC */
 			imq_lock(mqueue);
 	}
 
@@ -1114,60 +881,11 @@ ipc_mqueue_finish_receive(
 {
 	ipc_kmsg_t		kmsg;
 	mach_msg_return_t	mr;
-#if	DIPC
-	dipc_return_t		dr;
-#endif	/* DIPC */
 	ipc_thread_t 		self = current_thread();
 
 	mr = MACH_MSG_SUCCESS;
 	kmsg = *kmsgp;
 	dstat(++c_imfr_calls);
-
-#if	DIPC
-	/*
-	 *	There's a race where some other thread or interrupt
-	 *	context on another processor may have succeeded in
-	 *	enqueueing the kmsg (that we just picked up) but may
-	 *	not yet have succeeded in generating the KKT_CONNECT_REPLY.
-	 *	We wait here for that activity to complete.  We depend on
-	 *	the fact that both the mach_msg hotpath AND ipc_mqueue_receive
-	 *	come here before playing with the kmsg bits in any important
-	 *	way.
-	 *
-	 *	It's difficult to postpone waiting until later because the
-	 *	synchronization between these activities depends on two bits
-	 *	in the kmsg bits field; we don't want to have to add lock
-	 *	operations around all uses of that field.  Except for this
-	 *	code here and the related code in dipc_receive.c, we preserve
-	 *	the assumption on the receive side that only one thread at
-	 *	any time ever knows about and manipulates a kmsgs' fields.
-	 *	The check for KMSG_IN_DIPC in the mach_msg hotpath is benign
-	 *	because the bits that define KMSG_IN_DIPC are will remain
-	 *	set even during racing updates.
-	 */
-	if (KMSG_CONNECTING(kmsg)) {
-		dstat(++c_imr_connect_reply_race);
-		kmsg_connect_reply_wait(kmsg);
-	}
-
-	if (kmsg->ikm_header.msgh_bits & MACH_MSGH_BITS_REF_CONVERT) {
-		kmsg->ikm_header.msgh_bits &= ~ MACH_MSGH_BITS_REF_CONVERT;
-		(void) dipc_uid_port_reference(port);
-	}
-
-	if (KMSG_IS_META(kmsg)) {
-		ipc_kmsg_t	new_kmsg;
-
-		dr = dipc_pull_kmsg((meta_kmsg_t)kmsg, &new_kmsg);
-		assert(dr == DIPC_SUCCESS || dr == DIPC_TRANSPORT_ERROR);
-		assert(new_kmsg != IKM_NULL);
-		kmsg = new_kmsg;
-		if (dr == DIPC_TRANSPORT_ERROR) {
-			/* transport error */
-			mr = MACH_RCV_TRANSPORT_ERROR;
-		}
-	}
-#endif	/* DIPC */
 
 	/* check sizes */
 	if (mr == MACH_MSG_SUCCESS) {
@@ -1199,26 +917,6 @@ ipc_mqueue_finish_receive(
 		assert(port->ip_msgcount > 0);
 		port->ip_msgcount--;
 
-#if	DIPC
-		/*
-		 * unblock one remote sender now that there is a
-		 * space in the mqueue.  If the return code is
-		 * DIPC_WAKEUP_LOCAL or if there are no remote blocked
-		 * senders, then continue on and wake up a local
-		 * blocked sender.
-		 */
-		dr = DIPC_WAKEUP_LOCAL;
-		if (DIPC_IS_DIPC_PORT(port) &&
-		    port->ip_callback_map != NODE_MAP_NULL) {
-			dr = dipc_callback_sender(port);
-			/*
-			 * if a remote sender was unblocked, dr will have
-			 * been set to DIPC_SUCCESS and the local wakeup
-			 * will be skipped.
-			 */
-		}
-		if (dr == DIPC_WAKEUP_LOCAL)
-#endif	/* DIPC */
 		{
 			senders = &port->ip_blocked;
 			sender = ipc_thread_queue_first(senders);

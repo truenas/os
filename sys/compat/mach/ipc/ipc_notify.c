@@ -104,9 +104,6 @@
 #include <sys/mach/ipc/ipc_mqueue.h>
 #include <sys/mach/ipc/ipc_notify.h>
 #include <sys/mach/ipc/ipc_port.h>
-#if	DIPC
-#include <ddb/tr.h>
-#endif	/* DIPC */
 
 /*
  * Forward declarations
@@ -295,11 +292,6 @@ ipc_notify_port_deleted(
 	ipc_kmsg_t kmsg;
 	mach_port_deleted_notification_t *n;
 
-#if	MACH_RT
-	if (IP_RT(port))
-		kmsg = ikm_rtalloc(sizeof *n);
-	else
-#endif	/* MACH_RT */
 		kmsg = ikm_alloc(sizeof *n);
 	if (kmsg == IKM_NULL) {
 		printf("dropped port-deleted (%p, 0x%x)\n", port, name);
@@ -310,10 +302,6 @@ ipc_notify_port_deleted(
 	ikm_init(kmsg, sizeof *n);
 	n = (mach_port_deleted_notification_t *) &kmsg->ikm_header;
 	*n = ipc_notify_port_deleted_template;
-#if	MACH_RT
-	if (IP_RT(port))
-		KMSG_MARK_RT(kmsg);
-#endif	/* MACH_RT */
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
 	n->not_port = name;
@@ -341,11 +329,6 @@ ipc_notify_port_destroyed(
 	ipc_kmsg_t kmsg;
 	mach_port_destroyed_notification_t *n;
 
-#if	MACH_RT
-	if (IP_RT(port))
-		kmsg = ikm_rtalloc(sizeof *n);
-	else
-#endif	/* MACH_RT */
 		kmsg = ikm_alloc(sizeof *n);
 	if (kmsg == IKM_NULL) {
 		printf("dropped port-destroyed (%p, %p)\n",
@@ -358,10 +341,6 @@ ipc_notify_port_destroyed(
 	ikm_init(kmsg, sizeof *n);
 	n = (mach_port_destroyed_notification_t *) &kmsg->ikm_header;
 	*n = ipc_notify_port_destroyed_template;
-#if	MACH_RT
-	if (IP_RT(port))
-		KMSG_MARK_RT(kmsg);
-#endif	/* MACH_RT */
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
 	n->not_port.name = (mach_port_t)right;
@@ -386,11 +365,6 @@ ipc_notify_no_senders(
 	ipc_kmsg_t kmsg;
 	mach_no_senders_notification_t *n;
 
-#if	MACH_RT
-	if (IP_RT(port))
-		kmsg = ikm_rtalloc(sizeof *n);
-	else
-#endif	/* MACH_RT */
 		kmsg = ikm_alloc(sizeof *n);
 	if (kmsg == IKM_NULL) {
 		printf("dropped no-senders (%p, %u)\n", port, mscount);
@@ -401,10 +375,6 @@ ipc_notify_no_senders(
 	ikm_init(kmsg, sizeof *n);
 	n = (mach_no_senders_notification_t *) &kmsg->ikm_header;
 	*n = ipc_notify_no_senders_template;
-#if	MACH_RT
-	if (IP_RT(port))
-		KMSG_MARK_RT(kmsg);
-#endif	/* MACH_RT */
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
 	n->not_count = mscount;
@@ -427,35 +397,6 @@ ipc_notify_send_once(
 {
 	ipc_kmsg_t kmsg;
 	mach_send_once_notification_t *n;
-#if	DIPC
-	boolean_t active;
-	TR_DECL("ipc_notify_send_once");
-#endif	/* DIPC */
-
-#if	DIPC
-/*	tr2("enter:  port 0x%x", port);*/
-	/*
-	 *	If the port is not active, sending this
-	 *	notification causes an infinite loop.
-	 *	DIPC gets here because the send
-	 *	once right could be on another node.
-	 */
-	ip_lock(port);
-	active = ip_active(port);
-	ip_unlock(port);
-
-	if (!active) {
-		tr2("...port 0x%x is dead", port);
-		ipc_port_release_sonce(port);
-		return;
-	}
-#endif	/* DIPC */
-
-#if	MACH_RT
-	if (IP_RT(port))
-		kmsg = ikm_rtalloc(sizeof *n);
-	else
-#endif	/* MACH_RT */
 		kmsg = ikm_alloc(sizeof *n);
 	if (kmsg == IKM_NULL) {
 		printf("dropped send-once (%p)\n", port);
@@ -466,10 +407,6 @@ ipc_notify_send_once(
 	ikm_init(kmsg, sizeof *n);
 	n = (mach_send_once_notification_t *) &kmsg->ikm_header;
 	*n = ipc_notify_send_once_template;
-#if	MACH_RT
-	if (IP_RT(port))
-		KMSG_MARK_RT(kmsg);
-#endif	/* MACH_RT */
 
         n->not_header.msgh_remote_port = (mach_port_t) port;
 
@@ -493,11 +430,6 @@ ipc_notify_dead_name(
 	ipc_kmsg_t kmsg;
 	mach_dead_name_notification_t *n;
 
-#if	MACH_RT
-	if (IP_RT(port))
-		kmsg = ikm_rtalloc(sizeof *n);
-	else
-#endif	/* MACH_RT */
 		kmsg = ikm_alloc(sizeof *n);
 	if (kmsg == IKM_NULL) {
 		printf("dropped dead-name (%p, 0x%x)\n", port, name);
@@ -508,10 +440,6 @@ ipc_notify_dead_name(
 	ikm_init(kmsg, sizeof *n);
 	n = (mach_dead_name_notification_t *) &kmsg->ikm_header;
 	*n = ipc_notify_dead_name_template;
-#if	MACH_RT
-	if (IP_RT(port))
-		KMSG_MARK_RT(kmsg);
-#endif	/* MACH_RT */
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
 	n->not_port = name;

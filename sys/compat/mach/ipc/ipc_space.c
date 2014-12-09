@@ -129,12 +129,6 @@
 uma_zone_t ipc_space_zone;
 ipc_space_t ipc_space_kernel;
 ipc_space_t ipc_space_reply;
-#if	DIPC
-ipc_space_t ipc_space_remote;
-#endif	/* DIPC */
-#if	DIPC || MACH_KDB
-ipc_space_t default_pager_space;
-#endif	/* DIPC || MACH_KDB */
 
 /*
  *	Routine:	ipc_space_reference
@@ -312,11 +306,6 @@ ipc_space_destroy(
 	/*
 	 *	Now we can futz with it	without having it locked.
 	 */
-
-#if	DIPC || MACH_KDB
-	if (space == default_pager_space)
-		default_pager_space = IS_NULL;
-#endif	/* DIPC || MACH_KDB */
 
 	table = space->is_table;
 	size = space->is_table_size;
