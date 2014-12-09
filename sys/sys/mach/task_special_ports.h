@@ -142,16 +142,5 @@ typedef	int	task_special_port_t;
 #define task_set_task_access_port(task, port)	\
 		(task_set_special_port((task), TASK_ACCESS_PORT, (port)))
 
-#define task_get_wired_ledger_port(task, port)	\
-		(task_get_special_port((task), TASK_WIRED_LEDGER_PORT, (port)))
-
-#define task_set_wired_ledger_port(task, port)	\
-		(task_set_special_port((task), TASK_WIRED_LEDGER_PORT, (port)))
-
-#define task_get_paged_ledger_port(task, port)	\
-		(task_get_special_port((task), TASK_PAGED_LEDGER_PORT, (port)))
-
-#define task_set_paged_ledger_port(task, port)	\
-		(task_set_special_port((task), TASK_PAGED_LEDGER_PORT, (port)))
 
 #endif	/* _MACH_TASK_SPECIAL_PORTS_H_ */
