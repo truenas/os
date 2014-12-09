@@ -18,9 +18,6 @@
  * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
  */
-/*
- * MkLinux
- */
 /* CMU_HIST */
 /*
  * Revision 2.7  91/10/09  16:08:15  af
@@ -88,10 +85,12 @@
  *	Primitive functions to manipulate translation entries.
  */
 
-#if 0
-#include <mach_kdb.h>
-#include <mach_debug.h>
-#endif
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/file.h>
+#include <sys/filedesc.h>
+
 
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
@@ -111,11 +110,26 @@
 #include <sys/mach/thread.h>
 
 
+static fo_close_t mach_port_close;
+
+struct fileops mach_fileops  = {
+	.fo_close = mach_port_close
+};
+
 
 /* XXX */
 #define thread_wakeup(x) 
 
 uma_zone_t ipc_tree_entry_zone;
+
+
+static int
+mach_port_close(struct file *fp, struct thread *td)
+{
+
+	/* XXX */
+	return (0);
+}
 
 /*
  *	Routine:	ipc_entry_tree_collision
@@ -221,52 +235,34 @@ ipc_entry_get(
 	ipc_space_t	space,
 	boolean_t	is_send_once,
 	mach_port_name_t	*namep,
-	ipc_entry_t	*entryp)
-{
-	ipc_entry_t table;
-	mach_port_index_t first_free;
+	ipc_entry_t	*entryp,
+	ipc_object_t object)
+{	
 	ipc_entry_t free_entry;
+	int fd;
+	struct file *fp;
+	struct thread *td = curthread;
 
 	assert(space->is_active);
 
-	{
-		table = space->is_table;
-		first_free = table->ie_next;
+	if (object != NULL && ipc_hash_local_lookup(space, object, namep, entryp))
+		return (KERN_SUCCESS);
 
-		if (first_free == 0)
-			return KERN_NO_SPACE;
+	if ((free_entry = malloc(sizeof(*free_entry), M_DEVBUF, M_WAITOK)) == NULL)
+		return KERN_RESOURCE_SHORTAGE;
 
-		free_entry = &table[first_free];
-		table->ie_next = free_entry->ie_next;
-	}
+	if (falloc(td, &fp, &fd, 0))
+		return KERN_RESOURCE_SHORTAGE;
 
-	/*
-	 *	Initialize the new entry.  We need only
-	 *	increment the generation number and clear ie_request.
-	 */
+	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
 
-    {
-	mach_port_name_t new_name;
-	mach_port_gen_t gen;
-
-	assert((free_entry->ie_bits &~ IE_BITS_GEN_MASK) == 0);
-	gen = IE_BITS_NEW_GEN(free_entry->ie_bits);
-	free_entry->ie_bits = gen;
+	free_entry->ie_bits = 0;
 	free_entry->ie_request = 0;
-	/*
-	 *	The new name can't be MACH_PORT_NULL because index
-	 *	is non-zero.  It can't be MACH_PORT_DEAD because
-	 *	the table isn't allowed to grow big enough.
-	 *	(See comment in ipc/ipc_table.h.)
-	 */
-	new_name = MACH_PORT_MAKE(first_free, gen);
-	assert(MACH_PORT_NAME_VALID(new_name));
-	*namep = new_name;
-    }
+	free_entry->ie_name = fd;
 
-	assert(free_entry->ie_object == IO_NULL);
-
+	*namep = fd;
 	*entryp = free_entry;
+
 	return KERN_SUCCESS;
 }
 
@@ -291,24 +287,15 @@ ipc_entry_alloc(
 	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp)
 {
-	kern_return_t kr;
 
 	is_write_lock(space);
 
-	for (;;) {
-		if (!space->is_active) {
-			is_write_unlock(space);
-			return KERN_INVALID_TASK;
-		}
-
-		kr = ipc_entry_get(space, is_send_once, namep, entryp);
-		if (kr == KERN_SUCCESS)
-			return kr;
-
-		kr = ipc_entry_grow_table(space, ITS_SIZE_NONE);
-		if (kr != KERN_SUCCESS)
-			return kr; /* space is unlocked */
+	if (!space->is_active) {
+		is_write_unlock(space);
+		return KERN_INVALID_TASK;
 	}
+
+	return (ipc_entry_get(space, is_send_once, namep, entryp, NULL));
 }
 
 /*

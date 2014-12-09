@@ -85,6 +85,7 @@
 #include <sys/mach/port.h>
 #include <sys/mach/ipc/ipc_table.h>
 #include <sys/mach/ipc/ipc_types.h>
+#include <sys/mach/ipc/ipc_object.h>
 
 /*
  *	Spaces hold capabilities for ipc_object_t's (ports and port sets).
@@ -112,6 +113,7 @@ typedef ipc_table_elems_t ipc_entry_num_t;	/* number of entries */
 
 typedef struct ipc_entry {
 	ipc_entry_bits_t ie_bits;
+	mach_port_name_t ie_name;
 	struct ipc_object *ie_object;
 	union {
 		mach_port_index_t next;
@@ -188,7 +190,8 @@ extern kern_return_t ipc_entry_get(
 	ipc_space_t	space,
 	boolean_t	is_send_once,
 	mach_port_name_t	*namep,
-	ipc_entry_t	*entryp);
+	ipc_entry_t	*entryp,
+	ipc_object_t object);
 
 /* Allocate an entry in a space, growing the space if necessary */
 extern kern_return_t ipc_entry_alloc(
