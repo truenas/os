@@ -159,6 +159,14 @@ WriteIncludes(FILE *file, boolean_t isuser, boolean_t isdef)
 	else {
 		fprintf(file, "#include <sys/cdefs.h>\n");
 		fprintf(file, "#include <sys/types.h>\n");
+		fprintf(file, "#ifdef _KERNEL\n");
+		fprintf(file, "#include <sys/mach/ndr.h>\n");
+		fprintf(file, "#include <sys/mach/kern_return.h>\n");
+		fprintf(file, "#include <sys/mach/notify.h>\n");
+		fprintf(file, "#include <sys/mach/mach_types.h>\n");
+		fprintf(file, "#include <sys/mach/message.h>\n");
+		fprintf(file, "#include <sys/mach/mig_errors.h>\n");
+		fprintf(file, "#else /* !_KERNEL */\n");
 		fprintf(file, "#include <string.h>\n");
 		fprintf(file, "#include <mach/ndr.h>\n");
 		fprintf(file, "#include <mach/boolean.h>\n");
@@ -167,6 +175,7 @@ WriteIncludes(FILE *file, boolean_t isuser, boolean_t isdef)
 		fprintf(file, "#include <mach/mach_types.h>\n");
 		fprintf(file, "#include <mach/message.h>\n");
 		fprintf(file, "#include <mach/mig_errors.h>\n");
+		fprintf(file, "#endif /*_KERNEL */\n");
 		if (ShortCircuit)
 			fprintf(file, "#include <mach/rpc.h>\n");
 		if (isuser && IsKernelUser) {
