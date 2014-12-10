@@ -678,7 +678,7 @@ ipc_kmsg_get(
 
 	if (kmsg == IKM_NULL)
 		return MACH_SEND_NO_BUFFER;
-		ikm_init(kmsg, msg_and_trailer_size);
+	ikm_init(kmsg, msg_and_trailer_size);
 
 	if (copyinmsg((char *) msg, (char *) &kmsg->ikm_header, size)) {
 		ikm_free(kmsg);
@@ -861,6 +861,9 @@ ipc_kmsg_copyin_header(
 	mach_port_name_t		notify_name)
 {
 	mach_msg_bits_t mbits = msg->msgh_bits &~ MACH_MSGH_BITS_CIRCULAR;
+	/* Here we know that the value is coming from userspace so the cast is safe
+	* because we've been passed a 32-bit name
+	*/
 	mach_port_name_t dest_name = CAST_MACH_PORT_TO_NAME(msg->msgh_remote_port);
 	mach_port_name_t reply_name = CAST_MACH_PORT_TO_NAME(msg->msgh_local_port);
 	kern_return_t kr;
@@ -1736,10 +1739,10 @@ ipc_kmsg_copyin(
     
     mr = ipc_kmsg_copyin_header(&kmsg->ikm_header, space, notify);
     if (mr != MACH_MSG_SUCCESS)
-	return mr;
+		return mr;
     
     if ((kmsg->ikm_header.msgh_bits & MACH_MSGH_BITS_COMPLEX) == 0)
-	return MACH_MSG_SUCCESS;
+		return MACH_MSG_SUCCESS;
     
     return( ipc_kmsg_copyin_body( kmsg, space, map) );
 }
@@ -2006,32 +2009,21 @@ ipc_kmsg_copyout_header(
 				reply_name = MACH_PORT_NAME_DEAD;
 				goto copyout_dest;
 			}
-
+			ip_reference(reply);
 			kr = ipc_entry_get(space,
 				reply_type == MACH_MSG_TYPE_PORT_SEND_ONCE,
 							   &reply_name, &entry, (ipc_object_t)reply);
-			if (kr != KERN_SUCCESS) {
-				ip_unlock(reply);
 
+			if (kr != KERN_SUCCESS) {
 				if (notify_port != IP_NULL)
 					ipc_port_release_sonce(notify_port);
 
-				/* space is locked */
-				kr = ipc_entry_grow_table(space,
-							  ITS_SIZE_NONE);
-				if (kr != KERN_SUCCESS) {
-					/* space is unlocked */
-
-					if (kr == KERN_RESOURCE_SHORTAGE)
-						return (MACH_RCV_HEADER_ERROR|
+				if (kr == KERN_RESOURCE_SHORTAGE)
+					return (MACH_RCV_HEADER_ERROR|
 							MACH_MSG_IPC_KERNEL);
-					else
-						return (MACH_RCV_HEADER_ERROR|
+				else
+					return (MACH_RCV_HEADER_ERROR|
 							MACH_MSG_IPC_SPACE);
-				}
-				/* space is locked again; start over */
-
-				continue;
 			}
 
 			assert(IE_BITS_TYPE(entry->ie_bits)

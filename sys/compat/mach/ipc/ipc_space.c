@@ -116,7 +116,6 @@
 #include <vm/uma.h>
 #include <sys/mach/ipc/port.h>
 #include <sys/mach/ipc/ipc_entry.h>
-#include <sys/mach/ipc/ipc_splay.h>
 #include <sys/mach/ipc/ipc_object.h>
 #include <sys/mach/ipc/ipc_hash.h>
 #include <sys/mach/ipc/ipc_table.h>
@@ -173,37 +172,22 @@ ipc_space_create(
 	ipc_space_t		*spacep)
 {
 	ipc_space_t space;
-	ipc_entry_t table;
+	ipc_entry_t *table;
 	ipc_entry_num_t new_size;
-	mach_port_index_t index;
 
 	space = is_alloc();
 	if (space == IS_NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
 	table = it_entries_alloc(initial);
-	if (table == IE_NULL) {
+	if (table == NULL) {
 		is_free(space);
 		return KERN_RESOURCE_SHORTAGE;
 	}
 
 	new_size = initial->its_size;
-	memset((void *) table, 0, new_size * sizeof(struct ipc_entry));
+	memset((void *) table, 0, new_size * sizeof(struct ipc_entry *));
 
-	/*
-	 *	Initialize the free list in the table.
-	 *	Add the entries in reverse order, and
-	 *	set the generation number to -1, so that
-	 *	initial allocations produce "natural" names.
-	 */
-
-	for (index = 0; index < new_size; index++) {
-		ipc_entry_t entry = &table[index];
-
-		entry->ie_bits = IE_BITS_GEN_MASK;
-		entry->ie_next = index+1;
-	}
-	table[new_size-1].ie_next = 0;
 
 	is_ref_lock_init(space);
 	space->is_references = 2;
@@ -215,7 +199,6 @@ ipc_space_create(
 	space->is_table_size = new_size;
 	space->is_table_next = initial+1;
 
-	ipc_splay_tree_init(&space->is_tree);
 	space->is_tree_total = 0;
 	space->is_tree_small = 0;
 	space->is_tree_hash = 0;
@@ -272,8 +255,7 @@ void
 ipc_space_destroy(
 	ipc_space_t	space)
 {
-	ipc_tree_entry_t tentry;
-	ipc_entry_t table;
+	ipc_entry_t *table;
 	ipc_entry_num_t size;
 	mach_port_index_t index;
 	boolean_t active;
@@ -311,36 +293,22 @@ ipc_space_destroy(
 	size = space->is_table_size;
 
 	for (index = 0; index < size; index++) {
-		ipc_entry_t entry = &table[index];
-		mach_port_type_t type = IE_BITS_TYPE(entry->ie_bits);
+		ipc_entry_t entry = table[index];
+		if (entry == NULL)
+			continue;
+		while (entry->ie_link != NULL) {
+			mach_port_type_t type = IE_BITS_TYPE(entry->ie_bits);
 
-		if (type != MACH_PORT_TYPE_NONE) {
-			mach_port_name_t name =
-				MACH_PORT_MAKEB(index, entry->ie_bits);
-
-			ipc_right_clean(space, name, entry);
+			if (type != MACH_PORT_TYPE_NONE) {
+				mach_port_name_t name =
+					MACH_PORT_MAKEB(index, entry->ie_bits);
+				ipc_right_clean(space, name, entry);
+			}
+			entry = entry->ie_link;
 		}
 	}
 
 	it_entries_free(space->is_table_next-1, table);
-
-	for (tentry = ipc_splay_traverse_start(&space->is_tree);
-	     tentry != ITE_NULL;
-	     tentry = ipc_splay_traverse_next(&space->is_tree, TRUE)) {
-		mach_port_type_t type = IE_BITS_TYPE(tentry->ite_bits);
-		mach_port_name_t name = tentry->ite_name;
-
-		assert(type != MACH_PORT_TYPE_NONE);
-
-		/* use object before ipc_right_clean releases ref */
-
-		if (type == MACH_PORT_TYPE_SEND)
-			ipc_hash_global_delete(space, tentry->ite_object,
-					       name, tentry);
-
-		ipc_right_clean(space, name, &tentry->ite_entry);
-	}
-	ipc_splay_traverse_finish(&space->is_tree);
 
 	/*
 	 *	Because the space is now dead,

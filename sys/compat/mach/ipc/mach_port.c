@@ -254,8 +254,7 @@ mach_port_names(
 	mach_port_type_t	**typesp,
 	mach_msg_type_number_t	*typesCnt)
 {
-	ipc_tree_entry_t tentry;
-	ipc_entry_t table;
+	ipc_entry_t *table;
 	ipc_entry_num_t tsize;
 	mach_port_index_t index;
 	ipc_entry_num_t actual;	/* this many names */
@@ -342,7 +341,7 @@ mach_port_names(
 	tsize = space->is_table_size;
 
 	for (index = 0; index < tsize; index++) {
-		ipc_entry_t entry = &table[index];
+		ipc_entry_t entry = table[index];
 		ipc_entry_bits_t bits = entry->ie_bits;
 
 		if (IE_BITS_TYPE(bits) != MACH_PORT_TYPE_NONE) {
@@ -353,18 +352,6 @@ mach_port_names(
 		}
 	}
 
-	for (tentry = ipc_splay_traverse_start(&space->is_tree);
-	    tentry != ITE_NULL;
-	    tentry = ipc_splay_traverse_next(&space->is_tree, FALSE)) {
-		ipc_entry_t entry = &tentry->ite_entry;
-		mach_port_name_t name = tentry->ite_name;
-
-		assert(IE_BITS_TYPE(tentry->ite_bits) !=
-				    MACH_PORT_TYPE_NONE);
-		mach_port_names_helper(timestamp, entry, name,
-				    names, types, &actual);
-	}
-	ipc_splay_traverse_finish(&space->is_tree);
 	is_read_unlock(space);
 
 
@@ -1039,8 +1026,7 @@ mach_port_get_set_status(
 	size = PAGE_SIZE;	/* initial guess */
 
 	for (;;) {
-		ipc_tree_entry_t tentry;
-		ipc_entry_t entry, table;
+		ipc_entry_t entry, *table;
 		ipc_entry_num_t tsize;
 		mach_port_index_t index;
 		mach_port_name_t *names;
@@ -1082,7 +1068,7 @@ mach_port_get_set_status(
 		tsize = space->is_table_size;
 
 		for (index = 0; index < tsize; index++) {
-			ipc_entry_t ientry = &table[index];
+			ipc_entry_t ientry = table[index];
 			ipc_entry_bits_t bits = ientry->ie_bits;
 
 			if (bits & MACH_PORT_TYPE_RECEIVE) {
@@ -1094,22 +1080,6 @@ mach_port_get_set_status(
 			}
 		}
 
-		for (tentry = ipc_splay_traverse_start(&space->is_tree);
-		    tentry != ITE_NULL;
-		    tentry =
-		    ipc_splay_traverse_next(&space->is_tree,FALSE)) {
-			ipc_entry_bits_t bits = tentry->ite_bits;
-
-			assert(IE_BITS_TYPE(bits) != MACH_PORT_TYPE_NONE);
-
-			if (bits & MACH_PORT_TYPE_RECEIVE) {
-			    ipc_port_t port = (ipc_port_t) tentry->ite_object;
-
-			    mach_port_gst_helper(pset, port, maxnames,
-						       names, &actual);
-			}
-		}
-		ipc_splay_traverse_finish(&space->is_tree);
 		is_read_unlock(space);
 
 		if (actual <= maxnames)

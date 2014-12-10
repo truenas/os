@@ -291,7 +291,6 @@ compat/mach/ipc/ipc_port.c		optional  compat_mach
 compat/mach/ipc/ipc_pset.c		optional  compat_mach
 compat/mach/ipc/ipc_right.c		optional  compat_mach
 compat/mach/ipc/ipc_space.c		optional  compat_mach
-compat/mach/ipc/ipc_splay.c		optional  compat_mach
 compat/mach/ipc/ipc_table.c		optional  compat_mach
 compat/mach/ipc/ipc_thread.c	optional  compat_mach
 compat/mach/ipc/mach_debug.c	optional  compat_mach

@@ -103,20 +103,21 @@
 /*
  * Forward declarations 
  */
+/* Lookup (space, obj) in local hash table */
+boolean_t ipc_hash_local_lookup(
+       ipc_space_t             space,
+       ipc_object_t            obj,
+       mach_port_name_t                *namep,
+       ipc_entry_t             *entryp);
 
-/* Lookup (space, obj) in global hash table */
-boolean_t ipc_hash_global_lookup(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_name_t		*namep,
-	ipc_tree_entry_t	*entryp);
+
 
 /* Insert an entry into the global reverse hash table */
-void ipc_hash_global_insert(
+void ipc_hash_local_insert(
 	ipc_space_t		space,
 	ipc_object_t		obj,
 	mach_port_name_t		name,
-	ipc_tree_entry_t	entry);
+	ipc_entry_t	entry);
 
 /* Delete an entry from the local reverse hash table */
 void ipc_hash_local_delete(
@@ -144,12 +145,6 @@ ipc_hash_lookup(
 	boolean_t 	rv;
 
 	rv = ipc_hash_local_lookup(space, obj, namep, entryp);
-	if (!rv) {
-		assert(!is_fast_space(space) || space->is_tree_hash == 0);
-		if (space->is_tree_hash > 0)
-			rv = ipc_hash_global_lookup(space, obj, namep,
-				(ipc_tree_entry_t *) entryp);
-	}
 	return (rv);
 }
 
@@ -169,17 +164,8 @@ ipc_hash_insert(
 	mach_port_name_t	name,
 	ipc_entry_t	entry)
 {
-	mach_port_index_t index;
 
-	index = MACH_PORT_INDEX(name);
-	if ((index < space->is_table_size) &&
-	    (entry == &space->is_table[index]))
-		ipc_hash_local_insert(space, obj, index, entry);
-	else {
-		assert(!is_fast_space(space));
-		ipc_hash_global_insert(space, obj, name,
-				       (ipc_tree_entry_t) entry);
-	}
+	ipc_hash_local_insert(space, obj, name, entry);
 }
 
 /*
@@ -197,17 +183,8 @@ ipc_hash_delete(
 	mach_port_name_t	name,
 	ipc_entry_t	entry)
 {
-	mach_port_index_t index;
 
-	index = MACH_PORT_INDEX(name);
-	if ((index < space->is_table_size) &&
-	    (entry == &space->is_table[index]))
-		ipc_hash_local_delete(space, obj, index, entry);
-	else {
-		assert(!is_fast_space(space));
-		ipc_hash_global_delete(space, obj, name,
-				       (ipc_tree_entry_t) entry);
-	}
+	ipc_hash_local_delete(space, obj, name, entry);
 }
 
 /*
@@ -219,171 +196,6 @@ ipc_hash_delete(
 
 typedef natural_t ipc_hash_index_t;
 
-ipc_hash_index_t ipc_hash_global_size;
-ipc_hash_index_t ipc_hash_global_mask;
-
-#define IH_GLOBAL_HASH(space, obj)					\
-	(((((ipc_hash_index_t) ((vm_offset_t)space)) >> 4) +		\
-	  (((ipc_hash_index_t) ((vm_offset_t)obj)) >> 6)) &		\
-	 ipc_hash_global_mask)
-
-typedef struct ipc_hash_global_bucket {
-	decl_mutex_data(,	ihgb_lock_data)
-	ipc_tree_entry_t	ihgb_head;
-} *ipc_hash_global_bucket_t;
-
-#define	IHGB_NULL	((ipc_hash_global_bucket_t) 0)
-
-#define	ihgb_lock_init(ihgb)	mtx_init(&(ihgb)->ihgb_lock_data, \
-										   "ETAP_IPC_IHGB", NULL, MTX_DEF)
-#define	ihgb_lock(ihgb)		mtx_lock(&(ihgb)->ihgb_lock_data)
-#define	ihgb_unlock(ihgb)	mtx_unlock(&(ihgb)->ihgb_lock_data)
-
-ipc_hash_global_bucket_t ipc_hash_global_table;
-
-/*
- *	Routine:	ipc_hash_global_lookup
- *	Purpose:
- *		Converts (space, obj) -> (name, entry).
- *		Looks in the global table, for splay tree entries.
- *		Returns TRUE if an entry was found.
- *	Conditions:
- *		The space must be locked (read or write) throughout.
- */
-
-boolean_t
-ipc_hash_global_lookup(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_name_t		*namep,
-	ipc_tree_entry_t	*entryp)
-{
-	ipc_hash_global_bucket_t bucket;
-	ipc_tree_entry_t this, *last;
-
-	assert(space != IS_NULL);
-	assert(obj != IO_NULL);
-
-	assert(!is_fast_space(space));
-	bucket = &ipc_hash_global_table[IH_GLOBAL_HASH(space, obj)];
-	ihgb_lock(bucket);
-
-	if ((this = bucket->ihgb_head) != ITE_NULL) {
-		if ((this->ite_object == obj) &&
-		    (this->ite_space == space)) {
-			/* found it at front; no need to move */
-
-			*namep = this->ite_name;
-			*entryp = this;
-		} else for (last = &this->ite_next;
-			    (this = *last) != ITE_NULL;
-			    last = &this->ite_next) {
-			if ((this->ite_object == obj) &&
-			    (this->ite_space == space)) {
-				/* found it; move to front */
-
-				*last = this->ite_next;
-				this->ite_next = bucket->ihgb_head;
-				bucket->ihgb_head = this;
-
-				*namep = this->ite_name;
-				*entryp = this;
-				break;
-			}
-		}
-	}
-
-	ihgb_unlock(bucket);
-	return this != ITE_NULL;
-}
-
-/*
- *	Routine:	ipc_hash_global_insert
- *	Purpose:
- *		Inserts an entry into the global reverse hash table.
- *	Conditions:
- *		The space must be write-locked.
- */
-
-void
-ipc_hash_global_insert(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_name_t		name,
-	ipc_tree_entry_t	entry)
-{
-	ipc_hash_global_bucket_t bucket;
-
-
-	assert(!is_fast_space(space));
-
-
-	assert(entry->ite_name == name);
-	assert(space != IS_NULL);
-	assert(entry->ite_space == space);
-	assert(obj != IO_NULL);
-	assert(entry->ite_object == obj);
-
-	space->is_tree_hash++;
-	assert(space->is_tree_hash <= space->is_tree_total);
-
-	bucket = &ipc_hash_global_table[IH_GLOBAL_HASH(space, obj)];
-	ihgb_lock(bucket);
-
-	/* insert at front of bucket */
-
-	entry->ite_next = bucket->ihgb_head;
-	bucket->ihgb_head = entry;
-
-	ihgb_unlock(bucket);
-}
-
-/*
- *	Routine:	ipc_hash_global_delete
- *	Purpose:
- *		Deletes an entry from the global reverse hash table.
- *	Conditions:
- *		The space must be write-locked.
- */
-
-void
-ipc_hash_global_delete(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_name_t		name,
-	ipc_tree_entry_t	entry)
-{
-	ipc_hash_global_bucket_t bucket;
-	ipc_tree_entry_t this, *last;
-
-	assert(!is_fast_space(space));
-
-	assert(entry->ite_name == name);
-	assert(space != IS_NULL);
-	assert(entry->ite_space == space);
-	assert(obj != IO_NULL);
-	assert(entry->ite_object == obj);
-
-	assert(space->is_tree_hash > 0);
-	space->is_tree_hash--;
-
-	bucket = &ipc_hash_global_table[IH_GLOBAL_HASH(space, obj)];
-	ihgb_lock(bucket);
-
-	for (last = &bucket->ihgb_head;
-	     (this = *last) != ITE_NULL;
-	     last = &this->ite_next) {
-		if (this == entry) {
-			/* found it; remove from bucket */
-
-			*last = this->ite_next;
-			break;
-		}
-	}
-	assert(this != ITE_NULL);
-
-	ihgb_unlock(bucket);
-}
 
 /*
  *	Each space has a local reverse hash table, which holds
@@ -435,9 +247,9 @@ ipc_hash_local_lookup(
 	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp)
 {
-	ipc_entry_t table;
+	ipc_entry_t *table, entry;
 	ipc_entry_num_t size;
-	mach_port_index_t hindex, index;
+	mach_port_index_t hindex;
 
 	assert(space != IS_NULL);
 	assert(obj != IO_NULL);
@@ -446,24 +258,15 @@ ipc_hash_local_lookup(
 	size = space->is_table_size;
 	hindex = IH_LOCAL_HASH(obj, size);
 
-	/*
-	 *	Ideally, table[hindex].ie_index is the name we want.
-	 *	However, must check ie_object to verify this,
-	 *	because collisions can happen.  In case of a collision,
-	 *	search farther along in the clump.
-	 */
-
-	while ((index = table[hindex].ie_index) != 0) {
-		ipc_entry_t entry = &table[index];
-
+	entry = table[hindex];
+	while (entry != NULL) {
 		if (entry->ie_object == obj) {
 			*namep = entry->ie_name;
 			*entryp = entry;
 			return TRUE;
 		}
 
-		if (++hindex == size)
-			hindex = 0;
+		entry = entry->ie_link;
 	}
 
 	return FALSE;
@@ -481,14 +284,13 @@ void
 ipc_hash_local_insert(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_index_t	index,
+	mach_port_index_t	index __unused,
 	ipc_entry_t		entry)
 {
-	ipc_entry_t table;
+	ipc_entry_t *table, entryp;
 	ipc_entry_num_t size;
 	mach_port_index_t hindex;
 
-	assert(index != 0);
 	assert(space != IS_NULL);
 	assert(obj != IO_NULL);
 
@@ -496,21 +298,12 @@ ipc_hash_local_insert(
 	size = space->is_table_size;
 	hindex = IH_LOCAL_HASH(obj, size);
 
-	assert(entry == &table[index]);
 	assert(entry->ie_object == obj);
 
-	/*
-	 *	We want to insert at hindex, but there may be collisions.
-	 *	If a collision occurs, search for the end of the clump
-	 *	and insert there.
-	 */
+	if ((entryp = table[hindex]) != NULL)
+		entry->ie_link = entryp;
 
-	while (table[hindex].ie_index != 0) {
-		if (++hindex == size)
-			hindex = 0;
-	}
-
-	table[hindex].ie_index = index;
+	table[hindex] = entry;
 }
 
 /*
@@ -525,12 +318,12 @@ void
 ipc_hash_local_delete(
 	ipc_space_t		space,
 	ipc_object_t		obj,
-	mach_port_index_t	index,
+	mach_port_index_t	index __unused,
 	ipc_entry_t		entry)
 {
-	ipc_entry_t table;
+	ipc_entry_t *table, entryp;
 	ipc_entry_num_t size;
-	mach_port_index_t hindex, dindex;
+	mach_port_index_t hindex;
 
 	assert(index != MACH_PORT_NAME_NULL);
 	assert(space != IS_NULL);
@@ -540,122 +333,30 @@ ipc_hash_local_delete(
 	size = space->is_table_size;
 	hindex = IH_LOCAL_HASH(obj, size);
 
-	assert(entry == &table[index]);
 	assert(entry->ie_object == obj);
 
-	/*
-	 *	First check we have the right hindex for this index.
-	 *	In case of collision, we have to search farther
-	 *	along in this clump.
-	 */
-
-	while (table[hindex].ie_index != index) {
-		if (++hindex == size)
-			hindex = 0;
+	if ((entryp = table[hindex]) == entry) {
+		table[hindex] = entry->ie_link;
+		return;
 	}
-
-	/*
-	 *	Now we want to set table[hindex].ie_index = 0.
-	 *	But if we aren't the last index in a clump,
-	 *	this might cause problems for lookups of objects
-	 *	farther along in the clump that are displaced
-	 *	due to collisions.  Searches for them would fail
-	 *	at hindex instead of succeeding.
-	 *
-	 *	So we must check the clump after hindex for objects
-	 *	that are so displaced, and move one up to the new hole.
-	 *
-	 *		hindex - index of new hole in the clump
-	 *		dindex - index we are checking for a displaced object
-	 *
-	 *	When we move a displaced object up into the hole,
-	 *	it creates a new hole, and we have to repeat the process
-	 *	until we get to the end of the clump.
-	 */
-
-	for (dindex = hindex; index != 0; hindex = dindex) {
-		for (;;) {
-			mach_port_index_t tindex;
-			ipc_object_t tobj;
-
-			if (++dindex == size)
-				dindex = 0;
-			assert(dindex != hindex);
-
-			/* are we at the end of the clump? */
-
-			index = table[dindex].ie_index;
-			if (index == 0)
-				break;
-
-			/* is this a displaced object? */
-
-			tobj = table[index].ie_object;
-			assert(tobj != IO_NULL);
-			tindex = IH_LOCAL_HASH(tobj, size);
-
-			if ((dindex < hindex) ?
-			    ((dindex < tindex) && (tindex <= hindex)) :
-			    ((dindex < tindex) || (tindex <= hindex)))
-				break;
+	while (entryp->ie_link != NULL) {
+		if (entryp->ie_link == entry) {
+			entryp->ie_link = entry->ie_link;
+			break;
 		}
-
-		table[hindex].ie_index = index;
+		entryp = entryp->ie_link;
 	}
 }
 
 /*
  *	Routine:	ipc_hash_init
  *	Purpose:
- *		Initialize the reverse hash table implementation.
+ *		Initialize the global reverse hash table implementation.
  */
 
 void
 ipc_hash_init(void)
 {
-	ipc_hash_index_t i;
-
-	/* if not configured, initialize ipc_hash_global_size */
-
-	if (ipc_hash_global_size == 0) {
-		ipc_hash_global_size = ipc_tree_entry_max >> 8;
-		if (ipc_hash_global_size < 32)
-			ipc_hash_global_size = 32;
-	}
-
-	/* make sure it is a power of two */
-
-	ipc_hash_global_mask = ipc_hash_global_size - 1;
-	if ((ipc_hash_global_size & ipc_hash_global_mask) != 0) {
-		natural_t bit;
-
-		/* round up to closest power of two */
-
-		for (bit = 1;; bit <<= 1) {
-			ipc_hash_global_mask |= bit;
-			ipc_hash_global_size = ipc_hash_global_mask + 1;
-
-			if ((ipc_hash_global_size & ipc_hash_global_mask) == 0)
-				break;
-		}
-	}
-
-	/* allocate ipc_hash_global_table */
-
-	ipc_hash_global_table = (ipc_hash_global_bucket_t)
-		malloc((vm_size_t) (ipc_hash_global_size *
-							sizeof(struct ipc_hash_global_bucket)), M_DEVBUF, M_ZERO|M_WAITOK);
-	assert(ipc_hash_global_table != IHGB_NULL);
-
-	/* and initialize it */
-
-	for (i = 0; i < ipc_hash_global_size; i++) {
-		ipc_hash_global_bucket_t bucket;
-
-		bucket = &ipc_hash_global_table[i];
-		ihgb_lock_init(bucket);
-		bucket->ihgb_head = ITE_NULL;
-	}
 }
 
 #if	MACH_IPC_DEBUG

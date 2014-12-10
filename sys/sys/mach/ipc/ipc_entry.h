@@ -114,7 +114,9 @@ typedef ipc_table_elems_t ipc_entry_num_t;	/* number of entries */
 typedef struct ipc_entry {
 	ipc_entry_bits_t ie_bits;
 	mach_port_name_t ie_name;
+	struct file		*ie_fp;
 	struct ipc_object *ie_object;
+	struct ipc_entry *ie_link;
 	union {
 		mach_port_index_t next;
 		ipc_table_index_t /* XXX ipc_port_request_index_t */ request;

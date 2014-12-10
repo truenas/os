@@ -102,7 +102,6 @@
 #include <sys/mach/ipc/port.h>
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_space.h>
-#include <sys/mach/ipc/ipc_splay.h>
 #include <sys/mach/ipc/ipc_object.h>
 #include <sys/mach/ipc/ipc_hash.h>
 #include <sys/mach/ipc/ipc_table.h>
@@ -124,44 +123,16 @@ uma_zone_t ipc_tree_entry_zone;
 
 
 static int
-mach_port_close(struct file *fp, struct thread *td)
+mach_port_close(struct file *fp, struct thread *td __unused)
 {
+	ipc_entry_t entry;
 
-	/* XXX */
+	assert(fp->f_data != NULL);
+	entry = fp->f_data;
+	assert(entry->ie_object == NULL);
+	free(entry, M_MACH);
+
 	return (0);
-}
-
-/*
- *	Routine:	ipc_entry_tree_collision
- *	Purpose:
- *		Checks if "name" collides with an allocated name
- *		in the space's tree.  That is, returns TRUE
- *		if the splay tree contains a name with the same
- *		index as "name".
- *	Conditions:
- *		The space is locked (read or write) and active.
- */
-
-static boolean_t
-ipc_entry_tree_collision(
-	ipc_space_t	space,
-	mach_port_name_t	name)
-{
-	mach_port_index_t index;
-	mach_port_name_t lower, upper;
-
-	assert(space->is_active);
-
-	/*
-	 *	Check if we collide with the next smaller name
-	 *	or the next larger name.
-	 */
-
-	ipc_splay_tree_bounds(&space->is_tree, name, &lower, &upper);
-
-	index = MACH_PORT_INDEX(name);
-	return (((lower != ~0) && (MACH_PORT_INDEX(lower) == index)) ||
-		((upper != 0) && (MACH_PORT_INDEX(upper) == index)));
 }
 
 /*
@@ -174,48 +145,19 @@ ipc_entry_tree_collision(
  */
 
 ipc_entry_t
-ipc_entry_lookup(
-	ipc_space_t	space,
-	mach_port_name_t	name)
+ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 {
-	mach_port_index_t index;
-	ipc_entry_t entry;
+	struct file *fp;
 
 	assert(space->is_active);
 
-			
-	index = MACH_PORT_INDEX(name);
-	/*
-	 * If space is fast, we assume no splay tree and name within table
-	 * bounds, but still check generation numbers (if enabled) and
-	 * look for null entries.
-	 */
-	if (is_fast_space(space)) {
-		entry = &space->is_table[index];
-		if (IE_BITS_GEN(entry->ie_bits) != MACH_PORT_GEN(name) ||
-			IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
-			entry = IE_NULL;
-	}
-	else
-	if (index < space->is_table_size) {
-		entry = &space->is_table[index];
-		if (IE_BITS_GEN(entry->ie_bits) != MACH_PORT_GEN(name))
-			if (entry->ie_bits & IE_BITS_COLLISION) {
-				assert(space->is_tree_total > 0);
-				goto tree_lookup;
-			} else
-				entry = IE_NULL;
-		else if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
-			entry = IE_NULL;
-	} else if (space->is_tree_total == 0)
-		entry = IE_NULL;
-	else
-	    tree_lookup:
-		entry = (ipc_entry_t)
-				ipc_splay_tree_lookup(&space->is_tree, name);
+	if (fget(curthread, name, NULL, &fp))
+		return (NULL);
 
-	assert((entry == IE_NULL) || IE_BITS_TYPE(entry->ie_bits));
-	return entry;
+	if (fp->f_type != DTYPE_MACH_IPC)
+		return (NULL);
+
+	return (fp->f_data);
 }
 
 /*
@@ -245,24 +187,27 @@ ipc_entry_get(
 
 	assert(space->is_active);
 
-	if (object != NULL && ipc_hash_local_lookup(space, object, namep, entryp))
+	if (object != NULL && ipc_hash_lookup(space, object, namep, entryp))
 		return (KERN_SUCCESS);
 
-	if ((free_entry = malloc(sizeof(*free_entry), M_DEVBUF, M_WAITOK)) == NULL)
+	ip_unlock((ipc_port_t)object);
+	if ((free_entry = malloc(sizeof(*free_entry), M_MACH, M_WAITOK)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
 	if (falloc(td, &fp, &fd, 0))
 		return KERN_RESOURCE_SHORTAGE;
 
-	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
-
 	free_entry->ie_bits = 0;
 	free_entry->ie_request = 0;
 	free_entry->ie_name = fd;
+	free_entry->ie_fp = fp;
+
+	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
 
 	*namep = fd;
 	*entryp = free_entry;
 
+	ip_lock((ipc_port_t)object);
 	return KERN_SUCCESS;
 }
 
@@ -319,13 +264,11 @@ ipc_entry_alloc_name(
 	mach_port_name_t	name,
 	ipc_entry_t	*entryp)
 {
-	mach_port_index_t index = MACH_PORT_INDEX(name);
-	mach_port_gen_t gen = MACH_PORT_GEN(name);
-	ipc_tree_entry_t tree_entry = ITE_NULL;
 
 	assert(MACH_PORT_NAME_VALID(name));
 
-
+	panic ("unsupported");
+#ifdef notyet
 	is_write_lock(space);
 
 	for (;;) {
@@ -350,9 +293,9 @@ ipc_entry_alloc_name(
 		 */
 
 		if ((0 < index) && (index < space->is_table_size)) {
-			ipc_entry_t table = space->is_table;
+			ipc_entry_t *table = space->is_table;
 
-			entry = &table[index];
+			entry = table[index];
 
 			if (IE_BITS_TYPE(entry->ie_bits)) {
 				if (IE_BITS_GEN(entry->ie_bits) == gen) {
@@ -400,25 +343,6 @@ ipc_entry_alloc_name(
 			return KERN_FAILURE;
 		}
 
-		/*
-		 *	Before trying to allocate any memory,
-		 *	check if the entry already exists in the tree.
-		 *	This avoids spurious resource errors.
-		 *	The splay tree makes a subsequent lookup/insert
-		 *	of the same name cheap, so this costs little.
-		 */
-
-		if ((space->is_tree_total > 0) &&
-		    ((tentry = ipc_splay_tree_lookup(&space->is_tree, name))
-							!= ITE_NULL)) {
-			assert(tentry->ite_space == space);
-			assert(IE_BITS_TYPE(tentry->ite_bits));
-
-			*entryp = &tentry->ite_entry;
-			if (tree_entry) ite_free(tree_entry);
-			return KERN_SUCCESS;
-		}
-
 		its = space->is_table_next;
 
 		/*
@@ -459,42 +383,10 @@ ipc_entry_alloc_name(
 			continue;
 		}
 
-		/*
-		 *	If a splay-tree entry was allocated previously,
-		 *	go ahead and insert it into the tree.
-		 */
 
-		if (tree_entry != ITE_NULL) {
-			space->is_tree_total++;
-
-			if (index < space->is_table_size)
-				space->is_table[index].ie_bits |=
-					IE_BITS_COLLISION;
-			else if ((index < its->its_size) &&
-				 !ipc_entry_tree_collision(space, name))
-				space->is_tree_small++;
-
-			ipc_splay_tree_insert(&space->is_tree,
-					      name, tree_entry);
-
-			tree_entry->ite_bits = 0;
-			tree_entry->ite_object = IO_NULL;
-			tree_entry->ite_request = 0;
-			tree_entry->ite_space = space;
-			*entryp = &tree_entry->ite_entry;
-			return KERN_SUCCESS;
-		}
-
-		/*
-		 *	Allocate a tree entry and try again.
-		 */
-
-		is_write_unlock(space);
-		tree_entry = ite_alloc();
-		if (tree_entry == ITE_NULL)
-			return KERN_RESOURCE_SHORTAGE;
 		is_write_lock(space);
 	}
+	#endif
 }
 
 /*
@@ -512,114 +404,16 @@ ipc_entry_dealloc(
 	mach_port_name_t	name,
 	ipc_entry_t	entry)
 {
-	ipc_entry_t table;
-	ipc_entry_num_t size;
-	mach_port_index_t index;
+	mach_port_index_t idx;
 
 	assert(space->is_active);
 	assert(entry->ie_object == IO_NULL);
 	assert(entry->ie_request == 0);
 
-
-	index = MACH_PORT_INDEX(name);
-	table = space->is_table;
-	size = space->is_table_size;
-
-
-	if (is_fast_space(space)) {
-		assert(index < size);
-		assert(entry == &table[index]);
-		assert(IE_BITS_GEN(entry->ie_bits) == MACH_PORT_GEN(name));
-		assert(!(entry->ie_bits & IE_BITS_COLLISION));
-		entry->ie_bits &= IE_BITS_GEN_MASK;
-		entry->ie_next = table->ie_next;
-		table->ie_next = index;
-		return;
-	}
-
-
-	if ((index < size) && (entry == &table[index])) {
-		assert(IE_BITS_GEN(entry->ie_bits) == MACH_PORT_GEN(name));
-
-		if (entry->ie_bits & IE_BITS_COLLISION) {
-			struct ipc_splay_tree small, collisions;
-			ipc_tree_entry_t tentry;
-			mach_port_name_t tname;
-			boolean_t pick;
-			ipc_entry_bits_t bits;
-			ipc_object_t obj;
-
-			/* must move an entry from tree to table */
-
-			ipc_splay_tree_split(&space->is_tree,
-					     MACH_PORT_MAKE(index+1, 0),
-					     &collisions);
-			ipc_splay_tree_split(&collisions,
-					     MACH_PORT_MAKE(index, 0),
-					     &small);
-
-			pick = ipc_splay_tree_pick(&collisions,
-						   &tname, &tentry);
-			assert(pick);
-			assert(MACH_PORT_INDEX(tname) == index);
-
-			bits = tentry->ite_bits;
-			entry->ie_bits = bits | MACH_PORT_GEN(tname);
-			entry->ie_object = obj = tentry->ite_object;
-			entry->ie_request = tentry->ite_request;
-			assert(tentry->ite_space == space);
-
-			if (IE_BITS_TYPE(bits) == MACH_PORT_TYPE_SEND) {
-				ipc_hash_global_delete(space, obj,
-						       tname, tentry);
-				ipc_hash_local_insert(space, obj,
-						      index, entry);
-			}
-
-			ipc_splay_tree_delete(&collisions, tname, tentry);
-
-			assert(space->is_tree_total > 0);
-			space->is_tree_total--;
-
-			/* check if collision bit should still be on */
-
-			pick = ipc_splay_tree_pick(&collisions,
-						   &tname, &tentry);
-			if (pick) {
-				entry->ie_bits |= IE_BITS_COLLISION;
-				ipc_splay_tree_join(&space->is_tree,
-						    &collisions);
-			}
-
-			ipc_splay_tree_join(&space->is_tree, &small);
-		} else {
-			entry->ie_bits &= IE_BITS_GEN_MASK;
-			entry->ie_next = table->ie_next;
-			table->ie_next = index;
-		}
-	} else {
-		ipc_tree_entry_t tentry = (ipc_tree_entry_t) entry;
-
-		assert(tentry->ite_space == space);
-
-		ipc_splay_tree_delete(&space->is_tree, name, tentry);
-
-		assert(space->is_tree_total > 0);
-		space->is_tree_total--;
-
-		if (index < size) {
-			ipc_entry_t ientry = &table[index];
-
-			assert(ientry->ie_bits & IE_BITS_COLLISION);
-
-			if (!ipc_entry_tree_collision(space, name))
-				ientry->ie_bits &= ~IE_BITS_COLLISION;
-		} else if ((index < space->is_table_next->its_size) &&
-			   !ipc_entry_tree_collision(space, name)) {
-			assert(space->is_tree_small > 0);
-			space->is_tree_small--;
-		}
-	}
+	idx = entry->ie_index;
+	if (idx < space->is_table_size && space->is_table[idx] == entry)
+		space->is_table[idx] = NULL;
+	fdrop(entry->ie_fp, curthread);
 }
 
 /*
@@ -646,9 +440,9 @@ ipc_entry_grow_table(
 	ipc_entry_num_t osize, size, nsize, psize;
 
 	do {
-		ipc_entry_t otable, table;
+		ipc_entry_t *otable, *table;
 		ipc_table_size_t oits, its, nits;
-		mach_port_index_t i, free_index;
+		mach_port_index_t i;
 
 		assert(space->is_active);
 
@@ -730,7 +524,7 @@ ipc_entry_grow_table(
 		 *	because we don't want them to spin.
 		 */
 
-		if (table == IE_NULL) {
+		if (table == NULL) {
 			is_write_unlock(space);
 #ifdef notyet
 			thread_wakeup((event_t) space);
@@ -774,190 +568,21 @@ ipc_entry_grow_table(
 			(void) memcpy((void *) table, (const void *) otable,
 			      osize * sizeof(struct ipc_entry));
 
-		for (i = 0; i < osize; i++)
-			table[i].ie_index = 0;
-
 		(void) memset((void *) (table + osize), 0,
-		      (size - osize) * sizeof(struct ipc_entry));
+		      (size - osize) * sizeof(struct ipc_entry *));
 
 		/*
 		 *	Put old entries into the reverse hash table.
 		 */
 
 		for (i = 0; i < osize; i++) {
-			ipc_entry_t entry = &table[i];
+			ipc_entry_t entry = table[i];
 
 			if (IE_BITS_TYPE(entry->ie_bits) ==
 						MACH_PORT_TYPE_SEND)
-				ipc_hash_local_insert(space, entry->ie_object,
+				ipc_hash_insert(space, entry->ie_object,
 						      i, entry);
 		}
-
-		/*
-		 *	If there are entries in the splay tree,
-		 *	then we have work to do:
-		 *		1) transfer entries to the table
-		 *		2) update is_tree_small
-		 */
-
-		assert(!is_fast_space(space) || space->is_tree_total == 0);
-		if (space->is_tree_total > 0) {
-			mach_port_index_t index;
-			boolean_t delete;
-			struct ipc_splay_tree ignore;
-			struct ipc_splay_tree move;
-			struct ipc_splay_tree small;
-			ipc_entry_num_t nosmall;
-			ipc_tree_entry_t tentry;
-
-			/*
-			 *	The splay tree divides into four regions,
-			 *	based on the index of the entries:
-			 *		1) 0 <= index < osize
-			 *		2) osize <= index < size
-			 *		3) size <= index < nsize
-			 *		4) nsize <= index
-			 *
-			 *	Entries in the first part are ignored.
-			 *	Entries in the second part, that don't
-			 *	collide, are moved into the table.
-			 *	Entries in the third part, that don't
-			 *	collide, are counted for is_tree_small.
-			 *	Entries in the fourth part are ignored.
-			 */
-
-			ipc_splay_tree_split(&space->is_tree,
-					     MACH_PORT_MAKE(nsize, 0),
-					     &small);
-			ipc_splay_tree_split(&small,
-					     MACH_PORT_MAKE(size, 0),
-					     &move);
-			ipc_splay_tree_split(&move,
-					     MACH_PORT_MAKE(osize, 0),
-					     &ignore);
-
-			/* move entries into the table */
-
-			for (tentry = ipc_splay_traverse_start(&move);
-			     tentry != ITE_NULL;
-			     tentry = ipc_splay_traverse_next(&move, delete)) {
-				mach_port_name_t name;
-				mach_port_gen_t gen;
-				mach_port_type_t type;
-				ipc_entry_bits_t bits;
-				ipc_object_t obj;
-				ipc_entry_t entry;
-
-				name = tentry->ite_name;
-				gen = MACH_PORT_GEN(name);
-				index = MACH_PORT_INDEX(name);
-
-				assert(tentry->ite_space == space);
-				assert((osize <= index) && (index < size));
-
-				entry = &table[index];
-
-				/* collision with previously moved entry? */
-
-				bits = entry->ie_bits;
-				if (bits != 0) {
-					assert(IE_BITS_TYPE(bits));
-					assert(IE_BITS_GEN(bits) != gen);
-
-					entry->ie_bits =
-						bits | IE_BITS_COLLISION;
-					delete = FALSE;
-					continue;
-				}
-
-				bits = tentry->ite_bits;
-				type = IE_BITS_TYPE(bits);
-				assert(type != MACH_PORT_TYPE_NONE);
-
-				entry->ie_bits = bits | gen;
-				entry->ie_object = obj = tentry->ite_object;
-				entry->ie_request = tentry->ite_request;
-
-				if (type == MACH_PORT_TYPE_SEND) {
-					ipc_hash_global_delete(space, obj,
-							       name, tentry);
-					ipc_hash_local_insert(space, obj,
-							      index, entry);
-				}
-
-				space->is_tree_total--;
-				delete = TRUE;
-			}
-			ipc_splay_traverse_finish(&move);
-
-			/* count entries for is_tree_small */
-
-			nosmall = 0; index = 0;
-			for (tentry = ipc_splay_traverse_start(&small);
-			     tentry != ITE_NULL;
-			     tentry = ipc_splay_traverse_next(&small, FALSE)) {
-				mach_port_index_t nindex;
-
-				nindex = MACH_PORT_INDEX(tentry->ite_name);
-
-				if (nindex != index) {
-					nosmall++;
-					index = nindex;
-				}
-			}
-			ipc_splay_traverse_finish(&small);
-
-			assert(nosmall <= (nsize - size));
-			assert(nosmall <= space->is_tree_total);
-			space->is_tree_small = nosmall;
-
-			/* put the splay tree back together */
-
-			ipc_splay_tree_join(&space->is_tree, &small);
-			ipc_splay_tree_join(&space->is_tree, &move);
-			ipc_splay_tree_join(&space->is_tree, &ignore);
-		}
-
-		/*
-		 *	Add entries in the new part which still aren't used
-		 *	to the free list.  Add them in reverse order,
-		 *	and set the generation number to -1, so that
-		 *	early allocations produce "natural" names.
-		 */
-
-		free_index = table[0].ie_next;
-		for (i = size-1; i >= osize; --i) {
-			ipc_entry_t entry = &table[i];
-
-			if (entry->ie_bits == 0) {
-				entry->ie_bits = IE_BITS_GEN_MASK;
-				entry->ie_next = free_index;
-				free_index = i;
-			}
-		}
-		table[0].ie_next = free_index;
-
-		/*
-		 *	Now we need to free the old table.
-		 *	If the space dies or grows while unlocked,
-		 *	then we can quit here.
-		 */
-
-		is_write_unlock(space);
-		thread_wakeup((event_t) space);
-		it_entries_free(oits, otable);
-		is_write_lock(space);
-		if (!space->is_active || (space->is_table_next != nits))
-			return KERN_SUCCESS;
-
-		/*
-		 *	We might have moved enough entries from
-		 *	the splay tree into the table that
-		 *	the table can be profitably grown again.
-		 *
-		 *	Note that if size == nsize, then
-		 *	space->is_tree_small == 0.
-		 */
 	} while ((space->is_tree_small > 0) &&
 		 (((nsize - size) * sizeof(struct ipc_entry)) <
 		  (space->is_tree_small * sizeof(struct ipc_tree_entry))));

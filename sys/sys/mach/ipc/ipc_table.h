@@ -150,20 +150,20 @@ extern void ipc_table_free(
 	vm_offset_t	table);
 
 #define	it_entries_alloc(its)						\
-	((ipc_entry_t)							\
-	 ipc_table_alloc((its)->its_size * sizeof(struct ipc_entry)))
+	((ipc_entry_t *)							\
+	 ipc_table_alloc((its)->its_size * sizeof(struct ipc_entry *)))
 
 #define it_entries_reallocable(its)					\
-	(((its)->its_size * sizeof(struct ipc_entry)) >= PAGE_SIZE)
+	(((its)->its_size * sizeof(struct ipc_entry *)) >= PAGE_SIZE)
 
 #define	it_entries_realloc(its, table, nits)				\
-	((ipc_entry_t)							\
-	 ipc_table_realloc((its)->its_size * sizeof(struct ipc_entry),	\
+	((ipc_entry_t *)							\
+	 ipc_table_realloc((its)->its_size * sizeof(struct ipc_entry *),	\
 			   (vm_offset_t)(table),			\
-			   (nits)->its_size * sizeof(struct ipc_entry)))
+			   (nits)->its_size * sizeof(struct ipc_entry *)))
 
 #define	it_entries_free(its, table)					\
-	ipc_table_free((its)->its_size * sizeof(struct ipc_entry),	\
+	ipc_table_free((its)->its_size * sizeof(struct ipc_entry *),	\
 		       (vm_offset_t)(table))
 
 #define	it_dnrequests_alloc(its)					\

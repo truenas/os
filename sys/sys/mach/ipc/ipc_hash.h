@@ -116,33 +116,6 @@ extern void ipc_hash_delete(
 	mach_port_name_t		name,
 	ipc_entry_t		entry);
 
-/*
- *	For use by functions that know what they're doing:
- *	the global primitives, for splay tree entries,
- *	and the local primitives, for table entries.
- */
-
-/* Delete an entry from the global reverse hash table */
-extern void ipc_hash_global_delete(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_name_t		name,
-	ipc_tree_entry_t	entry);
-
-/* Lookup (space, obj) in local hash table */
-extern boolean_t ipc_hash_local_lookup(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_name_t		*namep,
-	ipc_entry_t		*entryp);
-
-/* Inserts an entry into the local reverse hash table */
-extern void ipc_hash_local_insert(
-	ipc_space_t		space,
-	ipc_object_t		obj,
-	mach_port_index_t	index,
-	ipc_entry_t		entry);
-
 /* Initialize the reverse hash table implementation */
 extern void ipc_hash_init(void);
 
