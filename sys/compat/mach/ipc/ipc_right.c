@@ -668,9 +668,6 @@ ipc_right_destroy(
 			assert(ip_active(port));
 			assert(port->ip_receiver == space);
 
-			if (port->ip_subsystem)
-				subsystem_deallocate(
-					port->ip_subsystem->subsystem);
 			ipc_port_clear_receiver(port);
 			ipc_port_destroy(port); /* consumes our ref, unlocks */
 		} else if (type & MACH_PORT_TYPE_SEND_ONCE) {

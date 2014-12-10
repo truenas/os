@@ -180,15 +180,6 @@ typedef struct ipc_kmsg {
 #define	ikm_alloc(size)							\
 	((ipc_kmsg_t) kalloc(ikm_plus_overhead(size)))
 
-/*
- *	It's legal to ask whether a kmsg is RT-related even
- *	in a non-RT kernel configuration.  The answer is always no.
- *	But note that it's NOT legal to try to do KMSG_MARK_RT
- *	in a non-RT kernel configuration.
- */
-#define	KMSG_IS_RT(kmsg)	0
-
-
 #define	ikm_init(kmsg, size)						\
 MACRO_BEGIN								\
 	ikm_init_special((kmsg), ikm_plus_overhead(size));		\
@@ -216,16 +207,7 @@ MACRO_END
 #define	IKM_SIZE_NETWORK	-1
 #define	IKM_SIZE_INTR_KMSG	-2
 
-#define	ikm_free(kmsg)							\
-MACRO_BEGIN								\
-	register vm_size_t _size = (kmsg)->ikm_size;			\
-									\
-	if ((integer_t)_size > 0)					\
-		kfree((vm_offset_t) (kmsg), _size);			\
-	else								\
-		ipc_kmsg_free(kmsg);					\
-MACRO_END
-
+#define	ikm_free(kmsg)	ipc_kmsg_free(kmsg)
 
 struct ipc_kmsg_queue {
 	struct ipc_kmsg *ikmq_base;

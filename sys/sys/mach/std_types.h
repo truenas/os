@@ -117,10 +117,10 @@
 #define current_space() NULL
 #define zinit(size1, sizemax, size2, name) uma_zcreate(name, size1, NULL, NULL, NULL, NULL, 0, 0)
 #define zone_change(zone, flag, val)
-#define kalloc(size) malloc(size, M_DEVBUF, M_WAITOK)
-#define KALLOC(size, rt) ((vm_offset_t)malloc(size, M_DEVBUF, M_WAITOK))
-#define kfree(ptr, size) free((void *)(ptr), M_DEVBUF)
-#define KFREE(ptr, size, rt) free((void *)(ptr), M_DEVBUF)
+#define kalloc(size) malloc(size, M_MACH, M_WAITOK)
+#define KALLOC(size, rt) ((vm_offset_t)malloc(size, M_MACH, M_WAITOK))
+#define kfree(ptr, size) free((void *)(ptr), M_MACH)
+#define KFREE(ptr, size, rt) free((void *)(ptr), M_MACH)
 #define copyinmsg copyin
 #define copyoutmsg copyout
 /* drop reference */
@@ -134,7 +134,6 @@
 #define vm_map_copy_steal_pages(copy)
 #define thread_deallocate(thread)
 #define task_name_deallocate(task)
-#define subsystem_deallocate(sub)
 #define assert_wait(a, b)
 #define vm_map_copy_discard(map)
 #define cpu_number() curcpu

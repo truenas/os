@@ -467,12 +467,10 @@ ipc_kmsg_clean_body(
 	mach_msg_type_number_t	number)
 {
     mach_msg_descriptor_t 	*saddr, *eaddr;
-    boolean_t			rt;
 
     if ( number == 0 )
 	return;
 
-    rt = KMSG_IS_RT(kmsg);
     saddr = (mach_msg_descriptor_t *) 
 			((mach_msg_base_t *) &kmsg->ikm_header + 1);
     eaddr = saddr + number;
@@ -676,23 +674,11 @@ ipc_kmsg_get(
 
 	msg_and_trailer_size = size + MAX_TRAILER_SIZE;
 
-	if (msg_and_trailer_size <= IKM_SAVED_MSG_SIZE) {
-		if (
-		    ikm_cache_get(&kmsg)) {
-			ikm_check_initialized(kmsg, IKM_SAVED_KMSG_SIZE);
-		} else {
-				kmsg = ikm_alloc(IKM_SAVED_MSG_SIZE);
-			if (kmsg == IKM_NULL)
-				return MACH_SEND_NO_BUFFER;
-			ikm_init(kmsg, IKM_SAVED_MSG_SIZE);
-		}
-	} else {
-			kmsg = ikm_alloc(msg_and_trailer_size);
+	kmsg = ikm_alloc(msg_and_trailer_size);
 
-		if (kmsg == IKM_NULL)
-			return MACH_SEND_NO_BUFFER;
+	if (kmsg == IKM_NULL)
+		return MACH_SEND_NO_BUFFER;
 		ikm_init(kmsg, msg_and_trailer_size);
-	}
 
 	if (copyinmsg((char *) msg, (char *) &kmsg->ikm_header, size)) {
 		ikm_free(kmsg);
@@ -803,9 +789,7 @@ ipc_kmsg_put(
 	else
 		mr = MACH_MSG_SUCCESS;
 
-	if (kmsg->ikm_size != IKM_SAVED_KMSG_SIZE ||
-	    KMSG_IS_RT(kmsg) ||
-	    !ikm_cache_put(kmsg))
+	if (kmsg->ikm_size != IKM_SAVED_KMSG_SIZE)
 		ikm_free(kmsg);
 
 	return mr;
@@ -2784,106 +2768,6 @@ ipc_kmsg_check_scatter(
 
 	return(mr);
 }
-
-
-/*
- *	We keep a per-processor cache of kernel message buffers.
- *	The cache saves the overhead/locking of using kalloc/kfree.
- *	The per-processor cache seems to miss less than a per-thread cache,
- *	and it also uses less memory.  Access to the cache doesn't
- *	require locking.
- */
-#define IKM_STASH 16	/* # of cache entries per cpu */
-ipc_kmsg_t	ipc_kmsg_cache[ NCPUS ][ IKM_STASH ];
-unsigned int	ipc_kmsg_cache_avail[NCPUS];
-counter(unsigned int	c_ipc_kmsg_cache_tries = 0;)
-counter(unsigned int	c_ipc_kmsg_cache_misses = 0;)
-
-/*
- *	Routine:	ikm_cache_get
- *	Purpose:	Attempt to allocate from the per-cpu IKM cache.
- *	Conditions:	Nothing locked.
- *
- *	If the IKM cache for the current cpu is not empty, this routine
- *	will return the address of the block, nulling out the cache.
- *	TRUE is returned for success, FALSE for failure.
- *	Preemption must be disabled while in here.
- */
-
-boolean_t
-ikm_cache_get(
-	ipc_kmsg_t	* kmsg)
-{
-	register unsigned int	cpu, i;
-
-	counter(++c_ipc_kmsg_cache_tries);
-	disable_preemption();
-	cpu = cpu_number();
-
-	if (ipc_kmsg_cache_avail[cpu]) {
-		for (i = 0; i < IKM_STASH; i++) {
-			if ((*kmsg = ipc_kmsg_cache[cpu][i]) != NULL ) {
-				ipc_kmsg_cache[cpu][i] = IKM_NULL;
-				ipc_kmsg_cache_avail[cpu]--;
-				enable_preemption();
-				return(TRUE);
-			}
-		}
-	}
-
-	enable_preemption();
-	counter(++c_ipc_kmsg_cache_misses);
-	return(FALSE);
-}
-
-/*
- *	Routine:	ikm_cache_put
- *	Purpose:	Attempt to free a block to the per-cpu IKM cache.
- *	Conditions:	Nothing locked.
- *
- *	If the IKM cache for the current cpu is empty, this routine
- *	will store its argument into the cache.
- *	TRUE is returned for success, FALSE for failure.
- *	Preemption must be disabled while in here.
- */
-
-boolean_t
-ikm_cache_put(
-	ipc_kmsg_t	kmsg)
-{
-	unsigned int	cpu, i;
-
-	disable_preemption();
-	cpu = cpu_number();
-
-	if (ipc_kmsg_cache_avail[cpu] < IKM_STASH) {
-		for (i = 0; i < IKM_STASH; i++) {
-			if (ipc_kmsg_cache[cpu][i] == IKM_NULL) {
-				ipc_kmsg_cache[cpu][i] = kmsg;
-				ipc_kmsg_cache_avail[cpu]++;
-				enable_preemption();
-				return(TRUE);
-			}
-		}
-	}
-
-	enable_preemption();
-	return(FALSE);
-}
-
-
-void
-ikm_cache_init()
-{
-	unsigned int	cpu, i;
-
-	for (cpu = 0; cpu < NCPUS; ++cpu) {
-		ipc_kmsg_cache_avail[cpu] = 0;
-		for (i = 0; i < IKM_STASH; ++i)
-			ipc_kmsg_cache[cpu][i] = IKM_NULL;
-	}
-}
-
 
 /*
  *	Routine:	ipc_kmsg_copyout_to_kernel

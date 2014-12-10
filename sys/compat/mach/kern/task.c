@@ -415,22 +415,6 @@ unsigned	int sched_ticks;
 task_t	kernel_task;
 uma_zone_t	task_zone;
 
-#if 0
-/*
- * Define glue vector used by short-circuited RPC, and a pointer
- * to it.
- */
-static struct rpc_glue_vector _rpc_glue_vector_data = {
-	machine_rpc_simple,	/* migrate shuttle to server */
-	klcopyin,		/* short-circuit server copyin */
-	klcopyout,		/* short-circuit server copyout */
-	klcopyinstr,		/* short-circuit server klcopyinstr */
-	klthread_switch,	/* short-circuit user thread_switch */
-	klthread_depress_abort,	/* short-circuit user thread_depress_abort */
-};
-rpc_glue_vector_t _rpc_glue_vector = &_rpc_glue_vector_data;
-#endif
-
 /* Forwards */
 
 kern_return_t	task_hold_locked(

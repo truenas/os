@@ -153,7 +153,6 @@ int ipc_port_max = PORT_MAX;
 int ipc_pset_max = SET_MAX;
 
 extern void mig_init(void);
-extern void ikm_cache_init(void);
 
 /*
  *	Routine:	ipc_bootstrap
@@ -233,7 +232,6 @@ ipc_bootstrap(void)
 	ipc_table_init();
 	ipc_notify_init();
 	ipc_hash_init();
-	ikm_cache_init();
 }
 
 /* 

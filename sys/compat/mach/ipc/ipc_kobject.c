@@ -433,10 +433,8 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		 */
 
 		ikm_check_initialized(request, request->ikm_size);
-		if (request->ikm_size != IKM_SAVED_KMSG_SIZE ||
-			!ikm_cache_put (request)) {
+		if (request->ikm_size != IKM_SAVED_KMSG_SIZE)
 			ikm_free(request);
-		}
 	} else {
 		/*
 		 *	The message contents of the request are intact.
