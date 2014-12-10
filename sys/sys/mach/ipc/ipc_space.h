@@ -124,10 +124,10 @@ struct ipc_space {
 	decl_mutex_data(,is_ref_lock_data)
 	ipc_space_refs_t is_references;
 
-	decl_mutex_data(,is_lock_data)
+	struct sx is_lock_data;
 	boolean_t is_active;		/* is the space alive? */
 	boolean_t is_growing;		/* is the space growing? */
-	ipc_entry_t is_table;		/* an array of entries */
+	ipc_entry_t *is_table;		/* an array of entries */
 	ipc_entry_num_t is_table_size;	/* current size of table */
 	struct ipc_table_size *is_table_next; /* info for larger table */
 	struct ipc_splay_tree is_tree;	/* a splay tree of entries */
@@ -173,16 +173,16 @@ MACRO_BEGIN								\
 		is_free(is);		\
 MACRO_END
 
-#define	is_lock_init(is)	mutex_init(&(is)->is_lock_data, "ETAP_IPC_IS")
+#define	is_lock_init(is)	sx_init(&(is)->is_lock_data, "ETAP_IPC_IS")
 
-#define	is_read_lock(is)	mtx_lock(&(is)->is_lock_data)
-#define is_read_unlock(is)	mtx_unlock(&(is)->is_lock_data)
+#define	is_read_lock(is)	sx_slock(&(is)->is_lock_data)
+#define is_read_unlock(is)	sx_sunlock(&(is)->is_lock_data)
 
-#define	is_write_lock(is)	mtx_lock(&(is)->is_lock_data)
-#define	is_write_lock_try(is)	mtx_trylock(&(is)->is_lock_data)
-#define is_write_unlock(is)	mtx_unlock(&(is)->is_lock_data)
+#define	is_write_lock(is)	sx_xlock(&(is)->is_lock_data)
+#define	is_write_lock_try(is)	sx_tryxlock(&(is)->is_lock_data)
+#define is_write_unlock(is)	sx_xunlock(&(is)->is_lock_data)
 
-#define	is_write_to_read_lock(is)
+#define	is_write_to_read_lock(is) sx_downgrade(&(is)->is_lock_data)
 
 /* Take a reference on a space */
 extern void ipc_space_reference(

@@ -172,6 +172,7 @@
 
 #include <sys/lock.h>
 #include <sys/mutex.h>
+#include <sys/sx.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
