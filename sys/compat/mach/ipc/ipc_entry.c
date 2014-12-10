@@ -115,13 +115,6 @@ struct fileops mach_fileops  = {
 	.fo_close = mach_port_close
 };
 
-
-/* XXX */
-#define thread_wakeup(x) 
-
-uma_zone_t ipc_tree_entry_zone;
-
-
 static int
 mach_port_close(struct file *fp, struct thread *td __unused)
 {
@@ -151,10 +144,7 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 
 	assert(space->is_active);
 
-	if (fget(curthread, name, NULL, &fp))
-		return (NULL);
-
-	if (fp->f_type != DTYPE_MACH_IPC)
+	if (fget(curthread, name, NULL, &fp) || fp->f_type != DTYPE_MACH_IPC)
 		return (NULL);
 
 	return (fp->f_data);
@@ -232,15 +222,17 @@ ipc_entry_alloc(
 	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp)
 {
+	kern_return_t kr;
 
 	is_write_lock(space);
-
 	if (!space->is_active) {
 		is_write_unlock(space);
 		return KERN_INVALID_TASK;
 	}
 
-	return (ipc_entry_get(space, is_send_once, namep, entryp, NULL));
+	kr = ipc_entry_get(space, is_send_once, namep, entryp, NULL);
+	is_write_unlock(space);
+	return (kr);
 }
 
 /*
@@ -405,14 +397,26 @@ ipc_entry_dealloc(
 	ipc_entry_t	entry)
 {
 	mach_port_index_t idx;
+	ipc_entry_t entryp;
 
 	assert(space->is_active);
 	assert(entry->ie_object == IO_NULL);
 	assert(entry->ie_request == 0);
 
 	idx = entry->ie_index;
-	if (idx < space->is_table_size && space->is_table[idx] == entry)
-		space->is_table[idx] = NULL;
+	if (idx < space->is_table_size) {
+		if ((entryp = space->is_table[idx]) == entry)
+			space->is_table[idx] = entry->ie_link;
+		else {
+			while (entryp->ie_link != NULL) {
+				if (entryp->ie_link == entry) {
+					entryp->ie_link = entry->ie_link;
+					break;
+				}
+				entryp = entryp->ie_link;
+			}
+		}
+	}
 	fdrop(entry->ie_fp, curthread);
 }
 
