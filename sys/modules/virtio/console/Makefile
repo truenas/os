@@ -1,7 +1,5 @@
-#!/bin/sh
 #
-# Copyright (c) 2012 Edward Tomasz Napierała <trasz@FreeBSD.org>
-# All rights reserved.
+# $FreeBSD$
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -24,24 +22,15 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-# $FreeBSD$
-#
 
-# This is a wrapper script to run mdconfig.test.
+.PATH: ${.CURDIR}/../../../dev/virtio/console
 
-echo "1..1"
+KMOD=	virtio_console
+SRCS=	virtio_console.c
+SRCS+=	virtio_bus_if.h virtio_if.h
+SRCS+=	bus_if.h device_if.h
 
-if [ `whoami` != "root" ]; then
-	echo "ok 1 # skip You need to be root to run this test."
-	exit 0
-fi
+MFILES=	kern/bus_if.m kern/device_if.m \
+	dev/virtio/virtio_bus_if.m dev/virtio/virtio_if.m
 
-TESTDIR=$(dirname $(realpath $0))
-
-__PERL__ -w -U $TESTDIR/run.pl $TESTDIR/mdconfig.test > /dev/null
-
-if [ $? -eq 0 ]; then
-	echo "ok 1"
-else
-	echo "not ok 1"
-fi
+.include <bsd.kmod.mk>
