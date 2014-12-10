@@ -205,7 +205,7 @@ ipc_table_alloc(
 	vm_size_t	size)
 {
 
-	return ((vm_offset_t)malloc(size, M_DEVBUF, M_ZERO|M_WAITOK));
+	return ((vm_offset_t)malloc(size, M_MACH, M_ZERO|M_WAITOK));
 }
 
 /*
@@ -222,12 +222,12 @@ ipc_table_alloc(
 
 vm_offset_t
 ipc_table_realloc(
-	vm_size_t	old_size,
+	vm_size_t	old_size __unused,
 	vm_offset_t	old_table,
 	vm_size_t	new_size)
 {
 
-	return ((vm_offset_t)realloc((void*)old_table, new_size, M_DEVBUF, M_WAITOK|M_ZERO));
+	return ((vm_offset_t)realloc((void*)old_table, new_size, M_MACH, M_WAITOK));
 }
 
 /*
@@ -241,8 +241,9 @@ ipc_table_realloc(
 
 void
 ipc_table_free(
-	vm_size_t	size,
+	vm_size_t	size __unused,
 	vm_offset_t	table)
 {
-		kfree(table, size);
+
+	free((void *)table, M_MACH);
 }
