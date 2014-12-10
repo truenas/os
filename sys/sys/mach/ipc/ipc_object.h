@@ -146,39 +146,14 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 #define	io_alloc(otype)		\
 	((ipc_object_t) uma_zalloc(ipc_object_zones[(otype)], M_WAITOK))
 
-#if	DIPC || MACH_ASSERT
-/*
- *	DIPC must intercept the call to deallocate the IPC
- *	object in case the object in question is a port with
- *	a dipc_port extension.
- */
-extern void	io_free(
-			unsigned int	otype,
-			ipc_object_t	object);
-
-#else	/* DIPC || MACH_ASSERT */
 #define	io_free(otype, io)	\
 		uma_zfree(ipc_object_zones[(otype)], (io))
-#endif	/* DIPC || MACH_ASSERT */
 /*
  * Here we depend on the ipc_object being first within the ipc_common_data,
  * which is first within the rpc_common_data, which in turn must be first
  * within any kernel data structure needing to lock an ipc_object
  * (ipc_port and ipc_pset).
  */
-#if	DIPC && NCPUS == 1
-
-#define io_lock_init(io) \
-	usimple_lock_init(&((rpc_common_t)(io))->rcd_io_lock_data,	\
-			  ETAP_IPC_OBJECT)
-#define	io_lock(io) \
-	usimple_lock(&((rpc_common_t)(io))->rcd_io_lock_data)
-#define	io_lock_try(io) \
-	usimple_lock_try(&((rpc_common_t)(io))->rcd_io_lock_data)
-#define	io_unlock(io) \
-	usimple_unlock(&((rpc_common_t)(io))->rcd_io_lock_data)
-
-#else	/* DIPC  && NCPUS == 1 */
 
 #define io_lock_init(io) \
 	mtx_init(&((rpc_common_t)(io))->rcd_io_lock_data, "ETAP_IPC_RPC", NULL, MTX_DEF)
@@ -189,9 +164,7 @@ extern void	io_free(
 #define	io_unlock(io) \
 	mtx_unlock(&((rpc_common_t)(io))->rcd_io_lock_data)
 
-#endif	/* DIPC && NCPUS == 1 */
-
-#if	NCPUS > 1
+#ifdef SMP
 #define _VOLATILE_ volatile
 #else	/* NCPUS > 1 */
 #define _VOLATILE_
@@ -329,11 +302,6 @@ extern kern_return_t ipc_object_rename(
 	mach_port_name_t	oname,
 	mach_port_name_t	nname);
 
-#if	MACH_RT
-/* Determine if an object is real-time */
-extern boolean_t ipc_object_is_rt(
-	ipc_object_t	object);
-#endif	/* MACH_RT */
 
 #if	MACH_KDB
 /* Pretty-print an ipc object */

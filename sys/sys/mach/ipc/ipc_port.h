@@ -259,41 +259,6 @@ struct ipc_port {
 	struct ipc_thread_queue ip_blocked;
 	ipc_port_flags_t ip_flags;
 
-#if	NORMA_VM
-	/*
-	 *	These fields are needed for the use of XMM.
-	 *	Few ports need this information; it should
-	 *	be kept in XMM instead (TBD).  XXX
-	 */
-	long		ip_norma_xmm_object_refs;
-	struct ipc_port	*ip_norma_xmm_object;
-#endif
-
-#if	DIPC
-	/*
-	 *	Additional information necessary for distributing
-	 *	port state between nodes is attached on a per-port
-	 *	basis when a port is first made available remotely.
-	 *	Strictly local ports only pay the overhead of this
-	 *	(null) pointer.
-	 *
-	 *	However, in the distributed case, locking rules
-	 *	change for some of the existing fields in the local
-	 *	port structure, particularly the blocked receivers
-	 *	queue.  Consult dipc/dipc_port.h for details.
-	 */
-	struct dipc_port *ip_dipc;
-#endif
-
-#if	MACH_ASSERT
-#define	IP_NSPARES		10
-#define	IP_CALLSTACK_MAX	10
-	queue_chain_t	ip_port_links;	/* all allocated ports */
-	natural_t	ip_thread;	/* who made me?  thread context */
-	unsigned long	ip_timetrack;	/* give an idea of "when" created */
-	natural_t	ip_callstack[IP_CALLSTACK_MAX]; /* stack trace */
-	unsigned long	ip_spares[IP_NSPARES]; /* for debugging */
-#endif	/* MACH_ASSERT */
 };
 
 
@@ -319,37 +284,12 @@ struct ipc_port {
 #define	ip_lock_init(port)	io_lock_init(&(port)->ip_object)
 #define	ip_lock(port)		io_lock(&(port)->ip_object)
 #define	ip_lock_try(port)	io_lock_try(&(port)->ip_object)
-#if	DIPC
-/*
- *	DIPC reference counting works slightly differently
- *	than regular old local IPC.  In the ordinary case,
- *	local IPC is correct to assume that any send or
- *	send-once right resides in a port that also has
- *	a receive right.  If the port is alive, then in
- *	certain cases local IPC can safely decrement the
- *	port reference count but still be sure that the
- *	port has enough references to remain intact.
- *
- *	In DIPC, a proxy can have a a send right or send-
- *	once right, with no receive right.  Thus, cases
- *	in local IPC that didn't need to check after
- *	decrementing the reference count must now do so.
- */
-#define	ip_unlock(port)		ip_check_unlock(port)
-#define	ip_unlock_absolute(port) io_unlock(&(port)->ip_object)
-#else	/* DIPC */
 #define	ip_unlock(port)		io_unlock(&(port)->ip_object)
-#endif	/* DIPC */
 #define	ip_check_unlock(port)	io_check_unlock(&(port)->ip_object)
 #define	ip_reference(port)	io_reference(&(port)->ip_object)
 #define	ip_release(port)	io_release(&(port)->ip_object)
 
 #define	ip_kotype(port)		io_kotype(&(port)->ip_object)
-
-#if	MACH_RT
-#define	IPC_PORT_FLAGS_RT ((ipc_port_flags_t)(1 << 0))
-#define IP_RT(port) (((port)->ip_flags & IPC_PORT_FLAGS_RT) != 0)
-#endif	/* MACH_RT */
 
 /*
  *	No more senders information.
@@ -634,30 +574,10 @@ extern void ipc_port_debug_init(void);
  *	can be made by the distributed IPC subsystem that the port
  *	will not migrate after this call completes.
  *
-#if	DIPC
- *	A local receive right is a principal; a remote receive
- *	right is represented locally by a proxy.
-#endif
  */
 
-#if	DIPC
-/*
- * Avoid mutual recursion with dipc include files.  These functions are
- * also defined in dipc/dipc_funcs.h.
- */
-#include <dipc/dipc_types.h>
-extern node_name	dipc_node_self(void);
-extern node_name	dipc_port_destination(ipc_port_t	port);
-extern boolean_t	dipc_is_remote(	ipc_port_t	port);
-
-#define	IP_IS_REMOTE(port)		dipc_is_remote(port)
-#define	IP_PORT_NODE(port)		dipc_port_destination(port)
-#define IP_WAS_REMOTE(port)		(DIPC_ORIGIN_NODE(port) != \
-    						dipc_node_self())
-#else	/* DIPC */
 #define	IP_IS_REMOTE(port)		FALSE
 #define	IP_PORT_NODE(port)		node_self()
 #define IP_WAS_REMOTE(port)		FALSE
-#endif	/* DIPC */
 
 #endif	/* _IPC_IPC_PORT_H_ */

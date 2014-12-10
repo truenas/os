@@ -135,14 +135,7 @@
 #include <kern/macro_help.h>
 #include <kern/kalloc.h>
 #endif
-#if	MACH_RT
-#include <kern/rtalloc.h>
-#endif	/* MACH_RT */
 #include <sys/mach/ipc/ipc_object.h>
-
-#if	DIPC
-#include <dipc/dipc_types.h>		/* for handle_t definition */
-#endif	/* DIPC */
 
 /*
  *	This structure is only the header for a kmsg buffer;
@@ -156,34 +149,10 @@
  *	of the message.
  */
 
-#if	DIPC
-/*
- *	Refer to dipc/dipc_kmsg.h for a description of the
- *	meta_kmsg, a placeholder used to enqueue sufficient
- *	information about a kmsg to retrieve it from a
- *	remote sender.  Also look in that file for a description
- *	of the changes in use of certain kmsg fields during
- *	the DIPC receiving process.
- *
- *	The ikm_handle links the local kmsg (or meta_kmsg) to
- *	the remote sender's kmsg.  Unfortunately, it just isn't
- *	possible to overload one of the kmsg fields with the
- *	handle.  We can't overload the next and prev pointers
- *	or the ikm_size field because this information is all
- *	needed while the message is enqueued.  The size in the
- *	message header could be stolen but not easily:  then it
- *	is difficult to have a queued, inline kmsg that still
- *	has remote components.
- */
-#endif	/* DIPC */
-
 typedef struct ipc_kmsg {
 	struct ipc_kmsg *ikm_next, *ikm_prev;
 	vm_size_t ikm_size;
 	vm_offset_t ikm_private;		/* allocator-private info */
-#if	DIPC
-	handle_t ikm_handle;
-#endif	/* DIPC */
 	mach_msg_header_t ikm_header;
 } *ipc_kmsg_t;
 
@@ -211,18 +180,6 @@ typedef struct ipc_kmsg {
 #define	ikm_alloc(size)							\
 	((ipc_kmsg_t) kalloc(ikm_plus_overhead(size)))
 
-#if	MACH_RT
-
-#define	ikm_rtalloc(size)						\
-	((ipc_kmsg_t) rtalloc(ikm_plus_overhead(size)))
-
-#define	KMSG_IS_RT(kmsg)						\
-	((kmsg)->ikm_header.msgh_bits & MACH_MSGH_BITS_RTALLOC)
-#define	KMSG_MARK_RT(kmsg)						\
-	((kmsg)->ikm_header.msgh_bits |= MACH_MSGH_BITS_RTALLOC)
-
-#else	/* MACH_RT */
-
 /*
  *	It's legal to ask whether a kmsg is RT-related even
  *	in a non-RT kernel configuration.  The answer is always no.
@@ -231,31 +188,16 @@ typedef struct ipc_kmsg {
  */
 #define	KMSG_IS_RT(kmsg)	0
 
-#endif	/* MACH_RT */
 
 #define	ikm_init(kmsg, size)						\
 MACRO_BEGIN								\
 	ikm_init_special((kmsg), ikm_plus_overhead(size));		\
 MACRO_END
 
-#if	DIPC
-/*
- *	The msgh_bits must be initialized to zero so that
- *	the MACH_MSGH_BITS_META_KMSG flag is initialized
- *	to FALSE.  This might be worth making the default
- *	for the non-DIPC case, too.
- */
-#define	ikm_init_special(kmsg, size)					\
-MACRO_BEGIN								\
-	(kmsg)->ikm_size = (size);					\
-	(kmsg)->ikm_header.msgh_bits = 0;				\
-MACRO_END
-#else	/* !DIPC */
 #define	ikm_init_special(kmsg, size)					\
 MACRO_BEGIN								\
 	(kmsg)->ikm_size = (size);					\
 MACRO_END
-#endif	/* DIPC */
 
 #define	ikm_check_initialized(kmsg, size)				\
 MACRO_BEGIN								\
@@ -274,23 +216,6 @@ MACRO_END
 #define	IKM_SIZE_NETWORK	-1
 #define	IKM_SIZE_INTR_KMSG	-2
 
-#if	MACH_RT
-
-#define	ikm_free(kmsg)							\
-MACRO_BEGIN								\
-	register vm_size_t _size = (kmsg)->ikm_size;			\
-									\
-	if ((integer_t)_size > 0)					\
-		if (KMSG_IS_RT(kmsg))					\
-			rtfree((vm_offset_t) (kmsg), _size);		\
-		else					    		\
-			kfree((vm_offset_t) (kmsg), _size);		\
-	else								\
-		ipc_kmsg_free(kmsg);					\
-MACRO_END
-
-#else	/* MACH_RT */
-
 #define	ikm_free(kmsg)							\
 MACRO_BEGIN								\
 	register vm_size_t _size = (kmsg)->ikm_size;			\
@@ -300,8 +225,6 @@ MACRO_BEGIN								\
 	else								\
 		ipc_kmsg_free(kmsg);					\
 MACRO_END
-
-#endif	/* MACH_RT */
 
 
 struct ipc_kmsg_queue {

@@ -84,7 +84,6 @@
 
 #ifndef	STD_TYPES_H_
 #define	STD_TYPES_H_
-#define DIPC 0
 #define MACH_KDB 0
 #define MACH_COUNTERS 0
 #include <sys/mach/kern_return.h>

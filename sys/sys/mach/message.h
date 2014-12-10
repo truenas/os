@@ -115,16 +115,11 @@
 #ifndef	_MACH_MESSAGE_H_
 #define _MACH_MESSAGE_H_
 
-#define DIPC 0
 #define MACH_ASSERT 0
-#define MACH_RT 0
 #define MACH_KDB 0
-#define NCPUS 1
+#define NCPUS (SMP ? 32 : 1)
 #define NORMA_VM 0
 
-#ifdef	MACH_KERNEL
-#include <dipc.h>
-#endif	/* MACH_KERNEL */
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/param.h>
@@ -185,77 +180,9 @@ typedef char *mach_msg_trailer_info_t;
 #define MACH_MSGH_BITS_COMPLEX		0x80000000U
 #define	MACH_MSGH_BITS_CIRCULAR		0x40000000	/* internal use only */
 #define	MACH_MSGH_BITS_RTALLOC		0x20000000	/* internal use only */
-#if	DIPC
-/*
- *	These definitions could be common among	DIPC and !DIPC.
- *
- *	MACH_MSGH_BITS_DIPC_FORMAT means that the kmsg has been converted
- *	from local format to "network" format.  In particular, ports
- *	have been replaced by UIDs.
- *
- *	MACH_MSGH_BITS_META_KMSG means that the ksmg is not a real
- *	kmsg but is in fact a meta_kmsg.  The real kmsg is still on
- *	the sending node.
- *
- *	MACH_MSGH_BITS_MIGRATING means that the message was enqueued
- *	on another node and is being forwarded as part of a receive
- *	right migration operation.
- *
- *	MACH_MSGH_BITS_SENDER_WAITING means that the calling thread on
- *	the sending node is blocked waiting for the message to be
- *	received ***and processed*** by the receiver.  This case only
- *	applies under certain conditions, for messages destined to
- *	the kernel on the receiving node.  The caller synchronizes
- *	using this bit:  when the caller awakens, the caller checks
- *	whether this bit has been cleared.
- *
- *	MACH_MSGH_BITS_PLACEHOLDER means that the message (usually
- *	a meta_kmsg) is being used as a placeholder on the proxy's
- *	message queue while a kmsg is being sent to the principal.
- *
- *	MACH_MSGH_BITS_LOCAL_NMS means that the message contains
- *	a msg_local_port that has no more senders detection enabled
- *	on it.  This bit is carried over the wire in case the node
- *	receiving this message has never seen the port before.  We
- *	don't need a comparable bit for the destination port because
- *	it is a proxy for an existing receive right.
- *
- *	MACH_MSGH_BITS_HANDLE means that the meta-kmsg or kmsg
- *	contains a KKT handle.
- *
- *	MACH_MSGH_BITS_RECEIVING, when set, means that the kmsg
- *	is being handled on the receive-side of the world.  When
- *	clear, the kmsg is being handled on the send-side of the
- *	world.  This fact is important because of the bookkeeping
- *	tricks we play overloading various kmsg fields with
- *	transient data.
- *
- *	MACH_MSGH_BITS_REF_CONVERT, when set, means the reference
- *	counts on the port a kmsg is to be queued on need to be
- *	converted from a dipc port reference to a port reference
- *	(accomplished with dipc_uid_port_reference() ).
- */
-#define	MACH_MSGH_BITS_DIPC_FORMAT	0x10000000	/* internal use only */
-#define	MACH_MSGH_BITS_META_KMSG	0x08000000	/* internal use only */
-#define	MACH_MSGH_BITS_MIGRATING	0x04000000	/* internal use only */
-#define	MACH_MSGH_BITS_SENDER_WAITING	0x02000000	/* internal use only */
-#define	MACH_MSGH_BITS_PLACEHOLDER	0x01000000	/* internal use only */
-#define	MACH_MSGH_BITS_COMPLEX_OOL	0x00800000	/* internal use only */
-#define	MACH_MSGH_BITS_LOCAL_NMS	0x00400000	/* internal use only */
-#define	MACH_MSGH_BITS_HAS_HANDLE	0x00200000	/* internal use only */
-#define	MACH_MSGH_BITS_RECEIVING	0x00100000	/* internal use only */
-#define	MACH_MSGH_BITS_REF_CONVERT	0x00080000	/* internal use only */
-#define	MACH_MSGH_BITS_RPC		0x00040000	/* internal use only */
-#define	MACH_MSGH_BITS_CONNECTING	0x00020000	/* internal use only */
-#define	MACH_MSGH_BITS_CONNECT_WAIT	0x00010000	/* internal use only */
-#define	MACH_MSGH_BITS_DIPC_EXPANSION	0x00000000	/* sorry, none left */
-#define	MACH_MSGH_DIPC_BITS		0x1fff0000	/* internal use only */
-#define	MACH_MSGH_BITS_UNUSED		0x00000000	/* internal use only */
-#else	/* DIPC */
 #define	MACH_MSGH_BITS_UNUSED		0x1fff0000
-#endif	/* DIPC */
 
-#define	MACH_MSGH_BITS_PORTS_MASK				\
+#define	MACH_MSGH_BITS_PORTS_MASK								\
 		(MACH_MSGH_BITS_REMOTE_MASK|MACH_MSGH_BITS_LOCAL_MASK)
 
 #define MACH_MSGH_BITS(remote, local)				\
@@ -321,28 +248,8 @@ typedef unsigned int mach_msg_copy_options_t;
 #ifdef  _KERNEL
 #define MACH_MSG_KALLOC_COPY_T		4
 #define MACH_MSG_PAGE_LIST_COPY_T	5
-#if	DIPC
-#define MACH_MSG_OVERWRITE_DIPC		6
-#endif	/* DIPC */
 #endif  /* MACH_KERNEL */
 
-
-#if	DIPC
-/*
- *	WARNINGS!
- *
- *	The MACH_MSG_OOL_VOLATILE_DESCRIPTOR is equivalent to
- *	MACH_MSG_OOL_DESCRIPTOR for all kernel configurations
- *	except DIPC.  Note that using the physical copy option
- *	effectively turns a VOLATILE descriptor into an
- *	ordinary one.
- *
- *	DIPC steals bits from the type field of type
- *	descriptors.  Adding additional type
- *	descriptors, above, therefore may conflict
- *	with DIPC bits (defined below).
- */
-#endif	/* DIPC */
 
 typedef unsigned int mach_msg_descriptor_type_t;
 
@@ -402,31 +309,6 @@ typedef union
   mach_msg_type_descriptor_t		type;
 } mach_msg_descriptor_t;
 
-#if	DIPC
-/*
- *	The type field currently only requires the
- *	low-order two bits to represent the various
- *	possible types.  DIPC steals some of the upper
- *	bits for its own purposes.
- *
- *	DIPC_FORMAT_DESCRIPTOR indicates that the
- *	type descriptor has been converted from local
- *	format to network format.  A port is converted
- *	to a UID, etc.
- *
- *	DIPC_PORT_TRANSIT_MGMT indicates that the port
- *	has transit management enabled on it.
- */
-#define	DIPC_FORMAT_DESCRIPTOR	0x80
-#define	DIPC_PORT_TRANSIT_MGMT	0x40
-#define	DIPC_TYPE_BITS		0xc0
-
-#define	DIPC_DSC(d,bits)	(((mach_msg_descriptor_t *) d)->type.type \
-				 & (bits))
-#define	DIPC_MARK_DSC(d,bits)	(((mach_msg_descriptor_t *) d)->type.type \
-				 |= (bits))
-#endif	/* DIPC */
-
 typedef struct
 {
         mach_msg_size_t msgh_descriptor_count;
@@ -446,93 +328,6 @@ typedef	struct __aligned(8)
 } mach_msg_header_t;
 
 #define MACH_MSG_NULL (mach_msg_header_t *) 0
-
-#if	DIPC
-/*
- *	Local versus network message formats.  These notes
- *	apply only to the in-kernel representation of a message.
- *
- *	The entities of concern are:
- *		message header fields (bits, size, ports, etc.)
- *		message body type descriptors (ports, ool memory)
- *	The rest of the message body is ignored by DIPC.
- *
- *    msgh_bits.
- *	DIPC defines a number of internal bits, most of which
- *	do not matter when carried across the wire.  However,
- *	the following bits *do* matter:
- *		MACH_MSGH_BITS_MIGRATING
- *		MACH_MSGH_BITS_DIPC_FORMAT
- *		MACH_MSGH_BITS_SENDER_WAITING
- *	These bits are set by the sender and may trigger special
- *	action by the receiver.
- *
- *	DIPC also pays attention to the remote and local bit
- *	masks, which specify what kind of rights are being
- *	transferred.
- *
- *	The remaining bits in this field (including both
- *	user-settable and kernel internal) are ignored by DIPC
- *	and simply carried from sender to receiver.
- *
- *    msgh_size.
- *	This field defines the size of the kmsg as in the local case.
- *
- *    msgh_remote_port.
- *	As in the local IPC case, this field points to the destination
- *	port.  On the send-side, this will be a DIPC proxy.  DIPC
- *	will extract the UID, placing the UID and the kmsg on the
- *	wire.  The receiver finds the target port based on the UID.
- *
- *    msgh_local_port.
- *	In local format, in user-mode this field names a port; in
- *	kernel-mode, this field points to the port.  In DIPC, the
- *	UID is extracted from the port and stored using both this
- *	field and the subsequent msgh_reserved field.
- *
- *    msgh_reserved.
- *	Local format:  reserved.  DIPC format:  stolen for use
- *	in representing the msgh_local_port UID; initialized to
- *	PORT_ID_NULL and, when non-PORT_ID_NULL, indicates that
- *	msgh_local_port+msgh_reserved contains a valid UID.
- *
- *    msgh_id.
- *	DIPC ignores this field.
- *
- *    type descriptors.
- *	A message may contain one or more type descriptors,
- *	representing a kernel-mediated object to be transferred
- *	along with the message.  A kernel object may be an
- *	inline port right, an out of line memory region, or an
- *	out of line port array.  Each type descriptor consists
- *	of 96 bits, some of which behave differently under DIPC.
- *	The precise formats of the various type descriptors
- *	(e.g., mach_msg_port_descriptor_t) are defined above.
- *	An object that has been converted into network format
- *	has the DIPC_FORMAT_DESCRIPTOR bit set in its type
- *	descriptor.
- *
- *	+ Inline port right.  The type descriptor contains the
- *	UID of the port right; because a UID is larger than
- *	the original port name, the UID occupies the name field
- *	plus the following pad1 field.
- *
- *	+ OOL memory.  The type descriptor contains a pointer
- *	to a copy object.
- *
- *	+ OOL port array.  The type descriptor contains a pointer
- *	to a copy object, which in turn has kernel-allocated
- *	memory containing the DIPC format port rights.  The
- *	user-level OOL port names are converted into a sequence
- *	of internal type descriptors, each of which has the format
- *	described in the above paragraph on inline port rights.
- *
- *	N.B.  IMPORTANT!  Conversion code assumes that msgh_local_port
- *	is immediately followed by msgh_reserved, that the two fields
- *	are contiguous, and that msgh_local_port is first.  Refer to
- *	dipc/dipc_kmsg.c for details.
- */
-#endif	/* DIPC */
 
 typedef struct
 {
@@ -642,24 +437,7 @@ typedef struct
 typedef mach_msg_mac_trailer_t mach_msg_max_trailer_t;
 #define MAX_TRAILER_SIZE ((mach_msg_size_t)sizeof(mach_msg_max_trailer_t))
 
-#if	DIPC
-
-typedef struct 
-{
-  mach_msg_trailer_type_t	msgh_trailer_type;
-  mach_msg_trailer_size_t	msgh_trailer_size;
-  mach_port_seqno_t		msgh_seqno;
-  security_token_t		msgh_sender;
-  unsigned int			dipc_sender_kmsg;
-} mach_msg_dipc_trailer_t;
-
-typedef mach_msg_dipc_trailer_t mach_msg_format_0_trailer_t;
-
-#else
-
 typedef mach_msg_security_trailer_t mach_msg_format_0_trailer_t;
-
-#endif	/* DIPC */
 
 #define MACH_MSG_TRAILER_FORMAT_0_SIZE sizeof(mach_msg_format_0_trailer_t)
 #define MACH_MSG_TRAILER_MINIMUM_SIZE  sizeof(mach_msg_trailer_t)
@@ -796,10 +574,6 @@ typedef integer_t mach_msg_option_t;
 
 
 
-#if	DIPC
-#define MACH_SEND_LOCAL_QUEUE	0x00040000	/* internal use only */
-#endif	/* DIPC */
-
 #define MACH_RCV_TIMEOUT	0x00000100
 #define MACH_RCV_NOTIFY		0x00000200
 #define MACH_RCV_INTERRUPT	0x00000400	/* libmach implements */
@@ -926,15 +700,6 @@ typedef kern_return_t mach_msg_return_t;
 #define MACH_SEND_INVALID_TRAILER	0x10000011
 		/* The trailer to be sent does not match kernel format. */
 
-#if	DIPC
-#define MACH_SEND_TRANSPORT_ERROR	0x10000012
-		/* Message cannot be sent due to transport failure (DIPC) */
-#define MACH_SEND_PORT_MIGRATED		0x10000013
-		/* Port migrated here; resend message (DIPC) */
-#define MACH_SEND_RESEND_FAILED		0x10000014
-		/* Resend of message failed (DIPC) */
-#endif	/* DIPC */
-
 #define MACH_SEND_INVALID_RT_OOL_SIZE	0x10000015
 		/* The OOL buffer size is too large for RT behavior */
 
@@ -968,11 +733,6 @@ typedef kern_return_t mach_msg_return_t;
 		/* Out-of-line overwrite region is not large enough */
 #define MACH_RCV_INVALID_TRAILER	0x1000400f
 		/* trailer type or number of trailer elements not supported */
-#if	DIPC
-#define	MACH_RCV_TRANSPORT_ERROR	0x10004010
-		/* Message cannot be received due to transport failuer (DIPC) */
-#endif	/* DIPC */
-
 #define MACH_RCV_IN_PROGRESS_TIMED      0x10004011
                 /* Waiting for receive with timeout. (Internal use only.) */
 

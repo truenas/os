@@ -373,9 +373,6 @@
 #include <sys/mach/zalloc.h>
 #include <sys/mach/kalloc.h>
 #endif
-#if	MACH_RT
-#include <sys/mach/rtalloc.h>
-#endif	/* MACH_RT */
 #if 0
 #include <sys/mach/processor.h>
 #endif
@@ -397,10 +394,6 @@
 #if	MACH_KDB
 #include <ddb/db_sym.h>
 #endif	/* MACH_KDB */
-
-#if	TASK_SWAPPER
-#include <sys/mach/task_swap.h>
-#endif	/* TASK_SWAPPER */
 
 #include <sys/mach/queue.h>
 /*

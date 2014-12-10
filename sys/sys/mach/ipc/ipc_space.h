@@ -146,12 +146,6 @@ extern uma_zone_t ipc_space_zone;
 
 extern ipc_space_t ipc_space_kernel;
 extern ipc_space_t ipc_space_reply;
-#if	DIPC
-extern ipc_space_t ipc_space_remote;
-#endif	/* DIPC */
-#if	DIPC || MACH_KDB
-extern ipc_space_t default_pager_space;
-#endif	/* DIPC || MACH_KDB */
 
 #define is_fast_space(is)	((is)->is_fast)
 
