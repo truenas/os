@@ -652,49 +652,39 @@ ipc_object_copyout(
 
 	is_write_lock(space);
 
-	for (;;) {
-		if (!space->is_active) {
-			is_write_unlock(space);
-			return KERN_INVALID_TASK;
-		}
-
-		if ((msgt_name != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
-		    ipc_right_reverse(space, object, &name, &entry)) {
-			/* object is locked and active */
-
-			assert(entry->ie_bits & MACH_PORT_TYPE_SEND_RECEIVE);
-			break;
-		}
-		kr = ipc_entry_get(space, 
-			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
-						   &name, &entry, object);
-		if (kr != KERN_SUCCESS) {
-			/* unlocks/locks space, so must start again */
-
-			kr = ipc_entry_grow_table(space, ITS_SIZE_NONE);
-			if (kr != KERN_SUCCESS)
-				return kr; /* space is unlocked */
-
-			continue;
-		}
-
-		assert(IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE);
-		assert(entry->ie_object == IO_NULL);
-
-		io_lock(object);
-		if (!io_active(object)) {
-			io_unlock(object);
-			ipc_entry_dealloc(space, name, entry);
-			is_write_unlock(space);
-			return KERN_INVALID_CAPABILITY;
-		}
-
-		entry->ie_object = object;
-		break;
+	if (!space->is_active) {
+		is_write_unlock(space);
+		return KERN_INVALID_TASK;
 	}
 
-	/* space is write-locked and active, object is locked and active */
+	if ((msgt_name != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
+		ipc_right_reverse(space, object, &name, &entry)) {
+		/* object is locked and active */
 
+		assert(entry->ie_bits & MACH_PORT_TYPE_SEND_RECEIVE);
+		goto done;
+	}
+	kr = ipc_entry_get(space,
+			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
+						   &name, &entry, object);
+	if (kr != KERN_SUCCESS)
+		return (kr);
+
+
+	assert(IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE);
+	assert(entry->ie_object == IO_NULL);
+
+	io_lock(object);
+	if (!io_active(object)) {
+		io_unlock(object);
+		ipc_entry_dealloc(space, name, entry);
+		is_write_unlock(space);
+			return KERN_INVALID_CAPABILITY;
+	}
+
+	entry->ie_object = object;
+	/* space is write-locked and active, object is locked and active */
+done:
 	kr = ipc_right_copyout(space, name, entry,
 			       msgt_name, overflow, object);
 	/* object is unlocked */

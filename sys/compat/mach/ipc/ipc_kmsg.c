@@ -424,8 +424,7 @@ ipc_kmsg_queue_next(
  */
 
 void
-ipc_kmsg_destroy(
-	ipc_kmsg_t	kmsg)
+ipc_kmsg_destroy(ipc_kmsg_t	kmsg)
 {
 	ipc_kmsg_queue_t queue;
 	boolean_t empty;
@@ -789,8 +788,7 @@ ipc_kmsg_put(
 	else
 		mr = MACH_MSG_SUCCESS;
 
-	if (kmsg->ikm_size != IKM_SAVED_KMSG_SIZE)
-		ikm_free(kmsg);
+	ikm_free(kmsg);
 
 	return mr;
 }
@@ -861,19 +859,18 @@ ipc_kmsg_copyin_header(
 	mach_port_name_t		notify_name)
 {
 	mach_msg_bits_t mbits = msg->msgh_bits &~ MACH_MSGH_BITS_CIRCULAR;
-	/* Here we know that the value is coming from userspace so the cast is safe
-	* because we've been passed a 32-bit name
-	*/
-	mach_port_name_t dest_name = CAST_MACH_PORT_TO_NAME(msg->msgh_remote_port);
-	mach_port_name_t reply_name = CAST_MACH_PORT_TO_NAME(msg->msgh_local_port);
-	kern_return_t kr;
-
-    {
 	mach_msg_type_name_t dest_type = MACH_MSGH_BITS_REMOTE(mbits);
 	mach_msg_type_name_t reply_type = MACH_MSGH_BITS_LOCAL(mbits);
 	ipc_object_t dest_port, reply_port;
 	ipc_port_t dest_soright, reply_soright;
 	ipc_port_t notify_port;
+	kern_return_t kr;
+
+	/* Here we know that the value is coming from userspace so the cast is safe
+	* because we've been passed a 32-bit name
+	*/
+	mach_port_name_t dest_name = CAST_MACH_PORT_TO_NAME(msg->msgh_remote_port);
+	mach_port_name_t reply_name = CAST_MACH_PORT_TO_NAME(msg->msgh_local_port);
 
 	if (!MACH_MSG_TYPE_PORT_ANY_SEND(dest_type))
 		return MACH_SEND_INVALID_HEADER;
@@ -1252,8 +1249,6 @@ ipc_kmsg_copyin_header(
 			  MACH_MSGH_BITS(dest_type, reply_type));
 	msg->msgh_remote_port = (mach_port_t) dest_port;
 	msg->msgh_local_port = (mach_port_t) reply_port;
-    }
-
 	return MACH_MSG_SUCCESS;
 
     invalid_dest:

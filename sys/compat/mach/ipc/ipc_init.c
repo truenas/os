@@ -148,7 +148,6 @@ vm_size_t ipc_kernel_copy_map_size = IPC_KERNEL_COPY_MAP_SIZE;
 vm_size_t ipc_kmsg_max_vm_space = (IPC_KERNEL_COPY_MAP_SIZE * 7)/8;
 
 int ipc_space_max = SPACE_MAX;
-int ipc_tree_entry_max = ITE_MAX;
 int ipc_port_max = PORT_MAX;
 int ipc_pset_max = SET_MAX;
 
@@ -181,17 +180,6 @@ ipc_bootstrap(void)
 	/* make it exhaustible */
 	zone_change(ipc_space_zone, Z_EXHAUST, TRUE);
 #endif
-
-	ipc_tree_entry_zone =
-		zinit(sizeof(struct ipc_tree_entry),
-			ipc_tree_entry_max * sizeof(struct ipc_tree_entry),
-			sizeof(struct ipc_tree_entry),
-			"ipc tree entries");
-#if 0
-	/* make it exhaustible */
-	zone_change(ipc_tree_entry_zone, Z_EXHAUST, TRUE);
-#endif
-
 	/*
 	 * populate all port(set) zones
 	 */

@@ -345,9 +345,8 @@ mach_port_names(
 		ipc_entry_bits_t bits = entry->ie_bits;
 
 		if (IE_BITS_TYPE(bits) != MACH_PORT_TYPE_NONE) {
-			mach_port_name_t name = MACH_PORT_MAKEB(index, bits);
 
-			mach_port_names_helper(timestamp, entry, name,
+			mach_port_names_helper(timestamp, entry, entry->ie_name,
 					       names, types, &actual);
 		}
 	}

@@ -294,16 +294,14 @@ ipc_space_destroy(
 
 	for (index = 0; index < size; index++) {
 		ipc_entry_t entry = table[index];
+
 		if (entry == NULL)
 			continue;
-		while (entry->ie_link != NULL) {
+		while (entry != NULL) {
 			mach_port_type_t type = IE_BITS_TYPE(entry->ie_bits);
 
-			if (type != MACH_PORT_TYPE_NONE) {
-				mach_port_name_t name =
-					MACH_PORT_MAKEB(index, entry->ie_bits);
-				ipc_right_clean(space, name, entry);
-			}
+			if (type != MACH_PORT_TYPE_NONE)
+				ipc_right_clean(space, entry->ie_name, entry);
 			entry = entry->ie_link;
 		}
 	}
