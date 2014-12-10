@@ -68,7 +68,6 @@ typedef unsigned int mach_vm_machine_attribute_t;
 #ifdef _KERNEL
 struct proc;
 struct thread;
-MALLOC_DECLARE(M_MACH);
 /* don't see these in the recent NetBSD tree */
 #define ktrmmsg(a, b)
 #define ktrmool(a, b, c)

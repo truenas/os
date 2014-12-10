@@ -172,6 +172,7 @@
 #include <sys/types.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
+#include <sys/malloc.h>
 #include <vm/vm.h>
 
 #include <sys/mach/host_info.h>
@@ -203,11 +204,6 @@
 
 #ifdef	_KERNEL
 
-#if 0
-#include <compat/mach/thread.h>	/* for thread_port_array_t */
-#endif
-
-
 #define __MigTypeCheck 1
 #define __MigKernelSpecificCode 1
 
@@ -226,6 +222,7 @@ typedef struct clock                    *clock_ctrl_t;
 typedef struct ledger					*ledger_t;
 typedef processor_set_t         processor_set_name_t;
 
+MALLOC_DECLARE(M_MACH);
 
 #else	/* MACH_KERNEL */
 
