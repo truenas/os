@@ -270,15 +270,20 @@ typedef struct
 typedef struct
 {
 	mach_port_t			name;
-#if !defined(_KERNEL) && defined(__LP64__)	
+#if !defined(_KERNEL) && defined(__LP64__)
 	mach_msg_size_t		pad1;
-#endif	
+#endif
+#if !defined(__LP64__)
+	unsigned int			pad1 : 8;
+	unsigned int			pad2 : 8;
+#else
 	unsigned int			pad2 : 16;
+#endif
 	mach_msg_type_name_t		disposition : 8;
 	mach_msg_descriptor_type_t	type : 8;
 #if defined(_KERNEL)
 	uint32_t			pad_end;
-#endif	
+#endif
 } mach_msg_port_descriptor_t;
 
 typedef struct
