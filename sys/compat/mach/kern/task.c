@@ -391,8 +391,6 @@
 #include <sys/mach/mach_host_server.h>
 #include <sys/mach/mach_port_server.h>
 
-#define invalid_pri(a) 0
-
 struct processor_set default_pset;
 unsigned	int sched_ticks;
 task_t	kernel_task;
@@ -1330,6 +1328,7 @@ mach_task_init(void *arg __unused, struct proc *p)
 	task_t task;
 
 	p->p_machdata = task = uma_zalloc(task_zone, M_WAITOK);
+	task->itk_p = p;
 
 	mutex_init(&task->lock, "ETAP_THREAD_TASK_NEW");
 	queue_init(&task->semaphore_list);

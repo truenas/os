@@ -642,6 +642,13 @@ current_map(void)
 	return (&curthread->td_proc->p_vmspace->vm_map);
 }
 
+#define act_deallocate(act) thread_deallocate(act)
+#define act_lock(act)  mtx_lock(&(act)->ith_lock_data)
+#define act_lock_try(act) mtx_trylock(&(act)->ith_lock_data)
+#define act_unlock(act) mtx_unlock(&act->ith_lock_data)
+#define act_locked_act_reference(act) ((act)->ref_count++)
+
+
 /* wakeup a thread */
 extern void thread_go(thread_t);
 extern void thread_will_wait_with_timeout(thread_t, int);

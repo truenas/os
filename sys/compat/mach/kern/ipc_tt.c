@@ -131,17 +131,8 @@
 #include <sys/mach/task_server.h>
 #include <sys/mach/host_priv_server.h>
 
-
-#define act_lock(a)
-#define act_lock_try(a) 0
-#define act_unlock(a)
-#define mutex_pause()
 #define THR_ACT_NULL NULL
 #define VM_MAP_NULL NULL
-#define mutex_try mtx_trylock
-#define mutex_unlock mtx_unlock
-#define act_deallocate(act)
-#define act_locked_act_reference(act)
 
 
 /*
@@ -898,7 +889,6 @@ ref_task_port_locked( ipc_port_t port, task_t *ptask )
 		 */
 		if (!task_lock_try(task)) {
 			ip_unlock(port);
-			mutex_pause();
 			return (FALSE);
 		}
 		task->ref_count++;
@@ -950,13 +940,12 @@ ref_space_port_locked( ipc_port_t port, ipc_space_t *pspace )
 		 * ip_lock(). Allow out-of-order locking here, inlining
 		 * is_reference() to accomodate it.
 		 */
-		if (!mutex_try(&space->is_ref_lock_data)) {
+		if (!mtx_trylock(&space->is_ref_lock_data)) {
 			ip_unlock(port);
-			mutex_pause();
 			return (FALSE);
 		}
 		space->is_references++;
-		mutex_unlock(&space->is_ref_lock_data);
+		mtx_unlock(&space->is_ref_lock_data);
 	}
 	*pspace = space;
 	ip_unlock(port);
@@ -978,19 +967,16 @@ convert_port_to_map(
 	ipc_port_t	port)
 {
 	task_t task;
+	vm_map_t map;
 
 	task = convert_port_to_task(port);
 
 	if (task == TASK_NULL)
 		return VM_MAP_NULL;
-#if 0
-	map = task->map;
-	vm_map_reference_swap(map);
 
+	map = &task->itk_p->p_vmspace->vm_map;
 	task_deallocate(task);
-	return map;
-#endif
-	return (&task->itk_p->p_vmspace->vm_map);
+	return (map);
 }
 
 static boolean_t
@@ -1011,7 +997,6 @@ ref_act_port_locked( ipc_port_t port, thread_act_t *pthr_act )
 		 */
 		if (!act_lock_try(thr_act)) {
 			ip_unlock(port);
-			mutex_pause();
 			return (FALSE);
 		}
 		act_locked_act_reference(thr_act);
@@ -1065,12 +1050,6 @@ convert_task_to_port(
 
 	itk_lock(task);
 	if (task->itk_self != IP_NULL)
-#if	NORMA_TASK
-		if (task->map == VM_MAP_NULL)
-			/* norma placeholder task */
-			port = ipc_port_copy_send(task->itk_self);
-		else
-#endif	/* NORMA_TASK */
 		port = ipc_port_make_send(task->itk_self);
 	else
 		port = IP_NULL;
