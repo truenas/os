@@ -666,7 +666,7 @@ ipc_kmsg_get(
 {
 	mach_msg_size_t			msg_and_trailer_size;
 	ipc_kmsg_t 			kmsg;
-	mach_msg_format_0_trailer_t 	*trailer;
+	mach_msg_max_trailer_t 	*trailer;
 
 	if ((size < sizeof(mach_msg_header_t)) || (size & 3))
 		return MACH_SEND_MSG_TOO_SMALL;
@@ -692,8 +692,9 @@ ipc_kmsg_get(
 	 * is initialized to the minimum (sizeof(mach_msg_trailer_t)), to optimize
 	 * the cases where no implicit data is requested.
 	 */
-	trailer = (mach_msg_format_0_trailer_t *) ((vm_offset_t)&kmsg->ikm_header + size);
-	trailer->msgh_sender = KERNEL_SECURITY_TOKEN;
+	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)&kmsg->ikm_header + size);
+	trailer->msgh_sender = current_task()->sec_token;
+	trailer->msgh_audit = current_task()->audit_token;
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
 	trailer->msgh_trailer_size = MACH_MSG_TRAILER_MINIMUM_SIZE;
 
@@ -723,7 +724,7 @@ ipc_kmsg_get_from_kernel(
 {
 	ipc_kmsg_t 	kmsg;
 	mach_msg_size_t	msg_and_trailer_size;
-	mach_msg_format_0_trailer_t *trailer;
+	mach_msg_max_trailer_t *trailer;
 
 	assert(size >= sizeof(mach_msg_header_t));
 	assert((size & 3) == 0);
@@ -750,8 +751,9 @@ ipc_kmsg_get_from_kernel(
 	 * is initialized to the minimum (sizeof(mach_msg_trailer_t)), to optimize
 	 * the cases where no implicit data is requested.
 	 */
-	trailer = (mach_msg_format_0_trailer_t *) ((vm_offset_t)&kmsg->ikm_header + size);
+	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)&kmsg->ikm_header + size);
 	trailer->msgh_sender = KERNEL_SECURITY_TOKEN;
+	trailer->msgh_audit = KERNEL_AUDIT_TOKEN;
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
 	trailer->msgh_trailer_size = MACH_MSG_TRAILER_MINIMUM_SIZE;
 
