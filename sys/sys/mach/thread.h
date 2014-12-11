@@ -618,7 +618,7 @@ struct mach_thread_emuldata {
 static __inline thread_t
 current_thread(void)
 {
-	struct mach_thread_emuldata *mle = curthread->td_emuldata;
+	struct mach_thread_emuldata *mle = curthread->td_machdata;
 
 	return (mle->mle_thread);
 }
@@ -627,9 +627,8 @@ current_thread(void)
 static __inline struct task *
 current_task(void)
 {
-	struct mach_thread_emuldata *mle = curthread->td_emuldata;
 
-	return (mle->mle_thread->task);
+	return (curthread->td_proc->p_machdata);
 }
 
 
