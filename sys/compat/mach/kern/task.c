@@ -405,9 +405,6 @@
 
 security_token_t DEFAULT_USER_SECURITY_TOKEN = { {930624, 610120} };
 
-#undef MACH_HOST
-#define MACH_HOST 0
-#define MCMSG 0
 #define invalid_pri(a) 0
 
 struct processor_set default_pset;
@@ -423,7 +420,6 @@ void		task_wait_locked(
 			task_t		task);
 kern_return_t	task_release(
 			task_t		task);
-void		task_collect_scan(void);
 void		task_act_iterate(
 			task_t		 task,
 			kern_return_t	(*func)(thread_act_t inc));
@@ -432,214 +428,9 @@ void		task_free(
 void		task_synchronizer_destroy_all(
 			task_t		task);
 
-kern_return_t	task_set_ledger(
-			task_t		task,
-			ledger_t	wired,
-			ledger_t	paged);
-
-void
-task_init(void)
-{
-	task_zone = zinit(
-			sizeof(struct task),
-			TASK_MAX * sizeof(struct task),
-			TASK_CHUNK * sizeof(struct task),
-			"tasks");
-
-
-#if 0
-	/*
-	 * Create the kernel task as the first task.
-	 * Task_create_local must assign to kernel_task as a side effect,
-	 * for other initialization. (:-()
-	 */
-	if (task_create_local(TASK_NULL,
-		FALSE, FALSE, &kernel_task) != KERN_SUCCESS)
-		panic("task_init\n");
-	vm_map_deallocate(kernel_task->map);
-	kernel_task->map = kernel_map;
-#endif
-#if	MACH_ASSERT
-	if (watchacts & WA_TASK)
-	    printf("task_init: kernel_task = %x map=%x\n",
-				kernel_task, kernel_map);
-#endif	/* MACH_ASSERT */
-}
-
-#if 0
-#if	MACH_HOST
-void
-task_freeze(
-	task_t task)
-{
-	task_lock(task);
-	/*
-	 *	If may_assign is false, task is already being assigned,
-	 *	wait for that to finish.
-	 */
-	while (task->may_assign == FALSE) {
-		task->assign_active = TRUE;
-		thread_sleep_mutex((event_t) &task->assign_active,
-					&task->lock, TRUE);
-		task_lock(task);
-	}
-	task->may_assign = FALSE;
-	task_unlock(task);
-
-	return;
-}
-
-void
-task_unfreeze(
-	task_t task)
-{
-	task_lock(task);
-	assert(task->may_assign == FALSE);
-	task->may_assign = TRUE;
-	if (task->assign_active == TRUE) {
-		task->assign_active = FALSE;
-		thread_wakeup((event_t)&task->assign_active);
-	}
-	task_unlock(task);
-
-	return;
-}
-#endif	/* MACH_HOST */
-#endif
-#if 0
-/*
- * Create a task running in the kernel address space.  It may
- * have its own map of size mem_size and may have ipc privileges.
- */
-kern_return_t
-kernel_task_create(
-	task_t			parent_task,
-	vm_offset_t		map_base,
-	vm_size_t		map_size,
-	task_t			*child_task)
-{
-	kern_return_t		retval;
-	task_t			new_task;
-	task_user_data_data_t	user_data;
-	vm_map_t		old_map;
-
-	/*
-	 * Create the task.
-	 */
-	if ((retval = task_create_local(parent_task, FALSE, TRUE, &new_task))
-		!= KERN_SUCCESS)
-		return (retval);
-
-	/*
-	 * Task_create_local creates the task with a user-space map.
-	 * We attempt to replace the map and free it afterwards; else
-	 * task_deallocate will free it (can NOT set map to null before
-	 * task_deallocate, this impersonates a norma placeholder task).
-	 * _Mark the memory as pageable_ -- this is what we
-	 * want for images (like servers) loaded into the kernel.
-	 */
-	if (map_size == 0) {
-		vm_map_deallocate(new_task->map);
-		new_task->map = kernel_map;
-		*child_task = new_task;
-	} else {
-		old_map = new_task->map;
-		if ((retval = kmem_suballoc(kernel_map, &map_base,
-					    map_size, TRUE, FALSE,
-					    &new_task->map)) != KERN_SUCCESS) {
-			/*
-			 * New task created with ref count of 2 -- decrement by
-			 * one to force task deletion.
-			 */
-			printf("kmem_suballoc(%x,%x,%x,1,0,&new) Fails\n",
-			       kernel_map, map_base, map_size);
-			--new_task->ref_count;
-			task_deallocate(new_task);
-			return (retval);
-		}
-		vm_map_deallocate(old_map);
-		user_data.user_data = (void *)_rpc_glue_vector;
-		(void)task_set_info(new_task,
-				    TASK_USER_DATA,
-				    (task_info_t)&user_data,
-				    TASK_USER_DATA_COUNT);
-		*child_task = new_task;
-	}
-
-#if	MACH_KDB
-	/*
-	 * The following code is a KLUDGE to clone the osf1_server's symbol
-	 * table with offset addresses for this (first) INKserver.
-	 */
-	if (db_symtab_cloneeXXX("unix")) {
-		db_clone_symtabXXX("unix", "inks", map_base);
-	} else if (db_symtab_cloneeXXX("startup")) {
-		db_clone_symtabXXX("startup", "inks", map_base);
-	} else {
-		db_install_inks(map_base);
-	}
-#endif	/* MACH_KDB */
-
-	return (KERN_SUCCESS);
-}
-#endif
-#if	!NORMA_TASK
-kern_return_t
-task_create(
-	task_t			parent_task,
-	ledger_array_t	ledgers __unused,
-	mach_msg_type_number_t	num_ledger_ports,
-	boolean_t		inherit_memory,
-	task_t			*child_task)		/* OUT */
-{
-	kern_return_t sts;
-
-	if (parent_task == TASK_NULL)
-		return(KERN_INVALID_ARGUMENT);
-
-	sts = task_create_local(parent_task, inherit_memory, FALSE, child_task);
-
-        return(sts);
-}
-
-#endif	/* !NORMA_TASK */
-#if 0
-kern_return_t
-task_create_security_token(
+static kern_return_t
+task_create_internal(
 	task_t		parent_task,
-        host_t		host_security,
-        security_token_t sec_token,
-        ledger_port_array_t	ledger_ports,
-        mach_msg_type_number_t	num_ledger_ports,
-	boolean_t	inherit_memory,
-	task_t		*child_task)		/* OUT */
-{
-        kern_return_t sts;
-#ifdef	lint
-	num_ledger_ports++;
-	ledger_ports++;
-#endif	/* lint */
-        
-	if (parent_task == TASK_NULL)
-		return(KERN_INVALID_ARGUMENT);
-
-	if (host_security == HOST_NULL)
-		return(KERN_INVALID_SECURITY);
-
-	sts = task_create_local(parent_task, inherit_memory, FALSE, child_task);
-
-        if (sts != KERN_SUCCESS)
-                return(sts);
-
-        return(task_set_security_token(*child_task, host_security,
-                                       sec_token));
-}
-#endif
-kern_return_t
-task_create_local(
-	task_t		parent_task,
-	boolean_t	inherit_memory,
-	boolean_t	kernel_loaded,
 	task_t		*child_task)		/* OUT */
 {
 	register task_t	new_task;
@@ -652,136 +443,48 @@ task_create_local(
 
 	/* one ref for just being alive; one for our caller */
 	new_task->ref_count = 2;
-#ifdef notyet
-	if (inherit_memory)
-		new_task->map = vm_map_fork(parent_task->map);
-	else
-		new_task->map = vm_map_create(pmap_create(0),
-					round_page(VM_MIN_ADDRESS),
-					trunc_page(VM_MAX_ADDRESS), TRUE);
 
-#endif	
 	mutex_init(&new_task->lock, "ETAP_THREAD_TASK_NEW");
-#if 0
-	queue_init(&new_task->subsystem_list);
-	queue_init(&new_task->thr_acts);
-	mutex_init(&new_task->act_list_lock, "ETAP_THREAD_ACT_LIST");
-	new_task->thr_act_count = 0;
-	new_task->user_stop_count = 0;
-	new_task->suspend_count = 0;
-
-	new_task->active = TRUE;
-	new_task->kernel_loaded = kernel_loaded;
-	new_task->user_data = 0;
-
-	new_task->res_act_count = 0;	/* used unconditionally */
 	new_task->semaphores_owned = 0;
-	new_task->lock_sets_owned = 0;
-
-
-	new_task->total_user_time.seconds = 0;
-	new_task->total_user_time.microseconds = 0;
-	new_task->total_system_time.seconds = 0;
-	new_task->total_system_time.microseconds = 0;
-
-	task_prof_init(new_task);
-#endif
-#if	TASK_SWAPPER
-	new_task->swap_state = TASK_SW_IN;
-	new_task->swap_flags = 0;
-	new_task->swap_ast_waiting = 0;
-	new_task->swap_stamp = sched_tick;
-	new_task->swap_rss = 0;
-	new_task->swap_nswap = 0;
-#endif	/* TASK_SWAPPER */
 
 	queue_init(&new_task->semaphore_list);
-#if 0	
 	queue_init(&new_task->lock_set_list);
-#endif
-#if	MACH_HOST
-	new_task->may_assign = TRUE;
-	new_task->assign_active = FALSE;
-#endif	/* MACH_HOST */
-#if 0	
-	eml_task_reference(new_task, parent_task);
-#endif
 	ipc_task_init(new_task, parent_task);
 
-
 	if (parent_task != TASK_NULL) {
-#if	MACH_HOST
-		/*
-		 * Freeze the parent, so that parent_task->processor_set
-		 * cannot change.
-		 */
-		task_freeze(parent_task);
-#endif	/* MACH_HOST */
 		pset = parent_task->processor_set;
 		if (!pset->active)
 			pset = &default_pset;
-#if 0		
-		new_task->priority = parent_task->priority;
-		new_task->max_priority = parent_task->max_priority;
-		new_task->sched_data = parent_task->sched_data;
-		new_task->policy = parent_task->policy;
+
 		new_task->sec_token = parent_task->sec_token;
-		new_task->wired_ledger_port = ledger_copy(
-			convert_port_to_ledger(parent_task->wired_ledger_port));
-		new_task->paged_ledger_port = ledger_copy(
-			convert_port_to_ledger(parent_task->paged_ledger_port));
-#endif		
-	}
-	else {
+		new_task->audit_token = parent_task->audit_token;
+		new_task->policy = parent_task->policy;
+	} else {
 		pset = &default_pset;
-#if 0		
-		new_task->priority = BASEPRI_USER;
-		new_task->max_priority = BASEPRI_USER;
-		new_task->sched_data = 0;
 		new_task->policy = POLICY_TIMESHARE;
-		new_task->sec_token = DEFAULT_USER_SECURITY_TOKEN;
-#endif		
+		new_task->sec_token = KERNEL_SECURITY_TOKEN;
+		new_task->audit_token = KERNEL_AUDIT_TOKEN;
 	}
 	pset_lock(pset);
 	pset_add_task(pset, new_task);
 	pset_unlock(pset);
-#if	MACH_HOST
-	if (parent_task != TASK_NULL)
-		task_unfreeze(parent_task);
-#endif	/* MACH_HOST */
-
-#if	FAST_TAS
- 	if (inherit_memory) {
- 		new_task->fast_tas_base = parent_task->fast_tas_base;
- 		new_task->fast_tas_end  = parent_task->fast_tas_end;
- 	} else {
- 		new_task->fast_tas_base = (vm_offset_t)0;
- 		new_task->fast_tas_end  = (vm_offset_t)0;
- 	}
-#endif	/* FAST_TAS */
-
 	ipc_task_enable(new_task);
-
-#if	NORMA_TASK
-	new_task->child_node = -1;
-#endif	/* NORMA_TASK */
-
-#if     MCMSG
-	new_task->mcmsg_task = 0;
-#endif  /* MCMSG */
-
-#if	TASK_SWAPPER
-	task_swapout_eligible(new_task);
-#endif	/* TASK_SWAPPER */
-
-#if	MACH_ASSERT
-	if (watchacts & WA_TASK)
-	    printf("*** task_create_local(par=%x inh=%x) == 0x%x\n",
-			parent_task, inherit_memory, new_task);
-#endif	/* MACH_ASSERT */
-
 	*child_task = new_task;
 	return(KERN_SUCCESS);
+}
+
+
+void
+task_init(void)
+{
+	task_zone = zinit(
+			sizeof(struct task),
+			TASK_MAX * sizeof(struct task),
+			TASK_CHUNK * sizeof(struct task),
+			"tasks");
+
+	task_create_internal(TASK_NULL, &kernel_task);
+
 }
 
 /*
@@ -795,36 +498,6 @@ task_free( register task_t	task )
 {
 	register processor_set_t pset;
 
-
-#if	MACH_ASSERT
-	assert(task != 0);
-	if (watchacts & (WA_EXIT|WA_TASK))
-	    printf("task_free(%x(%d)) map ref %d\n", task, task->ref_count,
-			task->map->ref_count);
-#endif	/* MACH_ASSERT */
-
-#if     MCMSG && (iPSC860 || PARAGON860)
-	if (task->mcmsg_task != 0) {
-		mcmsg_task_destroy(task);
-	}
-#endif  /* MCMSG && (iPSC860 || PARAGON860) */
-#if	NORMA_TASK
-	if (task->map == VM_MAP_NULL) {
-		/* norma placeholder task */
-		ipc_port_release_send(task->itk_self);
-		task_unlock(task);
-		uma_zfree(task_zone, (vm_offset_t) task);
-		return;
-	}
-#endif	/* NORMA_TASK */
-
-#if	TASK_SWAPPER
-	/* task_terminate guarantees that this task is off the list */
-	assert((task->swap_state & TASK_SW_ELIGIBLE) == 0);
-#endif	/* TASK_SWAPPER */
-#if 0
-	eml_task_deallocate(task);
-#endif
 	/*
 	 * Temporarily restore the reference we dropped above, then
 	 * freeze the task so that the task->processor_set field
@@ -833,10 +506,6 @@ task_free( register task_t	task )
 	 */
 	++task->ref_count;
 	task_unlock(task);
-#if	MACH_HOST
-	task_freeze(task);
-#endif	/* MACH_HOST */
-	
 	pset = task->processor_set;
 	pset_lock(pset);
 	task_lock(task);
@@ -846,14 +515,6 @@ task_free( register task_t	task )
 		 * Back out. Must unfreeze inline since we'already
 		 * dropped our reference.
 		 */
-#if	MACH_HOST
-		assert(task->may_assign == FALSE);
-		task->may_assign = TRUE;
-		if (task->assign_active == TRUE) {
-			task->assign_active = FALSE;
-			thread_wakeup((event_t)&task->assign_active);
-		}
-#endif	/* MACH_HOST */
 		task_unlock(task);
 		pset_unlock(pset);
 		return;
@@ -1450,52 +1111,6 @@ task_resume(register task_t task)
 
 	return(KERN_SUCCESS);
 }
-#if 0
-kern_return_t
-task_set_security_token(
-        task_t		task,
-        host_t		host_security,
-        security_token_t sec_token)
-{
-	if (task == TASK_NULL)
-		return(KERN_INVALID_ARGUMENT);
-
-	if (host_security == HOST_NULL)
-		return(KERN_INVALID_SECURITY);
-
-        task_lock(task);
-        task->sec_token = sec_token;
-        task_unlock(task);
-
-        return(KERN_SUCCESS);
-}
-
-/*
- * Utility routine to set a ledger
- */
-kern_return_t
-task_set_ledger(
-        task_t		task,
-        ledger_t	wired,
-        ledger_t	paged)
-{
-	if (task == TASK_NULL)
-		return(KERN_INVALID_ARGUMENT);
-
-        task_lock(task);
-        if (wired) {
-                ipc_port_release_send(task->wired_ledger_port);
-                task->wired_ledger_port = ledger_copy(wired);
-        }                
-        if (paged) {
-                ipc_port_release_send(task->paged_ledger_port);
-                task->paged_ledger_port = ledger_copy(paged);
-        }                
-        task_unlock(task);
-
-        return(KERN_SUCCESS);
-}
-#endif
 
 kern_return_t
 task_set_info(
@@ -1509,22 +1124,8 @@ task_set_info(
 		return(KERN_INVALID_ARGUMENT);
 
 	switch (flavor) {
-#if 0	
-	    case TASK_USER_DATA:
-	    {
-		register task_user_data_t	user_data;
-
-		if (task_info_count < TASK_USER_DATA_COUNT) {
-		    return (KERN_INVALID_ARGUMENT);
-		}
-
-		user_data = (task_user_data_t)task_info_in;
-		task->user_data = user_data->user_data;
-		break;
-	    }
 	    default:
 			return (KERN_INVALID_ARGUMENT);
-#endif			
 	}
 	return (KERN_SUCCESS);
 }
@@ -1541,21 +1142,6 @@ task_info(
 		return(KERN_INVALID_ARGUMENT);
 
 	switch (flavor) {
-#if 0	
-	    case TASK_USER_DATA:
-	    {
-		register task_user_data_t	user_data;
-
-		if (*task_info_count < TASK_USER_DATA_COUNT) {
-		    return (KERN_INVALID_ARGUMENT);
-		}
-
-		user_data = (task_user_data_t)task_info_out;
-		user_data->user_data = task->user_data;
-		*task_info_count = TASK_USER_DATA_COUNT;
-		break;
-	    }
-#endif
 	    case TASK_BASIC_INFO:
 	    {
 		register task_basic_info_t	basic_info;
@@ -1729,8 +1315,6 @@ task_info(
 	return(KERN_SUCCESS);
 }
 
-#if	MACH_HOST
-
 /*
  *	task_assign:
  *
@@ -1738,196 +1322,13 @@ task_info(
  */
 kern_return_t
 task_assign(
-	task_t				task,
-	processor_set_t			new_pset,
-	boolean_t			assign_threads)
+	task_t				task __unused,
+	processor_set_t			new_pset __unused,
+	boolean_t			assign_threads __unused)
 {
-	kern_return_t			ret = KERN_SUCCESS;
-	register thread_t		thread, prev_thread;
-	register queue_head_t		*list;
-	register processor_set_t	pset;
-	int				max_priority;
 
-	if (task == TASK_NULL || new_pset == PROCESSOR_SET_NULL) {
-		return(KERN_INVALID_ARGUMENT);
-	}
-
-	task_lock(task);
-
-	/*
-	 *	If may_assign is false, task is already being assigned,
-	 *	wait for that to finish.
-	 */
-	while (task->may_assign == FALSE) {
-		task->assign_active = TRUE;
-		assert_wait((event_t)&task->assign_active, TRUE);
-		task_unlock(task);
-		thread_block((void (*)(void)) 0);
-		task_lock(task);
-	}
-
-	/*
-	 *	Do assignment.  If new pset is dead, redirect to default.
-	 */
-	pset = task->processor_set;
-	pset_lock(pset);
-	pset_remove_task(pset,task);
-	pset_unlock(pset);
-	pset_deallocate(pset);
-
-	pset_lock(new_pset);
-	if (!new_pset->active) {
-	    pset_unlock(new_pset);
-	    new_pset = &default_pset;
-	    pset_lock(new_pset);
-	}
-
-        /*
-         *      Reset policy and priorities if needed.
-         *
-         *      There are three rules for tasks under assignment:
-         *
-         *      (1) If the new pset has the old policy enabled, keep the
-         *          old policy. Otherwise, use the default policy for the pset.
-         *      (2) The new limits will be the pset limits for the new policy.
-         *      (3) The new base will be the same as the old base unless either
-         *              (a) the new policy changed to the pset default policy;
-         *                  in this case, the new base is the default policy
-         *                  base,
-         *          or
-         *              (b) the new limits are different from the old limits;
-         *                  in this case, the new base is the new limits.
-         */
-        max_priority = pset_max_priority(new_pset, task->policy);
-        if ((task->policy & new_pset->policies) == 0) {
-                task->policy = new_pset->policy_default;
-		task->sched_data = pset_sched_data(new_pset, task->policy);
-                task->priority = pset_base_priority(new_pset, task->policy);
-        	max_priority = pset_max_priority(new_pset, task->policy);
-        }
-        else if (task->max_priority != max_priority) {
-                task->priority = max_priority;
-        }
-
-        task->max_priority = max_priority;
-
-	pset_add_task(new_pset,task);
-	pset_unlock(new_pset);
-
-	if (assign_threads == FALSE) {
-		task_unlock(task);
-		return(KERN_SUCCESS);
-	}
-
-	/*
-	 *	Now freeze this assignment while we get the threads
-	 *	to catch up to it.
-	 */
-	task->may_assign = FALSE;
-
-	/*
-	 *	If current thread is in task, freeze its assignment.
-	 */
-	if (current_act()->task == task) {
-		task_unlock(task);
-		thread_freeze(current_thread());
-		task_lock(task);
-	}
-
-	/*
-	 *	Iterate down the thread list reassigning all the threads.
-	 *	("Base" threads only, please; psets belong to them)
-	 *	New threads pick up task's new processor set automatically.
-	 *	Do current thread last because new pset may be empty.
-	 */
-	{   thread_act_t	thr_act;
-	    int i;
-
-	    prev_thread = THREAD_NULL;
-	    for (i = 0, thr_act = (thread_act_t) queue_first(&task->thr_acts);
-		i < task->thr_act_count;
-		i++, thr_act = (thread_act_t)queue_next(&thr_act->thr_acts)) {
-
-		    thread = act_lock_thread(thr_act);
-		    if (thr_act->pool_port) {
-			act_unlock_thread(thr_act);
-			continue;
-		    }
-		    if (!(task->active)) {
-			ret = KERN_FAILURE;
-			act_unlock_thread(thr_act);
-			break;
-		    }
-		    assert(thread);
-		    if (thread == current_thread())
-			act_unlock_thread(thr_act);
-		    else {
-			thread_reference(thread);
-			task_unlock(task);
-			if (prev_thread != THREAD_NULL)
-			    thread_deallocate(prev_thread); /* may block */
-			assert(thread->top_act);
-			assert(thread->top_act->thread == thread);
-			/*
-			 * Inline thread_assign() here to avoid silly double
-			 * conversion.
-			 */
-			thread_freeze(thread);
-			thread_doassign(thread, new_pset, TRUE);
-			/*
-			 * All thread-related locks released at this point.
-			 */
-			prev_thread = thread;
-			task_lock(task);
-		    }
-	    }
-	    assert(queue_end(&task->thr_acts, (queue_entry_t)thr_act));
-	}
-
-	/*
-	 *	Done, wakeup anyone waiting for us.
-	 */
-	task->may_assign = TRUE;
-	if (task->assign_active) {
-		task->assign_active = FALSE;
-		thread_wakeup((event_t)&task->assign_active);
-	}
-	task_unlock(task);
-	if (prev_thread != THREAD_NULL)
-		thread_deallocate(prev_thread);		/* may block */
-
-	/*
-	 *	Finish assignment of current thread.
-	 */
-	if (current_act()->task == task) {
-		thread = act_lock_thread(current_act());
-		thread_doassign(thread, new_pset, TRUE);
-		/*
-		 * All thread-related locks released at this point.
-		 */
-	}
-
-	return(ret);
+	return (KERN_FAILURE);
 }
-#else	/* MACH_HOST */
-/*
- *	task_assign:
- *
- *	Change the assigned processor set for the task
- */
-kern_return_t
-task_assign(
-	task_t		task,
-	processor_set_t	new_pset,
-	boolean_t	assign_threads)
-{
-#ifdef	lint
-	task++; new_pset++; assign_threads++;
-#endif	/* lint */
-	return(KERN_FAILURE);
-}
-#endif	/* MACH_HOST */
-	
 
 /*
  *	task_assign_default:
@@ -1960,50 +1361,6 @@ task_get_assignment(
 	return(KERN_SUCCESS);
 }
 
-
-/*
- *	task_max_priority
- *
- *	Set the maximum priority for a task. This does not affect threads
- *	within the task. Use thread_max_priority() to set their limits.
- */
-kern_return_t
-task_max_priority(
-	task_t		task,
-	processor_set_t	pset,
-	int		max_priority)
-{
-    	kern_return_t       ret = KERN_SUCCESS;
-#if 0
-    	if ((task == TASK_NULL) || (pset == PROCESSOR_SET_NULL) ||
-            invalid_pri(max_priority))
-            return(KERN_INVALID_ARGUMENT);
-
-	task_lock(task);
-
-    	/*
-     	 *  Check for wrong processor set.
-     	 */
-    	if (pset != task->processor_set) {
-		task_unlock(task);
-		return(KERN_FAILURE);
-    	}
-
-        task->max_priority = max_priority;
-
-        /*
-         *      Reset priority if it violates new max priority
-         */
-        if (max_priority > task->priority) {
-            task->priority = max_priority;
-        }
-
-    	task_unlock(task);
-#endif
-    	return(ret);
-}
-
-
 /*
  * 	task_policy
  *
@@ -2020,383 +1377,34 @@ task_policy(
         boolean_t		set_limit,
         boolean_t		change)
 {
-	int lc;
-        processor_set_t pset;
-	policy_limit_t limit;
-        policy_rr_limit_data_t rr_limit;
-        policy_fifo_limit_data_t fifo_limit;
-        policy_timeshare_limit_data_t ts_limit;
-        kern_return_t ret = KERN_SUCCESS;
 
-	
-	if (task == TASK_NULL || (pset = task->processor_set) ==
-            PROCESSOR_SET_NULL)
-		return(KERN_INVALID_ARGUMENT);
-
-#if 0
-	if (invalid_policy(policy) || (pset->policies & policy) == 0)
-		return(KERN_INVALID_POLICY);
-#endif
-	if (set_limit) {
-		/*
-	 	 * 	Set scheduling limits to base priority.
-		 */
-		switch (policy) {
-		case POLICY_RR:
-		{
-			policy_rr_base_t rr_base;
-
-			if (count != POLICY_RR_BASE_COUNT)
-				return(KERN_INVALID_ARGUMENT);
-			lc = POLICY_RR_LIMIT_COUNT;
-			rr_base = (policy_rr_base_t) base;			
-			rr_limit.max_priority = rr_base->base_priority;
-			limit = (policy_limit_t) &rr_limit;
-			break;
-		}
-
-		case POLICY_FIFO:
-		{
-			policy_fifo_base_t fifo_base;
-
-			if (count != POLICY_FIFO_BASE_COUNT)
-				return(KERN_INVALID_ARGUMENT);
-			lc = POLICY_FIFO_LIMIT_COUNT;
-			fifo_base = (policy_fifo_base_t) base;
-			fifo_limit.max_priority = fifo_base->base_priority;
-			limit = (policy_limit_t) &fifo_limit;
-			break;
-		}
-
-		case POLICY_TIMESHARE:
-		{
-			policy_timeshare_base_t ts_base;
-
-			if (count != POLICY_TIMESHARE_BASE_COUNT)
-				return(KERN_INVALID_ARGUMENT);
-			lc = POLICY_TIMESHARE_LIMIT_COUNT;
-			ts_base = (policy_timeshare_base_t) base;
-			ts_limit.max_priority = ts_base->base_priority;
-			limit = (policy_limit_t) &ts_limit;
-			break;
-		}
-
-		default:
-			return(KERN_INVALID_POLICY);
-		}
-
-	} else {
-		/*
-		 *	Use current scheduling limits. Ensure that the
-		 *	new base priority will not exceed current limits.
-		 */
-                switch (policy) {
-                case POLICY_RR:
-		{
-			policy_rr_base_t rr_base;
-
-			if (count != POLICY_RR_BASE_COUNT)
-				return(KERN_INVALID_ARGUMENT);
-			lc = POLICY_RR_LIMIT_COUNT;
-			rr_base = (policy_rr_base_t) base;
-			if (rr_base->base_priority < task->max_priority) {
-				ret = KERN_POLICY_LIMIT;
-				break;
-			}
-                        rr_limit.max_priority = task->max_priority;
-			limit = (policy_limit_t) &rr_limit;
-                        break;
-		}
-
-                case POLICY_FIFO:
-		{
-			policy_fifo_base_t fifo_base;
-
-			if (count != POLICY_FIFO_BASE_COUNT)
-				return(KERN_INVALID_ARGUMENT);
-			lc = POLICY_FIFO_LIMIT_COUNT;
-			fifo_base = (policy_fifo_base_t) base;
-			if (fifo_base->base_priority < task->max_priority) {
-				ret = KERN_POLICY_LIMIT;
-				break;
-			}
-                        fifo_limit.max_priority = task->max_priority;
-			limit = (policy_limit_t) &fifo_limit;
-                        break;
-		}
-
-                case POLICY_TIMESHARE:
-		{
-			policy_timeshare_base_t ts_base;
-
-			if (count != POLICY_TIMESHARE_BASE_COUNT)
-				return(KERN_INVALID_ARGUMENT);
-			lc = POLICY_TIMESHARE_LIMIT_COUNT;
-			ts_base = (policy_timeshare_base_t) base;
-			if (ts_base->base_priority < task->max_priority) {
-				ret = KERN_POLICY_LIMIT;
-				break;
-			}
-                        ts_limit.max_priority = task->max_priority;
-			limit = (policy_limit_t) &ts_limit;
-                        break;
-		}
-
-                default:
-                        return(KERN_INVALID_POLICY);
-                }
-
-	}
-
-	if (ret != KERN_SUCCESS) 
-		return(ret);
-
-	ret = task_set_policy(task, pset, policy, base, count, 
-                              limit, lc, change);
-	
-	return(ret);
+	return (KERN_FAILURE);
 }
 
-/*
- *	task_set_policy
- *
- *	Set scheduling policy and parameters, both base and limit, for 
- *	the given task. Policy can be any policy implemented by the
- *	processor set, whether enabled or not. Change contained threads
- *	if requested.
- */
 kern_return_t
 task_set_policy(
-	task_t			task,
-	processor_set_t		pset,
-	policy_t		policy,
-	policy_base_t		base,
-	mach_msg_type_number_t	base_count,
-	policy_limit_t		limit,
-	mach_msg_type_number_t	limit_count,
-	boolean_t		change)
+	task_t			task __unused,
+	processor_set_t		pset __unused,
+	policy_t		policy __unused,
+	policy_base_t		base __unused,
+	mach_msg_type_number_t	base_count __unused,
+	policy_limit_t		limit __unused,
+	mach_msg_type_number_t	limit_count __unused,
+	boolean_t		change __unused)
 {
-	kern_return_t ret = KERN_SUCCESS;
 
-	if (task == TASK_NULL || pset == PROCESSOR_SET_NULL)
-		return(KERN_INVALID_ARGUMENT);
-	if (pset != task->processor_set)
-		return(KERN_FAILURE);
-
-	task_lock(task);
-
-	switch (policy) {
-	case POLICY_RR:
-	{
-		int temp;
-		policy_rr_base_t rr_base = (policy_rr_base_t) base;
-		policy_rr_limit_t rr_limit = (policy_rr_limit_t) limit;
-
-		if (base_count != POLICY_RR_BASE_COUNT || 
-		    limit_count != POLICY_RR_LIMIT_COUNT) {
-			ret = KERN_INVALID_ARGUMENT;
-			break;
-		}
-#if 0		
-		if (invalid_pri(rr_base->base_priority) ||
-                    invalid_pri(rr_limit->max_priority)) {
-			ret = KERN_INVALID_ARGUMENT;
-			break;
-		}
-#endif		
-                temp = rr_base->quantum * 1000;
-                if (temp % ticks)
-                    temp += ticks;
-                task->sched_data = temp/ticks;
-		task->priority = rr_base->base_priority;	
-		task->max_priority = rr_limit->max_priority;	
-		break;
-	}
-
-	case POLICY_FIFO:
-	{
-		policy_fifo_base_t fifo_base = (policy_fifo_base_t) base;
-		policy_fifo_limit_t fifo_limit = (policy_fifo_limit_t) limit;
-
-		if (base_count != POLICY_FIFO_BASE_COUNT || 
-		    limit_count != POLICY_FIFO_LIMIT_COUNT) {
-			ret = KERN_INVALID_ARGUMENT;
-			break;
-		}
-		
-		if (invalid_pri(fifo_base->base_priority) ||
- 		    invalid_pri(fifo_limit->max_priority)) {
-			ret = KERN_INVALID_ARGUMENT;
-                        break;
-                }
-		task->sched_data = 0;
-                task->priority = fifo_base->base_priority;        
-		task->max_priority = fifo_limit->max_priority;	
-                break;
-	}
-
-	case POLICY_TIMESHARE:
-	{
-		policy_timeshare_base_t ts_base = 
-					(policy_timeshare_base_t) base;
-		policy_timeshare_limit_t ts_limit = 
-					(policy_timeshare_limit_t) limit;
-
-		if (base_count != POLICY_TIMESHARE_BASE_COUNT || 
-		    limit_count != POLICY_TIMESHARE_LIMIT_COUNT) {
-			ret = KERN_INVALID_ARGUMENT;
-			break;
-		}
-		if (invalid_pri(ts_base->base_priority) ||
- 		    invalid_pri(ts_limit->max_priority)) {
-			ret = KERN_INVALID_ARGUMENT;
-                        break;
-                }
-		task->sched_data = 0;
-                task->priority = ts_base->base_priority;        
-		task->max_priority = ts_limit->max_priority;	
-                break;
-	}
-
-	default:
-		ret = KERN_INVALID_POLICY;
-	}
-
-	if (ret != KERN_SUCCESS) {
-		task_unlock(task);
-		return(ret);
-	}
-
-	task->policy = policy;
-#if 0
-        if (change) {
-		register thread_act_t	thr_act;
-                register queue_head_t	*list;
-
-                list = &task->thr_acts;
-		thr_act = (thread_act_t) queue_first(list);
-                while (!queue_end(list, (queue_entry_t) thr_act)) {
-			thread_set_policy(thr_act, pset, policy, 
-                                          base, base_count, limit, limit_count);
-                        thr_act = (thread_act_t) queue_next(&thr_act->thr_acts);
-                }
-        }
-#endif
-	task_unlock(task);
-	return(ret);
+	return (KERN_FAILURE);
 }
 
-
-/*
- *	task_collect_scan:
- *
- *	Attempt to free resources owned by tasks.
- */
-
-void
-task_collect_scan(void)
-{
-#if 0
-	register task_t		task, prev_task;
-	processor_set_t		pset, prev_pset;
-
-	prev_task = TASK_NULL;
-	prev_pset = PROCESSOR_SET_NULL;
-
-	mutex_lock(&all_psets_lock);
-	pset = (processor_set_t) queue_first(&all_psets);
-	while (!queue_end(&all_psets, (queue_entry_t) pset)) {
-		pset_lock(pset);
-		task = (task_t) queue_first(&pset->tasks);
-		while (!queue_end(&pset->tasks, (queue_entry_t) task)) {
-			task_reference(task);
-			pset->ref_count++;
-			pset_unlock(pset);
-			mutex_unlock(&all_psets_lock);
-
-			pmap_collect(task->map->pmap);
-
-			if (prev_task != TASK_NULL)
-				task_deallocate(prev_task);
-			prev_task = task;
-
-			if (prev_pset != PROCESSOR_SET_NULL)
-				pset_deallocate(prev_pset);
-			prev_pset = pset;
-
-			mutex_lock(&all_psets_lock);
-			pset_lock(pset);
-			task = (task_t) queue_next(&task->pset_tasks);
-		}
-		pset_unlock(pset);
-		pset = (processor_set_t) queue_next(&pset->all_psets);
-	}
-	mutex_unlock(&all_psets_lock);
-
-	if (prev_task != TASK_NULL)
-		task_deallocate(prev_task);
-	if (prev_pset != PROCESSOR_SET_NULL)
-		pset_deallocate(prev_pset);
-#endif
-}
-
-boolean_t task_collect_allowed = TRUE;
-unsigned task_collect_last_ticks = 0;
-unsigned task_collect_max_rate = 0;		/* in tickss */
-
-/*
- *	consider_task_collect:
- *
- *	Called by the pageout daemon when the system needs more free pages.
- */
-
-void
-consider_task_collect(void)
-{
-	/*
-	 *	By default, don't attempt task collection more frequently
-	 *	than once a second.
-	 */
-
-	if (task_collect_max_rate == 0)
-		task_collect_max_rate = hz;
-
-	if (task_collect_allowed &&
-	    (sched_ticks > (task_collect_last_ticks + task_collect_max_rate))) {
-		task_collect_last_ticks = sched_ticks;
-		task_collect_scan();
-	}
-}
 
 kern_return_t
 task_set_ras_pc(
- 	task_t		task,
- 	vm_offset_t	pc,
- 	vm_offset_t	endpc)
+ 	task_t		task __unused,
+ 	vm_offset_t	pc __unused,
+ 	vm_offset_t	endpc __unused)
 {
-#if	FAST_TAS
-	extern int fast_tas_debug;
- 
-	if (fast_tas_debug) {
-		printf("task 0x%x: setting fast_tas to [0x%x, 0x%x]\n",
-		       task, pc, endpc);
-	}
-	task_lock(task);
-	task->fast_tas_base = pc;
-	task->fast_tas_end =  endpc;
-	task_unlock(task);
-	return KERN_SUCCESS;
- 
-#else	/* FAST_TAS */
-#ifdef	lint
-	task++;
-	pc++;
-	endpc++;
-#endif	/* lint */
- 
-	return KERN_FAILURE;
- 
-#endif	/* FAST_TAS */
+
+	return (KERN_FAILURE);
 }
 
 void
@@ -2413,25 +1421,4 @@ task_synchronizer_destroy_all(task_t task)
 		(void) semaphore_destroy(task, semaphore);
 	}
 
-}
-
-
-/*
- *	task_set_port_space:
- *
- *	Set port name space of task to specified size.
- */
-
-kern_return_t
-task_set_port_space(
- 	ipc_space_t		task,
- 	int		table_entries)
-{
-	kern_return_t kr;
-	
-	is_write_lock(task);
-	kr = ipc_entry_grow_table(task, table_entries);
-	if (kr == KERN_SUCCESS)
-		is_write_unlock(task);
-	return kr;
 }
