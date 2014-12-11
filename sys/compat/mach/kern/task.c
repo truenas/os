@@ -345,9 +345,6 @@
 #include <fast_tas.h>
 #include <task_swapper.h>
 #include <platforms.h>
-#if	(iPSC860 || PARAGON860)
-#include <mcmsg.h>
-#endif	/* (iPSC860 || PARAGON860) */
 
 #include <mach/boolean.h>
 
@@ -370,10 +367,6 @@
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/thread.h>
 #if 0
-#include <sys/mach/zalloc.h>
-#include <sys/mach/kalloc.h>
-#endif
-#if 0
 #include <sys/mach/processor.h>
 #endif
 #include <sys/mach/sched_prim.h>	/* for thread_wakeup */
@@ -385,12 +378,6 @@
 #include <sys/mach/host.h>
 #include <vm/vm_kern.h>		/* for kernel_map, ipc_kernel_map */
 #include <vm/uma.h>
-#if 0
-#include <sys/mach/profile.h>
-#include <sys/mach/assert.h>
-#include <sys/mach/sync_lock.h>
-#include <sys/mach/sync_sema.h>
-#endif
 #if	MACH_KDB
 #include <ddb/db_sym.h>
 #endif	/* MACH_KDB */
@@ -402,8 +389,6 @@
 #include <sys/mach/task_server.h>
 #include <sys/mach/mach_host_server.h>
 #include <sys/mach/mach_port_server.h>
-
-security_token_t DEFAULT_USER_SECURITY_TOKEN = { {930624, 610120} };
 
 #define invalid_pri(a) 0
 
@@ -428,6 +413,22 @@ void		task_free(
 void		task_synchronizer_destroy_all(
 			task_t		task);
 
+
+kern_return_t
+task_create(
+	task_t				parent_task,
+	__unused ledger_array_t	ledger_ports,
+	__unused mach_msg_type_number_t	num_ledger_ports,
+	__unused boolean_t		inherit_memory,
+	__unused task_t			*child_task)	/* OUT */
+{
+	if (parent_task == TASK_NULL)
+		return(KERN_INVALID_ARGUMENT);
+
+	return(KERN_FAILURE);
+}
+
+
 static kern_return_t
 task_create_internal(
 	task_t		parent_task,
@@ -448,7 +449,6 @@ task_create_internal(
 	new_task->semaphores_owned = 0;
 
 	queue_init(&new_task->semaphore_list);
-	queue_init(&new_task->lock_set_list);
 	ipc_task_init(new_task, parent_task);
 
 	if (parent_task != TASK_NULL) {
@@ -465,11 +465,9 @@ task_create_internal(
 		new_task->sec_token = KERNEL_SECURITY_TOKEN;
 		new_task->audit_token = KERNEL_AUDIT_TOKEN;
 	}
-	pset_lock(pset);
-	pset_add_task(pset, new_task);
-	pset_unlock(pset);
 	ipc_task_enable(new_task);
 	*child_task = new_task;
+
 	return(KERN_SUCCESS);
 }
 
@@ -507,7 +505,6 @@ task_free( register task_t	task )
 	++task->ref_count;
 	task_unlock(task);
 	pset = task->processor_set;
-	pset_lock(pset);
 	task_lock(task);
 	if (--task->ref_count > 0) {
 		/*
@@ -516,71 +513,13 @@ task_free( register task_t	task )
 		 * dropped our reference.
 		 */
 		task_unlock(task);
-		pset_unlock(pset);
 		return;
 	}
-	pset_remove_task(pset,task);
 	task_unlock(task);
-	pset_unlock(pset);
-	pset_deallocate(pset);
-#if 0	
-	if (task->kernel_loaded)
-	    vm_map_remove(kernel_map, task->map->min_offset,
-			  task->map->max_offset, VM_MAP_NO_FLAGS);
-	vm_map_deallocate(task->map);
-#endif	
 	is_release(task->itk_space);
-#if 0	
-	task_prof_deallocate(task);
-#endif	
 	uma_zfree(task_zone, task);
 }
 
-/*
- * task_act_iterate
- *
- * Ignores returncodes from called function.
- * Already locked: Task
- */
-void
-task_act_iterate(task_t task, kern_return_t (*func)(thread_act_t inc))
-{
-#if 0	
-	thread_act_t inc, ninc;
-#endif	
-#if	MACH_ASSERT
-	int c1 = task->thr_act_count, c2 = 0;
-	if (watchacts & WA_TASK)
-	    printf("\ttask_act_iterate(task=%x, func=%x)\n", task, func);
-#endif	/* MACH_ASSERT */
-
-	/* During iteration, find the next act _before_ calling the function,
-	   because the function might remove the act from the task.  */
-#if 0
-	for (inc  = (thread_act_t)queue_first(&task->thr_acts);
-	     inc != (thread_act_t)&task->thr_acts;
-	     inc  = ninc) {
-		ninc = (thread_act_t)queue_next(&inc->thr_acts);
-#if MACH_ASSERT
-		c2++;
-#endif
-		(void) (*func)(inc);
-	}
-#endif
-#if MACH_ASSERT
-	if (c1 != c2) {
-		printf("task_act_iterate: thr_act_count %d not %d\n", c1, c2);
-		/* Recount in case above (*func)() changed list */
-		for (c2 = 0, inc  = (thread_act_t)queue_first(&task->thr_acts);
-			     inc != (thread_act_t)&task->thr_acts; inc  = ninc) {
-		    ninc = (thread_act_t)queue_next(&inc->thr_acts);
-		    c2++;
-		}
-		printf("\t reset thr_act_count to %d\n",
-					task->thr_act_count = c2);
-	}
-#endif
-}
 
 void
 task_deallocate( task_t task )
@@ -633,23 +572,6 @@ task_terminate(
 	cur_task = current_task();
 	cur_thr_act = current_thread()->top_act;
 #endif
-#if	TASK_SWAPPER
-	/*
-	 *	If task is not resident (swapped out, or being swapped
-	 *	out), we want to bring it back in (this can block).
-	 *	NOTE: The only way that this can happen in the current
-	 *	system is if the task is swapped while it has a thread
-	 *	in exit(), and the thread does not hit a clean point
-	 *	to swap itself before getting here.  
-	 *	Terminating other tasks is another way to this code, but
-	 *	it is not yet fully supported.
-	 *	The task_swapin is unconditional.  It used to be done
-	 *	only if the task is not resident.  Swapping in a
-	 *	resident task will prevent it from being swapped out 
-	 *	while it terminates.
-	 */
-	task_swapin(task, TRUE);	/* TRUE means make it unswappable */
-#endif	/* TASK_SWAPPER */
 
 	/*
 	 *	Deactivate task so that it can't be terminated again,
