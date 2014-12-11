@@ -193,20 +193,9 @@ mach_msg_size_t mig_reply_size;
 #if     MACH_DEBUG
 #include <mach_debug/mach_debug_server.h>
 #endif	/* MACH_DEBUG */
-#if     NORMA_TASK
-#include <sys/mach/mach_norma_server.h>
-#include <kern/norma_task_server.h>
-#endif	/* NORMA_TASK */
-#if     NORMA_VM
-#include <xmm/proxy_server.h>
-#include <xmm/xmm_internal_server.h>
-#endif	/* NORMA_VM */
 #if     MACH_MACHINE_ROUTINES
 #include <machine/machine_routines.h>
 #endif	/* MACH_MACHINE_ROUTINES */
-#if	XK_PROXY
-#include <uk_xkern/xk_uproxy_server.h>
-#endif	/* XK_PROXY */
 
 rpc_subsystem_t mig_e[] = {
 #if 0	
@@ -230,17 +219,6 @@ rpc_subsystem_t mig_e[] = {
 #if     MACH_DEBUG
         (rpc_subsystem_t)&mach_debug_subsystem,
 #endif  /* MACH_DEBUG */
-#if     NORMA_TASK
-        (rpc_subsystem_t)&mach_norma_subsystem,
-        (rpc_subsystem_t)&norma_task_internal_subsystem,
-#endif  /* NORMA_TASK */
-#if     NORMA_VM
-        (rpc_subsystem_t)&_proxy_subsystem,
-        (rpc_subsystem_t)&xmm_internal_subsystem,
-#endif  /* NORMA_VM */
-#if     XK_PROXY
-        (rpc_subsystem_t)&do_uproxy_xk_uproxy_subsystem,
-#endif /* XK_PROXY */
 #if     MACH_MACHINE_ROUTINES
         (rpc_subsystem_t)&MACHINE_SUBSYSTEM,
 #endif  /* MACH_MACHINE_ROUTINES */
@@ -328,9 +306,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 			reply_size = mig_reply_size;
 		} else {
 			reply_size = ptr->size;
-#if	MACH_COUNTER
-			ptr->callcount++;
-#endif
 		}
 	}
 
