@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/eventhandler.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -58,6 +59,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/thread.h>
+#include <sys/mach/ipc_tt.h>
 
 #define MT_SETRUNNABLE 0x1
 
@@ -555,6 +557,7 @@ mach_thread_set_policy(struct mach_trap_args *args)
 }
 #endif
 
+
 void
 thread_go(thread_t thread)
 {
@@ -570,13 +573,70 @@ thread_block(void (*continuation)(void))
 void
 thread_will_wait_with_timeout(thread_t thread, int timeout)
 {
-
-
 }
 
 
 void
 thread_will_wait(thread_t thread)
 {
-	/* XXX */
 }
+
+static void
+mach_thread_create(task_t task, thread_t thread)
+{
+
+	thread->ref_count = 1;
+	thread->task = task;
+	ipc_thread_init(thread);
+}
+
+
+static uma_zone_t thread_shuttle_zone;
+
+static int
+uma_thread_init(void *_thread, int a, int b)
+{
+	/* allocate thread substructures */
+	return (0);
+}
+
+static void
+uma_thread_fini(void *_thread, int a)
+{
+	/* deallocate thread substructures */
+}
+
+static void
+mach_thread_init(void *arg __unused, struct thread *td)
+{
+	thread_t thread;
+
+	thread = uma_zalloc(thread_shuttle_zone, M_WAITOK);
+	mtx_init(&thread->ith_lock_data, "mach_thread lock", NULL, MTX_DEF);
+
+	td->td_machdata = thread;
+}
+
+static void
+mach_thread_ctor(void *arg __unused, struct thread *td)
+{
+	thread_t thread = td->td_machdata;
+	task_t task = td->td_proc->p_machdata;
+
+	mach_thread_create(task, thread);
+}
+
+static void
+thread_sysinit(void *arg __unused)
+{
+	thread_shuttle_zone = uma_zcreate("thread_shuttle_zone",
+									  sizeof(struct thread_shuttle),
+									  NULL, NULL, uma_thread_init,
+									  uma_thread_fini, 1, 0);
+
+	EVENTHANDLER_REGISTER(thread_ctor, mach_thread_ctor, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(thread_init, mach_thread_init, NULL, EVENTHANDLER_PRI_ANY);
+}
+
+/* before SI_SUB_INTRINSIC and after SI_SUB_EVENTHANDLER */
+SYSINIT(mach_thread, SI_SUB_KLD, SI_ORDER_ANY, thread_sysinit, NULL);

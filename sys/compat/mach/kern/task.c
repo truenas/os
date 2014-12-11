@@ -336,6 +336,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/eventhandler.h>
 #include <sys/kernel.h>
 #if 0
 #include <mach_kdb.h>
@@ -399,6 +400,7 @@ uma_zone_t	task_zone;
 
 /* Forwards */
 
+
 kern_return_t	task_hold_locked(
 			task_t		task);
 void		task_wait_locked(
@@ -432,23 +434,14 @@ task_create(
 static kern_return_t
 task_create_internal(
 	task_t		parent_task,
-	task_t		*child_task)		/* OUT */
+	task_t		new_task)
 {
-	register task_t	new_task;
 	register processor_set_t	pset;
-
-	new_task = (task_t) uma_zalloc(task_zone, M_WAITOK);
-	if (new_task == TASK_NULL) {
-		return(KERN_RESOURCE_SHORTAGE);
-	}
 
 	/* one ref for just being alive; one for our caller */
 	new_task->ref_count = 2;
-
-	mutex_init(&new_task->lock, "ETAP_THREAD_TASK_NEW");
 	new_task->semaphores_owned = 0;
 
-	queue_init(&new_task->semaphore_list);
 	ipc_task_init(new_task, parent_task);
 
 	if (parent_task != TASK_NULL) {
@@ -466,24 +459,10 @@ task_create_internal(
 		new_task->audit_token = KERNEL_AUDIT_TOKEN;
 	}
 	ipc_task_enable(new_task);
-	*child_task = new_task;
-
 	return(KERN_SUCCESS);
 }
 
 
-void
-task_init(void)
-{
-	task_zone = zinit(
-			sizeof(struct task),
-			TASK_MAX * sizeof(struct task),
-			TASK_CHUNK * sizeof(struct task),
-			"tasks");
-
-	task_create_internal(TASK_NULL, &kernel_task);
-
-}
 
 /*
  *	task_free:
@@ -1342,5 +1321,60 @@ task_synchronizer_destroy_all(task_t task)
 		semaphore = (semaphore_t) queue_first(&task->semaphore_list);
 		(void) semaphore_destroy(task, semaphore);
 	}
-
 }
+
+
+static void
+mach_task_init(void *arg __unused, struct proc *p)
+{
+	task_t task;
+
+	p->p_machdata = task = uma_zalloc(task_zone, M_WAITOK);
+
+	mutex_init(&task->lock, "ETAP_THREAD_TASK_NEW");
+	queue_init(&task->semaphore_list);
+}
+
+static void
+mach_task_ctor(void *arg __unused, struct proc *p)
+{
+	task_t task = p->p_machdata;
+	task_t parent_task;
+
+	if (p == &proc0) {
+		parent_task = TASK_NULL;
+		kernel_task = task;
+	} else
+		parent_task = p->p_pptr->p_machdata;
+
+	task_create_internal(parent_task, task);
+}
+
+static int
+uma_task_init(void *_thread, int a, int b)
+{
+	/* allocate task substructures */
+	return (0);
+}
+
+static void
+uma_task_fini(void *_thread, int a)
+{
+	/* deallocate task substructures */
+}
+
+
+static void
+task_sysinit(void *arg __unused)
+{
+	task_zone = uma_zcreate("mach_task_zone",
+							sizeof(struct task),
+							NULL, NULL, uma_task_init,
+							uma_task_fini, 1, 0);
+
+	EVENTHANDLER_REGISTER(process_init, mach_task_init, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_ctor, mach_task_ctor, NULL, EVENTHANDLER_PRI_ANY);
+}
+
+/* before SI_SUB_INTRINSIC and after SI_SUB_EVENTHANDLER */
+SYSINIT(mach_thread, SI_SUB_KLD, SI_ORDER_ANY, task_sysinit, NULL);

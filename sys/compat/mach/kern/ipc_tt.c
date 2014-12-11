@@ -328,11 +328,6 @@ ipc_thread_init(
 {
 	ipc_thread_links_init(thread);
 	ipc_kmsg_queue_init(&thread->ith_messages);
-
-#if 0
-	ith_lock_init(thread);
-#endif
-
 	thread->ith_mig_reply = MACH_PORT_NULL;
 	thread->ith_rpc_reply = IP_NULL;
 }
