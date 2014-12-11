@@ -182,10 +182,6 @@
  *	Functions to manipulate IPC message queues.
  */
 
-#if 0
-#include <dipc.h>
-#endif
-
 
 #include <sys/mach/port.h>
 #include <sys/mach/message.h>
@@ -205,10 +201,6 @@
 #include <sys/mach/ipc/ipc_space.h>
 #include <sys/mach/thread.h>
 
-
-#define TR_ENABLE 0
-#define	dstat_decl(foo)
-#define	dstat(foo)
 
 /*
  *	Routine:	ipc_mqueue_init
@@ -504,9 +496,6 @@ int	tr_ipc_mqueue_deliver = 0;
 #define	TR_IPC_MQEX(fmt, kmsg)
 #endif	/* TRACE_BUFFER */
 
-dstat_decl(unsigned int	c_imd_waiting_receiver = 0;)
-dstat_decl(unsigned int	c_imd_enqueued = 0;)
-
 mach_msg_return_t
 ipc_mqueue_deliver(
 	register ipc_port_t	port,
@@ -559,14 +548,12 @@ ipc_mqueue_deliver(
 
 	if (receiver == ITH_NULL) {
 		/* no receivers; queue kmsg */
-		dstat(++c_imd_enqueued);
 		ipc_kmsg_enqueue_macro(&mqueue->imq_messages, kmsg);
 		imq_unlock(mqueue);
 		TR_IPC_MQEX("exit: no receiver", 0);
 		return MACH_MSG_SUCCESS;
 	}
 
-	dstat(++c_imd_waiting_receiver);
 	ipc_thread_rmqueue_first_macro(receivers, receiver);
 	assert(ipc_kmsg_queue_empty(&mqueue->imq_messages));
 
@@ -724,11 +711,6 @@ ipc_mqueue_copyin(
  *
  */
 
-dstat_decl(unsigned int	c_imr_message_present = 0;)
-dstat_decl(unsigned int	c_imr_block = 0;)
-dstat_decl(unsigned int c_imr_calls = 0;)
-dstat_decl(unsigned int c_imr_connect_reply_race = 0;)
-dstat_decl(unsigned int c_imfr_calls = 0;)
 
 mach_msg_return_t
 ipc_mqueue_receive(
@@ -753,19 +735,15 @@ ipc_mqueue_receive(
 	MUST_BE_MASTER("ipc_mqueue_receive()");
 #endif
 	assert( !resume );
-	dstat(++c_imr_calls);
 
 	for (;;) {
 		kmsg = ipc_kmsg_queue_first(kmsgs);
 		if (kmsg != IKM_NULL) {
-			dstat(++c_imr_message_present);
 			ipc_kmsg_rmqueue_first_macro(kmsgs, kmsg);
 			port = (ipc_port_t) kmsg->ikm_header.msgh_remote_port;
 			seqno = port->ip_seqno++;
 			break;
 		}
-
-		dstat(++c_imr_block;)
 
 		/* must block waiting for a message */
 
@@ -885,8 +863,6 @@ ipc_mqueue_finish_receive(
 
 	mr = MACH_MSG_SUCCESS;
 	kmsg = *kmsgp;
-	dstat(++c_imfr_calls);
-
 	/* check sizes */
 	if (mr == MACH_MSG_SUCCESS) {
 		if (kmsg->ikm_header.msgh_size >
