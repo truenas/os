@@ -278,6 +278,7 @@ typedef struct task {
 
 	/* Task security token */
 	security_token_t sec_token;
+	audit_token_t audit_token;
 	/* Synchronizer ownership information */
 	queue_head_t	semaphore_list;		/* list of owned semaphores   */
 	int		semaphores_owned;	/* number of semaphores owned */
@@ -297,24 +298,6 @@ typedef struct task {
 	void		*user_data;	/* Arbitrary data settable via IPC */
 	int		suspend_count;	/* Internal scheduling only */
 
-#if	TASK_SWAPPER
-	/* Task swapper data */
-	unsigned short	swap_state;	/* swap state (e.g. IN/OUT) */
-	unsigned short	swap_flags;	/* swap flags (e.g. MAKE_UNSWAPP) */
-	unsigned int	swap_stamp;	/* when last swapped */
-	unsigned long	swap_rss;	/* size (pages) when last swapped */
-	int		swap_ast_waiting; /* number of threads that have not */
-					  /* reached a clean point and halted */
-	int		swap_nswap;	/* number of times this task swapped */
-	queue_chain_t	swapped_tasks;	/* list of non-resident tasks */
-#endif	/* TASK_SWAPPER */
-
-
-#if	MACH_HOST
-	boolean_t	may_assign;	/* can assigned pset be changed? */
-	boolean_t	assign_active;	/* waiting for may_assign */
-#endif	/* MACH_HOST */
-
 	/* User-visible scheduling information */
 	int		user_stop_count;	/* outstanding stops */
         
@@ -323,12 +306,6 @@ typedef struct task {
 				/* total user time for dead threads */
 	time_value_t	total_system_time;
 				/* total system time for dead threads */
-
-#if	MACH_PROF
-	boolean_t	task_profiled;  /* is task being profiled ? */
-	struct prof_data *profil_buffer;/* profile struct if so */
-#endif	/* MACH_PROF */
-
 
 	/* RPC subsystem information */
 	queue_head_t	subsystem_list;	/* list of subsystems */
@@ -340,13 +317,6 @@ typedef struct task {
 	/* User space system call emulation support */
 	struct 	eml_dispatch	*eml_dispatch;
 
-#if	NORMA_TASK
-	long		child_node;	/* if != -1, node for new children */
-#endif	/* NORMA_TASK */
-#if	FAST_TAS
-	vm_offset_t	fast_tas_base;
-	vm_offset_t	fast_tas_end;
-#endif	/* FAST_TAS */
 	MACHINE_TASK
 #endif
 } Task;
