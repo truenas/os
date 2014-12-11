@@ -229,6 +229,7 @@ mach_msg_trailer_size_t trailer_size[] = {
 	  sizeof(mach_msg_security_trailer_t) };
 
 security_token_t KERNEL_SECURITY_TOKEN = KERNEL_SECURITY_TOKEN_VALUE;
+audit_token_t KERNEL_AUDIT_TOKEN = KERNEL_AUDIT_TOKEN_VALUE;
 
 mach_msg_format_0_trailer_t trailer_template = {
 	/* mach_msg_trailer_type_t */ MACH_MSG_TRAILER_FORMAT_0,
