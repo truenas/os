@@ -447,6 +447,9 @@ typedef mach_msg_security_trailer_t mach_msg_format_0_trailer_t;
 #define   KERNEL_SECURITY_TOKEN_VALUE  { {0, 1} }
 extern security_token_t KERNEL_SECURITY_TOKEN;
 
+#define   KERNEL_AUDIT_TOKEN_VALUE  { {0, 0, 0, 0, 0, 0, 0, 0} }
+extern audit_token_t KERNEL_AUDIT_TOKEN;
+
 typedef	integer_t mach_msg_options_t;
 
 typedef struct
