@@ -1198,6 +1198,31 @@ mach_port_move_member(
 }
 
 /*
+ *	task_set_port_space:
+ *
+ *	Set port name space of task to specified size.
+ */
+kern_return_t
+task_set_port_space(
+ 	ipc_space_t	space,
+ 	int		table_entries)
+{
+	kern_return_t kr;
+	
+	is_write_lock(space);
+
+	if (!space->is_active) {
+		is_write_unlock(space);
+		return KERN_INVALID_TASK;
+	}
+
+	kr = ipc_entry_grow_table(space, table_entries);
+	if (kr == KERN_SUCCESS)
+		is_write_unlock(space);
+	return kr;
+}
+
+/*
  *	Routine:	mach_port_request_notification [kernel call]
  *	Purpose:
  *		Requests a notification.  The caller supplies
