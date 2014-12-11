@@ -574,7 +574,6 @@ struct proc {
 	struct proc	*p_peers;	/* (r) */
 	struct proc	*p_leader;	/* (b) */
 	void		*p_emuldata;	/* (c) Emulator state data. */
-	void		*p_machdata;	/* (c) Mach state data. */
 	struct label	*p_label;	/* (*) Proc (not subject) MAC label. */
 	struct p_sched	*p_sched;	/* (*) Scheduler-specific data. */
 	STAILQ_HEAD(, ktr_request)	p_ktr;	/* (o) KTR event queue. */
@@ -603,6 +602,7 @@ struct proc {
 	pid_t		p_reapsubtree;	/* (e) Pid of the direct child of the
 					       reaper which spawned
 					       our subtree. */
+	void		*p_machdata;	/* (c) Mach state data. */
 };
 
 #define	p_session	p_pgrp->pg_session
