@@ -98,10 +98,6 @@
  *	Exported kernel calls.  See mach/mach_port.defs.
  */
 
-#if 0
-#include <mach_debug.h>
-#include <mach_rt.h>
-#endif
 
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
@@ -135,13 +131,9 @@
 #include <vm/vm.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_extern.h>
+
 #define kmem_free(a, b, c) kmem_free(kernel_arena, b, c)
-#define TEMPORARY_NO_NMS 0
 
-
-#if 0
-#include <kern/misc_protos.h>
-#endif
 
 #define assert_static CTASSERT 
 #pragma clang diagnostic ignored "-Wuninitialized"
