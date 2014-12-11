@@ -200,8 +200,7 @@ done:
 int
 sys__kernelrpc_mach_port_allocate_trap(struct thread *td __unused, struct _kernelrpc_mach_port_allocate_trap_args *uap)
 {
-	thread_t mthread = current_thread();
-	ipc_space_t space = mthread->task->itk_space;
+	ipc_space_t space = current_task()->itk_space;
 	mach_port_name_t name;
 	int error;
 
@@ -214,8 +213,7 @@ sys__kernelrpc_mach_port_allocate_trap(struct thread *td __unused, struct _kerne
 int
 sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_mach_port_deallocate_trap_args *uap)
 {
-	thread_t mthread = current_thread();
-	ipc_space_t space = mthread->task->itk_space;
+	ipc_space_t space = current_task()->itk_space;
 
 	mach_port_deallocate(space, uap->name);
 	return (0);
@@ -224,8 +222,7 @@ sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_ma
 int
 sys__kernelrpc_mach_port_insert_right_trap(struct thread *td __unused, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
 {
-	thread_t mthread = current_thread();
-	ipc_space_t space = mthread->task->itk_space;
+	ipc_space_t space = current_task()->itk_space;
 	mach_port_t poly = CAST_MACH_NAME_TO_PORT(uap->poly);
 
 	return (mach_port_insert_right(space, uap->name, poly, uap->polyPoly));
@@ -234,8 +231,7 @@ sys__kernelrpc_mach_port_insert_right_trap(struct thread *td __unused, struct _k
 int
 sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach_port_mod_refs_trap_args *uap)
 {
-	thread_t mthread = current_thread();
-	ipc_space_t space = mthread->task->itk_space;
+	ipc_space_t space = current_task()->itk_space;
 	/*
 	  mach_port_name_t target = uap->target;
 	  mach_port_name_t *name = uap->name;
@@ -248,8 +244,7 @@ sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach
 int
 sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_mach_port_move_member_trap_args *uap)
 {
-	thread_t mthread = current_thread();
-	ipc_space_t space = mthread->task->itk_space;
+	ipc_space_t space = current_task()->itk_space;
 
 	return (mach_port_move_member(space, uap->member, uap->after));
 }
@@ -282,8 +277,7 @@ return (ENOSYS);
 int
 sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *uap)
 {
-	thread_t mthread = current_thread();
-	ipc_space_t space = mthread->task->itk_space;
+	ipc_space_t space = current_task()->itk_space;
 
 	return (mach_port_destroy(space, uap->name));
 }

@@ -297,7 +297,8 @@ compat/mach/ipc/mach_debug.c	optional  compat_mach
 compat/mach/ipc/mach_msg.c		optional  compat_mach
 compat/mach/ipc/mach_port.c		optional  compat_mach
 compat/mach/kern/ipc_tt.c		optional  compat_mach
-compat/mach/kern/task.c		optional  compat_mach
+compat/mach/kern/ipc_host.c		optional  compat_mach
+compat/mach/kern/task.c			optional  compat_mach
 
 
 contrib/altq/altq/altq_cbq.c		optional altq

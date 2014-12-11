@@ -391,10 +391,4 @@ processor_set_create(
 )
 UNSUPPORTED;
 
-int
-processor_set_default(
-	host_t host,
-	processor_set_name_t *default_set
-)
-UNSUPPORTED;
 

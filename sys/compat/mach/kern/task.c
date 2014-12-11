@@ -338,18 +338,6 @@
 #include <sys/param.h>
 #include <sys/eventhandler.h>
 #include <sys/kernel.h>
-#if 0
-#include <mach_kdb.h>
-#include <mach_host.h>
-#include <norma_task.h>
-#include <mach_prof.h>
-#include <fast_tas.h>
-#include <task_swapper.h>
-#include <platforms.h>
-
-#include <mach/boolean.h>
-
-#endif
 #include <machine/mach/vm_types.h>
 #if 0
 #include <sys/mach/vm_param.h>
@@ -364,7 +352,7 @@
 #if 0
 #include <sys/mach/misc_protos.h>
 #endif
-#include <compat/mach/task.h>
+#include <sys/mach/task.h>
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/thread.h>
 #if 0
@@ -443,10 +431,11 @@ task_create_internal(
 	ipc_task_init(new_task, parent_task);
 
 	if (parent_task != TASK_NULL) {
+#ifdef notyet		
 		pset = parent_task->processor_set;
 		if (!pset->active)
 			pset = &default_pset;
-
+#endif
 		new_task->sec_token = parent_task->sec_token;
 		new_task->audit_token = parent_task->audit_token;
 		new_task->policy = parent_task->policy;
@@ -1331,20 +1320,20 @@ mach_task_init(void *arg __unused, struct proc *p)
 	task->itk_p = p;
 
 	mutex_init(&task->lock, "ETAP_THREAD_TASK_NEW");
+	mutex_init(&task->itk_lock_data, "ETAP_THREAD_TASK_ITK");
 	queue_init(&task->semaphore_list);
+
+	if (p == &proc0) {
+		kernel_task = task;
+		task_create_internal(TASK_NULL, task);
+	}
 }
 
 static void
-mach_task_ctor(void *arg __unused, struct proc *p)
+mach_task_fork(void *arg __unused, struct proc *p1, struct proc *p2, int flags __unused)
 {
-	task_t task = p->p_machdata;
-	task_t parent_task;
-
-	if (p == &proc0) {
-		parent_task = TASK_NULL;
-		kernel_task = task;
-	} else
-		parent_task = p->p_pptr->p_machdata;
+	task_t task = p2->p_machdata;
+	task_t parent_task = p1->p_machdata;
 
 	task_create_internal(parent_task, task);
 }
@@ -1372,7 +1361,7 @@ task_sysinit(void *arg __unused)
 							uma_task_fini, 1, 0);
 
 	EVENTHANDLER_REGISTER(process_init, mach_task_init, NULL, EVENTHANDLER_PRI_ANY);
-	EVENTHANDLER_REGISTER(process_ctor, mach_task_ctor, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_fork, mach_task_fork, NULL, EVENTHANDLER_PRI_ANY);
 }
 
 /* before SI_SUB_INTRINSIC and after SI_SUB_EVENTHANDLER */

@@ -251,22 +251,18 @@ typedef	task_port_t		*task_port_array_t;
 typedef mach_port_t		thread_port_t;
 typedef	thread_port_t		*thread_port_array_t;
 typedef mach_port_t		processor_set_control_port_t;
-typedef mach_port_t		*processor_port_array_t;
 typedef mach_port_t		processor_set_name_port_t;
-typedef mach_port_t		*processor_set_name_port_array_t;
 typedef vm_offset_t		*emulation_vector_t;
-typedef	mach_port_t		thread_act_t;
-typedef	thread_act_t		*thread_act_array_t;
+typedef	mach_port_t		thread_t, thread_act_t;
 typedef mach_port_t		thread_act_port_t;
 typedef	thread_act_port_t	*thread_act_port_array_t;
 typedef mach_port_t		lock_set_port_t;
 typedef mach_port_t		semaphore_port_t;
 typedef mach_port_t		security_port_t;
-typedef mach_port_t		mem_entry_name_port_t;
 typedef integer_t		ledger_item_t;
+typedef mach_port_t		*processor_array_t;
 typedef processor_set_t         processor_set_name_t;
-typedef processor_set_name_t *processor_set_name_array_t;
-typedef processor_t *processor_array_t;
+typedef processor_set_name_t		*processor_set_name_array_t;
 
 #endif	/* MACH_KERNEL */
 typedef mach_port_t           clock_reply_t;
@@ -295,10 +291,11 @@ typedef char			*user_subsystem_t;
  *	before mach/{std,mach}_types.{defs,h} were set up.
  */
 #include <sys/mach/std_types.h>
-#include <compat/mach/processor.h>	/* for processor_array_t,
+#ifdef _KERNEL
+#include <sys/mach/processor.h>	/* for processor_array_t,
 				       processor_set_array_t,
 				       processor_set_name_array_t */
-#include <compat/mach/task.h>
+#include <sys/mach/task.h>
 
 #ifdef __MIG_check__Request__vm_map_subsystem__
 #include <sys/mach/ipc/ipc_kmsg.h>
@@ -340,5 +337,6 @@ int mach_vm_wire_32(host_priv_t host_priv, vm_map_t task, vm_address_t address, 
 
 #define vm_wire(host_priv, task, address, size, desired_access) mach_vm_wire_32(host_priv, task, address, size, desired_access)	
 
+#endif
 #endif
 #endif	/* _MACH_MACH_TYPES_H_ */

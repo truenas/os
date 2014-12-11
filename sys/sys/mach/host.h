@@ -89,6 +89,7 @@
 
 #ifndef	_KERN_HOST_H_
 #define _KERN_HOST_H_
+#include <sys/mach/host_special_ports.h>
 
 struct	host {
 	struct mtx lock;

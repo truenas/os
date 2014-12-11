@@ -116,6 +116,7 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
 
@@ -160,8 +161,8 @@ extern void mig_init(void);
  *		can be created.
  */
 
-void
-ipc_bootstrap(void)
+static void
+ipc_bootstrap_sysinit(void *arg __unused)
 {
 	kern_return_t kr;
 
@@ -172,15 +173,9 @@ ipc_bootstrap(void)
 
 	/* all IPC zones should be exhaustible */
 
-	ipc_space_zone = zinit(sizeof(struct ipc_space),
-			       ipc_space_max * sizeof(struct ipc_space),
-			       sizeof(struct ipc_space),
-			       "ipc spaces");
-#if 0
-	/* make it exhaustible */
-	zone_change(ipc_space_zone, Z_EXHAUST, TRUE);
-#endif
-	/*
+	ipc_space_zone = uma_zcreate("ipc_space_zone", sizeof(struct ipc_space),
+								 NULL, NULL, NULL, NULL, 1, 0);
+    /*
 	 * populate all port(set) zones
 	 */
 	ipc_object_zones[IOT_PORT] =
@@ -213,9 +208,6 @@ ipc_bootstrap(void)
 
 	/* initialize modules with hidden data structures */
 
-#if	MACH_ASSERT
-	ipc_port_debug_init();
-#endif
 	mig_init();
 	ipc_table_init();
 	ipc_notify_init();
@@ -273,3 +265,6 @@ ipc_init(void)
 	ipc_host_init();
 #endif	
 }
+
+/* before SI_SUB_INTRINSIC and after SI_SUB_EVENTHANDLER */
+SYSINIT(ipc_space, SI_SUB_KLD, SI_ORDER_ANY, ipc_bootstrap_sysinit, NULL);

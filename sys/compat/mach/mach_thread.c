@@ -582,11 +582,11 @@ thread_will_wait(thread_t thread)
 }
 
 static void
-mach_thread_create(task_t task, thread_t thread)
+mach_thread_create(struct thread *td, thread_t thread)
 {
 
 	thread->ref_count = 1;
-	thread->task = task;
+	thread->ith_td = td;
 	ipc_thread_init(thread);
 }
 
@@ -621,9 +621,8 @@ static void
 mach_thread_ctor(void *arg __unused, struct thread *td)
 {
 	thread_t thread = td->td_machdata;
-	task_t task = td->td_proc->p_machdata;
 
-	mach_thread_create(task, thread);
+	mach_thread_create(td, thread);
 }
 
 static void

@@ -166,11 +166,9 @@ ipc_task_init(
 	if (kport == IP_NULL)
 		panic("ipc_task_init");
 
-	itk_lock_init(task);
 	task->itk_self = kport;
 	task->itk_sself = ipc_port_make_send(kport);
 	task->itk_space = space;
-	space->is_fast = task->kernel_loaded;
 
 	if (parent == TASK_NULL) {
 		for (i = FIRST_EXCEPTION; i < EXC_TYPES_COUNT; i++) {
@@ -540,8 +538,8 @@ mach_task_self(void)
 mach_port_name_t
 mach_thread_self(void)
 {
-	thread_act_t  thr_act  = current_act();
-	task_t task = thr_act->task;
+	thread_t thr_act = current_thread();
+	task_t task = current_task();
 	ipc_port_t sright;
 
 	sright = retrieve_thread_self_fast(thr_act);

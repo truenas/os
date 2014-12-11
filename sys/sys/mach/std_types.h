@@ -143,7 +143,7 @@
 #define copyoutmap(a, b, c, d) 0
 #define copyinmap(a, b, c, d) 0
 
-#define decl_simple_lock_data(a, b) struct mtx b;
+#define decl_simple_lock_data(a, b) a struct mtx b;
 	
 #include <vm/vm.h>
 
@@ -206,6 +206,8 @@ struct vm_map_copy {
 
 typedef struct vm_map_copy *vm_map_copy_t;
 #include <sys/mach/macro_help.h>
-
+#else
+#define decl_simple_lock_data(a, b)
+#define decl_mutex_data(__annot, __lock)
 #endif
 #endif	/* STD_TYPES_H_ */

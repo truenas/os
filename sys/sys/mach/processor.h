@@ -138,7 +138,7 @@
 #endif
 
 struct processor_set {
-	decl_mutex_data(,	lock)		/* lock for everything else */
+	decl_mutex_data(,	lock);		/* lock for everything else */
 	boolean_t		active;		/* is pset in use */
 	struct ipc_port	*	pset_self;	/* port for operations */
 	struct ipc_port *	pset_name_self;	/* port for information */
@@ -195,8 +195,6 @@ struct processor {
 	processor_set_t	processor_set;	/* processor set I belong to */
 	processor_set_t processor_set_next;	/* set I will belong to */
 	queue_chain_t	processors;	/* all processors in set */
-	decl_simple_lock_data(,lock)
-	struct ipc_port *processor_self;	/* port for operations */
 	int		slot_num;	/* machine-indep slot number */
 #if	NCPUS > 1
 	ast_check_t	ast_check_data;	/* for remote ast_check invocation */
@@ -204,6 +202,8 @@ struct processor {
 #endif	/* NCPUS > 1 */
 	/* punt id data temporarily */
 	#endif
+	decl_simple_lock_data(,lock)
+	struct ipc_port *processor_self;	/* port for operations */
 };
 
 #define PROCESSOR_NULL	(processor_t)0

@@ -57,7 +57,7 @@ struct thread_shuttle {
 					   may be examined by this thread
 					   WITHOUT locking */
 	struct callout *timer;		/* timer for thread */
-	struct task *task;
+	struct thread *ith_td;
 
 	/* Special ports attached to this activation */
 	struct ipc_port *ith_self;	/* not a right, doesn't hold ref */
@@ -273,6 +273,7 @@ typedef struct thread_shuttle	*thread_shuttle_t;
 #define ith_scatter_list_size	saved.receive.scatter_list_size
 
 #define ith_other		saved.other
+#define ith_task		ith_td->td_proc->p_machdata
 
 /*
  * thread_t->at_safe_point values

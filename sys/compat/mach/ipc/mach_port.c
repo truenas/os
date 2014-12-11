@@ -127,7 +127,7 @@
 #include <sys/mach/ipc/ipc_pset.h>
 #include <sys/mach/ipc/ipc_right.h>
 #include <sys/mach/thread.h>
-#include <compat/mach/task.h>
+#include <sys/mach/task.h>
 #include <vm/vm.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_extern.h>

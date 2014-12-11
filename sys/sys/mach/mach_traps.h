@@ -66,8 +66,9 @@
 #ifndef	_MACH_MACH_TRAPS_H_
 #define _MACH_MACH_TRAPS_H_
 
-#include <stdint.h>
+__BEGIN_DECLS
 
+#ifndef	_KERNEL
 #include <mach/std_types.h>
 #include <mach/mach_types.h>
 #include <mach/kern_return.h>
@@ -79,9 +80,8 @@
 
 #include <sys/cdefs.h>
 
-__BEGIN_DECLS
+#include <stdint.h>
 
-#ifndef	KERNEL
 
 #ifdef	PRIVATE
 
@@ -304,6 +304,15 @@ extern kern_return_t pid_for_task(
 				int *x);
 
 #else	/* KERNEL */
+
+mach_port_name_t	mach_reply_port(void);
+
+mach_port_name_t	mach_thread_self(void);
+
+mach_port_name_t	mach_task_self(void);
+
+mach_port_name_t	mach_host_self(void);
+
 
 #ifdef	XNU_KERNEL_PRIVATE
 

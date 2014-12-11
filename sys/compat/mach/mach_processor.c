@@ -10,9 +10,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 
 #include <compat/mach/mach_types.h>
-#include <compat/mach/processor.h>
+#include <sys/mach/processor.h>
 
 
+processor_t		master_processor;
 
 void
 pset_add_task(processor_set_t	pset, task_t		task)

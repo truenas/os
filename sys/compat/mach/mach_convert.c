@@ -34,33 +34,6 @@ convert_port_to_clock(ipc_port_t port)
 	return (NULL);
 }
 
-host_t
-convert_port_to_host(ipc_port_t port)
-{
-	return (NULL);
-}
-
-host_t
-convert_port_to_host_priv(ipc_port_t port)
-{
-
-	return (NULL);
-}
-
-processor_set_t
-convert_port_to_pset(ipc_port_t port)
-{
-
-	return (NULL);
-}
-
-processor_set_t
-convert_port_to_pset_name(ipc_port_t port)
-{
-
-	return (NULL);
-}
-
 semaphore_t
 convert_port_to_semaphore(ipc_port_t port)
 {
@@ -84,20 +57,6 @@ convert_port_to_task_suspension_token(ipc_port_t port)
 
 ipc_voucher_t
 convert_port_to_voucher(ipc_port_t port)
-{
-
-	return (NULL);
-}
-
-ipc_port_t
-convert_pset_name_to_port(processor_set_t pset)
-{
-
-	return (NULL);
-}
-
-ipc_port_t
-convert_pset_to_port(processor_set_t pset)
 {
 
 	return (NULL);

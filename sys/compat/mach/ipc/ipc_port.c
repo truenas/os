@@ -1364,6 +1364,8 @@ ipc_port_alloc_special(
 	ipc_port_t port;
 
 	port = (ipc_port_t) io_alloc(IOT_PORT);
+
+	assert(port != IP_NULL);
 	if (port == IP_NULL)
 		return IP_NULL;
 
