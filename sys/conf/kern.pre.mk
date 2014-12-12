@@ -146,6 +146,10 @@ ZFS_ASM_CFLAGS= -x assembler-with-cpp -DLOCORE ${ZFS_CFLAGS}
 ZFS_C=		${CC} -c ${ZFS_CFLAGS} ${WERROR} ${PROF} ${.IMPSRC}
 ZFS_S=		${CC} -c ${ZFS_ASM_CFLAGS} ${WERROR} ${.IMPSRC}
 
+
+MACH_FLAGS= -I$S/apsl/include -I$S/sys
+MACH_C = ${NORMAL_C} ${MACH_FLAGS}
+
 .if ${MK_CTF} != "no"
 NORMAL_CTFCONVERT=	${CTFCONVERT} ${CTFFLAGS} ${.TARGET}
 .elif ${MAKE_VERSION} >= 5201111300
