@@ -239,6 +239,7 @@ typedef mach_port_t		alarm_t;
 typedef mach_port_t		clock_serv_t;
 typedef mach_port_t		clock_ctrl_t;
 typedef mach_port_t		io_master_t;
+typedef mach_port_t		ipc_space_t;
 
 typedef mach_port_t             task_suspension_token_t;
 typedef mach_port_t             host_t;
