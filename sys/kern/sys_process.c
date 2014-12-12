@@ -33,6 +33,7 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_compat.h"
+#include "opt_compat_mach.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1425,15 +1426,17 @@ kern_procctl(struct thread *td, idtype_t idtype, id_t id, int com, void *data)
 }
 
 int
-sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap __unused)
-{
-
-	return (ENOSYS);
-}
-
-int
 sys___iopolicysys(struct thread *td __unused, struct __iopolicysys_args *uap __unused)
 {
 
 	return (ENOSYS);
 }
+
+#ifndef COMPAT_MACH
+int
+sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap)
+{
+
+	return (ENOSYS);
+}
+#endif
