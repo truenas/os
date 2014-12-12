@@ -244,7 +244,8 @@ typedef struct task {
 	boolean_t	kernel_loaded;	/* Created with kernel_task_create() */
 
 	struct ipc_space *itk_space;
-
+	uint64_t		itk_uniqueid;
+	uint64_t		itk_puniqueid;
 	decl_mutex_data(,itk_lock_data)
 
 	/* IPC structures */
