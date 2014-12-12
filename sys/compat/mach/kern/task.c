@@ -1310,6 +1310,7 @@ task_synchronizer_destroy_all(task_t task)
 	}
 }
 
+static uint64_t task_uniqueid;
 
 static void
 mach_task_init(void *arg __unused, struct proc *p)
@@ -1335,6 +1336,9 @@ mach_task_fork(void *arg __unused, struct proc *p1, struct proc *p2, int flags _
 	task_t task = p2->p_machdata;
 	task_t parent_task = p1->p_machdata;
 
+	atomic_add_64(&task_uniqueid, 1);
+	task->itk_uniqueid = task_uniqueid;
+	task->itk_puniqueid = parent_task->itk_uniqueid;
 	task_create_internal(parent_task, task);
 }
 
