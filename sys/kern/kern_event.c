@@ -948,8 +948,8 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 	int v1)
 {
 	struct kevent keva[KQ_NEVENTS];
-	struct kevent *changes;
 	struct kevent64_s keva64[KQ_NEVENTS];
+	struct kevent *changes;
 	struct kevent64_s kevtmp, *kevp;
 	struct kqueue *kq;
 	struct file *fp;
@@ -971,7 +971,7 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 
 	nerrors = 0;
 	if (v1) {
-		struct kevent64_s *kevp, *changes;
+		struct kevent64_s *changes;
 		while (nchanges > 0) {
 			n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
 			error = k_ops->k_copyin(k_ops->arg, keva64, n);
@@ -1013,7 +1013,7 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 			kevp = (struct kevent64_s *)&changes[i];
 			if (!kevp->filter)
 				continue;
-			memcpy(&kevtmp, &changes[i], sizeof(struct kevent));
+			EV_SET64(&kevtmp, kevp->ident, kevp->filter, kevp->flags, kevp->fflags, kevp->data, kevp->udata, 0, 0);
 			kevp = &kevtmp;
 			kevp->flags &= ~EV_SYSFLAGS;
 			error = kqueue_register(kq, kevp, td, 1);
@@ -1039,9 +1039,9 @@ check_errors:
 		goto done;
 	}
 	if (v1 == 0)
-		for (i = 0; i < nevents; i++) {
-			memcpy(&keva64[i], &keva[i], sizeof(struct kevent));
-			keva64[i].ext[0] = keva64[i].ext[1] = 0;
+		for (i = 0; i < KQ_NEVENTS; i++) {
+			struct kevent *k = &keva[i];
+			EV_SET64(&keva64[i], k->ident, k->filter, k->flags, k->fflags, k->data, (uint64_t)k->udata, 0, 0);
 		}
 	error = kqueue_scan(kq, nevents, k_ops, timeout, keva64, td);
 done:
