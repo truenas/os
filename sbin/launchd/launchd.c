@@ -117,6 +117,13 @@ uid_t launchd_uid;
 FILE *launchd_console = NULL;
 int32_t launchd_sync_frequency = 30;
 
+__inline int
+posix_spawnattr_setbinpref_np(posix_spawnattr_t * __restrict a __unused,
+							  size_t b __unused, cpu_type_t *__restrict c __unused, size_t *__restrict d __unused)
+{
+	return 0;
+}
+
 int
 main(int argc, char *const *argv)
 {

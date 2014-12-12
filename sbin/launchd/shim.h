@@ -144,4 +144,24 @@ kern_return_t
 xpc_domain_add_services(job_t j, vm_offset_t services_buff, mach_msg_type_number_t services_sz);
 #define XPC_LPI_VERSION 20141120
 
+
+__inline int
+posix_spawnattr_setprocesstype_np(posix_spawnattr_t * a __unused, const int b __unused)
+{
+	return 0;
+}
+
+__inline int
+posix_spawnattr_set_importancewatch_port_np(posix_spawnattr_t * __restrict attr __unused,
+											int count __unused, mach_port_t portarray[] __unused)
+{
+	return 0;
+}
+
+__inline int
+posix_spawnattr_setcpumonitor_default(posix_spawnattr_t * __restrict a __unused)
+{
+	return 0;
+}
+
 #endif

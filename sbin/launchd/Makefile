@@ -15,11 +15,8 @@ CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
 CFLAGS+= -I${.CURDIR}/../../contrib/openbsm -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -DHAVE_INTTYPES_H
 
-LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
-LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
-LDFLAGS+= -L${.CURDIR}/../../lib/libosxsupport -losxsupport
-LDFLAGS+= -L${.CURDIR}/../../lib/libxpc -lxpc
-LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd -L../../lib/libmach -lmach -lutil -lnv
+LDFLAGS+= -static 
+LDFLAGS+= -L/usr/local/lib -L/usr/local/lib/gcc48 -lobjc -lbsm -lauditd
 LDFLAGS+= -pthread
 
 helper.h launchd_helperServer.h: helper.defs
@@ -44,7 +41,7 @@ SRCS= jobServer.c mach_excServer.c internalServer.c
 SRCS+= job_forwardUser.c  job_replyUser.c job_replyServer.c notifyServer.c
 SRCS+= internalUser.c
 SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
-
+LDADD+= -lutil -lauditd -lbsm -ldispatch -lmach -lBlocksRuntime -llaunch -losxsupport -lxpc -lnv 
 
 
 
