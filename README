@@ -11,24 +11,9 @@ v0:
 kevent flags:
 - EVFILT_MACHPORT
 
-libproc functions:
-proc_get_dirty
-proc_listallpids
-proc_listchildpids
-proc_listpgrppids
-proc_pidinfo
-proc_set_dirty
-proc_setpcontrol
-proc_terminate
-proc_track_dirty
-needing __proc_info system call to be implemented
-
 XML plist configuration
 
-
 v1:
-Retrofit CMU kernel ipc infrastructure
-
 Support:
 - MACH_SEND_NOTIFY
 
@@ -48,6 +33,10 @@ to actually work yet, among others:
 - posix_spawnattr_setbinpref_np
 - posix_spawnattr_getbinpref_np
 
+proc_setpcontrol
+proc_get_dirty
+proc_set_dirty
+proc_track_dirty
 
 
 v2 or later:
