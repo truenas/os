@@ -795,10 +795,14 @@ _dispatch_is_background_thread(void)
 
 DISPATCH_ALWAYS_INLINE
 static inline bool
-_dispatch_block_has_private_data(const dispatch_block_t block)
+_dispatch_block_has_private_data(const dispatch_block_t block __unused)
 {
+#ifdef notyet	
 	extern void (*_dispatch_block_special_invoke)(void*);
 	return (_dispatch_Block_invoke(block) == _dispatch_block_special_invoke);
+#else
+	return (0);
+#endif
 }
 
 DISPATCH_ALWAYS_INLINE

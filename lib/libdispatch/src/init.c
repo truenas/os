@@ -724,12 +724,13 @@ _dispatch_call_block_and_release(void *block)
 
 #if !USE_OBJC
 struct dispatch_queue_attr_s _dispatch_queue_attr_concurrent;
-
+#ifdef notyet
 // The compiler hides the name of the function it generates, and changes it if
 // we try to reference it directly, but the linker still sees it.
 extern void DISPATCH_BLOCK_SPECIAL_INVOKE(void *)
 		asm("____dispatch_block_create_block_invoke");
 void (*_dispatch_block_special_invoke)(void*) = DISPATCH_BLOCK_SPECIAL_INVOKE;
+#endif
 
 dispatch_block_t
 _dispatch_block_create(dispatch_block_flags_t flags, voucher_t voucher,
