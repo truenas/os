@@ -632,7 +632,7 @@ current_task(void)
 	return (curthread->td_proc->p_machdata);
 }
 
-
+#define current_space() current_task()->itk_space
 
 #define current_act() current_thread()
 

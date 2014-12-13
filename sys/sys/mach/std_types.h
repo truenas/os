@@ -114,7 +114,6 @@
 #define page_aligned(addr) ((addr & PAGE_MASK) == 0)
 
 /* XXX FIX THIS */
-#define current_space() NULL
 #define zinit(size1, sizemax, size2, name) uma_zcreate(name, size1, NULL, NULL, NULL, NULL, 0, 0)
 #define zone_change(zone, flag, val)
 #define kalloc(size) malloc(size, M_MACH, M_WAITOK)
