@@ -82,6 +82,7 @@
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/message.h>
+#include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/ipc/ipc_mqueue.h>
 #include <sys/mach/ipc/ipc_object.h>
 #include <sys/mach/ipc/ipc_port.h>
@@ -90,9 +91,8 @@
 #include <sys/mach/ipc/ipc_space.h>
 #include <sys/mach/ipc/ipc_print.h>
 
-#if 0
-#include <kern/thread_pool.h>
-#endif
+#include <sys/mach/thread.h>
+
 /*
  * Forward declarations
  */
@@ -402,7 +402,7 @@ filt_machportattach(struct knote *kn)
 
 	kn->kn_ptr.p_pset = pset;
 	ips_reference(pset);
-	knlist_add(&pset->ips_messages.imq_note, kn, 1);
+	knlist_add(&pset->ips_messages.imq_note, kn, 0);
 	ips_unlock(pset);
 	return (0);
 }
