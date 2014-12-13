@@ -113,24 +113,34 @@
  */
 
 kern_return_t
-ipc_right_lookup_write(
+ipc_right_lookup(
 	ipc_space_t	space,
 	mach_port_name_t	name,
-	ipc_entry_t	*entryp)
+	ipc_entry_t	*entryp,
+	int xlock)
 {
 	ipc_entry_t entry;
 
 	assert(space != IS_NULL);
 
-	is_write_lock(space);
+	if (xlock)
+		is_write_lock(space);
+	else
+		is_read_lock(space);
 
 	if (!space->is_active) {
-		is_write_unlock(space);
+		if (xlock)
+			is_write_unlock(space);
+		else
+			is_read_unlock(space);
 		return KERN_INVALID_TASK;
 	}
 
 	if ((entry = ipc_entry_lookup(space, name)) == IE_NULL) {
-		is_write_unlock(space);
+		if (xlock)
+			is_write_unlock(space);
+		else
+			is_read_unlock(space);
 		return KERN_INVALID_NAME;
 	}
 

@@ -74,20 +74,19 @@
 #ifndef	_IPC_IPC_RIGHT_H_
 #define	_IPC_IPC_RIGHT_H_
 
-#if 0
-#include <mach/boolean.h>
-#endif
 #include <sys/mach/kern_return.h>
 #include <sys/mach/ipc/ipc_port.h>
 #include <sys/mach/ipc/ipc_entry.h>
 
-#define	ipc_right_lookup_read	ipc_right_lookup_write
+#define	ipc_right_lookup_read(a, b, c)	ipc_right_lookup(a, b, c, 0)
+#define	ipc_right_lookup_write(a, b, c)	ipc_right_lookup(a, b, c, 1)
 
 /* Find an entry in a space, given the name */
-extern kern_return_t ipc_right_lookup_write(
+extern kern_return_t ipc_right_lookup(
 	ipc_space_t	space,
 	mach_port_name_t	name,
-	ipc_entry_t	*entryp);
+	ipc_entry_t	*entryp,
+	int xlock);
 
 /* Translate (space, object) -> (name, entry) */
 extern boolean_t ipc_right_reverse(
