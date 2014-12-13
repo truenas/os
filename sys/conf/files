@@ -255,7 +255,7 @@ compat/mach/task_server.c		optional  compat_mach
 compat/mach/vm_map_server.c		optional  compat_mach
 compat/mach/clock_server.c		optional  compat_mach
 
-compat/mach/proc_info.c			optional  compat_mach		compile-with "${MACH_C}"
+compat/mach/proc_info.c			optional  compat_mach		no-depend compile-with "${MACH_C}"
 #compat/mach/mach_bootstrap.c	optional  compat_mach
 compat/mach/mach_clock.c        optional  compat_mach
 compat/mach/mach_convert.c		optional  compat_mach
