@@ -177,16 +177,13 @@ ipc_entry_get(
 
 	assert(space->is_active);
 
-	if (object != NULL && ipc_hash_lookup(space, object, namep, entryp))
-		return (KERN_SUCCESS);
-
-	ip_unlock((ipc_port_t)object);
-	if ((free_entry = malloc(sizeof(*free_entry), M_MACH, M_WAITOK)) == NULL)
+	if ((free_entry = malloc(sizeof(*free_entry), M_MACH, M_WAITOK|M_ZERO)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
-	if (falloc(td, &fp, &fd, 0))
+	if (falloc(td, &fp, &fd, 0)) {
+		free(free_entry, M_DEVBUF);
 		return KERN_RESOURCE_SHORTAGE;
-
+	}
 	free_entry->ie_bits = 0;
 	free_entry->ie_request = 0;
 	free_entry->ie_name = fd;
@@ -197,7 +194,6 @@ ipc_entry_get(
 	*namep = fd;
 	*entryp = free_entry;
 
-	ip_lock((ipc_port_t)object);
 	return KERN_SUCCESS;
 }
 
@@ -231,7 +227,6 @@ ipc_entry_alloc(
 	}
 
 	kr = ipc_entry_get(space, is_send_once, namep, entryp, NULL);
-	is_write_unlock(space);
 	return (kr);
 }
 

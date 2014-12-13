@@ -2006,7 +2006,7 @@ ipc_kmsg_copyout_header(
 				reply_name = MACH_PORT_NAME_DEAD;
 				goto copyout_dest;
 			}
-			ip_reference(reply);
+			ip_unlock(reply);
 			kr = ipc_entry_get(space,
 				reply_type == MACH_MSG_TYPE_PORT_SEND_ONCE,
 							   &reply_name, &entry, (ipc_object_t)reply);
@@ -2037,7 +2037,6 @@ ipc_kmsg_copyout_header(
 			kr = ipc_port_dnrequest(reply, reply_name,
 						notify_port, &request);
 			if (kr != KERN_SUCCESS) {
-				ip_unlock(reply);
 
 				ipc_port_release_sonce(notify_port);
 
