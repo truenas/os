@@ -86,15 +86,6 @@
 #ifndef	_IPC_IPC_SPACE_H_
 #define _IPC_IPC_SPACE_H_
 
-#if 0
-#include <mach_kdb.h>
-
-#include <mach/boolean.h>
-#include <kern/macro_help.h>
-#include <kern/lock.h>
-#include <kern/zalloc.h>
-#endif
-
 #include <sys/mach/kern_return.h>
 
 #include <vm/uma.h>
