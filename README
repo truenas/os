@@ -5,11 +5,41 @@ Rudimentary Mach IPC is supported through libmach provided one's kernel
 is compiled with COMPAT_MACH. The mach interface generator should be able
 to work with modern .defs files.
 
+
+Work to be done for v0:
+
+- Makefile housekeeping - build all the auxiliary libraries
+(osxsupport, mach, dispatch, cfxlite) as part of buildworld and
+install them with installworld
+
+- complete launchctl
+    - add in the missing XML files to libcfxlite - look at the other
+files for examples of
+       pragmas to disable warnings about cast alignment and unused arguments to
+       avoid needing to re-write those files
+
+     - implement the two Foundation calls that launchctl uses
+
+- make launchd useful
+   - add in a runcom() to launchd to make it start up /etc/rc - see where the
+     kernel panics, track down the inevitable brain-dead locking and
+	 assertion issues
+
+   - track down the shims for xinetd / crond
+
+- verify that in-tree libdispatch works
+   - get the tests associated with libdispatch compiling to figure out if anything
+     is broken  - the latest versions can be found at:
+         http://libdispatch.macosforge.org/trac/browser/trunk/testing
+
+    - figure out why that function for block private data isn't being generated
+	
+
 Missing features ordered by version of launchd by which they'll be supported:
 
 v0:
 kevent flags:
-- EVFILT_MACHPORT
+- EVFILT_MACHPORT (mostly implemented but message queue check needs adding)
 
 XML plist configuration
 
@@ -61,6 +91,9 @@ __iopolicysys supports:
 #define	NOTE_EXIT_DECRYPTFAIL		0x00010000 
 #define	NOTE_EXIT_MEMORY		0x00020000
 #define NOTE_EXIT_CSERROR		0x00040000
+
+
+
 
 
 This is the top level of the FreeBSD source directory.  This file
