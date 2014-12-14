@@ -299,7 +299,7 @@ static struct {
 	{ &null_filtops },			/* EVFILT_LIO */
 	{ &user_filtops, 1 },			/* EVFILT_USER */
 	{ &null_filtops },			/* EVFILT_SENDFILE */
-#if COMPAT_MACH
+#ifdef COMPAT_MACH
 	{ &machport_filtops },		/* EVFILT_MACHPORT */
 #else
 	{ &null_filtops },
