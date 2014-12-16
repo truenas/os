@@ -390,6 +390,11 @@ symlinks:
 		ln -fs ../../../../sys/${MACHINE}/include/mach/$$h \
 		    ${DESTDIR}${INCLUDEDIR}/machine/mach; \
 	done
+	for d in *.defs; do \
+		ln -fs ../../../../sys/${MACHINE}/include/mach/$$d \
+		    ${DESTDIR}${INCLUDEDIR}/machine/mach; \
+	done
+
 .endif
 .for _MARCH in ${_MARCHS}
 .if exists(${.CURDIR}/../sys/${_MARCH}/include)
