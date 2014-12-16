@@ -413,10 +413,17 @@ try_again:
 
 	if (state_fd > 0) {
 		rewind(state_f);
+#ifdef __LP64__
 		len = fprintf(state_f,
 			      "clock: %04x tv: %016lu %08lu adj: %08d\n",
 			      clock_seq, last.tv_sec, (long)last.tv_usec,
-			      adjustment);
+					  adjustment);
+#else
+		len = fprintf(state_f,
+					  "clock: %04x tv: %016u %08lu adj: %08d\n",
+					  clock_seq, last.tv_sec, (long)last.tv_usec,
+					  adjustment);
+#endif
 		fflush(state_f);
 		if (ftruncate(state_fd, len) < 0) {
 			fprintf(state_f, "                   \n");
