@@ -94,13 +94,14 @@ static const CFRuntimeClass __CFBooleanClass = {
 };
 
 /* XXX these should be extern private */
-CF_EXPORT CFNumberType _CFNumberGetType2(CFNumberRef number);
-void __CFBooleanInitialize(void);
+CF_PRIVATE_EXTERN CFNumberType _CFNumberGetType2(CFNumberRef number);
+CF_PRIVATE_EXTERN void __CFBooleanInitialize(void);
 CFStringRef __CFNumberCreateFormattingDescription(CFAllocatorRef allocator, CFTypeRef cf, CFDictionaryRef formatOptions __unused);
-void __CFNumberInitialize(void);
+CF_PRIVATE_EXTERN void __CFNumberInitialize(void);
+CF_PRIVATE_EXTERN CFStringRef __CFNumberCopyFormattingDescriptionAsFloat64(CFTypeRef cf);
 
 
-void __CFBooleanInitialize(void) {
+CF_PRIVATE_EXTERN void __CFBooleanInitialize(void) {
     __kCFBooleanTypeID = _CFRuntimeRegisterClass(&__CFBooleanClass);
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFBooleanTrue, __kCFBooleanTypeID);
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFBooleanFalse, __kCFBooleanTypeID);
@@ -886,7 +887,7 @@ static CFStringRef __CFNumberCreateFormattingDescriptionAsFloat64(CFAllocatorRef
     return CFStringCreateWithFormat(allocator, NULL, CFSTR("%.*g"), DBL_DIG + 2, d);
 }
 
-CF_PRIVATE CFStringRef __CFNumberCopyFormattingDescriptionAsFloat64(CFTypeRef cf) {
+CF_PRIVATE_EXTERN CFStringRef __CFNumberCopyFormattingDescriptionAsFloat64(CFTypeRef cf) {
     CFStringRef result = __CFNumberCreateFormattingDescriptionAsFloat64(kCFAllocatorSystemDefault, cf);
 #if OLD_CRAP_TOO
 CFNumberRef number = (CFNumberRef)cf;
@@ -1019,7 +1020,7 @@ static const CFRuntimeClass __CFNumberClass = {
 };
 
 
-void __CFNumberInitialize(void) {
+CF_PRIVATE_EXTERN void __CFNumberInitialize(void) {
     __kCFNumberTypeID = _CFRuntimeRegisterClass(&__CFNumberClass);
 
     _CFRuntimeSetInstanceTypeIDAndIsa(&__kCFNumberNaN, __kCFNumberTypeID);

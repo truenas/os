@@ -62,6 +62,12 @@ CF_INLINE id objc_assign_global(id val, id *dest)
 CF_INLINE id objc_assign_ivar(id val, id dest, ptrdiff_t offset) 
 { return (*(id*)(uintptr_t)((char *)dest+offset) = val); }
 
+CF_INLINE id objc_read_weak(id *location) 
+{ return *location; }
+
+CF_INLINE id objc_assign_weak(id value, id *location) 
+{ return (*location = value); }
+
 CF_INLINE void *objc_collectableZone(void) { return NULL; }
 CF_INLINE unsigned int auto_zone_release(void *zone __unused, void *ptr __unused) { return 0; }
 CF_INLINE const void *auto_zone_base_pointer(void *zone __unused, const void *ptr __unused) { return NULL; }

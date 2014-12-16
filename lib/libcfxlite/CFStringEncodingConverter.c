@@ -700,7 +700,7 @@ uint32_t CFStringEncodingUnicodeToBytes(uint32_t encoding, uint32_t flags, const
             }
         }
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
         if (kCFStringEncodingConverterICU == converter->definition->encodingClass) return __CFStringEncodingICUToBytes((const char *)converter->toBytes, flags, characters, numChars, usedCharLen, bytes, maxByteLen, usedByteLen);
 #endif
 
@@ -819,7 +819,7 @@ uint32_t CFStringEncodingBytesToUnicode(uint32_t encoding, uint32_t flags, const
 
     if (!converter) return kCFStringEncodingConverterUnavailable;
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
     if (kCFStringEncodingConverterICU == converter->definition->encodingClass) return __CFStringEncodingICUToUnicode((const char *)converter->toBytes, flags, bytes, numBytes, usedByteLen, characters, maxCharLen, usedCharLen);
 #endif
 
@@ -854,7 +854,6 @@ uint32_t CFStringEncodingBytesToUnicode(uint32_t encoding, uint32_t flags, const
 
     return theResult;
 }
-
 CF_PRIVATE_EXTERN bool CFStringEncodingIsValidEncoding(uint32_t encoding) {
     return (CFStringEncodingGetConverter(encoding) ? true : false);
 }
@@ -907,7 +906,7 @@ CF_PRIVATE_EXTERN CFIndex CFStringEncodingByteLengthForCharacters(uint32_t encod
     const _CFEncodingConverter *converter = __CFGetConverter(encoding);
 
     if (converter) {
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
         if (kCFStringEncodingConverterICU == converter->definition->encodingClass) return __CFStringEncodingICUByteLength((const char *)converter->toBytes, flags, characters, numChars);
 #endif
 
@@ -992,7 +991,7 @@ CF_PRIVATE_EXTERN const CFStringEncoding *CFStringEncodingListOfAvailableEncodin
     if (NULL == encodings) {
         CFStringEncoding *list = (CFStringEncoding *)__CFBuiltinEncodings;
         CFIndex numICUConverters = 0, numPlatformConverters = 0;
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
         CFStringEncoding *icuConverters = __CFStringEncodingCreateICUEncodings(NULL, &numICUConverters);
 #else
         CFStringEncoding *icuConverters = NULL;

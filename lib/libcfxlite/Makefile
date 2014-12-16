@@ -16,6 +16,11 @@ SRCS+= CFPlatformConverters.c CFPreferences.c CFRuntime.c CFSet.c CFStringEncodi
 SRCS+= CFStringUtilities.c CFTimeZone.c CFUnicodeDecomposition.c 
 SRCS+= CFUnicodePrecomposition.c CFUniChar.c CFSortFunctions.c CFString.c
 SRCS+= CFStringEncodingConverter.c CFStringEncodingDatabase.c CFStringScanner.c CFURL.c CFURLAccess.c CFUtilities.c
+
+# XML support should only be considered transitional
+# libUCL for JSON/YAML is considered more palatable to many
+SRCS+= CFStringEncodingConverter.c CFXMLInputStream.c CFXMLNode.c CFXMLParser.c CFXMLPreferencesDomain.c CFXMLTree.c
+SRCS+= CFTree.c CFPropertyList.c CFOldStylePList.c CFBinaryPList.c CFBurstTrie.c CFUUID.c
 CLEANFILES+= *~ cscope.*
 
 .include <bsd.lib.mk>
