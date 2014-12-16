@@ -8,17 +8,9 @@ to work with modern .defs files.
 
 Work to be done for v0:
 
-- Makefile housekeeping - build all the auxiliary libraries
-(osxsupport, mach, dispatch, cfxlite) as part of buildworld and
-install them with installworld
-
 - complete launchctl
-    - add in the missing XML files to libcfxlite - look at the other
-files for examples of
-       pragmas to disable warnings about cast alignment and unused arguments to
-       avoid needing to re-write those files
-
-     - implement the two Foundation calls that launchctl uses
+    - implement the two Foundation calls that launchctl uses
+	- figure out what to do about CoreFoundation's dependency on icui18n - pull in to contrib?
 
 - make launchd useful
    - add in a runcom() to launchd to make it start up /etc/rc - see where the
@@ -40,8 +32,6 @@ Missing features ordered by version of launchd by which they'll be supported:
 v0:
 kevent flags:
 - EVFILT_MACHPORT (mostly implemented but message queue check needs adding)
-
-XML plist configuration
 
 v1:
 Support:
