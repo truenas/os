@@ -2,10 +2,11 @@
 
 LIB= dispatch
 
-.PATH: src
-.PATH: resolver
+.PATH: ${.CURDIR}
+.PATH: ${.CURDIR}/src
+.PATH: ${.CURDIR}/resolver
 
-CFLAGS+=	-I${.CURDIR}/../../apsl/include -I./os -I./private
+CFLAGS+=	-I${.CURDIR}/../../apsl/include -I${.CURDIR}/os -I${.CURDIR}/private
 CFLAGS+=	-I${.CURDIR} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 CFLAGS+=	-fblocks
 CFLAGS+=	-D__APPLE__ -DTARGET_CPU_X86=1 -DDISPATCH_USE_DTRACE=0
