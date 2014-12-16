@@ -341,7 +341,6 @@ ipc_thread_terminate(
 	thread->ith_rpc_reply = IP_NULL;
 }
 
-#if 0
 /*
  *	Routine:	ipc_thr_act_init
  *	Purpose:
@@ -351,7 +350,7 @@ ipc_thread_terminate(
  */
 
 void
-ipc_thr_act_init(task_t task, thread_act_t thr_act)
+ipc_thr_act_init(thread_act_t thr_act)
 {
 	ipc_port_t kport; int i;
 
@@ -370,6 +369,8 @@ ipc_thr_act_init(task_t task, thread_act_t thr_act)
 
 	ipc_kobject_set(kport, (ipc_kobject_t) thr_act, IKOT_ACT);
 }
+
+#if 0
 
 void
 ipc_thr_act_disable(thread_act_t thr_act)

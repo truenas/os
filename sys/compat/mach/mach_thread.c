@@ -588,6 +588,7 @@ mach_thread_create(struct thread *td, thread_t thread)
 	thread->ref_count = 1;
 	thread->ith_td = td;
 	ipc_thread_init(thread);
+	ipc_thr_act_init(thread);
 }
 
 
