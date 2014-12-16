@@ -32,6 +32,7 @@
 #include <string.h>
 
 
+#pragma clang diagnostic ignored "-Wsign-compare"
 
 #if __LP64__
 #define CFDATA_MAX_SIZE	    ((1UL << 42) - 1)
@@ -48,7 +49,7 @@ CF_INLINE unsigned long __CFPageSize() {
     GetSystemInfo(&sysInfo);
     return sysInfo.dwPageSize;
 }
-#elif DEPLOYMENT_TARGET_LINUX || __FreeBSD__
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
 #include <unistd.h>
 CF_INLINE unsigned long __CFPageSize() {
     return (unsigned long)getpagesize();

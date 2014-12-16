@@ -34,6 +34,7 @@
 #undef CF_PRIVATE
 #define CF_PRIVATE static
 
+#pragma clang diagnostic ignored "-Wsign-compare"
 
 const CFArrayCallBacks kCFTypeArrayCallBacks = {0, __CFTypeCollectionRetain, __CFTypeCollectionRelease, CFCopyDescription, CFEqual};
 static const CFArrayCallBacks __kCFNullArrayCallBacks = {0, NULL, NULL, NULL, NULL};

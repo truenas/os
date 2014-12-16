@@ -38,6 +38,7 @@
 #include <string.h>
 
 #pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsign-compare"
 
 #define BITSPERBYTE	8	/* (CHAR_BIT * sizeof(unsigned char)) */
 #define LOG_BPB		3

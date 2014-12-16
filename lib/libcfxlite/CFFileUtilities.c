@@ -358,7 +358,7 @@ CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, 
     int extBuffInteriorDotCount = 0; //people insist on using extensions like ".trace.plist", so we need to know how many dots back to look :(
     
     if (targetExtLen > 0) {
-        CFStringGetBytes(extension, CFRangeMake(0, targetExtLen), CFStringFileSystemEncoding(), 0, false, extBuff, CFMaxPathLength, &targetExtLen);
+        CFStringGetBytes(extension, CFRangeMake(0, targetExtLen), CFStringFileSystemEncoding(), 0, false, extBuff, CFMaxPathLength, (CFIndex *)&targetExtLen);
         extBuff[targetExtLen] = '\0';
         char *extBuffStr = (char *)extBuff;
         if (extBuffStr[0] == '.')
