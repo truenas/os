@@ -2,13 +2,14 @@
 PROG= launchd
 
 .PATH: .
-.PATH: support
-.PATH: uuid
+.PATH: ${.CURDIR}
+.PATH: ${.CURDIR}/support
+.PATH: ${.CURDIR}/uuid
 
 MK_MAN= no
 
-BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
-BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
+BASE_INCLUDE=  -I. -I${.CURDIR} -I${.CURDIR}/../../apsl/include
+BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
@@ -16,24 +17,25 @@ CFLAGS+= -I${.CURDIR}/../../contrib/openbsm -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -DHAVE_INTTYPES_H
 
 LDFLAGS+= -static 
-LDFLAGS+= -L/usr/local/lib -L/usr/local/lib/gcc48 -lobjc -lbsm -lauditd
+LDFLAGS+= -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -pthread
 
-helper.h launchd_helperServer.h: helper.defs
-	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header helper.h \
-	-sheader launchd_helperServer.h helper.defs
-jobServer.h jobServer.c job.h: job.defs helper.h
-	mig ${MIG_FLAGS} -sheader jobServer.h job.defs
-job_reply.h job_replyUser.c job_replyServer.c job_replyServer.h: job_reply.defs
-	mig ${MIG_FLAGS} -sheader job_replyServer.h job_reply.defs
-job_forward.h job_forwardUser.c job_forwardServer.h: job_forward.defs
-	mig ${MIG_FLAGS} -sheader job_forwardServer.h job_forward.defs
-notify.h notifyServer.c notifyServer.h: notify.defs
-	mig ${MIG_FLAGS} -sheader notifyServer.h notify.defs
-mach_excServer.h mach_excServer.c: mach_exc.defs
-	mig ${MIG_FLAGS} -sheader mach_excServer.h mach_exc.defs
-internal.h internalServer.h internalServer.c internalUser.c: internal.defs
-	mig ${MIG_FLAGS} -sheader internalServer.h internal.defs
+${.CURDIR}/helper.h ${.CURDIR}/launchd_helperServer.h: ${.CURDIR}/helper.defs
+	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header ${.CURDIR}/helper.h \
+	-sheader ${.CURDIR}/launchd_helperServer.h ${.CURDIR}/helper.defs
+
+${.CURDIR}/jobServer.h ${.CURDIR}/jobServer.c ${.CURDIR}/job.h: ${.CURDIR}/job.defs ${.CURDIR}/helper.h
+	mig ${MIG_FLAGS} -sheader ${.CURDIR}/jobServer.h ${.CURDIR}/job.defs
+${.CURDIR}/job_reply.h ${.CURDIR}/job_replyUser.c ${.CURDIR}/job_replyServer.c ${.CURDIR}/job_replyServer.h: ${.CURDIR}/job_reply.defs
+	mig ${MIG_FLAGS} -header ${.CURDIR}/job_reply.h -sheader ${.CURDIR}/job_replyServer.h ${.CURDIR}/job_reply.defs
+${.CURDIR}/job_forward.h ${.CURDIR}/job_forwardUser.c ${.CURDIR}/job_forwardServer.h: ${.CURDIR}/job_forward.defs
+	mig ${MIG_FLAGS} -header ${.CURDIR}/job_forward.h -sheader ${.CURDIR}/job_forwardServer.h ${.CURDIR}/job_forward.defs
+${.CURDIR}/notify.h ${.CURDIR}/notifyServer.c ${.CURDIR}/notifyServer.h: ${.CURDIR}/notify.defs
+	mig ${MIG_FLAGS} -header ${.CURDIR}/notify.h -sheader ${.CURDIR}/notifyServer.h ${.CURDIR}/notify.defs
+${.CURDIR}/mach_excServer.h ${.CURDIR}/mach_excServer.c: ${.CURDIR}/mach_exc.defs
+	mig ${MIG_FLAGS} -sheader ${.CURDIR}/mach_excServer.h ${.CURDIR}/mach_exc.defs
+${.CURDIR}/internal.h ${.CURDIR}/internalServer.h ${.CURDIR}/internalServer.c ${.CURDIR}/internalUser.c: ${.CURDIR}/internal.defs
+	mig ${MIG_FLAGS} -header ${.CURDIR}/internal.h -sheader ${.CURDIR}/internalServer.h ${.CURDIR}/internal.defs
 
 
 

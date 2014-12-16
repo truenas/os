@@ -37,9 +37,10 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libcom_err} \
 	libcompat \
 	libcrypt \
-	libcfxlite \
+	${_libcfxlite} \
 	libdevinfo \
 	libdevstat \
+	${_libdispatch} \
 	libdpv \
 	libdwarf \
 	libedit \
@@ -63,6 +64,8 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	liblzma \
 	libmach \
 	${_libmagic} \
+	${_libmach} \
+	libmagic \
 	libmandoc \
 	libmemstat \
 	libmd \
@@ -107,6 +110,11 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libvgl} \
 	${_libvmmapi} \
 	libwrap \
+<<<<<<< HEAD
+=======
+	libxo \
+	libxpc \
+>>>>>>> 6a32808... build launchd and dependencies (on 64-bit)
 	liby \
 	${_libypclnt} \
 	libyaml \
@@ -233,7 +241,13 @@ _librtld_db=	librtld_db
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
+<<<<<<< HEAD
 .if ${MK_BHYVE} != "no"
+=======
+_libcfxlite= libcfxlite
+_libdispatch= libdispatch
+_libmach= libmach
+>>>>>>> 6a32808... build launchd and dependencies (on 64-bit)
 _libvmmapi=	libvmmapi
 .endif
 .endif
