@@ -2660,7 +2660,9 @@ int
 load_and_unload_cmd(int argc, const char *const argv[])
 {
 	NSSearchPathEnumerationState es = 0;
+#ifdef notyet
 	char nspath[PATH_MAX * 2]; /* safe side, we need to append */
+#endif	
 	bool badopts = false;
 	struct load_unload_state lus;
 	size_t i;
@@ -2747,6 +2749,7 @@ load_and_unload_cmd(int argc, const char *const argv[])
 	/* Only one pass! */
 	lus.pass1 = launch_data_alloc(LAUNCH_DATA_ARRAY);
 
+#ifdef notyet
 	es = NSStartSearchPathEnumeration(NSLibraryDirectory, es);
 
 	while ((es = NSGetNextSearchPathEnumeration(es, nspath))) {
@@ -2793,7 +2796,7 @@ load_and_unload_cmd(int argc, const char *const argv[])
 			}
 		}
 	}
-
+#endif
 	for (i = 0; i < (size_t)argc; i++) {
 		readpath(argv[i], &lus);
 	}
