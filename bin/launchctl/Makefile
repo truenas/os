@@ -16,7 +16,7 @@ LDFLAGS+= -L${.CURDIR}/../../lib/libmach -lmach
 LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
 LDFLAGS+= -L${.CURDIR}/../../lib/libosxsupport -losxsupport
 LDFLAGS+= -L${.CURDIR}/../../lib/libcfxlite -lcfxlite
-LDFLAGS+= -L/usr/local/lib -lobjc -lbsm -lauditd
+LDFLAGS+= -L/usr/local/lib -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -lreadline -lutil -licui18n -pthread
 SRCS= launchctl.c
 

@@ -37,6 +37,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libcom_err} \
 	libcompat \
 	libcrypt \
+	libcfxlite \
 	libdevinfo \
 	libdevstat \
 	libdpv \
@@ -60,6 +61,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_liblaunch} \
 	${_libldns} \
 	liblzma \
+	libmach \
 	${_libmagic} \
 	libmandoc \
 	libmemstat \
@@ -71,6 +73,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libnetgraph} \
 	${_libngatm} \
 	libopie \
+	libosxsupport \
 	libpam \
 	libpcap \
 	${_libpmc} \

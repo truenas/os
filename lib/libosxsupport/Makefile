@@ -2,7 +2,7 @@
 LIB=	osxsupport
 
 .PATH: .
-.PATH: uuid
+.PATH: ${.CURDIR}/uuid
 .PATH: ../../sbin/launchd
 
 BASE_INCLUDE= -I${.CURDIR}/../../apsl/include

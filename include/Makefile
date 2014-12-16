@@ -148,7 +148,7 @@ compat:
 	    -p ${DESTDIR}${INCLUDEDIR}
 
 copies:
-.for i in ${LDIRS} ${LSUBDIRS} ${LSUBSUBDIRS} altq crypto machine machine/pc \
+.for i in ${LDIRS} ${LSUBDIRS} ${LSUBSUBDIRS} altq crypto machine machine/pc machine/mach \
 	${_MARCHS}
 .if exists(${DESTDIR}${INCLUDEDIR}/$i)
 	cd ${DESTDIR}${INCLUDEDIR}/$i; \
@@ -382,6 +382,13 @@ symlinks:
 	for h in *.h; do \
 		ln -fs ../../../../sys/${MACHINE}/include/pc/$$h \
 		    ${DESTDIR}${INCLUDEDIR}/machine/pc; \
+	done
+.endif
+.if exists(${.CURDIR}/../sys/${MACHINE}/include/mach)
+	cd ${.CURDIR}/../sys/${MACHINE}/include/mach; \
+	for h in *.h; do \
+		ln -fs ../../../../sys/${MACHINE}/include/mach/$$h \
+		    ${DESTDIR}${INCLUDEDIR}/machine/mach; \
 	done
 .endif
 .for _MARCH in ${_MARCHS}

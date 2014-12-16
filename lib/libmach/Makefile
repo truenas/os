@@ -2,13 +2,12 @@
 
 LIB=	mach
 
-.PATH: mach
-.PATH: ${MACHINE_CPUARCH}
-.PATH: ${MACHINE_CPUARCH}/sys
 
+A= ${.CURDIR}/${MACHINE_CPUARCH}
 
-machine:
-	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include machine
+.PATH: ${.CURDIR}/mach
+.PATH: ${A}
+.PATH: ${A}/sys
 
 .for _dir in ${.CURDIR}/../.. ${.CURDIR}/../../sys ${.CURDIR}/../../.. /sys /usr/src/sys
 .if !defined(SYSDIR) && exists(${_dir}/kern/)
@@ -19,20 +18,20 @@ SYSDIR=	${_dir}
 .error "can't find kernel source tree"
 .endif
 
-CFLAGS+= -I${.CURDIR}/../../include -I. -I./${MACHINE_CPUARCH} -I${.CURDIR}
+CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR}
 CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include
-CFLAGS+= -fPIC -DPRIVATE -D__MigTypeCheck -DLIBSYSCALL_INTERFACE
+CFLAGS+= -fPIC -DPRIVATE -D__MigTypeCheck=1 -DLIBSYSCALL_INTERFACE=1
 
-mach_port.h mach_portUser.c: machine mach_port.defs
-	mig ${CFLAGS} -server /dev/null mach_port.defs
-task.h taskUser.c: machine task.defs
-	mig ${CFLAGS} -server /dev/null task.defs
-host_priv.h host_privUser.c: machine host_priv.defs
-	mig ${CFLAGS} -server /dev/null host_priv.defs
-mach_host.h mach_hostUser.c: machine mach_host.defs
-	mig ${CFLAGS} -server /dev/null mach_host.defs
-vm_map.h vm_mapUser.c: machine vm_map.defs
-	mig ${CFLAGS} -server /dev/null vm_map.defs
+mach_port.h mach_portUser.c: ${.CURDIR}/mach_port.defs
+	mig ${CFLAGS} -server /dev/null ${.CURDIR}/mach_port.defs
+task.h taskUser.c: ${.CURDIR}/task.defs
+	mig ${CFLAGS} -server /dev/null ${.CURDIR}/task.defs
+host_priv.h host_privUser.c: ${.CURDIR}/host_priv.defs
+	mig ${CFLAGS} -server /dev/null ${.CURDIR}/host_priv.defs
+mach_host.h mach_hostUser.c: ${.CURDIR}/mach_host.defs
+	mig ${CFLAGS} -server /dev/null ${.CURDIR}/mach_host.defs
+vm_map.h vm_mapUser.c: ${.CURDIR}/vm_map.defs
+	mig ${CFLAGS} -server /dev/null ${.CURDIR}/vm_map.defs
 
 SRCS=					\
 	mach_portUser.c		\

@@ -27,7 +27,6 @@ SCRIPTS=mig.sh
 SRCS= error.c global.c header.c ident.c \
 	lexxer.l mig.c parser.y routine.c server.c \
 	statement.c string.c type.c user.c utils.c
-#handler.c
 
 CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
 CFLAGS+= -DYY_NO_UNPUT -DYY_NO_INPUT
@@ -38,14 +37,11 @@ CFLAGS+= -I${.CURDIR}/../../apsl/include
 CFLAGS+= -I${.CURDIR}/i386
 .endif
 
-machine:
-	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include ${.CURDIR}/machine
-
-ident.c: machine
+ident.c:
 	echo "#include \"alloc.h\" " >${.TARGET}
 	echo "const char *MigGenerationDate = \""`date`"\";" >>${.TARGET}
 	echo "const char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
 
-CLEANFILES+= ident.c *.o *~ *.gz cscope.* ${.CURDIR}/machine
+CLEANFILES+= ident.c *.o *~ *.gz cscope.*
 
 .include <bsd.prog.mk>
