@@ -227,8 +227,6 @@ static struct ctl_frontend ctlfe_frontend =
 };
 CTL_FRONTEND_DECLARE(ctlfe, ctlfe_frontend);
 
-extern struct ctl_softc *control_softc;
-
 void
 ctlfeshutdown(void)
 {
