@@ -12,8 +12,9 @@ CFLAGS+=	-fblocks
 CFLAGS+=	-D__APPLE__ -DTARGET_CPU_X86=1 -DDISPATCH_USE_DTRACE=0
 CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0 -D__BLOCKS__=1
 
-protocolServer.c protocolUser.c protocol.h protocolServer.h:
-	mig -user protocolUser.c -server protocolServer.c -header protocol.h \
+protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/src/protocol.defs
+	mig ${CFLAGS}  -user protocolUser.c \
+	-server protocolServer.c -header protocol.h \
 	-sheader protocolServer.h ${.CURDIR}/src/protocol.defs
 
 SRCS =  			\
@@ -38,7 +39,6 @@ SRCS =  			\
 SRCS+=	resolver.c
 SRCS+=	object.m
 
-clean:
-	rm -f *.o *.So *.po *~ protocol.h protocolServer.c protocolServer.h protocolUser.c \
+CLEANFILES+= *.o *.So *.po *~ protocol.h protocolServer.c protocolServer.h protocolUser.c \
 	*.so* *.a
 .include <bsd.lib.mk>
