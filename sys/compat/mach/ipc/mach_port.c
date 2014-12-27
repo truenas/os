@@ -98,6 +98,7 @@
  *	Exported kernel calls.  See mach/mach_port.defs.
  */
 
+#include "opt_compat_mach.h"
 
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
@@ -137,6 +138,12 @@
 
 #define assert_static CTASSERT 
 #pragma clang diagnostic ignored "-Wuninitialized"
+
+#ifdef COMPAT_MACH_PORT_DEBUG
+#define DPRINTF(a) printf(a)
+#else
+#define DPRINTF(a)
+#endif
 
 /*
  * Forward declarations
@@ -1354,16 +1361,19 @@ mach_port_insert_right(
 	ipc_port_t		poly,
 	mach_msg_type_name_t	polyPoly)
 {
-	if (space == IS_NULL)
+	if (space == IS_NULL) {
+		DPRINTF("insert_right: space is NULL\n");
 		return KERN_INVALID_TASK;
-
+	}
 	if (!MACH_PORT_NAME_VALID(name) ||
-	    !MACH_MSG_TYPE_PORT_ANY_RIGHT(polyPoly))
+	    !MACH_MSG_TYPE_PORT_ANY_RIGHT(polyPoly)) {
+		DPRINTF("invalid name or right\n");
 		return KERN_INVALID_VALUE;
-
-	if (!IO_VALID((ipc_object_t) poly))
+	}
+	if (!IO_VALID((ipc_object_t) poly)) {
+		DPRINTF("invalid capability\n");
 		return KERN_INVALID_CAPABILITY;
-
+	}
 	return ipc_object_copyout_name(space, (ipc_object_t) poly, 
 				       polyPoly, FALSE, name);
 }
