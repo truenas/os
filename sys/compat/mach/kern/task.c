@@ -1317,7 +1317,7 @@ mach_task_init(void *arg __unused, struct proc *p)
 {
 	task_t task;
 
-	p->p_machdata = task = uma_zalloc(task_zone, M_WAITOK);
+	p->p_machdata = task = uma_zalloc(task_zone, M_WAITOK|M_ZERO);
 	task->itk_p = p;
 
 	mutex_init(&task->lock, "ETAP_THREAD_TASK_NEW");
