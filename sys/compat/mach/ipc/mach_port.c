@@ -140,9 +140,9 @@
 #pragma clang diagnostic ignored "-Wuninitialized"
 
 #ifdef COMPAT_MACH_PORT_DEBUG
-#define DPRINTF(a) printf(a)
+#define DPRINTF printf
 #else
-#define DPRINTF(a)
+#define DPRINTF(...)
 #endif
 
 /*
@@ -1367,7 +1367,7 @@ mach_port_insert_right(
 	}
 	if (!MACH_PORT_NAME_VALID(name) ||
 	    !MACH_MSG_TYPE_PORT_ANY_RIGHT(polyPoly)) {
-		DPRINTF("invalid name or right\n");
+		DPRINTF("invalid name or right name=%x polyPoly=%x\n", name, polyPoly);
 		return KERN_INVALID_VALUE;
 	}
 	if (!IO_VALID((ipc_object_t) poly)) {

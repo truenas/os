@@ -1890,8 +1890,8 @@ ipc_right_copyout(
 					/* leave urefs pegged to maximum */
 
 					port->ip_srights--;
-					ip_release(port);
 					ip_unlock(port);
+					ip_release(port);
 					return KERN_SUCCESS;
 				}
 
@@ -1900,15 +1900,15 @@ ipc_right_copyout(
 			}
 
 			port->ip_srights--;
-			ip_release(port);
 			ip_unlock(port);
+			ip_release(port);
 		} else if (bits & MACH_PORT_TYPE_RECEIVE) {
 			assert(IE_BITS_TYPE(bits) == MACH_PORT_TYPE_RECEIVE);
 			assert(IE_BITS_UREFS(bits) == 0);
 
 			/* transfer send right to entry */
-			ip_release(port);
 			ip_unlock(port);
+			ip_release(port);
 		} else {
 			assert(IE_BITS_TYPE(bits) == MACH_PORT_TYPE_NONE);
 			assert(IE_BITS_UREFS(bits) == 0);
@@ -1942,8 +1942,8 @@ ipc_right_copyout(
 			assert(IE_BITS_UREFS(bits) > 0);
 			assert(port->ip_srights > 0);
 
-			ip_release(port);
 			ip_unlock(port);
+			ip_release(port);
 
 			/* entry is locked holding ref, so can use port */
 

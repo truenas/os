@@ -40,9 +40,11 @@ struct thread_shuttle {
 	struct ipc_kmsg_queue ith_messages;
 
 	struct mtx ith_lock_data;
+	struct mtx *ith_block_lock_data;
 	mach_port_t     ith_mig_reply;  /* reply port for mig */
 	struct ipc_port *ith_rpc_reply; /* reply port for kernel RPCs */
-
+	uint32_t timeout;
+	uint32_t sleep_stamp;
 
 		/* Various bits of stashed state */
 	union {

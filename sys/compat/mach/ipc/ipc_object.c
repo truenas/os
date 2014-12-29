@@ -664,9 +664,10 @@ ipc_object_copyout(
 		assert(entry->ie_bits & MACH_PORT_TYPE_SEND_RECEIVE);
 		goto done;
 	}
+	name = MACH_PORT_NAME_NULL;
 	kr = ipc_entry_get(space,
 			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
-						   &name, &entry, object);
+						   &name, &entry);
 	if (kr != KERN_SUCCESS)
 		return (kr);
 

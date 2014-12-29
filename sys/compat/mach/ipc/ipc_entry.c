@@ -90,7 +90,7 @@
 #include <sys/param.h>
 #include <sys/file.h>
 #include <sys/filedesc.h>
-
+#include <sys/fcntl.h>
 
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
@@ -133,7 +133,6 @@ mach_port_close(struct file *fp, struct thread *td __unused)
  *	Purpose:
  *		Searches for an entry, given its name.
  *	Conditions:
- *		The space must be read or write locked throughout.
  *		The space must be active.
  */
 
@@ -167,21 +166,24 @@ ipc_entry_get(
 	ipc_space_t	space,
 	boolean_t	is_send_once,
 	mach_port_name_t	*namep,
-	ipc_entry_t	*entryp,
-	ipc_object_t object)
+	ipc_entry_t	*entryp)
 {	
 	ipc_entry_t free_entry;
-	int fd;
+	int fd, flags;
 	struct file *fp;
 	struct thread *td = curthread;
 
 	assert(space->is_active);
 
+	flags = 0;
 	if ((free_entry = malloc(sizeof(*free_entry), M_MACH, M_WAITOK|M_ZERO)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
-
-	if (falloc(td, &fp, &fd, 0)) {
-		free(free_entry, M_DEVBUF);
+	if (*namep != MACH_PORT_NAME_NULL) {
+		fd = *namep;
+		flags = O_NOFDALLOC;
+	}
+	if (falloc(td, &fp, &fd, flags)) {
+		free(free_entry, M_MACH);
 		return KERN_RESOURCE_SHORTAGE;
 	}
 	free_entry->ie_bits = 0;
@@ -218,16 +220,14 @@ ipc_entry_alloc(
 	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp)
 {
-	kern_return_t kr;
 
 	is_write_lock(space);
 	if (!space->is_active) {
 		is_write_unlock(space);
-		return KERN_INVALID_TASK;
+		return (KERN_INVALID_TASK);
 	}
-
-	kr = ipc_entry_get(space, is_send_once, namep, entryp, NULL);
-	return (kr);
+	*namep = MACH_PORT_NAME_NULL;
+	return (ipc_entry_get(space, is_send_once, namep, entryp));
 }
 
 /*
@@ -251,131 +251,42 @@ ipc_entry_alloc_name(
 	mach_port_name_t	name,
 	ipc_entry_t	*entryp)
 {
+	mach_port_name_t newname;
+	struct file *fp;
+	kern_return_t kr;
+	struct thread *td = curthread;
 
 	assert(MACH_PORT_NAME_VALID(name));
-
-	panic ("unsupported");
-#ifdef notyet
 	is_write_lock(space);
+	if ((*entryp = ipc_entry_lookup(space, name)) != NULL)
+		return (KERN_SUCCESS);
 
-	for (;;) {
-		ipc_entry_t entry;
-		ipc_tree_entry_t tentry;
-		ipc_table_size_t its;
+	/* name could technically be a ridiculously large value */
+	if (kern_fdalloc(td, name, &newname))
+		return (KERN_RESOURCE_SHORTAGE);
 
-		if (!space->is_active) {
-			is_write_unlock(space);
-			if (tree_entry) ite_free(tree_entry);
-			return KERN_INVALID_TASK;
-		}
-
-		/*
-		 *	If we are under the table cutoff,
-		 *	there are usually three cases:
-		 *		1) The entry is inuse, for the same name
-		 *		2) The entry is inuse, for a different name
-		 *		3) The entry is free
-		 *	For a task with a "fast" IPC space, we disallow
-		 *	case 3), because ports cannot be renamed.
-		 */
-
-		if ((0 < index) && (index < space->is_table_size)) {
-			ipc_entry_t *table = space->is_table;
-
-			entry = table[index];
-
-			if (IE_BITS_TYPE(entry->ie_bits)) {
-				if (IE_BITS_GEN(entry->ie_bits) == gen) {
-					*entryp = entry;
-					assert(!tree_entry);
-					return KERN_SUCCESS;
-				}
-			} else {
-				mach_port_index_t free_index, next_index;
-
-				/*
-				 *	Rip the entry out of the free list.
-				 */
-
-				for (free_index = 0;
-				     (next_index = table[free_index].ie_next)
-							!= index;
-				     free_index = next_index)
-					continue;
-
-				table[free_index].ie_next =
-					table[next_index].ie_next;
-
-				entry->ie_bits = gen;
-				assert(entry->ie_object == IO_NULL);
-				entry->ie_request = 0;
-
-				*entryp = entry;
-				if (is_fast_space(space))
-					assert(!tree_entry);
-				else if (tree_entry)
-					ite_free(tree_entry);
-				return KERN_SUCCESS;
-			}
-		}
-
-		/*
-		 * In a fast space, ipc_entry_alloc_name may be
-		 * used only to add a right to a port name already
-		 * known in this space.
-		 */
-		if (is_fast_space(space)) {
-			is_write_unlock(space);
-			assert(!tree_entry);
-			return KERN_FAILURE;
-		}
-
-		its = space->is_table_next;
-
-		/*
-		 *	Check if the table should be grown.
-		 *
-		 *	Note that if space->is_table_size == its->its_size,
-		 *	then we won't ever try to grow the table.
-		 *
-		 *	Note that we are optimistically assuming that name
-		 *	doesn't collide with any existing names.  (So if
-		 *	it were entered into the tree, is_tree_small would
-		 *	be incremented.)  This is OK, because even in that
-		 *	case, we don't lose memory by growing the table.
-		 */
-
-		if ((space->is_table_size <= index) &&
-		    (index < its->its_size) &&
-		    (((its->its_size - space->is_table_size) *
-		      sizeof(struct ipc_entry)) <
-		     ((space->is_tree_small + 1) *
-		      sizeof(struct ipc_tree_entry)))) {
-			kern_return_t kr;
-
-			/*
-			 *	Can save space by growing the table.
-			 *	Because the space will be unlocked,
-			 *	we must restart.
-			 */
-
-			kr = ipc_entry_grow_table(space, ITS_SIZE_NONE);
-			assert(kr != KERN_NO_SPACE);
-			if (kr != KERN_SUCCESS) {
-				/* space is unlocked */
-				if (tree_entry) ite_free(tree_entry);
-				return kr;
-			}
-
-			continue;
-		}
-
-
-		is_write_lock(space);
+	if (newname != name) {
+		kern_fddealloc(td, newname);
+		return (KERN_NAME_EXISTS);
 	}
-	#endif
-}
+	if (falloc(td, &fp, &newname, O_NOFDALLOC)) {
+		kern_fddealloc(td, newname);
+		return (KERN_RESOURCE_SHORTAGE);
+	}
 
+	if (!space->is_active) {
+		is_write_unlock(space);
+		kern_fddealloc(td, newname);
+		return (KERN_INVALID_TASK);
+	}
+	kr = ipc_entry_get(space, 0, &name, entryp);
+	if (kr != KERN_SUCCESS) {
+		is_write_unlock(space);
+		kern_fddealloc(td, newname);
+		return (KERN_INVALID_TASK);
+	}
+	return (kr);
+}
 /*
  *	Routine:	ipc_entry_dealloc
  *	Purpose:

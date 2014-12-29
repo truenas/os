@@ -68,7 +68,8 @@ int
 sys_mach_clock_sleep_trap(struct thread *td __unused, struct mach_clock_sleep_trap_args *uap)
 {
 
-	return (mach_clock_sleep(uap->clock_name, uap->sleep_type, uap->sleep_sec, uap->sleep_nsec, uap->wakeup_time));
+	td->td_retval[0] = mach_clock_sleep(uap->clock_name, uap->sleep_type, uap->sleep_sec, uap->sleep_nsec, uap->wakeup_time);
+	return (0);
 }
 
 int
@@ -81,10 +82,11 @@ sys_mach_timebase_info(struct thread *td __unused, struct mach_timebase_info_arg
 int
 sys_mach_msg_overwrite_trap(struct thread *td __unused, struct mach_msg_overwrite_trap_args *uap)
 {
-
-	return (mach_msg_overwrite_trap(uap->msg, uap->option, uap->send_size, uap->rcv_size,
-								   uap->rcv_name, uap->timeout, uap->notify, uap->rcv_msg,
-									uap->scatter_list_size));
+	td->td_retval[0] = mach_msg_overwrite_trap(
+		uap->msg, uap->option, uap->send_size, uap->rcv_size,
+		uap->rcv_name, uap->timeout, uap->notify, uap->rcv_msg,
+		uap->scatter_list_size);
+	return (0);
 }
 
 int
@@ -181,7 +183,6 @@ sys_mach_task_self_trap(struct thread *td, struct mach_task_self_trap_args *uap)
 	return (0);
 }
 
-
 int
 sys_mach_host_self_trap(struct thread *td, struct mach_host_self_trap_args *uap)
 {
@@ -220,12 +221,26 @@ sys__kernelrpc_mach_port_deallocate_trap(struct thread *td, struct _kernelrpc_ma
 }
 
 int
-sys__kernelrpc_mach_port_insert_right_trap(struct thread *td __unused, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
+sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_mach_port_insert_right_trap_args *uap)
 {
-	ipc_space_t space = current_task()->itk_space;
-	mach_port_t poly = CAST_MACH_NAME_TO_PORT(uap->poly);
+	task_t task = current_task(); /* port_name_to_task(uap->target); */
+	ipc_port_t port;
+	mach_msg_type_name_t disp;
+	int rv = MACH_SEND_INVALID_DEST;
 
-	return (mach_port_insert_right(space, uap->name, poly, uap->polyPoly));
+	if (task != current_task())
+		goto done;
+
+	rv = ipc_object_copyin(task->itk_space, uap->poly, uap->polyPoly, (ipc_object_t *)&port);
+	if (rv != KERN_SUCCESS)
+		goto done;
+	disp = ipc_object_copyin_type(uap->polyPoly);
+	rv = mach_port_insert_right(task->itk_space, uap->name, port, disp);
+done:
+	if (task)
+		task_deallocate(task);
+	td->td_retval[0] = rv;
+	return (0);
 }
 
 int
@@ -238,7 +253,8 @@ sys__kernelrpc_mach_port_mod_refs_trap(struct thread *td, struct _kernelrpc_mach
 	  mach_port_right_t right = uap->right;
 	  mach_port_delta_t delta = uap->delta;
 	*/
-	return (mach_port_mod_refs(space, uap->name, uap->right, uap->delta));
+	td->td_retval[0] = mach_port_mod_refs(space, uap->name, uap->right, uap->delta);
+	return (0);
 }
 
 int

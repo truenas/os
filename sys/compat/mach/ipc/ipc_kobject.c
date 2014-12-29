@@ -287,13 +287,13 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
 					EVENT_BEGIN,
 					((thread_t) th),
-					&request->ikm_header.msgh_id,
+					&request->ikm_header->msgh_id,
 					sizeof(int));
 	/*
 	 * Find out corresponding mig_hash entry if any
 	 */
 	{
-		register int key = request->ikm_header.msgh_id;
+		register int key = request->ikm_header->msgh_id;
 		register int i = MIG_HASH(key);
 		register int max_iter = mig_table_max_displ;
 	
@@ -326,8 +326,8 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	 * Initialize reply message.
 	 */
 	{
-#define	InP	((mach_msg_header_t *) &request->ikm_header)
-#define	OutP	((mig_reply_error_t *) &reply->ikm_header)
+#define	InP	((mach_msg_header_t *) request->ikm_header)
+#define	OutP	((mig_reply_error_t *) reply->ikm_header)
 
 		OutP->NDR = NDR_record;
 		OutP->Head.msgh_size = sizeof(mig_reply_error_t);
@@ -347,14 +347,14 @@ ipc_kobject_server(ipc_kmsg_t	request)
  */
 	{
 	    if (ptr)	
-			(*ptr->routine)(&request->ikm_header, &reply->ikm_header);
+			(*ptr->routine)(request->ikm_header, reply->ikm_header);
 	    else {
-			if (!ipc_kobject_notify(&request->ikm_header, &reply->ikm_header)){
+			if (!ipc_kobject_notify(request->ikm_header, reply->ikm_header)){
 #if	MACH_IPC_TEST
 				printf("ipc_kobject_server: bogus kernel message, id=%d\n",
-					   request->ikm_header.msgh_id);
+					   request->ikm_header->msgh_id);
 #endif	/* MACH_IPC_TEST */
-				((mig_reply_error_t *) &reply->ikm_header)->RetCode
+				((mig_reply_error_t *) reply->ikm_header)->RetCode
 					= MIG_BAD_ID;
 			}
 	    }
@@ -371,8 +371,8 @@ ipc_kobject_server(ipc_kmsg_t	request)
  *	We set msgh_remote_port to IP_NULL so that the kmsg
  *	destroy routines don't try to destroy the port twice.
  */
-	destp = (ipc_port_t *) &request->ikm_header.msgh_remote_port;
-	switch (MACH_MSGH_BITS_REMOTE(request->ikm_header.msgh_bits)) {
+	destp = (ipc_port_t *) &request->ikm_header->msgh_remote_port;
+	switch (MACH_MSGH_BITS_REMOTE(request->ikm_header->msgh_bits)) {
 	case MACH_MSG_TYPE_PORT_SEND:
 		ipc_port_release_send(*destp);
 		break;
@@ -386,9 +386,9 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	}
 	*destp = IP_NULL;
 
-	if (!(reply->ikm_header.msgh_bits & MACH_MSGH_BITS_COMPLEX) &&
-		((mig_reply_error_t *) &reply->ikm_header)->RetCode != KERN_SUCCESS)
-		kr = ((mig_reply_error_t *) &reply->ikm_header)->RetCode;
+	if (!(reply->ikm_header->msgh_bits & MACH_MSGH_BITS_COMPLEX) &&
+		((mig_reply_error_t *) reply->ikm_header)->RetCode != KERN_SUCCESS)
+		kr = ((mig_reply_error_t *) reply->ikm_header)->RetCode;
 	else
 		kr = KERN_SUCCESS;
 
@@ -417,7 +417,7 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		 *	which is needed in the reply message.
 		 */
 
-		request->ikm_header.msgh_local_port = MACH_PORT_NULL;
+		request->ikm_header->msgh_local_port = MACH_PORT_NULL;
 		ipc_kmsg_destroy(request);
 	}
 
@@ -432,11 +432,11 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
 						EVENT_END,
 						((thread_t) th),
-						&request->ikm_header.msgh_id,
+						&request->ikm_header->msgh_id,
 						sizeof(int));
 
 		return IKM_NULL;
-	} else if (!IP_VALID((ipc_port_t)reply->ikm_header.msgh_remote_port)) {
+	} else if (!IP_VALID((ipc_port_t)reply->ikm_header->msgh_remote_port)) {
 		/*
 		 *	Can't queue the reply message if the destination
 		 *	(the reply port) isn't valid.
@@ -447,14 +447,14 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
 						EVENT_END,
 						((thread_t) th),
-						&request->ikm_header.msgh_id,
+						&request->ikm_header->msgh_id,
 						sizeof(int));
 
 		return IKM_NULL;
 	}
 
 	trailer = (mach_msg_format_0_trailer_t *)
-		((vm_offset_t)&reply->ikm_header + (int)reply->ikm_header.msgh_size);                
+		((vm_offset_t)reply->ikm_header + (int)reply->ikm_header->msgh_size);
 	trailer->msgh_sender = KERNEL_SECURITY_TOKEN;
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
 	trailer->msgh_trailer_size = MACH_MSG_TRAILER_MINIMUM_SIZE;
@@ -462,7 +462,7 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
 					EVENT_END,
 					((thread_t) th),
-					&request->ikm_header.msgh_id,
+					&request->ikm_header->msgh_id,
 					sizeof(int));
 
 	return reply;

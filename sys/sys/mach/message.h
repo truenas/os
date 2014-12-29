@@ -238,6 +238,9 @@ typedef uint8_t mach_msg_type_name_t;
 #define MACH_MSG_TYPE_MAKE_SEND		20	/* Must hold receive rights */
 #define MACH_MSG_TYPE_MAKE_SEND_ONCE	21	/* Must hold receive rights */
 
+#define MACH_MSG_TYPE_DISPOSE_RECEIVE	24	/* must hold receive right */
+#define MACH_MSG_TYPE_DISPOSE_SEND	25	/* must hold send right(s) */
+#define MACH_MSG_TYPE_DISPOSE_SEND_ONCE 26	/* must hold sendonce right */
 
 typedef unsigned int mach_msg_copy_options_t;
 
@@ -288,6 +291,26 @@ typedef struct
 
 typedef struct
 {
+  uint32_t			address;
+  mach_msg_size_t       	size;
+  boolean_t     		deallocate: 8;
+  mach_msg_copy_options_t       copy: 8;
+  unsigned int     		pad1: 8;
+  mach_msg_descriptor_type_t    type: 8;
+} mach_msg_ool_descriptor32_t;
+
+typedef struct
+{
+  uint64_t			address;
+  boolean_t     		deallocate: 8;
+  mach_msg_copy_options_t       copy: 8;
+  unsigned int     		pad1: 8;
+  mach_msg_descriptor_type_t    type: 8;
+  mach_msg_size_t       	size;
+} mach_msg_ool_descriptor64_t;
+
+typedef struct
+{
   void* address;
   mach_msg_size_t       	size;
   boolean_t     		deallocate: 8;
@@ -295,6 +318,26 @@ typedef struct
   unsigned int     		pad1: 8;
   mach_msg_descriptor_type_t    type: 8;
 } mach_msg_ool_descriptor_t;
+
+typedef struct
+{
+  uint32_t			address;
+  mach_msg_size_t		count;
+  boolean_t     		deallocate: 8;
+  mach_msg_copy_options_t       copy: 8;
+  mach_msg_type_name_t		disposition : 8;
+  mach_msg_descriptor_type_t	type : 8;
+} mach_msg_ool_ports_descriptor32_t;
+
+typedef struct
+{
+  uint64_t			address;
+  boolean_t     		deallocate: 8;
+  mach_msg_copy_options_t       copy: 8;
+  mach_msg_type_name_t		disposition : 8;
+  mach_msg_descriptor_type_t	type : 8;
+  mach_msg_size_t		count;
+} mach_msg_ool_ports_descriptor64_t;
 
 typedef struct
 {
@@ -328,10 +371,11 @@ typedef	struct __aligned(8)
   mach_msg_size_t	msgh_size;
   mach_port_t		msgh_remote_port;
   mach_port_t		msgh_local_port;
-  mach_msg_size_t 	msgh_reserved;
+  mach_port_name_t 	msgh_voucher_port;
   mach_msg_id_t		msgh_id;
 } mach_msg_header_t;
 
+#define	msgh_reserved		msgh_voucher_port
 #define MACH_MSG_NULL (mach_msg_header_t *) 0
 
 typedef struct
@@ -701,6 +745,8 @@ typedef kern_return_t mach_msg_return_t;
 		/* Invalid out-of-line memory pointer. */
 #define MACH_SEND_NO_BUFFER		0x1000000d
 		/* No message buffer is available. */
+#define MACH_SEND_TOO_LARGE		0x1000000e
+		/* Send is too large for port */
 #define MACH_SEND_INVALID_TYPE		0x1000000f
 		/* Invalid msg-type specification. */
 #define MACH_SEND_INVALID_HEADER	0x10000010

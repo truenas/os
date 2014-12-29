@@ -248,7 +248,7 @@ ipc_mqueue_move(
 
 		/* only move messages sent to port */
 
-		if (kmsg->ikm_header.msgh_remote_port != (mach_port_t) port)
+		if (kmsg->ikm_header->msgh_remote_port != (mach_port_t) port)
 			continue;
 
 		ipc_kmsg_rmqueue(oldq, kmsg);
@@ -321,7 +321,7 @@ ipc_mqueue_send(
 	ipc_port_t port;
 	kern_return_t           save_wait_result;
 
-	port = (ipc_port_t) kmsg->ikm_header.msgh_remote_port;
+	port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 	assert(IP_VALID(port));
 
 	ip_lock(port);
@@ -346,7 +346,7 @@ ipc_mqueue_send(
 		return MACH_MSG_SUCCESS;
 	}
 
-	if (kmsg->ikm_header.msgh_bits & MACH_MSGH_BITS_CIRCULAR) {
+	if (kmsg->ikm_header->msgh_bits & MACH_MSGH_BITS_CIRCULAR) {
 		ip_unlock(port);
 
 		/* don't allow the creation of a circular loop */
@@ -374,7 +374,7 @@ ipc_mqueue_send(
 
 			ip_release(port);
 			ip_check_unlock(port);
-			kmsg->ikm_header.msgh_remote_port = MACH_PORT_NULL;
+			kmsg->ikm_header->msgh_remote_port = MACH_PORT_NULL;
 			ipc_kmsg_destroy(kmsg);
 			return MACH_MSG_SUCCESS;
 		}
@@ -388,7 +388,7 @@ ipc_mqueue_send(
 
 		if ((port->ip_msgcount < port->ip_qlimit) ||
 		    (option & MACH_SEND_ALWAYS) ||
-		    (MACH_MSGH_BITS_REMOTE(kmsg->ikm_header.msgh_bits) ==
+		    (MACH_MSGH_BITS_REMOTE(kmsg->ikm_header->msgh_bits) ==
 						MACH_MSG_TYPE_PORT_SEND_ONCE))
 			break;
 
@@ -568,9 +568,9 @@ ipc_mqueue_deliver(
 	receiver->ith_seqno = port->ip_seqno++;
 
 	imq_unlock(mqueue);
-
-	thread_go(receiver);
 	enable_preemption();
+	thread_go(receiver);
+
 
 	TR_IPC_MQEX("exit: wakeup 0x%x", receiver);
 	return MACH_MSG_SUCCESS;
@@ -730,17 +730,13 @@ ipc_mqueue_receive(
 	ipc_kmsg_queue_t kmsgs = &mqueue->imq_messages;
 	ipc_thread_t self = current_thread();
 	kern_return_t	save_wait_result;
-
-#if	NCPUS > 1 && defined(PARAGON860) && defined(ASMP)
-	MUST_BE_MASTER("ipc_mqueue_receive()");
-#endif
 	assert( !resume );
 
 	for (;;) {
 		kmsg = ipc_kmsg_queue_first(kmsgs);
 		if (kmsg != IKM_NULL) {
 			ipc_kmsg_rmqueue_first_macro(kmsgs, kmsg);
-			port = (ipc_port_t) kmsg->ikm_header.msgh_remote_port;
+			port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 			seqno = port->ip_seqno++;
 			break;
 		}
@@ -754,27 +750,21 @@ ipc_mqueue_receive(
 			}
 
 			self->ith_state = MACH_RCV_IN_PROGRESS_TIMED;
-			self->ith_msize = max_size;
-			ipc_thread_enqueue_macro(&mqueue->imq_threads, self);
-
-			thread_will_wait_with_timeout(self, timeout);
-
 		} else {
-
 			self->ith_state = MACH_RCV_IN_PROGRESS;
-			self->ith_msize = max_size;
-			ipc_thread_enqueue_macro(&mqueue->imq_threads, self);
-
-			thread_will_wait(self);
+			timeout = 0;
 		}
-
-		imq_unlock(mqueue);
+		thread_will_wait_with_timeout(self, timeout);
+		ipc_thread_enqueue_macro(&mqueue->imq_threads, self);
 		if (continuation != (void (*)(void)) 0) {
 			counter(c_ipc_mqueue_receive_block_user++);
 		} else {
 			counter(c_ipc_mqueue_receive_block_kernel++);
 		}
+		self->ith_msize = max_size;
+		self->ith_block_lock_data = &mqueue->imq_lock_data;
 		thread_block(continuation);
+		imq_unlock(mqueue);
 		if (option & MACH_RCV_TIMEOUT) {
 			/* XXX */
 		}
@@ -789,7 +779,7 @@ ipc_mqueue_receive(
 			/* pick up the message that was handed to us */
 			kmsg = self->ith_kmsg;
 			seqno = self->ith_seqno;
-			port = (ipc_port_t) kmsg->ikm_header.msgh_remote_port;
+			port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 			break;
 		}
 
@@ -865,9 +855,11 @@ ipc_mqueue_finish_receive(
 	kmsg = *kmsgp;
 	/* check sizes */
 	if (mr == MACH_MSG_SUCCESS) {
-		if (kmsg->ikm_header.msgh_size >
+		if (kmsg->ikm_header->msgh_size >
 				(max_size - REQUESTED_TRAILER_SIZE(option))) {
 			/* the receive buffer isn't large enough */
+			printf("msgh_size=%d max_size=%d REQUESTED_TRAILER_SIZE(option)=%d\n",
+				   kmsg->ikm_header->msgh_size, max_size, REQUESTED_TRAILER_SIZE(option));
 			mr = MACH_RCV_TOO_LARGE;
 		} else if (self->ith_scatter_list != MACH_MSG_BODY_NULL) {
 			/* verify the scatter list */
@@ -879,9 +871,9 @@ ipc_mqueue_finish_receive(
 	}
 
 	if (mr == MACH_MSG_SUCCESS) {
-		assert((kmsg->ikm_header.msgh_bits & MACH_MSGH_BITS_CIRCULAR)
+		assert((kmsg->ikm_header->msgh_bits & MACH_MSGH_BITS_CIRCULAR)
 									== 0);
-		assert(port == (ipc_port_t) kmsg->ikm_header.msgh_remote_port);
+		assert(port == (ipc_port_t) kmsg->ikm_header->msgh_remote_port);
 	}
 
 	ip_lock(port);

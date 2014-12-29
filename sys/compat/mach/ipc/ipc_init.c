@@ -148,6 +148,16 @@ vm_map_t ipc_kernel_copy_map;
 vm_size_t ipc_kernel_copy_map_size = IPC_KERNEL_COPY_MAP_SIZE;
 vm_size_t ipc_kmsg_max_vm_space = (IPC_KERNEL_COPY_MAP_SIZE * 7)/8;
 
+uma_zone_t ipc_kmsg_zone;
+
+
+/*
+ * values to limit inline message body handling
+ * avoid copyin/out limits - even after accounting for maximum descriptor expansion.
+ */
+#define IPC_KMSG_MAX_SPACE (64 * 1024 * 1024) /* keep in sync with COPYSIZELIMIT_PANIC */
+vm_size_t ipc_kmsg_max_body_space = ((IPC_KMSG_MAX_SPACE * 3)/4 - MAX_TRAILER_SIZE);
+
 int ipc_space_max = SPACE_MAX;
 int ipc_port_max = PORT_MAX;
 int ipc_pset_max = SET_MAX;
@@ -175,6 +185,8 @@ ipc_bootstrap_sysinit(void *arg __unused)
 
 	ipc_space_zone = uma_zcreate("ipc_space_zone", sizeof(struct ipc_space),
 								 NULL, NULL, NULL, NULL, 1, 0);
+	ipc_kmsg_zone = uma_zcreate("ipc_kmsg_zone", IKM_SAVED_MSG_SIZE,
+								NULL, NULL, NULL, NULL, 1, 0);
     /*
 	 * populate all port(set) zones
 	 */

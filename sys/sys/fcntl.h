@@ -155,6 +155,7 @@ typedef	__pid_t		pid_t;
 #define	FCNTLFLAGS	(FAPPEND|FASYNC|FFSYNC|FNONBLOCK|FPOSIXSHM|FRDAHEAD| \
 			 O_DIRECT)
 #endif
+#define O_NOFDALLOC	0x80000000
 #endif
 
 /*

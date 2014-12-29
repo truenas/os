@@ -561,24 +561,48 @@ mach_thread_set_policy(struct mach_trap_args *args)
 void
 thread_go(thread_t thread)
 {
-	/* XXX */
+	int needunlock = 0;
+	struct mtx *block_lock = thread->ith_block_lock_data;
+
+	if (block_lock != NULL && !mtx_owned(block_lock)) {
+		needunlock = 1;
+		mtx_lock(block_lock);
+	}
+	wakeup(thread);
+	if (needunlock)
+		mtx_unlock(block_lock);
 }
 
 void
-thread_block(void (*continuation)(void))
+thread_block(void (*continuation)(void) __unused) /* ignore continuation for now */
 {
-	/* XXX */
+	thread_t thread = current_thread();
+	int rc;
+
+	rc = msleep(thread, thread->ith_block_lock_data, PCATCH|PSOCK, "thread_block", thread->timeout);
+	thread->ith_block_lock_data = NULL;
+	if (rc == EINTR || rc == ERESTART)
+		thread->wait_result = THREAD_INTERRUPTED;
+	else if (rc == EWOULDBLOCK)
+		thread->wait_result = THREAD_TIMED_OUT;
+	else
+		thread->wait_result = 0;
 }
 
 void
 thread_will_wait_with_timeout(thread_t thread, int timeout)
 {
+
+	thread->sleep_stamp = ticks;
+	thread->timeout = timeout;
 }
 
 
 void
 thread_will_wait(thread_t thread)
 {
+
+	thread->sleep_stamp = ticks;
 }
 
 static void

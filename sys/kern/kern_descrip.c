@@ -1670,6 +1670,28 @@ fdalloc(struct thread *td, int minfd, int *result)
 	return (0);
 }
 
+int
+kern_fdalloc(struct thread *td, int minfd, int *result)
+{
+	struct proc *p = td->td_proc;
+	struct filedesc *fdp = p->p_fd;
+	int rc;
+	FILEDESC_XLOCK(fdp);
+	rc = fdalloc(td, minfd, result);
+	FILEDESC_XUNLOCK(fdp);
+	return (rc);
+}
+
+void
+kern_fddealloc(struct thread *td, int fd)
+{
+	struct proc *p = td->td_proc;
+	struct filedesc *fdp = p->p_fd;
+	FILEDESC_XLOCK(fdp);
+	fdunused(fdp, fd);
+	FILEDESC_XUNLOCK(fdp);
+}
+
 /*
  * Allocate n file descriptors for the process.
  */
@@ -1744,6 +1766,7 @@ falloc(struct thread *td, struct file **resultfp, int *resultfd, int flags)
 	if (error)
 		return (error);		/* no reference held on error */
 
+	fd = *resultfd;
 	error = finstall(td, fp, &fd, flags, NULL);
 	if (error) {
 		fdrop(fp, td);		/* one reference (fp only) */
@@ -1811,9 +1834,11 @@ finstall(struct thread *td, struct file *fp, int *fd, int flags,
 		filecaps_validate(fcaps, __func__);
 
 	FILEDESC_XLOCK(fdp);
-	if ((error = fdalloc(td, 0, fd))) {
-		FILEDESC_XUNLOCK(fdp);
-		return (error);
+	if (!(flags & O_NOFDALLOC)) {
+		if ((error = fdalloc(td, 0, fd))) {
+			FILEDESC_XUNLOCK(fdp);
+			return (error);
+		}
 	}
 	fhold(fp);
 	fde = &fdp->fd_ofiles[*fd];

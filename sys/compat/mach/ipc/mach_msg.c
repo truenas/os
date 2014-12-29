@@ -290,7 +290,7 @@ mach_msg_send(
 
 	if (mr != MACH_MSG_SUCCESS) {
 	    mr |= ipc_kmsg_copyout_pseudo(kmsg, space, map, MACH_MSG_BODY_NULL);
-	    (void) ipc_kmsg_put(msg, kmsg, kmsg->ikm_header.msgh_size);
+	    (void) ipc_kmsg_put(msg, kmsg, kmsg->ikm_header->msgh_size);
 	}
 
 	return mr;
@@ -405,7 +405,7 @@ mach_msg_receive(
 	}
 	trailer = (mach_msg_format_0_trailer_t *)
 			((vm_offset_t)&kmsg->ikm_header +
-			round_msg(kmsg->ikm_header.msgh_size));
+			round_msg(kmsg->ikm_header->msgh_size));
 	if (option & MACH_RCV_TRAILER_MASK) {
 		trailer->msgh_seqno = seqno;
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
@@ -422,7 +422,7 @@ mach_msg_receive(
 	if (mr != MACH_MSG_SUCCESS) {
 		if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR
 		    ) {
-			if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header.msgh_size +
+			if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header->msgh_size +
 			   trailer->msgh_trailer_size) == MACH_RCV_INVALID_DATA)
 				mr = MACH_RCV_INVALID_DATA;
 		} 
@@ -436,7 +436,7 @@ mach_msg_receive(
 		return mr;
 	}
 	mr = ipc_kmsg_put(msg, kmsg, 
-		kmsg->ikm_header.msgh_size + trailer->msgh_trailer_size);
+		kmsg->ikm_header->msgh_size + trailer->msgh_trailer_size);
 	FREE_SCATTER_LIST(slist, slist_size, slist_rt);
 
 	return mr;
@@ -535,7 +535,7 @@ msg_receive_error(
 	trailer = (mach_msg_format_0_trailer_t *) 
 			((vm_offset_t)&kmsg->ikm_header +
 			round_msg(sizeof(mach_msg_header_t)));
-	kmsg->ikm_header.msgh_size = sizeof(mach_msg_header_t);
+	kmsg->ikm_header->msgh_size = sizeof(mach_msg_header_t);
 	bcopy(  (char *)&trailer_template, 
 		(char *)trailer, 
 		sizeof(trailer_template));
@@ -547,7 +547,7 @@ msg_receive_error(
 	/*
 	 * Copy the message to user space
 	 */
-	if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header.msgh_size +
+	if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header->msgh_size +
 			trailer->msgh_trailer_size) == MACH_RCV_INVALID_DATA)
 		return(MACH_RCV_INVALID_DATA);
 	else 

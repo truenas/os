@@ -913,11 +913,11 @@ ipc_port_destroy(
 	while ((kmsg = ipc_kmsg_dequeue(kmqueue)) != IKM_NULL) {
 		imq_unlock(mqueue);
 
-		assert(kmsg->ikm_header.msgh_remote_port ==
+		assert(kmsg->ikm_header->msgh_remote_port ==
 						(mach_port_t) port);
 
 		ipc_port_release(port);
-		kmsg->ikm_header.msgh_remote_port = MACH_PORT_NULL;
+		kmsg->ikm_header->msgh_remote_port = MACH_PORT_NULL;
 		ipc_kmsg_destroy(kmsg);
 
 		imq_lock(mqueue);
@@ -1823,7 +1823,7 @@ print_ports(void)
 
  */
 
-#define	KMSG_MATCH_FIELD(kmsg)	((unsigned int) kmsg->ikm_header.msgh_id)
+#define	KMSG_MATCH_FIELD(kmsg)	((unsigned int) kmsg->ikm_header->msgh_id)
 #define	DKQP_LONG(kmsg)	FALSE
 char	*dkqp_long_format = "(%3d) <%10d> 0x%x   %10d %10d\n";
 char	*dkqp_format = "(%3d) <%10d> 0x%x   %10d %10d\n";
@@ -1861,7 +1861,7 @@ db_kmsg_queue_print(
 		if (DKQP_LONG(kmsg))
 			inline_total += kmsg->ikm_size;
 		else
-			inline_total += kmsg->ikm_header.msgh_size;
+			inline_total += kmsg->ikm_header->msgh_size;
 	}
 	iprintf(DKQP_LONG(kmsg) ? dkqp_long_format : dkqp_format,
 		icount,	cur_id, ikmsg, inline_total, ool_total);

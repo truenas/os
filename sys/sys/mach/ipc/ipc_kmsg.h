@@ -137,6 +137,47 @@
 #endif
 #include <sys/mach/ipc/ipc_object.h>
 
+#pragma pack(4)
+
+typedef	struct
+{
+  mach_msg_bits_t	msgh_bits;
+  mach_msg_size_t	msgh_size;
+  mach_port_name_t	msgh_remote_port;
+  mach_port_name_t	msgh_local_port;
+  mach_port_name_t	msgh_voucher_port;
+  mach_msg_id_t		msgh_id;
+} mach_msg_legacy_header_t;
+
+typedef struct
+{
+        mach_msg_legacy_header_t       header;
+        mach_msg_body_t         body;
+} mach_msg_legacy_base_t;
+
+typedef struct
+{
+  mach_port_name_t				name;
+  mach_msg_size_t				pad1;
+  uint32_t						pad2 : 16;
+  mach_msg_type_name_t			disposition : 8;
+  mach_msg_descriptor_type_t	type : 8;
+} mach_msg_legacy_port_descriptor_t;
+
+
+typedef union
+{
+  mach_msg_legacy_port_descriptor_t			port;
+  mach_msg_ool_descriptor32_t		out_of_line32;
+  mach_msg_ool_ports_descriptor32_t	ool_ports32;
+  mach_msg_type_descriptor_t			type;
+} mach_msg_legacy_descriptor_t;
+
+#pragma pack()
+
+#define LEGACY_HEADER_SIZE_DELTA ((mach_msg_size_t)(sizeof(mach_msg_header_t) - sizeof(mach_msg_legacy_header_t)))
+
+
 /*
  *	This structure is only the header for a kmsg buffer;
  *	the actual buffer is normally larger.  The rest of the buffer
@@ -150,10 +191,10 @@
  */
 
 typedef struct ipc_kmsg {
+	mach_msg_size_t			ikm_size;
 	struct ipc_kmsg *ikm_next, *ikm_prev;
-	vm_size_t ikm_size;
-	vm_offset_t ikm_private;		/* allocator-private info */
-	mach_msg_header_t ikm_header;
+	mach_msg_header_t		*ikm_header;
+	ipc_port_t			ikm_prealloc;
 } *ipc_kmsg_t;
 
 #define	IKM_NULL		((ipc_kmsg_t) 0)
@@ -195,6 +236,12 @@ MACRO_BEGIN								\
 	assert((kmsg)->ikm_size == (size));				\
 MACRO_END
 
+#define ikm_set_header(kmsg, mtsize)					\
+MACRO_BEGIN												\
+	(kmsg)->ikm_header = (mach_msg_header_t *) 			\
+	((vm_offset_t)((kmsg) + 1) + (kmsg)->ikm_size - (mtsize));	\
+MACRO_END
+
 /*
  *	Non-positive message sizes are special.  They indicate that
  *	the message buffer doesn't come from ikm_alloc and
@@ -207,6 +254,7 @@ MACRO_END
 #define	IKM_SIZE_NETWORK	-1
 #define	IKM_SIZE_INTR_KMSG	-2
 
+
 #define	ikm_free(kmsg)	ipc_kmsg_free(kmsg)
 
 struct ipc_kmsg_queue {
@@ -216,7 +264,7 @@ struct ipc_kmsg_queue {
 typedef struct ipc_kmsg_queue *ipc_kmsg_queue_t;
 
 #define	IKMQ_NULL		((ipc_kmsg_queue_t) 0)
-
+extern uma_zone_t ipc_kmsg_zone;
 
 /*
  * Exported interfaces
@@ -315,6 +363,10 @@ MACRO_END
 /* Destroy kernel message */
 extern void ipc_kmsg_destroy(
 	ipc_kmsg_t	kmsg);
+
+/* Allocate a kernel message */
+extern ipc_kmsg_t ipc_kmsg_alloc(
+	mach_msg_size_t size);
 
 /* Free a kernel message buffer */
 extern void ipc_kmsg_free(
