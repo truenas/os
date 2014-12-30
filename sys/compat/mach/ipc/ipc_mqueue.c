@@ -415,9 +415,10 @@ ipc_mqueue_send(
 			thread_will_wait(self);
 		}
 
-	 	ip_unlock(port);
 		counter(c_ipc_mqueue_send_block++);
+		self->ith_block_lock_data = &port->port_comm.rcd_io_lock_data;
 		thread_block((void (*)(void)) 0);
+		ip_unlock(port);
 
 		/* Save proper wait_result in case we block */
 		save_wait_result = self->wait_result;
