@@ -199,10 +199,9 @@ typedef struct ipc_kmsg {
 
 #define	IKM_NULL		((ipc_kmsg_t) 0)
 
-#define	IKM_OVERHEAD							\
-		(sizeof(struct ipc_kmsg) - sizeof(mach_msg_header_t))
+#define	IKM_OVERHEAD   (sizeof(struct ipc_kmsg))
 
-#define	ikm_plus_overhead(size)	((vm_size_t)((size) + IKM_OVERHEAD))
+#define	ikm_plus_overhead(size)	((mach_msg_size_t)((size) + IKM_OVERHEAD))
 #define	ikm_less_overhead(size)	((mach_msg_size_t)((size) - IKM_OVERHEAD))
 
 /*
@@ -215,7 +214,7 @@ typedef struct ipc_kmsg {
  *	IKM_SAVED_KMSG_SIZE includes overhead; IKM_SAVED_MSG_SIZE doesn't.
  */
 
-#define	IKM_SAVED_KMSG_SIZE	((vm_size_t) 256)
+#define	IKM_SAVED_KMSG_SIZE	256
 #define	IKM_SAVED_MSG_SIZE	ikm_less_overhead(IKM_SAVED_KMSG_SIZE)
 
 #define	ikm_alloc(size)							\
@@ -399,7 +398,7 @@ extern void ipc_kmsg_put_to_kernel(
 
 /* Copyin port rights in the header of a message */
 extern mach_msg_return_t ipc_kmsg_copyin_header(
-	mach_msg_header_t	*msg,
+	ipc_kmsg_t	kmsg,
 	ipc_space_t		space,
 	mach_port_name_t		notify);
 

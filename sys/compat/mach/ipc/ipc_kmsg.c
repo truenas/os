@@ -362,6 +362,7 @@ ipc_kmsg_alloc(
 	if (kmsg != IKM_NULL) {
 		ikm_init(kmsg, max_expanded_size);
 		ikm_set_header(kmsg, msg_and_trailer_size);
+		printf("kmsg=%p kmsg->ikm_header=%p kmsg->ikm_size=%d\n", kmsg, kmsg->ikm_header, kmsg->ikm_size);
 	}
 	return (kmsg);
 }
@@ -939,10 +940,11 @@ ipc_kmsg_put_to_kernel(
 
 mach_msg_return_t
 ipc_kmsg_copyin_header(
-	mach_msg_header_t	*msg,
+	ipc_kmsg_t		kmsg,
 	ipc_space_t		space,
 	mach_port_name_t		notify_name)
 {
+	mach_msg_header_t *msg  = kmsg->ikm_header;
 	mach_msg_bits_t mbits = msg->msgh_bits &~ MACH_MSGH_BITS_CIRCULAR;
 	mach_msg_type_name_t dest_type = MACH_MSGH_BITS_REMOTE(mbits);
 	mach_msg_type_name_t reply_type = MACH_MSGH_BITS_LOCAL(mbits);
@@ -951,6 +953,8 @@ ipc_kmsg_copyin_header(
 	ipc_port_t notify_port;
 	kern_return_t kr;
 
+	dest_port = reply_port = NULL;
+	dest_soright = reply_soright = notify_port = NULL;
 	/* Here we know that the value is coming from userspace so the cast is safe
 	* because we've been passed a 32-bit name
 	*/
@@ -1816,7 +1820,7 @@ ipc_kmsg_copyin(
 {
     mach_msg_return_t 		mr;
     
-    mr = ipc_kmsg_copyin_header(kmsg->ikm_header, space, notify);
+    mr = ipc_kmsg_copyin_header(kmsg, space, notify);
     if (mr != MACH_MSG_SUCCESS)
 		return mr;
     
@@ -2816,7 +2820,7 @@ ipc_kmsg_check_scatter(
 	mach_msg_body_t		**slistp,
 	mach_msg_size_t		*sizep)
 {
-    	mach_msg_body_t		*body;
+	mach_msg_body_t		*body;
 	mach_msg_descriptor_t 	*gstart, *gend;
 	mach_msg_descriptor_t 	*sstart, *send;
 	mach_msg_return_t 	mr = MACH_MSG_SUCCESS;
