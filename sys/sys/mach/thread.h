@@ -275,7 +275,6 @@ typedef struct thread_shuttle	*thread_shuttle_t;
 #define ith_scatter_list_size	saved.receive.scatter_list_size
 
 #define ith_other		saved.other
-#define ith_task		ith_td->td_proc->p_machdata
 
 /*
  * thread_t->at_safe_point values
@@ -606,8 +605,11 @@ extern void		consider_thread_collect(void);
 #define	ith_option		saved.receive.option
 #define ith_scatter_list	saved.receive.scatter_list
 #define ith_scatter_list_size	saved.receive.scatter_list_size
-
+#define ith_task		ith_td->td_proc->p_machdata
+#define ith_map			ith_td->td_proc->p_vmspace->vm_map
 #define ith_other		saved.other
+
+#define thread_map(thread) (&(thread)->ith_td->td_proc->p_vmspace->vm_map)
 
 struct mach_port;
 
