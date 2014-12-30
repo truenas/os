@@ -333,9 +333,14 @@ ipc_kmsg_alloc(
 {
 	mach_msg_size_t max_expanded_size;
 	ipc_kmsg_t kmsg;
+	int mflags;
 
 	mach_msg_size_t size = msg_and_trailer_size - MAX_TRAILER_SIZE;
-
+#ifdef INVARIANTS
+	mflags = M_NOWAIT|M_ZERO;
+#else
+	mflags = M_NOWAIT;
+#endif
 	/* compare against implementation upper limit for the body */
 	if (size > ipc_kmsg_max_body_space)
 		return IKM_NULL;
@@ -353,16 +358,14 @@ ipc_kmsg_alloc(
 	} else
 		max_expanded_size = msg_and_trailer_size;
 
-	if (max_expanded_size <= IKM_SAVED_MSG_SIZE) {
-		kmsg = uma_zalloc(ipc_kmsg_zone, M_NOWAIT);
-	} else {
-		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH, M_NOWAIT);
-	}
+	if (max_expanded_size <= IKM_SAVED_MSG_SIZE)
+		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
+	else
+		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH, mflags);
 
 	if (kmsg != IKM_NULL) {
 		ikm_init(kmsg, max_expanded_size);
 		ikm_set_header(kmsg, msg_and_trailer_size);
-		printf("kmsg=%p kmsg->ikm_header=%p kmsg->ikm_size=%d\n", kmsg, kmsg->ikm_header, kmsg->ikm_size);
 	}
 	return (kmsg);
 }
@@ -686,7 +689,10 @@ void
 ipc_kmsg_free(ipc_kmsg_t	kmsg)
 {
 
-	free(kmsg, M_MACH);
+	if (kmsg->ikm_size <= IKM_SAVED_MSG_SIZE)
+		uma_zfree(ipc_kmsg_zone, kmsg);
+	else
+		free(kmsg, M_MACH);
 }
 
 /*
@@ -749,7 +755,10 @@ ipc_kmsg_get(
 	kmsg->ikm_header->msgh_id			= legacy_base.header.msgh_id;
 
 	/* ipc_kmsg_print(kmsg);*/
-	printf("msgh_size=%d\n", size);
+	if (copyinmsg(msg_addr, (char *)(kmsg->ikm_header + 1), size - (mach_msg_size_t)sizeof(mach_msg_header_t))) {
+		ipc_kmsg_free(kmsg);
+		return MACH_SEND_INVALID_DATA;
+	}
 	/* 
 	 * I reserve for the trailer the largest space (MAX_TRAILER_SIZE)
 	 * However, the internal size field of the trailer (msgh_trailer_size)
@@ -868,7 +877,6 @@ ipc_kmsg_put(
 		kmsg->ikm_header = (mach_msg_header_t *)legacy_header;
 	}
 #endif
-	printf("copying %d bytes to %p\n", size, msg);
 	if (copyoutmsg((const char *) kmsg->ikm_header, (char *) msg, size))
 		mr = MACH_RCV_INVALID_DATA;
 	else
@@ -961,7 +969,6 @@ ipc_kmsg_copyin_header(
 	mach_port_name_t dest_name = CAST_MACH_PORT_TO_NAME(msg->msgh_remote_port);
 	mach_port_name_t reply_name = CAST_MACH_PORT_TO_NAME(msg->msgh_local_port);
 
-	printf("dest_name=%d reply_name=%d\n", dest_name, reply_name);
 	if (!MACH_MSG_TYPE_PORT_ANY_SEND(dest_type))
 		return MACH_SEND_INVALID_HEADER;
 
@@ -1402,7 +1409,6 @@ ipc_kmsg_copyin_body(
 	body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
     saddr = (mach_msg_descriptor_t *) (body + 1);
     eaddr = saddr + body->msgh_descriptor_count;
-    
     /* make sure the message does not ask for more msg descriptors
      * than the message can hold.
      */
