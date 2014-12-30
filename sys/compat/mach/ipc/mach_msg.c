@@ -404,7 +404,7 @@ mach_msg_receive(
 		return mr;
 	}
 	trailer = (mach_msg_format_0_trailer_t *)
-			((vm_offset_t)&kmsg->ikm_header +
+			((vm_offset_t)kmsg->ikm_header +
 			round_msg(kmsg->ikm_header->msgh_size));
 	if (option & MACH_RCV_TRAILER_MASK) {
 		trailer->msgh_seqno = seqno;
@@ -533,7 +533,7 @@ msg_receive_error(
 	 * Build a minimal message with the requested trailer.
 	 */
 	trailer = (mach_msg_format_0_trailer_t *) 
-			((vm_offset_t)&kmsg->ikm_header +
+			((vm_offset_t)kmsg->ikm_header +
 			round_msg(sizeof(mach_msg_header_t)));
 	kmsg->ikm_header->msgh_size = sizeof(mach_msg_header_t);
 	bcopy(  (char *)&trailer_template, 
