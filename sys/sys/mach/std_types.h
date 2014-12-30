@@ -86,6 +86,7 @@
 #define	STD_TYPES_H_
 #define MACH_KDB 0
 #define MACH_COUNTERS 0
+#define ZONE_DEBUG 0
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/vm_types.h>
