@@ -462,6 +462,8 @@ task_free( register task_t	task )
 {
 	register processor_set_t pset;
 
+	/* tasks are tied to proc structures so should only be freed if proc goes away */
+	return;
 	/*
 	 * Temporarily restore the reference we dropped above, then
 	 * freeze the task so that the task->processor_set field
