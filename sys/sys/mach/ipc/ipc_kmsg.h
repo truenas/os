@@ -435,6 +435,11 @@ extern mach_msg_return_t ipc_kmsg_copyout(
 	mach_port_name_t		notify,
 	mach_msg_body_t		*slist);
 
+/* Compute size of message as copied out to the specified space/map */
+extern mach_msg_size_t ipc_kmsg_copyout_size(
+	ipc_kmsg_t		kmsg,
+	vm_map_t		map);
+
 /* Copyout port rights and out-of-line memory from the body of a message */
 extern mach_msg_return_t ipc_kmsg_copyout_body(
     	ipc_kmsg_t		kmsg,
@@ -473,7 +478,6 @@ extern boolean_t	ikm_cache_put(
 	ipc_kmsg_t		kmsg);
 
 #if 	MACH_KDB
-#include <mach_kdb.h>
 
 /* Do a formatted dump of a kernel message */
 extern void ipc_kmsg_print(
