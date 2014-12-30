@@ -110,9 +110,11 @@
 
 
 static fo_close_t mach_port_close;
+static fo_fill_kinfo_t mach_port_fill_kinfo;
 
 struct fileops mach_fileops  = {
-	.fo_close = mach_port_close
+	.fo_close = mach_port_close,
+	.fo_fill_kinfo = mach_port_fill_kinfo
 };
 
 static int
@@ -125,6 +127,14 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 	assert(entry->ie_object == NULL);
 	free(entry, M_MACH);
 
+	return (0);
+}
+
+static int
+mach_port_fill_kinfo(struct file *fp __unused, struct kinfo_file *kif __unused,
+					 struct filedesc *fdp __unused)
+{
+	/* placeholder to prevent us from panicking */
 	return (0);
 }
 
