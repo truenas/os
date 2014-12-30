@@ -300,7 +300,7 @@ ipc_notify_port_deleted(
 	}
 
 	ikm_init(kmsg, sizeof *n);
-	n = (mach_port_deleted_notification_t *) &kmsg->ikm_header;
+	n = (mach_port_deleted_notification_t *) kmsg->ikm_header;
 	*n = ipc_notify_port_deleted_template;
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
@@ -339,7 +339,7 @@ ipc_notify_port_destroyed(
 	}
 
 	ikm_init(kmsg, sizeof *n);
-	n = (mach_port_destroyed_notification_t *) &kmsg->ikm_header;
+	n = (mach_port_destroyed_notification_t *) kmsg->ikm_header;
 	*n = ipc_notify_port_destroyed_template;
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
@@ -373,7 +373,7 @@ ipc_notify_no_senders(
 	}
 
 	ikm_init(kmsg, sizeof *n);
-	n = (mach_no_senders_notification_t *) &kmsg->ikm_header;
+	n = (mach_no_senders_notification_t *) kmsg->ikm_header;
 	*n = ipc_notify_no_senders_template;
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
@@ -405,7 +405,7 @@ ipc_notify_send_once(
 	}
 
 	ikm_init(kmsg, sizeof *n);
-	n = (mach_send_once_notification_t *) &kmsg->ikm_header;
+	n = (mach_send_once_notification_t *) kmsg->ikm_header;
 	*n = ipc_notify_send_once_template;
 
         n->not_header.msgh_remote_port = (mach_port_t) port;
@@ -438,7 +438,7 @@ ipc_notify_dead_name(
 	}
 
 	ikm_init(kmsg, sizeof *n);
-	n = (mach_dead_name_notification_t *) &kmsg->ikm_header;
+	n = (mach_dead_name_notification_t *) kmsg->ikm_header;
 	*n = ipc_notify_dead_name_template;
 
 	n->not_header.msgh_remote_port = (mach_port_t) port;
