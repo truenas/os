@@ -334,7 +334,7 @@ ipc_kmsg_alloc(
 	mach_msg_size_t max_expanded_size;
 	ipc_kmsg_t kmsg;
 
-		mach_msg_size_t size = msg_and_trailer_size - MAX_TRAILER_SIZE;
+	mach_msg_size_t size = msg_and_trailer_size - MAX_TRAILER_SIZE;
 
 	/* compare against implementation upper limit for the body */
 	if (size > ipc_kmsg_max_body_space)
@@ -517,7 +517,7 @@ ipc_kmsg_clean_body(
 	return;
 
     saddr = (mach_msg_descriptor_t *) 
-			((mach_msg_base_t *) &kmsg->ikm_header + 1);
+			((mach_msg_base_t *) kmsg->ikm_header + 1);
     eaddr = saddr + number;
 
     for ( ; saddr < eaddr; saddr++ ) {
@@ -668,7 +668,7 @@ ipc_kmsg_clean(
 	if (mbits & MACH_MSGH_BITS_COMPLEX) {
 		mach_msg_body_t *body;
 
-		body = (mach_msg_body_t *) (&kmsg->ikm_header + 1);
+		body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
 		ipc_kmsg_clean_body(kmsg, body->msgh_descriptor_count);
 	}
 }
@@ -747,13 +747,15 @@ ipc_kmsg_get(
 	kmsg->ikm_header->msgh_voucher_port		= legacy_base.header.msgh_voucher_port;
 	kmsg->ikm_header->msgh_id			= legacy_base.header.msgh_id;
 
+	/* ipc_kmsg_print(kmsg);*/
+	printf("msgh_size=%d\n", size);
 	/* 
 	 * I reserve for the trailer the largest space (MAX_TRAILER_SIZE)
 	 * However, the internal size field of the trailer (msgh_trailer_size)
 	 * is initialized to the minimum (sizeof(mach_msg_trailer_t)), to optimize
 	 * the cases where no implicit data is requested.
 	 */
-	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)&kmsg->ikm_header + size);
+	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)kmsg->ikm_header + size);
 	trailer->msgh_sender = current_task()->sec_token;
 	trailer->msgh_audit = current_task()->audit_token;
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
@@ -799,7 +801,7 @@ ipc_kmsg_get_from_kernel(
 	
 	if ((kmsg = ipc_kmsg_alloc(msg_and_trailer_size)) == NULL)
 		return MACH_SEND_NO_BUFFER;
-	(void) memcpy((void *) &kmsg->ikm_header, (const void *) msg, size);
+	(void) memcpy((void *) kmsg->ikm_header, (const void *) msg, size);
 
 	kmsg->ikm_header->msgh_size = size;
 	/* 
@@ -808,7 +810,7 @@ ipc_kmsg_get_from_kernel(
 	 * is initialized to the minimum (sizeof(mach_msg_trailer_t)), to optimize
 	 * the cases where no implicit data is requested.
 	 */
-	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)&kmsg->ikm_header + size);
+	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)kmsg->ikm_header + size);
 	trailer->msgh_sender = KERNEL_SECURITY_TOKEN;
 	trailer->msgh_audit = KERNEL_AUDIT_TOKEN;
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
@@ -842,7 +844,31 @@ ipc_kmsg_put(
 
 	ikm_check_initialized(kmsg, kmsg->ikm_size);
 
-	if (copyoutmsg((const char *) &kmsg->ikm_header, (char *) msg, size))
+#if defined(__LP64__)
+	if (current_task() != kernel_task) { /* don't if receiver expects fully-cooked in-kernel msg; ux_exception */
+		mach_msg_legacy_header_t *legacy_header =
+			(mach_msg_legacy_header_t *)((vm_offset_t)(kmsg->ikm_header) + LEGACY_HEADER_SIZE_DELTA);
+
+		mach_msg_bits_t		bits		= kmsg->ikm_header->msgh_bits;
+		mach_msg_size_t		msg_size	= kmsg->ikm_header->msgh_size;
+		mach_port_name_t	remote_port	= CAST_MACH_PORT_TO_NAME(kmsg->ikm_header->msgh_remote_port);
+		mach_port_name_t	local_port	= CAST_MACH_PORT_TO_NAME(kmsg->ikm_header->msgh_local_port);
+		mach_port_name_t	voucher_port	= kmsg->ikm_header->msgh_voucher_port;
+		mach_msg_id_t		id			= kmsg->ikm_header->msgh_id;
+
+		legacy_header->msgh_id			= id;
+		legacy_header->msgh_local_port = local_port;
+		legacy_header->msgh_remote_port = remote_port;
+		legacy_header->msgh_voucher_port = voucher_port;
+		legacy_header->msgh_size		= msg_size - LEGACY_HEADER_SIZE_DELTA;
+		legacy_header->msgh_bits		= bits;
+
+		size -= LEGACY_HEADER_SIZE_DELTA;
+		kmsg->ikm_header = (mach_msg_header_t *)legacy_header;
+	}
+#endif
+	printf("copying %d bytes to %p\n", size, msg);
+	if (copyoutmsg((const char *) kmsg->ikm_header, (char *) msg, size))
 		mr = MACH_RCV_INVALID_DATA;
 	else
 		mr = MACH_MSG_SUCCESS;
@@ -869,7 +895,7 @@ ipc_kmsg_put_to_kernel(
 	mach_msg_size_t		size)
 {
 
-	(void) memcpy((void *) msg, (const void *) &kmsg->ikm_header, size);
+	(void) memcpy((void *) msg, (const void *) kmsg->ikm_header, size);
 
 	ikm_free(kmsg);
 }
@@ -1369,7 +1395,7 @@ ipc_kmsg_copyin_body(
 #else
 	use_page_lists = steal_pages = FALSE;
 #endif
-    body = (mach_msg_body_t *) (&kmsg->ikm_header + 1);
+	body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
     saddr = (mach_msg_descriptor_t *) (body + 1);
     eaddr = saddr + body->msgh_descriptor_count;
     
@@ -1377,11 +1403,10 @@ ipc_kmsg_copyin_body(
      * than the message can hold.
      */
     
-    if (eaddr <= saddr ||
-	eaddr > (mach_msg_descriptor_t *) (&kmsg->ikm_header + 
+    if (eaddr <= saddr || eaddr > (mach_msg_descriptor_t *) (kmsg->ikm_header +
 			    kmsg->ikm_header->msgh_size)) {
-	ipc_kmsg_clean_partial(kmsg,0,0,0);
-	return MACH_SEND_MSG_TOO_SMALL;
+		ipc_kmsg_clean_partial(kmsg,0,0,0);
+		return MACH_SEND_MSG_TOO_SMALL;
     }
     
     /*
@@ -1857,7 +1882,7 @@ ipc_kmsg_copyin_from_kernel(
     	mach_msg_descriptor_t	*saddr, *eaddr;
     	mach_msg_body_t		*body;
 
-    	body = (mach_msg_body_t *) (&kmsg->ikm_header + 1);
+		body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
     	saddr = (mach_msg_descriptor_t *) (body + 1);
     	eaddr = (mach_msg_descriptor_t *) saddr + body->msgh_descriptor_count;
 
@@ -2341,7 +2366,7 @@ ipc_kmsg_copyout_body(
     vm_offset_t         	data;
     mach_msg_descriptor_t 	*sstart, *send;
 
-    body = (mach_msg_body_t *) (&kmsg->ikm_header + 1);
+	body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
     saddr = (mach_msg_descriptor_t *) (body + 1);
     eaddr = saddr + body->msgh_descriptor_count;
 
@@ -2546,6 +2571,62 @@ ipc_kmsg_copyout_body(
 }
 
 /*
+ *	Routine:	ipc_kmsg_copyout_size
+ *	Purpose:
+ *		Compute the size of the message as copied out to the given
+ *		map. If the destination map's pointers are a different size
+ *		than the kernel's, we have to allow for expansion/
+ *		contraction of the descriptors as appropriate.
+ *	Conditions:
+ *		Nothing locked.
+ *	Returns:
+ *		size of the message as it would be received.
+ */
+
+mach_msg_size_t
+ipc_kmsg_copyout_size(
+	ipc_kmsg_t		kmsg,
+	vm_map_t		map)
+{
+    mach_msg_size_t		send_size;
+
+    send_size = kmsg->ikm_header->msgh_size;
+
+    boolean_t is_task_64bit = (map->max_offset > VM_MAX_ADDRESS);
+
+#if defined(__LP64__)
+	send_size -= LEGACY_HEADER_SIZE_DELTA;
+#endif
+
+    if (kmsg->ikm_header->msgh_bits & MACH_MSGH_BITS_COMPLEX) {
+
+        mach_msg_body_t *body;
+        mach_msg_descriptor_t *saddr, *eaddr;
+
+        body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
+        saddr = (mach_msg_descriptor_t *) (body + 1);
+        eaddr = saddr + body->msgh_descriptor_count;
+
+        for ( ; saddr < eaddr; saddr++ ) {
+            switch (saddr->type.type) {
+                case MACH_MSG_OOL_DESCRIPTOR:
+                case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
+                case MACH_MSG_OOL_PORTS_DESCRIPTOR:
+                    if(!is_task_64bit)
+                        send_size -= DESC_SIZE_ADJUSTMENT;
+                    break;
+                case MACH_MSG_PORT_DESCRIPTOR:
+                    send_size -= DESC_SIZE_ADJUSTMENT;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    return send_size;
+}
+
+/*
  *	Routine:	ipc_kmsg_copyout
  *	Purpose:
  *		"Copy-out" port rights and out-of-line memory
@@ -2691,7 +2772,7 @@ ipc_kmsg_copyout_dest(
 	if (mbits & MACH_MSGH_BITS_COMPLEX) {
 		mach_msg_body_t *body;
 
-		body = (mach_msg_body_t *) (&kmsg->ikm_header + 1);
+		body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
 		ipc_kmsg_clean_body(kmsg, body->msgh_descriptor_count);
 	}
 }
@@ -2743,9 +2824,9 @@ ipc_kmsg_check_scatter(
 	assert(*slistp != MACH_MSG_BODY_NULL);
 	assert(*sizep != 0);
 
-    	body = (mach_msg_body_t *) (&kmsg->ikm_header + 1);
-    	gstart = (mach_msg_descriptor_t *) (body + 1);
-    	gend = gstart + body->msgh_descriptor_count;
+	body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
+	gstart = (mach_msg_descriptor_t *) (body + 1);
+	gend = gstart + body->msgh_descriptor_count;
 
 	sstart = (mach_msg_descriptor_t *) (*slistp + 1);
 	send = sstart + (*slistp)->msgh_descriptor_count;
@@ -2866,9 +2947,10 @@ ipc_kmsg_copyout_to_kernel(
 
 
 #if	MACH_KDB
-#include <mach_kdb.h>
 #include <ddb/db_output.h>
 #include <sys/mach/ipc/ipc_print.h>
+
+
 /*
  * Forward declarations
  */
@@ -2960,7 +3042,7 @@ ipc_kmsg_print(
 		kmsg->ikm_size);
 
 	printf("\n");
-	ipc_msg_print(&kmsg->ikm_header);
+	ipc_msg_print(kmsg->ikm_header);
 }
 
 char *
