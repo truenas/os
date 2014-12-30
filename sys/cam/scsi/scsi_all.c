@@ -85,7 +85,7 @@ __FBSDID("$FreeBSD$");
  * after a SCSI bus reset.
  */
 #ifndef SCSI_DELAY
-#define SCSI_DELAY 2000
+#define SCSI_DELAY 5000
 #endif
 /*
  * All devices need _some_ sort of bus settle delay, so we'll set it to
