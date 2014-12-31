@@ -1,4 +1,0 @@
-"ipc-hello" is a test case so crude it doesn't even merit a Makefile.
-
-There is build.sh to compile it and env.sh to source set the LD_LIBRARY_PATH
-to where libmach is so that ipc_hello  will run.
