@@ -460,6 +460,8 @@ routine	mach_port_kernel_object(
 		name		: mach_port_name_t;
 	out	object_type	: unsigned;
 	out	object_addr	: unsigned);
+#else
+skip;
 #endif
 
 /*

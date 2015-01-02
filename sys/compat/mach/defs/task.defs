@@ -257,7 +257,9 @@ routine lock_set_create(
 routine lock_set_destroy(
 		task		: task_t;
 		lock_set	: lock_set_t);
-
+#else
+skip;
+skip;
 #endif
 /*
  * Create and destroy semaphore synchronizers on a
@@ -345,6 +347,10 @@ routine task_set_emulation_vector(
 		vector_start	: int;
 		emulation_vector: emulation_vector_t);
 
+#else
+skip;
+skip;
+skip;
 #endif
 /*
  *      Establish restart pc for interrupted atomic sequences.
