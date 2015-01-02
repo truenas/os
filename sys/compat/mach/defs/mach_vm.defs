@@ -89,7 +89,7 @@ subsystem
  *	of the specified size.  The address at which the
  *	allocation actually took place is returned.
  */
-#if !defined(_MACH_VM_PUBLISH_AS_LOCAL_)
+#if defined(SHOW_UNUSED) && !defined(_MACH_VM_PUBLISH_AS_LOCAL_)
 routine PREFIX(mach_vm_allocate) (
 		target		: vm_task_entry_t;
 	inout	address		: mach_vm_address_t;
@@ -98,7 +98,7 @@ routine PREFIX(mach_vm_allocate) (
 
 #else
 
-#if !KERNEL && !LIBSYSCALL_INTERFACE
+#if !defined(SHOW_UNUSED) || (!KERNEL && !LIBSYSCALL_INTERFACE)
 skip;
 #else
 routine PREFIX(vm_allocate) (
@@ -116,7 +116,7 @@ routine PREFIX(vm_allocate) (
  *	Deallocate the specified range from the virtual
  *	address space of the target virtual memory map.
  */
-#if !defined(_MACH_VM_PUBLISH_AS_LOCAL_)
+#if defined(SHOW_UNUSED) && !defined(_MACH_VM_PUBLISH_AS_LOCAL_)
 routine PREFIX(mach_vm_deallocate) (
 		target		: vm_task_entry_t;
 		address		: mach_vm_address_t;
@@ -124,7 +124,7 @@ routine PREFIX(mach_vm_deallocate) (
 
 #else
 
-#if !KERNEL && !LIBSYSCALL_INTERFACE
+#if !defined(SHOW_UNUSED) || (!KERNEL && !LIBSYSCALL_INTERFACE)
 skip;
 #else
 routine PREFIX(vm_deallocate) (
@@ -332,6 +332,9 @@ routine vm_behavior_set(
  *	The user-defined memory manager for this object is responsible
  *	for further consistency.]
  */
+#if !defined(SHOW_UNUSED)
+skip;
+#else
 #if !defined(_MACH_VM_PUBLISH_AS_LOCAL_)
 routine PREFIX(mach_vm_map) (
 #else
@@ -352,6 +355,7 @@ routine PREFIX(vm_map) (
 		cur_protection	: vm_prot_t;
 		max_protection	: vm_prot_t;
 		inheritance	: vm_inherit_t);
+#endif
 
 /*
  *	Set/Get special properties of memory associated
