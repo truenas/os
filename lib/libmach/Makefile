@@ -4,6 +4,7 @@ LIB=	mach
 
 
 A= ${.CURDIR}/${MACHINE_CPUARCH}
+DEFS=${.CURDIR}/../../sys/compat/mach/defs
 
 .PATH: ${.CURDIR}/mach
 .PATH: ${A}
@@ -18,20 +19,22 @@ SYSDIR=	${_dir}
 .error "can't find kernel source tree"
 .endif
 
-CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR}
+CFLAGS+= -g -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR}
 CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include
 CFLAGS+= -fPIC -DPRIVATE -D__MigTypeCheck=1 -DLIBSYSCALL_INTERFACE=1
 
-mach_port.h mach_portUser.c: ${.CURDIR}/mach_port.defs
-	mig ${CFLAGS} -server /dev/null ${.CURDIR}/mach_port.defs
-task.h taskUser.c: ${.CURDIR}/task.defs
-	mig ${CFLAGS} -server /dev/null ${.CURDIR}/task.defs
-host_priv.h host_privUser.c: ${.CURDIR}/host_priv.defs
-	mig ${CFLAGS} -server /dev/null ${.CURDIR}/host_priv.defs
-mach_host.h mach_hostUser.c: ${.CURDIR}/mach_host.defs
-	mig ${CFLAGS} -server /dev/null ${.CURDIR}/mach_host.defs
-vm_map.h vm_mapUser.c: ${.CURDIR}/vm_map.defs
-	mig ${CFLAGS} -server /dev/null ${.CURDIR}/vm_map.defs
+mach_port.h mach_portUser.c: ${DEFS}/mach_port.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/mach_port.defs
+task.h taskUser.c: ${DEFS}/task.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/task.defs
+host_priv.h host_privUser.c: ${DEFS}/host_priv.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/host_priv.defs
+mach_host.h mach_hostUser.c: ${DEFS}/mach_host.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/mach_host.defs
+vm_map.h vm_mapUser.c: ${DEFS}/vm_map.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/vm_map.defs
+mach_vm.h mach_vmUser.c: ${DEFS}/mach_vm.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/mach_vm.defs
 
 SRCS=					\
 	mach_portUser.c		\
@@ -39,6 +42,7 @@ SRCS=					\
 	host_privUser.c		\
 	mach_hostUser.c		\
 	vm_mapUser.c		\
+	mach_vmUser.c		\
 	error_codes.c		\
 	mach_error_string.c \
 	mach_init.c 		\
