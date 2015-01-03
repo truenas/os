@@ -47,6 +47,8 @@
                 set-e
                 ..
             ..
+            sleep
+            ..
             test
             ..
         ..
@@ -68,6 +70,8 @@
             lib
             ..
             usr.bin
+                diff
+                ..
             ..
         ..
         lib
@@ -86,6 +90,12 @@
             libcrypt
             ..
             libmp
+            ..
+            librt
+            ..
+            libthr
+                dlopen
+                ..
             ..
             libutil
             ..
@@ -169,21 +179,9 @@
         usr.bin
             apply
             ..
-            calendar
+            basename
             ..
-            comm
-            ..
-            file2c
-            ..
-            join
-            ..
-            jot
-            ..
-            lastcomm
-            ..
-            m4
-            ..
-            make
+            bmake
                 archives
                     fmt_44bsd
                     ..
@@ -281,6 +279,30 @@
                     ..
                 ..
             ..
+            calendar
+            ..
+            cmp
+            ..
+            comm
+            ..
+            cut
+            ..
+            dirname
+            ..
+            file2c
+            ..
+            grep
+            ..
+            gzip
+            ..
+            join
+            ..
+            jot
+            ..
+            lastcomm
+            ..
+            m4
+            ..
             ncal
             ..
             printf
@@ -308,6 +330,8 @@
             etcupdate
             ..
             newsyslog
+            ..
+            nmtree
             ..
             pw
             ..

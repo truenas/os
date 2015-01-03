@@ -529,7 +529,7 @@ ahci_attach(device_t dev)
 	ctlr->emloc = ATA_INL(ctlr->r_mem, AHCI_EM_LOC);
 
 	/* Create controller-wide DMA tag. */
-	if (bus_dma_tag_create(bus_get_dma_tag(dev), 0, 0,
+	if (bus_dma_tag_create(bus_get_dma_tag(dev), 1, 0,
 	    (ctlr->caps & AHCI_CAP_64BIT) ? BUS_SPACE_MAXADDR :
 	    BUS_SPACE_MAXADDR_32BIT, BUS_SPACE_MAXADDR, NULL, NULL,
 	    BUS_SPACE_MAXSIZE, BUS_SPACE_UNRESTRICTED, BUS_SPACE_MAXSIZE,
@@ -1580,6 +1580,7 @@ ahci_ch_intr_direct(void *arg)
 	struct ahci_channel *ch = device_get_softc(dev);
 	struct ccb_hdr *ccb_h;
 	uint32_t istatus;
+	STAILQ_HEAD(, ccb_hdr) tmp_doneq = STAILQ_HEAD_INITIALIZER(tmp_doneq);
 
 	/* Read interrupt statuses. */
 	istatus = ATA_INL(ch->r_mem, AHCI_P_IS);
@@ -1590,9 +1591,14 @@ ahci_ch_intr_direct(void *arg)
 	ch->batch = 1;
 	ahci_ch_intr_main(ch, istatus);
 	ch->batch = 0;
+	/*
+	 * Prevent the possibility of issues caused by processing the queue
+	 * while unlocked below by moving the contents to a local queue.
+	 */
+	STAILQ_CONCAT(&tmp_doneq, &ch->doneq);
 	mtx_unlock(&ch->mtx);
-	while ((ccb_h = STAILQ_FIRST(&ch->doneq)) != NULL) {
-		STAILQ_REMOVE_HEAD(&ch->doneq, sim_links.stqe);
+	while ((ccb_h = STAILQ_FIRST(&tmp_doneq)) != NULL) {
+		STAILQ_REMOVE_HEAD(&tmp_doneq, sim_links.stqe);
 		xpt_done_direct((union ccb *)ccb_h);
 	}
 }
@@ -2033,8 +2039,8 @@ ahci_execute_transaction(struct ahci_slot *slot)
 		return;
 	}
 	/* Start command execution timeout */
-	callout_reset(&slot->timeout, (int)ccb->ccb_h.timeout * hz / 2000,
-	    (timeout_t*)ahci_timeout, slot);
+	callout_reset_sbt(&slot->timeout, SBT_1MS * ccb->ccb_h.timeout / 2,
+	    0, (timeout_t*)ahci_timeout, slot, 0);
 	return;
 }
 
@@ -2071,9 +2077,9 @@ ahci_rearm_timeout(device_t dev)
 			continue;
 		if ((ch->toslots & (1 << i)) == 0)
 			continue;
-		callout_reset(&slot->timeout,
-		    (int)slot->ccb->ccb_h.timeout * hz / 2000,
-		    (timeout_t*)ahci_timeout, slot);
+		callout_reset_sbt(&slot->timeout,
+    	    	    SBT_1MS * slot->ccb->ccb_h.timeout / 2, 0,
+		    (timeout_t*)ahci_timeout, slot, 0);
 	}
 }
 
@@ -2105,9 +2111,9 @@ ahci_timeout(struct ahci_slot *slot)
 			slot->state = AHCI_SLOT_EXECUTING;
 		}
 
-		callout_reset(&slot->timeout,
-		    (int)slot->ccb->ccb_h.timeout * hz / 2000,
-		    (timeout_t*)ahci_timeout, slot);
+		callout_reset_sbt(&slot->timeout,
+	    	    SBT_1MS * slot->ccb->ccb_h.timeout / 2, 0,
+		    (timeout_t*)ahci_timeout, slot, 0);
 		return;
 	}
 

@@ -154,7 +154,7 @@ static char *trap_msg[] = {
 };
 
 #if defined(I586_CPU) && !defined(NO_F00F_HACK)
-extern int has_f00f_bug;
+int has_f00f_bug = 0;		/* Initialized so that it can be patched. */
 #endif
 
 #ifdef KDB
@@ -1160,7 +1160,7 @@ syscall(struct trapframe *frame)
 	KASSERT(PCB_USER_FPU(td->td_pcb),
 	    ("System call %s returning with kernel FPU ctx leaked",
 	     syscallname(td->td_proc, sa.code)));
-	KASSERT(td->td_pcb->pcb_save == &td->td_pcb->pcb_user_save,
+	KASSERT(td->td_pcb->pcb_save == get_pcb_user_save_td(td),
 	    ("System call %s returning with mangled pcb_save",
 	     syscallname(td->td_proc, sa.code)));
 
