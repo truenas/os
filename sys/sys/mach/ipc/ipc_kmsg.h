@@ -217,8 +217,7 @@ typedef struct ipc_kmsg {
 #define	IKM_SAVED_KMSG_SIZE	256
 #define	IKM_SAVED_MSG_SIZE	ikm_less_overhead(IKM_SAVED_KMSG_SIZE)
 
-#define	ikm_alloc(size)							\
-	((ipc_kmsg_t) kalloc(ikm_plus_overhead(size)))
+#define	ikm_alloc(size)	ipc_kmsg_alloc(size);
 
 #define	ikm_init(kmsg, size)						\
 MACRO_BEGIN								\
