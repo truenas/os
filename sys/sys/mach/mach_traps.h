@@ -63,8 +63,8 @@
  *	Kernel RPC functions are defined in <mach/mach_interface.h>.
  */
 
-#ifndef	_MACH_MACH_TRAPS_H_
-#define _MACH_MACH_TRAPS_H_
+#ifndef	_SYS_MACH_MACH_TRAPS_H_
+#define _SYS_MACH_MACH_TRAPS_H_
 
 __BEGIN_DECLS
 
@@ -84,7 +84,6 @@ __BEGIN_DECLS
 
 
 #ifdef	PRIVATE
-
 extern mach_port_name_t mach_reply_port(void);
 
 extern mach_port_name_t thread_self_trap(void);
@@ -746,4 +745,4 @@ kern_return_t iokit_user_client_trap(
 
 __END_DECLS
 
-#endif	/* _MACH_MACH_TRAPS_H_ */
+#endif	/* _SYS_MACH_MACH_TRAPS_H_ */
