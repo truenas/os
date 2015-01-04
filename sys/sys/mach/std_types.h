@@ -99,7 +99,7 @@
 #include <sys/mutex.h>
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
-#define mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF)
+#define mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF|MTX_DUPOK)
 #define MACH_IPC_DEBUG 0
 #define MACH_DEBUG 0
 #define MACH_MACHINE_ROUTINES 0
@@ -123,6 +123,11 @@
 #define KFREE(ptr, size, rt) free((void *)(ptr), M_MACH)
 #define copyinmsg copyin
 #define copyoutmsg copyout
+#ifdef INVARIANTS
+#define UNSUPPORTED { panic("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
+#else
+#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
+#endif
 /* drop reference */
 #define vm_allocate(a, b, c, d) 0
 #define vm_deallocate(map, pa, size) 0
