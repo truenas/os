@@ -1,7 +1,7 @@
 /*
  * IDENTIFICATION:
- * stub generated Sun Dec  7 19:06:24 2014
- * with a MiG generated Fri Nov 28 21:32:34 PST 2014 by kmacy@serenity
+ * stub generated Fri Jan  2 23:04:32 2015
+ * with a MiG generated Mon Dec 15 20:44:56 PST 2014 by kmacy@serenity
  * OPTIONS: 
  *	KernelServer
  */
@@ -132,33 +132,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-		int flags;
-	} __Request__mach_vm_allocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-	} __Request__mach_vm_deallocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -174,6 +150,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -188,6 +167,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -201,6 +183,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_read_entry_t data_list;
 		natural_t count;
@@ -231,6 +216,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t source_address;
 		mach_vm_size_t size;
@@ -245,6 +233,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -259,6 +250,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -273,6 +267,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -289,28 +286,7 @@
 		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t object;
 		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-		mach_vm_offset_t mask;
-		int flags;
-		memory_object_offset_t offset;
-		boolean_t copy;
-		vm_prot_t cur_protection;
-		vm_prot_t max_protection;
-		vm_inherit_t inheritance;
-	} __Request__mach_vm_map_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -348,6 +324,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_offset_t offset;
 	} __Request__mach_vm_page_query_t;
@@ -360,6 +339,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		natural_t nesting_depth;
@@ -374,6 +356,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		vm_region_flavor_t flavor;
@@ -406,6 +391,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		vm_purgable_t control;
@@ -420,6 +408,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		vm_page_info_flavor_t flavor;
@@ -434,31 +425,6 @@
 
 #ifndef __Reply__mach_vm_subsystem__defined
 #define __Reply__mach_vm_subsystem__defined
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-		mach_vm_address_t address;
-	} __Reply__mach_vm_allocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__mach_vm_deallocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
 
 #ifdef  __MigPackStructs
 #pragma pack(4)
@@ -570,19 +536,6 @@
 		NDR_record_t NDR;
 		kern_return_t RetCode;
 	} __Reply__mach_vm_behavior_set_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-		mach_vm_address_t address;
-	} __Reply__mach_vm_map_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -715,8 +668,6 @@
 #ifndef __ReplyUnion__mach_vm_subsystem__defined
 #define __ReplyUnion__mach_vm_subsystem__defined
 union __ReplyUnion__mach_vm_subsystem {
-	__Reply__mach_vm_allocate_t Reply_mach_vm_allocate;
-	__Reply__mach_vm_deallocate_t Reply_mach_vm_deallocate;
 	__Reply__mach_vm_protect_t Reply_mach_vm_protect;
 	__Reply__mach_vm_inherit_t Reply_mach_vm_inherit;
 	__Reply__mach_vm_read_t Reply_mach_vm_read;
@@ -726,7 +677,6 @@ union __ReplyUnion__mach_vm_subsystem {
 	__Reply__mach_vm_read_overwrite_t Reply_mach_vm_read_overwrite;
 	__Reply__mach_vm_msync_t Reply_mach_vm_msync;
 	__Reply__mach_vm_behavior_set_t Reply_mach_vm_behavior_set;
-	__Reply__mach_vm_map_t Reply_mach_vm_map;
 	__Reply__mach_vm_machine_attribute_t Reply_mach_vm_machine_attribute;
 	__Reply__mach_vm_remap_t Reply_mach_vm_remap;
 	__Reply__mach_vm_page_query_t Reply_mach_vm_page_query;
@@ -739,12 +689,6 @@ union __ReplyUnion__mach_vm_subsystem {
 #endif /* __RequestUnion__mach_vm_subsystem__defined */
 /* Forward Declarations */
 
-
-mig_internal novalue _Xmach_vm_allocate
-	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
-
-mig_internal novalue _Xmach_vm_deallocate
-	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
 mig_internal novalue _Xmach_vm_protect
 	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
@@ -771,9 +715,6 @@ mig_internal novalue _Xmach_vm_msync
 	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
 mig_internal novalue _Xmach_vm_behavior_set
-	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
-
-mig_internal novalue _Xmach_vm_map
 	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
 mig_internal novalue _Xmach_vm_machine_attribute
@@ -803,227 +744,6 @@ mig_internal novalue _Xmach_vm_page_info
 
 #if ( __MigTypeCheck )
 #if __MIG_check__Request__mach_vm_subsystem__
-#if !defined(__MIG_check__Request__mach_vm_allocate_t__defined)
-#define __MIG_check__Request__mach_vm_allocate_t__defined
-
-mig_internal kern_return_t __MIG_check__Request__mach_vm_allocate_t(__attribute__((__unused__)) __Request__mach_vm_allocate_t *In0P)
-{
-
-	typedef __Request__mach_vm_allocate_t __Request;
-#if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
-	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
-		return MIG_BAD_ARGUMENTS;
-#endif	/* __MigTypeCheck */
-
-	return MACH_MSG_SUCCESS;
-}
-#endif /* !defined(__MIG_check__Request__mach_vm_allocate_t__defined) */
-#endif /* __MIG_check__Request__mach_vm_subsystem__ */
-#endif /* ( __MigTypeCheck ) */
-
-
-/* Routine mach_vm_allocate */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_vm_allocate
-#if	defined(LINTLIBRARY)
-    (target, address, size, flags)
-	vm_map_t target;
-	mach_vm_address_t *address;
-	mach_vm_size_t size;
-	int flags;
-{ return mach_vm_allocate(target, address, size, flags); }
-#else
-(
-	vm_map_t target,
-	mach_vm_address_t *address,
-	mach_vm_size_t size,
-	int flags
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine mach_vm_allocate */
-mig_internal novalue _Xmach_vm_allocate
-	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP)
-{
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-		int flags;
-		mach_msg_trailer_t trailer;
-	} Request;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-	typedef __Request__mach_vm_allocate_t __Request;
-	typedef __Reply__mach_vm_allocate_t Reply;
-
-	/*
-	 * typedef struct {
-	 * 	mach_msg_header_t Head;
-	 * 	NDR_record_t NDR;
-	 * 	kern_return_t RetCode;
-	 * } mig_reply_error_t;
-	 */
-
-	Request *In0P = (Request *) InHeadP;
-	Reply *OutP = (Reply *) OutHeadP;
-#ifdef	__MIG_check__Request__mach_vm_allocate_t__defined
-	kern_return_t check_result;
-#endif	/* __MIG_check__Request__mach_vm_allocate_t__defined */
-
-#if	__MigKernelSpecificCode
-#else
-#endif /* __MigKernelSpecificCode */
-	vm_map_t target;
-
-	__DeclareRcvRpc(4800, "mach_vm_allocate")
-	__BeforeRcvRpc(4800, "mach_vm_allocate")
-/* RetCArg=0x0 rtSimpleRequest=1 */
-
-#if	defined(__MIG_check__Request__mach_vm_allocate_t__defined)
-	check_result = __MIG_check__Request__mach_vm_allocate_t((__Request *)In0P);
-	if (check_result != MACH_MSG_SUCCESS)
-		{ MIG_RETURN_ERROR(OutP, check_result); }
-#endif	/* defined(__MIG_check__Request__mach_vm_allocate_t__defined) */
-
-	target = convert_port_entry_to_map(In0P->Head.msgh_request_port);
-
-	OutP->RetCode = mach_vm_allocate(target, &In0P->address, In0P->size, In0P->flags);
-	vm_map_deallocate(target);
-	if (OutP->RetCode != KERN_SUCCESS) {
-		MIG_RETURN_ERROR(OutP, OutP->RetCode);
-	}
-#if	__MigKernelSpecificCode
-#endif /* __MigKernelSpecificCode */
-
-	OutP->NDR = NDR_record;
-
-
-	OutP->address = In0P->address;
-
-	OutP->Head.msgh_size = (sizeof(Reply));
-	__AfterRcvRpc(4800, "mach_vm_allocate")
-}
-
-#if ( __MigTypeCheck )
-#if __MIG_check__Request__mach_vm_subsystem__
-#if !defined(__MIG_check__Request__mach_vm_deallocate_t__defined)
-#define __MIG_check__Request__mach_vm_deallocate_t__defined
-
-mig_internal kern_return_t __MIG_check__Request__mach_vm_deallocate_t(__attribute__((__unused__)) __Request__mach_vm_deallocate_t *In0P)
-{
-
-	typedef __Request__mach_vm_deallocate_t __Request;
-#if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
-	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
-		return MIG_BAD_ARGUMENTS;
-#endif	/* __MigTypeCheck */
-
-	return MACH_MSG_SUCCESS;
-}
-#endif /* !defined(__MIG_check__Request__mach_vm_deallocate_t__defined) */
-#endif /* __MIG_check__Request__mach_vm_subsystem__ */
-#endif /* ( __MigTypeCheck ) */
-
-
-/* Routine mach_vm_deallocate */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_vm_deallocate
-#if	defined(LINTLIBRARY)
-    (target, address, size)
-	vm_map_t target;
-	mach_vm_address_t address;
-	mach_vm_size_t size;
-{ return mach_vm_deallocate(target, address, size); }
-#else
-(
-	vm_map_t target,
-	mach_vm_address_t address,
-	mach_vm_size_t size
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine mach_vm_deallocate */
-mig_internal novalue _Xmach_vm_deallocate
-	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP)
-{
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-		mach_msg_trailer_t trailer;
-	} Request;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-	typedef __Request__mach_vm_deallocate_t __Request;
-	typedef __Reply__mach_vm_deallocate_t Reply;
-
-	/*
-	 * typedef struct {
-	 * 	mach_msg_header_t Head;
-	 * 	NDR_record_t NDR;
-	 * 	kern_return_t RetCode;
-	 * } mig_reply_error_t;
-	 */
-
-	Request *In0P = (Request *) InHeadP;
-	Reply *OutP = (Reply *) OutHeadP;
-#ifdef	__MIG_check__Request__mach_vm_deallocate_t__defined
-	kern_return_t check_result;
-#endif	/* __MIG_check__Request__mach_vm_deallocate_t__defined */
-
-#if	__MigKernelSpecificCode
-#else
-#endif /* __MigKernelSpecificCode */
-	vm_map_t target;
-
-	__DeclareRcvRpc(4801, "mach_vm_deallocate")
-	__BeforeRcvRpc(4801, "mach_vm_deallocate")
-/* RetCArg=0x0 rtSimpleRequest=1 */
-
-#if	defined(__MIG_check__Request__mach_vm_deallocate_t__defined)
-	check_result = __MIG_check__Request__mach_vm_deallocate_t((__Request *)In0P);
-	if (check_result != MACH_MSG_SUCCESS)
-		{ MIG_RETURN_ERROR(OutP, check_result); }
-#endif	/* defined(__MIG_check__Request__mach_vm_deallocate_t__defined) */
-
-	target = convert_port_entry_to_map(In0P->Head.msgh_request_port);
-
-	OutP->RetCode = mach_vm_deallocate(target, In0P->address, In0P->size);
-	vm_map_deallocate(target);
-#if	__MigKernelSpecificCode
-#endif /* __MigKernelSpecificCode */
-
-	OutP->NDR = NDR_record;
-
-
-	__AfterRcvRpc(4801, "mach_vm_deallocate")
-}
-
-#if ( __MigTypeCheck )
-#if __MIG_check__Request__mach_vm_subsystem__
 #if !defined(__MIG_check__Request__mach_vm_protect_t__defined)
 #define __MIG_check__Request__mach_vm_protect_t__defined
 
@@ -1032,7 +752,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_protect_t(__attribute__
 
 	typedef __Request__mach_vm_protect_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1079,6 +800,9 @@ mig_internal novalue _Xmach_vm_protect
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -1113,7 +837,7 @@ mig_internal novalue _Xmach_vm_protect
 
 	__DeclareRcvRpc(4802, "mach_vm_protect")
 	__BeforeRcvRpc(4802, "mach_vm_protect")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_protect_t__defined)
 	check_result = __MIG_check__Request__mach_vm_protect_t((__Request *)In0P);
@@ -1144,7 +868,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_inherit_t(__attribute__
 
 	typedef __Request__mach_vm_inherit_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1189,6 +914,9 @@ mig_internal novalue _Xmach_vm_inherit
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -1222,7 +950,7 @@ mig_internal novalue _Xmach_vm_inherit
 
 	__DeclareRcvRpc(4803, "mach_vm_inherit")
 	__BeforeRcvRpc(4803, "mach_vm_inherit")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_inherit_t__defined)
 	check_result = __MIG_check__Request__mach_vm_inherit_t((__Request *)In0P);
@@ -1253,7 +981,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_read_t(__attribute__((_
 
 	typedef __Request__mach_vm_read_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1300,6 +1029,9 @@ mig_internal novalue _Xmach_vm_read
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -1355,7 +1087,7 @@ mig_internal novalue _Xmach_vm_read
 
 	__DeclareRcvRpc(4804, "mach_vm_read")
 	__BeforeRcvRpc(4804, "mach_vm_read")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_read_t__defined)
 	check_result = __MIG_check__Request__mach_vm_read_t((__Request *)In0P);
@@ -1403,7 +1135,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_read_list_t(__attribute
 
 	typedef __Request__mach_vm_read_list_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1446,6 +1179,9 @@ mig_internal novalue _Xmach_vm_read_list
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_read_entry_t data_list;
 		natural_t count;
@@ -1478,7 +1214,7 @@ mig_internal novalue _Xmach_vm_read_list
 
 	__DeclareRcvRpc(4805, "mach_vm_read_list")
 	__BeforeRcvRpc(4805, "mach_vm_read_list")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_read_list_t__defined)
 	check_result = __MIG_check__Request__mach_vm_read_list_t((__Request *)In0P);
@@ -1640,7 +1376,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_copy_t(__attribute__((_
 
 	typedef __Request__mach_vm_copy_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1685,6 +1422,9 @@ mig_internal novalue _Xmach_vm_copy
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t source_address;
 		mach_vm_size_t size;
@@ -1718,7 +1458,7 @@ mig_internal novalue _Xmach_vm_copy
 
 	__DeclareRcvRpc(4807, "mach_vm_copy")
 	__BeforeRcvRpc(4807, "mach_vm_copy")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_copy_t__defined)
 	check_result = __MIG_check__Request__mach_vm_copy_t((__Request *)In0P);
@@ -1749,7 +1489,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_read_overwrite_t(__attr
 
 	typedef __Request__mach_vm_read_overwrite_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1796,6 +1537,9 @@ mig_internal novalue _Xmach_vm_read_overwrite
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -1829,7 +1573,7 @@ mig_internal novalue _Xmach_vm_read_overwrite
 
 	__DeclareRcvRpc(4808, "mach_vm_read_overwrite")
 	__BeforeRcvRpc(4808, "mach_vm_read_overwrite")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_read_overwrite_t__defined)
 	check_result = __MIG_check__Request__mach_vm_read_overwrite_t((__Request *)In0P);
@@ -1864,7 +1608,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_msync_t(__attribute__((
 
 	typedef __Request__mach_vm_msync_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1909,6 +1654,9 @@ mig_internal novalue _Xmach_vm_msync
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -1942,7 +1690,7 @@ mig_internal novalue _Xmach_vm_msync
 
 	__DeclareRcvRpc(4809, "mach_vm_msync")
 	__BeforeRcvRpc(4809, "mach_vm_msync")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_msync_t__defined)
 	check_result = __MIG_check__Request__mach_vm_msync_t((__Request *)In0P);
@@ -1973,7 +1721,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_behavior_set_t(__attrib
 
 	typedef __Request__mach_vm_behavior_set_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2018,6 +1767,9 @@ mig_internal novalue _Xmach_vm_behavior_set
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -2051,7 +1803,7 @@ mig_internal novalue _Xmach_vm_behavior_set
 
 	__DeclareRcvRpc(4810, "mach_vm_behavior_set")
 	__BeforeRcvRpc(4810, "mach_vm_behavior_set")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_behavior_set_t__defined)
 	check_result = __MIG_check__Request__mach_vm_behavior_set_t((__Request *)In0P);
@@ -2074,155 +1826,6 @@ mig_internal novalue _Xmach_vm_behavior_set
 
 #if ( __MigTypeCheck )
 #if __MIG_check__Request__mach_vm_subsystem__
-#if !defined(__MIG_check__Request__mach_vm_map_t__defined)
-#define __MIG_check__Request__mach_vm_map_t__defined
-
-mig_internal kern_return_t __MIG_check__Request__mach_vm_map_t(__attribute__((__unused__)) __Request__mach_vm_map_t *In0P)
-{
-
-	typedef __Request__mach_vm_map_t __Request;
-#if	__MigTypeCheck
-	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
-	    (In0P->msgh_body.msgh_descriptor_count != 1) ||
-	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
-		return MIG_BAD_ARGUMENTS;
-#endif	/* __MigTypeCheck */
-
-#if	__MigTypeCheck
-	if (In0P->object.type != MACH_MSG_PORT_DESCRIPTOR ||
-	    In0P->object.disposition != 17)
-		return MIG_TYPE_ERROR;
-#endif	/* __MigTypeCheck */
-
-	return MACH_MSG_SUCCESS;
-}
-#endif /* !defined(__MIG_check__Request__mach_vm_map_t__defined) */
-#endif /* __MIG_check__Request__mach_vm_subsystem__ */
-#endif /* ( __MigTypeCheck ) */
-
-
-/* Routine mach_vm_map */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_vm_map
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
-	mach_vm_address_t *address;
-	mach_vm_size_t size;
-	mach_vm_offset_t mask;
-	int flags;
-	mem_entry_name_port_t object;
-	memory_object_offset_t offset;
-	boolean_t copy;
-	vm_prot_t cur_protection;
-	vm_prot_t max_protection;
-	vm_inherit_t inheritance;
-{ return mach_vm_map(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
-#else
-(
-	vm_map_t target_task,
-	mach_vm_address_t *address,
-	mach_vm_size_t size,
-	mach_vm_offset_t mask,
-	int flags,
-	mem_entry_name_port_t object,
-	memory_object_offset_t offset,
-	boolean_t copy,
-	vm_prot_t cur_protection,
-	vm_prot_t max_protection,
-	vm_inherit_t inheritance
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine mach_vm_map */
-mig_internal novalue _Xmach_vm_map
-	(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP)
-{
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t object;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-		mach_vm_offset_t mask;
-		int flags;
-		memory_object_offset_t offset;
-		boolean_t copy;
-		vm_prot_t cur_protection;
-		vm_prot_t max_protection;
-		vm_inherit_t inheritance;
-		mach_msg_trailer_t trailer;
-	} Request;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-	typedef __Request__mach_vm_map_t __Request;
-	typedef __Reply__mach_vm_map_t Reply;
-
-	/*
-	 * typedef struct {
-	 * 	mach_msg_header_t Head;
-	 * 	NDR_record_t NDR;
-	 * 	kern_return_t RetCode;
-	 * } mig_reply_error_t;
-	 */
-
-	Request *In0P = (Request *) InHeadP;
-	Reply *OutP = (Reply *) OutHeadP;
-#ifdef	__MIG_check__Request__mach_vm_map_t__defined
-	kern_return_t check_result;
-#endif	/* __MIG_check__Request__mach_vm_map_t__defined */
-
-#if	__MigKernelSpecificCode
-#else
-#endif /* __MigKernelSpecificCode */
-	vm_map_t target_task;
-
-	__DeclareRcvRpc(4811, "mach_vm_map")
-	__BeforeRcvRpc(4811, "mach_vm_map")
-/* RetCArg=0x0 rtSimpleRequest=0 */
-
-#if	defined(__MIG_check__Request__mach_vm_map_t__defined)
-	check_result = __MIG_check__Request__mach_vm_map_t((__Request *)In0P);
-	if (check_result != MACH_MSG_SUCCESS)
-		{ MIG_RETURN_ERROR(OutP, check_result); }
-#endif	/* defined(__MIG_check__Request__mach_vm_map_t__defined) */
-
-	target_task = convert_port_entry_to_map(In0P->Head.msgh_request_port);
-
-	OutP->RetCode = mach_vm_map(target_task, &In0P->address, In0P->size, In0P->mask, In0P->flags, null_conversion(In0P->object.name), In0P->offset, In0P->copy, In0P->cur_protection, In0P->max_protection, In0P->inheritance);
-	vm_map_deallocate(target_task);
-	if (OutP->RetCode != KERN_SUCCESS) {
-		MIG_RETURN_ERROR(OutP, OutP->RetCode);
-	}
-#if	__MigKernelSpecificCode
-
-	if (IP_VALID((ipc_port_t)In0P->object.name))
-		ipc_port_release_send((ipc_port_t)In0P->object.name);
-#endif /* __MigKernelSpecificCode */
-
-	OutP->NDR = NDR_record;
-
-
-	OutP->address = In0P->address;
-
-	OutP->Head.msgh_size = (sizeof(Reply));
-	__AfterRcvRpc(4811, "mach_vm_map")
-}
-
-#if ( __MigTypeCheck )
-#if __MIG_check__Request__mach_vm_subsystem__
 #if !defined(__MIG_check__Request__mach_vm_machine_attribute_t__defined)
 #define __MIG_check__Request__mach_vm_machine_attribute_t__defined
 
@@ -2231,7 +1834,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_machine_attribute_t(__a
 
 	typedef __Request__mach_vm_machine_attribute_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2278,6 +1882,9 @@ mig_internal novalue _Xmach_vm_machine_attribute
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
@@ -2312,7 +1919,7 @@ mig_internal novalue _Xmach_vm_machine_attribute
 
 	__DeclareRcvRpc(4812, "mach_vm_machine_attribute")
 	__BeforeRcvRpc(4812, "mach_vm_machine_attribute")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_machine_attribute_t__defined)
 	check_result = __MIG_check__Request__mach_vm_machine_attribute_t((__Request *)In0P);
@@ -2500,7 +2107,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_page_query_t(__attribut
 
 	typedef __Request__mach_vm_page_query_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2545,6 +2153,9 @@ mig_internal novalue _Xmach_vm_page_query
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_offset_t offset;
 		mach_msg_trailer_t trailer;
@@ -2576,7 +2187,7 @@ mig_internal novalue _Xmach_vm_page_query
 
 	__DeclareRcvRpc(4814, "mach_vm_page_query")
 	__BeforeRcvRpc(4814, "mach_vm_page_query")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_page_query_t__defined)
 	check_result = __MIG_check__Request__mach_vm_page_query_t((__Request *)In0P);
@@ -2611,7 +2222,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_region_recurse_t(__attr
 
 	typedef __Request__mach_vm_region_recurse_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2660,6 +2272,9 @@ mig_internal novalue _Xmach_vm_region_recurse
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		natural_t nesting_depth;
@@ -2693,7 +2308,7 @@ mig_internal novalue _Xmach_vm_region_recurse
 
 	__DeclareRcvRpc(4815, "mach_vm_region_recurse")
 	__BeforeRcvRpc(4815, "mach_vm_region_recurse")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_region_recurse_t__defined)
 	check_result = __MIG_check__Request__mach_vm_region_recurse_t((__Request *)In0P);
@@ -2736,7 +2351,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_region_t(__attribute__(
 
 	typedef __Request__mach_vm_region_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2787,6 +2403,9 @@ mig_internal novalue _Xmach_vm_region
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		vm_region_flavor_t flavor;
@@ -2841,7 +2460,7 @@ mig_internal novalue _Xmach_vm_region
 
 	__DeclareRcvRpc(4816, "mach_vm_region")
 	__BeforeRcvRpc(4816, "mach_vm_region")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_region_t__defined)
 	check_result = __MIG_check__Request__mach_vm_region_t((__Request *)In0P);
@@ -3067,7 +2686,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_purgable_control_t(__at
 
 	typedef __Request__mach_vm_purgable_control_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -3112,6 +2732,9 @@ mig_internal novalue _Xmach_vm_purgable_control
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		vm_purgable_t control;
@@ -3145,7 +2768,7 @@ mig_internal novalue _Xmach_vm_purgable_control
 
 	__DeclareRcvRpc(4818, "mach_vm_purgable_control")
 	__BeforeRcvRpc(4818, "mach_vm_purgable_control")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_purgable_control_t__defined)
 	check_result = __MIG_check__Request__mach_vm_purgable_control_t((__Request *)In0P);
@@ -3182,7 +2805,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_vm_page_info_t(__attribute
 
 	typedef __Request__mach_vm_page_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -3229,6 +2853,9 @@ mig_internal novalue _Xmach_vm_page_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		vm_page_info_flavor_t flavor;
@@ -3262,7 +2889,7 @@ mig_internal novalue _Xmach_vm_page_info
 
 	__DeclareRcvRpc(4819, "mach_vm_page_info")
 	__BeforeRcvRpc(4819, "mach_vm_page_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_vm_page_info_t__defined)
 	check_result = __MIG_check__Request__mach_vm_page_info_t((__Request *)In0P);
@@ -3326,10 +2953,8 @@ const struct mach_vm_subsystem {
 	(mach_msg_size_t)sizeof(union __ReplyUnion__mach_vm_subsystem),
 	(vm_address_t)0,
 	{
-          { (mig_impl_routine_t) 0,
-            (mig_stub_routine_t) _Xmach_vm_allocate, 5, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_allocate_t) },
-          { (mig_impl_routine_t) 0,
-            (mig_stub_routine_t) _Xmach_vm_deallocate, 5, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_deallocate_t) },
+		{0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0},
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xmach_vm_protect, 7, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_protect_t) },
           { (mig_impl_routine_t) 0,
@@ -3348,8 +2973,7 @@ const struct mach_vm_subsystem {
             (mig_stub_routine_t) _Xmach_vm_msync, 6, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_msync_t) },
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xmach_vm_behavior_set, 6, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_behavior_set_t) },
-          { (mig_impl_routine_t) 0,
-            (mig_stub_routine_t) _Xmach_vm_map, 14, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_map_t) },
+		{0, 0, 0, 0, 0, 0},
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xmach_vm_machine_attribute, 7, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__mach_vm_machine_attribute_t) },
           { (mig_impl_routine_t) 0,

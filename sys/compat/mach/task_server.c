@@ -1,7 +1,7 @@
 /*
  * IDENTIFICATION:
- * stub generated Sun Dec  7 19:06:24 2014
- * with a MiG generated Fri Nov 28 21:32:34 PST 2014 by kmacy@serenity
+ * stub generated Sun Jan  4 02:47:39 2015
+ * with a MiG generated Sat Jan 3 03:03:25 PST 2015 by kmacy@serenity
  * OPTIONS: 
  *	KernelServer
  */
@@ -149,6 +149,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_terminate_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -159,6 +162,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_threads_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -185,6 +191,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_ports_lookup_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -195,6 +204,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_outCnt;
@@ -208,6 +220,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_inCnt;
@@ -222,6 +237,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_suspend_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -232,6 +250,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_resume_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -242,6 +263,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int which_port;
 	} __Request__task_get_special_port_t;
@@ -270,6 +294,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__thread_create_from_user_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -280,6 +307,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -312,6 +342,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		exception_mask_t exception_mask;
 	} __Request__task_get_exception_ports_t;
@@ -342,6 +375,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int policy;
 		int value;
@@ -369,6 +405,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -383,6 +422,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -397,6 +439,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		policy_t policy;
 		mach_msg_type_number_t baseCnt;
@@ -413,6 +458,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t basepc;
 		vm_address_t boundspc;
@@ -426,6 +474,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_zone_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -452,6 +503,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		boolean_t assign_threads;
 	} __Request__task_assign_default_t;
@@ -464,6 +518,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_get_assignment_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -495,6 +552,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t old_stateCnt;
@@ -508,6 +568,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -522,6 +585,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int new_limit;
 	} __Request__task_set_phys_footprint_limit_t;
@@ -534,6 +600,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_suspend2_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -544,6 +613,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_resume2_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -554,6 +626,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_purgable_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -564,6 +639,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_voucher_selector_t which;
 	} __Request__task_get_mach_voucher_t;
@@ -1420,7 +1498,8 @@ mig_internal kern_return_t __MIG_check__Request__task_terminate_t(__attribute__(
 
 	typedef __Request__task_terminate_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1459,6 +1538,9 @@ mig_internal novalue _Xtask_terminate
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -1488,7 +1570,7 @@ mig_internal novalue _Xtask_terminate
 
 	__DeclareRcvRpc(3401, "task_terminate")
 	__BeforeRcvRpc(3401, "task_terminate")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_terminate_t__defined)
 	check_result = __MIG_check__Request__task_terminate_t((__Request *)In0P);
@@ -1519,7 +1601,8 @@ mig_internal kern_return_t __MIG_check__Request__task_threads_t(__attribute__((_
 
 	typedef __Request__task_threads_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1562,6 +1645,9 @@ mig_internal novalue _Xtask_threads
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -1616,7 +1702,7 @@ mig_internal novalue _Xtask_threads
 
 	__DeclareRcvRpc(3402, "task_threads")
 	__BeforeRcvRpc(3402, "task_threads")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_threads_t__defined)
 	check_result = __MIG_check__Request__task_threads_t((__Request *)In0P);
@@ -1784,7 +1870,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_ports_lookup_t(__attribute
 
 	typedef __Request__mach_ports_lookup_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1827,6 +1914,9 @@ mig_internal novalue _Xmach_ports_lookup
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -1881,7 +1971,7 @@ mig_internal novalue _Xmach_ports_lookup
 
 	__DeclareRcvRpc(3404, "mach_ports_lookup")
 	__BeforeRcvRpc(3404, "mach_ports_lookup")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_ports_lookup_t__defined)
 	check_result = __MIG_check__Request__mach_ports_lookup_t((__Request *)In0P);
@@ -1933,7 +2023,8 @@ mig_internal kern_return_t __MIG_check__Request__task_info_t(__attribute__((__un
 
 	typedef __Request__task_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1978,6 +2069,9 @@ mig_internal novalue _Xtask_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_outCnt;
@@ -2010,7 +2104,7 @@ mig_internal novalue _Xtask_info
 
 	__DeclareRcvRpc(3405, "task_info")
 	__BeforeRcvRpc(3405, "task_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_info_t__defined)
 	check_result = __MIG_check__Request__task_info_t((__Request *)In0P);
@@ -2054,7 +2148,8 @@ mig_internal kern_return_t __MIG_check__Request__task_set_info_t(__attribute__((
 
 #if	__MigTypeCheck
 	msgh_size = In0P->Head.msgh_size;
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (msgh_size < (sizeof(__Request) - 208)) ||  (msgh_size > (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2111,6 +2206,9 @@ mig_internal novalue _Xtask_set_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_inCnt;
@@ -2144,7 +2242,7 @@ mig_internal novalue _Xtask_set_info
 
 	__DeclareRcvRpc(3406, "task_set_info")
 	__BeforeRcvRpc(3406, "task_set_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_set_info_t__defined)
 	check_result = __MIG_check__Request__task_set_info_t((__Request *)In0P);
@@ -2175,7 +2273,8 @@ mig_internal kern_return_t __MIG_check__Request__task_suspend_t(__attribute__((_
 
 	typedef __Request__task_suspend_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2214,6 +2313,9 @@ mig_internal novalue _Xtask_suspend
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -2243,7 +2345,7 @@ mig_internal novalue _Xtask_suspend
 
 	__DeclareRcvRpc(3407, "task_suspend")
 	__BeforeRcvRpc(3407, "task_suspend")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_suspend_t__defined)
 	check_result = __MIG_check__Request__task_suspend_t((__Request *)In0P);
@@ -2274,7 +2376,8 @@ mig_internal kern_return_t __MIG_check__Request__task_resume_t(__attribute__((__
 
 	typedef __Request__task_resume_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2313,6 +2416,9 @@ mig_internal novalue _Xtask_resume
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -2342,7 +2448,7 @@ mig_internal novalue _Xtask_resume
 
 	__DeclareRcvRpc(3408, "task_resume")
 	__BeforeRcvRpc(3408, "task_resume")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_resume_t__defined)
 	check_result = __MIG_check__Request__task_resume_t((__Request *)In0P);
@@ -2373,7 +2479,8 @@ mig_internal kern_return_t __MIG_check__Request__task_get_special_port_t(__attri
 
 	typedef __Request__task_get_special_port_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2416,6 +2523,9 @@ mig_internal novalue _Xtask_get_special_port
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int which_port;
 		mach_msg_trailer_t trailer;
@@ -2468,7 +2578,7 @@ mig_internal novalue _Xtask_get_special_port
 
 	__DeclareRcvRpc(3409, "task_get_special_port")
 	__BeforeRcvRpc(3409, "task_get_special_port")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_get_special_port_t__defined)
 	check_result = __MIG_check__Request__task_get_special_port_t((__Request *)In0P);
@@ -2630,7 +2740,8 @@ mig_internal kern_return_t __MIG_check__Request__thread_create_from_user_t(__att
 
 	typedef __Request__thread_create_from_user_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2671,6 +2782,9 @@ mig_internal novalue _Xthread_create_from_user
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -2722,7 +2836,7 @@ mig_internal novalue _Xthread_create_from_user
 
 	__DeclareRcvRpc(3411, "thread_create_from_user")
 	__BeforeRcvRpc(3411, "thread_create_from_user")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__thread_create_from_user_t__defined)
 	check_result = __MIG_check__Request__thread_create_from_user_t((__Request *)In0P);
@@ -2775,7 +2889,8 @@ mig_internal kern_return_t __MIG_check__Request__thread_create_running_from_user
 
 #if	__MigTypeCheck
 	msgh_size = In0P->Head.msgh_size;
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (msgh_size < (sizeof(__Request) - 128)) ||  (msgh_size > (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2834,6 +2949,9 @@ mig_internal novalue _Xthread_create_running_from_user
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -2889,7 +3007,7 @@ mig_internal novalue _Xthread_create_running_from_user
 
 	__DeclareRcvRpc(3412, "thread_create_running_from_user")
 	__BeforeRcvRpc(3412, "thread_create_running_from_user")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__thread_create_running_from_user_t__defined)
 	check_result = __MIG_check__Request__thread_create_running_from_user_t((__Request *)In0P);
@@ -3059,7 +3177,8 @@ mig_internal kern_return_t __MIG_check__Request__task_get_exception_ports_t(__at
 
 	typedef __Request__task_get_exception_ports_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -3110,6 +3229,9 @@ mig_internal novalue _Xtask_get_exception_ports
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		exception_mask_t exception_mask;
 		mach_msg_trailer_t trailer;
@@ -3169,7 +3291,7 @@ mig_internal novalue _Xtask_get_exception_ports
 
 	__DeclareRcvRpc(3414, "task_get_exception_ports")
 	__BeforeRcvRpc(3414, "task_get_exception_ports")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_get_exception_ports_t__defined)
 	check_result = __MIG_check__Request__task_get_exception_ports_t((__Request *)In0P);
@@ -3462,7 +3584,8 @@ mig_internal kern_return_t __MIG_check__Request__semaphore_create_t(__attribute_
 
 	typedef __Request__semaphore_create_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -3507,6 +3630,9 @@ mig_internal novalue _Xsemaphore_create
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int policy;
 		int value;
@@ -3559,9 +3685,9 @@ mig_internal novalue _Xsemaphore_create
 	task_t task;
 	semaphore_t semaphore;
 
-	__DeclareRcvRpc(3416, "semaphore_create")
-	__BeforeRcvRpc(3416, "semaphore_create")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3418, "semaphore_create")
+	__BeforeRcvRpc(3418, "semaphore_create")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__semaphore_create_t__defined)
 	check_result = __MIG_check__Request__semaphore_create_t((__Request *)In0P);
@@ -3596,7 +3722,7 @@ mig_internal novalue _Xsemaphore_create
 	OutP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	OutP->Head.msgh_size = (sizeof(Reply));
 	OutP->msgh_body.msgh_descriptor_count = 1;
-	__AfterRcvRpc(3416, "semaphore_create")
+	__AfterRcvRpc(3418, "semaphore_create")
 }
 
 #if ( __MigTypeCheck )
@@ -3689,8 +3815,8 @@ mig_internal novalue _Xsemaphore_destroy
 	task_t task;
 	semaphore_t semaphore;
 
-	__DeclareRcvRpc(3417, "semaphore_destroy")
-	__BeforeRcvRpc(3417, "semaphore_destroy")
+	__DeclareRcvRpc(3419, "semaphore_destroy")
+	__BeforeRcvRpc(3419, "semaphore_destroy")
 /* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__semaphore_destroy_t__defined)
@@ -3718,7 +3844,7 @@ mig_internal novalue _Xsemaphore_destroy
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3417, "semaphore_destroy")
+	__AfterRcvRpc(3419, "semaphore_destroy")
 }
 
 #if ( __MigTypeCheck )
@@ -3736,7 +3862,8 @@ mig_internal kern_return_t __MIG_check__Request__task_policy_set_t(__attribute__
 
 #if	__MigTypeCheck
 	msgh_size = In0P->Head.msgh_size;
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (msgh_size < (sizeof(__Request) - 64)) ||  (msgh_size > (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -3793,6 +3920,9 @@ mig_internal novalue _Xtask_policy_set
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -3824,9 +3954,9 @@ mig_internal novalue _Xtask_policy_set
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3418, "task_policy_set")
-	__BeforeRcvRpc(3418, "task_policy_set")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3420, "task_policy_set")
+	__BeforeRcvRpc(3420, "task_policy_set")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_policy_set_t__defined)
 	check_result = __MIG_check__Request__task_policy_set_t((__Request *)In0P);
@@ -3844,7 +3974,7 @@ mig_internal novalue _Xtask_policy_set
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3418, "task_policy_set")
+	__AfterRcvRpc(3420, "task_policy_set")
 }
 
 #if ( __MigTypeCheck )
@@ -3857,7 +3987,8 @@ mig_internal kern_return_t __MIG_check__Request__task_policy_get_t(__attribute__
 
 	typedef __Request__task_policy_get_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -3904,6 +4035,9 @@ mig_internal novalue _Xtask_policy_get
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -3937,9 +4071,9 @@ mig_internal novalue _Xtask_policy_get
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3419, "task_policy_get")
-	__BeforeRcvRpc(3419, "task_policy_get")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3421, "task_policy_get")
+	__BeforeRcvRpc(3421, "task_policy_get")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_policy_get_t__defined)
 	check_result = __MIG_check__Request__task_policy_get_t((__Request *)In0P);
@@ -3970,7 +4104,7 @@ mig_internal novalue _Xtask_policy_get
 	OutP->get_default = In0P->get_default;
 
 	OutP = (Reply *) OutHeadP;
-	__AfterRcvRpc(3419, "task_policy_get")
+	__AfterRcvRpc(3421, "task_policy_get")
 }
 
 #if ( __MigTypeCheck )
@@ -3990,7 +4124,8 @@ mig_internal kern_return_t __MIG_check__Request__task_policy_t(__attribute__((__
 
 #if	__MigTypeCheck
 	msgh_size = In0P->Head.msgh_size;
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (msgh_size < (sizeof(__Request) - 20)) ||  (msgh_size > (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -4054,6 +4189,9 @@ mig_internal novalue _Xtask_policy
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		policy_t policy;
 		mach_msg_type_number_t baseCnt;
@@ -4088,9 +4226,9 @@ mig_internal novalue _Xtask_policy
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3421, "task_policy")
-	__BeforeRcvRpc(3421, "task_policy")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3423, "task_policy")
+	__BeforeRcvRpc(3423, "task_policy")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_policy_t__defined)
 	check_result = __MIG_check__Request__task_policy_t((__Request *)In0P, (__Request **)&In1P);
@@ -4108,7 +4246,7 @@ mig_internal novalue _Xtask_policy
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3421, "task_policy")
+	__AfterRcvRpc(3423, "task_policy")
 }
 
 #if ( __MigTypeCheck )
@@ -4121,7 +4259,8 @@ mig_internal kern_return_t __MIG_check__Request__task_set_ras_pc_t(__attribute__
 
 	typedef __Request__task_set_ras_pc_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -4164,6 +4303,9 @@ mig_internal novalue _Xtask_set_ras_pc
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t basepc;
 		vm_address_t boundspc;
@@ -4194,9 +4336,9 @@ mig_internal novalue _Xtask_set_ras_pc
 #endif /* __MigKernelSpecificCode */
 	task_t target_task;
 
-	__DeclareRcvRpc(3422, "task_set_ras_pc")
-	__BeforeRcvRpc(3422, "task_set_ras_pc")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3427, "task_set_ras_pc")
+	__BeforeRcvRpc(3427, "task_set_ras_pc")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_set_ras_pc_t__defined)
 	check_result = __MIG_check__Request__task_set_ras_pc_t((__Request *)In0P);
@@ -4214,7 +4356,7 @@ mig_internal novalue _Xtask_set_ras_pc
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3422, "task_set_ras_pc")
+	__AfterRcvRpc(3427, "task_set_ras_pc")
 }
 
 #if ( __MigTypeCheck )
@@ -4227,7 +4369,8 @@ mig_internal kern_return_t __MIG_check__Request__task_zone_info_t(__attribute__(
 
 	typedef __Request__task_zone_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -4274,6 +4417,9 @@ mig_internal novalue _Xtask_zone_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -4346,9 +4492,9 @@ mig_internal novalue _Xtask_zone_info
 	kern_return_t RetCode;
 	task_t target_task;
 
-	__DeclareRcvRpc(3423, "task_zone_info")
-	__BeforeRcvRpc(3423, "task_zone_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3428, "task_zone_info")
+	__BeforeRcvRpc(3428, "task_zone_info")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_zone_info_t__defined)
 	check_result = __MIG_check__Request__task_zone_info_t((__Request *)In0P);
@@ -4398,7 +4544,7 @@ mig_internal novalue _Xtask_zone_info
 	OutP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	OutP->Head.msgh_size = (sizeof(Reply));
 	OutP->msgh_body.msgh_descriptor_count = 2;
-	__AfterRcvRpc(3423, "task_zone_info")
+	__AfterRcvRpc(3428, "task_zone_info")
 }
 
 #if ( __MigTypeCheck )
@@ -4495,8 +4641,8 @@ mig_internal novalue _Xtask_assign
 	task_t task;
 	processor_set_t new_set;
 
-	__DeclareRcvRpc(3424, "task_assign")
-	__BeforeRcvRpc(3424, "task_assign")
+	__DeclareRcvRpc(3429, "task_assign")
+	__BeforeRcvRpc(3429, "task_assign")
 /* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_assign_t__defined)
@@ -4524,7 +4670,7 @@ mig_internal novalue _Xtask_assign
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3424, "task_assign")
+	__AfterRcvRpc(3429, "task_assign")
 }
 
 #if ( __MigTypeCheck )
@@ -4537,7 +4683,8 @@ mig_internal kern_return_t __MIG_check__Request__task_assign_default_t(__attribu
 
 	typedef __Request__task_assign_default_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -4578,6 +4725,9 @@ mig_internal novalue _Xtask_assign_default
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		boolean_t assign_threads;
 		mach_msg_trailer_t trailer;
@@ -4607,9 +4757,9 @@ mig_internal novalue _Xtask_assign_default
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3425, "task_assign_default")
-	__BeforeRcvRpc(3425, "task_assign_default")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3430, "task_assign_default")
+	__BeforeRcvRpc(3430, "task_assign_default")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_assign_default_t__defined)
 	check_result = __MIG_check__Request__task_assign_default_t((__Request *)In0P);
@@ -4627,7 +4777,7 @@ mig_internal novalue _Xtask_assign_default
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3425, "task_assign_default")
+	__AfterRcvRpc(3430, "task_assign_default")
 }
 
 #if ( __MigTypeCheck )
@@ -4640,7 +4790,8 @@ mig_internal kern_return_t __MIG_check__Request__task_get_assignment_t(__attribu
 
 	typedef __Request__task_get_assignment_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -4681,6 +4832,9 @@ mig_internal novalue _Xtask_get_assignment
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -4730,9 +4884,9 @@ mig_internal novalue _Xtask_get_assignment
 	task_t task;
 	processor_set_name_t assigned_set;
 
-	__DeclareRcvRpc(3426, "task_get_assignment")
-	__BeforeRcvRpc(3426, "task_get_assignment")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3431, "task_get_assignment")
+	__BeforeRcvRpc(3431, "task_get_assignment")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_get_assignment_t__defined)
 	check_result = __MIG_check__Request__task_get_assignment_t((__Request *)In0P);
@@ -4767,7 +4921,7 @@ mig_internal novalue _Xtask_get_assignment
 	OutP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	OutP->Head.msgh_size = (sizeof(Reply));
 	OutP->msgh_body.msgh_descriptor_count = 1;
-	__AfterRcvRpc(3426, "task_get_assignment")
+	__AfterRcvRpc(3431, "task_get_assignment")
 }
 
 #if ( __MigTypeCheck )
@@ -4920,8 +5074,8 @@ mig_internal novalue _Xtask_set_policy
 	task_t task;
 	processor_set_t pset;
 
-	__DeclareRcvRpc(3427, "task_set_policy")
-	__BeforeRcvRpc(3427, "task_set_policy")
+	__DeclareRcvRpc(3432, "task_set_policy")
+	__BeforeRcvRpc(3432, "task_set_policy")
 /* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_set_policy_t__defined)
@@ -4949,7 +5103,7 @@ mig_internal novalue _Xtask_set_policy
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3427, "task_set_policy")
+	__AfterRcvRpc(3432, "task_set_policy")
 }
 
 #if ( __MigTypeCheck )
@@ -4962,7 +5116,8 @@ mig_internal kern_return_t __MIG_check__Request__task_get_state_t(__attribute__(
 
 	typedef __Request__task_get_state_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5007,6 +5162,9 @@ mig_internal novalue _Xtask_get_state
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t old_stateCnt;
@@ -5037,9 +5195,9 @@ mig_internal novalue _Xtask_get_state
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3428, "task_get_state")
-	__BeforeRcvRpc(3428, "task_get_state")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3433, "task_get_state")
+	__BeforeRcvRpc(3433, "task_get_state")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_get_state_t__defined)
 	check_result = __MIG_check__Request__task_get_state_t((__Request *)In0P);
@@ -5065,7 +5223,7 @@ mig_internal novalue _Xtask_get_state
 
 	OutP->Head.msgh_size = (sizeof(Reply) - 128) + (_WALIGN_((4 * OutP->old_stateCnt)));
 
-	__AfterRcvRpc(3428, "task_get_state")
+	__AfterRcvRpc(3433, "task_get_state")
 }
 
 #if ( __MigTypeCheck )
@@ -5083,7 +5241,8 @@ mig_internal kern_return_t __MIG_check__Request__task_set_state_t(__attribute__(
 
 #if	__MigTypeCheck
 	msgh_size = In0P->Head.msgh_size;
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (msgh_size < (sizeof(__Request) - 128)) ||  (msgh_size > (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5140,6 +5299,9 @@ mig_internal novalue _Xtask_set_state
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -5171,9 +5333,9 @@ mig_internal novalue _Xtask_set_state
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3429, "task_set_state")
-	__BeforeRcvRpc(3429, "task_set_state")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3434, "task_set_state")
+	__BeforeRcvRpc(3434, "task_set_state")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_set_state_t__defined)
 	check_result = __MIG_check__Request__task_set_state_t((__Request *)In0P);
@@ -5191,7 +5353,7 @@ mig_internal novalue _Xtask_set_state
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3429, "task_set_state")
+	__AfterRcvRpc(3434, "task_set_state")
 }
 
 #if ( __MigTypeCheck )
@@ -5204,7 +5366,8 @@ mig_internal kern_return_t __MIG_check__Request__task_set_phys_footprint_limit_t
 
 	typedef __Request__task_set_phys_footprint_limit_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5247,6 +5410,9 @@ mig_internal novalue _Xtask_set_phys_footprint_limit
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int new_limit;
 		mach_msg_trailer_t trailer;
@@ -5276,9 +5442,9 @@ mig_internal novalue _Xtask_set_phys_footprint_limit
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3430, "task_set_phys_footprint_limit")
-	__BeforeRcvRpc(3430, "task_set_phys_footprint_limit")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3435, "task_set_phys_footprint_limit")
+	__BeforeRcvRpc(3435, "task_set_phys_footprint_limit")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_set_phys_footprint_limit_t__defined)
 	check_result = __MIG_check__Request__task_set_phys_footprint_limit_t((__Request *)In0P);
@@ -5300,7 +5466,7 @@ mig_internal novalue _Xtask_set_phys_footprint_limit
 
 
 	OutP->Head.msgh_size = (sizeof(Reply));
-	__AfterRcvRpc(3430, "task_set_phys_footprint_limit")
+	__AfterRcvRpc(3435, "task_set_phys_footprint_limit")
 }
 
 #if ( __MigTypeCheck )
@@ -5313,7 +5479,8 @@ mig_internal kern_return_t __MIG_check__Request__task_suspend2_t(__attribute__((
 
 	typedef __Request__task_suspend2_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5354,6 +5521,9 @@ mig_internal novalue _Xtask_suspend2
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -5403,9 +5573,9 @@ mig_internal novalue _Xtask_suspend2
 	task_t target_task;
 	task_suspension_token_t suspend_token;
 
-	__DeclareRcvRpc(3431, "task_suspend2")
-	__BeforeRcvRpc(3431, "task_suspend2")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3436, "task_suspend2")
+	__BeforeRcvRpc(3436, "task_suspend2")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_suspend2_t__defined)
 	check_result = __MIG_check__Request__task_suspend2_t((__Request *)In0P);
@@ -5440,7 +5610,7 @@ mig_internal novalue _Xtask_suspend2
 	OutP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	OutP->Head.msgh_size = (sizeof(Reply));
 	OutP->msgh_body.msgh_descriptor_count = 1;
-	__AfterRcvRpc(3431, "task_suspend2")
+	__AfterRcvRpc(3436, "task_suspend2")
 }
 
 #if ( __MigTypeCheck )
@@ -5453,7 +5623,8 @@ mig_internal kern_return_t __MIG_check__Request__task_resume2_t(__attribute__((_
 
 	typedef __Request__task_resume2_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5492,6 +5663,9 @@ mig_internal novalue _Xtask_resume2
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -5517,9 +5691,9 @@ mig_internal novalue _Xtask_resume2
 #if	__MigKernelSpecificCode
 #else
 #endif /* __MigKernelSpecificCode */
-	__DeclareRcvRpc(3432, "task_resume2")
-	__BeforeRcvRpc(3432, "task_resume2")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3437, "task_resume2")
+	__BeforeRcvRpc(3437, "task_resume2")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_resume2_t__defined)
 	check_result = __MIG_check__Request__task_resume2_t((__Request *)In0P);
@@ -5534,7 +5708,7 @@ mig_internal novalue _Xtask_resume2
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3432, "task_resume2")
+	__AfterRcvRpc(3437, "task_resume2")
 }
 
 #if ( __MigTypeCheck )
@@ -5547,7 +5721,8 @@ mig_internal kern_return_t __MIG_check__Request__task_purgable_info_t(__attribut
 
 	typedef __Request__task_purgable_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5588,6 +5763,9 @@ mig_internal novalue _Xtask_purgable_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -5615,9 +5793,9 @@ mig_internal novalue _Xtask_purgable_info
 #endif /* __MigKernelSpecificCode */
 	task_t task;
 
-	__DeclareRcvRpc(3433, "task_purgable_info")
-	__BeforeRcvRpc(3433, "task_purgable_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3438, "task_purgable_info")
+	__BeforeRcvRpc(3438, "task_purgable_info")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_purgable_info_t__defined)
 	check_result = __MIG_check__Request__task_purgable_info_t((__Request *)In0P);
@@ -5639,7 +5817,7 @@ mig_internal novalue _Xtask_purgable_info
 
 
 	OutP->Head.msgh_size = (sizeof(Reply));
-	__AfterRcvRpc(3433, "task_purgable_info")
+	__AfterRcvRpc(3438, "task_purgable_info")
 }
 
 #if ( __MigTypeCheck )
@@ -5652,7 +5830,8 @@ mig_internal kern_return_t __MIG_check__Request__task_get_mach_voucher_t(__attri
 
 	typedef __Request__task_get_mach_voucher_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -5695,6 +5874,9 @@ mig_internal novalue _Xtask_get_mach_voucher
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_voucher_selector_t which;
 		mach_msg_trailer_t trailer;
@@ -5746,9 +5928,9 @@ mig_internal novalue _Xtask_get_mach_voucher
 	task_t task;
 	ipc_voucher_t voucher;
 
-	__DeclareRcvRpc(3434, "task_get_mach_voucher")
-	__BeforeRcvRpc(3434, "task_get_mach_voucher")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+	__DeclareRcvRpc(3439, "task_get_mach_voucher")
+	__BeforeRcvRpc(3439, "task_get_mach_voucher")
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_get_mach_voucher_t__defined)
 	check_result = __MIG_check__Request__task_get_mach_voucher_t((__Request *)In0P);
@@ -5783,7 +5965,7 @@ mig_internal novalue _Xtask_get_mach_voucher
 	OutP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	OutP->Head.msgh_size = (sizeof(Reply));
 	OutP->msgh_body.msgh_descriptor_count = 1;
-	__AfterRcvRpc(3434, "task_get_mach_voucher")
+	__AfterRcvRpc(3439, "task_get_mach_voucher")
 }
 
 #if ( __MigTypeCheck )
@@ -5876,8 +6058,8 @@ mig_internal novalue _Xtask_set_mach_voucher
 	task_t task;
 	ipc_voucher_t voucher;
 
-	__DeclareRcvRpc(3435, "task_set_mach_voucher")
-	__BeforeRcvRpc(3435, "task_set_mach_voucher")
+	__DeclareRcvRpc(3440, "task_set_mach_voucher")
+	__BeforeRcvRpc(3440, "task_set_mach_voucher")
 /* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_set_mach_voucher_t__defined)
@@ -5905,7 +6087,7 @@ mig_internal novalue _Xtask_set_mach_voucher
 	OutP->NDR = NDR_record;
 
 
-	__AfterRcvRpc(3435, "task_set_mach_voucher")
+	__AfterRcvRpc(3440, "task_set_mach_voucher")
 }
 
 #if ( __MigTypeCheck )
@@ -6029,8 +6211,8 @@ mig_internal novalue _Xtask_swap_mach_voucher
 	ipc_voucher_t new_voucher;
 	ipc_voucher_t old_voucher;
 
-	__DeclareRcvRpc(3436, "task_swap_mach_voucher")
-	__BeforeRcvRpc(3436, "task_swap_mach_voucher")
+	__DeclareRcvRpc(3441, "task_swap_mach_voucher")
+	__BeforeRcvRpc(3441, "task_swap_mach_voucher")
 /* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__task_swap_mach_voucher_t__defined)
@@ -6077,7 +6259,7 @@ mig_internal novalue _Xtask_swap_mach_voucher
 	OutP->Head.msgh_bits |= MACH_MSGH_BITS_COMPLEX;
 	OutP->Head.msgh_size = (sizeof(Reply));
 	OutP->msgh_body.msgh_descriptor_count = 1;
-	__AfterRcvRpc(3436, "task_swap_mach_voucher")
+	__AfterRcvRpc(3441, "task_swap_mach_voucher")
 }
 
 
@@ -6107,11 +6289,11 @@ const struct task_subsystem {
 	unsigned int	maxsize;	/* Max msg size */
 	vm_address_t	reserved;	/* Reserved */
 	struct routine_descriptor	/*Array of routine descriptors */
-		routine[37];
+		routine[42];
 } task_subsystem = {
 	task_server_routine,
 	3400,
-	3437,
+	3442,
 	(mach_msg_size_t)sizeof(union __ReplyUnion__task_subsystem),
 	(vm_address_t)0,
 	{
@@ -6147,6 +6329,8 @@ const struct task_subsystem {
             (mig_stub_routine_t) _Xtask_get_exception_ports, 7, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__task_get_exception_ports_t) },
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xtask_swap_exception_ports, 10, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__task_swap_exception_ports_t) },
+		{0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0},
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xsemaphore_create, 4, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__semaphore_create_t) },
           { (mig_impl_routine_t) 0,
@@ -6158,6 +6342,9 @@ const struct task_subsystem {
 		{0, 0, 0, 0, 0, 0},
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xtask_policy, 6, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__task_policy_t) },
+		{0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0},
           { (mig_impl_routine_t) 0,
             (mig_stub_routine_t) _Xtask_set_ras_pc, 5, 0, (routine_arg_descriptor_t)0, (mach_msg_size_t)sizeof(__Reply__task_set_ras_pc_t) },
           { (mig_impl_routine_t) 0,
@@ -6211,7 +6398,7 @@ mig_external boolean_t task_server
 	OutHeadP->msgh_local_port = MACH_PORT_NULL;
 	OutHeadP->msgh_id = InHeadP->msgh_id + 100;
 
-	if ((InHeadP->msgh_id > 3436) || (InHeadP->msgh_id < 3400) ||
+	if ((InHeadP->msgh_id > 3441) || (InHeadP->msgh_id < 3400) ||
 	    ((routine = task_subsystem.routine[InHeadP->msgh_id - 3400].stub_routine) == 0)) {
 		((mig_reply_error_t *)OutHeadP)->NDR = NDR_record;
 		((mig_reply_error_t *)OutHeadP)->RetCode = MIG_BAD_ID;
@@ -6228,7 +6415,7 @@ mig_external mig_routine_t task_server_routine
 
 	msgh_id = InHeadP->msgh_id - 3400;
 
-	if ((msgh_id > 36) || (msgh_id < 0))
+	if ((msgh_id > 41) || (msgh_id < 0))
 		return 0;
 
 	return task_subsystem.routine[msgh_id].stub_routine;

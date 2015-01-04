@@ -36,7 +36,7 @@ typedef function_table_entry   *function_table_t;
 #endif /* AUTOTEST */
 
 #ifndef	mach_port_MSG_COUNT
-#define	mach_port_MSG_COUNT	35
+#define	mach_port_MSG_COUNT	36
 #endif	/* mach_port_MSG_COUNT */
 
 #include <sys/mach/std_types.h>
@@ -1659,7 +1659,7 @@ extern const struct mach_port_subsystem {
 	unsigned int	maxsize;	/* Max msg size */
 	vm_address_t	reserved;	/* Reserved */
 	struct routine_descriptor	/*Array of routine descriptors */
-		routine[35];
+		routine[36];
 } mach_port_subsystem;
 
 /* typedefs for all requests */
@@ -1672,6 +1672,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_port_names_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1682,6 +1685,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_type_t;
@@ -1694,6 +1700,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t old_name;
 		mach_port_name_t new_name;
@@ -1707,6 +1716,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_right_t right;
 		mach_port_name_t name;
@@ -1720,6 +1732,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_right_t right;
 	} __Request__mach_port_allocate_t;
@@ -1732,6 +1747,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_deallocate_t;
@@ -1760,6 +1778,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_msg_type_name_t msgt_name;
@@ -1773,6 +1794,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_right_t right;
@@ -1787,6 +1811,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t member;
 		mach_port_name_t after;
@@ -1800,6 +1827,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_destroy_t;
@@ -1812,6 +1842,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_right_t right;
@@ -1825,6 +1858,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_msg_trailer_type_t trailer_type;
@@ -1840,6 +1876,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_mscount_t mscount;
@@ -1853,6 +1892,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_get_set_status_t;
@@ -1883,6 +1925,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_seqno_t seqno;
@@ -1896,6 +1941,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_flavor_t flavor;
@@ -1910,6 +1958,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_flavor_t flavor;
@@ -1925,6 +1976,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_right_t right;
 		mach_port_qos_t qos;
@@ -1956,6 +2010,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int table_entries;
 	} __Request__task_set_port_space_t;
@@ -1968,6 +2025,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_get_srights_t;
@@ -1980,6 +2040,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_port_space_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1990,6 +2053,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_dnrequest_info_t;
@@ -2002,6 +2068,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_name_t pset;
@@ -2015,6 +2084,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_name_t pset;
@@ -2028,6 +2100,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_get_context_t;
@@ -2040,6 +2115,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_vm_address_t context;
@@ -2053,6 +2131,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 	} __Request__mach_port_kobject_t;
@@ -2081,6 +2162,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		mach_port_delta_t srdelta;
@@ -2095,6 +2179,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		uint64_t guard;
@@ -2109,6 +2196,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
 		uint64_t guard;
@@ -2122,6 +2212,9 @@ extern const struct mach_port_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_port_space_basic_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -2711,16 +2804,16 @@ union __ReplyUnion__mach_port_subsystem {
     { "mach_port_get_srights", 3222 },\
     { "mach_port_space_info", 3223 },\
     { "mach_port_dnrequest_info", 3224 },\
-    { "mach_port_insert_member", 3225 },\
-    { "mach_port_extract_member", 3226 },\
-    { "mach_port_get_context", 3227 },\
-    { "mach_port_set_context", 3228 },\
-    { "mach_port_kobject", 3229 },\
-    { "mach_port_construct", 3230 },\
-    { "mach_port_destruct", 3231 },\
-    { "mach_port_guard", 3232 },\
-    { "mach_port_unguard", 3233 },\
-    { "mach_port_space_basic_info", 3234 }
+    { "mach_port_insert_member", 3226 },\
+    { "mach_port_extract_member", 3227 },\
+    { "mach_port_get_context", 3228 },\
+    { "mach_port_set_context", 3229 },\
+    { "mach_port_kobject", 3230 },\
+    { "mach_port_construct", 3231 },\
+    { "mach_port_destruct", 3232 },\
+    { "mach_port_guard", 3233 },\
+    { "mach_port_unguard", 3234 },\
+    { "mach_port_space_basic_info", 3235 }
 #endif
 
 #ifdef __AfterMigServerHeader

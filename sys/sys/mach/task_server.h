@@ -36,7 +36,7 @@ typedef function_table_entry   *function_table_t;
 #endif /* AUTOTEST */
 
 #ifndef	task_MSG_COUNT
-#define	task_MSG_COUNT	37
+#define	task_MSG_COUNT	42
 #endif	/* task_MSG_COUNT */
 
 #include <sys/mach/std_types.h>
@@ -1673,7 +1673,7 @@ extern const struct task_subsystem {
 	unsigned int	maxsize;	/* Max msg size */
 	vm_address_t	reserved;	/* Reserved */
 	struct routine_descriptor	/*Array of routine descriptors */
-		routine[37];
+		routine[42];
 } task_subsystem;
 
 /* typedefs for all requests */
@@ -1703,6 +1703,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_terminate_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1713,6 +1716,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_threads_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1739,6 +1745,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_ports_lookup_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1749,6 +1758,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_outCnt;
@@ -1762,6 +1774,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_inCnt;
@@ -1776,6 +1791,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_suspend_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1786,6 +1804,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_resume_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1796,6 +1817,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int which_port;
 	} __Request__task_get_special_port_t;
@@ -1824,6 +1848,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__thread_create_from_user_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1834,6 +1861,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -1866,6 +1896,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		exception_mask_t exception_mask;
 	} __Request__task_get_exception_ports_t;
@@ -1896,6 +1929,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int policy;
 		int value;
@@ -1923,6 +1959,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -1937,6 +1976,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -1951,6 +1993,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		policy_t policy;
 		mach_msg_type_number_t baseCnt;
@@ -1967,6 +2012,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t basepc;
 		vm_address_t boundspc;
@@ -1980,6 +2028,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_zone_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -2006,6 +2057,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		boolean_t assign_threads;
 	} __Request__task_assign_default_t;
@@ -2018,6 +2072,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_get_assignment_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -2049,6 +2106,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t old_stateCnt;
@@ -2062,6 +2122,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -2076,6 +2139,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int new_limit;
 	} __Request__task_set_phys_footprint_limit_t;
@@ -2088,6 +2154,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_suspend2_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -2098,6 +2167,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_resume2_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -2108,6 +2180,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_purgable_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -2118,6 +2193,9 @@ extern const struct task_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_voucher_selector_t which;
 	} __Request__task_get_mach_voucher_t;
@@ -2755,26 +2833,26 @@ union __ReplyUnion__task_subsystem {
     { "task_set_exception_ports", 3413 },\
     { "task_get_exception_ports", 3414 },\
     { "task_swap_exception_ports", 3415 },\
-    { "semaphore_create", 3416 },\
-    { "semaphore_destroy", 3417 },\
-    { "task_policy_set", 3418 },\
-    { "task_policy_get", 3419 },\
-    { "task_policy", 3421 },\
-    { "task_set_ras_pc", 3422 },\
-    { "task_zone_info", 3423 },\
-    { "task_assign", 3424 },\
-    { "task_assign_default", 3425 },\
-    { "task_get_assignment", 3426 },\
-    { "task_set_policy", 3427 },\
-    { "task_get_state", 3428 },\
-    { "task_set_state", 3429 },\
-    { "task_set_phys_footprint_limit", 3430 },\
-    { "task_suspend2", 3431 },\
-    { "task_resume2", 3432 },\
-    { "task_purgable_info", 3433 },\
-    { "task_get_mach_voucher", 3434 },\
-    { "task_set_mach_voucher", 3435 },\
-    { "task_swap_mach_voucher", 3436 }
+    { "semaphore_create", 3418 },\
+    { "semaphore_destroy", 3419 },\
+    { "task_policy_set", 3420 },\
+    { "task_policy_get", 3421 },\
+    { "task_policy", 3423 },\
+    { "task_set_ras_pc", 3427 },\
+    { "task_zone_info", 3428 },\
+    { "task_assign", 3429 },\
+    { "task_assign_default", 3430 },\
+    { "task_get_assignment", 3431 },\
+    { "task_set_policy", 3432 },\
+    { "task_get_state", 3433 },\
+    { "task_set_state", 3434 },\
+    { "task_set_phys_footprint_limit", 3435 },\
+    { "task_suspend2", 3436 },\
+    { "task_resume2", 3437 },\
+    { "task_purgable_info", 3438 },\
+    { "task_get_mach_voucher", 3439 },\
+    { "task_set_mach_voucher", 3440 },\
+    { "task_swap_mach_voucher", 3441 }
 #endif
 
 #ifdef __AfterMigServerHeader

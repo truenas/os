@@ -340,43 +340,6 @@ kern_return_t vm_behavior_set
 );
 #endif	/* defined(LINTLIBRARY) */
 
-/* Routine vm_map */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t vm_map
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
-	vm_address_t *address;
-	vm_size_t size;
-	vm_address_t mask;
-	int flags;
-	mem_entry_name_port_t object;
-	vm_offset_t offset;
-	boolean_t copy;
-	vm_prot_t cur_protection;
-	vm_prot_t max_protection;
-	vm_inherit_t inheritance;
-{ return vm_map(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
-#else
-(
-	vm_map_t target_task,
-	vm_address_t *address,
-	vm_size_t size,
-	vm_address_t mask,
-	int flags,
-	mem_entry_name_port_t object,
-	vm_offset_t offset,
-	boolean_t copy,
-	vm_prot_t cur_protection,
-	vm_prot_t max_protection,
-	vm_inherit_t inheritance
-);
-#endif	/* defined(LINTLIBRARY) */
-
 /* Routine vm_machine_attribute */
 #ifdef	mig_external
 mig_external
@@ -686,43 +649,6 @@ kern_return_t mach_make_memory_entry_64
 	vm_prot_t permission,
 	mach_port_t *object_handle,
 	mem_entry_name_port_t parent_entry
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine vm_map_64 */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t vm_map_64
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
-	vm_address_t *address;
-	vm_size_t size;
-	vm_address_t mask;
-	int flags;
-	mem_entry_name_port_t object;
-	memory_object_offset_t offset;
-	boolean_t copy;
-	vm_prot_t cur_protection;
-	vm_prot_t max_protection;
-	vm_inherit_t inheritance;
-{ return vm_map_64(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
-#else
-(
-	vm_map_t target_task,
-	vm_address_t *address,
-	vm_size_t size,
-	vm_address_t mask,
-	int flags,
-	mem_entry_name_port_t object,
-	memory_object_offset_t offset,
-	boolean_t copy,
-	vm_prot_t cur_protection,
-	vm_prot_t max_protection,
-	vm_inherit_t inheritance
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -1033,43 +959,6 @@ kern_return_t vm_behavior_set
 );
 #endif	/* defined(LINTLIBRARY) */
 
-/* Routine vm_map */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t vm_map
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
-	vm_address_t *address;
-	vm_size_t size;
-	vm_address_t mask;
-	int flags;
-	mem_entry_name_port_t object;
-	vm_offset_t offset;
-	boolean_t copy;
-	vm_prot_t cur_protection;
-	vm_prot_t max_protection;
-	vm_inherit_t inheritance;
-{ return vm_map(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
-#else
-(
-	vm_map_t target_task,
-	vm_address_t *address,
-	vm_size_t size,
-	vm_address_t mask,
-	int flags,
-	mem_entry_name_port_t object,
-	vm_offset_t offset,
-	boolean_t copy,
-	vm_prot_t cur_protection,
-	vm_prot_t max_protection,
-	vm_inherit_t inheritance
-);
-#endif	/* defined(LINTLIBRARY) */
-
 /* Routine vm_machine_attribute */
 #ifdef	mig_external
 mig_external
@@ -1382,43 +1271,6 @@ kern_return_t mach_make_memory_entry_64
 );
 #endif	/* defined(LINTLIBRARY) */
 
-/* Routine vm_map_64 */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t vm_map_64
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	vm_map_t target_task;
-	vm_address_t *address;
-	vm_size_t size;
-	vm_address_t mask;
-	int flags;
-	mem_entry_name_port_t object;
-	memory_object_offset_t offset;
-	boolean_t copy;
-	vm_prot_t cur_protection;
-	vm_prot_t max_protection;
-	vm_inherit_t inheritance;
-{ return vm_map_64(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
-#else
-(
-	vm_map_t target_task,
-	vm_address_t *address,
-	vm_size_t size,
-	vm_address_t mask,
-	int flags,
-	mem_entry_name_port_t object,
-	memory_object_offset_t offset,
-	boolean_t copy,
-	vm_prot_t cur_protection,
-	vm_prot_t max_protection,
-	vm_inherit_t inheritance
-);
-#endif	/* defined(LINTLIBRARY) */
-
 /* Routine vm_purgable_control */
 #ifdef	mig_external
 mig_external
@@ -1481,6 +1333,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_region_flavor_t flavor;
@@ -1495,6 +1350,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1509,6 +1367,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1522,6 +1383,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1537,6 +1401,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1551,6 +1418,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1564,6 +1434,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_read_entry_t data_list;
 		natural_t count;
@@ -1594,6 +1467,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t source_address;
 		vm_size_t size;
@@ -1608,6 +1484,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1622,6 +1501,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1636,6 +1518,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1652,28 +1537,7 @@ extern const struct vm_map_subsystem {
 		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t object;
 		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		vm_address_t address;
-		vm_size_t size;
-		vm_address_t mask;
-		int flags;
-		vm_offset_t offset;
-		boolean_t copy;
-		vm_prot_t cur_protection;
-		vm_prot_t max_protection;
-		vm_inherit_t inheritance;
-	} __Request__vm_map_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
@@ -1711,6 +1575,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		boolean_t must_wire;
 	} __Request__task_wire_t;
@@ -1741,6 +1608,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_offset_t offset;
 	} __Request__vm_map_page_query_t;
@@ -1753,6 +1623,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 	} __Request__mach_vm_region_info_t;
@@ -1765,6 +1638,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__vm_mapped_pages_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1775,6 +1651,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		natural_t nesting_depth;
@@ -1789,6 +1668,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		natural_t nesting_depth;
@@ -1803,6 +1685,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 	} __Request__mach_vm_region_info_64_t;
@@ -1815,6 +1700,9 @@ extern const struct vm_map_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_region_flavor_t flavor;
@@ -1849,28 +1737,7 @@ extern const struct vm_map_subsystem {
 		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t object;
 		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		vm_address_t address;
-		vm_size_t size;
-		vm_address_t mask;
-		int flags;
-		memory_object_offset_t offset;
-		boolean_t copy;
-		vm_prot_t cur_protection;
-		vm_prot_t max_protection;
-		vm_inherit_t inheritance;
-	} __Request__vm_map_64_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_purgable_t control;
@@ -1899,7 +1766,6 @@ union __RequestUnion__vm_map_subsystem {
 	__Request__vm_read_overwrite_t Request_vm_read_overwrite;
 	__Request__vm_msync_t Request_vm_msync;
 	__Request__vm_behavior_set_t Request_vm_behavior_set;
-	__Request__vm_map_t Request_vm_map;
 	__Request__vm_machine_attribute_t Request_vm_machine_attribute;
 	__Request__vm_remap_t Request_vm_remap;
 	__Request__task_wire_t Request_task_wire;
@@ -1912,7 +1778,6 @@ union __RequestUnion__vm_map_subsystem {
 	__Request__mach_vm_region_info_64_t Request_mach_vm_region_info_64;
 	__Request__vm_region_64_t Request_vm_region_64;
 	__Request__mach_make_memory_entry_64_t Request_mach_make_memory_entry_64;
-	__Request__vm_map_64_t Request_vm_map_64;
 	__Request__vm_purgable_control_t Request_vm_purgable_control;
 };
 #endif /* __RequestUnion__vm_map_subsystem__defined */
@@ -2075,19 +1940,6 @@ union __RequestUnion__vm_map_subsystem {
 		NDR_record_t NDR;
 		kern_return_t RetCode;
 	} __Reply__vm_behavior_set_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-		vm_address_t address;
-	} __Reply__vm_map_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -2288,19 +2140,6 @@ union __RequestUnion__vm_map_subsystem {
 		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		kern_return_t RetCode;
-		vm_address_t address;
-	} __Reply__vm_map_64_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
 		int state;
 	} __Reply__vm_purgable_control_t;
 #ifdef  __MigPackStructs
@@ -2326,7 +2165,6 @@ union __ReplyUnion__vm_map_subsystem {
 	__Reply__vm_read_overwrite_t Reply_vm_read_overwrite;
 	__Reply__vm_msync_t Reply_vm_msync;
 	__Reply__vm_behavior_set_t Reply_vm_behavior_set;
-	__Reply__vm_map_t Reply_vm_map;
 	__Reply__vm_machine_attribute_t Reply_vm_machine_attribute;
 	__Reply__vm_remap_t Reply_vm_remap;
 	__Reply__task_wire_t Reply_task_wire;
@@ -2339,7 +2177,6 @@ union __ReplyUnion__vm_map_subsystem {
 	__Reply__mach_vm_region_info_64_t Reply_mach_vm_region_info_64;
 	__Reply__vm_region_64_t Reply_vm_region_64;
 	__Reply__mach_make_memory_entry_64_t Reply_mach_make_memory_entry_64;
-	__Reply__vm_map_64_t Reply_vm_map_64;
 	__Reply__vm_purgable_control_t Reply_vm_purgable_control;
 };
 #endif /* __RequestUnion__vm_map_subsystem__defined */
@@ -2358,7 +2195,6 @@ union __ReplyUnion__vm_map_subsystem {
     { "vm_read_overwrite", 3809 },\
     { "vm_msync", 3810 },\
     { "vm_behavior_set", 3811 },\
-    { "vm_map", 3812 },\
     { "vm_machine_attribute", 3813 },\
     { "vm_remap", 3814 },\
     { "task_wire", 3815 },\
@@ -2371,7 +2207,6 @@ union __ReplyUnion__vm_map_subsystem {
     { "mach_vm_region_info_64", 3823 },\
     { "vm_region_64", 3824 },\
     { "mach_make_memory_entry_64", 3825 },\
-    { "vm_map_64", 3826 },\
     { "vm_purgable_control", 3830 }
 #endif
 

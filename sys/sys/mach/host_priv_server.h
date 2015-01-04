@@ -36,7 +36,7 @@ typedef function_table_entry   *function_table_t;
 #endif /* AUTOTEST */
 
 #ifndef	host_priv_MSG_COUNT
-#define	host_priv_MSG_COUNT	23
+#define	host_priv_MSG_COUNT	26
 #endif	/* host_priv_MSG_COUNT */
 
 #include <sys/mach/std_types.h>
@@ -1090,7 +1090,7 @@ extern const struct host_priv_subsystem {
 	unsigned int	maxsize;	/* Max msg size */
 	vm_address_t	reserved;	/* Reserved */
 	struct routine_descriptor	/*Array of routine descriptors */
-		routine[23];
+		routine[26];
 } host_priv_subsystem;
 
 /* typedefs for all requests */
@@ -1103,6 +1103,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_get_boot_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1113,6 +1116,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int options;
 	} __Request__host_reboot_t;
@@ -1125,6 +1131,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -1206,6 +1215,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_processors_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1216,6 +1228,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		clock_id_t clock_id;
 	} __Request__host_get_clock_control_t;
@@ -1228,6 +1243,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int node;
 		int which;
@@ -1275,6 +1293,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		exception_mask_t exception_mask;
 	} __Request__host_get_exception_ports_t;
@@ -1323,6 +1344,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_processor_sets_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1361,6 +1385,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__get_dp_control_port_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1385,6 +1412,9 @@ extern const struct host_priv_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_get_UNDServer_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1797,19 +1827,19 @@ union __ReplyUnion__host_priv_subsystem {
     { "vm_allocate_cpm", 406 },\
     { "host_processors", 407 },\
     { "host_get_clock_control", 408 },\
-    { "host_get_special_port", 409 },\
-    { "host_set_special_port", 410 },\
-    { "host_set_exception_ports", 411 },\
-    { "host_get_exception_ports", 412 },\
-    { "host_swap_exception_ports", 413 },\
-    { "mach_vm_wire", 415 },\
-    { "host_processor_sets", 416 },\
-    { "host_processor_set_priv", 417 },\
-    { "set_dp_control_port", 418 },\
-    { "get_dp_control_port", 419 },\
-    { "host_set_UNDServer", 420 },\
-    { "host_get_UNDServer", 421 },\
-    { "kext_request", 422 }
+    { "host_get_special_port", 412 },\
+    { "host_set_special_port", 413 },\
+    { "host_set_exception_ports", 414 },\
+    { "host_get_exception_ports", 415 },\
+    { "host_swap_exception_ports", 416 },\
+    { "mach_vm_wire", 418 },\
+    { "host_processor_sets", 419 },\
+    { "host_processor_set_priv", 420 },\
+    { "set_dp_control_port", 421 },\
+    { "get_dp_control_port", 422 },\
+    { "host_set_UNDServer", 423 },\
+    { "host_get_UNDServer", 424 },\
+    { "kext_request", 425 }
 #endif
 
 #ifdef __AfterMigServerHeader

@@ -228,6 +228,9 @@ extern const struct clock_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__clock_get_time_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -238,6 +241,9 @@ extern const struct clock_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		clock_flavor_t flavor;
 		mach_msg_type_number_t clock_attrCnt;

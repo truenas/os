@@ -1,7 +1,7 @@
 /*
  * IDENTIFICATION:
- * stub generated Sun Dec  7 19:06:24 2014
- * with a MiG generated Fri Nov 28 21:32:34 PST 2014 by kmacy@serenity
+ * stub generated Fri Jan  2 23:04:32 2015
+ * with a MiG generated Mon Dec 15 20:44:56 PST 2014 by kmacy@serenity
  * OPTIONS: 
  *	KernelServer
  */
@@ -133,6 +133,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -146,6 +149,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_kernel_version_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -156,6 +162,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_page_size_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -184,6 +193,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		processor_flavor_t flavor;
 	} __Request__host_processor_info_t;
@@ -196,6 +208,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		clock_id_t clock_id;
 	} __Request__host_get_clock_service_t;
@@ -208,6 +223,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_virtual_physical_table_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -218,6 +236,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__processor_set_default_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -228,6 +249,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__processor_set_create_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -256,6 +280,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -285,6 +312,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info64_outCnt;
@@ -298,6 +328,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_zone_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -308,6 +341,9 @@
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_msg_type_number_t recipesCnt;
 		uint8_t recipes[5120];
@@ -694,7 +730,8 @@ mig_internal kern_return_t __MIG_check__Request__host_info_t(__attribute__((__un
 
 	typedef __Request__host_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -739,6 +776,9 @@ mig_internal novalue _Xhost_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -769,7 +809,7 @@ mig_internal novalue _Xhost_info
 #endif /* __MigKernelSpecificCode */
 	__DeclareRcvRpc(200, "host_info")
 	__BeforeRcvRpc(200, "host_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_info_t__defined)
 	check_result = __MIG_check__Request__host_info_t((__Request *)In0P);
@@ -805,7 +845,8 @@ mig_internal kern_return_t __MIG_check__Request__host_kernel_version_t(__attribu
 
 	typedef __Request__host_kernel_version_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -846,6 +887,9 @@ mig_internal novalue _Xhost_kernel_version
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -873,7 +917,7 @@ mig_internal novalue _Xhost_kernel_version
 #endif /* __MigKernelSpecificCode */
 	__DeclareRcvRpc(201, "host_kernel_version")
 	__BeforeRcvRpc(201, "host_kernel_version")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_kernel_version_t__defined)
 	check_result = __MIG_check__Request__host_kernel_version_t((__Request *)In0P);
@@ -915,7 +959,8 @@ mig_internal kern_return_t __MIG_check__Request__host_page_size_t(__attribute__(
 
 	typedef __Request__host_page_size_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -956,6 +1001,9 @@ mig_internal novalue _Xhost_page_size
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -983,7 +1031,7 @@ mig_internal novalue _Xhost_page_size
 #endif /* __MigKernelSpecificCode */
 	__DeclareRcvRpc(202, "host_page_size")
 	__BeforeRcvRpc(202, "host_page_size")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_page_size_t__defined)
 	check_result = __MIG_check__Request__host_page_size_t((__Request *)In0P);
@@ -1170,7 +1218,8 @@ mig_internal kern_return_t __MIG_check__Request__host_processor_info_t(__attribu
 
 	typedef __Request__host_processor_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1217,6 +1266,9 @@ mig_internal novalue _Xhost_processor_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		processor_flavor_t flavor;
 		mach_msg_trailer_t trailer;
@@ -1269,7 +1321,7 @@ mig_internal novalue _Xhost_processor_info
 	kern_return_t RetCode;
 	__DeclareRcvRpc(204, "host_processor_info")
 	__BeforeRcvRpc(204, "host_processor_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_processor_info_t__defined)
 	check_result = __MIG_check__Request__host_processor_info_t((__Request *)In0P);
@@ -1314,7 +1366,8 @@ mig_internal kern_return_t __MIG_check__Request__host_get_clock_service_t(__attr
 
 	typedef __Request__host_get_clock_service_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1357,6 +1410,9 @@ mig_internal novalue _Xhost_get_clock_service
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		clock_id_t clock_id;
 		mach_msg_trailer_t trailer;
@@ -1409,7 +1465,7 @@ mig_internal novalue _Xhost_get_clock_service
 
 	__DeclareRcvRpc(206, "host_get_clock_service")
 	__BeforeRcvRpc(206, "host_get_clock_service")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_get_clock_service_t__defined)
 	check_result = __MIG_check__Request__host_get_clock_service_t((__Request *)In0P);
@@ -1454,7 +1510,8 @@ mig_internal kern_return_t __MIG_check__Request__host_virtual_physical_table_inf
 
 	typedef __Request__host_virtual_physical_table_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1497,6 +1554,9 @@ mig_internal novalue _Xhost_virtual_physical_table_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -1547,7 +1607,7 @@ mig_internal novalue _Xhost_virtual_physical_table_info
 	kern_return_t RetCode;
 	__DeclareRcvRpc(209, "host_virtual_physical_table_info")
 	__BeforeRcvRpc(209, "host_virtual_physical_table_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_virtual_physical_table_info_t__defined)
 	check_result = __MIG_check__Request__host_virtual_physical_table_info_t((__Request *)In0P);
@@ -1594,7 +1654,8 @@ mig_internal kern_return_t __MIG_check__Request__processor_set_default_t(__attri
 
 	typedef __Request__processor_set_default_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1635,6 +1696,9 @@ mig_internal novalue _Xprocessor_set_default
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -1685,7 +1749,7 @@ mig_internal novalue _Xprocessor_set_default
 
 	__DeclareRcvRpc(213, "processor_set_default")
 	__BeforeRcvRpc(213, "processor_set_default")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__processor_set_default_t__defined)
 	check_result = __MIG_check__Request__processor_set_default_t((__Request *)In0P);
@@ -1730,7 +1794,8 @@ mig_internal kern_return_t __MIG_check__Request__processor_set_create_t(__attrib
 
 	typedef __Request__processor_set_create_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -1773,6 +1838,9 @@ mig_internal novalue _Xprocessor_set_create
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -1844,7 +1912,7 @@ mig_internal novalue _Xprocessor_set_create
 
 	__DeclareRcvRpc(214, "processor_set_create")
 	__BeforeRcvRpc(214, "processor_set_create")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__processor_set_create_t__defined)
 	check_result = __MIG_check__Request__processor_set_create_t((__Request *)In0P);
@@ -2058,7 +2126,8 @@ mig_internal kern_return_t __MIG_check__Request__host_statistics_t(__attribute__
 
 	typedef __Request__host_statistics_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2103,6 +2172,9 @@ mig_internal novalue _Xhost_statistics
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -2133,7 +2205,7 @@ mig_internal novalue _Xhost_statistics
 #endif /* __MigKernelSpecificCode */
 	__DeclareRcvRpc(216, "host_statistics")
 	__BeforeRcvRpc(216, "host_statistics")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_statistics_t__defined)
 	check_result = __MIG_check__Request__host_statistics_t((__Request *)In0P);
@@ -2280,7 +2352,8 @@ mig_internal kern_return_t __MIG_check__Request__host_statistics64_t(__attribute
 
 	typedef __Request__host_statistics64_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2325,6 +2398,9 @@ mig_internal novalue _Xhost_statistics64
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info64_outCnt;
@@ -2355,7 +2431,7 @@ mig_internal novalue _Xhost_statistics64
 #endif /* __MigKernelSpecificCode */
 	__DeclareRcvRpc(219, "host_statistics64")
 	__BeforeRcvRpc(219, "host_statistics64")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_statistics64_t__defined)
 	check_result = __MIG_check__Request__host_statistics64_t((__Request *)In0P);
@@ -2391,7 +2467,8 @@ mig_internal kern_return_t __MIG_check__Request__mach_zone_info_t(__attribute__(
 
 	typedef __Request__mach_zone_info_t __Request;
 #if	__MigTypeCheck
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (In0P->Head.msgh_size != (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2438,6 +2515,9 @@ mig_internal novalue _Xmach_zone_info
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		mach_msg_trailer_t trailer;
 	} Request;
 #ifdef  __MigPackStructs
@@ -2510,7 +2590,7 @@ mig_internal novalue _Xmach_zone_info
 	kern_return_t RetCode;
 	__DeclareRcvRpc(220, "mach_zone_info")
 	__BeforeRcvRpc(220, "mach_zone_info")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__mach_zone_info_t__defined)
 	check_result = __MIG_check__Request__mach_zone_info_t((__Request *)In0P);
@@ -2575,7 +2655,8 @@ mig_internal kern_return_t __MIG_check__Request__host_create_mach_voucher_t(__at
 
 #if	__MigTypeCheck
 	msgh_size = In0P->Head.msgh_size;
-	if ((In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	if (!(In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) ||
+	    (In0P->msgh_body.msgh_descriptor_count != 0) ||
 	    (msgh_size < (sizeof(__Request) - 5120)) ||  (msgh_size > (mach_msg_size_t)sizeof(__Request)))
 		return MIG_BAD_ARGUMENTS;
 #endif	/* __MigTypeCheck */
@@ -2632,6 +2713,9 @@ mig_internal novalue _Xhost_create_mach_voucher
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_msg_type_number_t recipesCnt;
 		uint8_t recipes[5120];
@@ -2685,7 +2769,7 @@ mig_internal novalue _Xhost_create_mach_voucher
 
 	__DeclareRcvRpc(222, "host_create_mach_voucher")
 	__BeforeRcvRpc(222, "host_create_mach_voucher")
-/* RetCArg=0x0 rtSimpleRequest=1 */
+/* RetCArg=0x0 rtSimpleRequest=0 */
 
 #if	defined(__MIG_check__Request__host_create_mach_voucher_t__defined)
 	check_result = __MIG_check__Request__host_create_mach_voucher_t((__Request *)In0P);
