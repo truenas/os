@@ -284,6 +284,7 @@ routine vm_behavior_set(
  *	The user-defined memory manager for this object is responsible
  *	for further consistency.]
  */
+#ifdef SHOW_UNUSED
 routine PREFIX(vm_map) (
 		target_task	: vm_task_entry_t;
 	inout	address		: vm_address_t;
@@ -297,6 +298,9 @@ routine PREFIX(vm_map) (
 		max_protection	: vm_prot_t;
 		inheritance	: vm_inherit_t);
 
+#else
+skip;
+#endif
 /*
  *	Set/Get special properties of memory associated
  *	to some virtual address range, such as cachability, 
@@ -376,7 +380,7 @@ routine	vm_mapped_pages_info(
 		task		: mach_vm_map_t;
 	out	pages		: page_address_array_t);
 
-#if 0
+#ifdef SHOW_UNUSED
 /*
  *    Allow application level processes to create named entries which
  *    are backed by sub-maps which describe regions of address space.
@@ -442,7 +446,7 @@ routine mach_make_memory_entry_64(
 		parent_entry	:mem_entry_name_port_t);
 
 
-
+#ifdef SHOW_UNUSED
 routine vm_map_64(
 		target_task	: vm_task_entry_t;
 	inout	address		: vm_address_t;
@@ -455,6 +459,9 @@ routine vm_map_64(
 		cur_protection	: vm_prot_t;
 		max_protection	: vm_prot_t;
 		inheritance	: vm_inherit_t);
+#else
+skip;
+#endif
 
 #if 0
 /*
