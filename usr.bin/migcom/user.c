@@ -2274,18 +2274,18 @@ WriteRPCPortDisposition(FILE *file, register argument_t *arg)
 	 * on input and output. If we stay with this then a new bitfield will have
 	 * to be added. Right now the port disposition is the same for in and out cases.
 	 */
-	/*
-	 * According to the MIG specification, the port disposition could be different
-	 * on input and output. If we stay with this then a new bitfield will have
-	 * to be added. Right now the port disposition is the same for in and out cases.
-	 */
     switch(arg->argType->itInName)
     {
 
     case  MACH_MSG_TYPE_MOVE_RECEIVE:
 		fprintf(file, " | MACH_RPC_MOVE_RECEIVE");
 		break;
-      
+
+	case  MACH_MSG_TYPE_MOVE_SEND:
+		fprintf(file, " | MACH_RPC_MOVE_SEND");
+		break;
+
+	case  MACH_MSG_TYPE_MOVE_SEND_ONCE:
 		fprintf(file, " | MACH_RPC_MOVE_SEND_ONCE");
 		break;
       
