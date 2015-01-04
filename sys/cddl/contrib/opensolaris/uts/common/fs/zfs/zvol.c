@@ -2451,13 +2451,13 @@ zvol_geom_start(struct bio *bp)
 	zvol_state_t *zv;
 	boolean_t first;
 
+	zv = bp->bio_to->private;
+	ASSERT(zv != NULL);
 	switch (bp->bio_cmd) {
 	case BIO_READ:
 	case BIO_WRITE:
 	case BIO_FLUSH:
 	case BIO_DELETE:
-		zv = bp->bio_to->private;
-		ASSERT(zv != NULL);
 		mtx_lock(&zv->zv_queue_mtx);
 		first = (bioq_first(&zv->zv_queue) == NULL);
 		bioq_insert_tail(&zv->zv_queue, bp);
