@@ -110,10 +110,12 @@
 
 
 static fo_close_t mach_port_close;
+static fo_stat_t mach_port_stat;
 static fo_fill_kinfo_t mach_port_fill_kinfo;
 
 struct fileops mach_fileops  = {
 	.fo_close = mach_port_close,
+	.fo_stat = mach_port_stat,
 	.fo_fill_kinfo = mach_port_fill_kinfo
 };
 
@@ -127,6 +129,14 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 	assert(entry->ie_object == NULL);
 	free(entry, M_MACH);
 
+	return (0);
+}
+
+static int
+mach_port_stat(struct file *fp __unused, struct stat *sb __unused,
+			   struct ucred *active_cred __unused, struct thread *td __unused)
+{
+	printf("Now WHY are you statting a mach port?\n");
 	return (0);
 }
 
@@ -165,7 +175,7 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
  *		Tries to allocate an entry out of the space.
  *	Conditions:
  *		The space is write-locked and active throughout.
- *		An object may be locked.  Will not allocate memory.
+ *		An object may be locked.  Will try to allocate memory.
  *	Returns:
  *		KERN_SUCCESS		A free entry was found.
  *		KERN_NO_SPACE		No entry allocated.
@@ -188,6 +198,7 @@ ipc_entry_get(
 	flags = 0;
 	if ((free_entry = malloc(sizeof(*free_entry), M_MACH, M_WAITOK|M_ZERO)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
+
 	if (*namep != MACH_PORT_NAME_NULL) {
 		fd = *namep;
 		flags = O_NOFDALLOC;
@@ -200,6 +211,7 @@ ipc_entry_get(
 	free_entry->ie_request = 0;
 	free_entry->ie_name = fd;
 	free_entry->ie_fp = fp;
+	free_entry->ie_index = UINT_MAX;
 
 	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
 
@@ -230,6 +242,7 @@ ipc_entry_alloc(
 	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp)
 {
+	kern_return_t kr;
 
 	is_write_lock(space);
 	if (!space->is_active) {
@@ -237,7 +250,9 @@ ipc_entry_alloc(
 		return (KERN_INVALID_TASK);
 	}
 	*namep = MACH_PORT_NAME_NULL;
-	return (ipc_entry_get(space, is_send_once, namep, entryp));
+	if ((kr = ipc_entry_get(space, is_send_once, namep, entryp)) != KERN_SUCCESS)
+		is_write_unlock(space);
+	return (kr);
 }
 
 /*
