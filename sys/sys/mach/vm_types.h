@@ -29,6 +29,9 @@
 typedef vm_offset_t     pointer_t;
 typedef vm_offset_t     vm_address_t;
 typedef int    vm_purgable_t;
+#ifndef _KERNEL
+typedef natural_t mach_vm_map_t; /* mach_port_t */
+#endif
 
 #endif	/* MACH_VM_TYPES_H_ */
 
