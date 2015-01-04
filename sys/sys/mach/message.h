@@ -261,6 +261,7 @@ typedef unsigned int mach_msg_descriptor_type_t;
 #define MACH_MSG_OOL_PORTS_DESCRIPTOR 		2
 #define MACH_MSG_OOL_VOLATILE_DESCRIPTOR  	3
 
+#pragma pack(4)
 
 typedef struct
 {
@@ -276,12 +277,7 @@ typedef struct
 #if !defined(_KERNEL) && defined(__LP64__)
 	mach_msg_size_t		pad1;
 #endif
-#if !defined(__LP64__)
-	unsigned int			pad1 : 8;
-	unsigned int			pad2 : 8;
-#else
 	unsigned int			pad2 : 16;
-#endif
 	mach_msg_type_name_t		disposition : 8;
 	mach_msg_descriptor_type_t	type : 8;
 #if defined(_KERNEL)
@@ -517,6 +513,8 @@ typedef union
   mach_msg_empty_send_t	send;
   mach_msg_empty_rcv_t	rcv;
 } mach_msg_empty_t;
+
+#pragma pack()
 
 /* utility to round the message size - will become machine dependent */
 #define round_msg(x)	(((mach_msg_size_t)(x) + sizeof (natural_t) - 1) & \

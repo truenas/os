@@ -134,11 +134,13 @@
 
 #include <sys/mach/ndr.h>
 
+#pragma pack(4)
 typedef struct {
 	mach_msg_header_t	Head;
 	NDR_record_t		NDR;
 	kern_return_t		RetCode;
 } mig_reply_error_t;
+#pragma pack()
 
 typedef struct mig_symtab {
 	char	*ms_routine_name;
