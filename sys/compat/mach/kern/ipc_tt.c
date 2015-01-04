@@ -659,6 +659,10 @@ task_set_special_port(
 	ipc_port_t *whichp;
 	ipc_port_t old;
 
+#ifdef VERBOSE_DEBUGGING
+	printf("task_set_special_port(task=%p, which=%d, port=%p)\n",task, which, port);
+#endif
+	/* we only support the current task */
 	if (task == TASK_NULL)
 		return KERN_INVALID_ARGUMENT;
 
@@ -859,6 +863,9 @@ convert_port_to_task(
 {
 	boolean_t r;
 	task_t task = TASK_NULL;
+
+	/* currently only handle current task */
+	return (current_task());
 
 	r = FALSE;
 	while (!r && IP_VALID(port)) {
