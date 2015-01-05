@@ -84,6 +84,7 @@
 #include "ipc.h"
 #include "shim.h"
 
+#define _LD_LIBRARY_PATH_STDPATH "/lib:/usr/lib:/usr/local/lib"
 #define LAUNCHD_CONF ".launchd.conf"
 
 extern char **environ;
@@ -189,7 +190,11 @@ main(int argc, char *const *argv)
 	if (NULL == getenv("PATH")) {
 		setenv("PATH", _PATH_STDPATH, 1);
 	}
-	syslog(LOG_ERR, "path set\n");
+
+	if (NULL == getenv("LD_LIBRARY_PATH")) {
+		setenv("LD_LIBRARY_PATH", _LD_LIBRARY_PATH_STDPATH, 1);
+	}
+	syslog(LOG_ERR, "paths set\n");
 	if (pid1_magic) {
 		syslog(LOG_ERR, "doing pid1_magic\n");
 		pid1_magic_init();
