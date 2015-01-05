@@ -378,7 +378,7 @@ static void
 runcom(void)
 {
 	bool runcom_fsck = should_fsck();
-	const char *argv[] = { "/bin/launchctl", "bootstrap", NULL };
+	char *argv[4];
 	struct termios term;
 	int vdisable;
 
@@ -417,13 +417,19 @@ runcom(void)
 		if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &term) == -1)
 			syslog(LOG_WARNING, "tcsetattr(\"%s\") %m", _PATH_CONSOLE);
 	}
-	syslog(LOG_ERR, "setenv()\n");
 	setenv("SafeBoot", runcom_safe ? "-x" : "", 1);
 	setenv("FsckSlash", runcom_fsck ? "-F" : "", 1);
 	setenv("NetBoot", runcom_netboot ? "-N" : "", 1);
 
 	syslog(LOG_ERR, "execv()\n");
-	execv(argv[0], (char * const*)argv);
+	{
+		char _sh[] = "sh";
+
+		argv[0] = _sh;
+		argv[1] = __DECONST(char *, _PATH_RUNCOM);
+		argv[2] = 0;
+		execv(_PATH_BSHELL, argv);
+	}
 	stall("can't exec %s for %s: %m", _PATH_BSHELL, _PATH_RUNCOM);
 	exit(EXIT_FAILURE);
 }
