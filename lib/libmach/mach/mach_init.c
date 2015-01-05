@@ -12,6 +12,7 @@
 #include <machine/mach/ndr_def.h>
 static void mach_init(void) __attribute__((constructor));
 mach_port_t mach_reply_port(void);
+mach_port_t task_self_trap(void);
 
 extern mach_port_t _task_reply_port;
 
