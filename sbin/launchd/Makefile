@@ -23,21 +23,21 @@ LDFLAGS+= -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -pthread
 
 helper.h launchd_helperServer.h: ${.CURDIR}/helper.defs
-	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header ${.CURDIR}/helper.h \
-	-sheader ${.CURDIR}/launchd_helperServer.h ${.CURDIR}/helper.defs
+	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header helper.h \
+	-sheader launchd_helperServer.h ${.CURDIR}/helper.defs
 
-jobServer.h jobServer.c job.h: ${.CURDIR}/job.defs ${.CURDIR}/helper.h
-	mig ${MIG_FLAGS} -sheader ${.CURDIR}/jobServer.h ${.CURDIR}/job.defs
+jobServer.h jobServer.c job.h: ${.CURDIR}/job.defs helper.h
+	mig ${MIG_FLAGS} -sheader jobServer.h ${.CURDIR}/job.defs
 job_reply.h job_replyUser.c job_replyServer.c job_replyServer.h: ${.CURDIR}/job_reply.defs
-	mig ${MIG_FLAGS} -header ${.CURDIR}/job_reply.h -sheader ${.CURDIR}/job_replyServer.h ${.CURDIR}/job_reply.defs
+	mig ${MIG_FLAGS} -header job_reply.h -sheader job_replyServer.h ${.CURDIR}/job_reply.defs
 ${.CURDIR}/job_forward.h job_forwardUser.c job_forwardServer.h: ${.CURDIR}/job_forward.defs
-	mig ${MIG_FLAGS} -header ${.CURDIR}/job_forward.h -sheader ${.CURDIR}/job_forwardServer.h ${.CURDIR}/job_forward.defs
+	mig ${MIG_FLAGS} -header job_forward.h -sheader job_forwardServer.h ${.CURDIR}/job_forward.defs
 notify.h notifyServer.c notifyServer.h: ${.CURDIR}/notify.defs
-	mig ${MIG_FLAGS} -header ${.CURDIR}/notify.h -sheader ${.CURDIR}/notifyServer.h ${.CURDIR}/notify.defs
+	mig ${MIG_FLAGS} -header notify.h -sheader notifyServer.h ${.CURDIR}/notify.defs
 mach_excServer.h mach_excServer.c: ${.CURDIR}/mach_exc.defs
-	mig ${MIG_FLAGS} -sheader ${.CURDIR}/mach_excServer.h ${.CURDIR}/mach_exc.defs
+	mig ${MIG_FLAGS} -sheader mach_excServer.h ${.CURDIR}/mach_exc.defs
 internal.h internalServer.h internalServer.c internalUser.c: ${.CURDIR}/internal.defs
-	mig ${MIG_FLAGS} -header ${.CURDIR}/internal.h -sheader ${.CURDIR}/internalServer.h ${.CURDIR}/internal.defs
+	mig ${MIG_FLAGS} -header internal.h -sheader internalServer.h ${.CURDIR}/internal.defs
 
 
 
