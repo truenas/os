@@ -860,11 +860,10 @@ ipc_mqueue_finish_receive(
 	rcv_size = ipc_kmsg_copyout_size(kmsg, thread_map(self));
 	if (rcv_size + REQUESTED_TRAILER_SIZE(option) > max_size) {
 		/* the receive buffer isn't large enough */
-		printf("max_size=%d REQUESTED_TRAILER_SIZE(option)=%d\n",
-			   max_size, REQUESTED_TRAILER_SIZE(option));
+		printf("%s max_size=%d REQUESTED_TRAILER_SIZE(option=%d)=%d\n",
+			   curthread->td_proc->p_comm, max_size, option, REQUESTED_TRAILER_SIZE(option));
 		/* ipc_kmsg_print(kmsg); */
 		printf("rcv_size=%d\n", rcv_size);
-
 		mr = MACH_RCV_TOO_LARGE;
 	} else if (self->ith_scatter_list != MACH_MSG_BODY_NULL) {
 		/* verify the scatter list */
