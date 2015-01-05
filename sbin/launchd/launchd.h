@@ -48,4 +48,20 @@ char *launchd_copy_persistent_store(int type, const char *file);
 
 int _fd(int fd);
 
+void init_boot(bool sflag);
+void init_pre_kevent(void);
+
+
+#define launchd_assumes(e)      \
+        (__builtin_expect(!(e), 0) ? _log_launchd_bug(0, __FILE__, __LINE__, #e), false : true)
+
+void _log_launchd_bug(const char *rcs_rev, const char *path, unsigned int line, const char *test);
+
+
+void update_ttys(void);
+void catatonia(void);
+bool init_check_pid(pid_t p);
+
+pid_t launchd_fork(void);
+
 #endif /* __LAUNCHD_H__ */

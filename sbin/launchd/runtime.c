@@ -182,17 +182,22 @@ union do_notify_max_sz {
 void
 launchd_runtime_init(void)
 {
+#ifdef notyet
 	pid_t p = getpid();
-
+#endif
+	syslog(LOG_ERR, "kqueue() ... ");
 	(void)posix_assert_zero((mainkq = kqueue()));
-
+	syslog(LOG_ERR, " ... success");
 	os_assert_zero(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &demand_port_set));
+	syslog(LOG_ERR, "port allocate success");
 	os_assert_zero(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &ipc_port_set));
+	syslog(LOG_ERR, "port allocate success");
 	posix_assert_zero(kevent_mod(demand_port_set, EVFILT_MACHPORT, EV_ADD, 0, 0, &kqmportset_callback));
-
+	syslog(LOG_ERR, "kevent_mod success");
 	os_assert_zero(launchd_mport_create_recv(&launchd_internal_port));
+	syslog(LOG_ERR, "launchd_mport_create_recv() success");
 	os_assert_zero(launchd_mport_make_send(launchd_internal_port));
-
+	syslog(LOG_ERR, "launchd_mport_make_send() success");
 	max_msg_size = sizeof(union vproc_mig_max_sz);
 #ifdef notyet
 	if (sizeof(union xpc_domain_max_sz) > max_msg_size) {
@@ -200,10 +205,14 @@ launchd_runtime_init(void)
 	}
 #endif
 	os_assert_zero(runtime_add_mport(launchd_internal_port, launchd_internal_demux));
-	os_assert_zero(pthread_create(&kqueue_demand_thread, NULL, kqueue_demand_loop, NULL));
+	syslog(LOG_ERR, "runtime_add_mport() success");
+	os_assert_zero(pthread_create(&kqueue_demand_thread, NULL, kqueue_demand_loop, NULL));	syslog(LOG_ERR, "pthread_create() success");
+	
+	syslog(LOG_ERR, "pthread_detach(kqueue_demand_thread)\n");
 	os_assert_zero(pthread_detach(kqueue_demand_thread));
-
+#ifdef notyet
 	(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
+#endif
 }
 
 void
@@ -586,6 +595,8 @@ x_handle_kqueue(mach_port_t junk __attribute__((unused)), integer_t fd)
 
 	bulk_kev = NULL;
 
+
+	
 	return 0;
 }
 
@@ -643,8 +654,12 @@ runtime_fork(mach_port_t bsport)
 
 	sigemptyset(&emptyset);
 
+
+	syslog(LOG_ERR, "runtime_fork(bsport=%d)", bsport);
 	(void)os_assumes_zero(launchd_mport_make_send(bsport));
+	syslog(LOG_ERR, "setting bsport");
 	(void)os_assumes_zero(launchd_set_bport(bsport));
+	syslog(LOG_ERR, "set bsport");
 	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
 
 	__OS_COMPILETIME_ASSERT__(SIG_ERR == (typeof(SIG_ERR))-1);

@@ -137,6 +137,15 @@ main(int argc, char *const *argv)
 	 * stuff in launchd_runtime_init() and the stuff in
 	 * handle_pid1_crashes_separately().
 	 */
+/*
+	 * Note that this does NOT open a file...
+	 * Does 'init' deserve its own facility number?
+	 */
+	openlog("init", LOG_CONS, LOG_AUTH);
+
+	
+	fprintf(stderr, "closing descriptors!!!!!\n");
+	syslog(LOG_EMERG, "starting main!!!!!\n");
 	testfd_or_openfd(STDIN_FILENO, _PATH_DEVNULL, O_RDONLY);
 	testfd_or_openfd(STDOUT_FILENO, _PATH_DEVNULL, O_WRONLY);
 	testfd_or_openfd(STDERR_FILENO, _PATH_DEVNULL, O_WRONLY);
@@ -174,15 +183,17 @@ main(int argc, char *const *argv)
 		exit(EXIT_FAILURE);
 	}
 
+	syslog(LOG_ERR, "launchd_runtime_init()\n");
 	launchd_runtime_init();
 
 	if (NULL == getenv("PATH")) {
 		setenv("PATH", _PATH_STDPATH, 1);
 	}
-
+	syslog(LOG_ERR, "path set\n");
 	if (pid1_magic) {
+		syslog(LOG_ERR, "doing pid1_magic\n");
 		pid1_magic_init();
-
+		syslog(LOG_ERR, "pid1_magic done !!!!!!\n");
 		int cfd = -1;
 		if ((cfd = open(_PATH_CONSOLE, O_WRONLY | O_NOCTTY)) != -1) {
 			_fd(cfd);
@@ -229,8 +240,10 @@ main(int argc, char *const *argv)
 		 *
 		 * <rdar://problem/5039559&6153301>
 		 */
+		syslog(LOG_ERR, "create update thread\n");
 		pthread_t t = NULL;
 		(void)os_assumes_zero(pthread_create(&t, NULL, update_thread, NULL));
+		syslog(LOG_ERR, "detach update thread\n");
 		(void)os_assumes_zero(pthread_detach(t));
 
 		/* PID 1 doesn't have a flat namespace. */
@@ -280,9 +293,15 @@ main(int argc, char *const *argv)
 	}
 
 	monitor_networking_state();
+	syslog(LOG_ERR, "jobmgr_init sflag=%x\n", sflag);
 	jobmgr_init(sflag);
-
+	syslog(LOG_ERR, "launchd_runtime_init2()\n");
 	launchd_runtime_init2();
+	if (getpid() == 1 /* && !job_active(rlcj) */) {
+			syslog(LOG_ERR, "init_pre_kevent() for reaaaaal!!! \n");
+			init_pre_kevent();
+	}
+	syslog(LOG_ERR, "launchd_runtime()\n");
 	launchd_runtime();
 }
 
@@ -668,3 +687,6 @@ pfsystem_callback(void *obj __attribute__((unused)), struct kevent *kev)
 		jobmgr_dispatch_all_semaphores(root_jobmgr);
 	}
 }
+
+
+
