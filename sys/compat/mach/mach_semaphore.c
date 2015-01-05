@@ -52,7 +52,6 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/mach/task_server.h>
 
-#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
 int
 semaphore_create(
 	task_t task,

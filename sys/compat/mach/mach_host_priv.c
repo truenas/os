@@ -15,8 +15,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/mach/host_priv_server.h>
 
 
-#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
-
 int
 get_dp_control_port(
 	host_priv_t host,

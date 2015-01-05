@@ -244,9 +244,6 @@ mach_host_processor_set_priv(struct mach_trap_args *args)
 
 #endif
 
-#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
-
-
 int
 host_create_mach_voucher(
 	host_t host,

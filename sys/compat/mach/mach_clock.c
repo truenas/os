@@ -131,8 +131,6 @@ clock_get_time(clock_serv_t clock_serv, mach_timespec_t *cur_time)
 	return (copyout(&ts, cur_time, sizeof(ts)));
 }
 
-#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
-
 int
 clock_get_attributes(
 	clock_serv_t clock_serv,

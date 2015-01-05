@@ -691,8 +691,6 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 #endif
 
 
-#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
-
 int
 task_get_mach_voucher(
 	task_t task,

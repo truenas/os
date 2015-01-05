@@ -101,42 +101,26 @@ sys_mach_msg_trap(struct thread *td __unused, struct mach_msg_trap_args *uap)
 	
 int
 sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_args *uap)
-{
-	return (ENOSYS);	
-}
+	UNSUPPORTED;
 
 int
 sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_trap_args *uap)
-{
-	return (ENOSYS);
-}
-
+	UNSUPPORTED;
 int
 sys_mach_semaphore_wait_signal_trap(struct thread *td, struct mach_semaphore_wait_signal_trap_args *uap)
-{
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_signal_thread_trap_args *uap)
-{
-
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys_mach_semaphore_signal_all_trap(struct thread *td, struct mach_semaphore_signal_all_trap_args *uap)
-{
-
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
-{
-
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys_mach_thread_switch(struct thread *td, struct mach_thread_switch_args *uap)
@@ -267,28 +251,19 @@ sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_m
 
 int
 sys__kernelrpc_mach_port_insert_member_trap(struct thread *td, struct _kernelrpc_mach_port_insert_member_trap_args *uap)
-{
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys__kernelrpc_mach_port_extract_member_trap(struct thread *td, struct _kernelrpc_mach_port_extract_member_trap_args *uap)
-{
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys__kernelrpc_mach_port_construct_trap(struct thread *td, struct _kernelrpc_mach_port_construct_trap_args *uap)
-{
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys__kernelrpc_mach_port_destruct_trap(struct thread *td, struct _kernelrpc_mach_port_destruct_trap_args *uap)
-{
-
-return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_port_destroy_trap_args *uap)
@@ -300,15 +275,12 @@ sys__kernelrpc_mach_port_destroy_trap(struct thread *td, struct _kernelrpc_mach_
 
 int
 sys__kernelrpc_mach_port_guard_trap(struct thread *td, struct _kernelrpc_mach_port_guard_trap_args *uap)
-{
-	return (ENOSYS);
-}
+	UNSUPPORTED;
+
 
 int
 sys__kernelrpc_mach_port_unguard_trap(struct thread *td, struct _kernelrpc_mach_port_unguard_trap_args *uap)
-{
-	return (ENOSYS);
-}
+	UNSUPPORTED;
 
 int
 sys__kernelrpc_mach_vm_map_trap(struct thread *td, struct _kernelrpc_mach_vm_map_trap_args *uap)
