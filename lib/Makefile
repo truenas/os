@@ -246,6 +246,7 @@ _librtld_db=	librtld_db
 =======
 _libcfxlite= libcfxlite
 _libdispatch= libdispatch
+_liblaunch=	liblaunch
 _libmach= libmach
 >>>>>>> 6a32808... build launchd and dependencies (on 64-bit)
 _libvmmapi=	libvmmapi
@@ -262,7 +263,6 @@ _libproc=	libproc
 _librtld_db=	librtld_db
 .endif
 
-_liblaunch=	liblaunch
 
 .if ${MACHINE_CPUARCH} == "powerpc"
 _libproc=	libproc
