@@ -865,6 +865,12 @@ mach_port_mod_refs(
 	if (right >= MACH_PORT_RIGHT_NUMBER)
 		return KERN_INVALID_VALUE;
 
+	if (!MACH_PORT_NAME_VALID(name)) {
+		if (right == MACH_PORT_RIGHT_SEND ||
+		    right == MACH_PORT_RIGHT_SEND_ONCE)
+			return KERN_SUCCESS;
+		return KERN_INVALID_NAME;
+	}
 	kr = ipc_right_lookup_write(space, name, &entry);
 	if (kr != KERN_SUCCESS)
 		return kr;
@@ -1679,7 +1685,6 @@ thread_activation_create(task_t task, mach_port_name_t name,
 
 #endif
 
-#define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
 int
 mach_port_construct(
 	ipc_space_t task,
