@@ -275,7 +275,7 @@ mig_init(void)
 ipc_kmsg_t
 ipc_kobject_server(ipc_kmsg_t	request)
 {
-	mach_msg_size_t reply_size;
+	mach_msg_size_t alloc_size, reply_size;
 	ipc_kmsg_t reply;
 	kern_return_t kr;
 	ipc_port_t *destp;
@@ -308,20 +308,18 @@ ipc_kobject_server(ipc_kmsg_t	request)
 			reply_size = ptr->size;
 		}
 	}
-
+	alloc_size = reply_size;
 	/* round up for ikm_cache; overhead is added by ikm_alloc */
-	if ((reply_size += MAX_TRAILER_SIZE) < IKM_SAVED_MSG_SIZE)
-		reply_size = IKM_SAVED_MSG_SIZE;
+	if ((alloc_size += MAX_TRAILER_SIZE) < IKM_SAVED_MSG_SIZE)
+		alloc_size = IKM_SAVED_MSG_SIZE;
 
-		reply = ikm_alloc(reply_size);
+	reply = ipc_kmsg_alloc(alloc_size);
 
 	if (reply == IKM_NULL) {
-		printf("ipc_kobject_server: dropping request\n");
 		ipc_kmsg_destroy(request);
 		return IKM_NULL;
 	}
-
-	ikm_init(reply, reply_size);
+	ikm_init_special(reply, reply_size);
 	/*
 	 * Initialize reply message.
 	 */
