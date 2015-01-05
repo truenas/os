@@ -601,19 +601,18 @@ ipc_object_destroy(
 	assert(io_otype(object) == IOT_PORT);
 
 	switch (msgt_name) {
-	    case MACH_MSG_TYPE_PORT_SEND:
+	case MACH_MSG_TYPE_PORT_SEND:
 		ipc_port_release_send((ipc_port_t) object);
 		break;
 
-	    case MACH_MSG_TYPE_PORT_SEND_ONCE:
+	case MACH_MSG_TYPE_PORT_SEND_ONCE:
 		ipc_notify_send_once((ipc_port_t) object);
 		break;
 
-	    case MACH_MSG_TYPE_PORT_RECEIVE:
+	case MACH_MSG_TYPE_PORT_RECEIVE:
 		ipc_port_release_receive((ipc_port_t) object);
 		break;
-
-	    default:
+	default:
 		panic("ipc_object_destroy: strange rights");
 	}
 }
@@ -668,9 +667,10 @@ ipc_object_copyout(
 	kr = ipc_entry_get(space,
 			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
 						   &name, &entry);
-	if (kr != KERN_SUCCESS)
+	if (kr != KERN_SUCCESS) {
+		is_write_unlock(space);
 		return (kr);
-
+	}
 
 	assert(IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE);
 	assert(entry->ie_object == IO_NULL);
