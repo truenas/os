@@ -304,6 +304,7 @@ ipc_hash_local_insert(
 		entry->ie_link = entryp;
 
 	table[hindex] = entry;
+	entry->ie_index = hindex;
 }
 
 /*
