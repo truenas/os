@@ -399,16 +399,18 @@ int mach_vm_wire_32(host_priv_t host_priv, vm_map_t task, vm_address_t address, 
 
 int mach_vm_map_page_query(vm_map_t target_map, vm_offset_t offset, integer_t *disposition, integer_t *ref_count);
 int mach_vm_mapped_pages_info(vm_map_t task, page_address_array_t *pages, mach_msg_type_number_t *pagesCnt);
+
+int mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
+			mach_vm_offset_t _mask __unused, int _flags, mem_entry_name_port_t object __unused,
+			memory_object_offset_t offset __unused, boolean_t copy __unused,
+			vm_prot_t cur_protection, vm_prot_t max_protection, vm_inherit_t inh);
+
+
+int mach_vm_deallocate(vm_map_t map,  vm_offset_t addr, size_t len);
 #if 0
-int mach_vm_map(struct thread *td, mach_vm_offset_t *address, mach_vm_size_t _size,
-			mach_vm_offset_t _mask __unused, int _flags, vm_prot_t cur_protection,
-			vm_prot_t max_protection, mach_vm_inherit_t inh);
-
-int mach_vm_deallocate(struct thread *td, vm_offset_t addr, size_t len);
 int mach_vm_protect(struct thread *td, vm_offset_t addr, size_t len, vm_prot_t prot);
-
-
 #endif
+
 /* These are machine dependent functions */
 
 int cpu_mach_vm_machine_attribute(vm_map_t, vm_offset_t, size_t, int *);
