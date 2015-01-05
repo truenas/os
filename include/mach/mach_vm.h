@@ -3,6 +3,16 @@
 
 /* Module mach_vm */
 
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#ifdef _KERNEL
+#include <sys/mach/ndr.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/notify.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/message.h>
+#include <sys/mach/mig_errors.h>
+#else /* !_KERNEL */
 #include <string.h>
 #include <mach/ndr.h>
 #include <mach/boolean.h>
@@ -11,6 +21,7 @@
 #include <mach/mach_types.h>
 #include <mach/message.h>
 #include <mach/mig_errors.h>
+#endif /*_KERNEL */
 
 #ifdef AUTOTEST
 #ifndef FUNCTION_PTR_T
@@ -28,11 +39,11 @@ typedef function_table_entry   *function_table_t;
 #define	mach_vm_MSG_COUNT	20
 #endif	/* mach_vm_MSG_COUNT */
 
-#include <mach/std_types.h>
-#include <mach/mig.h>
-#include <mach/mig.h>
-#include <mach/mach_types.h>
-#include <mach_debug/mach_debug_types.h>
+#include <sys/mach/std_types.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach_debug/mach_debug_types.h>
 
 #ifdef __BeforeMigUserHeader
 __BeforeMigUserHeader
@@ -41,50 +52,6 @@ __BeforeMigUserHeader
 #include <sys/cdefs.h>
 __BEGIN_DECLS
 
-
-/* Routine mach_vm_allocate */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_vm_allocate
-#if	defined(LINTLIBRARY)
-    (target, address, size, flags)
-	mach_vm_map_t target;
-	mach_vm_address_t *address;
-	mach_vm_size_t size;
-	int flags;
-{ return mach_vm_allocate(target, address, size, flags); }
-#else
-(
-	mach_vm_map_t target,
-	mach_vm_address_t *address,
-	mach_vm_size_t size,
-	int flags
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine mach_vm_deallocate */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_vm_deallocate
-#if	defined(LINTLIBRARY)
-    (target, address, size)
-	mach_vm_map_t target;
-	mach_vm_address_t address;
-	mach_vm_size_t size;
-{ return mach_vm_deallocate(target, address, size); }
-#else
-(
-	mach_vm_map_t target,
-	mach_vm_address_t address,
-	mach_vm_size_t size
-);
-#endif	/* defined(LINTLIBRARY) */
 
 /* Routine mach_vm_protect */
 #ifdef	mig_external
@@ -294,43 +261,6 @@ kern_return_t mach_vm_behavior_set
 	mach_vm_address_t address,
 	mach_vm_size_t size,
 	vm_behavior_t new_behavior
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine mach_vm_map */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_vm_map
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance)
-	mach_vm_map_t target_task;
-	mach_vm_address_t *address;
-	mach_vm_size_t size;
-	mach_vm_offset_t mask;
-	int flags;
-	mem_entry_name_port_t object;
-	memory_object_offset_t offset;
-	boolean_t copy;
-	vm_prot_t cur_protection;
-	vm_prot_t max_protection;
-	vm_inherit_t inheritance;
-{ return mach_vm_map(target_task, address, size, mask, flags, object, offset, copy, cur_protection, max_protection, inheritance); }
-#else
-(
-	mach_vm_map_t target_task,
-	mach_vm_address_t *address,
-	mach_vm_size_t size,
-	mach_vm_offset_t mask,
-	int flags,
-	mem_entry_name_port_t object,
-	memory_object_offset_t offset,
-	boolean_t copy,
-	vm_prot_t cur_protection,
-	vm_prot_t max_protection,
-	vm_inherit_t inheritance
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -579,39 +509,6 @@ __END_DECLS
 		NDR_record_t NDR;
 		mach_vm_address_t address;
 		mach_vm_size_t size;
-		int flags;
-	} __Request__mach_vm_allocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-	} __Request__mach_vm_deallocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
 		boolean_t set_maximum;
 		vm_prot_t new_protection;
 	} __Request__mach_vm_protect_t;
@@ -749,30 +646,6 @@ __END_DECLS
 		mach_vm_size_t size;
 		vm_behavior_t new_behavior;
 	} __Request__mach_vm_behavior_set_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t object;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_vm_address_t address;
-		mach_vm_size_t size;
-		mach_vm_offset_t mask;
-		int flags;
-		memory_object_offset_t offset;
-		boolean_t copy;
-		vm_prot_t cur_protection;
-		vm_prot_t max_protection;
-		vm_inherit_t inheritance;
-	} __Request__mach_vm_map_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -924,8 +797,6 @@ __END_DECLS
 #ifndef __RequestUnion__mach_vm_subsystem__defined
 #define __RequestUnion__mach_vm_subsystem__defined
 union __RequestUnion__mach_vm_subsystem {
-	__Request__mach_vm_allocate_t Request_mach_vm_allocate;
-	__Request__mach_vm_deallocate_t Request_mach_vm_deallocate;
 	__Request__mach_vm_protect_t Request_mach_vm_protect;
 	__Request__mach_vm_inherit_t Request_mach_vm_inherit;
 	__Request__mach_vm_read_t Request_mach_vm_read;
@@ -935,7 +806,6 @@ union __RequestUnion__mach_vm_subsystem {
 	__Request__mach_vm_read_overwrite_t Request_mach_vm_read_overwrite;
 	__Request__mach_vm_msync_t Request_mach_vm_msync;
 	__Request__mach_vm_behavior_set_t Request_mach_vm_behavior_set;
-	__Request__mach_vm_map_t Request_mach_vm_map;
 	__Request__mach_vm_machine_attribute_t Request_mach_vm_machine_attribute;
 	__Request__mach_vm_remap_t Request_mach_vm_remap;
 	__Request__mach_vm_page_query_t Request_mach_vm_page_query;
@@ -950,31 +820,6 @@ union __RequestUnion__mach_vm_subsystem {
 
 #ifndef __Reply__mach_vm_subsystem__defined
 #define __Reply__mach_vm_subsystem__defined
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-		mach_vm_address_t address;
-	} __Reply__mach_vm_allocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__mach_vm_deallocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
 
 #ifdef  __MigPackStructs
 #pragma pack(4)
@@ -1086,19 +931,6 @@ union __RequestUnion__mach_vm_subsystem {
 		NDR_record_t NDR;
 		kern_return_t RetCode;
 	} __Reply__mach_vm_behavior_set_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-		mach_vm_address_t address;
-	} __Reply__mach_vm_map_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -1230,8 +1062,6 @@ union __RequestUnion__mach_vm_subsystem {
 #ifndef __ReplyUnion__mach_vm_subsystem__defined
 #define __ReplyUnion__mach_vm_subsystem__defined
 union __ReplyUnion__mach_vm_subsystem {
-	__Reply__mach_vm_allocate_t Reply_mach_vm_allocate;
-	__Reply__mach_vm_deallocate_t Reply_mach_vm_deallocate;
 	__Reply__mach_vm_protect_t Reply_mach_vm_protect;
 	__Reply__mach_vm_inherit_t Reply_mach_vm_inherit;
 	__Reply__mach_vm_read_t Reply_mach_vm_read;
@@ -1241,7 +1071,6 @@ union __ReplyUnion__mach_vm_subsystem {
 	__Reply__mach_vm_read_overwrite_t Reply_mach_vm_read_overwrite;
 	__Reply__mach_vm_msync_t Reply_mach_vm_msync;
 	__Reply__mach_vm_behavior_set_t Reply_mach_vm_behavior_set;
-	__Reply__mach_vm_map_t Reply_mach_vm_map;
 	__Reply__mach_vm_machine_attribute_t Reply_mach_vm_machine_attribute;
 	__Reply__mach_vm_remap_t Reply_mach_vm_remap;
 	__Reply__mach_vm_page_query_t Reply_mach_vm_page_query;
@@ -1255,8 +1084,6 @@ union __ReplyUnion__mach_vm_subsystem {
 
 #ifndef subsystem_to_name_map_mach_vm
 #define subsystem_to_name_map_mach_vm \
-    { "mach_vm_allocate", 4800 },\
-    { "mach_vm_deallocate", 4801 },\
     { "mach_vm_protect", 4802 },\
     { "mach_vm_inherit", 4803 },\
     { "mach_vm_read", 4804 },\
@@ -1266,7 +1093,6 @@ union __ReplyUnion__mach_vm_subsystem {
     { "mach_vm_read_overwrite", 4808 },\
     { "mach_vm_msync", 4809 },\
     { "mach_vm_behavior_set", 4810 },\
-    { "mach_vm_map", 4811 },\
     { "mach_vm_machine_attribute", 4812 },\
     { "mach_vm_remap", 4813 },\
     { "mach_vm_page_query", 4814 },\

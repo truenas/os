@@ -3,6 +3,16 @@
 
 /* Module mach_host */
 
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#ifdef _KERNEL
+#include <sys/mach/ndr.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/notify.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/message.h>
+#include <sys/mach/mig_errors.h>
+#else /* !_KERNEL */
 #include <string.h>
 #include <mach/ndr.h>
 #include <mach/boolean.h>
@@ -11,7 +21,7 @@
 #include <mach/mach_types.h>
 #include <mach/message.h>
 #include <mach/mig_errors.h>
-#include <mach/port.h>
+#endif /*_KERNEL */
 
 #ifdef AUTOTEST
 #ifndef FUNCTION_PTR_T
@@ -29,13 +39,12 @@ typedef function_table_entry   *function_table_t;
 #define	mach_host_MSG_COUNT	25
 #endif	/* mach_host_MSG_COUNT */
 
-#include <mach/std_types.h>
-#include <mach/mig.h>
-#include <mach/mig.h>
-#include <mach/mach_types.h>
-#include <mach/mach_types.h>
-#include <mach_debug/mach_debug_types.h>
-#include <mach/mach_init.h>
+#include <sys/mach/std_types.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach_debug/mach_debug_types.h>
 
 #ifdef __BeforeMigUserHeader
 __BeforeMigUserHeader
@@ -52,12 +61,21 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_info
+#if	defined(LINTLIBRARY)
+    (host, flavor, host_info_out, host_info_outCnt)
+	host_t host;
+	host_flavor_t flavor;
+	host_info_t host_info_out;
+	mach_msg_type_number_t *host_info_outCnt;
+{ return host_info(host, flavor, host_info_out, host_info_outCnt); }
+#else
 (
 	host_t host,
 	host_flavor_t flavor,
 	host_info_t host_info_out,
 	mach_msg_type_number_t *host_info_outCnt
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_kernel_version */
 #ifdef	mig_external
@@ -66,10 +84,17 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_kernel_version
+#if	defined(LINTLIBRARY)
+    (host, kernel_version)
+	host_t host;
+	kernel_version_t kernel_version;
+{ return host_kernel_version(host, kernel_version); }
+#else
 (
 	host_t host,
 	kernel_version_t kernel_version
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine _host_page_size */
 #ifdef	mig_external
@@ -78,10 +103,17 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t _host_page_size
+#if	defined(LINTLIBRARY)
+    (host, out_page_size)
+	host_t host;
+	vm_size_t *out_page_size;
+{ return _host_page_size(host, out_page_size); }
+#else
 (
 	host_t host,
 	vm_size_t *out_page_size
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine mach_memory_object_memory_entry */
 #ifdef	mig_external
@@ -90,6 +122,16 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t mach_memory_object_memory_entry
+#if	defined(LINTLIBRARY)
+    (host, internal, size, permission, pager, entry_handle)
+	host_t host;
+	boolean_t internal;
+	vm_size_t size;
+	vm_prot_t permission;
+	memory_object_t pager;
+	mach_port_t *entry_handle;
+{ return mach_memory_object_memory_entry(host, internal, size, permission, pager, entry_handle); }
+#else
 (
 	host_t host,
 	boolean_t internal,
@@ -98,6 +140,7 @@ kern_return_t mach_memory_object_memory_entry
 	memory_object_t pager,
 	mach_port_t *entry_handle
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_processor_info */
 #ifdef	mig_external
@@ -106,6 +149,15 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_processor_info
+#if	defined(LINTLIBRARY)
+    (host, flavor, out_processor_count, out_processor_info, out_processor_infoCnt)
+	host_t host;
+	processor_flavor_t flavor;
+	natural_t *out_processor_count;
+	processor_info_array_t *out_processor_info;
+	mach_msg_type_number_t *out_processor_infoCnt;
+{ return host_processor_info(host, flavor, out_processor_count, out_processor_info, out_processor_infoCnt); }
+#else
 (
 	host_t host,
 	processor_flavor_t flavor,
@@ -113,18 +165,7 @@ kern_return_t host_processor_info
 	processor_info_array_t *out_processor_info,
 	mach_msg_type_number_t *out_processor_infoCnt
 );
-
-/* Routine host_get_io_master */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t host_get_io_master
-(
-	host_t host,
-	io_master_t *io_master
-);
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_get_clock_service */
 #ifdef	mig_external
@@ -133,39 +174,19 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_get_clock_service
+#if	defined(LINTLIBRARY)
+    (host, clock_id, clock_serv)
+	host_t host;
+	clock_id_t clock_id;
+	clock_serv_t *clock_serv;
+{ return host_get_clock_service(host, clock_id, clock_serv); }
+#else
 (
 	host_t host,
 	clock_id_t clock_id,
 	clock_serv_t *clock_serv
 );
-
-/* Routine kmod_get_info */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t kmod_get_info
-(
-	host_t host,
-	kmod_args_t *modules,
-	mach_msg_type_number_t *modulesCnt
-);
-
-/* Routine host_zone_info */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t host_zone_info
-(
-	host_priv_t host,
-	zone_name_array_t *names,
-	mach_msg_type_number_t *namesCnt,
-	zone_info_array_t *info,
-	mach_msg_type_number_t *infoCnt
-);
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_virtual_physical_table_info */
 #ifdef	mig_external
@@ -174,11 +195,19 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_virtual_physical_table_info
+#if	defined(LINTLIBRARY)
+    (host, info, infoCnt)
+	host_t host;
+	hash_info_bucket_array_t *info;
+	mach_msg_type_number_t *infoCnt;
+{ return host_virtual_physical_table_info(host, info, infoCnt); }
+#else
 (
 	host_t host,
 	hash_info_bucket_array_t *info,
 	mach_msg_type_number_t *infoCnt
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine processor_set_default */
 #ifdef	mig_external
@@ -187,10 +216,17 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t processor_set_default
+#if	defined(LINTLIBRARY)
+    (host, default_set)
+	host_t host;
+	processor_set_name_t *default_set;
+{ return processor_set_default(host, default_set); }
+#else
 (
 	host_t host,
 	processor_set_name_t *default_set
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine processor_set_create */
 #ifdef	mig_external
@@ -199,11 +235,19 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t processor_set_create
+#if	defined(LINTLIBRARY)
+    (host, new_set, new_name)
+	host_t host;
+	processor_set_t *new_set;
+	processor_set_name_t *new_name;
+{ return processor_set_create(host, new_set, new_name); }
+#else
 (
 	host_t host,
 	processor_set_t *new_set,
 	processor_set_name_t *new_name
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine mach_memory_object_memory_entry_64 */
 #ifdef	mig_external
@@ -212,6 +256,16 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t mach_memory_object_memory_entry_64
+#if	defined(LINTLIBRARY)
+    (host, internal, size, permission, pager, entry_handle)
+	host_t host;
+	boolean_t internal;
+	memory_object_size_t size;
+	vm_prot_t permission;
+	memory_object_t pager;
+	mach_port_t *entry_handle;
+{ return mach_memory_object_memory_entry_64(host, internal, size, permission, pager, entry_handle); }
+#else
 (
 	host_t host,
 	boolean_t internal,
@@ -220,6 +274,7 @@ kern_return_t mach_memory_object_memory_entry_64
 	memory_object_t pager,
 	mach_port_t *entry_handle
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_statistics */
 #ifdef	mig_external
@@ -228,12 +283,21 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_statistics
+#if	defined(LINTLIBRARY)
+    (host_priv, flavor, host_info_out, host_info_outCnt)
+	host_t host_priv;
+	host_flavor_t flavor;
+	host_info_t host_info_out;
+	mach_msg_type_number_t *host_info_outCnt;
+{ return host_statistics(host_priv, flavor, host_info_out, host_info_outCnt); }
+#else
 (
 	host_t host_priv,
 	host_flavor_t flavor,
 	host_info_t host_info_out,
 	mach_msg_type_number_t *host_info_outCnt
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_request_notification */
 #ifdef	mig_external
@@ -242,24 +306,19 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_request_notification
+#if	defined(LINTLIBRARY)
+    (host, notify_type, notify_port)
+	host_t host;
+	host_flavor_t notify_type;
+	mach_port_t notify_port;
+{ return host_request_notification(host, notify_type, notify_port); }
+#else
 (
 	host_t host,
 	host_flavor_t notify_type,
 	mach_port_t notify_port
 );
-
-/* Routine host_lockgroup_info */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t host_lockgroup_info
-(
-	host_t host,
-	lockgroup_info_array_t *lockgroup_info,
-	mach_msg_type_number_t *lockgroup_infoCnt
-);
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_statistics64 */
 #ifdef	mig_external
@@ -268,12 +327,21 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_statistics64
+#if	defined(LINTLIBRARY)
+    (host_priv, flavor, host_info64_out, host_info64_outCnt)
+	host_t host_priv;
+	host_flavor_t flavor;
+	host_info64_t host_info64_out;
+	mach_msg_type_number_t *host_info64_outCnt;
+{ return host_statistics64(host_priv, flavor, host_info64_out, host_info64_outCnt); }
+#else
 (
 	host_t host_priv,
 	host_flavor_t flavor,
 	host_info64_t host_info64_out,
 	mach_msg_type_number_t *host_info64_outCnt
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine mach_zone_info */
 #ifdef	mig_external
@@ -282,6 +350,15 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t mach_zone_info
+#if	defined(LINTLIBRARY)
+    (host, names, namesCnt, info, infoCnt)
+	host_priv_t host;
+	mach_zone_name_array_t *names;
+	mach_msg_type_number_t *namesCnt;
+	mach_zone_info_array_t *info;
+	mach_msg_type_number_t *infoCnt;
+{ return mach_zone_info(host, names, namesCnt, info, infoCnt); }
+#else
 (
 	host_priv_t host,
 	mach_zone_name_array_t *names,
@@ -289,6 +366,24 @@ kern_return_t mach_zone_info
 	mach_zone_info_array_t *info,
 	mach_msg_type_number_t *infoCnt
 );
+#endif	/* defined(LINTLIBRARY) */
+
+/* Routine mach_zone_force_gc */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t mach_zone_force_gc
+#if	defined(LINTLIBRARY)
+    (host)
+	host_t host;
+{ return mach_zone_force_gc(host); }
+#else
+(
+	host_t host
+);
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_create_mach_voucher */
 #ifdef	mig_external
@@ -297,12 +392,21 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_create_mach_voucher
+#if	defined(LINTLIBRARY)
+    (host, recipes, recipesCnt, voucher)
+	host_t host;
+	mach_voucher_attr_raw_recipe_array_t recipes;
+	mach_msg_type_number_t recipesCnt;
+	ipc_voucher_t *voucher;
+{ return host_create_mach_voucher(host, recipes, recipesCnt, voucher); }
+#else
 (
 	host_t host,
 	mach_voucher_attr_raw_recipe_array_t recipes,
 	mach_msg_type_number_t recipesCnt,
 	ipc_voucher_t *voucher
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_register_mach_voucher_attr_manager */
 #ifdef	mig_external
@@ -311,6 +415,15 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_register_mach_voucher_attr_manager
+#if	defined(LINTLIBRARY)
+    (host, attr_manager, default_value, new_key, new_attr_control)
+	host_t host;
+	mach_voucher_attr_manager_t attr_manager;
+	mach_voucher_attr_value_handle_t default_value;
+	mach_voucher_attr_key_t *new_key;
+	ipc_voucher_attr_control_t *new_attr_control;
+{ return host_register_mach_voucher_attr_manager(host, attr_manager, default_value, new_key, new_attr_control); }
+#else
 (
 	host_t host,
 	mach_voucher_attr_manager_t attr_manager,
@@ -318,6 +431,7 @@ kern_return_t host_register_mach_voucher_attr_manager
 	mach_voucher_attr_key_t *new_key,
 	ipc_voucher_attr_control_t *new_attr_control
 );
+#endif	/* defined(LINTLIBRARY) */
 
 /* Routine host_register_well_known_mach_voucher_attr_manager */
 #ifdef	mig_external
@@ -326,6 +440,15 @@ mig_external
 extern
 #endif	/* mig_external */
 kern_return_t host_register_well_known_mach_voucher_attr_manager
+#if	defined(LINTLIBRARY)
+    (host, attr_manager, default_value, key, new_attr_control)
+	host_t host;
+	mach_voucher_attr_manager_t attr_manager;
+	mach_voucher_attr_value_handle_t default_value;
+	mach_voucher_attr_key_t key;
+	ipc_voucher_attr_control_t *new_attr_control;
+{ return host_register_well_known_mach_voucher_attr_manager(host, attr_manager, default_value, key, new_attr_control); }
+#else
 (
 	host_t host,
 	mach_voucher_attr_manager_t attr_manager,
@@ -333,6 +456,7 @@ kern_return_t host_register_well_known_mach_voucher_attr_manager
 	mach_voucher_attr_key_t key,
 	ipc_voucher_attr_control_t *new_attr_control
 );
+#endif	/* defined(LINTLIBRARY) */
 
 __END_DECLS
 
@@ -357,6 +481,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -370,6 +497,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_kernel_version_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -380,6 +510,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request___host_page_size_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -408,6 +541,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		processor_flavor_t flavor;
 	} __Request__host_processor_info_t;
@@ -420,16 +556,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-	} __Request__host_get_io_master_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		clock_id_t clock_id;
 	} __Request__host_get_clock_service_t;
@@ -442,26 +571,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-	} __Request__kmod_get_info_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-	} __Request__host_zone_info_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__host_virtual_physical_table_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -472,6 +584,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__processor_set_default_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -482,6 +597,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__processor_set_create_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -510,6 +628,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info_outCnt;
@@ -539,16 +660,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-	} __Request__host_lockgroup_info_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		host_flavor_t flavor;
 		mach_msg_type_number_t host_info64_outCnt;
@@ -562,6 +676,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_zone_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -572,6 +689,22 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
+	} __Request__mach_zone_force_gc_t;
+#ifdef  __MigPackStructs
+#pragma pack()
+#endif
+
+#ifdef  __MigPackStructs
+#pragma pack(4)
+#endif
+	typedef struct {
+		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_msg_type_number_t recipesCnt;
 		uint8_t recipes[5120];
@@ -624,19 +757,16 @@ union __RequestUnion__mach_host_subsystem {
 	__Request___host_page_size_t Request__host_page_size;
 	__Request__mach_memory_object_memory_entry_t Request_mach_memory_object_memory_entry;
 	__Request__host_processor_info_t Request_host_processor_info;
-	__Request__host_get_io_master_t Request_host_get_io_master;
 	__Request__host_get_clock_service_t Request_host_get_clock_service;
-	__Request__kmod_get_info_t Request_kmod_get_info;
-	__Request__host_zone_info_t Request_host_zone_info;
 	__Request__host_virtual_physical_table_info_t Request_host_virtual_physical_table_info;
 	__Request__processor_set_default_t Request_processor_set_default;
 	__Request__processor_set_create_t Request_processor_set_create;
 	__Request__mach_memory_object_memory_entry_64_t Request_mach_memory_object_memory_entry_64;
 	__Request__host_statistics_t Request_host_statistics;
 	__Request__host_request_notification_t Request_host_request_notification;
-	__Request__host_lockgroup_info_t Request_host_lockgroup_info;
 	__Request__host_statistics64_t Request_host_statistics64;
 	__Request__mach_zone_info_t Request_mach_zone_info;
+	__Request__mach_zone_force_gc_t Request_mach_zone_force_gc;
 	__Request__host_create_mach_voucher_t Request_host_create_mach_voucher;
 	__Request__host_register_mach_voucher_attr_manager_t Request_host_register_mach_voucher_attr_manager;
 	__Request__host_register_well_known_mach_voucher_attr_manager_t Request_host_register_well_known_mach_voucher_attr_manager;
@@ -727,57 +857,9 @@ union __RequestUnion__mach_host_subsystem {
 		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t io_master;
-		/* end of the kernel processed data */
-	} __Reply__host_get_io_master_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
 		mach_msg_port_descriptor_t clock_serv;
 		/* end of the kernel processed data */
 	} __Reply__host_get_clock_service_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		mach_msg_ool_descriptor_t modules;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_msg_type_number_t modulesCnt;
-	} __Reply__kmod_get_info_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		mach_msg_ool_descriptor_t names;
-		mach_msg_ool_descriptor_t info;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_msg_type_number_t namesCnt;
-		mach_msg_type_number_t infoCnt;
-	} __Reply__host_zone_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -872,22 +954,6 @@ union __RequestUnion__mach_host_subsystem {
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		mach_msg_ool_descriptor_t lockgroup_info;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_msg_type_number_t lockgroup_infoCnt;
-	} __Reply__host_lockgroup_info_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		kern_return_t RetCode;
 		mach_msg_type_number_t host_info64_outCnt;
@@ -911,6 +977,18 @@ union __RequestUnion__mach_host_subsystem {
 		mach_msg_type_number_t namesCnt;
 		mach_msg_type_number_t infoCnt;
 	} __Reply__mach_zone_info_t;
+#ifdef  __MigPackStructs
+#pragma pack()
+#endif
+
+#ifdef  __MigPackStructs
+#pragma pack(4)
+#endif
+	typedef struct {
+		mach_msg_header_t Head;
+		NDR_record_t NDR;
+		kern_return_t RetCode;
+	} __Reply__mach_zone_force_gc_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -970,19 +1048,16 @@ union __ReplyUnion__mach_host_subsystem {
 	__Reply___host_page_size_t Reply__host_page_size;
 	__Reply__mach_memory_object_memory_entry_t Reply_mach_memory_object_memory_entry;
 	__Reply__host_processor_info_t Reply_host_processor_info;
-	__Reply__host_get_io_master_t Reply_host_get_io_master;
 	__Reply__host_get_clock_service_t Reply_host_get_clock_service;
-	__Reply__kmod_get_info_t Reply_kmod_get_info;
-	__Reply__host_zone_info_t Reply_host_zone_info;
 	__Reply__host_virtual_physical_table_info_t Reply_host_virtual_physical_table_info;
 	__Reply__processor_set_default_t Reply_processor_set_default;
 	__Reply__processor_set_create_t Reply_processor_set_create;
 	__Reply__mach_memory_object_memory_entry_64_t Reply_mach_memory_object_memory_entry_64;
 	__Reply__host_statistics_t Reply_host_statistics;
 	__Reply__host_request_notification_t Reply_host_request_notification;
-	__Reply__host_lockgroup_info_t Reply_host_lockgroup_info;
 	__Reply__host_statistics64_t Reply_host_statistics64;
 	__Reply__mach_zone_info_t Reply_mach_zone_info;
+	__Reply__mach_zone_force_gc_t Reply_mach_zone_force_gc;
 	__Reply__host_create_mach_voucher_t Reply_host_create_mach_voucher;
 	__Reply__host_register_mach_voucher_attr_manager_t Reply_host_register_mach_voucher_attr_manager;
 	__Reply__host_register_well_known_mach_voucher_attr_manager_t Reply_host_register_well_known_mach_voucher_attr_manager;
@@ -996,19 +1071,16 @@ union __ReplyUnion__mach_host_subsystem {
     { "_host_page_size", 202 },\
     { "mach_memory_object_memory_entry", 203 },\
     { "host_processor_info", 204 },\
-    { "host_get_io_master", 205 },\
     { "host_get_clock_service", 206 },\
-    { "kmod_get_info", 207 },\
-    { "host_zone_info", 208 },\
     { "host_virtual_physical_table_info", 209 },\
     { "processor_set_default", 213 },\
     { "processor_set_create", 214 },\
     { "mach_memory_object_memory_entry_64", 215 },\
     { "host_statistics", 216 },\
     { "host_request_notification", 217 },\
-    { "host_lockgroup_info", 218 },\
     { "host_statistics64", 219 },\
     { "mach_zone_info", 220 },\
+    { "mach_zone_force_gc", 221 },\
     { "host_create_mach_voucher", 222 },\
     { "host_register_mach_voucher_attr_manager", 223 },\
     { "host_register_well_known_mach_voucher_attr_manager", 224 }

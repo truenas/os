@@ -3,6 +3,16 @@
 
 /* Module task */
 
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#ifdef _KERNEL
+#include <sys/mach/ndr.h>
+#include <sys/mach/kern_return.h>
+#include <sys/mach/notify.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/message.h>
+#include <sys/mach/mig_errors.h>
+#else /* !_KERNEL */
 #include <string.h>
 #include <mach/ndr.h>
 #include <mach/boolean.h>
@@ -11,6 +21,7 @@
 #include <mach/mach_types.h>
 #include <mach/message.h>
 #include <mach/mig_errors.h>
+#endif /*_KERNEL */
 
 #ifdef AUTOTEST
 #ifndef FUNCTION_PTR_T
@@ -28,11 +39,11 @@ typedef function_table_entry   *function_table_t;
 #define	task_MSG_COUNT	42
 #endif	/* task_MSG_COUNT */
 
-#include <mach/std_types.h>
-#include <mach/mig.h>
-#include <mach/mig.h>
-#include <mach/mach_types.h>
-#include <mach_debug/mach_debug_types.h>
+#include <sys/mach/std_types.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mig.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach_debug/mach_debug_types.h>
 
 #ifdef __BeforeMigUserHeader
 __BeforeMigUserHeader
@@ -402,48 +413,6 @@ kern_return_t task_swap_exception_ports
 );
 #endif	/* defined(LINTLIBRARY) */
 
-/* Routine lock_set_create */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t lock_set_create
-#if	defined(LINTLIBRARY)
-    (task, new_lock_set, n_ulocks, policy)
-	task_t task;
-	lock_set_t *new_lock_set;
-	int n_ulocks;
-	int policy;
-{ return lock_set_create(task, new_lock_set, n_ulocks, policy); }
-#else
-(
-	task_t task,
-	lock_set_t *new_lock_set,
-	int n_ulocks,
-	int policy
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine lock_set_destroy */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t lock_set_destroy
-#if	defined(LINTLIBRARY)
-    (task, lock_set)
-	task_t task;
-	lock_set_t lock_set;
-{ return lock_set_destroy(task, lock_set); }
-#else
-(
-	task_t task,
-	lock_set_t lock_set
-);
-#endif	/* defined(LINTLIBRARY) */
-
 /* Routine semaphore_create */
 #ifdef	mig_external
 mig_external
@@ -577,73 +546,6 @@ kern_return_t task_policy
 	mach_msg_type_number_t baseCnt,
 	boolean_t set_limit,
 	boolean_t change
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine task_set_emulation */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t task_set_emulation
-#if	defined(LINTLIBRARY)
-    (target_port, routine_entry_pt, routine_number)
-	task_t target_port;
-	vm_address_t routine_entry_pt;
-	int routine_number;
-{ return task_set_emulation(target_port, routine_entry_pt, routine_number); }
-#else
-(
-	task_t target_port,
-	vm_address_t routine_entry_pt,
-	int routine_number
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine task_get_emulation_vector */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t task_get_emulation_vector
-#if	defined(LINTLIBRARY)
-    (task, vector_start, emulation_vector, emulation_vectorCnt)
-	task_t task;
-	int *vector_start;
-	emulation_vector_t *emulation_vector;
-	mach_msg_type_number_t *emulation_vectorCnt;
-{ return task_get_emulation_vector(task, vector_start, emulation_vector, emulation_vectorCnt); }
-#else
-(
-	task_t task,
-	int *vector_start,
-	emulation_vector_t *emulation_vector,
-	mach_msg_type_number_t *emulation_vectorCnt
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine task_set_emulation_vector */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t task_set_emulation_vector
-#if	defined(LINTLIBRARY)
-    (task, vector_start, emulation_vector, emulation_vectorCnt)
-	task_t task;
-	int vector_start;
-	emulation_vector_t emulation_vector;
-	mach_msg_type_number_t emulation_vectorCnt;
-{ return task_set_emulation_vector(task, vector_start, emulation_vector, emulation_vectorCnt); }
-#else
-(
-	task_t task,
-	int vector_start,
-	emulation_vector_t emulation_vector,
-	mach_msg_type_number_t emulation_vectorCnt
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -1006,6 +908,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_terminate_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1016,6 +921,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_threads_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1042,6 +950,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__mach_ports_lookup_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1052,6 +963,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_outCnt;
@@ -1065,6 +979,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_flavor_t flavor;
 		mach_msg_type_number_t task_info_inCnt;
@@ -1079,6 +996,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_suspend_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1089,6 +1009,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_resume_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1099,6 +1022,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int which_port;
 	} __Request__task_get_special_port_t;
@@ -1127,6 +1053,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__thread_create_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1137,6 +1066,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -1169,6 +1101,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		exception_mask_t exception_mask;
 	} __Request__task_get_exception_ports_t;
@@ -1199,33 +1134,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		int n_ulocks;
-		int policy;
-	} __Request__lock_set_create_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t lock_set;
 		/* end of the kernel processed data */
-	} __Request__lock_set_destroy_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		int policy;
 		int value;
@@ -1253,6 +1164,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -1267,6 +1181,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		task_policy_flavor_t flavor;
 		mach_msg_type_number_t policy_infoCnt;
@@ -1295,6 +1212,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		policy_t policy;
 		mach_msg_type_number_t baseCnt;
@@ -1311,46 +1231,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		vm_address_t routine_entry_pt;
-		int routine_number;
-	} __Request__task_set_emulation_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-	} __Request__task_get_emulation_vector_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_ool_descriptor_t emulation_vector;
 		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		int vector_start;
-		mach_msg_type_number_t emulation_vectorCnt;
-	} __Request__task_set_emulation_vector_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		vm_address_t basepc;
 		vm_address_t boundspc;
@@ -1364,6 +1247,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_zone_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1390,6 +1276,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		boolean_t assign_threads;
 	} __Request__task_assign_default_t;
@@ -1402,6 +1291,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_get_assignment_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1433,6 +1325,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t old_stateCnt;
@@ -1446,6 +1341,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		thread_state_flavor_t flavor;
 		mach_msg_type_number_t new_stateCnt;
@@ -1460,6 +1358,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		int new_limit;
 	} __Request__task_set_phys_footprint_limit_t;
@@ -1472,6 +1373,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_suspend2_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1482,6 +1386,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_resume2_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1492,6 +1399,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 	} __Request__task_purgable_info_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1502,6 +1412,9 @@ __END_DECLS
 #endif
 	typedef struct {
 		mach_msg_header_t Head;
+		/* start of the kernel processed data */
+		mach_msg_body_t msgh_body;
+		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_voucher_selector_t which;
 	} __Request__task_get_mach_voucher_t;
@@ -1560,17 +1473,12 @@ union __RequestUnion__task_subsystem {
 	__Request__task_set_exception_ports_t Request_task_set_exception_ports;
 	__Request__task_get_exception_ports_t Request_task_get_exception_ports;
 	__Request__task_swap_exception_ports_t Request_task_swap_exception_ports;
-	__Request__lock_set_create_t Request_lock_set_create;
-	__Request__lock_set_destroy_t Request_lock_set_destroy;
 	__Request__semaphore_create_t Request_semaphore_create;
 	__Request__semaphore_destroy_t Request_semaphore_destroy;
 	__Request__task_policy_set_t Request_task_policy_set;
 	__Request__task_policy_get_t Request_task_policy_get;
 	__Request__task_sample_t Request_task_sample;
 	__Request__task_policy_t Request_task_policy;
-	__Request__task_set_emulation_t Request_task_set_emulation;
-	__Request__task_get_emulation_vector_t Request_task_get_emulation_vector;
-	__Request__task_set_emulation_vector_t Request_task_set_emulation_vector;
 	__Request__task_set_ras_pc_t Request_task_set_ras_pc;
 	__Request__task_zone_info_t Request_task_zone_info;
 	__Request__task_assign_t Request_task_assign;
@@ -1824,32 +1732,6 @@ union __RequestUnion__task_subsystem {
 		mach_msg_header_t Head;
 		/* start of the kernel processed data */
 		mach_msg_body_t msgh_body;
-		mach_msg_port_descriptor_t new_lock_set;
-		/* end of the kernel processed data */
-	} __Reply__lock_set_create_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__lock_set_destroy_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
 		mach_msg_port_descriptor_t semaphore;
 		/* end of the kernel processed data */
 	} __Reply__semaphore_create_t;
@@ -1916,47 +1798,6 @@ union __RequestUnion__task_subsystem {
 		NDR_record_t NDR;
 		kern_return_t RetCode;
 	} __Reply__task_policy_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__task_set_emulation_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		mach_msg_ool_descriptor_t emulation_vector;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		int vector_start;
-		mach_msg_type_number_t emulation_vectorCnt;
-	} __Reply__task_get_emulation_vector_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__task_set_emulation_vector_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -2181,17 +2022,12 @@ union __ReplyUnion__task_subsystem {
 	__Reply__task_set_exception_ports_t Reply_task_set_exception_ports;
 	__Reply__task_get_exception_ports_t Reply_task_get_exception_ports;
 	__Reply__task_swap_exception_ports_t Reply_task_swap_exception_ports;
-	__Reply__lock_set_create_t Reply_lock_set_create;
-	__Reply__lock_set_destroy_t Reply_lock_set_destroy;
 	__Reply__semaphore_create_t Reply_semaphore_create;
 	__Reply__semaphore_destroy_t Reply_semaphore_destroy;
 	__Reply__task_policy_set_t Reply_task_policy_set;
 	__Reply__task_policy_get_t Reply_task_policy_get;
 	__Reply__task_sample_t Reply_task_sample;
 	__Reply__task_policy_t Reply_task_policy;
-	__Reply__task_set_emulation_t Reply_task_set_emulation;
-	__Reply__task_get_emulation_vector_t Reply_task_get_emulation_vector;
-	__Reply__task_set_emulation_vector_t Reply_task_set_emulation_vector;
 	__Reply__task_set_ras_pc_t Reply_task_set_ras_pc;
 	__Reply__task_zone_info_t Reply_task_zone_info;
 	__Reply__task_assign_t Reply_task_assign;
@@ -2228,17 +2064,12 @@ union __ReplyUnion__task_subsystem {
     { "task_set_exception_ports", 3413 },\
     { "task_get_exception_ports", 3414 },\
     { "task_swap_exception_ports", 3415 },\
-    { "lock_set_create", 3416 },\
-    { "lock_set_destroy", 3417 },\
     { "semaphore_create", 3418 },\
     { "semaphore_destroy", 3419 },\
     { "task_policy_set", 3420 },\
     { "task_policy_get", 3421 },\
     { "task_sample", 3422 },\
     { "task_policy", 3423 },\
-    { "task_set_emulation", 3424 },\
-    { "task_get_emulation_vector", 3425 },\
-    { "task_set_emulation_vector", 3426 },\
     { "task_set_ras_pc", 3427 },\
     { "task_zone_info", 3428 },\
     { "task_assign", 3429 },\

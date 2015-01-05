@@ -4,3 +4,4 @@
 #include <mach/task.h>
 #include <mach/mach_vm.h>
 #include <mach/mach_port.h>
+#include <mach/mach_traps.h>
