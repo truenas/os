@@ -1834,7 +1834,7 @@ finstall(struct thread *td, struct file *fp, int *fd, int flags,
 		filecaps_validate(fcaps, __func__);
 
 	FILEDESC_XLOCK(fdp);
-	if (!(flags & O_NOFDALLOC)) {
+	if (!(flags & FNOFDALLOC)) {
 		if ((error = fdalloc(td, 0, fd))) {
 			FILEDESC_XUNLOCK(fdp);
 			return (error);

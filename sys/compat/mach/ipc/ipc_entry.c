@@ -201,7 +201,7 @@ ipc_entry_get(
 
 	if (*namep != MACH_PORT_NAME_NULL) {
 		fd = *namep;
-		flags = O_NOFDALLOC;
+		flags = FNOFDALLOC;
 	}
 	if (falloc(td, &fp, &fd, flags)) {
 		free(free_entry, M_MACH);
@@ -294,7 +294,7 @@ ipc_entry_alloc_name(
 		kern_fddealloc(td, newname);
 		return (KERN_NAME_EXISTS);
 	}
-	if (falloc(td, &fp, &newname, O_NOFDALLOC)) {
+	if (falloc(td, &fp, &newname, FNOFDALLOC)) {
 		kern_fddealloc(td, newname);
 		return (KERN_RESOURCE_SHORTAGE);
 	}

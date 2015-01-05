@@ -155,7 +155,10 @@ typedef	__pid_t		pid_t;
 #define	FCNTLFLAGS	(FAPPEND|FASYNC|FFSYNC|FNONBLOCK|FPOSIXSHM|FRDAHEAD| \
 			 O_DIRECT)
 #endif
-#define O_NOFDALLOC	0x80000000
+
+/* need extra protection against the braindead mksubr script in usr.bin/kdump */
+
+#define FNOFDALLOC    0x80000000
 #endif
 
 /*
