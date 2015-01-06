@@ -1,21 +1,22 @@
 This is the mach_support branch. It adds support for a subset of the mach
 API as a precursor to supporting launchd.
 
-Rudimentary Mach IPC is supported through libmach provided one's kernel
-is compiled with COMPAT_MACH. The mach interface generator should be able
-to work with modern .defs files.
+Basic Mach IPC is supported through libmach provided one's kernel
+is compiled with COMPAT_MACH. The mach interface generator should 
+be able to work with modern .defs (MIG) files.
 
+Note that launchctl needs to be built by cd'ing to <repo>/bin/launchctl and building it by hand
+because of its transitive dependence on libicu18n which is not in base.
 
 Work to be done for v0:
 
+- launch gettys so that console input works
+
 - complete launchctl
-    - implement the two Foundation calls that launchctl uses
-	- figure out what to do about CoreFoundation's dependency on icui18n - pull in to contrib?
+	- import icui18n in to contrib for launchctl -> CF -> icu dependency
 
 - make launchd useful
-   - add in a runcom() to launchd to make it start up /etc/rc - see where the
-     kernel panics, track down the inevitable brain-dead locking and
-	 assertion issues
+   - write plists for basic services    
 
    - track down the shims for xinetd / crond
 
