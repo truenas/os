@@ -74,7 +74,7 @@
 #ifndef	_ERROR_H
 #define	_ERROR_H
 
-#include <errno.h>
+#include <sys/errno.h>
 extern int lineno;
 extern void fatal(const char *format, ...);
 extern void warn(const char *format, ...);

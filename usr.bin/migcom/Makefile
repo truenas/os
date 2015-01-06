@@ -24,24 +24,37 @@
 .include <src.opts.mk>
 PROG= migcom
 SCRIPTS=mig.sh
-SRCS= error.c global.c header.c ident.c \
+SRCS= ident.c error.c global.c header.c \
 	lexxer.l mig.c parser.y routine.c server.c \
 	statement.c string.c type.c user.c utils.c
 
-CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
-CFLAGS+= -DYY_NO_UNPUT -DYY_NO_INPUT
-CFLAGS+= -I${.CURDIR}/../../apsl/include
+
+CFLAGS+= -nostdinc -I./include -I${.CURDIR} -I${.CURDIR}/shims -I./include
+CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys 
+CFLAGS+= -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT -I${.CURDIR}/../../apsl/include
+
 
 .if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
 .PATH: i386
 CFLAGS+= -I${.CURDIR}/i386
+include/x86: ${.CURDIR}/Makefile
+	mkdir -p include
+	ln -sf ${.CURDIR}/../../sys/x86/include include/x86
 .endif
 
-ident.c:
+include/machine:  ${.CURDIR}/Makefile
+	mkdir -p include
+	ln -sf ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include include/machine
+
+.if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
+ident.c: include/machine include/x86 
+.else
+ident.c: include/machine
+.endif
 	echo "#include \"alloc.h\" " >${.TARGET}
 	echo "const char *MigGenerationDate = \""`date`"\";" >>${.TARGET}
 	echo "const char *MigMoreData = \""`whoami`"@"`hostname`"\";" >>${.TARGET}
 
-CLEANFILES+= ident.c *.o *~ *.gz cscope.*
+CLEANFILES+= ident.c *.o *~ *.gz cscope.* include/machine include/x86
 
 .include <bsd.prog.mk>
