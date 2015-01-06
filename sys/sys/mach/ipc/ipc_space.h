@@ -91,6 +91,8 @@
 #include <vm/uma.h>
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_types.h>
+#include <sys/lock.h>
+#include <sys/rwlock.h>
 
 /*
  *	Every task has a space of IPC capabilities.
@@ -114,7 +116,7 @@ struct ipc_space {
 	decl_mutex_data(,is_ref_lock_data)
 	ipc_space_refs_t is_references;
 
-	struct sx is_lock_data;
+	struct rwlock is_lock_data;
 	boolean_t is_active;		/* is the space alive? */
 	boolean_t is_growing;		/* is the space growing? */
 	ipc_entry_t *is_table;		/* an array of entries */
@@ -161,17 +163,17 @@ MACRO_BEGIN								\
 	if (_refs == 0)							\
 		is_free(is);		\
 MACRO_END
+#define	is_lock_init(is)	rw_init(&(is)->is_lock_data, "ETAP_IPC_IS")
 
-#define	is_lock_init(is)	sx_init(&(is)->is_lock_data, "ETAP_IPC_IS")
+#define	is_read_lock(is)	rw_rlock(&(is)->is_lock_data)
+#define is_read_unlock(is)	rw_runlock(&(is)->is_lock_data)
 
-#define	is_read_lock(is)	sx_slock(&(is)->is_lock_data)
-#define is_read_unlock(is)	sx_sunlock(&(is)->is_lock_data)
+#define	is_write_lock(is)	rw_wlock(&(is)->is_lock_data)
+#define	is_write_lock_try(is)	rw_trywlock(&(is)->is_lock_data)
+#define is_write_unlock(is)	rw_wunlock(&(is)->is_lock_data)
 
-#define	is_write_lock(is)	sx_xlock(&(is)->is_lock_data)
-#define	is_write_lock_try(is)	sx_tryxlock(&(is)->is_lock_data)
-#define is_write_unlock(is)	sx_xunlock(&(is)->is_lock_data)
+#define	is_write_to_read_lock(is) rw_downgrade(&(is)->is_lock_data)
 
-#define	is_write_to_read_lock(is) sx_downgrade(&(is)->is_lock_data)
 
 /* Take a reference on a space */
 extern void ipc_space_reference(

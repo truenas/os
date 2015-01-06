@@ -649,12 +649,8 @@ ipc_object_copyout(
 	assert(IO_VALID(object));
 	assert(io_otype(object) == IOT_PORT);
 
-	is_write_lock(space);
-
-	if (!space->is_active) {
-		is_write_unlock(space);
+	if (!space->is_active)
 		return KERN_INVALID_TASK;
-	}
 
 	if ((msgt_name != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
 		ipc_right_reverse(space, object, &name, &entry)) {
@@ -668,7 +664,6 @@ ipc_object_copyout(
 			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
 						   &name, &entry);
 	if (kr != KERN_SUCCESS) {
-		is_write_unlock(space);
 		return (kr);
 	}
 
@@ -679,7 +674,6 @@ ipc_object_copyout(
 	if (!io_active(object)) {
 		io_unlock(object);
 		ipc_entry_dealloc(space, name, entry);
-		is_write_unlock(space);
 			return KERN_INVALID_CAPABILITY;
 	}
 
@@ -688,8 +682,6 @@ ipc_object_copyout(
 done:
 	kr = ipc_right_copyout(space, name, entry,
 			       msgt_name, overflow, object);
-	/* object is unlocked */
-	is_write_unlock(space);
 
 	if (kr == KERN_SUCCESS)
 		*namep = name;

@@ -2246,6 +2246,7 @@ ipc_kmsg_copyout_header(
 				goto copyout_dest;
 			}
 			ip_unlock(reply);
+			is_write_unlock(space);
 			reply_name = MACH_PORT_NAME_NULL;
 			kr = ipc_entry_get(space,
 				reply_type == MACH_MSG_TYPE_PORT_SEND_ONCE,

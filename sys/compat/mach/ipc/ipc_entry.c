@@ -244,15 +244,15 @@ ipc_entry_alloc(
 {
 	kern_return_t kr;
 
-	is_write_lock(space);
-	if (!space->is_active) {
-		is_write_unlock(space);
+	if (!space->is_active)
 		return (KERN_INVALID_TASK);
-	}
+
 	*namep = MACH_PORT_NAME_NULL;
 	if ((kr = ipc_entry_get(space, is_send_once, namep, entryp)) != KERN_SUCCESS)
-		is_write_unlock(space);
-	return (kr);
+		return (kr);
+
+	is_write_lock(space);
+	return (0);
 }
 
 /*
@@ -285,6 +285,7 @@ ipc_entry_alloc_name(
 	is_write_lock(space);
 	if ((*entryp = ipc_entry_lookup(space, name)) != NULL)
 		return (KERN_SUCCESS);
+	is_write_unlock(space);
 
 	/* name could technically be a ridiculously large value */
 	if (kern_fdalloc(td, name, &newname))
@@ -300,16 +301,15 @@ ipc_entry_alloc_name(
 	}
 
 	if (!space->is_active) {
-		is_write_unlock(space);
 		kern_fddealloc(td, newname);
 		return (KERN_INVALID_TASK);
 	}
 	kr = ipc_entry_get(space, 0, &name, entryp);
 	if (kr != KERN_SUCCESS) {
-		is_write_unlock(space);
 		kern_fddealloc(td, newname);
 		return (KERN_INVALID_TASK);
 	}
+	is_write_lock(space);
 	return (kr);
 }
 /*
