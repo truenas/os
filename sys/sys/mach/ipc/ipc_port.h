@@ -160,28 +160,13 @@
 
 #ifndef	_IPC_IPC_PORT_H_
 #define _IPC_IPC_PORT_H_
-#if 0
-#include <dipc.h>
-#include <norma_vm.h>
-#include <mach_rt.h>
-#include <mach_assert.h>
-#include <mach_debug.h>
-
-#include <mach/boolean.h>
-#endif
 
 #include <sys/lock.h>
 #include <sys/mutex.h>
-#include <sys/sx.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 
-
-#if 0
-#include <kern/lock.h>
-#include <kern/ipc_kobject.h>
-#endif
 
 #include <sys/mach/ipc/ipc_object.h>
 #include <sys/mach/ipc/ipc_mqueue.h>
@@ -189,10 +174,6 @@
 #include <sys/mach/ipc/ipc_thread.h>
 #include <sys/mach/ipc/ipc_types.h>
 #include <sys/mach/ipc/ipc_entry.h>
-#if 0
-#include <kern/thread_pool.h>
-#include <kern/rpc_common.h>
-#endif
 
 /*
  * This structure defines the elements in common between
