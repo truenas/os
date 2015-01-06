@@ -10,7 +10,7 @@
 #include <xlocale.h>
 
 
-#define INCLUDE_OBJC 1
+#define INCLUDE_OBJC 0
 #define __strong
 #define __DARWIN_NULL (void *)0
 
