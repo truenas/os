@@ -55,9 +55,10 @@ hostid_set()
 	${SYSCTL} kern.hostid=${id} >/dev/null
 }
 
-hostid_hardware()
+valid_hostid()
 {
-	uuid=`kenv -q smbios.system.uuid | tr '[:upper:]' '[:lower:]'`
+	uuid=`echo $1 | tr '[:upper:]' '[:lower:]'`
+
 	x="[0-9a-f]"
 	y=$x$x$x$x
 
@@ -91,9 +92,20 @@ hostid_hardware()
 	*-ffff-ffff-ffff-ffffffffffff)
 		;;
 	$y$y-$y-$y-$y-$y$y$y)
-		echo "${uuid}"
+		return 0
 		;;
 	esac
+
+	return 1
+}
+
+hostid_hardware()
+{
+	uuid=`kenv -q smbios.system.uuid`
+
+	if valid_hostid $uuid; then
+		echo "${uuid}"
+	fi
 }
 
 hostid_generate()
