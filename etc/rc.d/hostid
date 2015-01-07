@@ -137,11 +137,15 @@ hostid_start()
 {
 	# If ${hostid_file} already exists, we take UUID from there.
 	if [ -r ${hostid_file} ]; then
-		hostid_set `cat ${hostid_file}`
-	else
-		# No hostid file, generate UUID.
-		hostid_generate
+		read saved_hostid < ${hostid_file}
+		if valid_hostid ${saved_hostid}; then
+			hostid_set `cat ${hostid_file}`
+			exit 0
+		fi
 	fi
+
+	# No hostid file, generate UUID.
+	hostid_generate
 }
 
 load_rc_config $name
