@@ -163,20 +163,44 @@
       <sect3 xml:id="disks">
 	<title>Disks and Storage</title>
 
-	<para>&nbsp;</para>
+	<para revision="274939" contrib="sponsor" sponsor="&ix;">The
+	  &man.ctld.8; utility has been updated to include support for
+	  registering <acronym>iSCSI</acronym> targets and portals on
+	  <acronym>iSNS</acronym> servers.  This provides a mechanism
+	  which allows <acronym>iSCSI</acronym> initiators to find
+	  targets and portals without requiring active
+	  discovery.</para>
+
+	<para revision="275891" contrib="sponsor" sponsor="&ix;">The
+	  &man.ctl.4; subsystem has been updated, increasing the ports
+	  limit from <literal>128</literal> to <literal>256</literal>,
+	  and <acronym>LUN</acronym> limit from <literal>256</literal>
+	  to <literal>1024</literal>.</para>
       </sect3>
 
       <sect3 xml:id="fs">
 	<title>File Systems</title>
 
-	<para>&nbsp;</para>
+	<para revision="275490">A new tunable,
+	  <literal>vfs.zfs.spa_slop_shift</literal>, has been added,
+	  which controls how much space is reserved by default.</para>
       </sect3>
     </sect2>
 
     <sect2 xml:id="userland">
       <title>Userland Changes</title>
 
-      <para>&nbsp;</para>
+      <para revision="275040">A new file configuration library,
+	&man.figpar.3;, has been added to the base system.</para>
+
+      <para revision="275040">A new utility, &man.dpv.1;, has been
+	added to the base system, providing a &man.dialog.1;-style
+	progress view from one or more input streams.  A corresponding
+	library, &man.dpv.3;, has also been added.</para>
+
+      <para revision="275945">The &man.elfdump.1; utility has been
+	updated to support capability mode provided by
+	&man.capsicum.4;.</para>
 
       <sect3 xml:id="rc-scripts">
 	<title><filename>/etc/rc.d</filename> Scripts</title>

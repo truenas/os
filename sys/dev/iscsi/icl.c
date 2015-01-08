@@ -152,7 +152,7 @@ icl_conn_receive(struct icl_conn *ic, size_t len)
 }
 
 static struct icl_pdu *
-icl_pdu_new(struct icl_conn *ic, int flags)
+icl_pdu_new_empty(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
 
@@ -193,11 +193,11 @@ icl_pdu_free(struct icl_pdu *ip)
  * Allocate icl_pdu with empty BHS to fill up by the caller.
  */
 struct icl_pdu *
-icl_pdu_new_bhs(struct icl_conn *ic, int flags)
+icl_pdu_new(struct icl_conn *ic, int flags)
 {
 	struct icl_pdu *ip;
 
-	ip = icl_pdu_new(ic, flags);
+	ip = icl_pdu_new_empty(ic, flags);
 	if (ip == NULL)
 		return (NULL);
 
@@ -547,7 +547,7 @@ icl_conn_receive_pdu(struct icl_conn *ic, size_t *availablep)
 	if (ic->ic_receive_state == ICL_CONN_STATE_BHS) {
 		KASSERT(ic->ic_receive_pdu == NULL,
 		    ("ic->ic_receive_pdu != NULL"));
-		request = icl_pdu_new(ic, M_NOWAIT);
+		request = icl_pdu_new_empty(ic, M_NOWAIT);
 		if (request == NULL) {
 			ICL_DEBUG("failed to allocate PDU; "
 			    "dropping connection");
@@ -776,6 +776,7 @@ icl_receive_thread(void *arg)
 
 	ICL_CONN_LOCK(ic);
 	ic->ic_receive_running = false;
+	cv_signal(&ic->ic_send_cv);
 	ICL_CONN_UNLOCK(ic);
 	kthread_exit();
 }
@@ -1026,6 +1027,7 @@ icl_send_thread(void *arg)
 	STAILQ_CONCAT(&ic->ic_to_send, &queue);
 
 	ic->ic_send_running = false;
+	cv_signal(&ic->ic_send_cv);
 	ICL_CONN_UNLOCK(ic);
 	kthread_exit();
 }
@@ -1330,15 +1332,11 @@ icl_conn_close(struct icl_conn *ic)
 	/*
 	 * Wake up the threads, so they can properly terminate.
 	 */
-	cv_signal(&ic->ic_receive_cv);
-	cv_signal(&ic->ic_send_cv);
 	while (ic->ic_receive_running || ic->ic_send_running) {
 		//ICL_DEBUG("waiting for send/receive threads to terminate");
-		ICL_CONN_UNLOCK(ic);
 		cv_signal(&ic->ic_receive_cv);
 		cv_signal(&ic->ic_send_cv);
-		pause("icl_close", 1 * hz);
-		ICL_CONN_LOCK(ic);
+		cv_wait(&ic->ic_send_cv, ic->ic_lock);
 	}
 	//ICL_DEBUG("send/receive threads terminated");
 

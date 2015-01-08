@@ -197,7 +197,7 @@ iscsi_pdu_prepare(struct icl_pdu *request)
 	 * Data-Out PDU does not contain CmdSN.
 	 */
 	if (bhssc->bhssc_opcode != ISCSI_BHS_OPCODE_SCSI_DATA_OUT) {
-		if (is->is_cmdsn > is->is_maxcmdsn &&
+		if (ISCSI_SNGT(is->is_cmdsn, is->is_maxcmdsn) &&
 		    (bhssc->bhssc_opcode & ISCSI_BHS_OPCODE_IMMEDIATE) == 0) {
 			/*
 			 * Current MaxCmdSN prevents us from sending any more
@@ -206,8 +206,10 @@ iscsi_pdu_prepare(struct icl_pdu *request)
 			 * or by maintenance thread.
 			 */
 #if 0
-			ISCSI_SESSION_DEBUG(is, "postponing send, CmdSN %d, ExpCmdSN %d, MaxCmdSN %d, opcode 0x%x",
-			    is->is_cmdsn, is->is_expcmdsn, is->is_maxcmdsn, bhssc->bhssc_opcode);
+			ISCSI_SESSION_DEBUG(is, "postponing send, CmdSN %u, "
+			    "ExpCmdSN %u, MaxCmdSN %u, opcode 0x%x",
+			    is->is_cmdsn, is->is_expcmdsn, is->is_maxcmdsn,
+			    bhssc->bhssc_opcode);
 #endif
 			return (true);
 		}
@@ -272,7 +274,7 @@ iscsi_session_logout(struct iscsi_session *is)
 	struct icl_pdu *request;
 	struct iscsi_bhs_logout_request *bhslr;
 
-	request = icl_pdu_new_bhs(is->is_conn, M_NOWAIT);
+	request = icl_pdu_new(is->is_conn, M_NOWAIT);
 	if (request == NULL)
 		return;
 
@@ -591,7 +593,7 @@ iscsi_callout(void *context)
 	if (is->is_timeout < 2)
 		return;
 
-	request = icl_pdu_new_bhs(is->is_conn, M_NOWAIT);
+	request = icl_pdu_new(is->is_conn, M_NOWAIT);
 	if (request == NULL) {
 		ISCSI_SESSION_WARN(is, "failed to allocate PDU");
 		return;
@@ -616,7 +618,7 @@ iscsi_pdu_update_statsn(const struct icl_pdu *response)
 {
 	const struct iscsi_bhs_data_in *bhsdi;
 	struct iscsi_session *is;
-	uint32_t expcmdsn, maxcmdsn;
+	uint32_t expcmdsn, maxcmdsn, statsn;
 
 	is = PDU_SESSION(response);
 
@@ -635,26 +637,27 @@ iscsi_pdu_update_statsn(const struct icl_pdu *response)
 	 */
 	if (bhsdi->bhsdi_opcode != ISCSI_BHS_OPCODE_SCSI_DATA_IN ||
 	    (bhsdi->bhsdi_flags & BHSDI_FLAGS_S) != 0) {
-		if (ntohl(bhsdi->bhsdi_statsn) < is->is_statsn) {
-			ISCSI_SESSION_WARN(is,
-			    "PDU StatSN %d >= session StatSN %d, opcode 0x%x",
-			    is->is_statsn, ntohl(bhsdi->bhsdi_statsn),
-			    bhsdi->bhsdi_opcode);
+		statsn = ntohl(bhsdi->bhsdi_statsn);
+		if (statsn != is->is_statsn && statsn != (is->is_statsn + 1)) {
+			/* XXX: This is normal situation for MCS */
+			ISCSI_SESSION_WARN(is, "PDU 0x%x StatSN %u != "
+			    "session ExpStatSN %u (or + 1); reconnecting",
+			    bhsdi->bhsdi_opcode, statsn, is->is_statsn);
+			iscsi_session_reconnect(is);
 		}
-		is->is_statsn = ntohl(bhsdi->bhsdi_statsn);
+		if (ISCSI_SNGT(statsn, is->is_statsn))
+			is->is_statsn = statsn;
 	}
 
 	expcmdsn = ntohl(bhsdi->bhsdi_expcmdsn);
 	maxcmdsn = ntohl(bhsdi->bhsdi_maxcmdsn);
 
-	/*
-	 * XXX: Compare using Serial Arithmetic Sense.
-	 */
-	if (maxcmdsn + 1 < expcmdsn) {
-		ISCSI_SESSION_DEBUG(is, "PDU MaxCmdSN %d + 1 < PDU ExpCmdSN %d; ignoring",
+	if (ISCSI_SNLT(maxcmdsn + 1, expcmdsn)) {
+		ISCSI_SESSION_DEBUG(is,
+		    "PDU MaxCmdSN %u + 1 < PDU ExpCmdSN %u; ignoring",
 		    maxcmdsn, expcmdsn);
 	} else {
-		if (maxcmdsn > is->is_maxcmdsn) {
+		if (ISCSI_SNGT(maxcmdsn, is->is_maxcmdsn)) {
 			is->is_maxcmdsn = maxcmdsn;
 
 			/*
@@ -663,15 +666,19 @@ iscsi_pdu_update_statsn(const struct icl_pdu *response)
 			 */
 			if (!STAILQ_EMPTY(&is->is_postponed))
 				cv_signal(&is->is_maintenance_cv);
-		} else if (maxcmdsn < is->is_maxcmdsn) {
-			ISCSI_SESSION_DEBUG(is, "PDU MaxCmdSN %d < session MaxCmdSN %d; ignoring",
+		} else if (ISCSI_SNLT(maxcmdsn, is->is_maxcmdsn)) {
+			/* XXX: This is normal situation for MCS */
+			ISCSI_SESSION_DEBUG(is,
+			    "PDU MaxCmdSN %u < session MaxCmdSN %u; ignoring",
 			    maxcmdsn, is->is_maxcmdsn);
 		}
 
-		if (expcmdsn > is->is_expcmdsn) {
+		if (ISCSI_SNGT(expcmdsn, is->is_expcmdsn)) {
 			is->is_expcmdsn = expcmdsn;
-		} else if (expcmdsn < is->is_expcmdsn) {
-			ISCSI_SESSION_DEBUG(is, "PDU ExpCmdSN %d < session ExpCmdSN %d; ignoring",
+		} else if (ISCSI_SNLT(expcmdsn, is->is_expcmdsn)) {
+			/* XXX: This is normal situation for MCS */
+			ISCSI_SESSION_DEBUG(is,
+			    "PDU ExpCmdSN %u < session ExpCmdSN %u; ignoring",
 			    expcmdsn, is->is_expcmdsn);
 		}
 	}
@@ -804,7 +811,7 @@ iscsi_pdu_handle_nop_in(struct icl_pdu *response)
 		icl_pdu_get_data(response, 0, data, datasize);
 	}
 
-	request = icl_pdu_new_bhs(response->ip_conn, M_NOWAIT);
+	request = icl_pdu_new(response->ip_conn, M_NOWAIT);
 	if (request == NULL) {
 		ISCSI_SESSION_WARN(is, "failed to allocate memory; "
 		    "reconnecting");
@@ -1172,7 +1179,7 @@ iscsi_pdu_handle_r2t(struct icl_pdu *response)
 			return;
 		}
 
-		request = icl_pdu_new_bhs(response->ip_conn, M_NOWAIT);
+		request = icl_pdu_new(response->ip_conn, M_NOWAIT);
 		if (request == NULL) {
 			icl_pdu_free(response);
 			iscsi_session_reconnect(is);
@@ -1576,7 +1583,7 @@ iscsi_ioctl_daemon_send(struct iscsi_softc *sc,
 		}
 	}
 
-	ip = icl_pdu_new_bhs(is->is_conn, M_WAITOK);
+	ip = icl_pdu_new(is->is_conn, M_WAITOK);
 	memcpy(ip->ip_bhs, ids->ids_bhs, sizeof(*ip->ip_bhs));
 	if (datalen > 0) {
 		error = icl_pdu_append_data(ip, data, datalen, M_WAITOK);
@@ -2060,7 +2067,7 @@ iscsi_action_abort(struct iscsi_session *is, union ccb *ccb)
 		return;
 	}
 
-	request = icl_pdu_new_bhs(is->is_conn, M_NOWAIT);
+	request = icl_pdu_new(is->is_conn, M_NOWAIT);
 	if (request == NULL) {
 		ccb->ccb_h.status = CAM_RESRC_UNAVAIL;
 		xpt_done(ccb);
@@ -2114,7 +2121,7 @@ iscsi_action_scsiio(struct iscsi_session *is, union ccb *ccb)
 	}
 #endif
 
-	request = icl_pdu_new_bhs(is->is_conn, M_NOWAIT);
+	request = icl_pdu_new(is->is_conn, M_NOWAIT);
 	if (request == NULL) {
 		if ((ccb->ccb_h.status & CAM_DEV_QFRZN) == 0) {
 			xpt_freeze_devq(ccb->ccb_h.path, 1);
