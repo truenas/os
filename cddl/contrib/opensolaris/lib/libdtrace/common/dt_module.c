@@ -903,13 +903,7 @@ dt_module_update(dtrace_hdl_t *dtp, struct kld_file_stat *k_stat)
 	int is_elf_obj;
 
 	(void) strlcpy(name, k_stat->name, sizeof(name));
-	/* #6521: work around a possible GRUB bug that doesn't pass full path */
-	if (!strchr(k_stat->pathname, '/')) {
-		(void) strcpy(fname, "/boot/kernel/");
-		(void) strncat(fname, k_stat->pathname, MAXPATHLEN);
-	} else {
-		(void) strlcpy(fname, k_stat->pathname, sizeof(fname));
-	}
+	(void) strlcpy(fname, k_stat->pathname, sizeof(fname));
 #endif
 
 	if ((fd = open(fname, O_RDONLY)) == -1 || fstat64(fd, &st) == -1 ||
