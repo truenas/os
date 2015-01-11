@@ -187,11 +187,6 @@ static struct filterops user_filtops = {
 	.f_touch = filt_usertouch,
 };
 
-#ifdef COMPAT_MACH
-/* Mach portset filter */
-extern struct filterops machport_filtops;
-#endif
-
 static uma_zone_t	knote_zone;
 static atomic_uint	kq_ncallouts = ATOMIC_VAR_INIT(0);
 static unsigned int 	kq_calloutmax = 4 * 1024;
@@ -300,7 +295,7 @@ static struct {
 	{ &user_filtops, 1 },			/* EVFILT_USER */
 	{ &null_filtops },			/* EVFILT_SENDFILE */
 #ifdef COMPAT_MACH
-	{ &machport_filtops },		/* EVFILT_MACHPORT */
+	{ &null_filtops },		/* EVFILT_MACHPORT */
 #else
 	{ &null_filtops },
 #endif

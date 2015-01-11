@@ -207,6 +207,7 @@ SUBDIR=	\
 	mac_seeotheruids \
 	mac_stub \
 	mac_test \
+	${_mach} \
 	malo \
 	mcd \
 	md \
@@ -745,6 +746,8 @@ _mthca=		mthca
 .endif
 _ndis=		ndis
 _nfe=		nfe
+# not really arch-specific but only building on amd64 for now
+_mach=		mach
 _ntb=		ntb
 _nvd=		nvd
 .if ${MK_SOURCELESS_HOST} != "no"
