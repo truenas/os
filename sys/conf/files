@@ -268,9 +268,9 @@ compat/mach/mach_syscalls.c     optional  compat_mach_static
 compat/mach/mach_sysent.c       optional  compat_mach_static
 compat/mach/mach_task.c         optional  compat_mach_static
 compat/mach/mach_thread.c       optional  compat_mach_static
+compat/mach/mach_traps.c        optional  compat_mach_static
 compat/mach/mach_vm.c           optional  compat_mach_static
 
-compat/mach/mach_traps.c        optional  compat_mach_static
 
 compat/mach/ipc/ipc_entry.c		optional  compat_mach_static
 compat/mach/ipc/ipc_hash.c		optional  compat_mach_static
@@ -289,6 +289,7 @@ compat/mach/ipc/ipc_thread.c	optional  compat_mach_static
 compat/mach/ipc/mach_debug.c	optional  compat_mach_static
 compat/mach/ipc/mach_msg.c		optional  compat_mach_static
 compat/mach/ipc/mach_port.c		optional  compat_mach_static
+
 compat/mach/kern/ipc_tt.c		optional  compat_mach_static
 compat/mach/kern/ipc_host.c		optional  compat_mach_static
 compat/mach/kern/task.c			optional  compat_mach_static

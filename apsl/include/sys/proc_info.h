@@ -41,8 +41,11 @@
 #include <net/route.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#ifdef __FreeBSD__
+#include <sys/mach/machine.h>
+#else
 #include <mach/machine.h>
-
+#endif
 __BEGIN_DECLS
 
 
