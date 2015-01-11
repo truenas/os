@@ -58,7 +58,6 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_vm.h>
 #include <compat/mach/mach_errno.h>
 #include <compat/mach/mach_port.h>
-#include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
 #include <sys/mach/mach_vm_server.h>

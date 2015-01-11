@@ -47,7 +47,6 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_thread.h>
 #include <compat/mach/mach_semaphore.h>
 #include <compat/mach/mach_notify.h>
-#include <compat/mach/mach_exec.h>
 #include <compat/mach/mach_vm.h>
 
 #include <sys/mach/mach_types.h>

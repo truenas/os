@@ -43,7 +43,6 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_port.h>
 #include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_services.h>
 #include <compat/mach/mach_proto.h>
 
 #include <sys/mach/mach_types.h>

@@ -81,7 +81,6 @@ __FBSDID("$FreeBSD$");
 #include <compat/mach/mach_proto.h>
 #include <compat/mach/mach_semaphore.h>
 #include <compat/mach/mach_notify.h>
-#include <compat/mach/mach_exec.h>
 #include <compat/mach/mach_vm.h>
 
 MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
