@@ -89,7 +89,9 @@ PMC_SOFT_DEFINE( , , page_fault, write);
 #include <machine/intr_machdep.h>
 #ifdef COMPAT_MACH
 #include <compat/mach/mach_types.h>
-struct sysent *mach_sysent_p;
+int mach_avail = 1;
+#else
+int mach_avail = 0;
 #endif
 #include <x86/mca.h>
 #include <machine/md_var.h>
@@ -109,6 +111,7 @@ void dblfault_handler(struct trapframe *frame);
 
 static int trap_pfault(struct trapframe *, int);
 static void trap_fatal(struct trapframe *, vm_offset_t);
+struct sysent *mach_sysent_p;
 
 #define MAX_TRAP_MSG		32
 static char *trap_msg[] = {
@@ -916,7 +919,10 @@ cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
  	if (p->p_sysent->sv_mask)
  		sa->code &= p->p_sysent->sv_mask;
 #ifdef COMPAT_MACH
-	if (MACH_SYSCALL(sa->code))
+	/*  COMPAT_MACH does not guarantee that mach support is actually
+	 * available so we check mach_sysent_p
+	*/
+	if (MACH_SYSCALL(sa->code) && mach_sysent_p != NULL)
 		sa->callp = &mach_sysent_p[MACH_SYSCALL_IDX(sa->code)];
 	else
 #endif

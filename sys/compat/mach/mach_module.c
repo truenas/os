@@ -4,14 +4,21 @@
 #include <sys/module.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
+#include <sys/types.h>
+#include <sys/systm.h>
 
 extern struct sysent *mach_sysent_p, mach_sysent[];
 extern struct filterops machport_filtops;
+extern int mach_avail;
 
 static int
 mach_mod_init(void)
 {
-	
+
+	if (!mach_avail) {
+		printf("COMPAT_MACH must be compiled in to the kernel\n");
+		return (ENOTSUP);
+	}
 	mach_sysent_p = mach_sysent;
 	kqueue_add_filteropts(EVFILT_MACHPORT, &machport_filtops);
 	return (0);
