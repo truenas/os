@@ -141,7 +141,7 @@ kern_return_t ipc_object_copyin(ipc_space_t, mach_port_name_t,
     mach_msg_type_name_t, ipc_port_t *);
 void ipc_port_release_send(ipc_port_t);
 
-#if defined(AUDIT) && defined(COMPAT_MACH)
+#if defined(AUDIT) && !defined(NO_COMPAT_MACH)
 
 
 /*

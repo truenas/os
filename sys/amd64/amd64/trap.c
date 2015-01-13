@@ -87,7 +87,7 @@ PMC_SOFT_DEFINE( , , page_fault, write);
 
 #include <machine/cpu.h>
 #include <machine/intr_machdep.h>
-#ifdef COMPAT_MACH
+#ifndef NO_COMPAT_MACH
 #include <compat/mach/mach_types.h>
 int mach_avail = 1;
 #else
@@ -918,7 +918,7 @@ cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 	}
  	if (p->p_sysent->sv_mask)
  		sa->code &= p->p_sysent->sv_mask;
-#ifdef COMPAT_MACH
+#ifndef NO_COMPAT_MACH
 	/*  COMPAT_MACH does not guarantee that mach support is actually
 	 * available so we check mach_sysent_p
 	*/

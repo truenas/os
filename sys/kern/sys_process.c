@@ -1242,7 +1242,7 @@ sys___iopolicysys(struct thread *td __unused, struct __iopolicysys_args *uap __u
 	return (ENOSYS);
 }
 
-#ifndef COMPAT_MACH
+#ifdef NO_COMPAT_MACH
 int
 sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap)
 {

@@ -45,7 +45,7 @@
 
 #include <sys/file.h>
 #include <sys/sysctl.h>
-#ifdef COMPAT_MACH
+#ifndef NO_COMPAT_MACH
 #include <sys/mach/port.h>
 #endif
 
@@ -126,7 +126,7 @@ void	 audit_cred_init(struct ucred *cred);
 void	 audit_cred_kproc0(struct ucred *cred);
 void	 audit_cred_proc1(struct ucred *cred);
 void	 audit_proc_coredump(struct thread *td, char *path, int errcode);
-#ifdef COMPAT_MACH
+#ifndef NO_COMPAT_MACH
 void     audit_session_ref(struct ucred *cred);
 void     audit_session_unref(struct ucred *cred);
 void     audit_session_procnew(struct proc *p);
