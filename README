@@ -9,6 +9,9 @@ Note that launchctl needs to be built by cd'ing to <repo>/bin/launchctl
 and building it by hand because of its transitive dependence on icu. devel/icu
 needs to be installed for libcfxlite (part of buildworld) to build.
 
+Mach is now a module by default to workaround the limited typeid space (15 bits) of
+dtrace.
+
 Work to be done for v0:
 
 - launch gettys so that console input works
