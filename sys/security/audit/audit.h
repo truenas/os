@@ -45,9 +45,7 @@
 
 #include <sys/file.h>
 #include <sys/sysctl.h>
-#ifndef NO_COMPAT_MACH
 #include <sys/mach/port.h>
-#endif
 
 /*
  * Audit subsystem condition flags.  The audit_enabled flag is set and
@@ -126,7 +124,6 @@ void	 audit_cred_init(struct ucred *cred);
 void	 audit_cred_kproc0(struct ucred *cred);
 void	 audit_cred_proc1(struct ucred *cred);
 void	 audit_proc_coredump(struct thread *td, char *path, int errcode);
-#ifndef NO_COMPAT_MACH
 void     audit_session_ref(struct ucred *cred);
 void     audit_session_unref(struct ucred *cred);
 void     audit_session_procnew(struct proc *p);
@@ -134,7 +131,6 @@ void     audit_session_procexit(struct proc *p);
 int      audit_session_spawnjoin(struct thread *td, ipc_port_t port);
 void     audit_sdev_submit(au_id_t auid, au_asid_t asid, void *record,
             u_int record_len);
-#endif
 void	 audit_thread_alloc(struct thread *td);
 void	 audit_thread_free(struct thread *td);
 

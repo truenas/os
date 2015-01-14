@@ -92,6 +92,7 @@
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
 
+#include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #if 0

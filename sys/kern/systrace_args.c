@@ -3449,6 +3449,405 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 4;
 		break;
 	}
+	/* _kernelrpc_mach_vm_allocate_trap */
+	case 610: {
+		struct _kernelrpc_mach_vm_allocate_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		uarg[1] = (intptr_t) p->address; /* mach_vm_offset_t * */
+		iarg[2] = p->size; /* mach_vm_size_t */
+		iarg[3] = p->flags; /* int */
+		*n_args = 4;
+		break;
+	}
+	/* _kernelrpc_mach_vm_deallocate_trap */
+	case 612: {
+		struct _kernelrpc_mach_vm_deallocate_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->address; /* mach_vm_offset_t */
+		iarg[2] = p->size; /* mach_vm_size_t */
+		*n_args = 3;
+		break;
+	}
+	/* _kernelrpc_mach_vm_protect_trap */
+	case 614: {
+		struct _kernelrpc_mach_vm_protect_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->address; /* mach_vm_offset_t */
+		iarg[2] = p->size; /* mach_vm_size_t */
+		iarg[3] = p->set_maximum; /* int */
+		iarg[4] = p->new_protection; /* vm_prot_t */
+		*n_args = 5;
+		break;
+	}
+	/* _kernelrpc_mach_vm_map_trap */
+	case 615: {
+		struct _kernelrpc_mach_vm_map_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		uarg[1] = (intptr_t) p->address; /* mach_vm_offset_t * */
+		iarg[2] = p->size; /* mach_vm_size_t */
+		iarg[3] = p->mask; /* mach_vm_offset_t */
+		iarg[4] = p->flags; /* int */
+		iarg[5] = p->cur_protection; /* vm_prot_t */
+		*n_args = 6;
+		break;
+	}
+	/* _kernelrpc_mach_port_allocate_trap */
+	case 616: {
+		struct _kernelrpc_mach_port_allocate_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->right; /* mach_port_right_t */
+		uarg[2] = (intptr_t) p->name; /* mach_port_name_t * */
+		*n_args = 3;
+		break;
+	}
+	/* _kernelrpc_mach_port_destroy_trap */
+	case 617: {
+		struct _kernelrpc_mach_port_destroy_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		*n_args = 2;
+		break;
+	}
+	/* _kernelrpc_mach_port_deallocate_trap */
+	case 618: {
+		struct _kernelrpc_mach_port_deallocate_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		*n_args = 2;
+		break;
+	}
+	/* _kernelrpc_mach_port_mod_refs_trap */
+	case 619: {
+		struct _kernelrpc_mach_port_mod_refs_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		iarg[2] = p->right; /* mach_port_right_t */
+		iarg[3] = p->delta; /* mach_port_delta_t */
+		*n_args = 4;
+		break;
+	}
+	/* _kernelrpc_mach_port_move_member_trap */
+	case 620: {
+		struct _kernelrpc_mach_port_move_member_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->member; /* mach_port_name_t */
+		iarg[2] = p->after; /* mach_port_name_t */
+		*n_args = 3;
+		break;
+	}
+	/* _kernelrpc_mach_port_insert_right_trap */
+	case 621: {
+		struct _kernelrpc_mach_port_insert_right_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		iarg[2] = p->poly; /* mach_port_name_t */
+		iarg[3] = p->polyPoly; /* mach_msg_type_name_t */
+		*n_args = 4;
+		break;
+	}
+	/* _kernelrpc_mach_port_insert_member_trap */
+	case 622: {
+		struct _kernelrpc_mach_port_insert_member_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		iarg[2] = p->pset; /* mach_port_name_t */
+		*n_args = 3;
+		break;
+	}
+	/* _kernelrpc_mach_port_extract_member_trap */
+	case 623: {
+		struct _kernelrpc_mach_port_extract_member_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		iarg[2] = p->pset; /* mach_port_name_t */
+		*n_args = 3;
+		break;
+	}
+	/* _kernelrpc_mach_port_construct_trap */
+	case 624: {
+		struct _kernelrpc_mach_port_construct_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		uarg[1] = (intptr_t) p->options; /* struct mach_port_options * */
+		uarg[2] = p->context; /* uint64_t */
+		uarg[3] = (intptr_t) p->name; /* mach_port_name_t * */
+		*n_args = 4;
+		break;
+	}
+	/* _kernelrpc_mach_port_destruct_trap */
+	case 625: {
+		struct _kernelrpc_mach_port_destruct_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		iarg[2] = p->srdelta; /* mach_port_delta_t */
+		uarg[3] = p->guard; /* uint64_t */
+		*n_args = 4;
+		break;
+	}
+	/* mach_reply_port */
+	case 626: {
+		*n_args = 0;
+		break;
+	}
+	/* mach_thread_self_trap */
+	case 627: {
+		*n_args = 0;
+		break;
+	}
+	/* mach_task_self_trap */
+	case 628: {
+		*n_args = 0;
+		break;
+	}
+	/* mach_host_self_trap */
+	case 629: {
+		*n_args = 0;
+		break;
+	}
+	/* mach_msg_trap */
+	case 631: {
+		struct mach_msg_trap_args *p = params;
+		uarg[0] = (intptr_t) p->msg; /* mach_msg_header_t * */
+		iarg[1] = p->option; /* mach_msg_option_t */
+		iarg[2] = p->send_size; /* mach_msg_size_t */
+		iarg[3] = p->rcv_size; /* mach_msg_size_t */
+		iarg[4] = p->rcv_name; /* mach_port_name_t */
+		iarg[5] = p->timeout; /* mach_msg_timeout_t */
+		iarg[6] = p->notify; /* mach_port_name_t */
+		*n_args = 7;
+		break;
+	}
+	/* mach_msg_overwrite_trap */
+	case 632: {
+		struct mach_msg_overwrite_trap_args *p = params;
+		uarg[0] = (intptr_t) p->msg; /* mach_msg_header_t * */
+		iarg[1] = p->option; /* mach_msg_option_t */
+		iarg[2] = p->send_size; /* mach_msg_size_t */
+		iarg[3] = p->rcv_size; /* mach_msg_size_t */
+		iarg[4] = p->rcv_name; /* mach_port_name_t */
+		iarg[5] = p->timeout; /* mach_msg_timeout_t */
+		iarg[6] = p->notify; /* mach_port_name_t */
+		uarg[7] = (intptr_t) p->rcv_msg; /* mach_msg_header_t * */
+		iarg[8] = p->scatter_list_size; /* mach_msg_size_t */
+		*n_args = 9;
+		break;
+	}
+	/* mach_semaphore_signal_trap */
+	case 633: {
+		struct mach_semaphore_signal_trap_args *p = params;
+		iarg[0] = p->signal_name; /* mach_port_name_t */
+		*n_args = 1;
+		break;
+	}
+	/* mach_semaphore_signal_all_trap */
+	case 634: {
+		struct mach_semaphore_signal_all_trap_args *p = params;
+		iarg[0] = p->signal_name; /* mach_port_name_t */
+		*n_args = 1;
+		break;
+	}
+	/* mach_semaphore_signal_thread_trap */
+	case 635: {
+		struct mach_semaphore_signal_thread_trap_args *p = params;
+		iarg[0] = p->signal_name; /* mach_port_name_t */
+		iarg[1] = p->thread; /* mach_port_name_t */
+		*n_args = 2;
+		break;
+	}
+	/* mach_semaphore_wait_trap */
+	case 636: {
+		struct mach_semaphore_wait_trap_args *p = params;
+		iarg[0] = p->wait_name; /* mach_port_name_t */
+		*n_args = 1;
+		break;
+	}
+	/* mach_semaphore_wait_signal_trap */
+	case 637: {
+		struct mach_semaphore_wait_signal_trap_args *p = params;
+		iarg[0] = p->wait_name; /* mach_port_name_t */
+		iarg[1] = p->signal_name; /* mach_port_name_t */
+		*n_args = 2;
+		break;
+	}
+	/* mach_semaphore_timedwait_trap */
+	case 638: {
+		struct mach_semaphore_timedwait_trap_args *p = params;
+		iarg[0] = p->wait_name; /* mach_port_name_t */
+		uarg[1] = p->sec; /* unsigned int */
+		iarg[2] = p->nsec; /* mach_clock_res_t */
+		*n_args = 3;
+		break;
+	}
+	/* mach_semaphore_timedwait_signal_trap */
+	case 639: {
+		struct mach_semaphore_timedwait_signal_trap_args *p = params;
+		iarg[0] = p->wait_name; /* mach_port_name_t */
+		iarg[1] = p->signal_name; /* mach_port_name_t */
+		uarg[2] = p->sec; /* unsigned int */
+		iarg[3] = p->nsec; /* mach_clock_res_t */
+		*n_args = 4;
+		break;
+	}
+	/* _kernelrpc_mach_port_guard_trap */
+	case 641: {
+		struct _kernelrpc_mach_port_guard_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		uarg[2] = p->guard; /* uint64_t */
+		iarg[3] = p->strict; /* int */
+		*n_args = 4;
+		break;
+	}
+	/* _kernelrpc_mach_port_unguard_trap */
+	case 642: {
+		struct _kernelrpc_mach_port_unguard_trap_args *p = params;
+		iarg[0] = p->target; /* mach_port_name_t */
+		iarg[1] = p->name; /* mach_port_name_t */
+		uarg[2] = p->guard; /* uint64_t */
+		*n_args = 3;
+		break;
+	}
+	/* mach_task_name_for_pid */
+	case 644: {
+		struct mach_task_name_for_pid_args *p = params;
+		iarg[0] = p->target_tport; /* mach_port_name_t */
+		iarg[1] = p->pid; /* int */
+		uarg[2] = (intptr_t) p->tn; /* mach_port_name_t * */
+		*n_args = 3;
+		break;
+	}
+	/* mach_task_for_pid */
+	case 645: {
+		struct mach_task_for_pid_args *p = params;
+		iarg[0] = p->target_tport; /* mach_port_name_t */
+		iarg[1] = p->pid; /* int */
+		uarg[2] = (intptr_t) p->t; /* mach_port_name_t * */
+		*n_args = 3;
+		break;
+	}
+	/* mach_pid_for_task */
+	case 646: {
+		struct mach_pid_for_task_args *p = params;
+		iarg[0] = p->t; /* mach_port_name_t */
+		uarg[1] = (intptr_t) p->pid; /* int * */
+		*n_args = 2;
+		break;
+	}
+	/* mach_macx_swapon */
+	case 648: {
+		struct mach_macx_swapon_args *p = params;
+		uarg[0] = (intptr_t) p->name; /* char * */
+		iarg[1] = p->flags; /* int */
+		iarg[2] = p->size; /* int */
+		iarg[3] = p->priority; /* int */
+		*n_args = 4;
+		break;
+	}
+	/* mach_macx_swapoff */
+	case 649: {
+		struct mach_macx_swapoff_args *p = params;
+		uarg[0] = (intptr_t) p->name; /* char * */
+		iarg[1] = p->flags; /* int */
+		*n_args = 2;
+		break;
+	}
+	/* mach_macx_triggers */
+	case 651: {
+		struct mach_macx_triggers_args *p = params;
+		iarg[0] = p->hi_water; /* int */
+		iarg[1] = p->low_water; /* int */
+		iarg[2] = p->flags; /* int */
+		iarg[3] = p->alert_port; /* mach_port_name_t */
+		*n_args = 4;
+		break;
+	}
+	/* mach_macx_backing_store_suspend */
+	case 652: {
+		struct mach_macx_backing_store_suspend_args *p = params;
+		iarg[0] = p->suspend; /* int */
+		*n_args = 1;
+		break;
+	}
+	/* mach_macx_backing_store_recovery */
+	case 653: {
+		struct mach_macx_backing_store_recovery_args *p = params;
+		iarg[0] = p->pid; /* int */
+		*n_args = 1;
+		break;
+	}
+	/* mach_swtch_pri */
+	case 659: {
+		struct mach_swtch_pri_args *p = params;
+		iarg[0] = p->pri; /* int */
+		*n_args = 1;
+		break;
+	}
+	/* mach_swtch */
+	case 660: {
+		*n_args = 0;
+		break;
+	}
+	/* mach_thread_switch */
+	case 661: {
+		struct mach_thread_switch_args *p = params;
+		iarg[0] = p->thread_name; /* mach_port_name_t */
+		iarg[1] = p->option; /* int */
+		iarg[2] = p->option_time; /* mach_msg_timeout_t */
+		*n_args = 3;
+		break;
+	}
+	/* mach_clock_sleep_trap */
+	case 662: {
+		struct mach_clock_sleep_trap_args *p = params;
+		iarg[0] = p->clock_name; /* mach_port_name_t */
+		iarg[1] = p->sleep_type; /* mach_sleep_type_t */
+		iarg[2] = p->sleep_sec; /* int */
+		iarg[3] = p->sleep_nsec; /* int */
+		uarg[4] = (intptr_t) p->wakeup_time; /* mach_timespec_t * */
+		*n_args = 5;
+		break;
+	}
+	/* mach_timebase_info */
+	case 689: {
+		struct mach_timebase_info_args *p = params;
+		uarg[0] = (intptr_t) p->info; /* struct mach_timebase_info * */
+		*n_args = 1;
+		break;
+	}
+	/* mach_wait_until */
+	case 690: {
+		struct mach_wait_until_args *p = params;
+		uarg[0] = p->deadline; /* uint64_t */
+		*n_args = 1;
+		break;
+	}
+	/* mk_timer_create */
+	case 691: {
+		*n_args = 0;
+		break;
+	}
+	/* mk_timer_destroy */
+	case 692: {
+		struct mk_timer_destroy_args *p = params;
+		iarg[0] = p->name; /* mach_port_name_t */
+		*n_args = 1;
+		break;
+	}
+	/* mk_timer_arm */
+	case 693: {
+		struct mk_timer_arm_args *p = params;
+		iarg[0] = p->name; /* mach_port_name_t */
+		iarg[1] = p->expire_time; /* mach_absolute_time_t */
+		*n_args = 2;
+		break;
+	}
+	/* mk_timer_cancel */
+	case 694: {
+		struct mk_timer_cancel_args *p = params;
+		iarg[0] = p->name; /* mach_port_name_t */
+		uarg[1] = (intptr_t) p->result_time; /* mach_absolute_time_t * */
+		*n_args = 2;
+		break;
+	}
 	default:
 		*n_args = 0;
 		break;
@@ -9198,6 +9597,680 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* _kernelrpc_mach_vm_allocate_trap */
+	case 610:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_vm_offset_t *";
+			break;
+		case 2:
+			p = "mach_vm_size_t";
+			break;
+		case 3:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_vm_deallocate_trap */
+	case 612:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_vm_offset_t";
+			break;
+		case 2:
+			p = "mach_vm_size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_vm_protect_trap */
+	case 614:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_vm_offset_t";
+			break;
+		case 2:
+			p = "mach_vm_size_t";
+			break;
+		case 3:
+			p = "int";
+			break;
+		case 4:
+			p = "vm_prot_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_vm_map_trap */
+	case 615:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_vm_offset_t *";
+			break;
+		case 2:
+			p = "mach_vm_size_t";
+			break;
+		case 3:
+			p = "mach_vm_offset_t";
+			break;
+		case 4:
+			p = "int";
+			break;
+		case 5:
+			p = "vm_prot_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_allocate_trap */
+	case 616:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_right_t";
+			break;
+		case 2:
+			p = "mach_port_name_t *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_destroy_trap */
+	case 617:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_deallocate_trap */
+	case 618:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_mod_refs_trap */
+	case 619:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "mach_port_right_t";
+			break;
+		case 3:
+			p = "mach_port_delta_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_move_member_trap */
+	case 620:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_insert_right_trap */
+	case 621:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "mach_port_name_t";
+			break;
+		case 3:
+			p = "mach_msg_type_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_insert_member_trap */
+	case 622:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_extract_member_trap */
+	case 623:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_construct_trap */
+	case 624:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "struct mach_port_options *";
+			break;
+		case 2:
+			p = "uint64_t";
+			break;
+		case 3:
+			p = "mach_port_name_t *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_destruct_trap */
+	case 625:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "mach_port_delta_t";
+			break;
+		case 3:
+			p = "uint64_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_reply_port */
+	case 626:
+		break;
+	/* mach_thread_self_trap */
+	case 627:
+		break;
+	/* mach_task_self_trap */
+	case 628:
+		break;
+	/* mach_host_self_trap */
+	case 629:
+		break;
+	/* mach_msg_trap */
+	case 631:
+		switch(ndx) {
+		case 0:
+			p = "mach_msg_header_t *";
+			break;
+		case 1:
+			p = "mach_msg_option_t";
+			break;
+		case 2:
+			p = "mach_msg_size_t";
+			break;
+		case 3:
+			p = "mach_msg_size_t";
+			break;
+		case 4:
+			p = "mach_port_name_t";
+			break;
+		case 5:
+			p = "mach_msg_timeout_t";
+			break;
+		case 6:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_msg_overwrite_trap */
+	case 632:
+		switch(ndx) {
+		case 0:
+			p = "mach_msg_header_t *";
+			break;
+		case 1:
+			p = "mach_msg_option_t";
+			break;
+		case 2:
+			p = "mach_msg_size_t";
+			break;
+		case 3:
+			p = "mach_msg_size_t";
+			break;
+		case 4:
+			p = "mach_port_name_t";
+			break;
+		case 5:
+			p = "mach_msg_timeout_t";
+			break;
+		case 6:
+			p = "mach_port_name_t";
+			break;
+		case 7:
+			p = "mach_msg_header_t *";
+			break;
+		case 8:
+			p = "mach_msg_size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_signal_trap */
+	case 633:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_signal_all_trap */
+	case 634:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_signal_thread_trap */
+	case 635:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_wait_trap */
+	case 636:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_wait_signal_trap */
+	case 637:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_timedwait_trap */
+	case 638:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "unsigned int";
+			break;
+		case 2:
+			p = "mach_clock_res_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_semaphore_timedwait_signal_trap */
+	case 639:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "unsigned int";
+			break;
+		case 3:
+			p = "mach_clock_res_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_guard_trap */
+	case 641:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "uint64_t";
+			break;
+		case 3:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* _kernelrpc_mach_port_unguard_trap */
+	case 642:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_port_name_t";
+			break;
+		case 2:
+			p = "uint64_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_task_name_for_pid */
+	case 644:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "mach_port_name_t *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_task_for_pid */
+	case 645:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "mach_port_name_t *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_pid_for_task */
+	case 646:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "int *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_macx_swapon */
+	case 648:
+		switch(ndx) {
+		case 0:
+			p = "char *";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "int";
+			break;
+		case 3:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_macx_swapoff */
+	case 649:
+		switch(ndx) {
+		case 0:
+			p = "char *";
+			break;
+		case 1:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_macx_triggers */
+	case 651:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "int";
+			break;
+		case 3:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_macx_backing_store_suspend */
+	case 652:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_macx_backing_store_recovery */
+	case 653:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_swtch_pri */
+	case 659:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_swtch */
+	case 660:
+		break;
+	/* mach_thread_switch */
+	case 661:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "mach_msg_timeout_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_clock_sleep_trap */
+	case 662:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_sleep_type_t";
+			break;
+		case 2:
+			p = "int";
+			break;
+		case 3:
+			p = "int";
+			break;
+		case 4:
+			p = "mach_timespec_t *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_timebase_info */
+	case 689:
+		switch(ndx) {
+		case 0:
+			p = "struct mach_timebase_info *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mach_wait_until */
+	case 690:
+		switch(ndx) {
+		case 0:
+			p = "uint64_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mk_timer_create */
+	case 691:
+		break;
+	/* mk_timer_destroy */
+	case 692:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mk_timer_arm */
+	case 693:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_absolute_time_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* mk_timer_cancel */
+	case 694:
+		switch(ndx) {
+		case 0:
+			p = "mach_port_name_t";
+			break;
+		case 1:
+			p = "mach_absolute_time_t *";
+			break;
+		default:
+			break;
+		};
+		break;
 	default:
 		break;
 	};
@@ -11175,6 +12248,223 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* ppoll */
 	case 545:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_vm_allocate_trap */
+	case 610:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_vm_deallocate_trap */
+	case 612:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_vm_protect_trap */
+	case 614:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_vm_map_trap */
+	case 615:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_allocate_trap */
+	case 616:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_destroy_trap */
+	case 617:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_deallocate_trap */
+	case 618:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_mod_refs_trap */
+	case 619:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_move_member_trap */
+	case 620:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_insert_right_trap */
+	case 621:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_insert_member_trap */
+	case 622:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_extract_member_trap */
+	case 623:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_construct_trap */
+	case 624:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_destruct_trap */
+	case 625:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_reply_port */
+	case 626:
+	/* mach_thread_self_trap */
+	case 627:
+	/* mach_task_self_trap */
+	case 628:
+	/* mach_host_self_trap */
+	case 629:
+	/* mach_msg_trap */
+	case 631:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_msg_overwrite_trap */
+	case 632:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_signal_trap */
+	case 633:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_signal_all_trap */
+	case 634:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_signal_thread_trap */
+	case 635:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_wait_trap */
+	case 636:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_wait_signal_trap */
+	case 637:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_timedwait_trap */
+	case 638:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_semaphore_timedwait_signal_trap */
+	case 639:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_guard_trap */
+	case 641:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* _kernelrpc_mach_port_unguard_trap */
+	case 642:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_task_name_for_pid */
+	case 644:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_task_for_pid */
+	case 645:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_pid_for_task */
+	case 646:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_macx_swapon */
+	case 648:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_macx_swapoff */
+	case 649:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_macx_triggers */
+	case 651:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_macx_backing_store_suspend */
+	case 652:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_macx_backing_store_recovery */
+	case 653:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_swtch_pri */
+	case 659:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_swtch */
+	case 660:
+	/* mach_thread_switch */
+	case 661:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_clock_sleep_trap */
+	case 662:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_timebase_info */
+	case 689:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mach_wait_until */
+	case 690:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mk_timer_create */
+	case 691:
+	/* mk_timer_destroy */
+	case 692:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mk_timer_arm */
+	case 693:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* mk_timer_cancel */
+	case 694:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

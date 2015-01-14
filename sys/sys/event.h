@@ -271,9 +271,7 @@ struct knote {
 		struct		aiocblist *p_aio;	/* AIO job pointer */
 		struct		aioliojob *p_lio;	/* LIO job pointer */ 
 		sbintime_t	*p_nexttime;	/* next timer event fires at */
-#ifndef NO_COMPAT_MACH
 		struct		ipc_pset *p_pset;
-#endif
 		void		*p_v;		/* generic other pointer */
 	} kn_ptr;
 	struct			filterops *kn_fop;

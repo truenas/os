@@ -88,21 +88,10 @@
 #ifndef	_IPC_IPC_OBJECT_H_
 #define _IPC_IPC_OBJECT_H_
 
-#if 0
-#include <dipc.h>
-#include <mach_rt.h>
-#include <cpus.h>
-#include <mach_kdb.h>
-#endif
-
 #include <vm/uma.h>
 #include <sys/mach/kern_return.h>
+#include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
-#if 0
-#include <kern/lock.h>
-#include <kern/macro_help.h>
-#include <kern/zalloc.h>
-#endif
 #include <sys/mach/ipc/ipc_types.h>
 #include <sys/mach/ipc_common.h>	/* for ipc_object data defs */
 

@@ -99,7 +99,7 @@
 #include <sys/mutex.h>
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
-#define mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF|MTX_DUPOK)
+#define mach_mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF|MTX_DUPOK)
 #define MACH_IPC_DEBUG 0
 #define MACH_DEBUG 0
 #define MACH_MACHINE_ROUTINES 0
@@ -113,7 +113,6 @@
 #define VM_MAP_REMOVE_WAIT_FOR_KWIRE 0
 #define VM_MAP_REMOVE_INTERRUPTIBLE 0
 #define page_aligned(addr) ((addr & PAGE_MASK) == 0)
-
 /* XXX FIX THIS */
 #define zinit(size1, sizemax, size2, name) uma_zcreate(name, size1, NULL, NULL, NULL, NULL, 0, 0)
 #define zone_change(zone, flag, val)

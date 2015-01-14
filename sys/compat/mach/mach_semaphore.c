@@ -14,11 +14,7 @@ __FBSDID("$FreeBSD$");
 
 #include <vm/uma.h>
 
-#include <compat/mach/mach_types.h>
-#include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_errno.h>
-#include <compat/mach/mach_port.h>
-
+#include <sys/mach/mach_types.h>
 #include <sys/mach/task_server.h>
 
 int

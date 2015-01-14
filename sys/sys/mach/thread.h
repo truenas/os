@@ -629,7 +629,7 @@ current_thread(void)
 }
 
 
-static __inline struct task *
+static __inline task_t
 current_task(void)
 {
 

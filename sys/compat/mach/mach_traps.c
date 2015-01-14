@@ -39,17 +39,8 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
 
-#include <compat/mach/mach_types.h>
-#include <compat/mach/mach_message.h>
-#include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_port.h>
-#include <compat/mach/mach_proto.h>
-#include <compat/mach/mach_thread.h>
-#include <compat/mach/mach_semaphore.h>
-#include <compat/mach/mach_notify.h>
-#include <compat/mach/mach_vm.h>
-
 #include <sys/mach/mach_types.h>
+
 #include <sys/mach/ipc/ipc_types.h>
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/ipc/mach_msg.h>
@@ -57,8 +48,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/mach/mach_port_server.h>
 #include <sys/mach/mach_vm_server.h>
 #include <sys/mach/task_server.h>
+#include <sys/mach/thread_switch.h>
 
 #include <sys/mach/mach_init.h>
+
+#include <compat/mach/mach_clock.h>
+#include <compat/mach/mach_thread.h>
+#include <compat/mach/mach_vm.h>
 
 
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -122,10 +118,10 @@ sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
 	UNSUPPORTED;
 
 int
-sys_mach_thread_switch(struct thread *td, struct mach_thread_switch_args *uap)
+sys_mach_thread_switch(struct thread *td __unused, struct mach_thread_switch_args *uap)
 {
 
-	return (mach_thread_switch(td, uap->thread_name, uap->option, uap->option_time));
+	return (mach_thread_switch(uap->thread_name, uap->option, uap->option_time));
 }	
 
 int

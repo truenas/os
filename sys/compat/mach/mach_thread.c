@@ -1,32 +1,3 @@
-/*-
- * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
- * All rights reserved.
- *
- * This code is derived from software contributed to The NetBSD Foundation
- * by Emmanuel Dreyfus
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -46,22 +17,18 @@ __FBSDID("$FreeBSD$");
 #include <sys/sleepqueue.h>
 #include <sys/signal.h>
 
-#include <compat/mach/mach_types.h>
-#include <compat/mach/mach_message.h>
-#include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_port.h>
-#include <compat/mach/mach_task.h>
-#include <compat/mach/mach_thread.h>
-#include <compat/mach/mach_errno.h>
-#include <compat/mach/mach_proto.h>
+#include <sys/mach/mach_types.h>
+#include <sys/mach/mach_traps.h>
 
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/thread.h>
 #include <sys/mach/ipc_tt.h>
+#include <sys/mach/thread_switch.h>
 
 #define MT_SETRUNNABLE 0x1
 
-#pragma clang diagnostic ignored "-Wunused-parameter"
+int mach_swtch_pri(int pri);
+
 #ifdef notyet
 /*
  * Am assuming that Mach lacks the concept of uninterruptible
@@ -93,10 +60,11 @@ _intr_tdsigwakeup(struct thread *td, int intrval)
 
 
 int
-mach_thread_switch(struct thread *td, mach_port_name_t thread_name, int option, mach_msg_timeout_t option_time)
+mach_thread_switch(mach_port_name_t thread_name, int option, mach_msg_timeout_t option_time)
 {
        int timeout;
        struct mach_emuldata *med;
+	   struct thread *td = curthread;
 
        med = (struct mach_emuldata *)td->td_proc->p_emuldata;
        timeout = option_time * hz / 1000;
@@ -107,11 +75,11 @@ mach_thread_switch(struct thread *td, mach_port_name_t thread_name, int option, 
         * [- but preempt() is for _involuntary_ context switches.]
         */
        switch(option) {
-       case MACH_SWITCH_OPTION_NONE:
+       case SWITCH_OPTION_NONE:
                sched_relinquish(curthread);
                break;
 
-       case MACH_SWITCH_OPTION_WAIT:
+       case SWITCH_OPTION_WAIT:
 #ifdef notyet		   
                med->med_thpri = 1;
                while (med->med_thpri != 0) {
@@ -122,8 +90,7 @@ mach_thread_switch(struct thread *td, mach_port_name_t thread_name, int option, 
               }
                break;
 #endif
-       case MACH_SWITCH_OPTION_DEPRESS:
-       case MACH_SWITCH_OPTION_IDLE:
+       case SWITCH_OPTION_DEPRESS:
                /* Use a callout to restore the priority after depression? */
                td->td_priority = PRI_MAX_TIMESHARE;
                break;
@@ -136,8 +103,9 @@ mach_thread_switch(struct thread *td, mach_port_name_t thread_name, int option, 
 }
 
 int
-mach_swtch_pri(struct thread *td, int pri)
+mach_swtch_pri(int pri)
 {
+	struct thread *td = curthread;
 	
 	thread_lock(td);
 	if (td->td_state == TDS_RUNNING)

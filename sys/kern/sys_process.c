@@ -1235,18 +1235,4 @@ stopevent(struct proc *p, unsigned int event, unsigned int val)
 	} while (p->p_step);
 }
 
-int
-sys___iopolicysys(struct thread *td __unused, struct __iopolicysys_args *uap __unused)
-{
 
-	return (ENOSYS);
-}
-
-#ifdef NO_COMPAT_MACH
-int
-sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap)
-{
-
-	return (ENOSYS);
-}
-#endif

@@ -82,6 +82,7 @@
  *
  *	Entry hash table operations.
  */
+#include <sys/mach/mach_types.h>
 #include <sys/mach/port.h>
 #include <sys/mach/ipc/port.h>
 #include <sys/mach/ipc/ipc_space.h>

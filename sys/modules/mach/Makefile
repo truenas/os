@@ -13,9 +13,9 @@ SRCS=	bus_if.h device_if.h vnode_if.h opt_compat_mach.h opt_ntp.h
 SRCS+= host_priv_server.c mach_host_server.c mach_port_server.c mach_vm_server.c 
 SRCS+= task_server.c vm_map_server.c clock_server.c
 # compat/mach
-SRCS+= proc_info.c mach_clock.c mach_convert.c mach_errno.c mach_host.c mach_host_priv.c
-SRCS+= mach_misc.c mach_module.c mach_processor.c mach_semaphore.c mach_syscalls.c 
-SRCS+= mach_sysent.c mach_task.c mach_thread.c mach_traps.c mach_vm.c 
+SRCS+= proc_info.c mach_clock.c mach_convert.c mach_host.c mach_host_priv.c
+SRCS+= mach_misc.c mach_module.c mach_processor.c mach_semaphore.c
+SRCS+= mach_task.c mach_thread.c mach_traps.c mach_vm.c 
 # compat/mach/ipc
 SRCS+= ipc_entry.c ipc_hash.c ipc_init.c ipc_kmsg.c ipc_kobject.c ipc_mqueue.c ipc_notify.c
 SRCS+= ipc_object.c ipc_port.c ipc_pset.c ipc_right.c ipc_space.c ipc_table.c ipc_thread.c

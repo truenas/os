@@ -258,14 +258,11 @@ compat/mach/clock_server.c		optional  compat_mach_static
 compat/mach/proc_info.c			optional  compat_mach_static		no-depend compile-with "${MACH_C}"
 compat/mach/mach_clock.c        optional  compat_mach_static
 compat/mach/mach_convert.c		optional  compat_mach_static
-compat/mach/mach_errno.c        optional  compat_mach_static
 compat/mach/mach_host.c         optional  compat_mach_static
 compat/mach/mach_host_priv.c    optional  compat_mach_static
 compat/mach/mach_misc.c         optional  compat_mach_static
 compat/mach/mach_processor.c         optional  compat_mach_static
 compat/mach/mach_semaphore.c    optional  compat_mach_static
-compat/mach/mach_syscalls.c     optional  compat_mach_static
-compat/mach/mach_sysent.c       optional  compat_mach_static
 compat/mach/mach_task.c         optional  compat_mach_static
 compat/mach/mach_thread.c       optional  compat_mach_static
 compat/mach/mach_traps.c        optional  compat_mach_static

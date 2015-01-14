@@ -418,4 +418,51 @@ MIASM =  \
 	pipe2.o \
 	aio_mlock.o \
 	procctl.o \
-	ppoll.o
+	ppoll.o \
+	_kernelrpc_mach_vm_allocate_trap.o \
+	_kernelrpc_mach_vm_deallocate_trap.o \
+	_kernelrpc_mach_vm_protect_trap.o \
+	_kernelrpc_mach_vm_map_trap.o \
+	_kernelrpc_mach_port_allocate_trap.o \
+	_kernelrpc_mach_port_destroy_trap.o \
+	_kernelrpc_mach_port_deallocate_trap.o \
+	_kernelrpc_mach_port_mod_refs_trap.o \
+	_kernelrpc_mach_port_move_member_trap.o \
+	_kernelrpc_mach_port_insert_right_trap.o \
+	_kernelrpc_mach_port_insert_member_trap.o \
+	_kernelrpc_mach_port_extract_member_trap.o \
+	_kernelrpc_mach_port_construct_trap.o \
+	_kernelrpc_mach_port_destruct_trap.o \
+	mach_reply_port.o \
+	mach_thread_self_trap.o \
+	mach_task_self_trap.o \
+	mach_host_self_trap.o \
+	mach_msg_trap.o \
+	mach_msg_overwrite_trap.o \
+	mach_semaphore_signal_trap.o \
+	mach_semaphore_signal_all_trap.o \
+	mach_semaphore_signal_thread_trap.o \
+	mach_semaphore_wait_trap.o \
+	mach_semaphore_wait_signal_trap.o \
+	mach_semaphore_timedwait_trap.o \
+	mach_semaphore_timedwait_signal_trap.o \
+	_kernelrpc_mach_port_guard_trap.o \
+	_kernelrpc_mach_port_unguard_trap.o \
+	mach_task_name_for_pid.o \
+	mach_task_for_pid.o \
+	mach_pid_for_task.o \
+	mach_macx_swapon.o \
+	mach_macx_swapoff.o \
+	mach_macx_triggers.o \
+	mach_macx_backing_store_suspend.o \
+	mach_macx_backing_store_recovery.o \
+	mach_swtch_pri.o \
+	mach_swtch.o \
+	mach_thread_switch.o \
+	mach_clock_sleep_trap.o \
+	mach_timebase_info.o \
+	mach_wait_until.o \
+	mk_timer_create.o \
+	mk_timer_destroy.o \
+	mk_timer_arm.o \
+	mk_timer_cancel.o

@@ -2,25 +2,78 @@
 #include <sys/event.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
+#include <sys/syscall.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
 #include <sys/types.h>
 #include <sys/systm.h>
 
-extern struct sysent *mach_sysent_p, mach_sysent[];
 extern struct filterops machport_filtops;
-extern int mach_avail;
+
+static struct syscall_helper_data osx_syscalls[] = {
+	SYSCALL_INIT_HELPER(__proc_info),
+	SYSCALL_INIT_HELPER(__iopolicysys),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_vm_allocate_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_vm_deallocate_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_vm_protect_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_vm_map_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_allocate_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_destroy_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_deallocate_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_mod_refs_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_move_member_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_insert_right_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_insert_member_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_extract_member_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_construct_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_destruct_trap),
+	SYSCALL_INIT_HELPER(mach_reply_port),
+	SYSCALL_INIT_HELPER(mach_thread_self_trap),
+	SYSCALL_INIT_HELPER(mach_task_self_trap),
+	SYSCALL_INIT_HELPER(mach_host_self_trap),
+	SYSCALL_INIT_HELPER(mach_msg_trap),
+	SYSCALL_INIT_HELPER(mach_msg_overwrite_trap),
+	SYSCALL_INIT_HELPER(mach_semaphore_signal_trap),
+	SYSCALL_INIT_HELPER(mach_semaphore_signal_all_trap),
+	SYSCALL_INIT_HELPER(mach_semaphore_signal_thread_trap),
+	SYSCALL_INIT_HELPER(mach_semaphore_wait_trap),
+	SYSCALL_INIT_HELPER(mach_semaphore_wait_signal_trap),
+	SYSCALL_INIT_HELPER(mach_semaphore_timedwait_signal_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_guard_trap),
+	SYSCALL_INIT_HELPER(_kernelrpc_mach_port_unguard_trap),
+	SYSCALL_INIT_HELPER(mach_task_for_pid),
+	SYSCALL_INIT_HELPER(mach_pid_for_task),
+	SYSCALL_INIT_HELPER(mach_macx_swapon),
+	SYSCALL_INIT_HELPER(mach_macx_swapoff),
+	SYSCALL_INIT_HELPER(mach_macx_triggers),
+	SYSCALL_INIT_HELPER(mach_macx_backing_store_suspend),
+	SYSCALL_INIT_HELPER(mach_macx_backing_store_recovery),
+	SYSCALL_INIT_HELPER(mach_swtch_pri),
+	SYSCALL_INIT_HELPER(mach_swtch),
+	SYSCALL_INIT_HELPER(mach_thread_switch),
+	SYSCALL_INIT_HELPER(mach_clock_sleep_trap),
+	SYSCALL_INIT_HELPER(mach_timebase_info),
+	SYSCALL_INIT_HELPER(mach_wait_until),
+	SYSCALL_INIT_HELPER(mk_timer_create),
+	SYSCALL_INIT_HELPER(mk_timer_destroy),
+	SYSCALL_INIT_HELPER(mk_timer_arm),
+	SYSCALL_INIT_HELPER(mk_timer_cancel),
+	SYSCALL_INIT_LAST
+};
 
 static int
 mach_mod_init(void)
 {
+	int err;
 
-	if (!mach_avail) {
-		printf("COMPAT_MACH must be compiled in to the kernel\n");
-		return (ENOTSUP);
+	if ((err = syscall_helper_register(osx_syscalls, SY_THR_STATIC_KLD))) {
+		printf("failed to register osx calls: %d\n", err);
+		return (EINVAL);
 	}
-	mach_sysent_p = mach_sysent;
-	kqueue_add_filteropts(EVFILT_MACHPORT, &machport_filtops);
+	if (kqueue_add_filteropts(EVFILT_MACHPORT, &machport_filtops)) {
+		printf("failed to register machport_filtops\n");
+		return (EINVAL);
+	}
 	return (0);
 }
 
@@ -39,6 +92,7 @@ mach_module_event_handler(module_t mod, int what, void *arg)
 	default:
 		return (EOPNOTSUPP);
 	}
+	printf("mach services loaded\n");
 	return (0);
 }
 
@@ -49,3 +103,35 @@ static moduledata_t mach_moduledata = {
 };
 
 DECLARE_MODULE(mach, mach_moduledata, SI_SUB_KLD, SI_ORDER_ANY);
+
+/* MD mach functions */
+#include <compat/mach/mach_vm.h>
+#include <compat/mach/mach_thread.h>
+
+int
+cpu_mach_create_thread(void *arg)
+{
+
+	return (EINVAL);
+}
+
+int
+cpu_mach_thread_get_state(struct thread *td, int flavor, void *state, int *size)
+{
+
+	return (EINVAL);
+}
+
+int
+cpu_mach_thread_set_state(struct thread *td, int flavor, void *state)
+{
+
+	return (EINVAL);
+}
+
+int
+cpu_mach_vm_machine_attribute(vm_map_t map, vm_offset_t addr, size_t size, int *valp)
+{
+
+	return (EINVAL);
+}

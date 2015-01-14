@@ -107,5 +107,4 @@ typedef struct {
 #else
 #define DPRINTF(a)
 #endif /* DEBUG_MACH */
-
 #endif /* !_MACH_TYPES_H_ */

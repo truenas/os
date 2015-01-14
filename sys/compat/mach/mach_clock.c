@@ -39,13 +39,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/time.h>
 
-#include <compat/mach/mach_types.h>
-#include <compat/mach/mach_message.h>
-#include <compat/mach/mach_port.h>
-#include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_proto.h>
-
 #include <sys/mach/mach_types.h>
+#include <sys/mach/message.h>
+#include <sys/mach/mach_port.h>
+#include <compat/mach/mach_clock.h>
+
 #include <sys/mach/clock_server.h>
 
 #define timespecsub_netbsd(tsp, usp, vsp)                               \

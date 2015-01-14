@@ -122,13 +122,8 @@
 
 #include <sys/mach/kern_return.h>
 #include <sys/mach/mach_param.h>
+#include <sys/mach/mach_types.h>
 
-#if 0
-#include <kern/ipc_host.h>
-#include <kern/misc_protos.h>
-#include <vm/vm_map.h>
-#include <vm/vm_kern.h>
-#endif
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_space.h>
 #include <sys/mach/ipc/ipc_object.h>

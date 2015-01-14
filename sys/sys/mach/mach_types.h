@@ -168,7 +168,8 @@
 
 #ifndef	_MACH_MACH_TYPES_H_
 #define _MACH_MACH_TYPES_H_
-
+#include <sys/cdefs.h>
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -207,8 +208,8 @@
 #define __MigTypeCheck 1
 #define __MigKernelSpecificCode 1
 
-
-typedef struct task                     *task_name_t, *task_suspension_token_t;
+typedef struct ipc_space	*ipc_space_t;
+typedef struct mach_task                     *task_name_t, *task_suspension_token_t;
 typedef struct thread_shuttle *thread_t, *thread_act_t;
 typedef struct coalition                *coalition_t;
 typedef struct host                     *host_t;
@@ -221,7 +222,6 @@ typedef struct clock                    *clock_serv_t;
 typedef struct clock                    *clock_ctrl_t;
 typedef struct ledger					*ledger_t;
 typedef processor_set_t         processor_set_name_t;
-
 MALLOC_DECLARE(M_MACH);
 
 #else	/* MACH_KERNEL */
@@ -283,6 +283,10 @@ typedef mach_port_t UNDServerRef;
 typedef mach_port_t		*ledger_port_array_t;
 typedef mach_port_t    		ledger_port_t;
 typedef char			*user_subsystem_t;
+typedef int mach_clock_res_t;
+typedef int mach_sleep_type_t;
+typedef int mach_absolute_time_t;
+
 
 
 
@@ -292,6 +296,7 @@ typedef char			*user_subsystem_t;
  *	before mach/{std,mach}_types.{defs,h} were set up.
  */
 #include <sys/mach/std_types.h>
+#include <sys/mach/mach_time.h>
 #ifdef _KERNEL
 #include <sys/mach/processor.h>	/* for processor_array_t,
 				       processor_set_array_t,

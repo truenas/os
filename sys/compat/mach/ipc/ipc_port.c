@@ -1455,7 +1455,7 @@ void
 ipc_port_debug_init(void)
 {
 	queue_init(&port_alloc_queue);
-	mutex_init(&port_alloc_queue_lock, ETAP_IPC_PORT_ALLOCQ);
+	mach_mutex_init(&port_alloc_queue_lock, ETAP_IPC_PORT_ALLOCQ);
 }
 
 

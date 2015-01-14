@@ -5,14 +5,12 @@
 
 
 all:
-	@echo "make serverdefs and sysent only"
+	@echo "make serverdefs only"
 
 SYSPATH=../../sys/mach
 
 .PATH: defs
 .PATH: ${SYSPATH}
-
-sysent:  mach_sysent.c mach_syscall.h mach_proto.h mach_syscalls.c mach_systrace_args.c
 
 HEADERNAMES= host_priv_server.h mach_host_server.h mach_port_server.h mach_vm_server.h \
 	task_server.h vm_map_server.h clock_server.c
@@ -58,12 +56,3 @@ ${SYSPATH}/clock_server.h clock_server.c: defs/clock.defs
 	mig ${MFLAGS} -header /dev/null -user /dev/null -server clock_server.c defs/clock.defs
 	mig ${MFLAGS} -header /dev/null -user /dev/null -server /dev/null \
 	-sheader ${SYSPATH}/clock_server.h defs/clock.defs
-
-mach_sysent.c mach_syscall.h mach_proto.h mach_syscalls.c mach_systrace_args.c: \
-		../../kern/makesyscalls.sh syscalls.master syscalls.conf
-	-mv -f mach_sysent.c mach_sysent.c.bak
-	-mv -f mach_syscall.h mach_syscall.h.bak
-	-mv -f mach_proto.h mach_proto.h.bak
-	-mv -f mach_syscalls.c mach_syscalls.c.bak
-	-mv -f mach_systrace_args.c mach_systrace_args.c.bak
-	sh ../../kern/makesyscalls.sh syscalls.master syscalls.conf

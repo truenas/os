@@ -236,7 +236,7 @@ extern ipc_port_t convert_task_suspension_token_to_port(task_suspension_token_t 
 extern task_suspension_token_t convert_port_to_task_suspension_token(ipc_port_t port);
 
 
-typedef struct task {
+typedef struct mach_task {
 	/* Synchronization/destruction information */
 	decl_mutex_data(,lock)		/* Task's lock */
 	int		ref_count;	/* Number of references to me */
@@ -331,7 +331,7 @@ typedef	mach_port_t *task_port_array_t;
 #define task_lock_try(task)	mtx_trylock(&(task)->lock)
 #define task_unlock(task)	mtx_unlock(&(task)->lock)
 
-#define	itk_lock_init(task)	mutex_init(&(task)->itk_lock_data, \
+#define	itk_lock_init(task)	mach_mutex_init(&(task)->itk_lock_data, \
 					   "ETAP_THREAD_TASK_ITK")
 #define	itk_lock(task)		mtx_lock(&(task)->itk_lock_data)
 #define	itk_unlock(task)	mtx_unlock(&(task)->itk_lock_data)

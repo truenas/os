@@ -26,7 +26,6 @@
 #ifndef	_IPC_TYPES_H_
 #define	_IPC_TYPES_H_
 #ifdef _KERNEL
-typedef struct ipc_space	*ipc_space_t;
 #endif
 typedef mach_port_name_t mach_port_index_t;
 #endif	/* _IPC_TYPES_H_ */

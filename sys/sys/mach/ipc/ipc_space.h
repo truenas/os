@@ -140,7 +140,7 @@ extern ipc_space_t ipc_space_reply;
 
 #define is_fast_space(is)	((is)->is_fast)
 
-#define	is_ref_lock_init(is)	mutex_init(&(is)->is_ref_lock_data, \
+#define	is_ref_lock_init(is)	mach_mutex_init(&(is)->is_ref_lock_data, \
 					   "ETAP_IPC_IS_REF")
 
 #define	ipc_space_reference_macro(is)					\

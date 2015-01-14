@@ -1323,8 +1323,8 @@ mach_task_init(void *arg __unused, struct proc *p)
 	p->p_machdata = task = uma_zalloc(task_zone, M_WAITOK|M_ZERO);
 	task->itk_p = p;
 
-	mutex_init(&task->lock, "ETAP_THREAD_TASK_NEW");
-	mutex_init(&task->itk_lock_data, "ETAP_THREAD_TASK_ITK");
+	mach_mutex_init(&task->lock, "ETAP_THREAD_TASK_NEW");
+	mach_mutex_init(&task->itk_lock_data, "ETAP_THREAD_TASK_ITK");
 	queue_init(&task->semaphore_list);
 
 	if (p == &proc0) {
@@ -1363,7 +1363,7 @@ static void
 task_sysinit(void *arg __unused)
 {
 	task_zone = uma_zcreate("mach_task_zone",
-							sizeof(struct task),
+							sizeof(struct mach_task),
 							NULL, NULL, uma_task_init,
 							uma_task_fini, 1, 0);
 

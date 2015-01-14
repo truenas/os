@@ -517,8 +517,6 @@ compat/linux/linux_util.c	optional	compat_linux32
 dev/amr/amr_linux.c		optional	compat_linux32 amr
 dev/mfi/mfi_linux.c		optional	compat_linux32 mfi
 
-amd64/mach/mach_machdep.c		optional  compat_mach
-
 #
 # Windows NDIS driver support
 #

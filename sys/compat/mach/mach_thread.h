@@ -36,17 +36,7 @@
 #include <sys/param.h>
 #include <sys/signal.h>
 
-#include <compat/mach/mach_types.h>
-#include <compat/mach/mach_message.h>
-
-/* For mach_create_thread_child() */
-struct mach_create_thread_child_args {
-	struct thread *mctc_td;
-	struct thread *mctc_oldtd;
-	mach_natural_t *mctc_state;
-	int mctc_flavor;
-	int mctc_child_done;
-};
+#include <sys/mach/mach_types.h>
 
 /* For mach_sys_syscall_thread_switch() */
 #define MACH_SWITCH_OPTION_NONE	0
@@ -56,16 +46,7 @@ struct mach_create_thread_child_args {
 
 /* For mach_thread_info */
 #define MACH_THREAD_BASIC_INFO 3
-struct mach_thread_basic_info {
-	mach_time_value_t	user_time;
-	mach_time_value_t	system_time;
-	mach_integer_t	cpu_usage;
-	mach_policy_t	policy;
-	mach_integer_t	run_state;
-	mach_integer_t	flags;
-	mach_integer_t	suspend_count;
-	mach_integer_t	sleep_time;
-};
+
 #define MACH_TH_STATE_RUNNING		1
 #define MACH_TH_STATE_STOPPED		2
 #define MACH_TH_STATE_WAITING		3
@@ -76,13 +57,6 @@ struct mach_thread_basic_info {
 #define MACH_TH_FLAGS_IDLE	2
 
 #define MACH_THREAD_SCHED_TIMESHARE_INFO 10
-struct mach_policy_timeshare_info {
-	mach_integer_t max_priority;
-	mach_integer_t base_priority;
-	mach_integer_t cur_priority;
-	mach_boolean_t depressed;
-	mach_integer_t depress_priority;
-};
 
 #define MACH_THREAD_SCHED_RR_INFO	11
 #define MACH_THREAD_SCHED_FIFO_INFO	12
@@ -91,175 +65,12 @@ struct mach_policy_timeshare_info {
 #define MACH_THREAD_STANDARD_POLICY	1
 #define MACH_THREAD_TIME_CONSTRAINT_POLICY 2
 #define MACH_THREAD_PRECEDENCE_POLICY	3
-
-/* thread_policy */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-	mach_ndr_record_t req_ndr;
-	mach_policy_t req_policy;
-	mach_msg_type_number_t req_count;
-	mach_integer_t req_base[5];
-	mach_boolean_t req_setlimit;
-} mach_thread_policy_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_policy_reply_t;
-
-/* mach_thread_create */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-} mach_thread_create_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_msg_body_t rep_body;
-	mach_msg_port_descriptor_t rep_child_act;
-} mach_thread_create_reply_t;
-
-/* mach_thread_create_running */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-	mach_ndr_record_t req_ndr;
-	mach_thread_state_flavor_t req_flavor;
-	mach_msg_type_number_t req_new_stateCnt;
-	mach_natural_t req_new_state[224];
-} mach_thread_create_running_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_msg_body_t rep_body;
-	mach_msg_port_descriptor_t rep_child_act;
-} mach_thread_create_running_reply_t;
-
-/* mach_thread_info */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-	mach_ndr_record_t req_ndr;
-	mach_thread_flavor_t req_flavor;
-	mach_msg_type_number_t req_thread_info_outCnt;
-} mach_thread_info_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-	mach_msg_type_number_t rep_thread_info_outCnt;
-	mach_integer_t rep_thread_info_out[12];
-} mach_thread_info_reply_t;
-
-/* thread_get_state */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-	mach_ndr_record_t req_ndr;
-	mach_thread_state_flavor_t req_flavor;
-	mach_msg_type_number_t req_old_stateCnt;
-} mach_thread_get_state_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-	mach_msg_type_number_t rep_old_stateCnt;
-	mach_natural_t rep_old_state[224];
-} mach_thread_get_state_reply_t;
-
-/* mach_thread_set_state */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-	mach_ndr_record_t req_ndr;
-	int req_flavor;
-	mach_msg_type_number_t req_new_stateCnt;
-	mach_natural_t req_new_state[224];
-} mach_thread_set_state_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_set_state_reply_t;
-
-/* thread_suspend */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-} mach_thread_suspend_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_suspend_reply_t;
-
-/* thread_resume */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-} mach_thread_resume_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_resume_reply_t;
-
-/* thread_abort */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-} mach_thread_abort_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_abort_reply_t;
-
-/* thread_abort_safely */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-} mach_thread_abort_safely_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_abort_safely_reply_t;
-
-/* thread_set_policy */
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-	mach_msg_body_t req_body;
-	mach_msg_port_descriptor_t req_pset;
-	mach_ndr_record_t req_ndr;
-	mach_policy_t req_policy;
-	mach_msg_type_number_t req_baseCnt;
-	mach_integer_t req_base[5];
-	mach_msg_type_number_t req_limitCnt;
-	mach_integer_t req_limit[1];
-} mach_thread_set_policy_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retCode;
-} mach_thread_set_policy_reply_t;
+#include <compat/mach/mach_vm.h>
 
 /* These are machine dependent functions */
 int cpu_mach_thread_get_state(struct thread *, int, void *, int *);
 int cpu_mach_thread_set_state(struct thread *, int, void *);
 int cpu_mach_create_thread(void *);
-int mach_thread_switch(struct thread *td, mach_port_name_t therad_name, int option, mach_msg_timeout_t option_time);
 int mach_swtch_pri(struct thread *td, int pri);
 
 #endif /* _MACH_THREAD_H_ */

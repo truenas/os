@@ -115,7 +115,7 @@ typedef struct ipc_mqueue {
 
 #define	IMQ_NULL		((ipc_mqueue_t) 0)
 
-#define	imq_lock_init(mq)	mutex_init(&(mq)->imq_lock_data, \
+#define	imq_lock_init(mq)	mach_mutex_init(&(mq)->imq_lock_data, \
 					   "ETAP_IPC_MQUEUE")
 #define	imq_lock(mq)		mtx_lock(&(mq)->imq_lock_data)
 #define	imq_lock_try(mq)	mtx_trylock(&(mq)->imq_lock_data)

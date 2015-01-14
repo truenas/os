@@ -312,7 +312,7 @@ typedef struct ipc_port_request {
 extern struct mtx ipc_port_multiple_lock_data;
 
 #define	ipc_port_multiple_lock_init()					\
-		mutex_init(&ipc_port_multiple_lock_data, "ETAP_IPC_PORT_MULT")
+		mach_mutex_init(&ipc_port_multiple_lock_data, "ETAP_IPC_PORT_MULT")
 
 #define	ipc_port_multiple_lock()					\
 		mtx_lock(&ipc_port_multiple_lock_data)
@@ -330,7 +330,7 @@ decl_mutex_data(extern,ipc_port_timestamp_lock_data)
 extern ipc_port_timestamp_t ipc_port_timestamp_data;
 
 #define	ipc_port_timestamp_lock_init()					\
-		mutex_init(&ipc_port_timestamp_lock_data, "ETAP_IPC_PORT_TIME")
+		mach_mutex_init(&ipc_port_timestamp_lock_data, "ETAP_IPC_PORT_TIME")
 
 #define	ipc_port_timestamp_lock()					\
 		mtx_lock(&ipc_port_timestamp_lock_data)

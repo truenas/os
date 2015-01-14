@@ -503,12 +503,6 @@ struct macx_backing_store_recovery_args {
 extern kern_return_t macx_backing_store_recovery(
 				struct macx_backing_store_recovery_args *args);
 
-struct swtch_pri_args {
-	PAD_ARG_(int, pri);
-};
-extern boolean_t swtch_pri(
-				struct swtch_pri_args *args);
-
 struct pfz_exit_args {
 	int32_t dummy;
 };

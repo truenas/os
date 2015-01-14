@@ -296,7 +296,7 @@ proc_pidshortbsdinfo(struct proc *p, struct proc_bsdshortinfo * pbsd_shortp, int
 static uint64_t
 proc_puniqueid(struct proc *p)
 {
-	struct task *task;
+	task_t task;
 	
 	task = p->p_machdata;
 	return (task->itk_puniqueid);
@@ -305,7 +305,7 @@ proc_puniqueid(struct proc *p)
 static uint64_t
 proc_uniqueid(struct proc *p)
 {
-	struct task *task;
+	task_t task;
 
 	task = p->p_machdata;
 	return (task->itk_uniqueid);
@@ -453,3 +453,13 @@ sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap)
 	return (proc_info(uap->callnum, uap->pid, uap->flavor, uap->arg, uap->buffer,
 					  uap->buffersize));
 }
+
+
+
+int
+sys___iopolicysys(struct thread *td __unused, struct __iopolicysys_args *uap __unused)
+{
+ 
+	return (ENOSYS);
+}
+

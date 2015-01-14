@@ -31,7 +31,7 @@ typedef	mach_port_t			*thread_array_t;
 typedef	mach_port_t			*thread_port_array_t;
 typedef mach_port_t			thread_act_port_t;
 typedef	thread_act_port_t		*thread_act_port_array_t;
-typedef struct task			*task_t;
+typedef struct mach_task			*task_t;
 typedef struct clock *mach_clock_t;
 typedef struct processor		*processor_t;
 typedef struct subsystem		*subsystem_t;

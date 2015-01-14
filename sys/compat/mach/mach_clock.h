@@ -37,24 +37,9 @@
 #include <sys/signal.h>
 #include <sys/mach/mach_time.h>
 
-#include <compat/mach/mach_types.h>
-#include <compat/mach/mach_message.h>
-
 /* clock_get_time */
 #define MACH_TIME_ABSOLUTE 0x00
 #define MACH_TIME_RELATIVE 0x01
-
-typedef struct {
-	mach_msg_header_t req_msgh;
-} mach_clock_get_time_request_t;
-
-typedef struct {
-	mach_msg_header_t rep_msgh;
-	mach_ndr_record_t rep_ndr;
-	mach_kern_return_t rep_retval;
-	mach_timespec_t rep_cur_time;
-	mach_msg_trailer_t rep_trailer;
-} mach_clock_get_time_reply_t;
 
 int mach_timebase_info(mach_timebase_info_t infop);
 int mach_clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, int sleep_nsec, mach_timespec_t *wakeup_time);

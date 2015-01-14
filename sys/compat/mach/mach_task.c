@@ -25,13 +25,9 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
 
-#include <compat/mach/mach_types.h>
+#include <sys/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 #include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_errno.h>
-#include <compat/mach/mach_port.h>
-#include <compat/mach/mach_task.h>
-#include <compat/mach/mach_proto.h>
 
 #include <sys/mach/task_server.h>
 
