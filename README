@@ -1,16 +1,15 @@
 This is the mach_support branch. It adds support for a subset of the mach
-API as a precursor to supporting launchd.
-
-Basic Mach IPC is supported through libmach provided one's kernel
-is compiled with COMPAT_MACH. The mach interface generator should 
+API as a precursor to supporting launchd. The mach interface generator should
 be able to work with modern .defs (MIG) files.
+
+Basic Mach IPC is supported through the mach kernel module or COMPAT_MACH_STATIC.
+It is now a module by default to workaround the limited typeid space (15 bits) of
+dtrace.
 
 Note that launchctl needs to be built by cd'ing to <repo>/bin/launchctl
 and building it by hand because of its transitive dependence on icu. devel/icu
 needs to be installed for libcfxlite (part of buildworld) to build.
 
-Mach is now a module by default to workaround the limited typeid space (15 bits) of
-dtrace.
 
 Work to be done for v0:
 
@@ -20,7 +19,7 @@ Work to be done for v0:
 	- import icui18n in to contrib for launchctl -> CF -> icu dependency
 
 - make launchd useful
-   - write plists for basic services    
+   - write plists for basic services
 
    - track down the shims for xinetd / crond
 
