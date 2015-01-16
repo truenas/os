@@ -1991,6 +1991,7 @@ vdev_to_nvlist_iter(nvlist_t *nv, nvlist_t *search, boolean_t *avail_spare,
 		if (nvlist_lookup_string(nv, srchkey, &val) != 0)
 			break;
 
+#ifdef sun
 		/*
 		 * Search for the requested value. Special cases:
 		 *
@@ -2040,6 +2041,9 @@ vdev_to_nvlist_iter(nvlist_t *nv, nvlist_t *search, boolean_t *avail_spare,
 				break;
 			}
 		} else if (strcmp(srchkey, ZPOOL_CONFIG_TYPE) == 0 && val) {
+#else
+		if (strcmp(srchkey, ZPOOL_CONFIG_TYPE) == 0 && val) {
+#endif
 			char *type, *idx, *end, *p;
 			uint64_t id, vdev_id;
 
