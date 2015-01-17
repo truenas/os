@@ -2019,6 +2019,7 @@ static void
 ctlfe_datamove(union ctl_io *io)
 {
 	union ccb *ccb;
+	struct cam_sim *sim;
 	struct cam_periph *periph;
 	struct ctlfe_lun_softc *softc;
 
@@ -2026,8 +2027,9 @@ ctlfe_datamove(union ctl_io *io)
 	    ("Unexpected io_type (%d) in ctlfe_datamove", io->io_hdr.io_type));
 
 	ccb = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr;
+	sim = xpt_path_sim(ccb->ccb_h.path);
+	CAM_SIM_LOCK(sim);
 	periph = xpt_path_periph(ccb->ccb_h.path);
-	cam_periph_lock(periph);
 	softc = (struct ctlfe_lun_softc *)periph->softc;
 	io->io_hdr.flags |= CTL_FLAG_DMA_QUEUED;
 	if ((io->io_hdr.status & CTL_STATUS_MASK) != CTL_STATUS_NONE)
@@ -2035,19 +2037,21 @@ ctlfe_datamove(union ctl_io *io)
 	TAILQ_INSERT_TAIL(&softc->work_queue, &ccb->ccb_h,
 			  periph_links.tqe);
 	xpt_schedule(periph, /*priority*/ 1);
-	cam_periph_unlock(periph);
+	CAM_SIM_UNLOCK(sim);
 }
 
 static void
 ctlfe_done(union ctl_io *io)
 {
 	union ccb *ccb;
+	struct cam_sim *sim;
 	struct cam_periph *periph;
 	struct ctlfe_lun_softc *softc;
 
 	ccb = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr;
+	sim = xpt_path_sim(ccb->ccb_h.path);
+	CAM_SIM_LOCK(sim);
 	periph = xpt_path_periph(ccb->ccb_h.path);
-	cam_periph_lock(periph);
 	softc = (struct ctlfe_lun_softc *)periph->softc;
 
 	if (io->io_hdr.io_type == CTL_IO_TASK) {
@@ -2075,9 +2079,7 @@ ctlfe_done(union ctl_io *io)
 			ctlfe_free_ccb(periph, ccb);
 		} else {
 			softc->atios_sent++;
-			cam_periph_unlock(periph);
 			xpt_action(ccb);
-			return;
 		}
 	} else {
 		io->io_hdr.flags |= CTL_FLAG_STATUS_QUEUED;
@@ -2086,7 +2088,7 @@ ctlfe_done(union ctl_io *io)
 		xpt_schedule(periph, /*priority*/ 1);
 	}
 
-	cam_periph_unlock(periph);
+	CAM_SIM_UNLOCK(sim);
 }
 
 static void
