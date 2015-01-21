@@ -60,7 +60,7 @@ __FBSDID("$FreeBSD$");
 #pragma clang diagnostic ignored "-Wunused-parameter"
 
 int
-sys_mach_clock_sleep_trap(struct thread *td __unused, struct mach_clock_sleep_trap_args *uap)
+sys_clock_sleep_trap(struct thread *td __unused, struct clock_sleep_trap_args *uap)
 {
 
 	td->td_retval[0] = mach_clock_sleep(uap->clock_name, uap->sleep_type, uap->sleep_sec, uap->sleep_nsec, uap->wakeup_time);
@@ -95,44 +95,44 @@ sys_mach_msg_trap(struct thread *td __unused, struct mach_msg_trap_args *uap)
 }
 	
 int
-sys_mach_semaphore_wait_trap(struct thread *td, struct mach_semaphore_wait_trap_args *uap)
+sys_semaphore_wait_trap(struct thread *td, struct semaphore_wait_trap_args *uap)
 	UNSUPPORTED;
 
 int
-sys_mach_semaphore_signal_trap(struct thread *td, struct mach_semaphore_signal_trap_args *uap)
+sys_semaphore_signal_trap(struct thread *td, struct semaphore_signal_trap_args *uap)
 	UNSUPPORTED;
 int
-sys_mach_semaphore_wait_signal_trap(struct thread *td, struct mach_semaphore_wait_signal_trap_args *uap)
-	UNSUPPORTED;
-
-int
-sys_mach_semaphore_signal_thread_trap(struct thread *td, struct mach_semaphore_signal_thread_trap_args *uap)
+sys_semaphore_wait_signal_trap(struct thread *td, struct semaphore_wait_signal_trap_args *uap)
 	UNSUPPORTED;
 
 int
-sys_mach_semaphore_signal_all_trap(struct thread *td, struct mach_semaphore_signal_all_trap_args *uap)
+sys_semaphore_signal_thread_trap(struct thread *td, struct semaphore_signal_thread_trap_args *uap)
 	UNSUPPORTED;
 
 int
-sys_mach_task_for_pid(struct thread *td, struct mach_task_for_pid_args *uap)
+sys_semaphore_signal_all_trap(struct thread *td, struct semaphore_signal_all_trap_args *uap)
 	UNSUPPORTED;
 
 int
-sys_mach_thread_switch(struct thread *td __unused, struct mach_thread_switch_args *uap)
+sys_task_for_pid(struct thread *td, struct task_for_pid_args *uap)
+	UNSUPPORTED;
+
+int
+sys_thread_switch(struct thread *td __unused, struct thread_switch_args *uap)
 {
 
 	return (mach_thread_switch(uap->thread_name, uap->option, uap->option_time));
 }	
 
 int
-sys_mach_swtch_pri(struct thread *td, struct mach_swtch_pri_args *uap)
+sys_swtch_pri(struct thread *td, struct swtch_pri_args *uap)
 {
 
 	return (mach_swtch_pri(td, uap->pri));
 }
 
 int
-sys_mach_swtch(struct thread *td, struct mach_swtch_args *v)
+sys_swtch(struct thread *td, struct swtch_args *v)
 {
 
 	return (mach_swtch_pri(td, 0));
@@ -147,7 +147,7 @@ sys_mach_reply_port(struct thread *td, struct mach_reply_port_args *uap __unused
 }
 
 int
-sys_mach_thread_self_trap(struct thread *td, struct mach_thread_self_trap_args *uap)
+sys_thread_self_trap(struct thread *td, struct thread_self_trap_args *uap)
 {
 
 	td->td_retval[0] = mach_thread_self();
@@ -155,7 +155,7 @@ sys_mach_thread_self_trap(struct thread *td, struct mach_thread_self_trap_args *
 }
 
 int
-sys_mach_task_self_trap(struct thread *td, struct mach_task_self_trap_args *uap)
+sys_task_self_trap(struct thread *td, struct task_self_trap_args *uap)
 {
 
 	td->td_retval[0] = mach_task_self();
@@ -163,7 +163,7 @@ sys_mach_task_self_trap(struct thread *td, struct mach_task_self_trap_args *uap)
 }
 
 int
-sys_mach_host_self_trap(struct thread *td, struct mach_host_self_trap_args *uap)
+sys_host_self_trap(struct thread *td, struct host_self_trap_args *uap)
 {
 	ipc_port_t port;
 	kern_return_t kr;

@@ -86,7 +86,7 @@ __FBSDID("$FreeBSD$");
 MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
 
 int
-sys_mach_semaphore_timedwait_trap(struct thread *td, struct mach_semaphore_timedwait_trap_args *uap)
+sys_semaphore_timedwait_trap(struct thread *td, struct semaphore_timedwait_trap_args *uap)
 {
 
 	DPRINTF(("%s(0x%x, %d, %d);\n",
@@ -96,7 +96,7 @@ sys_mach_semaphore_timedwait_trap(struct thread *td, struct mach_semaphore_timed
 
 
 int
-sys_mach_semaphore_timedwait_signal_trap(struct thread *td, struct mach_semaphore_timedwait_signal_trap_args *uap)
+sys_semaphore_timedwait_signal_trap(struct thread *td, struct semaphore_timedwait_signal_trap_args *uap)
 {
 
 	DPRINTF(("%s(0x%x, 0x%x, %d, %d);\n", __FUNCTION__,
@@ -107,7 +107,7 @@ sys_mach_semaphore_timedwait_signal_trap(struct thread *td, struct mach_semaphor
 
 
 int
-sys_mach_pid_for_task(struct thread *td, struct mach_pid_for_task_args *uap)
+sys_pid_for_task(struct thread *td, struct pid_for_task_args *uap)
 {
 
 	DPRINTF(("sys_mach_pid_for_task(0x%x, %p);\n",
@@ -117,7 +117,7 @@ sys_mach_pid_for_task(struct thread *td, struct mach_pid_for_task_args *uap)
 
 
 int
-sys_mach_macx_swapon(struct thread *td, struct mach_macx_swapon_args *uap)
+sys_macx_swapon(struct thread *td, struct macx_swapon_args *uap)
 {
 
 	DPRINTF(("sys_mach_macx_swapon(%p, %d, %d, %d);\n",
@@ -127,7 +127,7 @@ sys_mach_macx_swapon(struct thread *td, struct mach_macx_swapon_args *uap)
 }
 
 int
-sys_mach_macx_swapoff(struct thread *td, struct mach_macx_swapoff_args *uap)
+sys_macx_swapoff(struct thread *td, struct macx_swapoff_args *uap)
 {
 
 	DPRINTF(("sys_mach_macx_swapoff(%p, %d);\n",
@@ -136,7 +136,7 @@ sys_mach_macx_swapoff(struct thread *td, struct mach_macx_swapoff_args *uap)
 }
 
 int
-sys_mach_macx_triggers(struct thread *td, struct mach_macx_triggers_args *uap)
+sys_macx_triggers(struct thread *td, struct macx_triggers_args *uap)
 {
 
 	DPRINTF(("sys_mach_macx_triggers(%d, %d, %d, 0x%x);\n",
@@ -191,19 +191,19 @@ sys_mk_timer_cancel(struct thread *td, struct mk_timer_cancel_args *uap)
 }
 
 int
-sys_mach_task_name_for_pid(struct thread *td, struct mach_task_name_for_pid_args *uap)
+sys_task_name_for_pid(struct thread *td, struct task_name_for_pid_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys_mach_macx_backing_store_suspend(struct thread *td, struct mach_macx_backing_store_suspend_args *uap)
+sys_macx_backing_store_suspend(struct thread *td, struct macx_backing_store_suspend_args *uap)
 {
 	return (ENOSYS);
 }
 
 int
-sys_mach_macx_backing_store_recovery(struct thread *td, struct mach_macx_backing_store_recovery_args *uap)
+sys_macx_backing_store_recovery(struct thread *td, struct macx_backing_store_recovery_args *uap)
 {
 	return (ENOSYS);
 }

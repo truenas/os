@@ -3588,17 +3588,17 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 0;
 		break;
 	}
-	/* mach_thread_self_trap */
+	/* thread_self_trap */
 	case 627: {
 		*n_args = 0;
 		break;
 	}
-	/* mach_task_self_trap */
+	/* task_self_trap */
 	case 628: {
 		*n_args = 0;
 		break;
 	}
-	/* mach_host_self_trap */
+	/* host_self_trap */
 	case 629: {
 		*n_args = 0;
 		break;
@@ -3631,55 +3631,55 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 9;
 		break;
 	}
-	/* mach_semaphore_signal_trap */
+	/* semaphore_signal_trap */
 	case 633: {
-		struct mach_semaphore_signal_trap_args *p = params;
+		struct semaphore_signal_trap_args *p = params;
 		iarg[0] = p->signal_name; /* mach_port_name_t */
 		*n_args = 1;
 		break;
 	}
-	/* mach_semaphore_signal_all_trap */
+	/* semaphore_signal_all_trap */
 	case 634: {
-		struct mach_semaphore_signal_all_trap_args *p = params;
+		struct semaphore_signal_all_trap_args *p = params;
 		iarg[0] = p->signal_name; /* mach_port_name_t */
 		*n_args = 1;
 		break;
 	}
-	/* mach_semaphore_signal_thread_trap */
+	/* semaphore_signal_thread_trap */
 	case 635: {
-		struct mach_semaphore_signal_thread_trap_args *p = params;
+		struct semaphore_signal_thread_trap_args *p = params;
 		iarg[0] = p->signal_name; /* mach_port_name_t */
 		iarg[1] = p->thread; /* mach_port_name_t */
 		*n_args = 2;
 		break;
 	}
-	/* mach_semaphore_wait_trap */
+	/* semaphore_wait_trap */
 	case 636: {
-		struct mach_semaphore_wait_trap_args *p = params;
+		struct semaphore_wait_trap_args *p = params;
 		iarg[0] = p->wait_name; /* mach_port_name_t */
 		*n_args = 1;
 		break;
 	}
-	/* mach_semaphore_wait_signal_trap */
+	/* semaphore_wait_signal_trap */
 	case 637: {
-		struct mach_semaphore_wait_signal_trap_args *p = params;
+		struct semaphore_wait_signal_trap_args *p = params;
 		iarg[0] = p->wait_name; /* mach_port_name_t */
 		iarg[1] = p->signal_name; /* mach_port_name_t */
 		*n_args = 2;
 		break;
 	}
-	/* mach_semaphore_timedwait_trap */
+	/* semaphore_timedwait_trap */
 	case 638: {
-		struct mach_semaphore_timedwait_trap_args *p = params;
+		struct semaphore_timedwait_trap_args *p = params;
 		iarg[0] = p->wait_name; /* mach_port_name_t */
 		uarg[1] = p->sec; /* unsigned int */
 		iarg[2] = p->nsec; /* mach_clock_res_t */
 		*n_args = 3;
 		break;
 	}
-	/* mach_semaphore_timedwait_signal_trap */
+	/* semaphore_timedwait_signal_trap */
 	case 639: {
-		struct mach_semaphore_timedwait_signal_trap_args *p = params;
+		struct semaphore_timedwait_signal_trap_args *p = params;
 		iarg[0] = p->wait_name; /* mach_port_name_t */
 		iarg[1] = p->signal_name; /* mach_port_name_t */
 		uarg[2] = p->sec; /* unsigned int */
@@ -3706,35 +3706,35 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* mach_task_name_for_pid */
+	/* task_name_for_pid */
 	case 644: {
-		struct mach_task_name_for_pid_args *p = params;
+		struct task_name_for_pid_args *p = params;
 		iarg[0] = p->target_tport; /* mach_port_name_t */
 		iarg[1] = p->pid; /* int */
 		uarg[2] = (intptr_t) p->tn; /* mach_port_name_t * */
 		*n_args = 3;
 		break;
 	}
-	/* mach_task_for_pid */
+	/* task_for_pid */
 	case 645: {
-		struct mach_task_for_pid_args *p = params;
+		struct task_for_pid_args *p = params;
 		iarg[0] = p->target_tport; /* mach_port_name_t */
 		iarg[1] = p->pid; /* int */
 		uarg[2] = (intptr_t) p->t; /* mach_port_name_t * */
 		*n_args = 3;
 		break;
 	}
-	/* mach_pid_for_task */
+	/* pid_for_task */
 	case 646: {
-		struct mach_pid_for_task_args *p = params;
+		struct pid_for_task_args *p = params;
 		iarg[0] = p->t; /* mach_port_name_t */
 		uarg[1] = (intptr_t) p->pid; /* int * */
 		*n_args = 2;
 		break;
 	}
-	/* mach_macx_swapon */
+	/* macx_swapon */
 	case 648: {
-		struct mach_macx_swapon_args *p = params;
+		struct macx_swapon_args *p = params;
 		uarg[0] = (intptr_t) p->name; /* char * */
 		iarg[1] = p->flags; /* int */
 		iarg[2] = p->size; /* int */
@@ -3742,17 +3742,17 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 4;
 		break;
 	}
-	/* mach_macx_swapoff */
+	/* macx_swapoff */
 	case 649: {
-		struct mach_macx_swapoff_args *p = params;
+		struct macx_swapoff_args *p = params;
 		uarg[0] = (intptr_t) p->name; /* char * */
 		iarg[1] = p->flags; /* int */
 		*n_args = 2;
 		break;
 	}
-	/* mach_macx_triggers */
+	/* macx_triggers */
 	case 651: {
-		struct mach_macx_triggers_args *p = params;
+		struct macx_triggers_args *p = params;
 		iarg[0] = p->hi_water; /* int */
 		iarg[1] = p->low_water; /* int */
 		iarg[2] = p->flags; /* int */
@@ -3760,44 +3760,44 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 4;
 		break;
 	}
-	/* mach_macx_backing_store_suspend */
+	/* macx_backing_store_suspend */
 	case 652: {
-		struct mach_macx_backing_store_suspend_args *p = params;
+		struct macx_backing_store_suspend_args *p = params;
 		iarg[0] = p->suspend; /* int */
 		*n_args = 1;
 		break;
 	}
-	/* mach_macx_backing_store_recovery */
+	/* macx_backing_store_recovery */
 	case 653: {
-		struct mach_macx_backing_store_recovery_args *p = params;
+		struct macx_backing_store_recovery_args *p = params;
 		iarg[0] = p->pid; /* int */
 		*n_args = 1;
 		break;
 	}
-	/* mach_swtch_pri */
+	/* swtch_pri */
 	case 659: {
-		struct mach_swtch_pri_args *p = params;
+		struct swtch_pri_args *p = params;
 		iarg[0] = p->pri; /* int */
 		*n_args = 1;
 		break;
 	}
-	/* mach_swtch */
+	/* swtch */
 	case 660: {
 		*n_args = 0;
 		break;
 	}
-	/* mach_thread_switch */
+	/* thread_switch */
 	case 661: {
-		struct mach_thread_switch_args *p = params;
+		struct thread_switch_args *p = params;
 		iarg[0] = p->thread_name; /* mach_port_name_t */
 		iarg[1] = p->option; /* int */
 		iarg[2] = p->option_time; /* mach_msg_timeout_t */
 		*n_args = 3;
 		break;
 	}
-	/* mach_clock_sleep_trap */
+	/* clock_sleep_trap */
 	case 662: {
-		struct mach_clock_sleep_trap_args *p = params;
+		struct clock_sleep_trap_args *p = params;
 		iarg[0] = p->clock_name; /* mach_port_name_t */
 		iarg[1] = p->sleep_type; /* mach_sleep_type_t */
 		iarg[2] = p->sleep_sec; /* int */
@@ -9848,13 +9848,13 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	/* mach_reply_port */
 	case 626:
 		break;
-	/* mach_thread_self_trap */
+	/* thread_self_trap */
 	case 627:
 		break;
-	/* mach_task_self_trap */
+	/* task_self_trap */
 	case 628:
 		break;
-	/* mach_host_self_trap */
+	/* host_self_trap */
 	case 629:
 		break;
 	/* mach_msg_trap */
@@ -9919,7 +9919,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_signal_trap */
+	/* semaphore_signal_trap */
 	case 633:
 		switch(ndx) {
 		case 0:
@@ -9929,7 +9929,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_signal_all_trap */
+	/* semaphore_signal_all_trap */
 	case 634:
 		switch(ndx) {
 		case 0:
@@ -9939,7 +9939,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_signal_thread_trap */
+	/* semaphore_signal_thread_trap */
 	case 635:
 		switch(ndx) {
 		case 0:
@@ -9952,7 +9952,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_wait_trap */
+	/* semaphore_wait_trap */
 	case 636:
 		switch(ndx) {
 		case 0:
@@ -9962,7 +9962,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_wait_signal_trap */
+	/* semaphore_wait_signal_trap */
 	case 637:
 		switch(ndx) {
 		case 0:
@@ -9975,7 +9975,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_timedwait_trap */
+	/* semaphore_timedwait_trap */
 	case 638:
 		switch(ndx) {
 		case 0:
@@ -9991,7 +9991,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_semaphore_timedwait_signal_trap */
+	/* semaphore_timedwait_signal_trap */
 	case 639:
 		switch(ndx) {
 		case 0:
@@ -10045,7 +10045,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_task_name_for_pid */
+	/* task_name_for_pid */
 	case 644:
 		switch(ndx) {
 		case 0:
@@ -10061,7 +10061,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_task_for_pid */
+	/* task_for_pid */
 	case 645:
 		switch(ndx) {
 		case 0:
@@ -10077,7 +10077,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_pid_for_task */
+	/* pid_for_task */
 	case 646:
 		switch(ndx) {
 		case 0:
@@ -10090,7 +10090,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_macx_swapon */
+	/* macx_swapon */
 	case 648:
 		switch(ndx) {
 		case 0:
@@ -10109,7 +10109,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_macx_swapoff */
+	/* macx_swapoff */
 	case 649:
 		switch(ndx) {
 		case 0:
@@ -10122,7 +10122,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_macx_triggers */
+	/* macx_triggers */
 	case 651:
 		switch(ndx) {
 		case 0:
@@ -10141,7 +10141,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_macx_backing_store_suspend */
+	/* macx_backing_store_suspend */
 	case 652:
 		switch(ndx) {
 		case 0:
@@ -10151,7 +10151,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_macx_backing_store_recovery */
+	/* macx_backing_store_recovery */
 	case 653:
 		switch(ndx) {
 		case 0:
@@ -10161,7 +10161,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_swtch_pri */
+	/* swtch_pri */
 	case 659:
 		switch(ndx) {
 		case 0:
@@ -10171,10 +10171,10 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_swtch */
+	/* swtch */
 	case 660:
 		break;
-	/* mach_thread_switch */
+	/* thread_switch */
 	case 661:
 		switch(ndx) {
 		case 0:
@@ -10190,7 +10190,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* mach_clock_sleep_trap */
+	/* clock_sleep_trap */
 	case 662:
 		switch(ndx) {
 		case 0:
@@ -12323,11 +12323,11 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* mach_reply_port */
 	case 626:
-	/* mach_thread_self_trap */
+	/* thread_self_trap */
 	case 627:
-	/* mach_task_self_trap */
+	/* task_self_trap */
 	case 628:
-	/* mach_host_self_trap */
+	/* host_self_trap */
 	case 629:
 	/* mach_msg_trap */
 	case 631:
@@ -12339,37 +12339,37 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_signal_trap */
+	/* semaphore_signal_trap */
 	case 633:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_signal_all_trap */
+	/* semaphore_signal_all_trap */
 	case 634:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_signal_thread_trap */
+	/* semaphore_signal_thread_trap */
 	case 635:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_wait_trap */
+	/* semaphore_wait_trap */
 	case 636:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_wait_signal_trap */
+	/* semaphore_wait_signal_trap */
 	case 637:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_timedwait_trap */
+	/* semaphore_timedwait_trap */
 	case 638:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_semaphore_timedwait_signal_trap */
+	/* semaphore_timedwait_signal_trap */
 	case 639:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
@@ -12384,59 +12384,59 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_task_name_for_pid */
+	/* task_name_for_pid */
 	case 644:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_task_for_pid */
+	/* task_for_pid */
 	case 645:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_pid_for_task */
+	/* pid_for_task */
 	case 646:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_macx_swapon */
+	/* macx_swapon */
 	case 648:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_macx_swapoff */
+	/* macx_swapoff */
 	case 649:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_macx_triggers */
+	/* macx_triggers */
 	case 651:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_macx_backing_store_suspend */
+	/* macx_backing_store_suspend */
 	case 652:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_macx_backing_store_recovery */
+	/* macx_backing_store_recovery */
 	case 653:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_swtch_pri */
+	/* swtch_pri */
 	case 659:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_swtch */
+	/* swtch */
 	case 660:
-	/* mach_thread_switch */
+	/* thread_switch */
 	case 661:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* mach_clock_sleep_trap */
+	/* clock_sleep_trap */
 	case 662:
 		if (ndx == 0 || ndx == 1)
 			p = "int";

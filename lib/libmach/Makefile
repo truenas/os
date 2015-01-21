@@ -62,11 +62,6 @@ SRCS=					\
 	mig_support.c
 
 
-MACH_OBJS = 	syscalls.o	
-
-SRCS+= ${MACH_OBJS:C/.o$/.S/}
-
-
 
 
 

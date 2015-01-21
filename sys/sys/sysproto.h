@@ -1939,13 +1939,13 @@ struct _kernelrpc_mach_port_destruct_trap_args {
 struct mach_reply_port_args {
 	register_t dummy;
 };
-struct mach_thread_self_trap_args {
+struct thread_self_trap_args {
 	register_t dummy;
 };
-struct mach_task_self_trap_args {
+struct task_self_trap_args {
 	register_t dummy;
 };
-struct mach_host_self_trap_args {
+struct host_self_trap_args {
 	register_t dummy;
 };
 struct mach_msg_trap_args {
@@ -1968,29 +1968,29 @@ struct mach_msg_overwrite_trap_args {
 	char rcv_msg_l_[PADL_(mach_msg_header_t *)]; mach_msg_header_t * rcv_msg; char rcv_msg_r_[PADR_(mach_msg_header_t *)];
 	char scatter_list_size_l_[PADL_(mach_msg_size_t)]; mach_msg_size_t scatter_list_size; char scatter_list_size_r_[PADR_(mach_msg_size_t)];
 };
-struct mach_semaphore_signal_trap_args {
+struct semaphore_signal_trap_args {
 	char signal_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t signal_name; char signal_name_r_[PADR_(mach_port_name_t)];
 };
-struct mach_semaphore_signal_all_trap_args {
+struct semaphore_signal_all_trap_args {
 	char signal_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t signal_name; char signal_name_r_[PADR_(mach_port_name_t)];
 };
-struct mach_semaphore_signal_thread_trap_args {
+struct semaphore_signal_thread_trap_args {
 	char signal_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t signal_name; char signal_name_r_[PADR_(mach_port_name_t)];
 	char thread_l_[PADL_(mach_port_name_t)]; mach_port_name_t thread; char thread_r_[PADR_(mach_port_name_t)];
 };
-struct mach_semaphore_wait_trap_args {
+struct semaphore_wait_trap_args {
 	char wait_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t wait_name; char wait_name_r_[PADR_(mach_port_name_t)];
 };
-struct mach_semaphore_wait_signal_trap_args {
+struct semaphore_wait_signal_trap_args {
 	char wait_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t wait_name; char wait_name_r_[PADR_(mach_port_name_t)];
 	char signal_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t signal_name; char signal_name_r_[PADR_(mach_port_name_t)];
 };
-struct mach_semaphore_timedwait_trap_args {
+struct semaphore_timedwait_trap_args {
 	char wait_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t wait_name; char wait_name_r_[PADR_(mach_port_name_t)];
 	char sec_l_[PADL_(unsigned int)]; unsigned int sec; char sec_r_[PADR_(unsigned int)];
 	char nsec_l_[PADL_(mach_clock_res_t)]; mach_clock_res_t nsec; char nsec_r_[PADR_(mach_clock_res_t)];
 };
-struct mach_semaphore_timedwait_signal_trap_args {
+struct semaphore_timedwait_signal_trap_args {
 	char wait_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t wait_name; char wait_name_r_[PADR_(mach_port_name_t)];
 	char signal_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t signal_name; char signal_name_r_[PADR_(mach_port_name_t)];
 	char sec_l_[PADL_(unsigned int)]; unsigned int sec; char sec_r_[PADR_(unsigned int)];
@@ -2007,54 +2007,54 @@ struct _kernelrpc_mach_port_unguard_trap_args {
 	char name_l_[PADL_(mach_port_name_t)]; mach_port_name_t name; char name_r_[PADR_(mach_port_name_t)];
 	char guard_l_[PADL_(uint64_t)]; uint64_t guard; char guard_r_[PADR_(uint64_t)];
 };
-struct mach_task_name_for_pid_args {
+struct task_name_for_pid_args {
 	char target_tport_l_[PADL_(mach_port_name_t)]; mach_port_name_t target_tport; char target_tport_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
 	char tn_l_[PADL_(mach_port_name_t *)]; mach_port_name_t * tn; char tn_r_[PADR_(mach_port_name_t *)];
 };
-struct mach_task_for_pid_args {
+struct task_for_pid_args {
 	char target_tport_l_[PADL_(mach_port_name_t)]; mach_port_name_t target_tport; char target_tport_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
 	char t_l_[PADL_(mach_port_name_t *)]; mach_port_name_t * t; char t_r_[PADR_(mach_port_name_t *)];
 };
-struct mach_pid_for_task_args {
+struct pid_for_task_args {
 	char t_l_[PADL_(mach_port_name_t)]; mach_port_name_t t; char t_r_[PADR_(mach_port_name_t)];
 	char pid_l_[PADL_(int *)]; int * pid; char pid_r_[PADR_(int *)];
 };
-struct mach_macx_swapon_args {
+struct macx_swapon_args {
 	char name_l_[PADL_(char *)]; char * name; char name_r_[PADR_(char *)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char size_l_[PADL_(int)]; int size; char size_r_[PADR_(int)];
 	char priority_l_[PADL_(int)]; int priority; char priority_r_[PADR_(int)];
 };
-struct mach_macx_swapoff_args {
+struct macx_swapoff_args {
 	char name_l_[PADL_(char *)]; char * name; char name_r_[PADR_(char *)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 };
-struct mach_macx_triggers_args {
+struct macx_triggers_args {
 	char hi_water_l_[PADL_(int)]; int hi_water; char hi_water_r_[PADR_(int)];
 	char low_water_l_[PADL_(int)]; int low_water; char low_water_r_[PADR_(int)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char alert_port_l_[PADL_(mach_port_name_t)]; mach_port_name_t alert_port; char alert_port_r_[PADR_(mach_port_name_t)];
 };
-struct mach_macx_backing_store_suspend_args {
+struct macx_backing_store_suspend_args {
 	char suspend_l_[PADL_(int)]; int suspend; char suspend_r_[PADR_(int)];
 };
-struct mach_macx_backing_store_recovery_args {
+struct macx_backing_store_recovery_args {
 	char pid_l_[PADL_(int)]; int pid; char pid_r_[PADR_(int)];
 };
-struct mach_swtch_pri_args {
+struct swtch_pri_args {
 	char pri_l_[PADL_(int)]; int pri; char pri_r_[PADR_(int)];
 };
-struct mach_swtch_args {
+struct swtch_args {
 	register_t dummy;
 };
-struct mach_thread_switch_args {
+struct thread_switch_args {
 	char thread_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t thread_name; char thread_name_r_[PADR_(mach_port_name_t)];
 	char option_l_[PADL_(int)]; int option; char option_r_[PADR_(int)];
 	char option_time_l_[PADL_(mach_msg_timeout_t)]; mach_msg_timeout_t option_time; char option_time_r_[PADR_(mach_msg_timeout_t)];
 };
-struct mach_clock_sleep_trap_args {
+struct clock_sleep_trap_args {
 	char clock_name_l_[PADL_(mach_port_name_t)]; mach_port_name_t clock_name; char clock_name_r_[PADR_(mach_port_name_t)];
 	char sleep_type_l_[PADL_(mach_sleep_type_t)]; mach_sleep_type_t sleep_type; char sleep_type_r_[PADR_(mach_sleep_type_t)];
 	char sleep_sec_l_[PADL_(int)]; int sleep_sec; char sleep_sec_r_[PADR_(int)];
@@ -2496,32 +2496,32 @@ int	sys__kernelrpc_mach_port_extract_member_trap(struct thread *, struct _kernel
 int	sys__kernelrpc_mach_port_construct_trap(struct thread *, struct _kernelrpc_mach_port_construct_trap_args *);
 int	sys__kernelrpc_mach_port_destruct_trap(struct thread *, struct _kernelrpc_mach_port_destruct_trap_args *);
 int	sys_mach_reply_port(struct thread *, struct mach_reply_port_args *);
-int	sys_mach_thread_self_trap(struct thread *, struct mach_thread_self_trap_args *);
-int	sys_mach_task_self_trap(struct thread *, struct mach_task_self_trap_args *);
-int	sys_mach_host_self_trap(struct thread *, struct mach_host_self_trap_args *);
+int	sys_thread_self_trap(struct thread *, struct thread_self_trap_args *);
+int	sys_task_self_trap(struct thread *, struct task_self_trap_args *);
+int	sys_host_self_trap(struct thread *, struct host_self_trap_args *);
 int	sys_mach_msg_trap(struct thread *, struct mach_msg_trap_args *);
 int	sys_mach_msg_overwrite_trap(struct thread *, struct mach_msg_overwrite_trap_args *);
-int	sys_mach_semaphore_signal_trap(struct thread *, struct mach_semaphore_signal_trap_args *);
-int	sys_mach_semaphore_signal_all_trap(struct thread *, struct mach_semaphore_signal_all_trap_args *);
-int	sys_mach_semaphore_signal_thread_trap(struct thread *, struct mach_semaphore_signal_thread_trap_args *);
-int	sys_mach_semaphore_wait_trap(struct thread *, struct mach_semaphore_wait_trap_args *);
-int	sys_mach_semaphore_wait_signal_trap(struct thread *, struct mach_semaphore_wait_signal_trap_args *);
-int	sys_mach_semaphore_timedwait_trap(struct thread *, struct mach_semaphore_timedwait_trap_args *);
-int	sys_mach_semaphore_timedwait_signal_trap(struct thread *, struct mach_semaphore_timedwait_signal_trap_args *);
+int	sys_semaphore_signal_trap(struct thread *, struct semaphore_signal_trap_args *);
+int	sys_semaphore_signal_all_trap(struct thread *, struct semaphore_signal_all_trap_args *);
+int	sys_semaphore_signal_thread_trap(struct thread *, struct semaphore_signal_thread_trap_args *);
+int	sys_semaphore_wait_trap(struct thread *, struct semaphore_wait_trap_args *);
+int	sys_semaphore_wait_signal_trap(struct thread *, struct semaphore_wait_signal_trap_args *);
+int	sys_semaphore_timedwait_trap(struct thread *, struct semaphore_timedwait_trap_args *);
+int	sys_semaphore_timedwait_signal_trap(struct thread *, struct semaphore_timedwait_signal_trap_args *);
 int	sys__kernelrpc_mach_port_guard_trap(struct thread *, struct _kernelrpc_mach_port_guard_trap_args *);
 int	sys__kernelrpc_mach_port_unguard_trap(struct thread *, struct _kernelrpc_mach_port_unguard_trap_args *);
-int	sys_mach_task_name_for_pid(struct thread *, struct mach_task_name_for_pid_args *);
-int	sys_mach_task_for_pid(struct thread *, struct mach_task_for_pid_args *);
-int	sys_mach_pid_for_task(struct thread *, struct mach_pid_for_task_args *);
-int	sys_mach_macx_swapon(struct thread *, struct mach_macx_swapon_args *);
-int	sys_mach_macx_swapoff(struct thread *, struct mach_macx_swapoff_args *);
-int	sys_mach_macx_triggers(struct thread *, struct mach_macx_triggers_args *);
-int	sys_mach_macx_backing_store_suspend(struct thread *, struct mach_macx_backing_store_suspend_args *);
-int	sys_mach_macx_backing_store_recovery(struct thread *, struct mach_macx_backing_store_recovery_args *);
-int	sys_mach_swtch_pri(struct thread *, struct mach_swtch_pri_args *);
-int	sys_mach_swtch(struct thread *, struct mach_swtch_args *);
-int	sys_mach_thread_switch(struct thread *, struct mach_thread_switch_args *);
-int	sys_mach_clock_sleep_trap(struct thread *, struct mach_clock_sleep_trap_args *);
+int	sys_task_name_for_pid(struct thread *, struct task_name_for_pid_args *);
+int	sys_task_for_pid(struct thread *, struct task_for_pid_args *);
+int	sys_pid_for_task(struct thread *, struct pid_for_task_args *);
+int	sys_macx_swapon(struct thread *, struct macx_swapon_args *);
+int	sys_macx_swapoff(struct thread *, struct macx_swapoff_args *);
+int	sys_macx_triggers(struct thread *, struct macx_triggers_args *);
+int	sys_macx_backing_store_suspend(struct thread *, struct macx_backing_store_suspend_args *);
+int	sys_macx_backing_store_recovery(struct thread *, struct macx_backing_store_recovery_args *);
+int	sys_swtch_pri(struct thread *, struct swtch_pri_args *);
+int	sys_swtch(struct thread *, struct swtch_args *);
+int	sys_thread_switch(struct thread *, struct thread_switch_args *);
+int	sys_clock_sleep_trap(struct thread *, struct clock_sleep_trap_args *);
 int	sys_mach_timebase_info(struct thread *, struct mach_timebase_info_args *);
 int	sys_mach_wait_until(struct thread *, struct mach_wait_until_args *);
 int	sys_mk_timer_create(struct thread *, struct mk_timer_create_args *);
@@ -3257,32 +3257,32 @@ int	freebsd7_shmctl(struct thread *, struct freebsd7_shmctl_args *);
 #define	SYS_AUE__kernelrpc_mach_port_construct_trap	AUE_NULL
 #define	SYS_AUE__kernelrpc_mach_port_destruct_trap	AUE_NULL
 #define	SYS_AUE_mach_reply_port	AUE_NULL
-#define	SYS_AUE_mach_thread_self_trap	AUE_NULL
-#define	SYS_AUE_mach_task_self_trap	AUE_NULL
-#define	SYS_AUE_mach_host_self_trap	AUE_NULL
+#define	SYS_AUE_thread_self_trap	AUE_NULL
+#define	SYS_AUE_task_self_trap	AUE_NULL
+#define	SYS_AUE_host_self_trap	AUE_NULL
 #define	SYS_AUE_mach_msg_trap	AUE_NULL
 #define	SYS_AUE_mach_msg_overwrite_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_signal_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_signal_all_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_signal_thread_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_wait_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_wait_signal_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_timedwait_trap	AUE_NULL
-#define	SYS_AUE_mach_semaphore_timedwait_signal_trap	AUE_NULL
+#define	SYS_AUE_semaphore_signal_trap	AUE_NULL
+#define	SYS_AUE_semaphore_signal_all_trap	AUE_NULL
+#define	SYS_AUE_semaphore_signal_thread_trap	AUE_NULL
+#define	SYS_AUE_semaphore_wait_trap	AUE_NULL
+#define	SYS_AUE_semaphore_wait_signal_trap	AUE_NULL
+#define	SYS_AUE_semaphore_timedwait_trap	AUE_NULL
+#define	SYS_AUE_semaphore_timedwait_signal_trap	AUE_NULL
 #define	SYS_AUE__kernelrpc_mach_port_guard_trap	AUE_NULL
 #define	SYS_AUE__kernelrpc_mach_port_unguard_trap	AUE_NULL
-#define	SYS_AUE_mach_task_name_for_pid	AUE_NULL
-#define	SYS_AUE_mach_task_for_pid	AUE_NULL
-#define	SYS_AUE_mach_pid_for_task	AUE_NULL
-#define	SYS_AUE_mach_macx_swapon	AUE_NULL
-#define	SYS_AUE_mach_macx_swapoff	AUE_NULL
-#define	SYS_AUE_mach_macx_triggers	AUE_NULL
-#define	SYS_AUE_mach_macx_backing_store_suspend	AUE_NULL
-#define	SYS_AUE_mach_macx_backing_store_recovery	AUE_NULL
-#define	SYS_AUE_mach_swtch_pri	AUE_NULL
-#define	SYS_AUE_mach_swtch	AUE_NULL
-#define	SYS_AUE_mach_thread_switch	AUE_NULL
-#define	SYS_AUE_mach_clock_sleep_trap	AUE_NULL
+#define	SYS_AUE_task_name_for_pid	AUE_NULL
+#define	SYS_AUE_task_for_pid	AUE_NULL
+#define	SYS_AUE_pid_for_task	AUE_NULL
+#define	SYS_AUE_macx_swapon	AUE_NULL
+#define	SYS_AUE_macx_swapoff	AUE_NULL
+#define	SYS_AUE_macx_triggers	AUE_NULL
+#define	SYS_AUE_macx_backing_store_suspend	AUE_NULL
+#define	SYS_AUE_macx_backing_store_recovery	AUE_NULL
+#define	SYS_AUE_swtch_pri	AUE_NULL
+#define	SYS_AUE_swtch	AUE_NULL
+#define	SYS_AUE_thread_switch	AUE_NULL
+#define	SYS_AUE_clock_sleep_trap	AUE_NULL
 #define	SYS_AUE_mach_timebase_info	AUE_NULL
 #define	SYS_AUE_mach_wait_until	AUE_NULL
 #define	SYS_AUE_mk_timer_create	AUE_NULL

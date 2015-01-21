@@ -1113,9 +1113,9 @@
 						  		mach_port_name_t target, mach_port_name_t name, \
 								mach_port_delta_t srdelta, uint64_t guard);}
 626	AUE_NULL	NOSTD		{ int mach_reply_port(void); }
-627	AUE_NULL	NOSTD		{ int mach_thread_self_trap(void); }
-628	AUE_NULL	NOSTD		{ int mach_task_self_trap(void); }
-629	AUE_NULL	NOSTD	  	{ int mach_host_self_trap(void); }
+627	AUE_NULL	NOSTD		{ int thread_self_trap(void); }
+628	AUE_NULL	NOSTD		{ int task_self_trap(void); }
+629	AUE_NULL	NOSTD	  	{ int host_self_trap(void); }
 630 AUE_NULL	UNIMPL	nosys
 631	AUE_NULL	NOSTD		{ int mach_msg_trap(mach_msg_header_t	*msg, \
 			    		  	  mach_msg_option_t	option, \
@@ -1134,23 +1134,23 @@
 			    			 mach_port_name_t	notify, \
 			    			 mach_msg_header_t	*rcv_msg, \
 			    			 mach_msg_size_t	scatter_list_size); }
-633	AUE_NULL	NOSTD		{ int mach_semaphore_signal_trap( \
+633	AUE_NULL	NOSTD		{ int semaphore_signal_trap( \
 			  mach_port_name_t signal_name); }
-634	AUE_NULL	NOSTD		{ int mach_semaphore_signal_all_trap( \
+634	AUE_NULL	NOSTD		{ int semaphore_signal_all_trap( \
 			      mach_port_name_t signal_name); }
-635	AUE_NULL	NOSTD		{ int mach_semaphore_signal_thread_trap( \
+635	AUE_NULL	NOSTD		{ int semaphore_signal_thread_trap( \
 			      	mach_port_name_t signal_name, \
 			    	mach_port_name_t thread); }
-636	AUE_NULL	NOSTD		{ int mach_semaphore_wait_trap( \
+636	AUE_NULL	NOSTD		{ int semaphore_wait_trap( \
 			      mach_port_name_t wait_name); }
-637	AUE_NULL	NOSTD		{ int mach_semaphore_wait_signal_trap( \
+637	AUE_NULL	NOSTD		{ int semaphore_wait_signal_trap( \
 			      		  	  mach_port_name_t wait_name, \
 			      			  mach_port_name_t signal_name); }
-638	AUE_NULL	NOSTD		{ int mach_semaphore_timedwait_trap( \
+638	AUE_NULL	NOSTD		{ int semaphore_timedwait_trap( \
 							    mach_port_name_t wait_name, \
 			    				unsigned int sec, \
 			    				mach_clock_res_t nsec); }
-639	AUE_NULL	NOSTD		{ int mach_semaphore_timedwait_signal_trap( \
+639	AUE_NULL	NOSTD		{ int semaphore_timedwait_signal_trap( \
 						  	  	mach_port_name_t wait_name, \
 							    mach_port_name_t signal_name, \
 			    				unsigned int sec, mach_clock_res_t nsec); }
@@ -1162,33 +1162,33 @@
 643	AUE_NULL	OBSOL	{ int mach_map_fd(int fd, \
 			    mach_vm_offset_t offset, mach_vm_offset_t *va, \
 			    mach_boolean_t findspace, mach_vm_size_t size); }
-644 AUE_NULL	NOSTD     { int mach_task_name_for_pid(mach_port_name_t target_tport, \
+644 AUE_NULL	NOSTD     { int task_name_for_pid(mach_port_name_t target_tport, \
 						  int pid, mach_port_name_t *tn); }
-645	AUE_NULL	NOSTD		{ int mach_task_for_pid(mach_port_name_t target_tport, \
+645	AUE_NULL	NOSTD		{ int task_for_pid(mach_port_name_t target_tport, \
 						  int pid, mach_port_name_t *t); }
-646	AUE_NULL	NOSTD		{ int mach_pid_for_task(mach_port_name_t t, int *pid); }
+646	AUE_NULL	NOSTD		{ int pid_for_task(mach_port_name_t t, int *pid); }
 647 AUE_NULL	UNIMPL	nosys
-648	AUE_NULL	NOSTD		{ int mach_macx_swapon( \
+648	AUE_NULL	NOSTD		{ int macx_swapon( \
 			    char *name, int flags, int size, int priority); }
-649	AUE_NULL	NOSTD		{ int mach_macx_swapoff( \
+649	AUE_NULL	NOSTD		{ int macx_swapoff( \
 			    char *name, int flags); }
 650 AUE_NULL	UNIMPL	nosys
-651	AUE_NULL	NOSTD		{ int mach_macx_triggers(int hi_water, int low_water, \
+651	AUE_NULL	NOSTD		{ int macx_triggers(int hi_water, int low_water, \
 			  	  int flags, mach_port_name_t alert_port); }
-652 AUE_NULL	NOSTD		{ int mach_macx_backing_store_suspend(int suspend); }
-653 AUE_NULL	NOSTD		{ int mach_macx_backing_store_recovery(int pid); }
+652 AUE_NULL	NOSTD		{ int macx_backing_store_suspend(int suspend); }
+653 AUE_NULL	NOSTD		{ int macx_backing_store_recovery(int pid); }
 654 AUE_NULL	UNIMPL	nosys
 655 AUE_NULL	UNIMPL	nosys
 656 AUE_NULL	UNIMPL	nosys
 657 AUE_NULL	UNIMPL	nosys
 658 AUE_NULL	UNIMPL	nosys
-659	AUE_NULL	NOSTD		{ int mach_swtch_pri(int pri); }
-660	AUE_NULL	NOSTD		{ int mach_swtch(void); }
-661	AUE_NULL	NOSTD		{ int mach_thread_switch( \
+659	AUE_NULL	NOSTD		{ int swtch_pri(int pri); }
+660	AUE_NULL	NOSTD		{ int swtch(void); }
+661	AUE_NULL	NOSTD		{ int thread_switch( \
 			    mach_port_name_t thread_name, \
 			    int option, \
 			    mach_msg_timeout_t option_time); }
-662	AUE_NULL	NOSTD		{ int mach_clock_sleep_trap( \
+662	AUE_NULL	NOSTD		{ int clock_sleep_trap( \
 			    mach_port_name_t clock_name, \
 			    mach_sleep_type_t sleep_type, \
 			    int sleep_sec, int sleep_nsec, \
