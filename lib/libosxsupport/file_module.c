@@ -39,6 +39,8 @@
 #include <dispatch/dispatch.h>
 #include <TargetConditionals.h>
 
+#pragma clang diagnostic ignored "-Wtautological-pointer-compare"
+
 /* notify SPI */
 uint32_t notify_peek(int token, uint32_t *val);
 
