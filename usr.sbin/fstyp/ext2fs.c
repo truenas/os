@@ -1,6 +1,10 @@
 /*-
- * Copyright (c) 2011 David Schultz
+ * Copyright (c) 2005 Stanislav Sedov
+ * Copyright (c) 2014 The FreeBSD Foundation
  * All rights reserved.
+ *
+ * This software was developed by Edward Tomasz Napierala under sponsorship
+ * from the FreeBSD Foundation.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,63 +31,55 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-/*
- * BUFSIZE is the number of bytes of rc4 output to compare.  The probability
- * that this test fails spuriously is 2**(-BUFSIZE * 8).
- */
-#define	BUFSIZE		8
+#include "fstyp.h"
 
-/*
- * Test whether arc4random_buf() returns the same sequence of bytes in both
- * parent and child processes.  (Hint: It shouldn't.)
- */
-int main(int argc, char *argv[]) {
-	struct shared_page {
-		char parentbuf[BUFSIZE];
-		char childbuf[BUFSIZE];
-	} *page;
-	pid_t pid;
-	char c;
+#define EXT2FS_SB_OFFSET	1024
+#define EXT2_SUPER_MAGIC	0xef53
+#define EXT2_DYNAMIC_REV	1
 
-	printf("1..1\n");
+typedef struct e2sb {
+	uint8_t		fake1[56];
+	uint16_t	s_magic;
+	uint8_t		fake2[18];
+	uint32_t	s_rev_level;
+	uint8_t		fake3[40];
+	char		s_volume_name[16];
+} e2sb_t;
 
-	page = mmap(NULL, sizeof(struct shared_page), PROT_READ | PROT_WRITE,
-		    MAP_ANON | MAP_SHARED, -1, 0);
-	if (page == MAP_FAILED) {
-		printf("fail 1 - mmap\n");
-		exit(1);
-	}
+int
+fstyp_ext2fs(FILE *fp, char *label, size_t size)
+{
+	e2sb_t *fs;
+	char *s_volume_name;
 
-	arc4random_buf(&c, 1);
+	fs = (e2sb_t *)read_buf(fp, EXT2FS_SB_OFFSET, 512);
+	if (fs == NULL)
+		return (1);
 
-	pid = fork();
-	if (pid < 0) {
-		printf("fail 1 - fork\n");
-		exit(1);
-	}
-	if (pid == 0) {
-		/* child */
-		arc4random_buf(page->childbuf, BUFSIZE);
-		exit(0);
+	/* Check for magic and versio n*/
+	if (fs->s_magic == EXT2_SUPER_MAGIC &&
+	    fs->s_rev_level == EXT2_DYNAMIC_REV) {
+		//G_LABEL_DEBUG(1, "ext2fs file system detected on %s.",
+		//    pp->name);
 	} else {
-		/* parent */
-		int status;
-		arc4random_buf(page->parentbuf, BUFSIZE);
-		wait(&status);
-	}
-	if (memcmp(page->parentbuf, page->childbuf, BUFSIZE) == 0) {
-		printf("fail 1 - sequences are the same\n");
-		exit(1);
+		free(fs);
+		return (1);
 	}
 
-	printf("ok 1 - sequences are different\n");
-	exit(0);
+	s_volume_name = fs->s_volume_name;
+	/* Terminate label */
+	s_volume_name[sizeof(fs->s_volume_name) - 1] = '\0';
+
+	if (s_volume_name[0] == '/')
+		s_volume_name += 1;
+
+	strlcpy(label, s_volume_name, size);
+	free(fs);
+
+	return (0);
 }

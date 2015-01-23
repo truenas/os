@@ -20,6 +20,8 @@
 
     <pubdate>$FreeBSD$</pubdate>
 
+    <!-- Last rev: 276991 -->
+
     <copyright>
       <year>2015</year>
       <holder role="mailto:doc@FreeBSD.org">The &os; Documentation
@@ -116,7 +118,9 @@
     <sect2 xml:id="kernel">
       <title>Kernel Changes</title>
 
-      <para>&nbsp;</para>
+      <para revision="276986">Throttling via <acronym>ACPI</acronym>
+	and <acronym>P4TCC</acronym> via &man.device.hints.5; have
+	been turned off by default.</para>
 
       <sect3 xml:id="kernel-virtualization">
 	<title>Virtualization Support</title>
@@ -202,6 +206,13 @@
 	updated to support capability mode provided by
 	&man.capsicum.4;.</para>
 
+      <para revision="276991">The &man.termcap.5; file is installed
+	as-is from sources, instead of reordering, creating
+	<filename>/etc/termcap.db</filename> by default, providing
+	a performance improvements to applications that use the
+	&man.termcap.5; database, such as &man.vi.1; and
+	&man.ncurses.3;.</para>
+
       <sect3 xml:id="rc-scripts">
 	<title><filename>/etc/rc.d</filename> Scripts</title>
 
@@ -212,7 +223,8 @@
     <sect2 xml:id="contrib">
       <title>Contributed Software</title>
 
-      <para>&nbsp;</para>
+      <para revision="277597"><application>OpenSSL</application> has
+	been updated to version 1.0.1l.</para>
     </sect2>
 
     <sect2 xml:id="ports">
