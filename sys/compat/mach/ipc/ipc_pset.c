@@ -424,10 +424,9 @@ filt_machport(struct knote *kn, long hint __unused)
 	mach_port_name_t        name = (mach_port_name_t)kn->kn_kevent.ident;
 	ipc_pset_t              pset = IPS_NULL;	
 	kern_return_t           kr;
-#if 0	
 	mach_msg_option_t	option;
 	mach_msg_size_t		size;
-#endif
+	mach_port_name_t	lportname;
 
 	kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 							  (ipc_object_t *)&pset);
@@ -440,9 +439,18 @@ filt_machport(struct knote *kn, long hint __unused)
 	}
 	ips_reference(pset);
 	ips_unlock(pset);
-	
-	/*  XXX check queue for messages */
-	return (0);
+
+	/* force a return - we have no callers directly receiving messages now */
+	option = MACH_RCV_LARGE | MACH_RCV_TIMEOUT;
+	size = 0;
+	kr = ipc_mqueue_receive(&pset->ips_messages, option, size, 0, /* immediate timeout */
+							NULL, NULL, &lportname);
+	ips_release(pset);
+	if (kr == MACH_RCV_TIMED_OUT) {
+		return (0);
+	}
+	kn->kn_data = lportname;
+	return (1);
 }
 
 static void

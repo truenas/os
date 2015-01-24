@@ -84,15 +84,17 @@ mach_module_event_handler(module_t mod, int what, void *arg)
 
 	switch (what) {
 	case MOD_LOAD:
-		if ((err = mach_mod_init()) != 0)
+		if ((err = mach_mod_init()) != 0) {
+			printf("mach services failed to load - mach system calls will not be available\n");
 			return (err);
+		}
 		break;
 	case MOD_UNLOAD:
 		return (EBUSY);
 	default:
 		return (EOPNOTSUPP);
 	}
-	printf("mach services loaded\n");
+	printf("mach services loaded - mach system calls available\n");
 	return (0);
 }
 

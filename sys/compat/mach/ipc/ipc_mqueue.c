@@ -417,7 +417,7 @@ ipc_mqueue_send(
 
 		counter(c_ipc_mqueue_send_block++);
 		self->ith_block_lock_data = &port->port_comm.rcd_io_lock_data;
-		thread_block((void (*)(void)) 0);
+		thread_block();
 		ip_unlock(port);
 
 		/* Save proper wait_result in case we block */
@@ -550,6 +550,7 @@ ipc_mqueue_deliver(
 	if (receiver == ITH_NULL) {
 		/* no receivers; queue kmsg */
 		ipc_kmsg_enqueue_macro(&mqueue->imq_messages, kmsg);
+		KNOTE_LOCKED(&mqueue->imq_note, 0);
 		imq_unlock(mqueue);
 		TR_IPC_MQEX("exit: no receiver", 0);
 		return MACH_MSG_SUCCESS;
@@ -686,12 +687,6 @@ ipc_mqueue_copyin(
  *	Purpose:
  *		Receive a message from a message queue.
  *
- *		If continuation is non-zero, then we might discard
- *		our kernel stack when we block.  We will continue
- *		after unblocking by executing continuation.
- *
- *		If resume is true, then we are resuming a receive
- *		operation after a blocked receive discarded our stack.
  *	Conditions:
  *		The message queue is locked; it will be returned unlocked.
  *
@@ -719,10 +714,9 @@ ipc_mqueue_receive(
 	mach_msg_option_t	option,
 	mach_msg_size_t		max_size,
 	mach_msg_timeout_t	timeout,
-	boolean_t		resume,
-	void			(*continuation)(void),
 	ipc_kmsg_t		*kmsgp,
-	mach_port_seqno_t	*seqnop)
+	mach_port_seqno_t	*seqnop,
+	mach_port_name_t	*lportname)
 {
 	ipc_port_t port;
 	ipc_kmsg_t kmsg;
@@ -731,11 +725,15 @@ ipc_mqueue_receive(
 	ipc_kmsg_queue_t kmsgs = &mqueue->imq_messages;
 	ipc_thread_t self = current_thread();
 	kern_return_t	save_wait_result;
-	assert( !resume );
 
 	for (;;) {
 		kmsg = ipc_kmsg_queue_first(kmsgs);
 		if (kmsg != IKM_NULL) {
+			if (max_size == 0) {
+				*lportname = kmsg->ikm_header->msgh_local_port->ip_receiver_name;
+				imq_unlock(mqueue);
+				return (MACH_RCV_TOO_LARGE);
+			}
 			ipc_kmsg_rmqueue_first_macro(kmsgs, kmsg);
 			port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 			seqno = port->ip_seqno++;
@@ -757,14 +755,9 @@ ipc_mqueue_receive(
 		}
 		thread_will_wait_with_timeout(self, timeout);
 		ipc_thread_enqueue_macro(&mqueue->imq_threads, self);
-		if (continuation != (void (*)(void)) 0) {
-			counter(c_ipc_mqueue_receive_block_user++);
-		} else {
-			counter(c_ipc_mqueue_receive_block_kernel++);
-		}
 		self->ith_msize = max_size;
 		self->ith_block_lock_data = &mqueue->imq_lock_data;
-		thread_block(continuation);
+		thread_block();
 		imq_unlock(mqueue);
 		if (option & MACH_RCV_TIMEOUT) {
 			/* XXX */

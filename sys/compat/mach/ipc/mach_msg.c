@@ -344,6 +344,7 @@ mach_msg_receive(
 	mach_msg_return_t mr;
 	mach_msg_body_t *slist;
 	mach_msg_format_0_trailer_t *trailer;
+	mach_port_name_t lportname;
 	mr = ipc_mqueue_copyin(space, rcv_name, &mqueue, &object);
 	if (mr != MACH_MSG_SUCCESS) {
 		return mr;
@@ -386,9 +387,7 @@ mach_msg_receive(
 	self->ith_scatter_list_size = slist_size;
 
 	mr = ipc_mqueue_receive(mqueue, option & MACH_RCV_TIMEOUT, rcv_size,
-				timeout, FALSE,
-				(void(*)(void))SAFE_EXTERNAL_RECEIVE,
-				&kmsg, &seqno);
+							timeout, &kmsg, &seqno, &lportname);
 	
 	/* mqueue is unlocked */
 	ipc_object_release(object);

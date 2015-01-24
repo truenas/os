@@ -94,7 +94,7 @@
 	mp_disable_preemption(); \
 	if (current_processor() != master_processor) { \
 	    mp_enable_preemption(); \
-	    thread_block((void (*)(void)) 0); \
+	    thread_block(); \
 	} else { \
 	    mp_enable_preemption(); \
 	} \

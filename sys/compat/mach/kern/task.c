@@ -557,7 +557,7 @@ task_terminate(
 			 *	Task is already being terminated.
 			 */
 			task_unlock(task);
-			thread_block((void (*)(void)) 0);
+			thread_block();
 			return(KERN_FAILURE);
 		}
 
@@ -627,7 +627,7 @@ task_terminate(
 			 *	Task is already being terminated.
 			 */
 			task_unlock(task);
-			thread_block((void (*)(void)) 0);
+			thread_block();
 			return(KERN_FAILURE);
 		}
 		task_hold_locked(task);

@@ -280,7 +280,7 @@ ipc_space_destroy(
 	while (space->is_growing) {
 		assert_wait((event_t) space, FALSE);
 		is_read_unlock(space);
-		thread_block((void (*)(void)) 0);
+		thread_block();
 		is_read_lock(space);
 	}
 	is_read_unlock(space);

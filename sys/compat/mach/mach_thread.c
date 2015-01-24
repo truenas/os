@@ -134,7 +134,7 @@ thread_go(thread_t thread)
 }
 
 void
-thread_block(void (*continuation)(void) __unused) /* ignore continuation for now */
+thread_block(void)
 {
 	thread_t thread = current_thread();
 	int rc;

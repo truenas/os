@@ -658,7 +658,7 @@ current_map(void)
 extern void thread_go(thread_t);
 extern void thread_will_wait_with_timeout(thread_t, int);
 extern void thread_will_wait(thread_t);
-extern void thread_block(void    (*continuation)(void));
+extern void thread_block(void);
 #if 0
 extern void assert_wait(event_t, boolean_t);
 #else

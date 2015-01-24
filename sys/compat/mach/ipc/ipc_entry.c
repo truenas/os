@@ -389,7 +389,7 @@ ipc_entry_grow_table(
 			 */
 			assert_wait((event_t) space, FALSE);
 			is_write_unlock(space);
-			thread_block((void (*)(void)) 0);
+			thread_block();
 			is_write_lock(space);
 			return KERN_SUCCESS;
 		}

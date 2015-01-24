@@ -167,10 +167,9 @@ extern mach_msg_return_t ipc_mqueue_receive(
 	mach_msg_option_t	option,
 	mach_msg_size_t		max_size,
 	mach_msg_timeout_t	timeout,
-	boolean_t		resume,
-	void			(*continuation)(void),
 	ipc_kmsg_t		*kmsgp,
-	mach_port_seqno_t	*seqnop);
+	mach_port_seqno_t	*seqnop,
+	mach_port_name_t	*lportname);
 
 /* Second half of ipc_mqueue_receive */
 extern mach_msg_return_t ipc_mqueue_finish_receive(

@@ -243,8 +243,7 @@ extern void		thread_block_reason(
 				int	reason);
 
 /* Block current thread (Block reason) */
-extern void		thread_block(
-				void	(*continuation)(void));
+extern void		thread_block(void);
 
 /* Switch directly to a particular thread */
 extern void		thread_run(
@@ -333,7 +332,7 @@ extern void		sched_thread(void);
 	MACRO_BEGIN							\
 	assert_wait(event, interruptible);	/* assert event */	\
 	mutex_unlock(lock);			/* release the lock */	\
-	thread_block((void (*)(void)) 0);	/* block ourselves */	\
+	thread_block();	/* block ourselves */	\
 	MACRO_END
 
 /*
@@ -349,7 +348,7 @@ extern void		sched_thread(void);
 	MACRO_BEGIN							\
 	assert_wait(event, interruptible);	/* assert event */	\
 	simple_unlock(lock);			/* release the lock */	\
-	thread_block((void (*)(void)) 0);	/* block ourselves */	\
+	thread_block();	/* block ourselves */	\
 	MACRO_END
 
 /*
@@ -365,7 +364,7 @@ extern void		sched_thread(void);
 	MACRO_BEGIN							\
 	assert_wait(event, interruptible);	/* assert event */	\
 	interlock_unlock(lock);			/* release the lock */	\
-	thread_block((void (*)(void)) 0);	/* block ourselves */	\
+	thread_block();	/* block ourselves */	\
 	MACRO_END
 
 /*
