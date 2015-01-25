@@ -10926,8 +10926,7 @@ ctl_check_for_blockage(struct ctl_lun *lun, union ctl_io *pending_io,
 	      ooa_io->io_hdr.nexus.targ_port)
 	  && (pending_io->io_hdr.nexus.initid.id ==
 	      ooa_io->io_hdr.nexus.initid.id))
-	 && ((ooa_io->io_hdr.flags & (CTL_FLAG_ABORT |
-	      CTL_FLAG_STATUS_SENT)) == 0))
+	 && ((ooa_io->io_hdr.flags & CTL_FLAG_ABORT) == 0))
 		return (CTL_ACTION_OVERLAP);
 
 	/*
@@ -10948,8 +10947,7 @@ ctl_check_for_blockage(struct ctl_lun *lun, union ctl_io *pending_io,
 	      ooa_io->io_hdr.nexus.targ_port)
 	  && (pending_io->io_hdr.nexus.initid.id ==
 	      ooa_io->io_hdr.nexus.initid.id))
-	 && ((ooa_io->io_hdr.flags & (CTL_FLAG_ABORT |
-	      CTL_FLAG_STATUS_SENT)) == 0))
+	 && ((ooa_io->io_hdr.flags & CTL_FLAG_ABORT) == 0))
 		return (CTL_ACTION_OVERLAP_TAG);
 
 	/*
