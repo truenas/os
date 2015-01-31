@@ -39,6 +39,18 @@ kern_return_t mach_port_move_member(
 	mach_port_name_t target,
 	mach_port_name_t member,
 	mach_port_name_t after
+	);
+
+kern_return_t mach_port_insert_member(
+	mach_port_name_t target,
+	mach_port_name_t member,
+	mach_port_name_t after
+	);
+
+kern_return_t mach_port_extract_member(
+	mach_port_name_t target,
+	mach_port_name_t member,
+	mach_port_name_t after
 );
 
 kern_return_t mach_vm_allocate(
