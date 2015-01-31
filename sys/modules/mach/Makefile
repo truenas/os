@@ -24,3 +24,4 @@ SRCS+= mach_debug.c mach_msg.c mach_port.c
 SRCS+= ipc_tt.c ipc_host.c task.c
 .include <bsd.kmod.mk>
 CFLAGS+= -I${SYSDIR}/apsl/include -DCOMPAT_MACH
+DEBUG_FLAGS+= -g -O0
