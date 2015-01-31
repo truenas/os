@@ -730,7 +730,9 @@ ipc_mqueue_receive(
 		kmsg = ipc_kmsg_queue_first(kmsgs);
 		if (kmsg != IKM_NULL) {
 			if (max_size == 0) {
-				*lportname = kmsg->ikm_header->msgh_local_port->ip_receiver_name;
+				assert(kmsg->ikm_header != NULL);
+				assert(kmsg->ikm_header->msgh_remote_port != NULL);
+				*lportname = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
 				imq_unlock(mqueue);
 				return (MACH_RCV_TOO_LARGE);
 			}
