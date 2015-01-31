@@ -374,17 +374,15 @@ ipc_pset_destroy(
 }
 
 
-
+#include <sys/file.h>
 static int      filt_machportattach(struct knote *kn);
 static void     filt_machportdetach(struct knote *kn);
 static int      filt_machport(struct knote *kn, long hint);
-static void     filt_machporttouch(struct knote *kn, struct kevent64_s *kev, u_long type);
 struct filterops machport_filtops = {
-	.f_isfd = 0,
+	.f_isfd = 1,
 	.f_attach = filt_machportattach,
 	.f_detach = filt_machportdetach,
 	.f_event = filt_machport,
-	.f_touch = filt_machporttouch,
 };
 
 static int
@@ -392,31 +390,36 @@ filt_machportattach(struct knote *kn)
 {
 	mach_port_name_t	name = (mach_port_name_t)kn->kn_kevent.ident;
 	ipc_pset_t			pset = IPS_NULL;
+	ipc_entry_t			entry;
 	kern_return_t		kr;
+	struct knlist		*note;
 
 	kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 							  (ipc_object_t *)&pset);
 
 	if (kr != KERN_SUCCESS)
 		return (kr == KERN_INVALID_NAME ? ENOENT : ENOTSUP);
-
-	kn->kn_ptr.p_pset = pset;
-	ips_reference(pset);
-	knlist_add(&pset->ips_messages.imq_note, kn, 0);
+	note = &pset->ips_messages.imq_note;
 	ips_unlock(pset);
+
+	if ((entry = ipc_entry_lookup(current_space(), name)) == NULL)
+		return (ENOENT);
+	KASSERT(entry->ie_object == (ipc_object_t)pset, ("entry->ie_object == pset"));
+	kn->kn_fp = entry->ie_fp;
+	knlist_add(note, kn, 0);
 	return (0);
 }
+
 
 static void
 filt_machportdetach(struct knote *kn)
 {
-	ipc_pset_t	pset = kn->kn_ptr.p_pset;
+	ipc_entry_t     entry = kn->kn_fp->f_data;
+	ipc_pset_t		pset = (ipc_pset_t)entry->ie_object;
 
-	ips_lock(pset);
-	knlist_remove(&pset->ips_messages.imq_note, kn, 1);
-	kn->kn_ptr.p_pset = IPS_NULL;
-	ips_unlock(pset);
+	knlist_remove(&pset->ips_messages.imq_note, kn, 0);
 }
+
 
 static int
 filt_machport(struct knote *kn, long hint __unused)
@@ -430,7 +433,8 @@ filt_machport(struct knote *kn, long hint __unused)
 
 	kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 							  (ipc_object_t *)&pset);
-	if (kr != KERN_SUCCESS || pset != kn->kn_ptr.p_pset || !ips_active(pset)) {
+	if (kr != KERN_SUCCESS || pset != (ipc_pset_t)((ipc_entry_t)kn->kn_fp->f_data)->ie_object
+		|| !ips_active(pset)) {
 		kn->kn_data = 0;
 		kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 		if (pset != IPS_NULL)
@@ -446,34 +450,16 @@ filt_machport(struct knote *kn, long hint __unused)
 	kr = ipc_mqueue_receive(&pset->ips_messages, option, size, 0, /* immediate timeout */
 							NULL, NULL, &lportname);
 	ips_release(pset);
+	/* XXX FIXME we're using the message queue lock for the knlist
+	   kqueue expects this to be held on return but receive
+	   returns with it unlocked
+	*/
+	imq_lock(&pset->ips_messages);
 	if (kr == MACH_RCV_TIMED_OUT) {
 		return (0);
 	}
 	kn->kn_data = lportname;
 	return (1);
-}
-
-static void
-filt_machporttouch(struct knote *kn, struct kevent64_s *kev, u_long type)
-{
-	switch (type) {
-	case EVENT_REGISTER:
-		kn->kn_sfflags = kev->fflags;
-		kn->kn_sdata = kev->data;
-		kn->kn_kevent.ext[0] = kev->ext[0];
-		kn->kn_kevent.ext[1] = kev->ext[1];
-		break;
-	case EVENT_PROCESS:
-		*kev = kn->kn_kevent;
-		if (kn->kn_flags & EV_CLEAR) {
-			kn->kn_data = 0;
-			kn->kn_fflags = 0;
-		}
-		break;
-	default:
-		panic("filt_machporttouch() - invalid type (%ld)", type);
-		break;
-	}
 }
 
 #if	MACH_KDB
