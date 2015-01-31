@@ -175,18 +175,29 @@ typedef char *mach_msg_trailer_info_t;
  */
 
 #define MACH_MSGH_BITS_ZERO		0x00000000
-#define MACH_MSGH_BITS_REMOTE_MASK	0x000000ff
-#define MACH_MSGH_BITS_LOCAL_MASK	0x0000ff00
-#define MACH_MSGH_BITS_COMPLEX		0x80000000U
-#define	MACH_MSGH_BITS_CIRCULAR		0x40000000	/* internal use only */
-#define	MACH_MSGH_BITS_RTALLOC		0x20000000	/* internal use only */
-#define	MACH_MSGH_BITS_UNUSED		0x1fff0000
 
-#define	MACH_MSGH_BITS_PORTS_MASK								\
-		(MACH_MSGH_BITS_REMOTE_MASK|MACH_MSGH_BITS_LOCAL_MASK)
+#define MACH_MSGH_BITS_REMOTE_MASK	0x0000001f
+#define MACH_MSGH_BITS_LOCAL_MASK	0x00001f00
+#define MACH_MSGH_BITS_VOUCHER_MASK	0x001f0000
+
+#define	MACH_MSGH_BITS_PORTS_MASK		\
+		(MACH_MSGH_BITS_REMOTE_MASK |	\
+		 MACH_MSGH_BITS_LOCAL_MASK |	\
+		 MACH_MSGH_BITS_VOUCHER_MASK)
+
+#define MACH_MSGH_BITS_COMPLEX		0x80000000U
+#define	MACH_MSGH_BITS_CIRCULAR		0x10000000	/* internal use only */
 
 #define MACH_MSGH_BITS(remote, local)				\
-		((remote) | ((local) << 8))
+	((remote) | ((local) << 8))
+#define	MACH_MSGH_BITS_SET_PORTS(remote, local, voucher)	\
+	(((remote) & MACH_MSGH_BITS_REMOTE_MASK) | 		\
+	 (((local) << 8) & MACH_MSGH_BITS_LOCAL_MASK) | 	\
+	 (((voucher) << 16) & MACH_MSGH_BITS_VOUCHER_MASK))
+#define MACH_MSGH_BITS_SET(remote, local, voucher, other)	\
+	(MACH_MSGH_BITS_SET_PORTS((remote), (local), (voucher)) \
+	 | ((other) &~ MACH_MSGH_BITS_PORTS_MASK))
+
 #define	MACH_MSGH_BITS_REMOTE(bits)				\
 		((bits) & MACH_MSGH_BITS_REMOTE_MASK)
 #define	MACH_MSGH_BITS_LOCAL(bits)				\

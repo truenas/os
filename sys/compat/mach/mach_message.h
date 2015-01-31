@@ -106,8 +106,7 @@
     "b\14invalid[0x4000]\0b\15invalid[0x8000]\0" \
     "b\16send_always\0b\17send_trailer\0"
 
-#define MACH_MSGH_BITS_REMOTE_MASK	0x000000ff
-#define MACH_MSGH_BITS_LOCAL_MASK	0x0000ff00
+
 #define MACH_MSGH_LOCAL_BITS(bits)	(((bits) >> 8) & 0xff)
 #define MACH_MSGH_REMOTE_BITS(bits)	((bits) & 0xff)
 #define MACH_MSGH_REPLY_LOCAL_BITS(bits)	(((bits) << 8) & 0xff00)

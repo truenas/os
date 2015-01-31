@@ -241,16 +241,27 @@ sys__kernelrpc_mach_port_move_member_trap(struct thread *td, struct _kernelrpc_m
 {
 	ipc_space_t space = current_task()->itk_space;
 
-	return (mach_port_move_member(space, uap->member, uap->after));
+	td->td_retval[0] = mach_port_move_member(space, uap->member, uap->after);
+	return (0);
 }
 
 int
 sys__kernelrpc_mach_port_insert_member_trap(struct thread *td, struct _kernelrpc_mach_port_insert_member_trap_args *uap)
-	UNSUPPORTED;
+{
+	ipc_space_t space = current_task()->itk_space;
+
+	td->td_retval[0] = mach_port_move_member(space, uap->name, uap->pset);
+	return (0);
+}
 
 int
 sys__kernelrpc_mach_port_extract_member_trap(struct thread *td, struct _kernelrpc_mach_port_extract_member_trap_args *uap)
-	UNSUPPORTED;
+{
+	ipc_space_t space = current_task()->itk_space;
+
+	td->td_retval[0] = mach_port_move_member(space, uap->name, MACH_PORT_NAME_NULL);
+	return (0);
+}
 
 int
 sys__kernelrpc_mach_port_construct_trap(struct thread *td, struct _kernelrpc_mach_port_construct_trap_args *uap)
