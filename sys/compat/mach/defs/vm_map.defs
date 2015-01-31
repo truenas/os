@@ -107,7 +107,7 @@ routine vm_region(
  *	allocation actually took place is returned.
  */
 
-#if !KERNEL && !LIBSYSCALL_INTERFACE
+#if !KERNEL 
 skip;
 #else
 routine PREFIX(vm_allocate)(
@@ -123,7 +123,7 @@ routine PREFIX(vm_allocate)(
  *	address space of the target task.
  */
 
-#if !KERNEL && !LIBSYSCALL_INTERFACE
+#if !KERNEL 
 skip;
 #else
 routine PREFIX(vm_deallocate)(

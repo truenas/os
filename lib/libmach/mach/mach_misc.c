@@ -40,18 +40,6 @@ kern_return_t _kernelrpc_mach_port_extract_right_trap(
 	mach_port_t *poly,
 	mach_msg_type_name_t *polyPoly
 );
-kern_return_t _kernelrpc_mach_port_mod_refs_trap(
-	ipc_space_t task,
-	mach_port_name_t name,
-	mach_port_right_t right,
-	mach_port_delta_t delta
-	);
-kern_return_t _kernelrpc_mach_port_move_member_trap(
-	mach_port_name_t target,
-	mach_port_name_t member,
-	mach_port_name_t after
-	);
-
 
 kern_return_t _kernelrpc_mach_vm_allocate_trap(
        mach_vm_map_t target,
@@ -75,6 +63,11 @@ kern_return_t _kernelrpc_mach_vm_map_trap(
 
 mach_port_t host_self_trap(void);
 mach_port_t thread_self_trap(void);
+
+
+kern_return_t vm_allocate(mach_port_name_t target, vm_address_t *addr, vm_size_t size, int flags);
+kern_return_t vm_deallocate(mach_port_name_t target, vm_address_t addr, vm_size_t size);
+
 
 
 kern_return_t
@@ -135,7 +128,21 @@ mach_vm_allocate(mach_port_name_t target, vm_address_t *addr, vm_size_t size, in
 }
 
 kern_return_t
+vm_allocate(mach_port_name_t target, vm_address_t *addr, vm_size_t size, int flags)
+{
+
+	return (_kernelrpc_mach_vm_allocate_trap(target, addr, size, flags));
+}
+
+kern_return_t
 mach_vm_deallocate(mach_port_name_t target, vm_address_t addr, vm_size_t size)
+{
+
+	return (_kernelrpc_mach_vm_deallocate_trap(target, addr, size));
+}
+
+kern_return_t
+vm_deallocate(mach_port_name_t target, vm_address_t addr, vm_size_t size)
 {
 
 	return (_kernelrpc_mach_vm_deallocate_trap(target, addr, size));
@@ -158,6 +165,21 @@ mach_port_move_member(mach_port_name_t target, mach_port_name_t member, mach_por
 {
 
 	return (_kernelrpc_mach_port_move_member_trap(target, member, after));
+}
+
+kern_return_t
+mach_port_insert_member(mach_port_name_t target, mach_port_name_t name, mach_port_name_t pset)
+{
+
+	return (_kernelrpc_mach_port_insert_member_trap(target, name, pset));
+}
+
+
+kern_return_t
+mach_port_extract_member(mach_port_name_t target, mach_port_name_t name, mach_port_name_t pset)
+{
+
+	return (_kernelrpc_mach_port_extract_member_trap(target, name, pset));
 }
 
 #include <time.h>

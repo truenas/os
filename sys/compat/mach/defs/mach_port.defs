@@ -464,6 +464,7 @@ routine	mach_port_kernel_object(
 skip;
 #endif
 
+#ifdef _KERNEL
 /*
  *	Inserts the specified rights into the portset identified
  *	by the <task, pset> pair.  The results of passing in the
@@ -502,6 +503,9 @@ routine mach_port_extract_member(
 		task		: ipc_space_t;
 		name		: mach_port_name_t;
 		pset		: mach_port_name_t);
+#else
+skip;
+skip;
 
 /*
  * Only valid for receive rights.

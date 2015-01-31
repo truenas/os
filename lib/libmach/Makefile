@@ -24,7 +24,7 @@ SYSDIR=	${_dir}
 CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR}
 CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include
 CFLAGS+= -fPIC -DPRIVATE -D__MigTypeCheck=1 -DLIBSYSCALL_INTERFACE=1
-DEBUG_FLAGS= -g
+DEBUG_FLAGS= -g -O0
 mach_port.h mach_portUser.c: ${DEFS}/mach_port.defs
 	mig ${CFLAGS} -server /dev/null ${DEFS}/mach_port.defs
 	cp mach_port.h ${H}/mach_port.h
