@@ -1305,6 +1305,8 @@ findkn:
 	} else {
 		kn->kn_sfflags = kev->fflags;
 		kn->kn_sdata = kev->data;
+		kn->kn_kevent.ext[0] = kev->ext[0];
+		kn->kn_kevent.ext[1] = kev->ext[1];
 	}
 
 	/*
