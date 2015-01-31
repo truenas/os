@@ -740,6 +740,8 @@ typedef kern_return_t mach_msg_return_t;
 		/* Bogus destination port. */
 #define MACH_SEND_TIMED_OUT		0x10000004
 		/* Message not sent before timeout expired. */
+#define MACH_SEND_INVALID_VOUCHER	0x10000005
+		/* Bogus voucher port. */
 #define MACH_SEND_INTERRUPTED		0x10000007
 		/* Software interrupt. */
 #define MACH_SEND_MSG_TOO_SMALL		0x10000008
