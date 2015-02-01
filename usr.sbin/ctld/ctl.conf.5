@@ -27,7 +27,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd November 9, 2014
+.Dd February 1, 2015
 .Dt CTL.CONF 5
 .Os
 .Sh NAME
@@ -60,13 +60,18 @@ portal-group <name> {
 	...
 }
 
-target <name> {
-	auth-group <name>
-	portal-group <name>
-	lun <number> {
-		path <path>
-	}
-	...
+.No lun Ar name No {
+.Dl path Ar path
+}
+
+.No target Ar name {
+.Dl auth-group Ar name
+.Dl portal-group Ar name
+.Dl lun Ar number Ar name
+.Dl lun Ar number No {
+.Dl 	path Ar path
+.Dl }
+.Dl ...
 }
 .Ed
 .Ss global level
@@ -90,10 +95,18 @@ The default is
 .It Ic portal-group Aq Ar name
 Opens a portal-group section, defining a portal group,
 which can then be assigned to any number of targets.
-.It Ic target Aq Ar name
-Opens a target configuration section.
-.It Ic timeout Aq Ar seconds
-Specifies timeout for login session, after which the connection
+.It Ic lun Ar name
+Create a
+.Sy lun
+configuration context, defining a LUN to be exported by some target(s).
+.It Ic target Ar name
+Create a
+.Sy target
+configuration context, which can contain one or more
+.Sy lun
+contexts.
+.It Ic timeout Ar seconds
+The timeout for login sessions, after which the connection
 will be forcibly terminated.
 The default is 60.
 Setting it to 0 disables the timeout.
@@ -259,6 +272,10 @@ IPv4 or IPv6 address to redirect initiators to.
 When configured, all initiators attempting to connect to this target
 will get redirected using "Target moved temporarily" login response.
 Redirection happens after successful authentication.
+.It Ic lun Ar number Ar name
+Export previously defined
+.Sy lun
+by the parent target.
 .It Ic lun Ar number
 Create a
 .Sy lun
@@ -333,21 +350,21 @@ target iqn.2012-06.com.example:target0 {
 	}
 }
 
+lun example_1 {
+	path /dev/zvol/tank/example_1
+}
+
 target iqn.2012-06.com.example:target1 {
 	chap chapuser chapsecret
-	lun 0 {
-		path /dev/zvol/tank/example_1
-	}
+	lun 0 example_1
 }
 
 target iqn.2012-06.com.example:target2 {
 	auth-group ag0
 	portal-group pg0
-	lun 0 {
-		path /dev/zvol/tank/example2_0
-	}
+	lun 0 example_1
 	lun 1 {
-		path /dev/zvol/tank/example2_1
+		path /dev/zvol/tank/example_2
 		option foo bar
 	}
 }
