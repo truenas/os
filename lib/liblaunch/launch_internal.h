@@ -79,8 +79,8 @@ _launch_globals(void) {
 
 #pragma GCC visibility push(default)
 
-#define LAUNCHD_DB_PREFIX "/private/var/db/launchd.db"
-#define LAUNCHD_LOG_PREFIX "/private/var/log"
+#define LAUNCHD_DB_PREFIX "/var/db/launchd"
+#define LAUNCHD_LOG_PREFIX "/var/log"
 
 #define LAUNCHD_JOB_DEFAULTS "Defaults"
 #define LAUNCHD_JOB_DEFAULTS_CACHED "CachedDefaults"
