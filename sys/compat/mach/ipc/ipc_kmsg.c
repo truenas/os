@@ -336,20 +336,22 @@ ipc_kmsg_alloc(
 	mach_msg_size_t max_expanded_size;
 	ipc_kmsg_t kmsg;
 	int mflags;
-
-	mach_msg_size_t size = msg_and_trailer_size - MAX_TRAILER_SIZE;
+	mach_msg_size_t min_msg_size = 0;
+	if (msg_and_trailer_size > MAX_TRAILER_SIZE)
+		min_msg_size = msg_and_trailer_size - MAX_TRAILER_SIZE;
 #ifdef INVARIANTS
 	mflags = M_NOWAIT|M_ZERO;
 #else
 	mflags = M_NOWAIT;
 #endif
 	/* compare against implementation upper limit for the body */
-	if (size > ipc_kmsg_max_body_space) {
-		printf("size=%d > ipc_kmsg_max_body_space=%ld - return IKM_NULL\n", size, ipc_kmsg_max_body_space);
+	if (min_msg_size > ipc_kmsg_max_body_space) {
+		printf("size=%d > ipc_kmsg_max_body_space=%ld - return IKM_NULL\n",
+			   min_msg_size, ipc_kmsg_max_body_space);
 		return IKM_NULL;
 	}
-	if (size > sizeof(mach_msg_base_t)) {
-		mach_msg_size_t max_desc = (mach_msg_size_t)(((size - sizeof(mach_msg_base_t)) /
+	if (min_msg_size > sizeof(mach_msg_base_t)) {
+		mach_msg_size_t max_desc = (mach_msg_size_t)(((min_msg_size - sizeof(mach_msg_base_t)) /
 				           sizeof(mach_msg_ool_descriptor32_t)) *
 				           DESC_SIZE_ADJUSTMENT);
 
