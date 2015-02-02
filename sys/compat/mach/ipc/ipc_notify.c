@@ -397,7 +397,8 @@ ipc_notify_send_once(
 {
 	ipc_kmsg_t kmsg;
 	mach_send_once_notification_t *n;
-		kmsg = ikm_alloc(sizeof *n);
+
+	kmsg = ikm_alloc(sizeof *n);
 	if (kmsg == IKM_NULL) {
 		printf("dropped send-once (%p)\n", port);
 		ipc_port_release_sonce(port);

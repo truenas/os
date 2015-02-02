@@ -345,6 +345,7 @@ ipc_kmsg_alloc(
 #endif
 	/* compare against implementation upper limit for the body */
 	if (size > ipc_kmsg_max_body_space) {
+		printf("size=%d > ipc_kmsg_max_body_space=%ld - return IKM_NULL\n", size, ipc_kmsg_max_body_space);
 		return IKM_NULL;
 	}
 	if (size > sizeof(mach_msg_base_t)) {
@@ -354,6 +355,7 @@ ipc_kmsg_alloc(
 
 		/* make sure expansion won't cause wrap */
 		if (msg_and_trailer_size > MACH_MSG_SIZE_MAX - max_desc) {
+			printf("expansion would cause wrap! - return IKM_NULL\n");
 			return IKM_NULL;
 		}
 		max_expanded_size = msg_and_trailer_size + max_desc;
