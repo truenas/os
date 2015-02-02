@@ -89,7 +89,7 @@ typedef enum {
 	CD_Q_BCD_TRACKS		= 0x02,
 	CD_Q_NO_CHANGER		= 0x04,
 	CD_Q_CHANGER		= 0x08,
-	CD_Q_10_BYTE_ONLY	= 0x10
+	CD_Q_10_BYTE_ONLY	= 0x10,
 	CD_Q_RETRY_BUSY		= 0x40
 } cd_quirks;
 
