@@ -31,11 +31,12 @@
 struct thread_shuttle {
 
 	/* IPC data structures */
-	struct thread_shuttle *ith_next, *ith_prev;
+	struct thread_shuttle *ith_next, *ith_prev, *ith_pool_next;
 	mach_msg_return_t ith_state;
 	mach_msg_size_t ith_msize;              /* max size for recvd msg */
 	struct ipc_kmsg *ith_kmsg;              /* received message */
 	mach_port_seqno_t ith_seqno;            /* seqno of recvd message */
+	mach_port_t ith_pool_port;
 
 	struct ipc_kmsg_queue ith_messages;
 
@@ -66,6 +67,7 @@ struct thread_shuttle {
 	struct ipc_port *ith_sself;	/* a send right */
 	struct exception_action exc_actions[EXC_TYPES_COUNT];
 	int		ref_count;	/* number of references to me */
+	int ith_active;
 
 #if 0
 

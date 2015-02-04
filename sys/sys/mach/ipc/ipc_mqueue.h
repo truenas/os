@@ -109,8 +109,6 @@
 typedef struct ipc_mqueue {
 	struct mtx imq_lock_data;
 	struct ipc_kmsg_queue imq_messages;
-	struct ipc_thread_queue imq_threads;
-	struct knlist imq_note;
 } *ipc_mqueue_t;
 
 #define	IMQ_NULL		((ipc_mqueue_t) 0)
@@ -158,12 +156,13 @@ extern mach_msg_return_t ipc_mqueue_deliver(
 extern mach_msg_return_t ipc_mqueue_copyin(
 	ipc_space_t	space,
 	mach_port_name_t	name,
-	ipc_mqueue_t	*mqueuep,
+	natural_t *bitsp,
 	ipc_object_t	*objectp);
 
 /* Receive a message from a message queue */
 extern mach_msg_return_t ipc_mqueue_receive(
-	ipc_mqueue_t		mqueue,
+	ipc_object_t		object,
+	natural_t	bits,
 	mach_msg_option_t	option,
 	mach_msg_size_t		max_size,
 	mach_msg_timeout_t	timeout,

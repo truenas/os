@@ -132,10 +132,10 @@ ipc_pset_alloc(
 	/* pset is locked */
 
 	pset->ips_local_name = name;
-	ipc_mqueue_init(&pset->ips_messages);
-#if 0	
+	TAILQ_INIT(&pset->ips_ports);
+	knlist_init(&pset->ips_note, &pset->pset_comm.rcd_io_lock_data,
+				NULL, NULL, NULL, NULL);
 	thread_pool_init(&pset->ips_thread_pool);
-#endif
 	*namep = name;
 	*psetp = pset;
 	return KERN_SUCCESS;
@@ -173,10 +173,7 @@ ipc_pset_alloc_name(
 	/* pset is locked */
 
 	pset->ips_local_name = name;
-	ipc_mqueue_init(&pset->ips_messages);
-#if 0	
 	thread_pool_init(&pset->ips_thread_pool);
-#endif
 	*psetp = pset;
 	return KERN_SUCCESS;
 }
@@ -203,21 +200,6 @@ ipc_pset_add(
 
 	port->ip_pset = pset;
 	ips_reference(pset);
-
-	imq_lock(&port->ip_messages);
-	imq_lock(&pset->ips_messages);
-
-	/* move messages from port's queue to the port set's queue */
-
-	ipc_mqueue_move(&pset->ips_messages, &port->ip_messages, port);
-	imq_unlock(&pset->ips_messages);
-	assert(ipc_kmsg_queue_empty(&port->ip_messages.imq_messages));
-
-	/* wake up threads waiting to receive from the port */
-
-	ipc_mqueue_changed(&port->ip_messages, MACH_RCV_PORT_CHANGED);
-	assert(ipc_thread_queue_empty(&port->ip_messages.imq_threads));
-	imq_unlock(&port->ip_messages);
 }
 
 /*
@@ -241,15 +223,6 @@ ipc_pset_remove(
 	port->ip_pset = IPS_NULL;
 	ips_release(pset);
 
-	imq_lock(&port->ip_messages);
-	imq_lock(&pset->ips_messages);
-
-	/* move messages from port set's queue to the port's queue */
-
-	ipc_mqueue_move(&port->ip_messages, &pset->ips_messages, port);
-
-	imq_unlock(&pset->ips_messages);
-	imq_unlock(&port->ip_messages);
 }
 
 /*
@@ -341,6 +314,29 @@ ipc_pset_move(
 		KERN_NOT_IN_SET : KERN_SUCCESS);
 }
 
+
+
+/*
+ *	Routine:	ipc_pset_changed
+ *	Purpose:
+ *		Wake up receivers waiting on pset.
+ *	Conditions:
+ *		The pset is locked.
+ */
+
+static void
+ipc_pset_changed(
+	ipc_pset_t		pset,
+	mach_msg_return_t	mr)
+{
+	ipc_thread_t th;
+
+	while ((th = thread_pool_get_act((ipc_port_t)pset, 0)) != ITH_NULL) {
+		th->ith_state = mr;
+		thread_go(th);
+	}
+}
+
 /*
  *	Routine:	ipc_pset_destroy
  *	Purpose:
@@ -362,12 +358,7 @@ ipc_pset_destroy(
 	assert(ips_active(pset));
 
 	pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-
-	imq_lock(&pset->ips_messages);
-	ipc_mqueue_changed(&pset->ips_messages, MACH_RCV_PORT_DIED);
-	imq_unlock(&pset->ips_messages);
-
-	/* XXXX Perhaps ought to verify ips_thread_pool is empty */
+	ipc_pset_changed(pset, MACH_RCV_PORT_DIED);
 
 	ips_release(pset);	/* consume the ref our caller gave us */
 	ips_check_unlock(pset);
@@ -399,14 +390,19 @@ filt_machportattach(struct knote *kn)
 
 	if (kr != KERN_SUCCESS)
 		return (kr == KERN_INVALID_NAME ? ENOENT : ENOTSUP);
-	note = &pset->ips_messages.imq_note;
+	note = &pset->ips_note;
 	ips_unlock(pset);
 
 	if ((entry = ipc_entry_lookup(current_space(), name)) == NULL)
 		return (ENOENT);
 	KASSERT(entry->ie_object == (ipc_object_t)pset, ("entry->ie_object == pset"));
 	kn->kn_fp = entry->ie_fp;
-	knlist_add(note, kn, 0);
+	ips_lock(pset);
+	knlist_add(note, kn, 1);
+	if (!TAILQ_EMPTY(&pset->ips_ports)) {
+		KNOTE_LOCKED(&pset->ips_note, 1);
+	}
+	ips_unlock(pset);
 	return (0);
 }
 
@@ -414,47 +410,55 @@ filt_machportattach(struct knote *kn)
 static void
 filt_machportdetach(struct knote *kn)
 {
-	ipc_entry_t     entry = kn->kn_fp->f_data;
-	ipc_pset_t		pset = (ipc_pset_t)entry->ie_object;
+	mach_port_name_t	name = (mach_port_name_t)kn->kn_kevent.ident;
+	ipc_pset_t		pset = IPS_NULL;
+	kern_return_t kr;
 
-	knlist_remove(&pset->ips_messages.imq_note, kn, 0);
+	kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
+							  (ipc_object_t *)&pset);
+
+	if (kr != KERN_SUCCESS)
+		return;
+
+	knlist_remove(&pset->ips_note, kn, 1);
+	ips_unlock(pset);
 }
 
 
 static int
-filt_machport(struct knote *kn, long hint __unused)
+filt_machport(struct knote *kn, long hint)
 {
 	mach_port_name_t        name = (mach_port_name_t)kn->kn_kevent.ident;
-	ipc_pset_t              pset = IPS_NULL;	
+	ipc_entry_t				entry = kn->kn_fp->f_data;
+	ipc_pset_t              pset = (ipc_pset_t)entry->ie_object;
 	kern_return_t           kr;
 	mach_msg_option_t	option;
 	mach_msg_size_t		size;
 	mach_port_name_t	lportname;
 
-	kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
-							  (ipc_object_t *)&pset);
-	if (kr != KERN_SUCCESS || pset != (ipc_pset_t)((ipc_entry_t)kn->kn_fp->f_data)->ie_object
-		|| !ips_active(pset)) {
-		kn->kn_data = 0;
-		kn->kn_flags |= (EV_EOF | EV_ONESHOT);
-		if (pset != IPS_NULL)
-			ips_unlock(pset);
-		return (1);
-	}
-	ips_reference(pset);
-	ips_unlock(pset);
+	if (hint == 0) {
 
+		kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
+								  (ipc_object_t *)&pset);
+		if (kr != KERN_SUCCESS || !ips_active(pset) ||
+			pset != (ipc_pset_t)((ipc_entry_t)kn->kn_fp->f_data)->ie_object) {
+			kn->kn_data = 0;
+			kn->kn_flags |= (EV_EOF | EV_ONESHOT);
+			return (1);
+		}
+	}
+
+	ips_reference(pset);
 	/* force a return - we have no callers directly receiving messages now */
 	option = MACH_RCV_LARGE | MACH_RCV_TIMEOUT;
 	size = 0;
-	kr = ipc_mqueue_receive(&pset->ips_messages, option, size, 0, /* immediate timeout */
-							NULL, NULL, &lportname);
+	kr = ipc_mqueue_receive((ipc_object_t)pset, MACH_PORT_TYPE_PORT_SET, option, size,
+							0, /* immediate timeout */NULL, NULL, &lportname);
 	ips_release(pset);
 	/* XXX FIXME we're using the message queue lock for the knlist
 	   kqueue expects this to be held on return but receive
 	   returns with it unlocked
 	*/
-	imq_lock(&pset->ips_messages);
 	if (kr == MACH_RCV_TIMED_OUT) {
 		return (0);
 	}

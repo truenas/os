@@ -2762,8 +2762,8 @@ ipc_kmsg_copyout_size(
 	send_size -= LEGACY_HEADER_SIZE_DELTA;
 #endif
 #ifdef VERBOSE_DEBUGGING
-	printf("ipc_kmsg_copyout_size() is_task_64bit=%d -> send_size=%d msgh_bits=0x%x\n",
-		   is_task_64bit, send_size, kmsg->ikm_header->msgh_bits);
+	printf("ipc_kmsg_copyout_size() is_task_64bit=%d -> send_size=%d msgh_bits=0x%x delta=%d\n",
+		   is_task_64bit, send_size, kmsg->ikm_header->msgh_bits, LEGACY_HEADER_SIZE_DELTA);
 #endif
     if (kmsg->ikm_header->msgh_bits & MACH_MSGH_BITS_COMPLEX) {
         mach_msg_body_t *body;

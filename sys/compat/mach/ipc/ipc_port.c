@@ -591,15 +591,36 @@ ipc_port_set_seqno(
 			ips_check_unlock(pset);
 			goto no_port_set;
 		} else {
-			imq_lock(&pset->ips_messages);
+			imq_lock(&port->ip_messages);
 			port->ip_seqno = seqno;
-			imq_unlock(&pset->ips_messages);
+			imq_unlock(&port->ip_messages);
 		}
 	} else {
 	    no_port_set:
 		imq_lock(&port->ip_messages);
 		port->ip_seqno = seqno;
 		imq_unlock(&port->ip_messages);
+	}
+}
+
+/*
+ *	Routine:	ipc_port_changed
+ *	Purpose:
+ *		Wake up receivers waiting on port.
+ *	Conditions:
+ *		The port is locked.
+ */
+
+static void
+ipc_port_changed(
+	ipc_port_t		port,
+	mach_msg_return_t	mr)
+{
+	ipc_thread_t th;
+
+	while ((th = thread_pool_get_act(port, 0)) != ITH_NULL) {
+		th->ith_state = mr;
+		thread_go(th);
 	}
 }
 
@@ -621,18 +642,12 @@ ipc_port_clear_receiver(
 
 	pset = port->ip_pset;
 	if (pset != IPS_NULL) {
-		/* No threads receiving from port, but must remove from set. */
-
 		ips_lock(pset);
 		ipc_pset_remove(pset, port);
 		ips_check_unlock(pset);
-	} else {
-		/* Else, wake up all receivers, indicating why. */
-
-		imq_lock(&port->ip_messages);
-		ipc_mqueue_changed(&port->ip_messages, MACH_RCV_PORT_DIED);
-		imq_unlock(&port->ip_messages);
 	}
+
+	ipc_port_changed(port, MACH_RCV_PORT_DIED);
 
 	ipc_port_set_mscount(port, 0);
 	imq_lock(&port->ip_messages);
@@ -688,6 +703,7 @@ ipc_port_init(
 #endif	/* MACH_ASSERT */
 
 	ipc_mqueue_init(&port->ip_messages);
+	thread_pool_init(&port->ip_thread_pool);
 	ipc_thread_queue_init(&port->ip_blocked);
 }
 
@@ -827,9 +843,8 @@ ipc_port_destroy(
 	ipc_kmsg_t kmsg;
 	ipc_thread_t sender;
 	ipc_port_request_t dnrequests;
-#if 0	
 	thread_pool_t thread_pool;
-#endif
+
 	assert(ip_active(port));
 	/* port->ip_receiver_name is garbage */
 	/* port->ip_receiver/port->ip_destination is garbage */
@@ -892,11 +907,10 @@ ipc_port_destroy(
 	dnrequests = port->ip_dnrequests;
 	port->ip_dnrequests = IPR_NULL;
 	ip_unlock(port);
-#if 0
 	/* wakeup any threads waiting on this pool port for an activation */
 	if ((thread_pool = &port->ip_thread_pool) != THREAD_POOL_NULL)
 		thread_pool_wakeup(thread_pool);
-#endif
+
 	/* throw away no-senders request */
 
 	nsrequest = port->ip_nsrequest;
@@ -907,7 +921,6 @@ ipc_port_destroy(
 
 	mqueue = &port->ip_messages;
 	imq_lock(mqueue);
-	assert(ipc_thread_queue_empty(&mqueue->imq_threads));
 	kmqueue = &mqueue->imq_messages;
 
 	while ((kmsg = ipc_kmsg_dequeue(kmqueue)) != IKM_NULL) {

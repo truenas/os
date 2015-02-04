@@ -1317,18 +1317,29 @@ findkn:
 	 * kn_knlist.
 	 */
 done_ev_add:
-	event = kn->kn_fop->f_event(kn, 0);
-	KQ_LOCK(kq);
-	if (event)
-		KNOTE_ACTIVATE(kn, 1);
-	kn->kn_status &= ~(KN_INFLUX | KN_SCAN);
-	KN_LIST_UNLOCK(kn);
-
 	if ((kev->flags & EV_DISABLE) &&
 	    ((kn->kn_status & KN_DISABLED) == 0)) {
 		kn->kn_status |= KN_DISABLED;
 	}
 
+	if ((kn->kn_status & KN_DISABLED) == 0 || (kev->flags & EV_ENABLE))
+		event = kn->kn_fop->f_event(kn, 0);
+	else
+		event = 0;
+	KQ_LOCK(kq);
+	if (event)
+		KNOTE_ACTIVATE(kn, 1);
+	kn->kn_status &= ~(KN_INFLUX | KN_SCAN);
+	KN_LIST_UNLOCK(kn);
+#ifdef KN_DEBUG
+#define IS_KN_DISABLED(kn) (!!(kn->kn_status & KN_DISABLED))
+#define IS_KN_QUEUED(kn) (!!(kn->kn_status & KN_QUEUED))
+#define IS_KN_ACTIVE(kn) (!!(kn->kn_status & KN_ACTIVE))
+	if ((kev->flags & EV_ENABLE)) {
+		printf("KN_DISABLED=%d KN_ACTIVE=%d KN_QUEUED=%d\n",
+			   IS_KN_DISABLED(kn), IS_KN_ACTIVE(kn), IS_KN_QUEUED(kn));
+	}
+#endif	
 	if ((kev->flags & EV_ENABLE) && (kn->kn_status & KN_DISABLED)) {
 		kn->kn_status &= ~KN_DISABLED;
 		if ((kn->kn_status & KN_ACTIVE) &&

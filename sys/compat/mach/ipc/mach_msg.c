@@ -338,14 +338,15 @@ mach_msg_receive(
 	ipc_space_t space = current_space();
 	vm_map_t map = current_map();
 	ipc_object_t object;
-	ipc_mqueue_t mqueue;
 	ipc_kmsg_t kmsg;
 	mach_port_seqno_t seqno;
 	mach_msg_return_t mr;
 	mach_msg_body_t *slist;
 	mach_msg_format_0_trailer_t *trailer;
 	mach_port_name_t lportname;
-	mr = ipc_mqueue_copyin(space, rcv_name, &mqueue, &object);
+	ipc_entry_bits_t bits;
+
+	mr = ipc_mqueue_copyin(space, rcv_name, &bits, &object);
 	if (mr != MACH_MSG_SUCCESS) {
 		return mr;
 	}
@@ -356,12 +357,10 @@ mach_msg_receive(
 	 */
 	if (option & MACH_RCV_OVERWRITE) {
 		if (slist_size < sizeof(mach_msg_base_t)) {
-			imq_unlock(mqueue);
 			ipc_object_release(object);
 			return MACH_RCV_SCATTER_SMALL;
 		} else {
 			slist_size -= sizeof(mach_msg_header_t);
-			imq_unlock(mqueue);
 			slist = (mach_msg_body_t *)KALLOC(slist_size, slist_rt);
 			if (slist == MACH_MSG_BODY_NULL ||
 			    copyin((char *) (msg + 1), (char *)slist,
@@ -376,7 +375,6 @@ mach_msg_receive(
 				ipc_object_release(object);
 				return MACH_RCV_INVALID_TYPE;
 			}
-			imq_lock(mqueue);
 		}
 	} else {
 		slist = MACH_MSG_BODY_NULL;
@@ -385,10 +383,10 @@ mach_msg_receive(
 	self->ith_option = option;
 	self->ith_scatter_list = slist;
 	self->ith_scatter_list_size = slist_size;
-
-	mr = ipc_mqueue_receive(mqueue, option & MACH_RCV_TIMEOUT, rcv_size,
+	io_lock(object);
+	mr = ipc_mqueue_receive(object, bits, option & MACH_RCV_TIMEOUT, rcv_size,
 							timeout, &kmsg, &seqno, &lportname);
-	
+	io_unlock(object);
 	/* mqueue is unlocked */
 	ipc_object_release(object);
 

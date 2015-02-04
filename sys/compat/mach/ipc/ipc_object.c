@@ -170,7 +170,9 @@ ipc_object_translate(
 	object = entry->ie_object;
 	assert(object != IO_NULL);
 
-	io_lock(object);
+	/* caller already holds locked reference */
+	if (*objectp != object)
+		io_lock(object);
 	is_read_unlock(space);
 
 	*objectp = object;

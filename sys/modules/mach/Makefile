@@ -21,7 +21,7 @@ SRCS+= ipc_entry.c ipc_hash.c ipc_init.c ipc_kmsg.c ipc_kobject.c ipc_mqueue.c i
 SRCS+= ipc_object.c ipc_port.c ipc_pset.c ipc_right.c ipc_space.c ipc_table.c ipc_thread.c
 SRCS+= mach_debug.c mach_msg.c mach_port.c
 # compat/mach/kern
-SRCS+= ipc_tt.c ipc_host.c task.c
+SRCS+= ipc_tt.c ipc_host.c task.c thread_pool.c
 .include <bsd.kmod.mk>
 CFLAGS+= -I${SYSDIR}/apsl/include -DCOMPAT_MACH
 DEBUG_FLAGS+= -g -O0

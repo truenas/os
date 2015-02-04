@@ -166,6 +166,7 @@
 #include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
+#include <sys/mach/thread_pool.h>
 
 
 #include <sys/mach/ipc/ipc_object.h>
@@ -185,9 +186,7 @@
  */
 typedef struct rpc_common_data {
 	struct ipc_common_data  rcd_comm;
-#if 0	
 	struct thread_pool      rcd_thread_pool;
-#endif
 	struct mtx rcd_io_lock_data;
 } *rpc_common_t;
 
@@ -240,7 +239,7 @@ struct ipc_port {
 	struct ipc_mqueue ip_messages;
 	struct ipc_thread_queue ip_blocked;
 	ipc_port_flags_t ip_flags;
-
+	TAILQ_ENTRY(ipc_port) ip_next;
 };
 
 

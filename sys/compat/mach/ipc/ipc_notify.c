@@ -409,7 +409,7 @@ ipc_notify_send_once(
 	n = (mach_send_once_notification_t *) kmsg->ikm_header;
 	*n = ipc_notify_send_once_template;
 
-        n->not_header.msgh_remote_port = (mach_port_t) port;
+	n->not_header.msgh_remote_port = (mach_port_t) port;
 
 	ipc_mqueue_send_always(kmsg);
 }

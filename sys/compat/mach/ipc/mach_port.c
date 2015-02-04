@@ -1477,9 +1477,7 @@ mach_port_get_attributes(
                                 goto no_port_set;
                         } else {
                                 statusp->mps_pset = pset->ips_local_name;
-                                imq_lock(&pset->ips_messages);
                                 statusp->mps_seqno = port->ip_seqno;
-                                imq_unlock(&pset->ips_messages);
                                 ips_unlock(pset);
                                 assert(MACH_PORT_NAME_VALID(statusp->mps_pset));
                         }

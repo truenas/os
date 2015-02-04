@@ -110,7 +110,8 @@ typedef struct ipc_pset {
 	struct rpc_common_data	pset_comm;
 
 	mach_port_name_t		ips_local_name;
-	struct ipc_mqueue	ips_messages;
+	struct knlist			ips_note;
+	TAILQ_HEAD(_ips_ports, ipc_port) ips_ports;
 } *ipc_pset_t;
 
 #define ips_object		pset_comm.rcd_comm.icd_object

@@ -227,6 +227,8 @@ MACRO_END
 #define	ikm_init_special(kmsg, size)					\
 MACRO_BEGIN								\
 	(kmsg)->ikm_size = (size);					\
+	(kmsg)->ikm_prev = NULL;						\
+	(kmsg)->ikm_next = NULL;						\
 MACRO_END
 
 #define	ikm_check_initialized(kmsg, size)				\
