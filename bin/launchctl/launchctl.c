@@ -3610,7 +3610,7 @@ str2bsport(const char *s)
 				launchctl_log(LOG_ERR, "Permission denied");
 				return 1;
 			} else if (result != BOOTSTRAP_SUCCESS) {
-				launchctl_log(LOG_ERR, "bootstrap_parent() %d", result);
+				launchctl_log(LOG_ERR, "failed bootstrap_parent() error=0x%08x", result);
 				return 1;
 			}
 		} while (getrootbs && last_bport != bport);
@@ -3688,7 +3688,7 @@ _bslist_cmd(mach_port_t bport, unsigned int depth, bool show_job, bool local_onl
 	flags |= local_only ? BOOTSTRAP_FORCE_LOCAL : 0;
 	result = bootstrap_info(bport, &service_names, &service_cnt, &service_jobs, &service_jobs_cnt, &service_actives, &service_active_cnt, flags);
 	if (result != BOOTSTRAP_SUCCESS) {
-		launchctl_log(LOG_ERR, "bootstrap_info(): %d", result);
+		launchctl_log(LOG_ERR, "bootstrap_info() failed: 0x08%x", result);
 		return 1;
 	}
 
