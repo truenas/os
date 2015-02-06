@@ -1270,7 +1270,7 @@ cfiscsi_session_unregister_initiator(struct cfiscsi_session *cs)
 }
 
 static struct cfiscsi_session *
-cfiscsi_session_new(struct cfiscsi_softc *softc)
+cfiscsi_session_new(struct cfiscsi_softc *softc, const char *offload)
 {
 	struct cfiscsi_session *cs;
 	int error;
@@ -1290,7 +1290,11 @@ cfiscsi_session_new(struct cfiscsi_softc *softc)
 	cv_init(&cs->cs_login_cv, "cfiscsi_login");
 #endif
 
-	cs->cs_conn = icl_new_conn(NULL, "cfiscsi", &cs->cs_lock);
+	cs->cs_conn = icl_new_conn(offload, "cfiscsi", &cs->cs_lock);
+	if (cs->cs_conn == NULL) {
+		free(cs, M_CFISCSI);
+		return (NULL);
+	}
 	cs->cs_conn->ic_receive = cfiscsi_receive_callback;
 	cs->cs_conn->ic_error = cfiscsi_error_callback;
 	cs->cs_conn->ic_prv0 = cs;
@@ -1373,7 +1377,7 @@ cfiscsi_accept(struct socket *so, struct sockaddr *sa, int portal_id)
 {
 	struct cfiscsi_session *cs;
 
-	cs = cfiscsi_session_new(&cfiscsi_softc);
+	cs = cfiscsi_session_new(&cfiscsi_softc, NULL);
 	if (cs == NULL) {
 		CFISCSI_WARN("failed to create session");
 		return;
@@ -1517,7 +1521,7 @@ cfiscsi_ioctl_handoff(struct ctl_iscsi *ci)
 		mtx_unlock(&cfiscsi_softc.lock);
 	} else {
 #endif
-		cs = cfiscsi_session_new(softc);
+		cs = cfiscsi_session_new(softc, cihp->offload);
 		if (cs == NULL) {
 			ci->status = CTL_ISCSI_ERROR;
 			snprintf(ci->error_str, sizeof(ci->error_str),
@@ -1668,6 +1672,7 @@ cfiscsi_ioctl_list(struct ctl_iscsi *ci)
 		    "<max_data_segment_length>%zd</max_data_segment_length>"
 		    "<immediate_data>%d</immediate_data>"
 		    "<iser>%d</iser>"
+		    "<offload>%s</offload>"
 		    "</connection>\n",
 		    cs->cs_id,
 		    cs->cs_initiator_name, cs->cs_initiator_addr, cs->cs_initiator_alias,
@@ -1677,7 +1682,8 @@ cfiscsi_ioctl_list(struct ctl_iscsi *ci)
 		    cs->cs_conn->ic_data_crc32c ? "CRC32C" : "None",
 		    cs->cs_max_data_segment_length,
 		    cs->cs_immediate_data,
-		    cs->cs_conn->ic_iser);
+		    cs->cs_conn->ic_iser,
+		    cs->cs_conn->ic_offload);
 		if (error != 0)
 			break;
 	}
@@ -1791,6 +1797,26 @@ cfiscsi_ioctl_terminate(struct ctl_iscsi *ci)
 		ci->status = CTL_ISCSI_SESSION_NOT_FOUND;
 		snprintf(ci->error_str, sizeof(ci->error_str),
 		    "No matching connections found");
+		return;
+	}
+
+	ci->status = CTL_ISCSI_OK;
+}
+
+static void
+cfiscsi_ioctl_limits(struct ctl_iscsi *ci)
+{
+	struct ctl_iscsi_limits_params *cilp;
+	int error;
+
+	cilp = (struct ctl_iscsi_limits_params *)&(ci->data);
+
+	error = icl_limits(cilp->offload, &cilp->data_segment_limit);
+	if (error != 0) {
+		ci->status = CTL_ISCSI_ERROR;
+		snprintf(ci->error_str, sizeof(ci->error_str),
+			"%s: icl_limits failed with error %d",
+			__func__, error);
 		return;
 	}
 
@@ -2223,6 +2249,9 @@ cfiscsi_ioctl(struct cdev *dev,
 		break;
 	case CTL_ISCSI_TERMINATE:
 		cfiscsi_ioctl_terminate(ci);
+		break;
+	case CTL_ISCSI_LIMITS:
+		cfiscsi_ioctl_limits(ci);
 		break;
 #ifdef ICL_KERNEL_PROXY
 	case CTL_ISCSI_LISTEN:
