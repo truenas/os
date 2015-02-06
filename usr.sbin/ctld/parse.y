@@ -61,7 +61,7 @@ extern int	yyparse(void);
 %token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP DISCOVERY_FILTER
 %token INITIATOR_NAME INITIATOR_PORTAL ISNS_SERVER ISNS_PERIOD ISNS_TIMEOUT
 %token LISTEN LISTEN_ISER LUN MAXPROC OPENING_BRACKET OPTION
-%token PATH PIDFILE PORT PORTAL_GROUP REDIRECT SEMICOLON SERIAL SIZE STR
+%token PATH PIDFILE PORTAL_GROUP REDIRECT SEMICOLON SERIAL SIZE STR
 %token TARGET TIMEOUT 
 
 %union
@@ -463,6 +463,8 @@ target_entry:
 	|
 	target_initiator_portal
 	|
+	target_offload
+	|
 	target_portal_group
 	|
 	target_port
@@ -650,6 +652,17 @@ target_initiator_portal:	INITIATOR_PORTAL STR
 		ap = auth_portal_new(target->t_auth_group, $2);
 		free($2);
 		if (ap == NULL)
+			return (1);
+	}
+	;
+
+target_offload:	OFFLOAD STR
+	{
+		int error;
+
+		error = target_set_offload(target, $2);
+		free($2);
+		if (error != 0)
 			return (1);
 	}
 	;
