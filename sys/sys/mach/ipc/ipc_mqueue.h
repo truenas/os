@@ -107,19 +107,18 @@
 #define TR_DECL(x)
 
 typedef struct ipc_mqueue {
-	struct mtx imq_lock_data;
 	struct ipc_kmsg_queue imq_messages;
 } *ipc_mqueue_t;
 
 #define	IMQ_NULL		((ipc_mqueue_t) 0)
-
+#if 0
 #define	imq_lock_init(mq)	mach_mutex_init(&(mq)->imq_lock_data, \
 					   "ETAP_IPC_MQUEUE")
 #define	imq_lock(mq)		mtx_lock(&(mq)->imq_lock_data)
 #define	imq_lock_try(mq)	mtx_trylock(&(mq)->imq_lock_data)
 #define	imq_unlock(mq)		mtx_unlock(&(mq)->imq_lock_data)
 #define	imq_lock_addr(mq)	mtx_lock((mq)->imq_lock_data)
-
+#endif
 #define	IMQ_NULL_CONTINUE	((void (*)(void)) 0)
 
 /*

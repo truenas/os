@@ -105,21 +105,8 @@
 #include <sys/mach/notify.h>
 
 #include <sys/mach/mach_param.h>
-#if 0
-#include <sys/mach/vm_param.h>
-#include <sys/mach/vm_prot.h>
-#endif
-#if 0
-#include <kern/thread_act.h>
-#include <kern/thread_pool.h>
-#include <sys/mach/mach_server.h>
-#endif
 #include <sys/mach/mach_port_server.h>
-#if 0
-#include <vm/vm_map.h>
-#include <vm/vm_kern.h>
-#include <vm/vm_user.h>
-#endif
+
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_space.h>
 #include <sys/mach/ipc/ipc_object.h>
@@ -1484,9 +1471,7 @@ mach_port_get_attributes(
                 } else {
                 no_port_set:
                         statusp->mps_pset = MACH_PORT_NAME_NULL;
-                        imq_lock(&port->ip_messages);
                         statusp->mps_seqno = port->ip_seqno;
-                        imq_unlock(&port->ip_messages);
                 }
                 statusp->mps_mscount = port->ip_mscount;
                 statusp->mps_qlimit = port->ip_qlimit;

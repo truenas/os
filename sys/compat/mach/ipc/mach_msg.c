@@ -154,28 +154,11 @@
  *	Exported message traps.  See mach/message.h.
  */
 
-#if 0
-#include <cpus.h>
-#include <dipc.h>
-#include <mach_rt.h>
-#endif
-
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/message.h>
 #include <sys/mach/mig_errors.h>
-#if 0
-#include <kern/assert.h>
-#include <kern/counters.h>
-#include <kern/cpu_number.h>
-#include <kern/lock.h>
-#endif
-#if 0
-#include <kern/ipc_sched.h>
-#include <kern/exception.h>
-#include <kern/misc_protos.h>
-#include <vm/vm_map.h>
-#endif
+
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/ipc/ipc_mqueue.h>
 #include <sys/mach/ipc/ipc_object.h>
@@ -189,11 +172,6 @@
 #include <sys/mach/thread.h>
 #include <sys/mach/sched_prim.h>
 #include <sys/mach/ipc_kobject.h>
-
-#if 0
-#include <kern/kalloc.h>
-#include <kern/thread_swap.h>
-#endif
 
 /*
  * Forward declarations
@@ -212,7 +190,6 @@ mach_msg_return_t mach_msg_receive(
 	mach_msg_size_t		rcv_size,
 	mach_port_name_t		rcv_name,
 	mach_msg_timeout_t	timeout,
-	mach_port_name_t		notify,
 	mach_msg_size_t		slist_size);
 
 mach_msg_return_t msg_receive_error(
@@ -280,6 +257,10 @@ mach_msg_send(
 
 	if (mr != MACH_MSG_SUCCESS)
 		return mr;
+
+	DPRINTF("send to remote port %d notify %d id %d\n", (int)kmsg->ikm_header->msgh_remote_port,
+		   notify, kmsg->ikm_header->msgh_id);
+
 	mr = ipc_kmsg_copyin(kmsg, space, map, MACH_PORT_NAME_NULL);
 	if (mr != MACH_MSG_SUCCESS) {
 		ikm_free(kmsg);
@@ -331,7 +312,6 @@ mach_msg_receive(
 	mach_msg_size_t		rcv_size,
 	mach_port_name_t		rcv_name,
 	mach_msg_timeout_t	timeout,
-	mach_port_name_t		notify,
 	mach_msg_size_t		slist_size)
 {
 	ipc_thread_t self = current_thread();
@@ -408,14 +388,7 @@ mach_msg_receive(
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
 	}
 
-	if (option & MACH_RCV_NOTIFY) {
-		if (notify == MACH_PORT_NAME_NULL)
-			mr = MACH_RCV_INVALID_NOTIFY;
-		else
-			mr = ipc_kmsg_copyout(kmsg, space, map, notify, slist);
-	} else {
-		mr = ipc_kmsg_copyout(kmsg, space, map, MACH_PORT_NAME_NULL, slist);
-	}
+	mr = ipc_kmsg_copyout(kmsg, space, map, MACH_PORT_NAME_NULL, slist);
 	if (mr != MACH_MSG_SUCCESS) {
 		if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR
 		    ) {
@@ -487,14 +460,14 @@ mach_msg_overwrite_trap(
 		    rcv = rcv_msg;
 		else
 		    rcv = msg;
+
+		DPRINTF("receiving on %d ... ", rcv_name);
 		mr = mach_msg_receive(rcv, option, rcv_size, rcv_name, 
-				      timeout, notify, scatter_list_size);
-		if (mr != MACH_MSG_SUCCESS) {
-			return mr;
-		}
+							  timeout, scatter_list_size);
+		DPRINTF("done \n");
 	}
 
-	return MACH_MSG_SUCCESS;
+	return (mr);
 }
 
 /*

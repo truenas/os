@@ -185,12 +185,6 @@
 
 #include <sys/mach/port.h>
 #include <sys/mach/message.h>
-#if 0
-#include <kern/assert.h>
-#include <kern/counters.h>
-#include <kern/ipc_sched.h>
-#include <kern/misc_protos.h>
-#endif
 #include <sys/mach/ipc_kobject.h>
 
 #include <sys/mach/ipc/ipc_mqueue.h>
@@ -212,7 +206,6 @@ void
 ipc_mqueue_init(
 	ipc_mqueue_t	mqueue)
 {
-	imq_lock_init(mqueue);
 	ipc_kmsg_queue_init(&mqueue->imq_messages);
 }
 
@@ -457,34 +450,21 @@ ipc_mqueue_deliver(
 	/* we have a receiver - we're done */
 	if (receiver != NULL) {
 		ipc_mqueue_run(receiver, mqueue, kmsg, port);
+		mtx_assert(&((rpc_common_t)pset)->rcd_io_lock_data, MA_NOTOWNED);
 		return (MACH_MSG_SUCCESS);
 	}
 
-	imq_lock(mqueue);
 	ipc_kmsg_enqueue_macro(&mqueue->imq_messages, kmsg);
 	port->ip_msgcount++;
-	imq_unlock(mqueue);
+	ip_unlock(port);
 	if (pset) {
-		if (port->ip_msgcount == 1)
-			TAILQ_INSERT_TAIL(&pset->ips_ports, port, ip_next);
 		KNOTE_LOCKED(&pset->ips_note, 1);
 		ips_unlock(pset);
 	}
-
-
+	mtx_assert(&((rpc_common_t)pset)->rcd_io_lock_data, MA_NOTOWNED);
 	assert(port->ip_msgcount > 0);
-	/*
-	 *	Can unlock the port now that the msg queue is locked
-	 *	and we know the port is active.  While the msg queue
-	 *	is locked, we have control of the kmsg, so the ref in
-	 *	it for the port is still good.  If the msg queue is in
-	 *	a set (dead or alive), then we're OK because the port
-	 *	is still a member of the set and the set won't go away
-	 *	until the port is taken out, which tries to lock the
-	 *	set's msg queue to remove the port's msgs.
-	 */
 
-	ip_unlock(port);
+
 
 
 	TR_IPC_MQEX("exit: wakeup 0x%x", receiver);
@@ -557,9 +537,27 @@ ipc_mqueue_copyin(
 		assert(ips_active(pset));
 		assert(pset->ips_local_name == name);
 		is_read_unlock(space);
+	restart:
 		if (!TAILQ_EMPTY(&pset->ips_ports)) {
-			port = TAILQ_FIRST(&pset->ips_ports);
-			ip_lock(port);
+			TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
+				if (port->ip_msgcount != 0) {
+					if (ip_lock_try(port) == 0) {
+						ips_reference(pset);
+						ips_unlock(pset);
+						ip_lock(port);
+						ips_lock(pset);
+						ips_release(pset);
+						if (port->ip_msgcount == 0) {
+							ip_unlock(port);
+							goto restart;
+						}
+					} else if (port->ip_msgcount == 0) {
+						ip_unlock(port);
+						goto restart;
+					} else
+						break;
+				}
+			}
 			ip_reference(port);
 			ip_unlock(port);
 			object = (ipc_object_t)port;
@@ -669,23 +667,38 @@ ipc_mqueue_receive(
 		ipc_pset_t pset = (ipc_pset_t)object;
 
 		if (max_size == 0) {
-			if (!TAILQ_EMPTY(&pset->ips_ports)) {
-				port = TAILQ_FIRST(&pset->ips_ports);
+		restart:
+			TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
+				if (port->ip_msgcount != 0) {
+					if (ip_lock_try(port) == 0) {
+						ips_reference(pset);
+						ips_unlock(pset);
+						ip_lock(port);
+						ips_lock(pset);
+						ips_release(pset);
+						if (port->ip_msgcount == 0) {
+							ip_unlock(port);
+							goto restart;
+						}
+					} else if (port->ip_msgcount == 0) {
+						ip_unlock(port);
+						goto restart;
+					} else
+						break;
+				}
+			}
+			if (port != NULL) {
 				mqueue = &port->ip_messages;
-				imq_lock(mqueue);
 				kmsgs = &mqueue->imq_messages;
 				kmsg = ipc_kmsg_queue_first(kmsgs);
-				if (kmsg != IKM_NULL) {
-					assert(kmsg->ikm_header != NULL);
-					assert(kmsg->ikm_header->msgh_remote_port != NULL);
-					*lportname = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
-					imq_unlock(mqueue);
-					return (MACH_RCV_TOO_LARGE);
-				}
-				imq_unlock(mqueue);
+				assert (kmsg != IKM_NULL);
+				assert(kmsg->ikm_header != NULL);
+				assert(kmsg->ikm_header->msgh_remote_port != NULL);
+				*lportname = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
+				ip_unlock(port);
+				return (MACH_RCV_TOO_LARGE);
 			}
 		}
-
 		/* if max_size != 0 and we weren't passed a port
 		*   we must block waiting for a message
 		*/
@@ -723,7 +736,6 @@ ipc_mqueue_receive(
 
 	port = (ipc_port_t)object;
 	mqueue = &port->ip_messages;
-	imq_lock(mqueue);
 	kmsgs = &mqueue->imq_messages;
 	kmsg = ipc_kmsg_queue_first(kmsgs);
 	if (kmsg != IKM_NULL) {
@@ -731,7 +743,6 @@ ipc_mqueue_receive(
 			assert(kmsg->ikm_header != NULL);
 			assert(kmsg->ikm_header->msgh_remote_port != NULL);
 			*lportname = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
-			imq_unlock(mqueue);
 			return (MACH_RCV_TOO_LARGE);
 		}
 #ifdef INVARIANTS
@@ -748,22 +759,12 @@ ipc_mqueue_receive(
 #endif
 		ipc_kmsg_rmqueue_first_macro(kmsgs, kmsg);
 		port->ip_msgcount--;
-
-		if (port->ip_pset != NULL) {
-			ips_lock(port->ip_pset);
-			TAILQ_REMOVE(&port->ip_pset->ips_ports, port, ip_next);
-			if (ipc_kmsg_queue_first(kmsgs) != NULL)
-				TAILQ_INSERT_TAIL(&port->ip_pset->ips_ports, port, ip_next);
-			ips_unlock(port->ip_pset);
-		}
 		port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 		seqno = port->ip_seqno++;
-		imq_unlock(mqueue);
 		goto done;
 	}
 
 		/* must block waiting for a message */
-	imq_unlock(mqueue);
 
 	if (option & MACH_RCV_TIMEOUT) {
 		if (timeout == 0) {

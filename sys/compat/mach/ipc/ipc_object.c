@@ -168,7 +168,10 @@ ipc_object_translate(
 	}
 
 	object = entry->ie_object;
-	assert(object != IO_NULL);
+	if (object == IO_NULL) {
+		is_read_unlock(space);
+		return (KERN_TERMINATED);
+	}
 
 	/* caller already holds locked reference */
 	if (*objectp != object)

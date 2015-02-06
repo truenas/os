@@ -186,25 +186,10 @@
  *	Functions to manipulate IPC ports.
  */
 
-#if 0
-#include <dipc.h>
-#include <norma_vm.h>
-#include <mach_kdb.h>
-#include <zone_debug.h>
-#include <mach_assert.h>
-#endif
-
 
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
-#if 0
-#include <kern/lock.h>
-#include <kern/ipc_sched.h>
-#include <kern/ipc_subsystem.h>
 
-#include <kern/thread_pool.h>
-#include <kern/misc_protos.h>
-#endif
 #include <sys/mach/ipc_kobject.h>
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_space.h>
@@ -591,15 +576,11 @@ ipc_port_set_seqno(
 			ips_check_unlock(pset);
 			goto no_port_set;
 		} else {
-			imq_lock(&port->ip_messages);
 			port->ip_seqno = seqno;
-			imq_unlock(&port->ip_messages);
 		}
 	} else {
 	    no_port_set:
-		imq_lock(&port->ip_messages);
 		port->ip_seqno = seqno;
-		imq_unlock(&port->ip_messages);
 	}
 }
 
@@ -650,9 +631,7 @@ ipc_port_clear_receiver(
 	ipc_port_changed(port, MACH_RCV_PORT_DIED);
 
 	ipc_port_set_mscount(port, 0);
-	imq_lock(&port->ip_messages);
 	port->ip_seqno = 0;
-	imq_unlock(&port->ip_messages);
 }
 
 /*
@@ -920,12 +899,9 @@ ipc_port_destroy(
 	/* destroy any queued messages */
 
 	mqueue = &port->ip_messages;
-	imq_lock(mqueue);
 	kmqueue = &mqueue->imq_messages;
 
 	while ((kmsg = ipc_kmsg_dequeue(kmqueue)) != IKM_NULL) {
-		imq_unlock(mqueue);
-
 		assert(kmsg->ikm_header->msgh_remote_port ==
 						(mach_port_t) port);
 
@@ -933,10 +909,7 @@ ipc_port_destroy(
 		kmsg->ikm_header->msgh_remote_port = MACH_PORT_NULL;
 		ipc_kmsg_destroy(kmsg);
 
-		imq_lock(mqueue);
 	}
-
-	imq_unlock(mqueue);
 
 	/* generate dead-name notifications */
 	if (dnrequests != IPR_NULL) {

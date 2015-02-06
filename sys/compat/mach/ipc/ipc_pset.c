@@ -199,7 +199,7 @@ ipc_pset_add(
 	assert(port->ip_pset == IPS_NULL);
 
 	port->ip_pset = pset;
-	ips_reference(pset);
+	TAILQ_INSERT_TAIL(&pset->ips_ports, port, ip_next);
 }
 
 /*
@@ -221,8 +221,7 @@ ipc_pset_remove(
 	assert(port->ip_pset == pset);
 
 	port->ip_pset = IPS_NULL;
-	ips_release(pset);
-
+	TAILQ_REMOVE(&pset->ips_ports, port, ip_next);
 }
 
 /*
@@ -355,11 +354,25 @@ void
 ipc_pset_destroy(
 	ipc_pset_t	pset)
 {
+	ipc_port_t port;
+
 	assert(ips_active(pset));
 
 	pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-	ipc_pset_changed(pset, MACH_RCV_PORT_DIED);
+	KNOTE_LOCKED(&pset->ips_note, 0);
 
+	while (!TAILQ_EMPTY(&pset->ips_ports)) {
+		port = TAILQ_FIRST(&pset->ips_ports);
+		if (ip_lock_try(port) == 0) {
+			ips_unlock(pset);
+			ip_lock(port);
+			ips_lock(pset);
+		}
+		TAILQ_REMOVE(&pset->ips_ports, port, ip_next);
+		port->ip_pset = NULL;
+		ip_unlock(port);
+	}
+	ipc_pset_changed(pset, MACH_RCV_PORT_DIED);
 	ips_release(pset);	/* consume the ref our caller gave us */
 	ips_check_unlock(pset);
 }
@@ -399,9 +412,6 @@ filt_machportattach(struct knote *kn)
 	kn->kn_fp = entry->ie_fp;
 	ips_lock(pset);
 	knlist_add(note, kn, 1);
-	if (!TAILQ_EMPTY(&pset->ips_ports)) {
-		KNOTE_LOCKED(&pset->ips_note, 1);
-	}
 	ips_unlock(pset);
 	return (0);
 }
@@ -437,11 +447,9 @@ filt_machport(struct knote *kn, long hint)
 	mach_port_name_t	lportname;
 
 	if (hint == 0) {
-
 		kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 								  (ipc_object_t *)&pset);
-		if (kr != KERN_SUCCESS || !ips_active(pset) ||
-			pset != (ipc_pset_t)((ipc_entry_t)kn->kn_fp->f_data)->ie_object) {
+		if (kr != KERN_SUCCESS || !ips_active(pset)) {
 			kn->kn_data = 0;
 			kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 			return (1);
