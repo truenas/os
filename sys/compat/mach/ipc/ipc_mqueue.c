@@ -450,7 +450,6 @@ ipc_mqueue_deliver(
 	/* we have a receiver - we're done */
 	if (receiver != NULL) {
 		ipc_mqueue_run(receiver, mqueue, kmsg, port);
-		mtx_assert(&((rpc_common_t)pset)->rcd_io_lock_data, MA_NOTOWNED);
 		return (MACH_MSG_SUCCESS);
 	}
 
@@ -461,7 +460,6 @@ ipc_mqueue_deliver(
 		KNOTE_LOCKED(&pset->ips_note, 1);
 		ips_unlock(pset);
 	}
-	mtx_assert(&((rpc_common_t)pset)->rcd_io_lock_data, MA_NOTOWNED);
 	assert(port->ip_msgcount > 0);
 
 
