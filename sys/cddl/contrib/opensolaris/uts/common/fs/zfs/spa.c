@@ -3763,6 +3763,7 @@ spa_create(const char *pool, nvlist_t *nvroot, nvlist_t *props,
 	spa_config_sync(spa, B_FALSE, B_TRUE);
 
 	spa_history_log_version(spa, "create");
+	spa_event_notify(spa, NULL, ESC_ZFS_POOL_CREATE);
 
 	spa->spa_minref = refcount_count(&spa->spa_refcount);
 
@@ -4901,6 +4902,8 @@ spa_vdev_attach(spa_t *spa, uint64_t guid, nvlist_t *nvroot, int replacing)
 
 	spa_strfree(oldvdpath);
 	spa_strfree(newvdpath);
+
+	spa_event_notify(spa, newvd, ESC_ZFS_VDEV_ATTACH);
 
 	if (spa->spa_bootfs)
 		spa_event_notify(spa, newvd, ESC_ZFS_BOOTFS_VDEV_ATTACH);
@@ -6995,3 +6998,4 @@ done:
 	sysevent_free(ev);
 #endif
 }
+

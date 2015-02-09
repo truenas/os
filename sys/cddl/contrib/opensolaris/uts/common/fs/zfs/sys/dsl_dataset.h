@@ -301,6 +301,9 @@ void dsl_dataset_set_refreservation_sync_impl(dsl_dataset_t *ds,
     zprop_source_t source, uint64_t value, dmu_tx_t *tx);
 void dsl_dataset_zapify(dsl_dataset_t *ds, dmu_tx_t *tx);
 int dsl_dataset_rollback(const char *fsname, void *owner, nvlist_t *result);
+void dsl_event_notify(dsl_dataset_t *ds, const char *name);
+void dsl_event_notify_rename(spa_t *spa, const char *oldname,
+    const char *newname, const char *name);
 
 #ifdef ZFS_DEBUG
 #define	dprintf_ds(ds, fmt, ...) do { \
