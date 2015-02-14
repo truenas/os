@@ -18,7 +18,9 @@ CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
 CFLAGS+= -I${.CURDIR}/../../contrib/openbsm -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -DHAVE_INTTYPES_H
 
-LDFLAGS+= -static 
+DEBUG_FLAGS+= -g -O0
+
+#LDFLAGS+= -static 
 LDFLAGS+= -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -pthread
 
