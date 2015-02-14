@@ -64,4 +64,6 @@ bool init_check_pid(pid_t p);
 
 pid_t launchd_fork(void);
 
+extern bool uflag;
+
 #endif /* __LAUNCHD_H__ */

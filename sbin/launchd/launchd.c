@@ -134,11 +134,12 @@ posix_spawnattr_setbinpref_np(posix_spawnattr_t * __restrict a __unused,
 	return 0;
 }
 
+bool uflag = false;
+
 int
 main(int argc, char *const *argv)
 {
 	bool sflag = false;
-	bool uflag = false;
 	int ch;
 
 	/* This needs to be cleaned up. Currently, we risk tripping assumes() macros
@@ -152,11 +153,8 @@ main(int argc, char *const *argv)
 	 * Note that this does NOT open a file...
 	 * Does 'init' deserve its own facility number?
 	 */
-	openlog("init", LOG_CONS, LOG_AUTH);
+	openlog("launchd", LOG_CONS, LOG_AUTH);
 
-	
-	fprintf(stderr, "closing descriptors!!!!!\n");
-	syslog(LOG_EMERG, "starting main!!!!!\n");
 	testfd_or_openfd(STDIN_FILENO, _PATH_DEVNULL, O_RDONLY);
 	testfd_or_openfd(STDOUT_FILENO, _PATH_DEVNULL, O_WRONLY);
 	testfd_or_openfd(STDERR_FILENO, _PATH_DEVNULL, O_WRONLY);

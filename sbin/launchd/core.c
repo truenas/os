@@ -172,6 +172,7 @@ extern int gL1CacheEnabled;
 #define IS_POWER_OF_TWO(v) (!(v & (v - 1)) && v)
 
 extern char **environ;
+extern bool uflag;
 
 struct waiting_for_removal {
 	SLIST_ENTRY(waiting_for_removal) sle;
@@ -4468,7 +4469,8 @@ job_start(job_t j)
 		break;
 	case 0:
 		if (unlikely(_vproc_post_fork_ping())) {
-			_exit(EXIT_FAILURE);
+			syslog(LOG_ERR, "_vproc_post_fork_ping() fail");
+			launchd_exit(EXIT_FAILURE);
 		}
 
 		(void)job_assumes_zero(j, runtime_close(execspair[0]));
@@ -4618,7 +4620,8 @@ job_start_child(job_t j)
 			}
 			if (glob(j->argv[i], gflags, NULL, &g) != 0) {
 				job_log_error(j, LOG_ERR, "glob(\"%s\")", j->argv[i]);
-				exit(EXIT_FAILURE);
+				syslog(LOG_ERR, "glob error");
+				launchd_exit(EXIT_FAILURE);
 			}
 		}
 		g.gl_pathv[0] = (char *)file2exec;
@@ -4781,7 +4784,8 @@ job_start_child(job_t j)
 #if HAVE_SANDBOX && !TARGET_OS_EMBEDDED
 out_bad:
 #endif
-	_exit(errno);
+	syslog(LOG_ERR, "errno=%d", errno);
+	launchd_exit(errno);
 }
 
 void
@@ -5026,7 +5030,7 @@ job_postfork_test_user(job_t j)
 out_bad:
 #if 0
 	(void)job_assumes_zero_p(j, kill2(getppid(), SIGTERM));
-	_exit(EXIT_FAILURE);
+	launchd_exit(EXIT_FAILURE);
 #else
 	job_log(j, LOG_WARNING, "In a future build of the OS, this error will be fatal.");
 #endif
@@ -5059,13 +5063,13 @@ job_postfork_become_user(job_t j)
 	if (j->username) {
 		if ((pwe = job_getpwnam(j, j->username)) == NULL) {
 			job_log(j, LOG_ERR, "getpwnam(\"%s\") failed", j->username);
-			_exit(ESRCH);
+			launchd_exit(ESRCH);
 		}
 	} else if (j->mach_uid) {
 		if ((pwe = getpwuid(j->mach_uid)) == NULL) {
 			job_log(j, LOG_ERR, "getpwuid(\"%u\") failed", j->mach_uid);
 			job_log_pids_with_weird_uids(j);
-			_exit(ESRCH);
+			launchd_exit(ESRCH);
 		}
 	} else {
 		return;
@@ -5088,7 +5092,7 @@ job_postfork_become_user(job_t j)
 
 	if (unlikely(pwe->pw_expire && time(NULL) >= pwe->pw_expire)) {
 		job_log(j, LOG_ERR, "Expired account");
-		_exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 
 
@@ -5103,18 +5107,18 @@ job_postfork_become_user(job_t j)
 
 		if (unlikely((gre = job_getgrnam(j, j->groupname)) == NULL)) {
 			job_log(j, LOG_ERR, "getgrnam(\"%s\") failed", j->groupname);
-			_exit(ESRCH);
+			launchd_exit(ESRCH);
 		}
 
 		desired_gid = gre->gr_gid;
 	}
 
 	if (job_assumes_zero_p(j, setlogin(loginname)) == -1) {
-		_exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 
 	if (job_assumes_zero_p(j, setgid(desired_gid)) == -1) {
-		_exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 
 	/*
@@ -5125,7 +5129,7 @@ job_postfork_become_user(job_t j)
 	if (likely(!j->no_init_groups)) {
 #if 1
 		if (job_assumes_zero_p(j, initgroups(loginname, desired_gid)) == -1) {
-			_exit(EXIT_FAILURE);
+			launchd_exit(EXIT_FAILURE);
 		}
 #else
 		/* Do our own little initgroups(). We do this to guarantee that we're
@@ -5138,13 +5142,13 @@ job_postfork_become_user(job_t j)
 		(void)job_assumes_zero_p(j, getgrouplist(j->username, desired_gid, groups, &ngroups));
 
 		if (job_assumes_zero_p(j, syscall(SYS_initgroups, ngroups, groups, desired_uid)) == -1) {
-			_exit(EXIT_FAILURE);
+			launchd_exit(EXIT_FAILURE);
 		}
 #endif
 	}
 
 	if (job_assumes_zero_p(j, setuid(desired_uid)) == -1) {
-		_exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 
 	r = confstr(_CS_DARWIN_USER_TEMP_DIR, tmpdirpath, sizeof(tmpdirpath));
@@ -6887,9 +6891,10 @@ jobmgr_new(jobmgr_t jm, mach_port_t requestorport, mach_port_t transfer_port, bo
 	if ((jmr->parentmgr = jm)) {
 		SLIST_INSERT_HEAD(&jm->submgrs, jmr, sle);
 	}
-	syslog(LOG_ERR, "launchd_mport_notify_req");
+	syslog(LOG_ERR, "if jm=%p then launchd_mport_notify_req transfer_port=%d", jm, transfer_port);
 	if (jm && jobmgr_assumes_zero(jmr, launchd_mport_notify_req(jmr->req_port, MACH_NOTIFY_DEAD_NAME)) != KERN_SUCCESS) {
 		syslog(LOG_ERR, "launchd_mport_notify_req failed!!!");
+		sleep(1);
 		goto out_bad;
 	}
 
@@ -6903,7 +6908,7 @@ jobmgr_new(jobmgr_t jm, mach_port_t requestorport, mach_port_t transfer_port, bo
 
 		snprintf(service_buf, sizeof(service_buf), "com.apple.launchd.peruser.%u", getuid());
 
-		if (jobmgr_assumes_zero(jmr, bootstrap_check_in(bootstrap_port, service_buf, &jmr->jm_port)) != 0) {
+		if (uflag == false && jobmgr_assumes_zero(jmr, bootstrap_check_in(bootstrap_port, service_buf, &jmr->jm_port)) != 0) {
 			goto out_bad;
 		}
 
@@ -7638,7 +7643,7 @@ semaphoreitem_setup(launch_data_t obj, const char *key, void *context)
 }
 
 bool
-externalevent_new(job_t j, struct eventsystem *sys, const char *evname, xpc_object_t event, uint64_t flags)
+externalevent_new(job_t j, struct eventsystem *sys, const char *evname, xpc_object_t event, uint64_t flags __unused)
 {
 	if (j->event_monitor) {
 		job_log(j, LOG_ERR, "The event monitor job cannot use LaunchEvents or XPC Events.");
@@ -7659,13 +7664,14 @@ externalevent_new(job_t j, struct eventsystem *sys, const char *evname, xpc_obje
 	ee->wanted_state = true;
 	sys->curid++;
 
+#ifdef notyet
 	if (flags & XPC_EVENT_FLAG_ENTITLEMENTS) {
 		struct ldcred *ldc = runtime_get_caller_creds();
 		if (ldc) {
 			ee->entitlements = xpc_copy_entitlements_for_pid(ldc->pid);
 		}
 	}
-
+#endif
 	if (sys == _launchd_support_system) {
 		ee->internal = true;
 	}
@@ -12051,45 +12057,12 @@ _log_launchd_bug(const char *rcs_rev, const char *path, unsigned int line, const
         syslog(LOG_NOTICE, "Bug: %s:%u (%s):%u: %s", file, line, buf, saved_errno, test);
 }
 
-static sigset_t blocked_signals;
-
-static pid_t
-job_fork(struct jobmgr_s *j __unused)
-{
-	pid_t r = -1;
-#if 0
-	mach_port_t p = j->jm_port;
-
-	sigprocmask(SIG_BLOCK, &blocked_signals, NULL);
-	syslog(LOG_ERR, "launchd_mport_make_send(%d)\n", p);
-	launchd_assumes(launchd_mport_make_send(p) == KERN_SUCCESS);
-	syslog(LOG_ERR, "launchd_set_bport(%d)\n", p);
-	launchd_assumes(launchd_set_bport(p) == KERN_SUCCESS);
-	syslog(LOG_ERR, "launchd_mport_deallocate(%d)\n", p);
-	launchd_assumes(launchd_mport_deallocate(p) == KERN_SUCCESS);
-#endif
-	r = fork();
-
-	if (r != 0) {
-		syslog(LOG_ERR, "launchd_set_bport(%d)\n", MACH_PORT_NULL);
-		launchd_assumes(launchd_set_bport(MACH_PORT_NULL) == KERN_SUCCESS);
-	} else if (r == 0) {
-		size_t i;
-
-		for (i = 0; i < NSIG; i++) {
-			if (sigismember(&blocked_signals, i))
-				signal(i, SIG_DFL);
-		}
-	}
-
-	sigprocmask(SIG_UNBLOCK, &blocked_signals, NULL);
-	
-	return r;
-}
-
-
 pid_t
 launchd_fork(void)
 {
-	return job_fork(root_jobmgr);
+	pid_t pid;
+	syslog(LOG_ERR, "call runtime_fork()");
+	pid = runtime_fork(root_jobmgr->jm_port);
+	syslog(LOG_ERR, "runtime_fork() returned %d", pid);
+	return (pid);
 }
