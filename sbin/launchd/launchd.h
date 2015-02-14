@@ -50,7 +50,7 @@ int _fd(int fd);
 
 void init_boot(bool sflag);
 void init_pre_kevent(void);
-
+void launchd_exit(int code)  __dead2;
 
 #define launchd_assumes(e)      \
         (__builtin_expect(!(e), 0) ? _log_launchd_bug(0, __FILE__, __LINE__, #e), false : true)

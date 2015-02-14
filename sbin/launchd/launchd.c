@@ -118,6 +118,15 @@ uid_t launchd_uid;
 FILE *launchd_console = NULL;
 int32_t launchd_sync_frequency = 30;
 
+void
+launchd_exit(int code)
+{
+	syslog(LOG_ERR, "exiting code %d errno %d", code, errno);
+	sleep(1);
+	_exit(code);
+}
+
+
 __inline int
 posix_spawnattr_setbinpref_np(posix_spawnattr_t * __restrict a __unused,
 							  size_t b __unused, cpu_type_t *__restrict c __unused, size_t *__restrict d __unused)
@@ -129,6 +138,7 @@ int
 main(int argc, char *const *argv)
 {
 	bool sflag = false;
+	bool uflag = false;
 	int ch;
 
 	/* This needs to be cleaned up. Currently, we risk tripping assumes() macros
@@ -169,9 +179,10 @@ main(int argc, char *const *argv)
 		}
 	}
 
-	while ((ch = getopt(argc, argv, "s")) != -1) {
+	while ((ch = getopt(argc, argv, "su")) != -1) {
 		switch (ch) {
 		case 's': sflag = true; break;	/* single user */
+		case 'u': uflag = true; break; /* run as non-pid1 */
 		case '?': /* we should do something with the global optopt variable here */
 		default:
 			fprintf(stderr, "%s: ignoring unknown arguments\n", getprogname());
@@ -179,9 +190,9 @@ main(int argc, char *const *argv)
 		}
 	}
 
-	if (getpid() != 1 && getppid() != 1) {
+	if (uflag == false && getpid() != 1 && getppid() != 1) {
 		fprintf(stderr, "%s: This program is not meant to be run directly.\n", getprogname());
-		exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 
 	syslog(LOG_ERR, "launchd_runtime_init()\n");
@@ -306,6 +317,7 @@ main(int argc, char *const *argv)
 			syslog(LOG_ERR, "init_pre_kevent() for reaaaaal!!! \n");
 			init_pre_kevent();
 	}
+	sleep(2);
 	syslog(LOG_ERR, "launchd_runtime()\n");
 	launchd_runtime();
 }
@@ -413,10 +425,10 @@ do_pid1_crash_diagnosis_mode2(const char *msg)
 	int fd;
 	revoke(_PATH_CONSOLE);
 	if ((fd = open(_PATH_CONSOLE, O_RDWR)) == -1) {
-		_exit(2);
+		launchd_exit(2);
 	}
 	if (login_tty(fd) == -1) {
-		_exit(3);
+		launchd_exit(3);
 	}
 
 	setenv("TERM", "vt100", 1);
@@ -434,7 +446,7 @@ do_pid1_crash_diagnosis_mode2(const char *msg)
 
 	execl(_PATH_BSHELL, "-sh", NULL);
 	syslog(LOG_ERR, "can't exec %s for PID 1 crash debugging: %m", _PATH_BSHELL);
-	_exit(EXIT_FAILURE);
+	launchd_exit(EXIT_FAILURE);
 }
 
 void
@@ -457,7 +469,7 @@ fatal_signal_handler(int sig, siginfo_t *si, void *uap __attribute__((unused)))
 	switch ((sample_p = vfork())) {
 	case 0:
 		execve(sample_args[0], sample_args, environ);
-		_exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 		break;
 	default:
 		waitpid(sample_p, &wstatus, 0);
@@ -510,7 +522,7 @@ pid1_magic_init(void)
 
 	if (setaudit_addr(&auinfo, sizeof(auinfo)) == -1) {
 		launchd_syslog(LOG_WARNING | LOG_CONSOLE, "Could not set audit session: %d: %s.", errno, strerror(errno));
-		_exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 
 	launchd_audit_session = auinfo.ai_asid;
