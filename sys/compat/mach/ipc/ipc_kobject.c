@@ -282,13 +282,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	mach_msg_format_0_trailer_t *trailer;
 	register mig_hash_t *ptr;
 
-	/* Only fetch current thread if ETAP is configured */
-	ETAP_DATA_LOAD(th, current_thread());
-	ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
-					EVENT_BEGIN,
-					((thread_t) th),
-					&request->ikm_header->msgh_id,
-					sizeof(int));
 	/*
 	 * Find out corresponding mig_hash entry if any
 	 */
@@ -316,6 +309,7 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	reply = ipc_kmsg_alloc(alloc_size);
 
 	if (reply == IKM_NULL) {
+		printf("ipc_kobject_server: dropping request\n");
 		ipc_kmsg_destroy(request);
 		return IKM_NULL;
 	}
@@ -334,6 +328,7 @@ ipc_kobject_server(ipc_kmsg_t	request)
 			MACH_MSGH_BITS(MACH_MSGH_BITS_LOCAL(InP->msgh_bits), 0);
 		OutP->Head.msgh_remote_port = InP->msgh_local_port;
 		OutP->Head.msgh_local_port  = MACH_PORT_NULL;
+		OutP->Head.msgh_voucher_port  = MACH_PORT_NAME_NULL;
 		OutP->Head.msgh_id = InP->msgh_id + 100;
 #undef	InP
 #undef	OutP
@@ -405,9 +400,7 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		 * from the rt_zone.
 		 */
 
-		ikm_check_initialized(request, request->ikm_size);
-		if (request->ikm_size != IKM_SAVED_KMSG_SIZE)
-			ikm_free(request);
+		ikm_free(request);
 	} else {
 		/*
 		 *	The message contents of the request are intact.
@@ -426,13 +419,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		 */
 
 		ikm_free(reply);
-
-		ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
-						EVENT_END,
-						((thread_t) th),
-						&request->ikm_header->msgh_id,
-						sizeof(int));
-
 		return IKM_NULL;
 	} else if (!IP_VALID((ipc_port_t)reply->ikm_header->msgh_remote_port)) {
 		/*
@@ -441,13 +427,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 		 */
 
 		ipc_kmsg_destroy(reply);
-
-		ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
-						EVENT_END,
-						((thread_t) th),
-						&request->ikm_header->msgh_id,
-						sizeof(int));
-
 		return IKM_NULL;
 	}
 
@@ -456,13 +435,6 @@ ipc_kobject_server(ipc_kmsg_t	request)
 	trailer->msgh_sender = KERNEL_SECURITY_TOKEN;
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
 	trailer->msgh_trailer_size = MACH_MSG_TRAILER_MINIMUM_SIZE;
-
-	ETAP_PROBE_DATA(ETAP_P_SYSCALL_MACH,
-					EVENT_END,
-					((thread_t) th),
-					&request->ikm_header->msgh_id,
-					sizeof(int));
-
 	return reply;
 }
 

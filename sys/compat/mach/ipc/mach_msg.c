@@ -173,8 +173,11 @@
 #include <sys/mach/sched_prim.h>
 #include <sys/mach/ipc_kobject.h>
 
+
+#define VERBOSE_DEBUGGING 1
+
 #ifndef DPRINTF
-#ifdef VERBOSE_DEBUGGING
+#if VERBOSE_DEBUGGING
 #define DPRINTF printf
 #else
 #define DPRINTF(...)

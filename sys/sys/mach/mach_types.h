@@ -203,6 +203,8 @@
 #include <sys/mach/prof_types.h>
 #include <sys/mach/host_notify.h>
 
+#define __MigPackStructs 1
+
 #ifdef	_KERNEL
 
 #define __MigTypeCheck 1

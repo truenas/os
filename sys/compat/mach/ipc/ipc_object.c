@@ -654,9 +654,11 @@ ipc_object_copyout(
 	assert(IO_VALID(object));
 	assert(io_otype(object) == IOT_PORT);
 
-	if (!space->is_active)
+	is_write_lock(space);
+	if (!space->is_active) {
+		is_write_unlock(space);
 		return KERN_INVALID_TASK;
-
+	}
 	if ((msgt_name != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
 		ipc_right_reverse(space, object, &name, &entry)) {
 		/* object is locked and active */
@@ -664,6 +666,7 @@ ipc_object_copyout(
 		assert(entry->ie_bits & MACH_PORT_TYPE_SEND_RECEIVE);
 		goto done;
 	}
+	is_write_unlock(space);
 	name = MACH_PORT_NAME_NULL;
 	kr = ipc_entry_get(space,
 			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
@@ -684,10 +687,11 @@ ipc_object_copyout(
 
 	entry->ie_object = object;
 	/* space is write-locked and active, object is locked and active */
+	is_write_lock(space);
 done:
 	kr = ipc_right_copyout(space, name, entry,
 			       msgt_name, overflow, object);
-
+	is_write_unlock(space);
 	if (kr == KERN_SUCCESS)
 		*namep = name;
 	return kr;

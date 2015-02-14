@@ -281,6 +281,47 @@
 #include <sys/mach/thread.h>
 
 
+#pragma pack(4)
+
+typedef	struct
+{
+	mach_msg_bits_t		msgh_bits;
+	mach_msg_size_t		msgh_size;
+	mach_port_name_t	msgh_remote_port;
+	mach_port_name_t	msgh_local_port;
+	mach_port_name_t	msgh_voucher_port;
+	mach_msg_id_t		msgh_id;
+} mach_msg_legacy_header_t;
+
+typedef struct
+{
+	mach_msg_legacy_header_t header;
+	mach_msg_body_t          body;
+} mach_msg_legacy_base_t;
+
+typedef struct
+{
+  mach_port_name_t				name;
+  mach_msg_size_t				pad1;
+  uint32_t						pad2 : 16;
+  mach_msg_type_name_t			disposition : 8;
+  mach_msg_descriptor_type_t	type : 8;
+} mach_msg_legacy_port_descriptor_t;
+
+
+typedef union
+{
+  mach_msg_legacy_port_descriptor_t			port;
+  mach_msg_ool_descriptor32_t		out_of_line32;
+  mach_msg_ool_ports_descriptor32_t	ool_ports32;
+  mach_msg_type_descriptor_t			type;
+} mach_msg_legacy_descriptor_t;
+
+#pragma pack()
+
+#define LEGACY_HEADER_SIZE_DELTA ((mach_msg_size_t)(sizeof(mach_msg_header_t) - sizeof(mach_msg_legacy_header_t)))
+
+
 extern vm_map_t		ipc_kernel_copy_map;
 extern vm_size_t	ipc_kmsg_max_space;
 extern vm_size_t	ipc_kmsg_max_vm_space;
@@ -859,6 +900,7 @@ ipc_kmsg_put(
 
 	ikm_check_initialized(kmsg, kmsg->ikm_size);
 
+	printf("doing kmsg_put size=%d to addr=%p\n", size, msg);
 #if defined(__LP64__)
 	if (current_task() != kernel_task) { /* don't if receiver expects fully-cooked in-kernel msg; ux_exception */
 		mach_msg_legacy_header_t *legacy_header =
@@ -2230,7 +2272,8 @@ ipc_kmsg_copyout_header(
 				 */
 
 				assert(entry->ie_bits &
-						MACH_PORT_TYPE_SEND_RECEIVE);
+					   MACH_PORT_TYPE_SEND_RECEIVE);
+				ip_lock(reply);
 				break;
 			}
 
@@ -2257,7 +2300,6 @@ ipc_kmsg_copyout_header(
 							   &reply_name, &entry);
 
 			if (kr != KERN_SUCCESS) {
-				is_write_unlock(space);
 				if (notify_port != IP_NULL)
 					ipc_port_release_sonce(notify_port);
 
@@ -2272,7 +2314,8 @@ ipc_kmsg_copyout_header(
 			assert(IE_BITS_TYPE(entry->ie_bits)
 						== MACH_PORT_TYPE_NONE);
 			assert(entry->ie_object == IO_NULL);
-
+			is_write_lock(space);
+			ip_lock(reply);
 			if (notify_port == IP_NULL) {
 				/* not making a dead-name request */
 
@@ -2309,7 +2352,8 @@ ipc_kmsg_copyout_header(
 			}
 
 			notify_port = IP_NULL; /* don't release right below */
-
+			is_write_lock(space);
+			ip_lock(reply);
 			entry->ie_object = (ipc_object_t) reply;
 			entry->ie_request = request;
 			break;
@@ -2498,6 +2542,46 @@ ipc_kmsg_copyout_object(
 	return MACH_MSG_SUCCESS;
 }
 
+
+static mach_msg_descriptor_t *
+ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
+        mach_msg_descriptor_t *dest_dsc,
+        ipc_space_t space, 
+        kern_return_t *mr)
+{
+    mach_port_t			port;
+    mach_port_name_t		name;
+    mach_msg_type_name_t		disp;
+
+
+    /* Copyout port right carried in the message */
+    port = dsc->port.name;
+    disp = dsc->port.disposition;
+    *mr |= ipc_kmsg_copyout_object(space, 
+            (ipc_object_t)port, 
+            disp, 
+            &name);
+
+    if(current_task() == kernel_task)
+    {
+        mach_msg_port_descriptor_t *user_dsc = (mach_msg_port_descriptor_t *)dest_dsc;
+        user_dsc--; // point to the start of this port descriptor
+        user_dsc->name = CAST_MACH_NAME_TO_PORT(name);
+        user_dsc->disposition = disp;
+        user_dsc->type = MACH_MSG_PORT_DESCRIPTOR;
+        dest_dsc = (mach_msg_descriptor_t *)user_dsc;
+    } else {
+        mach_msg_legacy_port_descriptor_t *user_dsc = (mach_msg_legacy_port_descriptor_t *)dest_dsc;
+        user_dsc--; // point to the start of this port descriptor
+        user_dsc->name = CAST_MACH_PORT_TO_NAME(name);
+        user_dsc->disposition = disp;
+        user_dsc->type = MACH_MSG_PORT_DESCRIPTOR;
+        dest_dsc = (mach_msg_descriptor_t *)user_dsc;
+    }
+
+    return (mach_msg_descriptor_t *)dest_dsc;
+}
+
 /*
  *	Routine:	ipc_kmsg_copyout_body
  *	Purpose:
@@ -2525,48 +2609,40 @@ ipc_kmsg_copyout_body(
 	mach_msg_body_t		*slist)
 {
     mach_msg_body_t 		*body;
-    mach_msg_descriptor_t 	*saddr, *eaddr;
+	mach_msg_descriptor_t	*kern_dsc, *user_dsc;
+    mach_msg_descriptor_t 	*saddr;
     mach_msg_return_t 		mr = MACH_MSG_SUCCESS;
-    kern_return_t 		kr;
-    vm_offset_t         	data;
-    mach_msg_descriptor_t 	*sstart, *send;
+	mach_msg_type_number_t	dsc_count, sdsc_count;
+	int i;
 
 	body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
-    saddr = (mach_msg_descriptor_t *) (body + 1);
-    eaddr = saddr + body->msgh_descriptor_count;
+	dsc_count = body->msgh_descriptor_count;
+    kern_dsc = (mach_msg_descriptor_t *) (body + 1);
+	user_dsc = &kern_dsc[dsc_count];
 
     /*
      * Do scatter list setup
      */
     if (slist != MACH_MSG_BODY_NULL) {
-	sstart = (mach_msg_descriptor_t *) (slist + 1);
-	send = sstart + slist->msgh_descriptor_count;
+		saddr = (mach_msg_descriptor_t *) (slist + 1);
+		sdsc_count = slist->msgh_descriptor_count;
     }
     else {
-	sstart = MACH_MSG_DESCRIPTOR_NULL;
+		saddr = MACH_MSG_DESCRIPTOR_NULL;
+		sdsc_count = 0;
     }
 
-    for ( ; saddr < eaddr; saddr++ ) {
+    for (i = dsc_count-1; i >= 0; i--) {
 	
-	switch (saddr->type.type) {
+	switch (kern_dsc[i].type.type) {
 	    
-	    case MACH_MSG_PORT_DESCRIPTOR: {
-		mach_msg_port_descriptor_t *dsc;
-		mach_port_name_t name;
-		/* 
-		 * Copyout port right carried in the message 
-		 */
-		dsc = &saddr->port;
-		name = CAST_MACH_PORT_TO_NAME(dsc->name);
-		mr |= ipc_kmsg_copyout_object(space, 
-					      (ipc_object_t) dsc->name, 
-					      dsc->disposition, 
-									  (mach_port_name_t *) &name);
-
+	case MACH_MSG_PORT_DESCRIPTOR: {
+		user_dsc = ipc_kmsg_copyout_port_descriptor(&kern_dsc[i], user_dsc, space, &mr);
 		break;
-	    }
-	    case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
-	    case MACH_MSG_OOL_DESCRIPTOR : {
+	}
+#ifdef notyet
+	case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
+	case MACH_MSG_OOL_DESCRIPTOR : {
 		vm_offset_t			rcv_addr;
 		vm_offset_t			snd_addr;
 		mach_msg_ool_descriptor_t	*dsc;
@@ -2726,11 +2802,20 @@ ipc_kmsg_copyout_body(
 		INCREMENT_SCATTER(sstart);
 		break;
 	    }
+#endif
 	    default : {
-		panic("untyped IPC copyout body: invalid message descriptor");
+		panic("untyped or unsupported IPC copyout body: invalid message descriptor");
 	    }
 	}
     }
+	if(user_dsc != kern_dsc) {
+        vm_offset_t dsc_adjust = (vm_offset_t)user_dsc - (vm_offset_t)kern_dsc;
+        memmove((char *)((vm_offset_t)kmsg->ikm_header + dsc_adjust), kmsg->ikm_header, sizeof(mach_msg_base_t));
+        kmsg->ikm_header = (mach_msg_header_t *)((vm_offset_t)kmsg->ikm_header + dsc_adjust);
+        /* Update the message size for the smaller user representation */
+        kmsg->ikm_header->msgh_size -= (mach_msg_size_t)dsc_adjust;
+    }
+
     return mr;
 }
 
@@ -2769,7 +2854,6 @@ ipc_kmsg_copyout_size(
         mach_msg_body_t *body;
         mach_msg_descriptor_t *saddr, *eaddr;
 
-		printf("is complex\n");
 
         body = (mach_msg_body_t *) (kmsg->ikm_header + 1);
         saddr = (mach_msg_descriptor_t *) (body + 1);

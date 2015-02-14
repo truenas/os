@@ -536,26 +536,26 @@ ipc_mqueue_copyin(
 		assert(pset->ips_local_name == name);
 		is_read_unlock(space);
 	restart:
-		if (!TAILQ_EMPTY(&pset->ips_ports)) {
-			TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
-				if (port->ip_msgcount != 0) {
-					if (ip_lock_try(port) == 0) {
-						ips_reference(pset);
-						ips_unlock(pset);
-						ip_lock(port);
-						ips_lock(pset);
+		TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
+			if (port->ip_msgcount > 0) {
+				if (ip_lock_try(port) == 0) {
+					ips_reference(pset);
+					ips_unlock(pset);
+					ip_lock(port);
+					ips_lock(pset);
 						ips_release(pset);
 						if (port->ip_msgcount == 0) {
 							ip_unlock(port);
 							goto restart;
 						}
-					} else if (port->ip_msgcount == 0) {
-						ip_unlock(port);
-						goto restart;
-					} else
-						break;
-				}
+				} else if (port->ip_msgcount == 0) {
+					ip_unlock(port);
+					goto restart;
+				} else
+					break;
 			}
+		}
+		if (port != NULL) {
 			ip_reference(port);
 			ip_unlock(port);
 			object = (ipc_object_t)port;

@@ -175,7 +175,7 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
  *	Purpose:
  *		Tries to allocate an entry out of the space.
  *	Conditions:
- *		The space is write-locked and active throughout.
+ *		The space is active throughout.
  *		An object may be locked.  Will try to allocate memory.
  *	Returns:
  *		KERN_SUCCESS		A free entry was found.

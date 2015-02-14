@@ -137,47 +137,6 @@
 #endif
 #include <sys/mach/ipc/ipc_object.h>
 
-#pragma pack(4)
-
-typedef	struct
-{
-  mach_msg_bits_t	msgh_bits;
-  mach_msg_size_t	msgh_size;
-  mach_port_name_t	msgh_remote_port;
-  mach_port_name_t	msgh_local_port;
-  mach_port_name_t	msgh_voucher_port;
-  mach_msg_id_t		msgh_id;
-} mach_msg_legacy_header_t;
-
-typedef struct
-{
-        mach_msg_legacy_header_t       header;
-        mach_msg_body_t         body;
-} mach_msg_legacy_base_t;
-
-typedef struct
-{
-  mach_port_name_t				name;
-  mach_msg_size_t				pad1;
-  uint32_t						pad2 : 16;
-  mach_msg_type_name_t			disposition : 8;
-  mach_msg_descriptor_type_t	type : 8;
-} mach_msg_legacy_port_descriptor_t;
-
-
-typedef union
-{
-  mach_msg_legacy_port_descriptor_t			port;
-  mach_msg_ool_descriptor32_t		out_of_line32;
-  mach_msg_ool_ports_descriptor32_t	ool_ports32;
-  mach_msg_type_descriptor_t			type;
-} mach_msg_legacy_descriptor_t;
-
-#pragma pack()
-
-#define LEGACY_HEADER_SIZE_DELTA ((mach_msg_size_t)(sizeof(mach_msg_header_t) - sizeof(mach_msg_legacy_header_t)))
-
-
 /*
  *	This structure is only the header for a kmsg buffer;
  *	the actual buffer is normally larger.  The rest of the buffer
