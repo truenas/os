@@ -83,50 +83,6 @@ kern_return_t vm_region
 );
 #endif	/* defined(LINTLIBRARY) */
 
-/* Routine vm_allocate */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t vm_allocate
-#if	defined(LINTLIBRARY)
-    (target_task, address, size, flags)
-	mach_vm_map_t target_task;
-	vm_address_t *address;
-	vm_size_t size;
-	int flags;
-{ return vm_allocate(target_task, address, size, flags); }
-#else
-(
-	mach_vm_map_t target_task,
-	vm_address_t *address,
-	vm_size_t size,
-	int flags
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine vm_deallocate */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t vm_deallocate
-#if	defined(LINTLIBRARY)
-    (target_task, address, size)
-	mach_vm_map_t target_task;
-	vm_address_t address;
-	vm_size_t size;
-{ return vm_deallocate(target_task, address, size); }
-#else
-(
-	mach_vm_map_t target_task,
-	vm_address_t address,
-	vm_size_t size
-);
-#endif	/* defined(LINTLIBRARY) */
-
 /* Routine vm_protect */
 #ifdef	mig_external
 mig_external
@@ -719,39 +675,6 @@ __END_DECLS
 		NDR_record_t NDR;
 		vm_address_t address;
 		vm_size_t size;
-		int flags;
-	} __Request__vm_allocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		vm_address_t address;
-		vm_size_t size;
-	} __Request__vm_deallocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		vm_address_t address;
-		vm_size_t size;
 		boolean_t set_maximum;
 		vm_prot_t new_protection;
 	} __Request__vm_protect_t;
@@ -1117,8 +1040,6 @@ __END_DECLS
 #define __RequestUnion__vm_map_subsystem__defined
 union __RequestUnion__vm_map_subsystem {
 	__Request__vm_region_t Request_vm_region;
-	__Request__vm_allocate_t Request_vm_allocate;
-	__Request__vm_deallocate_t Request_vm_deallocate;
 	__Request__vm_protect_t Request_vm_protect;
 	__Request__vm_inherit_t Request_vm_inherit;
 	__Request__vm_read_t Request_vm_read;
@@ -1163,31 +1084,6 @@ union __RequestUnion__vm_map_subsystem {
 		mach_msg_type_number_t infoCnt;
 		int info[10];
 	} __Reply__vm_region_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-		vm_address_t address;
-	} __Reply__vm_allocate_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__vm_deallocate_t;
 #ifdef  __MigPackStructs
 #pragma pack()
 #endif
@@ -1515,8 +1411,6 @@ union __RequestUnion__vm_map_subsystem {
 #define __ReplyUnion__vm_map_subsystem__defined
 union __ReplyUnion__vm_map_subsystem {
 	__Reply__vm_region_t Reply_vm_region;
-	__Reply__vm_allocate_t Reply_vm_allocate;
-	__Reply__vm_deallocate_t Reply_vm_deallocate;
 	__Reply__vm_protect_t Reply_vm_protect;
 	__Reply__vm_inherit_t Reply_vm_inherit;
 	__Reply__vm_read_t Reply_vm_read;
@@ -1545,8 +1439,6 @@ union __ReplyUnion__vm_map_subsystem {
 #ifndef subsystem_to_name_map_vm_map
 #define subsystem_to_name_map_vm_map \
     { "vm_region", 3800 },\
-    { "vm_allocate", 3801 },\
-    { "vm_deallocate", 3802 },\
     { "vm_protect", 3803 },\
     { "vm_inherit", 3804 },\
     { "vm_read", 3805 },\

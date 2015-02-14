@@ -496,48 +496,6 @@ kern_return_t mach_port_dnrequest_info
 );
 #endif	/* defined(LINTLIBRARY) */
 
-/* Routine mach_port_insert_member */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_port_insert_member
-#if	defined(LINTLIBRARY)
-    (task, name, pset)
-	ipc_space_t task;
-	mach_port_name_t name;
-	mach_port_name_t pset;
-{ return mach_port_insert_member(task, name, pset); }
-#else
-(
-	ipc_space_t task,
-	mach_port_name_t name,
-	mach_port_name_t pset
-);
-#endif	/* defined(LINTLIBRARY) */
-
-/* Routine mach_port_extract_member */
-#ifdef	mig_external
-mig_external
-#else
-extern
-#endif	/* mig_external */
-kern_return_t mach_port_extract_member
-#if	defined(LINTLIBRARY)
-    (task, name, pset)
-	ipc_space_t task;
-	mach_port_name_t name;
-	mach_port_name_t pset;
-{ return mach_port_extract_member(task, name, pset); }
-#else
-(
-	ipc_space_t task,
-	mach_port_name_t name,
-	mach_port_name_t pset
-);
-#endif	/* defined(LINTLIBRARY) */
-
 /* Routine mach_port_get_context */
 #ifdef	mig_external
 mig_external
@@ -1041,38 +999,6 @@ __END_DECLS
 		/* end of the kernel processed data */
 		NDR_record_t NDR;
 		mach_port_name_t name;
-		mach_port_name_t pset;
-	} __Request__mach_port_insert_member_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_port_name_t name;
-		mach_port_name_t pset;
-	} __Request__mach_port_extract_member_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		/* start of the kernel processed data */
-		mach_msg_body_t msgh_body;
-		/* end of the kernel processed data */
-		NDR_record_t NDR;
-		mach_port_name_t name;
 	} __Request__mach_port_get_context_t;
 #ifdef  __MigPackStructs
 #pragma pack()
@@ -1213,8 +1139,6 @@ union __RequestUnion__mach_port_subsystem {
 	__Request__mach_port_get_srights_t Request_mach_port_get_srights;
 	__Request__mach_port_space_info_t Request_mach_port_space_info;
 	__Request__mach_port_dnrequest_info_t Request_mach_port_dnrequest_info;
-	__Request__mach_port_insert_member_t Request_mach_port_insert_member;
-	__Request__mach_port_extract_member_t Request_mach_port_extract_member;
 	__Request__mach_port_get_context_t Request_mach_port_get_context;
 	__Request__mach_port_set_context_t Request_mach_port_set_context;
 	__Request__mach_port_kobject_t Request_mach_port_kobject;
@@ -1500,30 +1424,6 @@ union __RequestUnion__mach_port_subsystem {
 		mach_msg_header_t Head;
 		NDR_record_t NDR;
 		kern_return_t RetCode;
-	} __Reply__mach_port_insert_member_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
-	} __Reply__mach_port_extract_member_t;
-#ifdef  __MigPackStructs
-#pragma pack()
-#endif
-
-#ifdef  __MigPackStructs
-#pragma pack(4)
-#endif
-	typedef struct {
-		mach_msg_header_t Head;
-		NDR_record_t NDR;
-		kern_return_t RetCode;
 		mach_port_context_t context;
 	} __Reply__mach_port_get_context_t;
 #ifdef  __MigPackStructs
@@ -1643,8 +1543,6 @@ union __ReplyUnion__mach_port_subsystem {
 	__Reply__mach_port_get_srights_t Reply_mach_port_get_srights;
 	__Reply__mach_port_space_info_t Reply_mach_port_space_info;
 	__Reply__mach_port_dnrequest_info_t Reply_mach_port_dnrequest_info;
-	__Reply__mach_port_insert_member_t Reply_mach_port_insert_member;
-	__Reply__mach_port_extract_member_t Reply_mach_port_extract_member;
 	__Reply__mach_port_get_context_t Reply_mach_port_get_context;
 	__Reply__mach_port_set_context_t Reply_mach_port_set_context;
 	__Reply__mach_port_kobject_t Reply_mach_port_kobject;
@@ -1677,8 +1575,6 @@ union __ReplyUnion__mach_port_subsystem {
     { "mach_port_get_srights", 3216 },\
     { "mach_port_space_info", 3217 },\
     { "mach_port_dnrequest_info", 3218 },\
-    { "mach_port_insert_member", 3220 },\
-    { "mach_port_extract_member", 3221 },\
     { "mach_port_get_context", 3222 },\
     { "mach_port_set_context", 3223 },\
     { "mach_port_kobject", 3224 },\
