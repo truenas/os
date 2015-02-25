@@ -91,7 +91,7 @@ MAN=	aac.4 \
 	cc_htcp.4 \
 	cc_newreno.4 \
 	cc_vegas.4 \
-	ccd.4 \
+	${_ccd.4} \
 	cd.4 \
 	cdce.4 \
 	ch.4 \
@@ -208,8 +208,6 @@ MAN=	aac.4 \
 	ipw.4 \
 	ipwfw.4 \
 	isci.4 \
-	iscsi.4 \
-	iscsi_initiator.4 \
 	isp.4 \
 	ispfw.4 \
 	iwi.4 \
@@ -838,7 +836,6 @@ MLINKS+=lindev.4 full.4
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
-_bhyve.4=	bhyve.4
 _if_ntb.4=	if_ntb.4
 _ntb.4=		ntb.4
 _ntb_hw.4=	ntb_hw.4
@@ -851,6 +848,10 @@ MLINKS+=qlxge.4 if_qlxge.4
 MLINKS+=qlxgb.4 if_qlxgb.4
 MLINKS+=qlxgbe.4 if_qlxgbe.4
 MLINKS+=sfxge.4 if_sfxge.4
+
+.if ${MK_BHYVE} != "no"
+_bhyve.4=	bhyve.4
+.endif
 .endif
 
 .if ${MACHINE_CPUARCH} == "mips"
@@ -859,6 +860,16 @@ _nvram2env.4=	nvram2env.4
 
 .if exists(${.CURDIR}/man4.${MACHINE_CPUARCH})
 SUBDIR=	man4.${MACHINE_CPUARCH}
+.endif
+
+.if ${MK_CCD} != "no"
+_ccd.4=		ccd.4
+.endif
+
+.if ${MK_ISCSI} != "no"
+MAN+=		iscsi.4
+MAN+=		iscsi_initiator.4
+
 .endif
 
 .if ${MK_TESTS} != "no"

@@ -38,7 +38,6 @@ SUBDIR=	alias \
 	dirname \
 	dpv \
 	du \
-	ee \
 	elf2aout \
 	elfdump \
 	enigma \
@@ -67,7 +66,6 @@ SUBDIR=	alias \
 	id \
 	ipcrm \
 	ipcs \
-	iscsictl \
 	join \
 	jot \
 	${_kdump} \
@@ -157,7 +155,6 @@ SUBDIR=	alias \
 	systat \
 	tabs \
 	tail \
-	talk \
 	tar \
 	tcopy \
 	tee \
@@ -232,6 +229,10 @@ SUBDIR+=	calendar
 _clang=		clang
 .endif
 
+.if ${MK_EE} != "no"
+SUBDIR+=	ee
+.endif
+
 .if ${MK_GPL_DTC} != "yes"
 SUBDIR+=	dtc
 .endif
@@ -248,6 +249,10 @@ SUBDIR+=	hesinfo
 _iconv=		iconv
 _mkcsmapper=	mkcsmapper
 _mkesdb=	mkesdb
+.endif
+
+.if ${MK_ISCSI} != "no"
+SUBDIR+=	iscsictl
 .endif
 
 .if ${MK_KDUMP} != "no"
@@ -328,6 +333,10 @@ SUBDIR+=	rwho
 
 .if ${MK_SENDMAIL} != "no"
 SUBDIR+=	vacation
+.endif
+
+.if ${MK_TALK} != "no"
+SUBDIR+=	talk
 .endif
 
 .if ${MK_TELNET} != "no"

@@ -75,7 +75,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libpmc} \
 	${_libproc} \
 	libprocstat \
-	libradius \
+	${_libradius} \
 	librpcsvc \
 	librt \
 	${_librtld_db} \
@@ -131,7 +131,7 @@ SUBDIR_DEPEND_liblibrpcsec_gss= libgssapi
 SUBDIR_DEPEND_libmagic= libz
 SUBDIR_DEPEND_libmemstat= libkvm
 SUBDIR_DEPEND_libopie= libmd
-SUBDIR_DEPEND_libpam= libcrypt libopie libradius librpcsvc libtacplus libutil ${_libypclnt} ${_libcom_err} 
+SUBDIR_DEPEND_libpam= libcrypt libopie ${_libradius} librpcsvc libtacplus libutil ${_libypclnt} ${_libcom_err} 
 SUBDIR_DEPEND_libpjdlog= libutil
 SUBDIR_DEPEND_libprocstat= libkvm libutil
 SUBDIR_DEPEND_libradius= libmd
@@ -225,7 +225,9 @@ _librtld_db=	librtld_db
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
+.if ${MK_BHYVE} != "no"
 _libvmmapi=	libvmmapi
+.endif
 .endif
 
 .if ${MACHINE_CPUARCH} == "ia64"
@@ -254,6 +256,10 @@ _libmp=		libmp
 
 .if ${MK_PMC} != "no"
 _libpmc=	libpmc
+.endif
+
+.if ${MK_RADIUS_SUPPORT} != "no"
+_libradius=	libradius
 .endif
 
 .if ${MK_SENDMAIL} != "no"

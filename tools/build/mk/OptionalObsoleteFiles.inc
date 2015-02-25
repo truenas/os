@@ -6,6 +6,7 @@
 #
 
 .if ${MK_ACCT} == no
+OLD_FILES+=etc/rc.d/accounting
 OLD_FILES+=etc/periodic/daily/310.accounting
 OLD_FILES+=usr/sbin/accton
 OLD_FILES+=usr/sbin/sa
@@ -14,6 +15,8 @@ OLD_FILES+=usr/share/man/man8/sa.8.gz
 .endif
 
 .if ${MK_ACPI} == no
+OLD_FILES+=etc/devd/asus.conf
+OLD_FILES+=etc/rc.d/power_profile
 OLD_FILES+=usr/sbin/acpiconf
 OLD_FILES+=usr/sbin/acpidb
 OLD_FILES+=usr/sbin/acpidump
@@ -26,6 +29,7 @@ OLD_FILES+=usr/share/man/man8/iasl.8.gz
 
 .if ${MK_AMD} == no
 OLD_FILES+=etc/amd.map
+OLD_FILES+=etc/rc.d/amd
 OLD_FILES+=usr/bin/pawd
 OLD_FILES+=usr/sbin/amd
 OLD_FILES+=usr/sbin/amq
@@ -48,6 +52,8 @@ OLD_FILES+=usr/share/man/man8/wire-test.8.gz
 .endif
 
 .if ${MK_APM} == no
+OLD_FILES+=etc/rc.d/apm
+OLD_FILES+=etc/rc.d/apmd
 OLD_FILES+=etc/apmd.conf
 OLD_FILES+=usr/sbin/apm
 OLD_FILES+=usr/share/examples/etc/apmd.conf
@@ -139,10 +145,42 @@ OLD_FILES+=usr/share/man/man8/authpf.8.gz
 OLD_FILES+=usr/share/man/man8/authpf-noip.8.gz
 .endif
 
+.if ${MK_AUTOFS} == no
+OLD_FILES+=etc/autofs/include_ldap
+OLD_FILES+=etc/autofs/special_hosts
+OLD_FILES+=etc/autofs/special_media
+OLD_FILES+=etc/autofs/special_null
+OLD_FILES+=etc/auto_master
+OLD_FILES+=etc/rc.d/automount
+OLD_FILES+=etc/rc.d/automountd
+OLD_FILES+=etc/rc.d/autounmountd
+OLD_FILES+=usr/sbin/automount
+OLD_FILES+=usr/sbin/automountd
+OLD_FILES+=usr/sbin/autounmountd
+OLD_FILES+=usr/share/man/man5/autofs.5.gz
+OLD_FILES+=usr/share/man/man5/auto_master.5.gz
+OLD_FILES+=usr/share/man/man8/automount.8.gz
+OLD_FILES+=usr/share/man/man8/automountd.8.gz
+OLD_FILES+=usr/share/man/man8/autounmountd.8.gz
+OLD_DIRS+=etc/autofs
+.endif
+
+.if ${MK_BHYVE} == no
+OLD_FILES+=usr/sbin/bhyve
+OLD_FILES+=usr/sbin/bhyvectl
+OLD_FILES+=usr/sbin/bhyveload
+OLD_FILES+=usr/share/examples/bhyve/vmrun.sh
+OLD_FILES+=usr/share/man/man8/bhyve.8.gz
+OLD_FILES+=usr/share/man/man8/bhyveload.8.gz
+OLD_DIRS+=usr/share/examples/bhyve
+.endif
+
 .if ${MK_BLUETOOTH} == no
 OLD_FILES+=etc/bluetooth/hcsecd.conf
 OLD_FILES+=etc/bluetooth/hosts
 OLD_FILES+=etc/bluetooth/protocols
+OLD_DIRS+=etc/bluetooth
+OLD_FILES+=etc/defaults/bluetooth.device.conf
 OLD_FILES+=usr/bin/bthost
 OLD_FILES+=usr/bin/btsockstat
 OLD_FILES+=usr/bin/rfcomm_sppd
@@ -268,6 +306,132 @@ OLD_FILES+=usr/share/man/man8/sdpd.8.gz
 # to be filled in
 #.endif
 
+.if ${MK_BSNMP} == no
+OLD_FILES+=etc/snmpd.config
+OLD_FILES+=etc/rc.d/bsnmpd
+OLD_FILES+=usr/bin/bsnmpget
+OLD_FILES+=usr/bin/bsnmpset
+OLD_FILES+=usr/bin/bsnmpwalk
+OLD_FILES+=usr/include/bsnmp/asn1.h
+OLD_FILES+=usr/include/bsnmp/bridge_snmp.h
+OLD_FILES+=usr/include/bsnmp/snmp.h
+OLD_FILES+=usr/include/bsnmp/snmp_atm.h
+OLD_FILES+=usr/include/bsnmp/snmp_mibII.h
+OLD_FILES+=usr/include/bsnmp/snmp_netgraph.h
+OLD_FILES+=usr/include/bsnmp/snmpagent.h
+OLD_FILES+=usr/include/bsnmp/snmpclient.h
+OLD_FILES+=usr/include/bsnmp/snmpmod.h
+OLD_FILES+=usr/lib/libbsnmp.a
+OLD_LIBS+=usr/lib/libbsnmp.so.6
+OLD_FILES+=usr/lib/libbsnmp_p.a
+OLD_FILES+=usr/lib/libbsnmptools.a
+OLD_LIBS+=usr/lib/libbsnmptools.so.0
+OLD_FILES+=usr/lib/libbsnmptools_p.a
+OLD_LIBS+=usr/lib/snmp_atm.so.6
+OLD_LIBS+=usr/lib/snmp_bridge.so.6
+OLD_LIBS+=usr/lib/snmp_hast.so.6
+OLD_LIBS+=usr/lib/snmp_hostres.so.6
+OLD_LIBS+=usr/lib/snmp_lm75.so.6
+OLD_LIBS+=usr/lib/snmp_mibII.so.6
+OLD_LIBS+=usr/lib/snmp_netgraph.so.6
+OLD_LIBS+=usr/lib/snmp_pf.so.6
+OLD_LIBS+=usr/lib/snmp_target.so.6
+OLD_LIBS+=usr/lib/snmp_usm.so.6
+OLD_LIBS+=usr/lib/snmp_vacm.so.6
+OLD_LIBS+=usr/lib/snmp_wlan.so.6
+OLD_FILES+=usr/sbin/bsnmpd
+OLD_FILES+=usr/sbin/gensnmptree
+OLD_FILES+=usr/share/man/man1/bsnmpd.1.gz
+OLD_FILES+=usr/share/man/man1/bsnmpget.1.gz
+OLD_FILES+=usr/share/man/man1/bsnmpset.1.gz
+OLD_FILES+=usr/share/man/man1/bsnmpwalk.1.gz
+OLD_FILES+=usr/share/man/man1/gensnmptree.1.gz
+OLD_FILES+=usr/share/man/man3/asn1.3.gz
+OLD_FILES+=usr/share/man/man3/bsnmpagent.3.gz
+OLD_FILES+=usr/share/man/man3/bsnmpclient.3.gz
+OLD_FILES+=usr/share/man/man3/bsnmplib.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_atm.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_bridge.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_hast.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_hostres.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_lm75.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_mibII.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_netgraph.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_target.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_usm.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_vacm.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_wlan.3.gz
+OLD_FILES+=usr/share/man/man3/snmpmod.3.gz
+OLD_FILES+=usr/share/snmp/defs/atm_freebsd.def
+OLD_FILES+=usr/share/snmp/defs/atm_tree.def
+OLD_FILES+=usr/share/snmp/defs/bridge_tree.def
+OLD_FILES+=usr/share/snmp/defs/hast_tree.def
+OLD_FILES+=usr/share/snmp/defs/hostres_tree.def
+OLD_FILES+=usr/share/snmp/defs/lm75_tree.def
+OLD_FILES+=usr/share/snmp/defs/mibII_tree.def
+OLD_FILES+=usr/share/snmp/defs/netgraph_tree.def
+OLD_FILES+=usr/share/snmp/defs/pf_tree.def
+OLD_FILES+=usr/share/snmp/defs/target_tree.def
+OLD_FILES+=usr/share/snmp/defs/tree.def
+OLD_FILES+=usr/share/snmp/defs/usm_tree.def
+OLD_FILES+=usr/share/snmp/defs/vacm_tree.def
+OLD_FILES+=usr/share/snmp/defs/wlan_tree.def
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-ATM-FREEBSD-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-ATM.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-BRIDGE-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-HAST-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-HOSTRES-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-IP-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-LM75-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-MIB2-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-NETGRAPH.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-PF-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-SNMPD.txt
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-WIRELESS-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/BRIDGE-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/FOKUS-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/FREEBSD-MIB.txt
+OLD_FILES+=usr/share/snmp/mibs/RSTP-MIB.txt
+OLD_DIRS+=usr/include/bsnmp
+OLD_DIRS+=usr/share/snmp
+OLD_DIRS+=usr/share/snmp/defs
+OLD_DIRS+=usr/share/snmp/mibs
+.endif
+
+.if ${MK_BSDINSTALL} == no
+OLD_FILES+=usr/libexec/bsdinstall/adduser
+OLD_FILES+=usr/libexec/bsdinstall/auto
+OLD_FILES+=usr/libexec/bsdinstall/autopart
+OLD_FILES+=usr/libexec/bsdinstall/checksum
+OLD_FILES+=usr/libexec/bsdinstall/config
+OLD_FILES+=usr/libexec/bsdinstall/distextract
+OLD_FILES+=usr/libexec/bsdinstall/distfetch
+OLD_FILES+=usr/libexec/bsdinstall/docsinstall
+OLD_FILES+=usr/libexec/bsdinstall/entropy
+OLD_FILES+=usr/libexec/bsdinstall/hostname
+OLD_FILES+=usr/libexec/bsdinstall/jail
+OLD_FILES+=usr/libexec/bsdinstall/keymap
+OLD_FILES+=usr/libexec/bsdinstall/mirrorselect
+OLD_FILES+=usr/libexec/bsdinstall/mount
+OLD_FILES+=usr/libexec/bsdinstall/netconfig
+OLD_FILES+=usr/libexec/bsdinstall/netconfig_ipv4
+OLD_FILES+=usr/libexec/bsdinstall/netconfig_ipv6
+OLD_FILES+=usr/libexec/bsdinstall/partedit
+OLD_FILES+=usr/libexec/bsdinstall/rootpass
+OLD_FILES+=usr/libexec/bsdinstall/script
+OLD_FILES+=usr/libexec/bsdinstall/scriptedpart
+OLD_FILES+=usr/libexec/bsdinstall/services
+OLD_FILES+=usr/libexec/bsdinstall/time
+OLD_FILES+=usr/libexec/bsdinstall/umount
+OLD_FILES+=usr/libexec/bsdinstall/wlanconfig
+OLD_FILES+=usr/libexec/bsdinstall/zfsboot
+OLD_FILES+=usr/sbin/bsdinstall
+OLD_FILES+=usr/share/man/man8/bsdinstall.8.gz
+OLD_FILES+=usr/share/man/man8/sade.8.gz
+OLD_DIRS+=usr/libexec/bsdinstall
+.endif
+
 .if ${MK_CALENDAR} == no
 OLD_FILES+=etc/periodic/daily/300.calendar
 OLD_FILES+=usr/bin/calendar
@@ -326,6 +490,13 @@ OLD_FILES+=usr/share/calendar/uk_UA.KOI8-U/calendar.holiday
 OLD_FILES+=usr/share/calendar/uk_UA.KOI8-U/calendar.misc
 OLD_FILES+=usr/share/calendar/uk_UA.KOI8-U/calendar.orthodox
 OLD_FILES+=usr/share/man/man1/calendar.1.gz
+.endif
+
+.if ${MK_CCD} == no
+OLD_FILES+=etc/rc.d/ccd
+OLD_FILES+=sbin/ccdconfig
+OLD_FILES+=usr/share/man/man4/ccd.4.gz
+OLD_FILES+=usr/share/man/man8/ccdconfig.8.gz
 .endif
 
 .if ${MK_CDDL} == no
@@ -389,15 +560,31 @@ OLD_FILES+=usr/lib32/libuutil.so
 OLD_LIBS+=usr/lib32/libuutil.so.2
 OLD_FILES+=usr/lib32/libuutil_p.a
 .endif
+OLD_LIBS+=lib/libdtrace.so.2
 OLD_FILES+=usr/sbin/dtrace
 OLD_FILES+=usr/sbin/lockstat
 OLD_FILES+=usr/share/man/man1/dtrace.1.gz
+OLD_FILES+=usr/share/dtrace/disklatency
+OLD_FILES+=usr/share/dtrace/disklatencycmd
+OLD_FILES+=usr/share/dtrace/hotopen
+OLD_FILES+=usr/share/dtrace/nfsclienttime
+OLD_FILES+=usr/share/dtrace/toolkit/execsnoop
+OLD_FILES+=usr/share/dtrace/toolkit/hotkernel
+OLD_FILES+=usr/share/dtrace/toolkit/hotuser
+OLD_FILES+=usr/share/dtrace/toolkit/opensnoop
+OLD_FILES+=usr/share/dtrace/toolkit/procsystime
+OLD_FILES+=usr/share/man/man1/dtrace.1.gz
+OLD_DIRS+=usr/lib/dtrace
+OLD_DIRS+=usr/lib32/dtrace
+OLD_DIRS+=usr/share/dtrace/toolkit
+OLD_DIRS+=usr/share/dtrace
 .endif
 
 .if ${MK_ZFS} == no
 OLD_FILES+=boot/gptzfsboot
 OLD_FILES+=boot/zfsboot
 OLD_FILES+=boot/zfsloader
+OLD_FILES+=etc/devd/zfs.conf
 OLD_FILES+=etc/periodic/daily/404.status-zfs
 OLD_FILES+=etc/periodic/daily/800.scrub-zfs
 OLD_LIBS+=lib/libzfs.so.2
@@ -1136,6 +1323,23 @@ OLD_FILES+=usr/share/dict/web2a
 OLD_FILES+=usr/share/dict/words
 .endif
 
+.if ${MK_EE} == no
+OLD_FILES+=usr/bin/edit
+OLD_FILES+=usr/bin/ee
+OLD_FILES+=usr/bin/ree
+OLD_FILES+=usr/share/man/man1/edit.1.gz
+OLD_FILES+=usr/share/man/man1/ee.1.gz
+OLD_FILES+=usr/share/man/man1/ree.1.gz
+OLD_FILES+=usr/share/nls/C/ee.cat
+OLD_FILES+=usr/share/nls/de_DE.ISO8859-1/ee.cat
+OLD_FILES+=usr/share/nls/fr_FR.ISO8859-1/ee.cat
+OLD_FILES+=usr/share/nls/hu_HU.ISO8859-2/ee.cat
+OLD_FILES+=usr/share/nls/pl_PL.ISO8859-2/ee.cat
+OLD_FILES+=usr/share/nls/pt_BR.ISO8859-1/ee.cat
+OLD_FILES+=usr/share/nls/ru_RU.KOI8-R/ee.cat
+OLD_FILES+=usr/share/nls/uk_UA.KOI8-U/ee.cat
+.endif
+
 #.if ${MK_EXAMPLES} == no
 # to be filled in
 #.endif
@@ -1854,6 +2058,20 @@ OLD_FILES+=usr/share/man/man5/qop.5.gz
 OLD_FILES+=usr/share/man/man8/gssd.8.gz
 .endif
 
+.if ${MK_HAST} == no
+OLD_FILES+=sbin/hastctl
+OLD_FILES+=sbin/hastd
+OLD_FILES+=usr/share/examples/hast/ucarp.sh
+OLD_FILES+=usr/share/examples/hast/ucarp_down.sh
+OLD_FILES+=usr/share/examples/hast/ucarp_up.sh
+OLD_FILES+=usr/share/examples/hast/vip-down.sh
+OLD_FILES+=usr/share/examples/hast/vip-up.sh
+OLD_FILES+=usr/share/man/man5/hast.conf.5.gz
+OLD_FILES+=usr/share/man/man8/hastctl.8.gz
+OLD_FILES+=usr/share/man/man8/hastd.8.gz
+OLD_DIRS+=usr/share/examples/hast
+.endif
+
 .if ${MK_HESIOD} == no
 OLD_FILES+=usr/bin/hesinfo
 OLD_FILES+=usr/include/hesiod.h
@@ -2034,7 +2252,22 @@ OLD_FILES+=usr/share/man/man3/ipx_ntoa.3.gz
 OLD_FILES+=usr/share/man/man8/IPXrouted.8.gz
 .endif
 
+.if ${MK_ISCSI} == no
+OLD_FILES+=etc/rc.d/iscsictl
+OLD_FILES+=etc/rc.d/iscsid
+OLD_FILES+=sbin/iscontrol
+OLD_FILES+=usr/bin/iscsictl
+OLD_FILES+=usr/sbin/iscsid
+OLD_FILES+=usr/share/man/man4/iscsi.4.gz
+OLD_FILES+=usr/share/man/man4/iscsi_initiator.4.gz
+OLD_FILES+=usr/share/man/man5/iscsi.conf.5.gz
+OLD_FILES+=usr/share/man/man8/iscontrol.8.gz
+OLD_FILES+=usr/share/man/man8/iscsictl.8.gz
+OLD_FILES+=usr/share/man/man8/iscsid.8.gz
+.endif
+
 .if ${MK_JAIL} == no
+OLD_FILES+=etc/rc.d/jail
 OLD_FILES+=usr/sbin/jail
 OLD_FILES+=usr/sbin/jexec
 OLD_FILES+=usr/sbin/jls
@@ -2044,6 +2277,8 @@ OLD_FILES+=usr/share/man/man8/jls.8.gz
 .endif
 
 .if ${MK_KERBEROS} == no
+OLD_FILES+=etc/rc.d/ipropd_master
+OLD_FILES+=etc/rc.d/ipropd_slave
 OLD_FILES+=usr/bin/compile_et
 OLD_FILES+=usr/bin/hxtool
 OLD_FILES+=usr/bin/kadmin
@@ -3206,6 +3441,7 @@ OLD_FILES+=usr/share/man/man8/updatedb.8.gz
 .if ${MK_LPR} == no
 OLD_FILES+=etc/hosts.lpd
 OLD_FILES+=etc/printcap
+OLD_FILES+=etc/rc.d/lpd
 OLD_FILES+=usr/bin/lp
 OLD_FILES+=usr/bin/lpq
 OLD_FILES+=usr/bin/lpr
@@ -4025,6 +4261,13 @@ OLD_DIRS+=usr/share/doc/pjdfstest
 # to be filled in
 #.endif
 
+.if ${MK_TALK} == no
+OLD_FILES+=usr/bin/talk
+OLD_FILES+=usr/libexec/ntalkd
+OLD_FILES+=usr/share/man/man1/talk.1.gz
+OLD_FILES+=usr/share/man/man8/talkd.8.gz
+.endif
+
 .if ${MK_TCSH} == no
 OLD_FILES+=bin/csh
 OLD_FILES+=bin/tcsh
@@ -4617,9 +4860,10 @@ OLD_FILES+=usr/sbin/unbound-control
 OLD_FILES+=usr/sbin/unbound-control-setup
 .endif
 
-#.if ${MK_USB} == no
-# to be filled in
-#.endif
+.if ${MK_USB} == no
+OLD_FILES+=etc/devd/uauth.conf
+OLD_FILES+=etc/devd/usb.conf
+.endif
 
 .if ${MK_UTMPX} == no
 OLD_FILES+=etc/periodic/monthly/200.accounting
@@ -4643,6 +4887,8 @@ OLD_FILES+=usr/share/man/man8/utxrm.8.gz
 
 .if ${MK_WIRELESS} == no
 OLD_FILES+=etc/regdomain.xml
+OLD_FILES+=etc/rc.d/hostapd
+OLD_FILES+=etc/rc.d/wpa_supplicant
 OLD_FILES+=usr/sbin/ancontrol
 OLD_FILES+=usr/sbin/hostapd
 OLD_FILES+=usr/sbin/hostapd_cli

@@ -254,15 +254,19 @@ __DEFAULT_YES_OPTIONS = \
     ATM \
     AUDIT \
     AUTHPF \
+    AUTOFS \
+    BHYVE \
     BINUTILS \
     BLUETOOTH \
     BMAKE \
     BOOT \
     BSD_CPIO \
+    BSDINSTALL \
     BSNMP \
     BZIP2 \
     CALENDAR \
     CAPSICUM \
+    CCD \
     CDDL \
     CPP \
     CROSS_COMPILER \
@@ -272,6 +276,7 @@ __DEFAULT_YES_OPTIONS = \
     DICT \
     DYNAMICROOT \
     ED_CRYPTO \
+    EE \
     EXAMPLES \
     FLOPPY \
     FMTREE \
@@ -287,6 +292,7 @@ __DEFAULT_YES_OPTIONS = \
     GPIO \
     GPL_DTC \
     GROFF \
+    HAST \
     HTML \
     ICONV \
     INET \
@@ -296,6 +302,7 @@ __DEFAULT_YES_OPTIONS = \
     IPFILTER \
     IPFW \
     IPX \
+    ISCSI \
     JAIL \
     KDUMP \
     KERBEROS \
@@ -336,6 +343,7 @@ __DEFAULT_YES_OPTIONS = \
     PPP \
     PROFILE \
     QUOTAS \
+    RADIUS_SUPPORT \
     RCMDS \
     RCS \
     RESCUE \
@@ -351,6 +359,7 @@ __DEFAULT_YES_OPTIONS = \
     SYMVER \
     SYSCONS \
     SYSINSTALL \
+    TALK \
     TCSH \
     TELNET \
     TEXTPROC \
