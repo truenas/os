@@ -150,7 +150,8 @@ EventBuffer::ExtractEvent(string &eventString)
 				continue;
 			}
 			syslog(LOG_WARNING,
-			       "Event exceeds event size limit of %d bytes.");
+			       "Event exceeds event size limit of %d bytes.",
+			       MAX_EVENT_SIZE);
 		} else {
 			/*
 			 * Include the normal terminator in the extracted
@@ -175,7 +176,7 @@ EventBuffer::ExtractEvent(string &eventString)
 
 			m_synchronized = false;
 			syslog(LOG_WARNING,
-			       "Truncated %d characters from event.",
+			       "Truncated %zd characters from event.",
 			       eventLen - fieldEnd);
 		}
 		return (true);
