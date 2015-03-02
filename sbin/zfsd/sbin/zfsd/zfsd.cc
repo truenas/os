@@ -150,7 +150,7 @@ EventBuffer::ExtractEvent(string &eventString)
 				continue;
 			}
 			syslog(LOG_WARNING,
-			       "Event exceeds event size limit of %d bytes.");
+			       "Event exceeds event size limit of %d bytes.", MAX_EVENT_SIZE);
 		} else {
 			/*
 			 * Include the normal terminator in the extracted
