@@ -43,7 +43,7 @@ HOME=/
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin
 export HOME PATH
 
-if [ -f /data/truenas_license ]; then
+if [ -f /data/license ]; then
 	/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down
 	sleep 5
 fi
