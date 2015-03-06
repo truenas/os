@@ -222,7 +222,6 @@ SUBDIR=	\
 	mmcsd \
 	mpr \
 	mps \
-	mpslsi3 \
 	mpt \
 	mqueue \
 	mrsas \
