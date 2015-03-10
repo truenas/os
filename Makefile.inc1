@@ -1463,7 +1463,7 @@ cross-tools: .MAKE
     ${_crunchide} \
     ${_kgzip} \
     ${_mig} \
-    sys/boot/usb/tools
+    sys/boot/usb/tools \
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,depend,all,install)"; \
 		cd ${.CURDIR}/${_tool} && \
 		${MAKE} DIRPRFX=${_tool}/ obj && \
