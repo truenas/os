@@ -2103,6 +2103,7 @@ cfiscsi_ioctl_port_remove(struct ctl_req *req)
 	ctl_port_offline(&ct->ct_port);
 	cfiscsi_target_release(ct);
 	cfiscsi_target_release(ct);
+	req->status = CTL_LUN_OK;
 }
 
 static int
