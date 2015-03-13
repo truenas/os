@@ -14,7 +14,7 @@ NO_MAN=		YES
 
 WARNS?=		0
 
-FREEBSD_SRCTOP?=/usr/src
+FREEBSD_SRCTOP?=../../../..
 
 INCFLAGS+= -I${FREEBSD_SRCTOP}/cddl/contrib/opensolaris/lib/libzpool/common
 INCFLAGS+= -I${FREEBSD_SRCTOP}/cddl/compat/opensolaris/include
