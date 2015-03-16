@@ -855,7 +855,6 @@ g_eli_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	pp = g_new_providerf(gp, "%s%s", bpp->name, G_ELI_SUFFIX);
 	pp->mediasize = sc->sc_mediasize;
 	pp->sectorsize = sc->sc_sectorsize;
-	pp->stripesize = sc->sc_sectorsize;
 
 	g_error_provider(pp, 0);
 

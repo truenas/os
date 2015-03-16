@@ -765,6 +765,8 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 		*physical_ashift = highbit(4096) - 1;
 	} else if (pp->stripesize)
 		*physical_ashift = highbit(pp->stripesize) - 1;
+	else
+		*physical_ashift = highbit(pp->sectorsize) - 1;
 
 	/*
 	 * Clear the nowritecache settings, so that on a vdev_reopen()
