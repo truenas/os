@@ -45,14 +45,11 @@ SUBDIR=	alias \
 	expand \
 	false \
 	fetch \
-	file \
 	find \
-	finger \
 	fmt \
 	fold \
 	fstat \
 	fsync \
-	ftp \
 	gcore \
 	gencat \
 	getconf \
@@ -159,7 +156,6 @@ SUBDIR=	alias \
 	tcopy \
 	tee \
 	${_tests} \
-	tftp \
 	time \
 	tip \
 	top \
@@ -231,6 +227,18 @@ _clang=		clang
 
 .if ${MK_EE} != "no"
 SUBDIR+=	ee
+.endif
+
+.if ${MK_FILE} != "no"
+SUBDIR+=	file
+.endif
+
+.if ${MK_FINGER} != "no"
+SUBDIR+=	finger
+.endif
+
+.if ${MK_FTP} != "no"
+SUBDIR+=	ftp
 .endif
 
 .if ${MK_GPL_DTC} != "yes"
@@ -351,6 +359,10 @@ _tests=		tests
 SUBDIR+=	checknr
 SUBDIR+=	colcrt
 SUBDIR+=	ul
+.endif
+
+.if ${MK_TFTP} != "no"
+SUBDIR+=	tftp
 .endif
 
 .if ${MK_TOOLCHAIN} != "no"

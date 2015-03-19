@@ -46,7 +46,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 
-#include <sys/capability.h>
+#include <sys/capsicum.h>
 #include <sys/conf.h>
 #include <sys/domain.h>
 #include <sys/fcntl.h>
@@ -3405,7 +3405,7 @@ export_fd_to_sb(void *data, int type, int fd, int fflags, int refcnt,
 	}
 	if (locked)
 		FILEDESC_SUNLOCK(efbuf->fdp);
-	error = sbuf_bcat(efbuf->sb, kif, kif->kf_structsize);
+	error = sbuf_bcat(efbuf->sb, kif, kif->kf_structsize) == 0 ? 0 : ENOMEM;
 	if (efbuf->fdp != NULL)
 		FILEDESC_SLOCK(efbuf->fdp);
 	return (error);

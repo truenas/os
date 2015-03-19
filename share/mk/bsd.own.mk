@@ -260,6 +260,8 @@ __DEFAULT_YES_OPTIONS = \
     BLUETOOTH \
     BMAKE \
     BOOT \
+    BOOTPARAMD \
+    BOOTPD \
     BSD_CPIO \
     BSDINSTALL \
     BSNMP \
@@ -278,12 +280,15 @@ __DEFAULT_YES_OPTIONS = \
     ED_CRYPTO \
     EE \
     EXAMPLES \
+    FILE \
+    FINGER \
     FLOPPY \
     FMTREE \
     FORMAT_EXTENSIONS \
     FORTH \
     FP_LIBC \
     FREEBSD_UPDATE \
+    FTP \
     GAMES \
     GCOV \
     GDB \
@@ -297,6 +302,7 @@ __DEFAULT_YES_OPTIONS = \
     ICONV \
     INET \
     INET6 \
+    INETD \
     INFO \
     INSTALLLIB \
     IPFILTER \
@@ -344,6 +350,7 @@ __DEFAULT_YES_OPTIONS = \
     PROFILE \
     QUOTAS \
     RADIUS_SUPPORT \
+    RBOOTD \
     RCMDS \
     RCS \
     RESCUE \
@@ -361,8 +368,11 @@ __DEFAULT_YES_OPTIONS = \
     SYSINSTALL \
     TALK \
     TCSH \
+    TCP_WRAPPERS \
     TELNET \
     TEXTPROC \
+    TFTP \
+    TIMED \
     TOOLCHAIN \
     UNBOUND \
     USB \
