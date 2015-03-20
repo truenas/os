@@ -1024,12 +1024,12 @@ void
 WriteReturnMsgError(FILE *file, routine_t *rt, boolean_t isuser, argument_t *arg, string_t error)
 {
   char space[MAX_STR_LEN];
-    char * string = &space[0];
+  char * string = &space[0];
   
   if (UseEventLogger && arg != argNULL)
     sprintf(string, "LOG_W_E(\"%s\"); ", arg->argVarName);
   else
-		string = (char *)"";
+	  string = __DECONST(char *, "");
   
   fprintf(file, "\t\t{ ");
   

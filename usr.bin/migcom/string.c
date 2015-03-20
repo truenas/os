@@ -140,14 +140,14 @@ strphrase(left, right)
     current = saved + llen;
     *(current++) = ' ';
     strcpy(current, right);
-    free((char*)left);
+    free(__DECONST(char *, left));
     return(saved);
 }
 
 void
 strfree(string_t string)
 {
-    free((char *)string);
+    free(__DECONST(char *,string));
 }
 
 const char *
@@ -170,7 +170,7 @@ strstring(string)
 		return string;
 }
 
-const char *
+char *
 toupperstr(char *p)
 {
     register char *s = p;

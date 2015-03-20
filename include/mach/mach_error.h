@@ -59,7 +59,7 @@
 
 #include <mach/error.h>
 
-char		*mach_error_string(
+const char		*mach_error_string(
 /*
  *	Returns a string appropriate to the error argument given
  */
@@ -74,7 +74,7 @@ void		mach_error(
 	mach_error_t	error_value
 				);
 
-char		*mach_error_type(
+const char		*mach_error_type(
 /*
  *	Returns a string with the error system, subsystem and code
  */

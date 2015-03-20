@@ -3316,7 +3316,7 @@ WriteUserIndividual(statement_t *stats)
 			FILE *file;
 			char *filename;
         
-			filename = (char *)strconcat(UserFilePrefix,
+			filename = (char *)(uintptr_t)strconcat(UserFilePrefix,
 										 strconcat(stat->stRoutine->rtName, ".c"));
 			file = fopen(filename, "w");
 			if (file == NULL)

@@ -345,7 +345,7 @@ doSharp(body)
     {
 	endName = strrchr(body, '"');
 	*endName = '\0';
-	strfree((char *)yyinname);
+	strfree(__DECONST(char *,yyinname));
 	yyinname = strmake(startName+1);
     }
 }

@@ -89,6 +89,6 @@ extern void strfree(string_t string);
 
 extern const char *strbool(boolean_t bool);
 extern const char *strstring(string_t string);
-extern const char *toupperstr(char *string);
+extern char *toupperstr(char *string);
 
 #endif	/* STRDEFS_H */

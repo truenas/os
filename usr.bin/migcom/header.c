@@ -398,7 +398,7 @@ WriteDefinesRoutine(FILE *file, routine_t *rt)
 {
     char *up = (char *)malloc(strlen(rt->rtName)+1);
 
-    up = (char *)toupperstr(strcpy(up, rt->rtName));
+    up = toupperstr(strcpy(up, rt->rtName));
     fprintf(file, "#define\tMACH_ID_%s\t\t%d\t/* %s() */\n", 
 			up, rt->rtNumber + SubsystemBase, rt->rtName);
 	if (rt->rtKind == rkRoutine)

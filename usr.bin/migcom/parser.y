@@ -290,7 +290,7 @@ SubsystemStart		:	sySubsystem
       warn("previous Subsystem decl (of %s) will be ignored", SubsystemName);
       IsKernelUser = FALSE;
       IsKernelServer = FALSE;
-	strfree((char *)SubsystemName);
+	  strfree(__DECONST(char *, SubsystemName));
     }
 }
 			;
