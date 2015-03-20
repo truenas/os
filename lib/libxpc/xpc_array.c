@@ -18,8 +18,7 @@ xpc_array_create(const xpc_object_t *objects, size_t count)
 	if (count == 0 || objects == NULL)
 		return (xo);
 
-	printf("xpc_array_create: non-zero count not yet supported\n");
-	abort();
+	fail_log("xpc_array_create: non-zero count not yet supported\n");
 }
 
 void

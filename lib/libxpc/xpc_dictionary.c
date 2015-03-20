@@ -48,7 +48,7 @@ nv2xpc(const nvlist_t *nv)
 	else if (nvlist_type(nv) == NV_TYPE_NVLIST_ARRAY)
 		xo = _xpc_prim_create(_XPC_TYPE_ARRAY, val, nvcount(nv));
 	else
-		abort(); /* unreached */
+		fail_log("invalid nvlist_type\n");
 
 	return (xo);
 }
@@ -68,10 +68,9 @@ xpc_dictionary_create(const char * const *keys, const xpc_object_t *values, size
 	if (keys == NULL || values == NULL || count == 0)
 		return (xo);
 
-	printf("xpc_dictionary_create: non-zero count or non null entries not supported\n");
-	abort();
-	
+	fail_log("xpc_dictionary_create: non-zero count or non null entries not supported\n");
 }
+
 xpc_object_t
 xpc_dictionary_create_reply(xpc_object_t original)
 {
@@ -183,8 +182,11 @@ xpc_dictionary_get_value(xpc_object_t xdict, const char *key)
 		} else if (nvlist_exists_nvlist(xo->xo_nv, key))
 			xotmp = nv2xpc(nvlist_get_nvlist(xo->xo_nv, key));
 		else {
+			fail_log("no key type exists for key\n");
+#if 0
 			printf("unsupported type for %s\n", key);
 			abort();
+#endif			
 		}
 		nvlist_add_number_type(xo->xo_nv, key, (uint64_t)xotmp, NV_TYPE_PTR);
 	}

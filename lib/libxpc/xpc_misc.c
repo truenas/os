@@ -5,6 +5,18 @@
 #include "xpc_internal.h"
 #include <machine/atomic.h>
 #include <assert.h>
+#include <syslog.h>
+#include <stdarg.h>
+
+
+void
+fail_log(const char *exp)
+{
+	syslog(LOG_ERR, "%s", exp);
+	sleep(1);
+	printf("%s", exp);
+	abort();
+}
 
 static void nvlist_add_prim(nvlist_t *nv, const char *key, xpc_object_t xobj);
 
@@ -98,11 +110,13 @@ nvlist_add_prim(nvlist_t *nv, const char *key, xpc_object_t xobj)
 		xpc_nvlist_add_nvlist_type(nv, key, xo->xo_nv, NV_TYPE_NVLIST_ARRAY);
 		break;
 	default:
-		printf("unsupported serialization type %u\n", xo->xo_xpc_type);
-		abort();
+		fail_log("unsupported serialization type\n");
+#if 0
+	printf("unsupported serialization type %u\n", xo->xo_xpc_type);
+	abort();
+#endif
 	}
 }
-
 static void
 xpc_nvlist_destroy(nvlist_t *nv)
 {
@@ -249,7 +263,7 @@ ld2xpc(launch_data_t ld)
 		return (NULL);
 	if (ld->type == LAUNCH_DATA_STRING || ld->type == LAUNCH_DATA_OPAQUE) {
 		val.str = malloc(ld->string_len);
-		memcpy((void *)val.str, ld->string, ld->string_len);
+		memcpy(__DECONST(void *, val.str), ld->string, ld->string_len);
 		xo = _xpc_prim_create(ld_to_xpc_type[ld->type], val, ld->string_len);
 	} else if (ld->type == LAUNCH_DATA_BOOL) {
 		val.b = (bool)ld->boolean;
@@ -318,6 +332,14 @@ xpc_pipe_routine_reply(xpc_object_t xobj)
 	return (err);
 }
 
+
+#define LOG(...)	\
+	do {            \
+	syslog(LOG_ERR, "%s:%u: ", __FILE__, __LINE__);	\
+	syslog(LOG_ERR, __VA_ARGS__);					\
+	sleep(1); \
+	} while (0)
+
 int
 xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t *rcvport,
 	boolean_t (*demux)(mach_msg_header_t *, mach_msg_header_t *), mach_msg_size_t msgsize __unused,
@@ -338,8 +360,10 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 	request->msgh_size = MAX_RECV;
 	request->msgh_local_port = portset;
 	kr = mach_msg_receive(request);
+	LOG("mach_msg_receive returned %d\n", kr);
 	*rcvport = request->msgh_remote_port;
 	if (demux(request, (mach_msg_header_t *)&response)) {
+		LOG("demux returned true\n");
 		(void)mach_msg_send((mach_msg_header_t *)&response);
 		/*  can't do anything with the return code
 		* just tell the caller this has been handled
@@ -347,10 +371,13 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 		return (TRUE);
 	}
 	data_size = request->msgh_size;
+	LOG("unpacking data_size=%d", data_size);
 	val.nv = nvlist_unpack(&message.data, data_size);
+	LOG("unpacked to %p", val.nv);
 	/* is padding for alignment enforced in the kernel?*/
 	tr = (mach_msg_trailer_t *)(uintptr_t)(((uint8_t *)request) + sizeof(request) + data_size);
 	xo = _xpc_prim_create_flags(_XPC_TYPE_DICTIONARY, val, nvcount(val.nv), _XPC_FROM_WIRE);
+	LOG("created xpc_object %p", xo);
 	switch(tr->msgh_trailer_type) {
 	case MACH_RCV_TRAILER_AUDIT:
 	case MACH_RCV_TRAILER_CTX:

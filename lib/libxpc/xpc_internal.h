@@ -53,3 +53,6 @@ __private_extern__ void nvlist_add_object(nvlist_t *nv, const char *key, xpc_obj
 __private_extern__ xpc_object_t nvlist_get_object(const nvlist_t *nv, const char *key);
 __private_extern__ xpc_object_t nvlist_move_object(const nvlist_t *nv, const char *key);
 __private_extern__ size_t nvcount(const nvlist_t *nv);
+
+void fail_log(const char *) __dead2;
+
