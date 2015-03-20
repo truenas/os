@@ -196,24 +196,6 @@ __cap_rights_clear(cap_rights_t *rights, ...)
 	return (rights);
 }
 
-cap_rights_t *
-__cap_rights_clear_all(cap_rights_t *rights)
-{
-	unsigned int n;
-	int version;
-
-	version = CAPVER(rights);
-
-	assert(version == CAP_RIGHTS_VERSION_00);
-
-	n = version + 2;
-	assert(n >= CAPARSIZE_MIN && n <= CAPARSIZE_MAX);
-	memset(rights->cr_rights, 0, sizeof(rights->cr_rights[0]) * n);
-	CAP_NONE(rights);
-
-	return (rights);
-}
-
 bool
 __cap_rights_is_set(const cap_rights_t *rights, ...)
 {
