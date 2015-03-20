@@ -137,6 +137,10 @@
 #include <sys/mach/ipc/ipc_thread.h>
 
 #define vm_object_destroy(a)
+
+
+#pragma clang diagnostic ignored "-Wcast-qual"
+
 /*
  *	Routine:	ipc_kobject_notify
  *	Purpose:
