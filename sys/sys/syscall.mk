@@ -419,6 +419,8 @@ MIASM =  \
 	aio_mlock.o \
 	procctl.o \
 	ppoll.o \
+	futimens.o \
+	utimensat.o \
 	_kernelrpc_mach_vm_allocate_trap.o \
 	_kernelrpc_mach_vm_deallocate_trap.o \
 	_kernelrpc_mach_vm_protect_trap.o \
