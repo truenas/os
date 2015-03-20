@@ -903,8 +903,6 @@ do_dup(struct thread *td, int flags, int old, int new,
 
 	delfp = newfde->fde_file;
 
-	cap_rights_clear_all(&newfde->fde_rights);
-	free(newfde->fde_ioctls, M_FILECAPS);
 	/*
 	 * Duplicate the source descriptor.
 	 */
