@@ -68,31 +68,31 @@ struct error_system errors[err_max_system+1] = {
 	/* 0; err_kern */
 	{
 		errlib_count(err_os_sub),
-		(char *)"(operating system/?) unknown subsystem error",
+		"(operating system/?) unknown subsystem error",
 		err_os_sub,
 	},
 	/* 1; err_us */
 	{
 		errlib_count(err_us_sub),
-		(char *)"(user space/?) unknown subsystem error",
+		"(user space/?) unknown subsystem error",
 		err_us_sub,
 	},
 	/* 2; err_server */
 	{
 		errlib_count(err_server_sub),
-		(char *)"(server/?) unknown subsystem error",
+		"(server/?) unknown subsystem error",
 		err_server_sub,
 	},
 	/* 3 (& 3f); err_ipc */
 	{
 		errlib_count(err_ipc_sub),
-		(char *)"(ipc/?) unknown subsystem error",
+		"(ipc/?) unknown subsystem error",
 		err_ipc_sub,
 	},
 	/* 4; err_mach_ipc */
 	{
 		errlib_count(err_mach_ipc_sub),
-		(char *)"(ipc/?) unknown subsystem error",
+		"(ipc/?) unknown subsystem error",
 		err_mach_ipc_sub,
 	},
 };

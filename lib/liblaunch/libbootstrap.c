@@ -21,6 +21,7 @@
 #include "config.h"
 #include "launch.h"
 #include "launch_priv.h"
+#include "launch_internal.h"
 #include "bootstrap.h"
 #include "bootstrap_priv.h"
 #include "vproc.h"

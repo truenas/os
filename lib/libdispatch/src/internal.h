@@ -27,6 +27,9 @@
 #ifndef __DISPATCH_INTERNAL__
 #define __DISPATCH_INTERNAL__
 
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wpointer-bool-conversion"
+
 #include <config/config.h>
 
 #define __DISPATCH_BUILDING_DISPATCH__

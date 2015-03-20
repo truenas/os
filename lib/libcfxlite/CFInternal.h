@@ -33,6 +33,8 @@
     #error The header file CFInternal.h is for the exclusive use of CoreFoundation. No other project should include it.
 #endif
 
+#pragma clang diagnostic ignored "-Wcast-qual"
+
 #if !defined(__COREFOUNDATION_CFINTERNAL__)
 #define __COREFOUNDATION_CFINTERNAL__ 1
 

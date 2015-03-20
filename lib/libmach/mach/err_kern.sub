@@ -180,23 +180,23 @@ static const char * err_codes_unix[] = {
 
 static struct error_subsystem err_os_sub[] = {
 	{
-	(char *)"(os/kern)",
+	"(os/kern)",
 	errlib_count(err_codes_kern),
-	(char **)err_codes_kern,
+	err_codes_kern,
 	},
 	{
-	(char *)"(os/?)",
+	"(os/?)",
 	0,
-	(char **)0,
-	},
-	{
-	(char *)"(os/?)",
 	0,
-	(char **)0,
 	},
 	{
-	(char *)"(os/unix)",
+	"(os/?)",
+	0,
+	0,
+	},
+	{
+	"(os/unix)",
 	errlib_count(err_codes_unix),
-	(char **)err_codes_unix,
+	err_codes_unix,
 	},
 };

@@ -39,6 +39,8 @@
 #include <unistd.h>
 #endif
 
+#pragma clang diagnostic ignored "-Wcast-qual"
+
 CF_PRIVATE void _CFApplicationPreferencesDomainHasChanged(CFPreferencesDomainRef changedDomain);
 static Boolean _CFApplicationPreferencesSynchronizeNoLock(_CFApplicationPreferences *self);
 void _CFPreferencesDomainSetMultiple(CFPreferencesDomainRef domain, CFDictionaryRef dict);

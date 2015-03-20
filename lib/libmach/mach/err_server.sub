@@ -268,108 +268,108 @@ static const char	* err_codes_xkernel[] = {		/* 15 */
 static struct error_subsystem err_server_sub[] = {
 	/* server/0; */
 	{
-		(char *)"(server/netname)",
+		"(server/netname)",
 		errlib_count(err_codes_netname),
-		(char **)err_codes_netname,
+		err_codes_netname,
 	},
 	/* server/1; */
 	{
-		(char *)"(server/env_mgr)",
+		"(server/env_mgr)",
 		errlib_count(err_codes_env_mgr),
-		(char **)err_codes_env_mgr,
+		err_codes_env_mgr,
 	},
 	/* server/2; */
 	{
-		(char *)"(server/execd)",
+		"(server/execd)",
 		errlib_count(err_codes_execd),
-		(char **)err_codes_execd,
+		err_codes_execd,
 	},
 	/* server/3; */
 	{
-		(char *)"(server/netmemory)",
+		"(server/netmemory)",
 		errlib_count(err_codes_netmemory),
-		(char **)err_codes_netmemory,
+		err_codes_netmemory,
 	},
 	/* server/4; */
 	{
-		(char *)"(server/ufs)",
+		"(server/ufs)",
 		errlib_count(err_codes_ufs),
-		(char **)err_codes_ufs,
+		err_codes_ufs,
 	},
 	/* server/5; */
 	{
-		(char *)"(server/task_master)",
+		"(server/task_master)",
 		errlib_count(err_codes_task_master),
-		(char **)err_codes_task_master,
+		err_codes_task_master,
 	},
 	/* server/6; */
 	{
-		(char *)"(server/ns)",
+		"(server/ns)",
 		errlib_count(err_codes_ns),
-		(char **)err_codes_ns,
+		err_codes_ns,
 	},
 
 	/* server/7; i/o subsystem */
 	{
-		(char *)"(server/io)",
+		"(server/io)",
 		errlib_count(err_codes_io),
-		(char **)err_codes_io,
+		err_codes_io,
 	},
 
 	/* server/8; authentication server */
 	{
-		(char *)"(server/auth)",
+		"(server/auth)",
 		errlib_count(err_codes_auth),
-		(char **)err_codes_auth,
+		err_codes_auth,
 	},
 
 	/* server/9; generic US system */
 	{
-		(char *)"(server/us)",
+		"(server/us)",
 		errlib_count(err_codes_us),
-		(char **)err_codes_us,
+		err_codes_us,
 	},
 
 	/* server/10; SUN RPC package */
 	{
-		(char *)"(server/sunrpc)",
+		"(server/sunrpc)",
 		errlib_count(err_codes_sunrpc),
-		(char **)err_codes_sunrpc,
+		err_codes_sunrpc,
 	},
 
 	/* server/11; MachObject system */
 	{
-		(char *)"(server/object system)",
+		"(server/object system)",
 		errlib_count(err_codes_machobj),
-		(char **)err_codes_machobj,
+		err_codes_machobj,
 	},
 
 	/* server/12; loader */
 	{
-		(char *)"(server/loader)",
+		"(server/loader)",
 		errlib_count(err_codes_loader),
-		(char **)err_codes_loader,
+		err_codes_loader,
 	},
 
 	/* server/13; mach exception */
 	{
-		(char *)"(server/exception)",
+		"(server/exception)",
 		errlib_count(err_codes_exception),
-		(char **)err_codes_exception,
+		err_codes_exception,
 	},
 
 	/* server/14; unix signal */
 	{
-		(char *)"(server/unix-signal)",
+		"(server/unix-signal)",
 		errlib_count(err_codes_ux_signal),
-		(char **)err_codes_ux_signal,
+		err_codes_ux_signal,
 	},
 
 	/* server/15; xkernel */
 	{
-		(char *)"(server/xkernel)",
+		"(server/xkernel)",
 		errlib_count(err_codes_xkernel),
-		(char **)err_codes_xkernel,
+		err_codes_xkernel,
 	},
 
 };

@@ -21,6 +21,8 @@
 #ifndef __LAUNCH_INTERNAL_H__
 #define __LAUNCH_INTERNAL_H__
 
+#pragma clang diagnostic ignored "-Wcast-qual"
+
 #include "vproc_priv.h"
 
 #include <paths.h>

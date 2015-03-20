@@ -72,14 +72,14 @@
 #define	NO_SUCH_ERROR		"unknown error code"
 
 struct error_subsystem {
-	char			* subsys_name;
+	const char			* subsys_name;
 	int			max_code;
-	char			* * codes;
+	const char			* * codes;
 };
 
 struct error_system {
 	int			max_sub;
-	char			* bad_sub;
+	const char			* bad_sub;
 	struct error_subsystem	* subsystem;
 };
 

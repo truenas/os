@@ -81,7 +81,7 @@ do_compat(mach_error_t *org_err)
 	*org_err = err;
 }
 
-char *
+const char *
 mach_error_type(mach_error_t err)
 {
 	int sub, system;
@@ -92,13 +92,13 @@ mach_error_type(mach_error_t err)
 	system = err_get_system(err);
 
 	if (system > err_max_system || sub >= errors[system].max_sub)
-	    return((char *)"(?/?)");
+	    return((const char *)"(?/?)");
 	return(errors[system].subsystem[sub].subsys_name);
 }
 
 static boolean_t mach_error_full_diag = FALSE;
 
-char *
+const char *
 mach_error_string_int(mach_error_t err, boolean_t *diag)
 {
 	int sub, system, code;
@@ -112,17 +112,17 @@ mach_error_string_int(mach_error_t err, boolean_t *diag)
 	*diag = TRUE;
 
 	if (system > err_max_system)
-	    return((char *)"(?/?) unknown error system");
+	    return((const char *)"(?/?) unknown error system");
 	if (sub >= errors[system].max_sub)
 	    return(errors[system].bad_sub);
 	if (code >= errors[system].subsystem[sub].max_code)
-	    return ((char *)NO_SUCH_ERROR);
+	    return ((const char *)NO_SUCH_ERROR);
 
 	*diag = mach_error_full_diag;
 	return( errors[system].subsystem[sub].codes[code] );
 }
 
-char *
+const char *
 mach_error_string(mach_error_t err)
 {
 	boolean_t diag;

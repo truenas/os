@@ -110,11 +110,8 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libvgl} \
 	${_libvmmapi} \
 	libwrap \
-<<<<<<< HEAD
-=======
 	libxo \
 	libxpc \
->>>>>>> 6a32808... build launchd and dependencies (on 64-bit)
 	liby \
 	${_libypclnt} \
 	libyaml \
@@ -241,14 +238,12 @@ _librtld_db=	librtld_db
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
-<<<<<<< HEAD
 .if ${MK_BHYVE} != "no"
-=======
 _libcfxlite= libcfxlite
 _libdispatch= libdispatch
 _liblaunch=	liblaunch
 _libmach= libmach
->>>>>>> 6a32808... build launchd and dependencies (on 64-bit)
+.if ${MK_BHYVE} != "no"
 _libvmmapi=	libvmmapi
 .endif
 .endif

@@ -808,7 +808,7 @@ si_item_call(struct si_mod_s *si, int call, const char *str1, const char *str2, 
 		case SI_CALL_GROUPLIST: return si_grouplist(si, str1, (int) num1);
 		case SI_CALL_ALIAS_BYNAME: return si_alias_byname(si, str1);
 		case SI_CALL_HOST_BYNAME: return si_host_byname(si, str1, num1, str3, err);
-		case SI_CALL_HOST_BYADDR: return si_host_byaddr(si, (void *)str1, num1, str3, err);
+		case SI_CALL_HOST_BYADDR: return si_host_byaddr(si, (const void *)str1, num1, str3, err);
 		case SI_CALL_NETWORK_BYNAME: return si_network_byname(si, str1);
 		case SI_CALL_NETWORK_BYADDR: return si_network_byaddr(si, num1);
 		case SI_CALL_SERVICE_BYNAME: return si_service_byname(si, str1, str2);

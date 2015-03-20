@@ -116,22 +116,22 @@ static const char 	* err_codes_mach_mig[] = {
 static struct error_subsystem err_mach_ipc_sub[] = {
 	/* ipc/0; */
 	{
-		(char *)"(ipc/send)",
+		"(ipc/send)",
 		errlib_count(err_codes_mach_send),
-		(char **)err_codes_mach_send,
+		err_codes_mach_send,
 	},
 	/* ipc/1; */
 	{
-		(char *)"(ipc/rcv)",
+		"(ipc/rcv)",
 		errlib_count(err_codes_mach_rcv),
-		(char **)err_codes_mach_rcv,
+		err_codes_mach_rcv,
 
 	},
 	/* ipc/2 */
 	{
-		(char *)"(ipc/mig)",
+		"(ipc/mig)",
 		errlib_count(err_codes_mach_mig),
-		(char **)err_codes_mach_mig,
+		err_codes_mach_mig,
 	},
 
 };

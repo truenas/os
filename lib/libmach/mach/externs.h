@@ -32,4 +32,4 @@ extern void mach_init_ports(void);
 extern void mig_allocate(vm_address_t *, vm_size_t);
 extern void mig_deallocate(vm_address_t, vm_size_t);
 
-extern char *mach_error_string_int(mach_error_t, boolean_t *);
+extern const char *mach_error_string_int(mach_error_t, boolean_t *);
