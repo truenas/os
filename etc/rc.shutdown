@@ -46,7 +46,9 @@ export HOME PATH
 if [ -f /data/truenas_license ]; then
 	/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down
 	sleep 1
-	/bin/sh /etc/carp-state-change-hook carp0 LINK_DOWN
+	if [ -f /etc/carp-state-change-hook ]; then
+		/bin/sh /etc/carp-state-change-hook carp0 LINK_DOWN
+	fi
 	sleep 4
 fi
 
