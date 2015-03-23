@@ -45,9 +45,11 @@ export HOME PATH
 
 if [ -f /data/license ]; then
 	/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down
-	sleep 1
-	/usr/local/bin/python /usr/local/libexec/truenas/carp-state-change-hook.py carp0 LINK_DOWN
-	sleep 4
+	if [ -f /tmp/failover.json ]; then
+		sleep 1
+		/usr/local/bin/python /usr/local/libexec/truenas/carp-state-change-hook.py carp0 shutdown
+		sleep 4
+	fi
 fi
 
 . /etc/rc.subr
