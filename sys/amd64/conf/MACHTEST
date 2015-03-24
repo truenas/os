@@ -23,7 +23,7 @@ ident		GENERIC
 
 makeoptions	DEBUG=-g		# Build kernel with gdb(1) debug symbols
 makeoptions	WITH_CTF=1		# Run ctfconvert(1) for DTrace support
-makeoptions	MODULES_OVERRIDE="zfs opensolaris sem em ixgbe cxgb fdescfs procfs dtrace mach"
+makeoptions	MODULES_OVERRIDE="zfs opensolaris sem em fdescfs procfs dtrace mach"
 
 
 options 	SCHED_ULE		# ULE scheduler
