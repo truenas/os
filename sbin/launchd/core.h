@@ -39,6 +39,7 @@ extern bool launchd_flat_mach_namespace;
 extern bool launchd_embedded_handofgod;
 
 void jobmgr_init(bool);
+mach_port_t jobmgr_port(jobmgr_t);
 jobmgr_t jobmgr_shutdown(jobmgr_t jm);
 void jobmgr_dispatch_all_semaphores(jobmgr_t jm);
 void jobmgr_dispatch_all_interested(jobmgr_t jm, job_t j);

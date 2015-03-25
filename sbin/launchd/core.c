@@ -5531,7 +5531,7 @@ job_logv(job_t j, int pri, int err, const char *msg, va_list ap)
 	 * fork(2), but before the exec*(3). Let's route the log message back to
 	 * launchd proper.
 	 */
-	if (bootstrap_port) {
+	if (bootstrap_port && uflag == false) {
 		return _vproc_logv(pri, err, msg, ap);
 	}
 
@@ -6902,7 +6902,7 @@ jobmgr_new(jobmgr_t jm, mach_port_t requestorport, mach_port_t transfer_port, bo
 		syslog(LOG_ERR, "transfer_port=%d\n", transfer_port);
 		(void)jobmgr_assumes(jmr, jm != NULL);
 		jmr->jm_port = transfer_port;
-	} else if (!jm && !pid1_magic) {
+	} else if (!jm && !pid1_magic && uflag == false) {
 		char *trusted_fd = getenv(LAUNCHD_TRUSTED_FD_ENV);
 		name_t service_buf;
 

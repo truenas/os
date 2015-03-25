@@ -243,7 +243,7 @@ stall(const char *message, ...)
 	va_list ap;
 	va_start(ap, message);
 
-	vsyslog(LOG_ALERT, message, ap);
+	vsyslog(LOG_ERR, message, ap);
 	va_end(ap);
 	sleep(STALL_TIMEOUT);
 }
@@ -295,11 +295,11 @@ setctty(const char *name, int flags)
 	revoke(name);
 	if ((fd = open(name, flags | O_RDWR)) == -1) {
 		stall("can't open %s: %m", name);
-		exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 	if (login_tty(fd) == -1) {
 		stall("can't get %s for controlling terminal: %m", name);
-		exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	}
 }
 
@@ -337,10 +337,10 @@ single_user(void)
 
 		argv[0] = "-sh";
 		argv[1] = NULL;
-		execv(_PATH_BSHELL, (char *const *)argv);
+		execv(_PATH_BSHELL, __DECONST(char *const *, argv));
 		syslog(LOG_ERR, "can't exec %s for single user: %m", _PATH_BSHELL);
 		sleep(STALL_TIMEOUT);
-		exit(EXIT_FAILURE);
+		launchd_exit(EXIT_FAILURE);
 	} else {
 		if (kevent_mod(single_user_pid, EVFILT_PROC, EV_ADD, 
 					NOTE_EXIT, 0, &kqsingle_user_callback) == -1)
@@ -393,18 +393,22 @@ runcom(void)
 	} else if (runcom_pid > 0) {
 		run_runcom = false;
 		if (kevent_mod(runcom_pid, EVFILT_PROC, EV_ADD, 
-					NOTE_EXIT, 0, &kqruncom_callback) == -1) {
+					   NOTE_EXIT, 0, &kqruncom_callback) == -1) {
+			syslog(LOG_ERR, "runcom_callback() ... ");
 			runcom_callback(NULL, NULL);
+			syslog(LOG_ERR, "done\n");
 		}
 		return;
 	}
-
+	syslog(LOG_ERR, "setctty()\n");
 	setctty(_PATH_CONSOLE, 0);
+	
 	syslog(LOG_ERR, "fpathconf()\n");
+	sleep(1);
 	if ((vdisable = fpathconf(STDIN_FILENO, _PC_VDISABLE)) == -1) {
-		syslog(LOG_WARNING, "fpathconf(\"%s\") %m", _PATH_CONSOLE);
+		syslog(LOG_ERR, "fpathconf(\"%s\") %m", _PATH_CONSOLE);
 	} else if (tcgetattr(STDIN_FILENO, &term) == -1) {
-		syslog(LOG_WARNING, "tcgetattr(\"%s\") %m", _PATH_CONSOLE);
+		syslog(LOG_ERR, "tcgetattr(\"%s\") %m", _PATH_CONSOLE);
 	} else {
 		term.c_cc[VINTR] = vdisable;
 		term.c_cc[VKILL] = vdisable;
@@ -413,25 +417,32 @@ runcom(void)
 		term.c_cc[VSTART] = vdisable;
 		term.c_cc[VSTOP] = vdisable;
 		term.c_cc[VDSUSP] = vdisable;
-
+		sleep(1);
+		syslog(LOG_ERR, "tcsetattr(STDIN_FILENO) ...");
 		if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &term) == -1)
 			syslog(LOG_WARNING, "tcsetattr(\"%s\") %m", _PATH_CONSOLE);
+		syslog(LOG_ERR, "done\n");
 	}
+	sleep(1);
+	syslog(LOG_ERR, "setenv\n");
 	setenv("SafeBoot", runcom_safe ? "-x" : "", 1);
 	setenv("FsckSlash", runcom_fsck ? "-F" : "", 1);
 	setenv("NetBoot", runcom_netboot ? "-N" : "", 1);
-
-	syslog(LOG_ERR, "execv()\n");
+	syslog(LOG_ERR, "execv\n");
 	{
 		char _sh[] = "sh";
+		int err;
 
 		argv[0] = _sh;
 		argv[1] = __DECONST(char *, _PATH_RUNCOM);
 		argv[2] = 0;
-		execv(_PATH_BSHELL, argv);
+		syslog(LOG_ERR, "execv(%s, %p)\n", _PATH_BSHELL, argv);	
+		err = execv(_PATH_BSHELL, argv);
+		syslog(LOG_ERR, "execv err=%d errno=%d", err, errno);
+		sleep(2);
 	}
 	stall("can't exec %s for %s: %m", _PATH_BSHELL, _PATH_RUNCOM);
-	exit(EXIT_FAILURE);
+	launchd_exit(EXIT_FAILURE);
 }
 
 static void
@@ -674,7 +685,7 @@ session_launch(session_t s)
 	execv(se_cmd->argv[0], se_cmd->argv);
 	stall("can't exec %s '%s' for port %s: %m", session_type,
 		se_cmd->argv[0], s->se_device);
-	exit(EXIT_FAILURE);
+	launchd_exit(EXIT_FAILURE);
 }
 
 static void

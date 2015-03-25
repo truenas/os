@@ -299,10 +299,10 @@ main(int argc, char *const *argv)
 		}
 
 		launchd_audit_port = _audit_session_self();
-
+#if 0
 		vproc_transaction_begin(NULL);
 		vproc_transaction_end(NULL, NULL);
-
+#endif
 		launchd_syslog(LOG_DEBUG, "Per-user launchd started (UID/username): %u/%s.", launchd_uid, launchd_username);
 	}
 
