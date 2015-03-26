@@ -770,7 +770,22 @@ static SLIST_HEAD(, job_s) s_curious_jobs;
 static LIST_HEAD(, job_s) managed_actives[ACTIVE_JOB_HASH_SIZE];
 
 #define job_assumes(j, e) os_assumes_ctx(job_log_bug, j, (e))
+#if 0
 #define job_assumes_zero(j, e) os_assumes_zero_ctx(job_log_bug, j, (e))
+#else
+static int
+crapout(int value, void *j, const char *e)
+{
+	if (value) {
+		printf("%s=%d j=%p\n", (e), value, j);
+		abort();		
+	}
+	return (value);
+}
+
+#define job_assumes_zero(j, e) crapout((e), j, #e)
+#endif
+
 #define job_assumes_zero_p(j, e) posix_assumes_zero_ctx(job_log_bug, j, (e))
 
 static void job_import_keys(launch_data_t obj, const char *key, void *context);
