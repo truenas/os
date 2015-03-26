@@ -471,7 +471,7 @@ routine	mach_port_kernel_object(
 skip;
 #endif
 
-#ifdef _KERNEL
+#ifdef KERNEL
 /*
  *	Inserts the specified rights into the portset identified
  *	by the <task, pset> pair.  The results of passing in the
