@@ -225,6 +225,13 @@ routine mach_port_move_member(
 		member		: mach_port_name_t;
 		after		: mach_port_name_t);
 
+#else
+skip;
+skip;
+skip;
+skip;
+skip;
+skip;
 #endif
 /*
  *	Destroys all rights associated with the name and makes it
@@ -506,7 +513,7 @@ routine mach_port_extract_member(
 #else
 skip;
 skip;
-
+#endif
 /*
  * Only valid for receive rights.
  * Gets the context pointer for the port.
