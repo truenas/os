@@ -513,18 +513,16 @@ ipc_mqueue_copyin(
 
 	bits = entry->ie_bits;
 	object = entry->ie_object;
+	ipc_object_reference(object);
 
 	if (bits & MACH_PORT_TYPE_RECEIVE) {
 		port = (ipc_port_t) object;
 		assert(port != IP_NULL);
 
-		ip_lock(port);
 		assert(ip_active(port));
 		assert(port->ip_receiver_name == name);
 		assert(port->ip_receiver == space);
 		is_read_unlock(space);
-		ip_reference(port);
-		ip_unlock(port);
 	} else if (bits & MACH_PORT_TYPE_PORT_SET) {
 		ipc_pset_t pset;
 
@@ -539,15 +537,13 @@ ipc_mqueue_copyin(
 		TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
 			if (port->ip_msgcount > 0) {
 				if (ip_lock_try(port) == 0) {
-					ips_reference(pset);
 					ips_unlock(pset);
 					ip_lock(port);
 					ips_lock(pset);
-						ips_release(pset);
-						if (port->ip_msgcount == 0) {
-							ip_unlock(port);
-							goto restart;
-						}
+					if (port->ip_msgcount == 0) {
+						ip_unlock(port);
+						goto restart;
+					}
 				} else if (port->ip_msgcount == 0) {
 					ip_unlock(port);
 					goto restart;
@@ -557,12 +553,15 @@ ipc_mqueue_copyin(
 		}
 		if (port != NULL) {
 			ip_reference(port);
+			ips_unlock(pset);
 			ip_unlock(port);
+			ips_release(pset);
 			object = (ipc_object_t)port;
 			bits = MACH_PORT_TYPE_RECEIVE;
-		}
-		ips_unlock(pset);
+		} else
+			  ips_unlock(pset);
 	} else {
+		ipc_object_release(object);
 		is_read_unlock(space);
 		return MACH_RCV_INVALID_NAME;
 	}
