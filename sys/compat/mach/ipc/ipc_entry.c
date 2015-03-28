@@ -117,7 +117,8 @@ static fo_fill_kinfo_t mach_port_fill_kinfo;
 struct fileops mach_fileops  = {
 	.fo_close = mach_port_close,
 	.fo_stat = mach_port_stat,
-	.fo_fill_kinfo = mach_port_fill_kinfo
+	.fo_fill_kinfo = mach_port_fill_kinfo,
+	.fo_flags = DFLAG_PASSABLE
 };
 
 static int
@@ -164,9 +165,17 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 
 	assert(space->is_active);
 
-	if (fget(curthread, name, NULL, &fp) || fp->f_type != DTYPE_MACH_IPC)
+	if (curthread->td_proc->p_fd == NULL)
 		return (NULL);
 
+	if (fget(curthread, name, NULL, &fp) != 0) {
+		log(LOG_WARN, "entry for port name: %d not found\n", name);
+		return (NULL);
+	}
+	if (fp->f_type != DTYPE_MACH_IPC) {
+		log(LOG_WARN, "port name: %d is not MACH\n", name);
+		return (NULL);
+	}
 	return (fp->f_data);
 }
 
