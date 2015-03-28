@@ -32,6 +32,9 @@
 # Output and errors are directed to console by init, and the
 # console is the controlling terminal.
 
+# Last-ditch watchdog setting just in case the box hangs on the way down.
+watchdog -t 120
+
 stty status '^T' 2> /dev/null
 
 # Set shell to ignore SIGINT (2), but not children;
