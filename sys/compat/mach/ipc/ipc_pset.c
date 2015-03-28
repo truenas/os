@@ -199,6 +199,7 @@ ipc_pset_add(
 	assert(port->ip_pset == IPS_NULL);
 
 	port->ip_pset = pset;
+	ips_reference(pset);
 	TAILQ_INSERT_TAIL(&pset->ips_ports, port, ip_next);
 }
 
