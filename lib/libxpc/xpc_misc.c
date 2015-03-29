@@ -360,16 +360,17 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 	request->msgh_size = MAX_RECV;
 	request->msgh_local_port = portset;
 	kr = mach_msg_receive(request);
-	LOG("mach_msg_receive returned %d\n", kr);
+	if (kr != 0)
+		LOG("mach_msg_receive returned %d\n", kr);
 	*rcvport = request->msgh_remote_port;
 	if (demux(request, (mach_msg_header_t *)&response)) {
-		LOG("demux returned true\n");
 		(void)mach_msg_send((mach_msg_header_t *)&response);
 		/*  can't do anything with the return code
 		* just tell the caller this has been handled
 		*/
 		return (TRUE);
 	}
+	LOG("demux returned false\n");
 	data_size = request->msgh_size;
 	LOG("unpacking data_size=%d", data_size);
 	val.nv = nvlist_unpack(&message.data, data_size);
