@@ -8,6 +8,9 @@ DEFINES=  -D__APPLE__ -fblocks
 DEFINES+= -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 
+DEBUG_FLAGS=-g -O0
+
+
 CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck -D__APPLE_CC__=1 
 CFLAGS+= -I${.CURDIR}/../../lib/liblaunch -I${.CURDIR}/../../contrib/openbsm
 CFLAGS+= -I${.CURDIR}/../../include/mach
