@@ -900,7 +900,7 @@ ipc_kmsg_put(
 
 	ikm_check_initialized(kmsg, kmsg->ikm_size);
 
-	printf("doing kmsg_put size=%d to addr=%p\n", size, msg);
+	printf("doing kmsg_put size=%d to addr=%p", size, msg);
 #if defined(__LP64__)
 	if (current_task() != kernel_task) { /* don't if receiver expects fully-cooked in-kernel msg; ux_exception */
 		mach_msg_legacy_header_t *legacy_header =
@@ -920,10 +920,13 @@ ipc_kmsg_put(
 		legacy_header->msgh_size		= msg_size - LEGACY_HEADER_SIZE_DELTA;
 		legacy_header->msgh_bits		= bits;
 
+		printf(" msg_size=%d", msg_size);
+
 		size -= LEGACY_HEADER_SIZE_DELTA;
 		kmsg->ikm_header = (mach_msg_header_t *)legacy_header;
 	}
 #endif
+	printf("\n");
 	if (copyoutmsg((const char *) kmsg->ikm_header, (char *) msg, size))
 		mr = MACH_RCV_INVALID_DATA;
 	else
@@ -1025,9 +1028,10 @@ ipc_kmsg_copyin_header(
 		return MACH_SEND_INVALID_HEADER;
 
 	is_write_lock(space);
-	if (!space->is_active)
+	if (!space->is_active) {
+		printf("space not active");
 		goto invalid_dest;
-
+	}
 	if (notify_name != MACH_PORT_NAME_NULL) {
 		ipc_entry_t entry;
 
@@ -1057,9 +1061,11 @@ ipc_kmsg_copyin_header(
 		 */
 
 		entry = ipc_entry_lookup(space, name);
-		if (entry == IE_NULL)
+		if (entry == IE_NULL) {
+			printf("name=%d not found\n", name);
 			goto invalid_dest;
-
+		}
+			
 		assert(reply_type != 0); /* because name not null */
 
 		if (!ipc_right_copyin_check(space, name, entry, reply_type))
@@ -1077,7 +1083,8 @@ ipc_kmsg_copyin_header(
 			 *	checked for reply port errors above,
 			 *	so report a destination error.
 			 */
-
+			printf("dest_type or reply_type is SEND_ONCE\n");
+			
 			goto invalid_dest;
 		} else if ((dest_type == MACH_MSG_TYPE_MAKE_SEND) ||
 			   (dest_type == MACH_MSG_TYPE_MAKE_SEND_ONCE) ||
@@ -1086,8 +1093,10 @@ ipc_kmsg_copyin_header(
 			kr = ipc_right_copyin(space, name, entry,
 					      dest_type, FALSE,
 					      &dest_port, &dest_soright);
-			if (kr != KERN_SUCCESS)
+			if (kr != KERN_SUCCESS) {
+				printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 				goto invalid_dest;
+			}
 
 			/*
 			 *	Either dest or reply needs a receive right.
@@ -1121,9 +1130,10 @@ ipc_kmsg_copyin_header(
 			kr = ipc_right_copyin(space, name, entry,
 					      dest_type, FALSE,
 					      &dest_port, &dest_soright);
-			if (kr != KERN_SUCCESS)
+			if (kr != KERN_SUCCESS) {
+				printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 				goto invalid_dest;
-
+			}
 			assert(entry->ie_bits & MACH_PORT_TYPE_SEND);
 			assert(dest_soright == IP_NULL);
 
@@ -1146,9 +1156,10 @@ ipc_kmsg_copyin_header(
 
 			kr = ipc_right_copyin_two(space, name, entry,
 						  &dest_port, &dest_soright);
-			if (kr != KERN_SUCCESS)
+			if (kr != KERN_SUCCESS) {
+				printf("ipc_right_copyin_two failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 				goto invalid_dest;
-
+			}
 			/* the entry might need to be deallocated */
 
 			if (IE_BITS_TYPE(entry->ie_bits)
@@ -1173,9 +1184,10 @@ ipc_kmsg_copyin_header(
 			kr = ipc_right_copyin(space, name, entry,
 					      MACH_MSG_TYPE_MOVE_SEND, FALSE,
 					      &dest_port, &soright);
-			if (kr != KERN_SUCCESS)
+			if (kr != KERN_SUCCESS) {
+				printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 				goto invalid_dest;
-
+			}
 			/* the entry might need to be deallocated */
 
 			if (IE_BITS_TYPE(entry->ie_bits)
@@ -1208,15 +1220,17 @@ ipc_kmsg_copyin_header(
 		 */
 
 		entry = ipc_entry_lookup(space, dest_name);
-		if (entry == IE_NULL)
+		if (entry == IE_NULL) {
+			printf("ipc_entry_lookup failed on dest_name=%d\n", dest_name);
 			goto invalid_dest;
-
+		}
 		kr = ipc_right_copyin(space, dest_name, entry,
 				      dest_type, FALSE,
 				      &dest_port, &dest_soright);
-		if (kr != KERN_SUCCESS)
+		if (kr != KERN_SUCCESS) {
+			printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 			goto invalid_dest;
-
+		}
 		/* the entry might need to be deallocated */
 
 		if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
@@ -1263,9 +1277,10 @@ ipc_kmsg_copyin_header(
 		 *	dest_port and reply_port might still be the same.
 		 */
 		dest_entry = ipc_entry_lookup(space, dest_name);
-		if (dest_entry == IE_NULL)
+		if (dest_entry == IE_NULL) {
+			printf("ipc_entry_lookup failed on %d %s:%d\n", dest_name, __FILE__, __LINE__);
 			goto invalid_dest;
-
+		}
 		reply_entry = ipc_entry_lookup(space, reply_name);
 		if (reply_entry == IE_NULL)
 			goto invalid_reply;
@@ -1280,9 +1295,10 @@ ipc_kmsg_copyin_header(
 		kr = ipc_right_copyin(space, dest_name, dest_entry,
 				      dest_type, FALSE,
 				      &dest_port, &dest_soright);
-		if (kr != KERN_SUCCESS)
+		if (kr != KERN_SUCCESS) {
+			printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 			goto invalid_dest;
-
+		}
 		assert(IO_VALID(dest_port));
 
 		saved_reply = (ipc_port_t) reply_entry->ie_object;
@@ -1345,6 +1361,7 @@ ipc_kmsg_copyin_header(
 				assert(reply_soright == IP_NULL);
 
 				ipc_port_release(saved_reply);
+				printf("%s:%d\n", __FUNCTION__, __LINE__);
 				return MACH_SEND_INVALID_DEST;
 			}
 		}
@@ -1396,6 +1413,7 @@ ipc_kmsg_copyin_header(
 
     invalid_dest:
 	is_write_unlock(space);
+	printf("%s:%d\n", __FUNCTION__, __LINE__);
 	return MACH_SEND_INVALID_DEST;
 
     invalid_reply:
@@ -1476,6 +1494,8 @@ ipc_kmsg_copyin_port_descriptor(
  *		MACH_MSG_INVALID_RT_DESCRIPTOR Dealloc and RT are incompatible
  */
 
+#define KERN_DESC_SIZE 16
+
 mach_msg_return_t
 ipc_kmsg_copyin_body(
 	ipc_kmsg_t	kmsg,
@@ -1534,8 +1554,8 @@ ipc_kmsg_copyin_body(
 	/* user_addr = just after base as it was copied in */
     user_addr = (mach_msg_descriptor_t *)((vm_offset_t)kmsg->ikm_header + sizeof(mach_msg_base_t));
     /* Shift the mach_msg_base_t down to make room for dsc_count*16bytes of descriptors */
-    if(descriptor_size != 16*dsc_count) {
-        vm_offset_t dsc_adjust = 16*dsc_count - descriptor_size;
+    if(descriptor_size != KERN_DESC_SIZE*dsc_count) {
+        vm_offset_t dsc_adjust = KERN_DESC_SIZE*dsc_count - descriptor_size;
 
         memmove((char *)(((vm_offset_t)kmsg->ikm_header) - dsc_adjust), kmsg->ikm_header, sizeof(mach_msg_base_t));
         kmsg->ikm_header = (mach_msg_header_t *)((vm_offset_t)kmsg->ikm_header - dsc_adjust);
@@ -2197,11 +2217,11 @@ ipc_kmsg_copyin_from_kernel(
  *			Couldn't allocate memory for the dead-name request.
  */
 
-mach_msg_return_t
+static mach_msg_return_t
 ipc_kmsg_copyout_header(
 	mach_msg_header_t	*msg,
 	ipc_space_t		space,
-	mach_port_name_t		notify)
+	mach_msg_option_t option __unused)
 {
 	mach_msg_bits_t mbits = msg->msgh_bits;
 	ipc_port_t dest = (ipc_port_t) msg->msgh_remote_port;
@@ -2215,9 +2235,9 @@ ipc_kmsg_copyout_header(
 	mach_port_name_t dest_name, reply_name;
 
 	if (IP_VALID(reply)) {
-		ipc_port_t notify_port;
 		ipc_entry_t entry;
 		kern_return_t kr;
+		ipc_port_t notify_port = IP_NULL;
 
 		/*
 		 *	Handling notify (for MACH_RCV_NOTIFY) is tricky.
@@ -2249,15 +2269,6 @@ ipc_kmsg_copyout_header(
 					MACH_MSG_IPC_SPACE);
 			}
 
-			if (notify != MACH_PORT_NAME_NULL) {
-				notify_port = ipc_port_lookup_notify(space,
-								     notify);
-				if (notify_port == IP_NULL) {
-					is_write_unlock(space);
-					return MACH_RCV_INVALID_NOTIFY;
-				}
-			} else
-				notify_port = IP_NULL;
 			if ((reply_type != MACH_MSG_TYPE_PORT_SEND_ONCE) &&
 			    ipc_right_reverse(space, (ipc_object_t) reply,
 					      &reply_name, &entry)) {
@@ -2282,9 +2293,6 @@ ipc_kmsg_copyout_header(
 				ip_release(reply);
 				ip_check_unlock(reply);
 
-				if (notify_port != IP_NULL)
-					ipc_port_release_sonce(notify_port);
-
 				ip_lock(dest);
 				is_write_unlock(space);
 
@@ -2300,8 +2308,6 @@ ipc_kmsg_copyout_header(
 							   &reply_name, &entry);
 
 			if (kr != KERN_SUCCESS) {
-				if (notify_port != IP_NULL)
-					ipc_port_release_sonce(notify_port);
 
 				if (kr == KERN_RESOURCE_SHORTAGE)
 					return (MACH_RCV_HEADER_ERROR|
@@ -2317,17 +2323,13 @@ ipc_kmsg_copyout_header(
 			is_write_lock(space);
 			ip_lock(reply);
 			if (notify_port == IP_NULL) {
-				/* not making a dead-name request */
-
+				/* not making dead name request */
 				entry->ie_object = (ipc_object_t) reply;
 				break;
 			}
-
 			kr = ipc_port_dnrequest(reply, reply_name,
 						notify_port, &request);
 			if (kr != KERN_SUCCESS) {
-
-				ipc_port_release_sonce(notify_port);
 
 				ipc_entry_dealloc(space, reply_name, entry);
 				is_write_unlock(space);
@@ -2350,8 +2352,6 @@ ipc_kmsg_copyout_header(
 				is_write_lock(space);
 				continue;
 			}
-
-			notify_port = IP_NULL; /* don't release right below */
 			is_write_lock(space);
 			ip_lock(reply);
 			entry->ie_object = (ipc_object_t) reply;
@@ -2369,9 +2369,6 @@ ipc_kmsg_copyout_header(
 		/* reply port is unlocked */
 		assert(kr == KERN_SUCCESS);
 
-		if (notify_port != IP_NULL)
-			ipc_port_release_sonce(notify_port);
-
 		ip_lock(dest);
 		is_write_unlock(space);
 	} else {
@@ -2386,19 +2383,6 @@ ipc_kmsg_copyout_header(
 		if (!space->is_active) {
 			is_read_unlock(space);
 			return MACH_RCV_HEADER_ERROR|MACH_MSG_IPC_SPACE;
-		}
-
-		if (notify != MACH_PORT_NAME_NULL) {
-			ipc_entry_t entry;
-
-			/* must check notify even though it won't be used */
-
-			if (((entry = ipc_entry_lookup(space, notify))
-								== IE_NULL) ||
-			    ((entry->ie_bits & MACH_PORT_TYPE_RECEIVE) == 0)) {
-				is_read_unlock(space);
-				return MACH_RCV_INVALID_NOTIFY;
-			}
 		}
 
 		ip_lock(dest);
@@ -2562,6 +2546,7 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
             disp, 
             &name);
 
+	printf("ipc_kmsg_copyout_port_descriptor name is %d\n",name);
     if(current_task() == kernel_task)
     {
         mach_msg_port_descriptor_t *user_dsc = (mach_msg_port_descriptor_t *)dest_dsc;
@@ -2573,7 +2558,7 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
     } else {
         mach_msg_legacy_port_descriptor_t *user_dsc = (mach_msg_legacy_port_descriptor_t *)dest_dsc;
         user_dsc--; // point to the start of this port descriptor
-        user_dsc->name = CAST_MACH_PORT_TO_NAME(name);
+        user_dsc->name = name;
         user_dsc->disposition = disp;
         user_dsc->type = MACH_MSG_PORT_DESCRIPTOR;
         dest_dsc = (mach_msg_descriptor_t *)user_dsc;
@@ -2637,7 +2622,9 @@ ipc_kmsg_copyout_body(
 	switch (kern_dsc[i].type.type) {
 	    
 	case MACH_MSG_PORT_DESCRIPTOR: {
-		user_dsc = ipc_kmsg_copyout_port_descriptor(&kern_dsc[i], user_dsc, space, &mr);
+		pause("ports!!!", 30);
+		printf("copying out port descriptor\n");
+		user_dsc = ipc_kmsg_copyout_port_descriptor(kern_dsc + i, user_dsc, space, &mr);
 		break;
 	}
 #ifdef notyet
@@ -2810,12 +2797,12 @@ ipc_kmsg_copyout_body(
     }
 	if(user_dsc != kern_dsc) {
         vm_offset_t dsc_adjust = (vm_offset_t)user_dsc - (vm_offset_t)kern_dsc;
+		printf("dsc_adjust=%ld\n", dsc_adjust);
         memmove((char *)((vm_offset_t)kmsg->ikm_header + dsc_adjust), kmsg->ikm_header, sizeof(mach_msg_base_t));
         kmsg->ikm_header = (mach_msg_header_t *)((vm_offset_t)kmsg->ikm_header + dsc_adjust);
         /* Update the message size for the smaller user representation */
         kmsg->ikm_header->msgh_size -= (mach_msg_size_t)dsc_adjust;
     }
-
     return mr;
 }
 
@@ -2901,12 +2888,12 @@ ipc_kmsg_copyout(
 	ipc_kmsg_t		kmsg,
 	ipc_space_t		space,
 	vm_map_t		map,
-	mach_port_name_t		notify,
-	mach_msg_body_t		*slist)
+	mach_msg_body_t		*slist,
+	mach_msg_option_t option __unused)
 {
 	mach_msg_return_t mr;
 
-	mr = ipc_kmsg_copyout_header(kmsg->ikm_header, space, notify);
+	mr = ipc_kmsg_copyout_header(kmsg->ikm_header, space, 0);
 	if (mr != MACH_MSG_SUCCESS)
 		return mr;
 
