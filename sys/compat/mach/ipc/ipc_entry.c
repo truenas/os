@@ -91,6 +91,7 @@
 #include <sys/file.h>
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
+#include <sys/syslog.h>
 
 #include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
@@ -169,11 +170,11 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 		return (NULL);
 
 	if (fget(curthread, name, NULL, &fp) != 0) {
-		log(LOG_WARN, "entry for port name: %d not found\n", name);
+		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
 		return (NULL);
 	}
 	if (fp->f_type != DTYPE_MACH_IPC) {
-		log(LOG_WARN, "port name: %d is not MACH\n", name);
+		log(LOG_DEBUG, "port name: %d is not MACH\n", name);
 		return (NULL);
 	}
 	return (fp->f_data);
@@ -212,7 +213,9 @@ ipc_entry_get(
 	if (*namep != MACH_PORT_NAME_NULL) {
 		fd = *namep;
 		flags = FNOFDALLOC;
-	}
+	} else
+		flags = FMINALLOC;
+
 	if (falloc(td, &fp, &fd, flags)) {
 		free(free_entry, M_MACH);
 		return KERN_RESOURCE_SHORTAGE;
