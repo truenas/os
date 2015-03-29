@@ -312,6 +312,8 @@ static CFDictionaryRef _launchctl_jetsam_defaults = NULL;
 static CFDictionaryRef _launchctl_jetsam_defaults_cached = NULL;
 #endif
 
+mach_port_t bootstrap_port;
+
 int
 main(int argc, char *const argv[])
 {
@@ -397,12 +399,12 @@ main(int argc, char *const argv[])
 			exit(EXIT_FAILURE);
 		}
 	}
-
+#if 0
 	if (!readline) {
 		launchctl_log(LOG_ERR, "missing library: readline");
 		exit(EXIT_FAILURE);
 	}
-
+#endif
 	if (argc == 0) {
 		while ((l = readline(_launchctl_istty ? "launchd% " : NULL))) {
 			char *inputstring = l, *argv2[100], **ap = argv2;
@@ -3601,6 +3603,7 @@ str2bsport(const char *s)
 	task_t task = mach_task_self();
 	kern_return_t result;
 
+	printf("bootstrap_port=%d s=%s\n", bootstrap_port, s);
 	if (strcmp(s, "..") == 0 || getrootbs) {
 		do {
 			last_bport = bport;
@@ -3716,6 +3719,7 @@ bslist_cmd(int argc, const char *const argv[])
 	}
 
 	mach_port_t bport = bootstrap_port;
+	printf("bootstrap_port is %d\n", bport);
 	bool show_jobs = false;
 	if (argc > 2 && strcmp(argv[2], "-j") == 0) {
 		show_jobs = true;
@@ -3891,6 +3895,7 @@ asuser_cmd(int argc, const char * const argv[])
 
 	mach_port_t bp = MACH_PORT_NULL;
 	kr = bootstrap_look_up_per_user(rbs, NULL, req_uid, &bp);
+	printf("per-user bootstrap is bp=%d\n", bp);
 	if (kr != BOOTSTRAP_SUCCESS) {
 		launchctl_log(LOG_ERR, "bootstrap_look_up_per_user(): %u", kr);
 		return 1;
