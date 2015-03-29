@@ -19,7 +19,7 @@ mach_port_t task_self_trap(void);
 
 extern mach_port_t _task_reply_port;
 
-mach_port_t bootstrap_port = MACH_PORT_NULL;
+extern mach_port_t bootstrap_port;
 mach_port_t mach_task_self_ = MACH_PORT_NULL;
  __attribute__((visibility("hidden"))) mach_port_t _task_reply_port;
 
