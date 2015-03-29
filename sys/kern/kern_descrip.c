@@ -1826,16 +1826,18 @@ finstall(struct thread *td, struct file *fp, int *fd, int flags,
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct filedescent *fde;
-	int error;
+	int error, min;
 
 	KASSERT(fd != NULL, ("%s: fd == NULL", __func__));
 	KASSERT(fp != NULL, ("%s: fp == NULL", __func__));
 	if (fcaps != NULL)
 		filecaps_validate(fcaps, __func__);
 
+	min = (flags & FMINALLOC) ? 16 : 0;
+
 	FILEDESC_XLOCK(fdp);
 	if (!(flags & FNOFDALLOC)) {
-		if ((error = fdalloc(td, 0, fd))) {
+		if ((error = fdalloc(td, min, fd))) {
 			FILEDESC_XUNLOCK(fdp);
 			return (error);
 		}

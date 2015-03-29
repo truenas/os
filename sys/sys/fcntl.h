@@ -159,6 +159,7 @@ typedef	__pid_t		pid_t;
 /* need extra protection against the braindead mksubr script in usr.bin/kdump */
 
 #define FNOFDALLOC    0x80000000
+#define FMINALLOC     0x40000000
 #endif
 
 /*
