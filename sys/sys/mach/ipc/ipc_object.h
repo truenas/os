@@ -202,8 +202,11 @@ extern void ipc_object_reference(
 	ipc_object_t	object);
 
 /* Release a reference to an object */
-extern void ipc_object_release(
-	ipc_object_t	object);
+extern void _ipc_object_release(
+       ipc_object_t    object, char *file, int line);
+
+#define ipc_object_release(object) _ipc_object_release((object), __FILE__, __LINE__)
+
 
 /* Look up an object in a space */
 extern kern_return_t ipc_object_translate(

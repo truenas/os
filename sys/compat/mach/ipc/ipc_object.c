@@ -123,9 +123,12 @@ ipc_object_reference(
  */
 
 void
-ipc_object_release(
-	ipc_object_t	object)
+_ipc_object_release(
+	ipc_object_t	object, char *file, int line)
 {
+#ifdef VERBOSE_DEBUGGING
+	printf("ipc_object_release(%p:%d) %s:%d\n", object, object->io_references, file, line);
+#endif
 	io_lock(object);
 	assert(object->io_references > 0);
 	io_release(object);
