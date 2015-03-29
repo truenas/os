@@ -269,8 +269,8 @@ mach_msg_send(
 	if (mr != MACH_MSG_SUCCESS)
 		return mr;
 
-	DPRINTF("send to remote port %d notify %d id %d\n", (int)kmsg->ikm_header->msgh_remote_port,
-		   notify, kmsg->ikm_header->msgh_id);
+	DPRINTF("send to remote port %d notify %d id %d name %s\n", (int)kmsg->ikm_header->msgh_remote_port,
+			notify, kmsg->ikm_header->msgh_id, curproc->p_comm);
 
 	mr = ipc_kmsg_copyin(kmsg, space, map, MACH_PORT_NAME_NULL);
 	if (mr != MACH_MSG_SUCCESS) {
@@ -375,6 +375,7 @@ mach_msg_receive(
 	self->ith_scatter_list = slist;
 	self->ith_scatter_list_size = slist_size;
 	io_lock(object);
+	assert(object->io_references > 0);
 	mr = ipc_mqueue_receive(object, bits, option & MACH_RCV_TIMEOUT, rcv_size,
 							timeout, &kmsg, &seqno, &lportname);
 	io_unlock(object);
@@ -399,7 +400,7 @@ mach_msg_receive(
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
 	}
 
-	mr = ipc_kmsg_copyout(kmsg, space, map, MACH_PORT_NAME_NULL, slist);
+	mr = ipc_kmsg_copyout(kmsg, space, map, slist, 0);
 	if (mr != MACH_MSG_SUCCESS) {
 		if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR
 		    ) {
@@ -417,7 +418,7 @@ mach_msg_receive(
 		return mr;
 	}
 	mr = ipc_kmsg_put(msg, kmsg, 
-		kmsg->ikm_header->msgh_size + trailer->msgh_trailer_size);
+					  kmsg->ikm_header->msgh_size + trailer->msgh_trailer_size);
 	FREE_SCATTER_LIST(slist, slist_size, slist_rt);
 
 	return mr;
