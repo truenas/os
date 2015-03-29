@@ -216,7 +216,7 @@ typedef mach_port_t			*mach_port_array_t;
  *
  */
 
-#ifndef	NO_PORT_GEN
+#if 0
 
 #define	MACH_PORT_INDEX(name)		((name) >> 8)
 #define	MACH_PORT_GEN(name)		(((name) & 0xff) << 24)
