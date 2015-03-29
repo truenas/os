@@ -36,7 +36,7 @@ typedef function_table_entry   *function_table_t;
 #endif /* AUTOTEST */
 
 #ifndef	mach_port_MSG_COUNT
-#define	mach_port_MSG_COUNT	30
+#define	mach_port_MSG_COUNT	36
 #endif	/* mach_port_MSG_COUNT */
 
 #include <sys/mach/std_types.h>
@@ -1560,29 +1560,29 @@ union __ReplyUnion__mach_port_subsystem {
     { "mach_port_type", 3201 },\
     { "mach_port_rename", 3202 },\
     { "mach_port_allocate_name", 3203 },\
-    { "mach_port_destroy", 3204 },\
-    { "mach_port_get_refs", 3205 },\
-    { "mach_port_peek", 3206 },\
-    { "mach_port_set_mscount", 3207 },\
-    { "mach_port_get_set_status", 3208 },\
-    { "mach_port_request_notification", 3209 },\
-    { "mach_port_set_seqno", 3210 },\
-    { "mach_port_get_attributes", 3211 },\
-    { "mach_port_set_attributes", 3212 },\
-    { "mach_port_allocate_qos", 3213 },\
-    { "mach_port_allocate_full", 3214 },\
-    { "task_set_port_space", 3215 },\
-    { "mach_port_get_srights", 3216 },\
-    { "mach_port_space_info", 3217 },\
-    { "mach_port_dnrequest_info", 3218 },\
-    { "mach_port_get_context", 3222 },\
-    { "mach_port_set_context", 3223 },\
-    { "mach_port_kobject", 3224 },\
-    { "mach_port_construct", 3225 },\
-    { "mach_port_destruct", 3226 },\
-    { "mach_port_guard", 3227 },\
-    { "mach_port_unguard", 3228 },\
-    { "mach_port_space_basic_info", 3229 }
+    { "mach_port_destroy", 3210 },\
+    { "mach_port_get_refs", 3211 },\
+    { "mach_port_peek", 3212 },\
+    { "mach_port_set_mscount", 3213 },\
+    { "mach_port_get_set_status", 3214 },\
+    { "mach_port_request_notification", 3215 },\
+    { "mach_port_set_seqno", 3216 },\
+    { "mach_port_get_attributes", 3217 },\
+    { "mach_port_set_attributes", 3218 },\
+    { "mach_port_allocate_qos", 3219 },\
+    { "mach_port_allocate_full", 3220 },\
+    { "task_set_port_space", 3221 },\
+    { "mach_port_get_srights", 3222 },\
+    { "mach_port_space_info", 3223 },\
+    { "mach_port_dnrequest_info", 3224 },\
+    { "mach_port_get_context", 3228 },\
+    { "mach_port_set_context", 3229 },\
+    { "mach_port_kobject", 3230 },\
+    { "mach_port_construct", 3231 },\
+    { "mach_port_destruct", 3232 },\
+    { "mach_port_guard", 3233 },\
+    { "mach_port_unguard", 3234 },\
+    { "mach_port_space_basic_info", 3235 }
 #endif
 
 #ifdef __AfterMigUserHeader
