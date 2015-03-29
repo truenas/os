@@ -635,26 +635,28 @@ launchd_mport_notify_req(mach_port_t name, mach_msg_id_t which)
 {
 	mach_port_mscount_t msgc = (which == MACH_NOTIFY_PORT_DESTROYED) ? 0 : 1;
 	mach_port_t previous, where = (which == MACH_NOTIFY_NO_SENDERS) ? name : launchd_internal_port;
+	int err;
 
 	if (which == MACH_NOTIFY_NO_SENDERS) {
 		/* Always make sure the send count is zero, in case a receive right is
 		 * reused
 		 */
-		errno = mach_port_set_mscount(mach_task_self(), name, 0);
-		if (unlikely(errno != KERN_SUCCESS)) {
-			return errno;
+		err = mach_port_set_mscount(mach_task_self(), name, 0);
+		if (unlikely(err != KERN_SUCCESS)) {
+			return err;
 		}
 	}
 
-	errno = mach_port_request_notification(mach_task_self(), name, which, msgc, where, MACH_MSG_TYPE_MAKE_SEND_ONCE, &previous);
+	err = mach_port_request_notification(mach_task_self(), name, which, msgc, where, MACH_MSG_TYPE_MAKE_SEND_ONCE, &previous);
 
-	if (likely(errno == 0) && previous != MACH_PORT_NULL) {
+	if (likely(err == 0) && previous != MACH_PORT_NULL) {
 		(void)os_assumes_zero(launchd_mport_deallocate(previous));
 	}
 
-	return errno;
+	return (err);
 }
 
+extern void mig_init(void *port);
 pid_t
 runtime_fork(mach_port_t bsport)
 {
@@ -670,14 +672,18 @@ runtime_fork(mach_port_t bsport)
 	syslog(LOG_ERR, "setting bsport");
 	(void)os_assumes_zero(launchd_set_bport(bsport));
 	syslog(LOG_ERR, "set bsport");
+#if 0	
 	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
+#endif	
+	bootstrap_port = bsport;
 
 	__OS_COMPILETIME_ASSERT__(SIG_ERR == (typeof(SIG_ERR))-1);
-	(void)posix_assumes_zero(sigprocmask(SIG_BLOCK, &sigign_set, &oset));
-	for (i = 0; i < (sizeof(sigigns) / sizeof(int)); i++) {
-		(void)posix_assumes_zero(signal(sigigns[i], SIG_DFL));
+	if (uflag == false) {
+		(void)posix_assumes_zero(sigprocmask(SIG_BLOCK, &sigign_set, &oset));
+		for (i = 0; i < (sizeof(sigigns) / sizeof(int)); i++) {
+			(void)posix_assumes_zero(signal(sigigns[i], SIG_DFL));
+		}
 	}
-
 	r = fork();
 	saved_errno = errno;
 
@@ -685,12 +691,16 @@ runtime_fork(mach_port_t bsport)
 		for (i = 0; i < (sizeof(sigigns) / sizeof(int)); i++) {
 			(void)posix_assumes_zero(signal(sigigns[i], SIG_IGN));
 		}
-		(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &oset, NULL));
+		if (uflag == false)
+			(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &oset, NULL));
+		sleep(1);
 		(void)os_assumes_zero(launchd_set_bport(MACH_PORT_NULL));
+		bootstrap_port = MACH_PORT_NULL;
 	} else {
 		pid_t p = -getpid();
 		(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
 		(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &emptyset, NULL));
+		mig_init(NULL);
 	}
 
 	errno = saved_errno;
@@ -781,6 +791,8 @@ launchd_mport_create_recv(mach_port_t *name)
 kern_return_t
 launchd_mport_deallocate(mach_port_t name)
 {
+	return (0);
+	/* not yet */
 	return errno = mach_port_deallocate(mach_task_self(), name);
 }
 
@@ -1057,11 +1069,9 @@ launchd_runtime2(mach_msg_size_t msg_size)
 		xpc_object_t request = NULL;
 
 		int result;
-		syslog(LOG_ERR, "waiting 7s to xpc_pipe_try_receive ...");
-		sleep(7);
 		result = xpc_pipe_try_receive(ipc_port_set, &request, &recvp, launchd_mig_demux, msg_size, 0);
-		syslog(LOG_ERR, "result=%d", result);
-		sleep(1);
+		if (result != 1)
+			syslog(LOG_ERR, "result=%d", result);
 		if (result == 0 && request) {
 			boolean_t handled = false;
 			time_of_mach_msg_return = runtime_get_opaque_time();
@@ -1137,6 +1147,10 @@ runtime_fsync(int fd)
 	return fsync(fd);
 #endif
 }
+
+#undef TARGET_OS_EMBEDDED
+#define TARGET_OS_EMBEDDED 1
+static int launchd_appletv;
 
 /*
  * We should break this into two reference counts.

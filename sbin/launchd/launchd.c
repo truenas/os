@@ -118,6 +118,9 @@ uid_t launchd_uid;
 FILE *launchd_console = NULL;
 int32_t launchd_sync_frequency = 30;
 
+
+mach_port_t bootstrap_port;
+
 void
 launchd_exit(int code)
 {
@@ -315,7 +318,7 @@ main(int argc, char *const *argv)
 			syslog(LOG_ERR, "init_pre_kevent() for reaaaaal!!! \n");
 			init_pre_kevent();
 	}
-	sleep(2);
+	sleep(1);
 	syslog(LOG_ERR, "launchd_runtime()\n");
 	launchd_runtime();
 }

@@ -3627,8 +3627,9 @@ job_reap(job_t j)
 	bool was_dirty = false;
 	if (!(j->anonymous || j->implicit_reap)) {
 		uint32_t flags = 0;
+#if 0		
 		(void)job_assumes_zero(j, proc_get_dirty(j->p, &flags));
-
+#endif
 		j->idle_exit = (flags & PROC_DIRTY_ALLOWS_IDLE_EXIT);
 		was_dirty = (flags & PROC_DIRTY_IS_DIRTY);
 
@@ -4358,11 +4359,14 @@ jobmgr_callback(void *obj, struct kevent *kev)
 			jobmgr_still_alive_with_check(jm);
 		} else if (kev->ident == (uintptr_t)&jm->reboot_flags) {
 			jobmgr_do_garbage_collection(jm);
-		} else if (kev->ident == (uintptr_t)&launchd_runtime_busy_time) {
+		}
+		else if (kev->ident == (uintptr_t)&launchd_runtime_busy_time) {
+#if 0			
 			jobmgr_log(jm, LOG_DEBUG, "Idle exit timer fired. Shutting down.");
 			if (jobmgr_assumes_zero(jm, runtime_busy_cnt) == 0) {
 				return launchd_shutdown();
 			}
+#endif			
 #if HAVE_SYSTEMSTATS
 		} else if (kev->ident == (uintptr_t)systemstats_timer_callback) {
 			systemstats_timer_callback();
@@ -4486,12 +4490,12 @@ job_start(job_t j)
 		if (unlikely(_vproc_post_fork_ping())) {
 			syslog(LOG_ERR, "_vproc_post_fork_ping() fail");
 			launchd_exit(EXIT_FAILURE);
-		}
+		} else
+			syslog(LOG_ERR, "_vproc_post_fork_ping() success");
 
 		(void)job_assumes_zero(j, runtime_close(execspair[0]));
 		// wait for our parent to say they've attached a kevent to us
 		read(_fd(execspair[1]), &c, sizeof(c));
-
 		if (sipc) {
 			(void)job_assumes_zero(j, runtime_close(spair[0]));
 			snprintf(nbuf, sizeof(nbuf), "%d", spair[1]);
@@ -4723,6 +4727,7 @@ job_start_child(job_t j)
 	(void)job_assumes_zero(j, posix_spawnattr_setcpumonitor_default(&spattr));
 #endif
 
+#if 0
 #if !TARGET_OS_EMBEDDED
 	struct task_qos_policy qosinfo = {
 		.task_latency_qos_tier = LATENCY_QOS_LAUNCH_DEFAULT_TIER,
@@ -4734,7 +4739,8 @@ job_start_child(job_t j)
 		(void)job_assumes_zero_p(j, kr);
 	}
 #endif
-
+#endif
+	
 #if HAVE_RESPONSIBILITY
 	/* Specify which process is responsible for the new job.  Per-app XPC
 	 * services are the responsibility of the app.  Other processes are
@@ -4795,7 +4801,8 @@ job_start_child(job_t j)
 	}
 
 	errno = psf(NULL, file2exec, NULL, &spattr, (char *const *)argv, environ);
-
+	syslog(LOG_ERR, "job_start failed %s\n", strerror(errno));
+	
 #if HAVE_SANDBOX && !TARGET_OS_EMBEDDED
 out_bad:
 #endif
