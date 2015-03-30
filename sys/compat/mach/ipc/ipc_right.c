@@ -100,6 +100,16 @@
 #include <sys/mach/ipc/ipc_right.h>
 #include <sys/mach/ipc/ipc_notify.h>
 #include <sys/mach/ipc/ipc_table.h>
+
+#ifdef INVARIANTS
+#define OBJECT_CLEAR(entry, name) do {									\
+		/* printf("clearing object %p name: %d %s:%d\n", entry->ie_object, name, __FILE__, __LINE__); */ \
+		(entry)->ie_object = IO_NULL;									\
+} while (0)
+#else
+#define OBJECT_CLEAR(entry, name) (entry)->ie_object = IO_NULL
+#endif
+
 /*
  *	Routine:	ipc_right_lookup_write
  *	Purpose:
@@ -463,7 +473,7 @@ ipc_right_check(
 	}
 
 	entry->ie_bits = bits;
-	entry->ie_object = IO_NULL;
+	OBJECT_CLEAR(entry, name);
 	return TRUE;
 }
 
@@ -616,7 +626,7 @@ ipc_right_destroy(
 		assert(entry->ie_request == 0);
 		assert(pset != IPS_NULL);
 
-		entry->ie_object = IO_NULL;
+		OBJECT_CLEAR(entry, name);
 		ipc_entry_dealloc(space, name, entry);
 
 		ips_lock(pset);
@@ -650,7 +660,7 @@ ipc_right_destroy(
 			ip_check_unlock(port);
 
 			entry->ie_request = 0;
-			entry->ie_object = IO_NULL;
+			OBJECT_CLEAR(entry, name);
 			ipc_entry_dealloc(space, name, entry);
 			is_write_unlock(space);
 			break;
@@ -658,7 +668,7 @@ ipc_right_destroy(
 
 		dnrequest = ipc_right_dncancel_macro(space, port, name, entry);
 
-		entry->ie_object = IO_NULL;
+		OBJECT_CLEAR(entry, name);
 		ipc_entry_dealloc(space, name, entry);
 		is_write_unlock(space);
 
@@ -770,7 +780,7 @@ ipc_right_dealloc(
 		dnrequest = ipc_right_dncancel_macro(space, port, name, entry);
 		ip_unlock(port);
 
-		entry->ie_object = IO_NULL;
+		OBJECT_CLEAR(entry, name);
 		ipc_entry_dealloc(space, name, entry);
 		is_write_unlock(space);
 
@@ -819,7 +829,7 @@ ipc_right_dealloc(
 					name, entry);
 
 			ip_release(port);
-			entry->ie_object = IO_NULL;
+			OBJECT_CLEAR(entry, name);
 			ipc_entry_dealloc(space, name, entry);
 		} else
 			entry->ie_bits = bits-1; /* decrement urefs */
@@ -942,7 +952,7 @@ ipc_right_delta(
 		pset = (ipc_pset_t) entry->ie_object;
 		assert(pset != IPS_NULL);
 
-		entry->ie_object = IO_NULL;
+		OBJECT_CLEAR(entry, name);
 		ipc_entry_dealloc(space, name, entry);
 
 		ips_lock(pset);
@@ -1004,17 +1014,17 @@ ipc_right_delta(
 			}
 
 			entry->ie_bits = bits;
-			entry->ie_object = IO_NULL;
+			OBJECT_CLEAR(entry, name);
 		} else {
 			assert(IE_BITS_TYPE(bits) == MACH_PORT_TYPE_RECEIVE);
 			assert(IE_BITS_UREFS(bits) == 0);
 
 			dnrequest = ipc_right_dncancel_macro(space, port,
 							     name, entry);
-
-			entry->ie_object = IO_NULL;
+			OBJECT_CLEAR(entry, name);
 			ipc_entry_dealloc(space, name, entry);
 		}
+
 		is_write_unlock(space);
 
 		ipc_port_clear_receiver(port);
@@ -1058,7 +1068,7 @@ ipc_right_delta(
 		dnrequest = ipc_right_dncancel_macro(space, port, name, entry);
 		ip_unlock(port);
 
-		entry->ie_object = IO_NULL;
+		OBJECT_CLEAR(entry, name);
 		ipc_entry_dealloc(space, name, entry);
 		is_write_unlock(space);
 
@@ -1168,7 +1178,7 @@ ipc_right_delta(
 				ipc_hash_delete(space, (ipc_object_t) port,
 						name, entry);
 				ip_release(port);
-				entry->ie_object = IO_NULL;
+				OBJECT_CLEAR(entry, name);
 				ipc_entry_dealloc(space, name, entry);
 			}
 		} else
@@ -1440,7 +1450,7 @@ ipc_right_copyin(
 			dnrequest = ipc_right_dncancel_macro(space, port,
 							     name, entry);
 
-			entry->ie_object = IO_NULL;
+			OBJECT_CLEAR(entry, name);
 		}
 		entry->ie_bits = bits &~ MACH_PORT_TYPE_RECEIVE;
 
@@ -1545,9 +1555,8 @@ ipc_right_copyin(
 						space, port, name, entry);
 
 				ipc_hash_delete(space, (ipc_object_t) port,
-						name, entry);
-
-				entry->ie_object = IO_NULL;
+								name, entry);
+				OBJECT_CLEAR(entry, name);
 			}
 			entry->ie_bits = bits &~
 				(IE_BITS_UREFS_MASK|MACH_PORT_TYPE_SEND);
@@ -1602,7 +1611,7 @@ ipc_right_copyin(
 		dnrequest = ipc_right_dncancel_macro(space, port, name, entry);
 		ip_unlock(port);
 
-		entry->ie_object = IO_NULL;
+		OBJECT_CLEAR(entry, name);
 		entry->ie_bits = bits &~ MACH_PORT_TYPE_SEND_ONCE;
 
 		*objectp = (ipc_object_t) port;
@@ -1795,13 +1804,11 @@ ipc_right_copyin_two(
 
 			dnrequest = ipc_right_dncancel_macro(space, port,
 							     name, entry);
-
 			ipc_hash_delete(space, (ipc_object_t) port,
-					name, entry);
-
+							name, entry);
 			port->ip_srights++;
 			ip_reference(port);
-			entry->ie_object = IO_NULL;
+			OBJECT_CLEAR(entry, name);
 		}
 		entry->ie_bits = bits &~
 			(IE_BITS_UREFS_MASK|MACH_PORT_TYPE_SEND);
@@ -2089,7 +2096,7 @@ ipc_right_rename(
 	}
 
 	assert(oentry->ie_request == 0);
-	oentry->ie_object = IO_NULL;
+	OBJECT_CLEAR(oentry, oname);
 	ipc_entry_dealloc(space, oname, oentry);
 	is_write_unlock(space);
 

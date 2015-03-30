@@ -1269,6 +1269,8 @@ mach_port_request_notification(
 {
 	kern_return_t kr;
 
+	pause("huh?", 100);
+	printf("mach_port_request_notification called ...");
 	if (space == IS_NULL)
 		return KERN_INVALID_TASK;
 
@@ -1281,6 +1283,9 @@ mach_port_request_notification(
 
 		if (sync != 0)
 			return KERN_INVALID_VALUE;
+
+		if (!MACH_PORT_NAME_VALID(name))
+			return KERN_INVALID_RIGHT;
 
 		kr = ipc_port_translate_receive(space, name, &port);
 		if (kr != KERN_SUCCESS)
@@ -1297,15 +1302,13 @@ mach_port_request_notification(
 	    case MACH_NOTIFY_NO_SENDERS: {
 		ipc_port_t port;
 
+		if (!MACH_PORT_NAME_VALID(name))
+			return KERN_INVALID_RIGHT;
+
 		kr = ipc_port_translate_receive(space, name, &port);
 		if (kr != KERN_SUCCESS)
 			return kr;
 		/* port is locked and active */
-
-		if (!IP_NMS(port)) {
-			ip_unlock(port);
-			return KERN_INVALID_RIGHT;
-		}
 
 		ipc_port_nsrequest(port, sync, notify, previousp);
 		/* port is unlocked */
@@ -1313,16 +1316,13 @@ mach_port_request_notification(
 	    }
 
 	    case MACH_NOTIFY_DEAD_NAME:
-		kr = ipc_right_dnrequest(space, name, sync != 0,
-					 notify, previousp);
-		if (kr != KERN_SUCCESS)
-			return kr;
+			return KERN_INVALID_ARGUMENT;
 		break;
 
 	    default:
 		return KERN_INVALID_VALUE;
 	}
-
+	printf("success!\n");
 	return KERN_SUCCESS;
 }
 

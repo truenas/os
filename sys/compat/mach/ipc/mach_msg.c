@@ -473,10 +473,11 @@ mach_msg_overwrite_trap(
 		else
 		    rcv = msg;
 
-		DPRINTF("receiving on %d ... ", rcv_name);
+		DPRINTF("%s:%d receiving on %d ... ", curproc->p_comm, curthread->td_tid, rcv_name);
 		mr = mach_msg_receive(rcv, option, rcv_size, rcv_name, 
 							  timeout, scatter_list_size);
-		DPRINTF("done \n");
+		DPRINTF("%s:%d done on %d\n",curproc->p_comm, curthread->td_tid, rcv_name);
+
 	}
 
 	return (mr);

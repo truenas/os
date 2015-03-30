@@ -108,6 +108,7 @@
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
+#include <sys/syslog.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/mach_param.h>
 #include <sys/mach/task_special_ports.h>
@@ -135,6 +136,7 @@
 #define VM_MAP_NULL NULL
 
 
+#define VERBOSE_DEBUGGING
 /*
  *	Routine:	ipc_task_init
  *	Purpose:
@@ -613,7 +615,8 @@ task_get_special_port(
 		break;
 
 	    case TASK_BOOTSTRAP_PORT:
-		port = ipc_port_copy_send(task->itk_bootstrap);
+			port = ipc_port_copy_send(task->itk_bootstrap);
+			log(LOG_DEBUG, "get bootstrap port: %p", port);
 		break;
 
 	    case TASK_SEATBELT_PORT:
