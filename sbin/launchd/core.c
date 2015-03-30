@@ -160,7 +160,7 @@ extern int gL1CacheEnabled;
  */
 #define LAUNCHD_MIN_JOB_RUN_TIME 10
 #define LAUNCHD_DEFAULT_EXIT_TIMEOUT 20
-#define LAUNCHD_SIGKILL_TIMER 4
+#define LAUNCHD_SIGKILL_TIMER 30
 #define LAUNCHD_LOG_FAILED_EXEC_FREQ 10
 
 #define SHUTDOWN_LOG_DIR "/var/log/shutdown"
@@ -2156,7 +2156,10 @@ job_new(jobmgr_t jm, const char *label, const char *prog, const char *const *arg
 	j->mgr = jm;
 	j->min_run_time = LAUNCHD_MIN_JOB_RUN_TIME;
 	j->timeout = RUNTIME_ADVISABLE_IDLE_TIMEOUT;
-	j->exit_timeout = LAUNCHD_DEFAULT_EXIT_TIMEOUT;
+	if (uflag == true)
+		j->exit_timeout = 60;
+	else
+		j->exit_timeout = LAUNCHD_DEFAULT_EXIT_TIMEOUT;
 	j->currently_ignored = true;
 	j->ondemand = true;
 	j->checkedin = true;
@@ -4032,7 +4035,7 @@ job_dispatch(job_t j, bool kickstart)
 			return NULL;
 		}
 
-		if (kickstart || job_keepalive(j)) {
+		if (kickstart || job_keepalive(j) || uflag) {
 			job_log(j, LOG_DEBUG, "%starting job", kickstart ? "Kicks" : "S");
 			job_start(j);
 		} else {
@@ -6975,7 +6978,7 @@ jobmgr_new(jobmgr_t jm, mach_port_t requestorport, mach_port_t transfer_port, bo
 		bootstrapper = jobmgr_init_session(jmr, name, sflag);
 	}
 
-	if (!bootstrapper || !bootstrapper->weird_bootstrap) {
+	if (!bootstrapper || !bootstrapper->weird_bootstrap || uflag == true) {
 		if (jobmgr_assumes_zero(jmr, runtime_add_mport(jmr->jm_port, job_server)) != KERN_SUCCESS) {
 			goto out_bad;
 		}
