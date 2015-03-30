@@ -4805,6 +4805,7 @@ job_start_child(job_t j)
 
 	errno = psf(NULL, file2exec, NULL, &spattr, (char *const *)argv, environ);
 	syslog(LOG_ERR, "job_start failed %s\n", strerror(errno));
+	sleep(20);
 	
 #if HAVE_SANDBOX && !TARGET_OS_EMBEDDED
 out_bad:
