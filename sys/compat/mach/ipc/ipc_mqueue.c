@@ -235,6 +235,7 @@ ipc_mqueue_send(
 {
 	ipc_port_t port;
 	kern_return_t           save_wait_result;
+	ipc_thread_t self = current_thread();
 
 	port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 	assert(IP_VALID(port));
@@ -255,9 +256,13 @@ ipc_mqueue_send(
 		ip_unlock(port);
 
 		reply = ipc_kobject_server(kmsg);
-		if (reply != IKM_NULL)
-			ipc_mqueue_send_always(reply);
-
+		if (reply != IKM_NULL) {
+			self->ith_kmsg =  reply;
+			ip_lock(port);
+			self->ith_seqno = port->ip_seqno++;
+			ip_unlock(port);
+			/* ipc_mqueue_send_always(reply); */
+		}
 		return MACH_MSG_SUCCESS;
 	}
 
@@ -660,6 +665,10 @@ ipc_mqueue_receive(
 	ipc_thread_t self = current_thread();
 	kern_return_t	save_wait_result;
 
+	if (self->ith_kmsg != NULL) {
+		self->ith_state = MACH_MSG_SUCCESS;
+		goto rx_done;
+	}
 	if (bits & MACH_PORT_TYPE_PORT_SET) {
 		ipc_pset_t pset = (ipc_pset_t)object;
 
@@ -718,6 +727,7 @@ ipc_mqueue_receive(
 
 		/* Save proper wait_result in case we block */
 		save_wait_result = self->wait_result;
+	rx_done:
 		/* why did we wake up? */
 		if (self->ith_state == MACH_MSG_SUCCESS) {
 			/* pick up the message that was handed to us */
