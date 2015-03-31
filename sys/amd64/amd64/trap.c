@@ -49,11 +49,8 @@ __FBSDID("$FreeBSD$");
 #include "opt_hwpmc_hooks.h"
 #include "opt_isa.h"
 #include "opt_kdb.h"
-<<<<<<< HEAD
 #include "opt_kdtrace.h"
-=======
 #include "opt_compat_mach.h"
->>>>>>> cf26db0... add support for make mach system calls
 
 #include <sys/param.h>
 #include <sys/bus.h>
