@@ -34,6 +34,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc_info.h>
 
 
+int set_security_token(task_t);
+
+
 static int
 proc_terminate(int pid)
 {
@@ -450,6 +453,31 @@ proc_info(int op, pid_t pid, uint32_t flavor, uint64_t arg, void *addr,
 }
 
 int
+set_security_token(task_t task)
+{
+	struct proc *p;
+	security_token_t sec_token;
+	audit_token_t audit_token;
+
+	p = task->itk_p;
+
+	sec_token.val[0] = sec_token.val[1] = 0;
+	audit_token.val[0] = 0; /* wat: p->p_ucred->cr_au.ai_auid; */
+	audit_token.val[1] = p->p_ucred->cr_uid;
+	audit_token.val[2] = p->p_ucred->cr_gid;
+	audit_token.val[3] = p->p_ucred->cr_ruid;
+	audit_token.val[4] = p->p_ucred->cr_rgid;
+	audit_token.val[5] = p->p_pid;
+	audit_token.val[6] = 0; /* wat: p->p_ucred->cr_au.ai_asid; */
+	audit_token.val[7] = 0; /* wat: p->p_ucred->cr_au.ai_termid.port; */
+
+	task->audit_token = audit_token;
+	task->sec_token = sec_token;
+
+	return (0);
+}
+
+int
 sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap)
 {
 
@@ -458,11 +486,9 @@ sys___proc_info(struct thread *td __unused, struct __proc_info_args *uap)
 }
 
 
-
 int
 sys___iopolicysys(struct thread *td __unused, struct __iopolicysys_args *uap __unused)
 {
  
 	return (ENOSYS);
 }
-
