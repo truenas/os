@@ -6,17 +6,25 @@ Basic Mach IPC is supported through the mach kernel module or COMPAT_MACH_STATIC
 It is now a module by default to workaround the limited typeid space (15 bits) of
 dtrace.
 
-Note that launchctl needs to be built by cd'ing to <repo>/bin/launchctl
-and building it by hand because of its transitive dependence on icu. devel/icu
-needs to be installed for libcfxlite (part of buildworld) to build.
+Note that launchctl in-tree is not used, instead a much simpler version that uses
+json that lives out of tree (for now).
+
+As it stands, launchd will dispatch jobs but as it is is currently set to only link
+dynamically - preventing from running as pid1. It is considered early alpha.
+
+
+Unsupported OSX / Mach functionality:
+ - updating the audit token when setuid/setgid/ etc are called
+ - POSIX_SPAWN_SETEXEC
+ - (OOL) out of line descriptors of any kind
+ - memory object creation (used in parts of libdispatch)
+ - kevent64 support for receipt of messages in kevent (new in Yosemite, but not currently used by anything that I know of)
+ - voucher ports (used only by most recent parts of libdispatch)
 
 
 Work to be done for v0:
 
 - launch gettys so that console input works
-
-- complete launchctl
-	- import icui18n in to contrib for launchctl -> CF -> icu dependency
 
 - make launchd useful
    - write plists for basic services
