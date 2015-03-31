@@ -172,6 +172,8 @@ extern mach_port_name_t mach_reply_port(void);
 
 extern ipc_port_t retrieve_thread_self_fast(thread_t thr_act);
 
+extern void set_security_token(task_t);
+
 
 extern void ipc_thr_act_init(thread_act_t);
 #endif	/* _KERN_IPC_TT_H_ */

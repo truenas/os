@@ -436,8 +436,7 @@ task_create_internal(
 		if (!pset->active)
 			pset = &default_pset;
 #endif
-		new_task->sec_token = parent_task->sec_token;
-		new_task->audit_token = parent_task->audit_token;
+		set_security_token(new_task);
 		new_task->policy = parent_task->policy;
 	} else {
 		pset = &default_pset;
