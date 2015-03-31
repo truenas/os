@@ -29,19 +29,9 @@
  * $FreeBSD$
  */
 
-#ifndef	_NVLIST_IMPL_H_
-#define	_NVLIST_IMPL_H_
+#ifndef	_COMMON_IMPL_H_
+#define	_COMMON_IMPL_H_
 
-#include <stdint.h>
+#define	fd_is_valid(fd)	(fcntl((fd), F_GETFL) != -1 || errno != EBADF)
 
-#include "nv.h"
-
-void *nvlist_xpack(const nvlist_t *nvl, void *ubuf, int64_t *fdidxp, size_t *sizep);
-nvlist_t *nvlist_xunpack(const void *buf, size_t size, const int *fds,
-    size_t nfds);
-
-nvpair_t *nvlist_get_nvpair_parent(const nvlist_t *nvl);
-const unsigned char *nvlist_unpack_header(nvlist_t *nvl,
-    const unsigned char *ptr, size_t nfds, bool *isbep, size_t *leftp);
-
-#endif	/* !_NVLIST_IMPL_H_ */
+#endif	/* !_COMMON_IMPL_H_ */
