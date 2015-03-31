@@ -156,6 +156,57 @@ size_t runtime_busy_cnt;
 
 #define config_check(s, sb) (stat(LAUNCHD_CONFIG_PREFIX s, &sb) == 0)
 
+int audit_set_terminal_host(uint32_t *m);
+
+int
+audit_set_terminal_host(uint32_t *m)
+{
+
+#ifdef KERN_HOSTID
+        int name[2] = { CTL_KERN, KERN_HOSTID };
+        size_t len;
+
+        if (m == NULL)
+                return (kAUBadParamErr);
+        *m = 0;
+        len = sizeof(*m);
+        if (sysctl(name, 2, m, &len, NULL, 0) != 0) {
+                syslog(LOG_ERR, "sysctl() failed (%s)", strerror(errno));
+                return (kAUSysctlErr);
+        }
+        return (kAUNoErr);
+#else
+        *m = -1;
+        return (kAUNoErr);
+#endif
+}
+
+void
+audit_token_to_au32(audit_token_t atoken, uid_t *auidp, uid_t *euidp,
+    gid_t *egidp, uid_t *ruidp, gid_t *rgidp, pid_t *pidp, au_asid_t *asidp,
+    au_tid_t *tidp)
+{
+
+        if (auidp != NULL)
+                *auidp = (uid_t)atoken.val[0];
+        if (euidp != NULL)
+                *euidp = (uid_t)atoken.val[1];
+        if (egidp != NULL)
+                *egidp = (gid_t)atoken.val[2];
+        if (ruidp != NULL)
+                *ruidp = (uid_t)atoken.val[3];
+        if (rgidp != NULL)
+                *rgidp = (gid_t)atoken.val[4];
+        if (pidp != NULL)
+                *pidp = (pid_t)atoken.val[5];
+        if (asidp != NULL)
+                *asidp = (au_asid_t)atoken.val[6];
+        if (tidp != NULL) {
+                audit_set_terminal_host(&tidp->machine);
+                tidp->port = (dev_t)atoken.val[7];
+        }
+}
+
 mach_port_t
 runtime_get_kernel_port(void)
 {
@@ -670,11 +721,10 @@ runtime_fork(mach_port_t bsport)
 	syslog(LOG_ERR, "runtime_fork(bsport=%d)", bsport);
 	(void)os_assumes_zero(launchd_mport_make_send(bsport));
 	syslog(LOG_ERR, "setting bsport");
+	sleep(2);
 	(void)os_assumes_zero(launchd_set_bport(bsport));
 	syslog(LOG_ERR, "set bsport");
-#if 0	
 	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
-#endif	
 	bootstrap_port = bsport;
 
 	__OS_COMPILETIME_ASSERT__(SIG_ERR == (typeof(SIG_ERR))-1);
@@ -701,6 +751,8 @@ runtime_fork(mach_port_t bsport)
 		(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
 		(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &emptyset, NULL));
 		mig_init(NULL);
+		printf("%d sleeping 15 for attach\n", getpid());
+		sleep(15);
 	}
 
 	errno = saved_errno;
@@ -1006,13 +1058,11 @@ launchd_exc_runtime_once(mach_port_t port, mach_msg_size_t rcv_msg_size, mach_ms
 }
 
 void
-runtime_record_caller_creds(audit_token_t *token __unused)
+runtime_record_caller_creds(audit_token_t *token)
 {
-#ifdef notyet
 	(void)memcpy(&ldc_token, token, sizeof(*token));
 	audit_token_to_au32(*token, NULL, &ldc.euid,&ldc.egid, &ldc.uid, &ldc.gid,
 						&ldc.pid, &ldc.asid, NULL);
-#endif
 }
 
 struct ldcred *
