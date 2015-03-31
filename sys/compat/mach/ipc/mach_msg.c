@@ -397,6 +397,7 @@ mach_msg_receive(
 			round_msg(kmsg->ikm_header->msgh_size));
 	if (option & MACH_RCV_TRAILER_MASK) {
 		trailer->msgh_seqno = seqno;
+		trailer->msgh_trailer_type = GET_RCV_ELEMENTS(option);
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
 	}
 
