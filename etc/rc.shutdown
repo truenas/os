@@ -52,6 +52,8 @@ if grep -q TrueNAS /etc/version ; then
 		/usr/local/bin/python /usr/local/libexec/truenas/carp-state-change-hook.py carp0 shutdown
 		sleep 4
 	fi
+	# Last-ditch watchdog setting just in case the box hangs on way down.
+	watchdog -t 60
 fi
 
 . /etc/rc.subr
