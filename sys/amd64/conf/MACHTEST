@@ -191,6 +191,7 @@ device		puc			# Multi I/O cards and multi-channel UARTs
 # PCI Ethernet NICs that use the common MII bus controller code.
 # NOTE: Be sure to keep the 'device miibus' line in order to use these NICs!
 device		miibus			# MII bus support
+device		bce
 
 # Pseudo devices.
 device		loop			# Network loopback
