@@ -66,6 +66,11 @@ mach_mod_init(void)
 {
 	int err;
 
+	if (!cold) {
+		printf("mach services can only be loaded at boot time\n");
+		return (EINVAL);
+	}
+
 	if ((err = syscall_helper_register(osx_syscalls))) {
 		printf("failed to register osx calls: %d\n", err);
 		return (EINVAL);
