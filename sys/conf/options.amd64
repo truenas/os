@@ -21,7 +21,6 @@ COMPAT_FREEBSD32	opt_compat.h
 COMPAT_LINUX32		opt_compat.h
 #COMPAT_SVR4		opt_dontuse.h
 #DEBUG_SVR4		opt_svr4.h
-IMAGACT_BINMISC		opt_dontuse.h
 LINPROCFS		opt_dontuse.h
 LINSYSFS		opt_dontuse.h
 NDISAPI			opt_dontuse.h
@@ -60,7 +59,6 @@ PSM_DEBUG		opt_psm.h
 DEV_ATPIC		opt_atpic.h
 
 # Debugging
-KDTRACE_FRAME		opt_kdtrace.h
 
 # BPF just-in-time compiler
 BPF_JITTER		opt_bpf.h

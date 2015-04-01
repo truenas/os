@@ -66,7 +66,7 @@ mach_mod_init(void)
 {
 	int err;
 
-	if ((err = syscall_helper_register(osx_syscalls, SY_THR_STATIC_KLD))) {
+	if ((err = syscall_helper_register(osx_syscalls))) {
 		printf("failed to register osx calls: %d\n", err);
 		return (EINVAL);
 	}

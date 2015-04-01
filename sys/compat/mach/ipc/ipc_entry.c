@@ -113,12 +113,10 @@
 
 static fo_close_t mach_port_close;
 static fo_stat_t mach_port_stat;
-static fo_fill_kinfo_t mach_port_fill_kinfo;
 
 struct fileops mach_fileops  = {
 	.fo_close = mach_port_close,
 	.fo_stat = mach_port_stat,
-	.fo_fill_kinfo = mach_port_fill_kinfo,
 	.fo_flags = DFLAG_PASSABLE
 };
 
@@ -140,14 +138,6 @@ mach_port_stat(struct file *fp __unused, struct stat *sb __unused,
 			   struct ucred *active_cred __unused, struct thread *td __unused)
 {
 	printf("Now WHY are you statting a mach port?\n");
-	return (0);
-}
-
-static int
-mach_port_fill_kinfo(struct file *fp __unused, struct kinfo_file *kif __unused,
-					 struct filedesc *fdp __unused)
-{
-	/* placeholder to prevent us from panicking */
 	return (0);
 }
 

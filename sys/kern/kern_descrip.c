@@ -1992,20 +1992,15 @@ fdcopy(struct filedesc *fdp)
 	newfdp->fd_freefile = -1;
 	for (i = 0; i <= fdp->fd_lastfile; ++i) {
 		ofde = &fdp->fd_ofiles[i];
-<<<<<<< HEAD
-		if (fdisused(fdp, i) &&
-		    (ofde->fde_file->f_ops->fo_flags & DFLAG_PASSABLE) &&
-		    ofde->fde_file->f_ops != &badfileops) {
+		if (ofde->fde_file == NULL ||
+			(ofde->fde_file->f_type == DTYPE_KQUEUE ||
+		    (ofde->fde_file->f_ops != &badfileops))) {
 			nfde = &newfdp->fd_ofiles[i];
 			*nfde = *ofde;
 			filecaps_copy(&ofde->fde_caps, &nfde->fde_caps);
 			fhold(nfde->fde_file);
 			newfdp->fd_lastfile = i;
 		} else {
-=======
-		if (ofde->fde_file == NULL ||
-			(ofde->fde_file->f_type == DTYPE_KQUEUE)) {
->>>>>>> adbe8cd...  fix kqueue non-inheritance check
 			if (newfdp->fd_freefile == -1)
 				newfdp->fd_freefile = i;
 		}

@@ -30,7 +30,6 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_ktrace.h"
-#include "opt_kqueue.h"
 #include "opt_compat_mach.h"
 
 #include <sys/param.h>

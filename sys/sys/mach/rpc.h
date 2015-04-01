@@ -41,8 +41,6 @@
 #include <ipc/ipc_object.h>
 #endif	/* MACH_KERNEL */
 
-#pragma clang diagnostic ignored "-Wunused-local-typedef"
-
 /*
  * The various bits of the type field of the routine_arg_descriptor
  */
