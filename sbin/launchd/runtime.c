@@ -62,6 +62,9 @@
 #include <dlfcn.h>
 #include <os/assumes.h>
 
+#include <bsm/libbsm.h>
+
+
 #include "internalServer.h"
 #include "internal.h"
 #include "notifyServer.h"
@@ -156,6 +159,8 @@ size_t runtime_busy_cnt;
 
 #define config_check(s, sb) (stat(LAUNCHD_CONFIG_PREFIX s, &sb) == 0)
 
+#ifdef notyet
+/* defined in libbsm */
 int audit_set_terminal_host(uint32_t *m);
 
 int
@@ -180,6 +185,7 @@ audit_set_terminal_host(uint32_t *m)
         return (kAUNoErr);
 #endif
 }
+#endif
 
 void
 audit_token_to_au32(audit_token_t atoken, uid_t *auidp, uid_t *euidp,
@@ -721,7 +727,6 @@ runtime_fork(mach_port_t bsport)
 	syslog(LOG_ERR, "runtime_fork(bsport=%d)", bsport);
 	(void)os_assumes_zero(launchd_mport_make_send(bsport));
 	syslog(LOG_ERR, "setting bsport");
-	sleep(2);
 	(void)os_assumes_zero(launchd_set_bport(bsport));
 	syslog(LOG_ERR, "set bsport");
 	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
@@ -743,7 +748,6 @@ runtime_fork(mach_port_t bsport)
 		}
 		if (uflag == false)
 			(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &oset, NULL));
-		sleep(1);
 		(void)os_assumes_zero(launchd_set_bport(MACH_PORT_NULL));
 		bootstrap_port = MACH_PORT_NULL;
 	} else {
@@ -751,8 +755,10 @@ runtime_fork(mach_port_t bsport)
 		(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
 		(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &emptyset, NULL));
 		mig_init(NULL);
-		printf("%d sleeping 15 for attach\n", getpid());
-		sleep(15);
+		if (uflag == true) {
+			printf("%d sleeping 15 for attach\n", getpid());
+			sleep(15);
+		}
 	}
 
 	errno = saved_errno;
