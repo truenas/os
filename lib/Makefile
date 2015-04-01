@@ -62,7 +62,6 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_liblaunch} \
 	${_libldns} \
 	liblzma \
-	libmach \
 	${_libmagic} \
 	${_libmach} \
 	libmagic \
@@ -75,6 +74,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libnetbsd \
 	${_libnetgraph} \
 	${_libngatm} \
+	libnv \
 	libopie \
 	libosxsupport \
 	libpam \
@@ -110,8 +110,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libvgl} \
 	${_libvmmapi} \
 	libwrap \
-	libxo \
-	libxpc \
+        libxpc \
 	liby \
 	${_libypclnt} \
 	libyaml \
@@ -243,7 +242,6 @@ _libcfxlite= libcfxlite
 _libdispatch= libdispatch
 _liblaunch=	liblaunch
 _libmach= libmach
-.if ${MK_BHYVE} != "no"
 _libvmmapi=	libvmmapi
 .endif
 .endif
