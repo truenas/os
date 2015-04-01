@@ -60,6 +60,7 @@ typedef struct __posix_spawn_file_actions	*posix_spawn_file_actions_t;
 #define POSIX_SPAWN_SETSCHEDULER	0x08
 #define POSIX_SPAWN_SETSIGDEF		0x10
 #define POSIX_SPAWN_SETSIGMASK		0x20
+#define POSIX_SPAWN_SETEXEC		0x40
 
 __BEGIN_DECLS
 /*
