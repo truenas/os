@@ -14,13 +14,14 @@ BASE_INCLUDE=  -I. -I${.CURDIR} -I${.CURDIR}/init -I${.CURDIR}/../../apsl/includ
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 DEFINES= -DTARGET_CPU_X86=1 -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
-CFLAGS+= ${MIG_FLAGS}  -D__MigTypeCheck
+#override default CFLAGS
+CFLAGS= ${MIG_FLAGS}  -D__MigTypeCheck
 CFLAGS+= -I${.CURDIR}/../../contrib/openbsm -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -DHAVE_INTTYPES_H
 
 DEBUG_FLAGS+= -g -O0
 
-#LDFLAGS+= -static 
+LDFLAGS+= -static
 LDFLAGS+= -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -pthread
 
