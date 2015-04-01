@@ -1971,51 +1971,51 @@ fdunshare(struct thread *td)
 struct filedesc *
 fdcopy(struct filedesc *fdp)
 {
-	struct filedesc *newfdp;
-	struct filedescent *nfde, *ofde;
-	int i;
-
-	/* Certain daemons might not have file descriptors. */
-	if (fdp == NULL)
-		return (NULL);
-
-	newfdp = fdinit(fdp);
-	FILEDESC_SLOCK(fdp);
-	while (fdp->fd_lastfile >= newfdp->fd_nfiles) {
-		FILEDESC_SUNLOCK(fdp);
-		FILEDESC_XLOCK(newfdp);
-		fdgrowtable(newfdp, fdp->fd_lastfile + 1);
-		FILEDESC_XUNLOCK(newfdp);
-		FILEDESC_SLOCK(fdp);
-	}
-	/* copy all passable descriptors (i.e. not kqueue) */
-	newfdp->fd_freefile = -1;
-	for (i = 0; i <= fdp->fd_lastfile; ++i) {
-		ofde = &fdp->fd_ofiles[i];
- 		if (fdisused(fdp, i) &&
- 		    (ofde->fde_file->f_ops->fo_flags & DFLAG_PASSABLE) &&
-		    (ofde->fde_file->f_ops != &badfileops) {
-			nfde = &newfdp->fd_ofiles[i];
-			*nfde = *ofde;
-			filecaps_copy(&ofde->fde_caps, &nfde->fde_caps);
-			fhold(nfde->fde_file);
-			newfdp->fd_lastfile = i;
-		} else {
-			if (newfdp->fd_freefile == -1)
-				newfdp->fd_freefile = i;
-		}
-	}
-	newfdp->fd_cmask = fdp->fd_cmask;
-	FILEDESC_SUNLOCK(fdp);
-	FILEDESC_XLOCK(newfdp);
-	for (i = 0; i <= newfdp->fd_lastfile; ++i) {
-		if (newfdp->fd_ofiles[i].fde_file != NULL)
-			fdused(newfdp, i);
-	}
-	if (newfdp->fd_freefile == -1)
-		newfdp->fd_freefile = i;
-	FILEDESC_XUNLOCK(newfdp);
-	return (newfdp);
+        struct filedesc *newfdp;
+        struct filedescent *nfde, *ofde;
+        int i;
+ 
+        /* Certain daemons might not have file descriptors. */
+        if (fdp == NULL)
+                return (NULL);
+ 
+        newfdp = fdinit(fdp);
+        FILEDESC_SLOCK(fdp);
+        while (fdp->fd_lastfile >= newfdp->fd_nfiles) {
+                FILEDESC_SUNLOCK(fdp);
+                FILEDESC_XLOCK(newfdp);
+                fdgrowtable(newfdp, fdp->fd_lastfile + 1);
+                FILEDESC_XUNLOCK(newfdp);
+                FILEDESC_SLOCK(fdp);
+        }
+        /* copy all passable descriptors (i.e. not kqueue) */
+        newfdp->fd_freefile = -1;
+        for (i = 0; i <= fdp->fd_lastfile; ++i) {
+                ofde = &fdp->fd_ofiles[i];
+                if (fdisused(fdp, i) &&
+                    (ofde->fde_file->f_ops->fo_flags & DFLAG_PASSABLE) &&
+                    ofde->fde_file->f_ops != &badfileops) {
+                        nfde = &newfdp->fd_ofiles[i];
+                        *nfde = *ofde;
+                        filecaps_copy(&ofde->fde_caps, &nfde->fde_caps);
+                        fhold(nfde->fde_file);
+                        newfdp->fd_lastfile = i;
+                } else {
+                        if (newfdp->fd_freefile == -1)
+                                newfdp->fd_freefile = i;
+                }
+        }
+        newfdp->fd_cmask = fdp->fd_cmask;
+        FILEDESC_SUNLOCK(fdp);
+        FILEDESC_XLOCK(newfdp);
+        for (i = 0; i <= newfdp->fd_lastfile; ++i) {
+                if (newfdp->fd_ofiles[i].fde_file != NULL)
+                        fdused(newfdp, i);
+        }
+        if (newfdp->fd_freefile == -1)
+                newfdp->fd_freefile = i;
+        FILEDESC_XUNLOCK(newfdp);
+        return (newfdp);
 }
 
 /*
