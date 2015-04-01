@@ -15,7 +15,6 @@ dynamically - preventing from running as pid1. It is considered early alpha.
 
 Unsupported OSX / Mach functionality:
  - updating the audit token when setuid/setgid/ etc are called
- - POSIX_SPAWN_SETEXEC
  - (OOL) out of line descriptors of any kind
  - memory object creation (used in parts of libdispatch)
  - kevent64 support for receipt of messages in kevent (new in Yosemite, but not currently used by anything that I know of)
