@@ -50,9 +50,8 @@
 #include <string.h>
 #include <errno.h>
 
-/* These are not advertised in libbsm.h */
+/* This is not advertised in libbsm.h */
 int audit_set_terminal_port(dev_t *p);
-int audit_set_terminal_host(uint32_t *m);
 
 /*
  * General purpose audit submission mechanism for userspace.
