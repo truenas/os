@@ -57,6 +57,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libipsec \
 	${_libipx} \
 	libjail \
+	libjansson \
 	libkiconv \
 	libkvm \
 	${_liblaunch} \
