@@ -21,7 +21,7 @@ SYSDIR=	${_dir}
 .error "can't find kernel source tree"
 .endif
 
-CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR}
+CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR} -I./include
 CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include
 CFLAGS+= -fPIC -DPRIVATE -D__MigTypeCheck=1 -DLIBSYSCALL_INTERFACE=1
 DEBUG_FLAGS= -g -O0
@@ -61,8 +61,11 @@ SRCS=					\
 	mig_strncpy.c 		\
 	mig_support.c
 
+${SRCS}: include/machine
 
-
+include/machine: ${.CURDIR}/Makefile
+	mkdir -p include
+	ln -sf ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include include/machine
 
 
 CLEANFILES+= machine *~ mach_port.h task.h host_priv.h mach_host.h
