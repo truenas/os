@@ -1338,6 +1338,7 @@ bootstrap-tools: .MAKE
     ${_cat} \
     usr.bin/lorder \
     usr.bin/makewhatis \
+    usr.bin/migcom \
     ${_mklocale} \
     usr.bin/rpcgen \
     ${_sed} \

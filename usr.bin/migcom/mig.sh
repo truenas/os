@@ -62,7 +62,7 @@ do
     esac
 done
 
-CC="${SYSROOT}${CC}"
+CC="${CC}"
 MIGCOM="${SYSROOT}${MIGCOM}"
 
 if [ $# -ne 1 ]; then
