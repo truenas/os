@@ -87,8 +87,6 @@ _netipx=	netipx
 INCS+=		iconv.h
 .endif
 
-<<<<<<< HEAD
-=======
 .if ${MK_USB} != "no"
 LSUBDIRS+=	dev/usb
 .endif
@@ -96,7 +94,6 @@ LSUBDIRS+=	dev/usb
 .if ${MACHINE_ARCH} == "powerpc" || ${MACHINE_ARCH} == "powerpc64"
 _dev_powermac_nvram=	dev/powermac_nvram
 .endif
->>>>>>> origin/freebsd10
 
 # Define SHARED to indicate whether you want symbolic links to the system
 # source (``symlinks''), or a separate copy (``copies'').  ``symlinks'' is
