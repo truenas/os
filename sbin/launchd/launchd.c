@@ -119,7 +119,10 @@ FILE *launchd_console = NULL;
 int32_t launchd_sync_frequency = 30;
 
 
+/* gdb can't cope with copy relocations (caused by global variables in shared libraries) */
+#ifdef MACH_DEBUG
 mach_port_t bootstrap_port;
+#endif
 
 void
 launchd_exit(int code)
