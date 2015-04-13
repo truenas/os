@@ -405,7 +405,7 @@ ipc_kmsg_alloc(
 	} else
 		max_expanded_size = msg_and_trailer_size;
 
-	if (max_expanded_size <= IKM_SAVED_MSG_SIZE)
+	if (ikm_plus_overhead(max_expanded_size) <= IKM_SAVED_KMSG_SIZE)
 		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
 	else
 		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH, mflags);
