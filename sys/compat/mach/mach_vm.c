@@ -244,6 +244,7 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 	size_t size = round_page(_size);
 	vm_offset_t daddr;
 	vm_prot_t prot, protmax;
+	int err;
 
 	prot = VM_PROT_READ|VM_PROT_WRITE;
 	protmax = VM_PROT_ALL;
@@ -253,24 +254,27 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 	vm_map_lock(map);
 	if ((flags & MACH_VM_FLAGS_ANYWHERE) &&
 		(vm_map_findspace(map, 0, size, &daddr))) {
-		vm_map_unlock(map);
-		return (ENOMEM);
+	  err = ENOMEM;
+	  goto error;
 	} else {
+	  err = EINVAL;
 		/* Address range must be all in user VM space. */
 		if (daddr < vm_map_min(map) ||
 		    daddr + size > vm_map_max(map))
-			return (EINVAL);
+		  goto error;
 		if (daddr + size < daddr)
-			return (EINVAL);
-
+		  goto error;
 	}
 	if (vm_map_insert(map, NULL, 0, daddr, daddr + size, prot, protmax, 0)) {
-		vm_map_unlock(map);
-		return (EFAULT);
+	  err = EFAULT;
+	  goto error;
 	}
 	vm_map_unlock(map);
 	*addr = daddr;
 	return (0);
+ error:
+	vm_map_unlock(map);
+	return (err);
 }
 
 int

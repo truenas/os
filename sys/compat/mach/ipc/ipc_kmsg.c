@@ -2284,7 +2284,6 @@ ipc_kmsg_copyout_header(
 
 				assert(entry->ie_bits &
 					   MACH_PORT_TYPE_SEND_RECEIVE);
-				ip_lock(reply);
 				break;
 			}
 
