@@ -405,9 +405,11 @@ ipc_kmsg_alloc(
 	} else
 		max_expanded_size = msg_and_trailer_size;
 
+#ifdef notyet	
 	if (ikm_plus_overhead(max_expanded_size) <= IKM_SAVED_KMSG_SIZE)
 		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
 	else
+#endif		
 		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH, mflags);
 
 	if (kmsg != IKM_NULL) {
@@ -735,9 +737,11 @@ void
 ipc_kmsg_free(ipc_kmsg_t	kmsg)
 {
 
+#ifdef notyet	
 	if (kmsg->ikm_size <= IKM_SAVED_MSG_SIZE)
 		uma_zfree(ipc_kmsg_zone, kmsg);
 	else
+#endif		
 		free(kmsg, M_MACH);
 }
 
