@@ -1306,6 +1306,8 @@ ipc_right_copyin_check(
 
 		port = (ipc_port_t) entry->ie_object;
 		assert(port != IP_NULL);
+		if (port->ip_receiver != space)
+			return (FALSE);
 
 		ip_lock(port);
 		active = ip_active(port);
