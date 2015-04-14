@@ -1292,8 +1292,8 @@ ipc_kmsg_copyin_header(
 		assert(dest_entry != reply_entry); /* names are not equal */
 		assert(reply_type != 0); /* because reply_name not null */
 
-		if (!ipc_right_copyin_check(space, reply_name, reply_entry,
-					    reply_type))
+		if (ipc_right_copyin_check(space, reply_name, reply_entry,
+					    reply_type) == FALSE)
 			goto invalid_reply;
 
 		kr = ipc_right_copyin(space, dest_name, dest_entry,
