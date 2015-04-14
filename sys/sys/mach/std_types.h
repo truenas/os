@@ -97,6 +97,22 @@
 #include <sys/systm.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
+
+
+#ifndef MACH_VERBOSE_DEBUGGING
+#define MACH_VERBOSE_DEBUGGING 0
+#endif
+
+#ifndef MDPRINTF
+#if MACH_VERBOSE_DEBUGGING
+#define MDPRINTF printf
+#else
+#define MDPRINTF(...)
+#endif
+#endif
+
+
+
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
 #define mach_mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF|MTX_DUPOK)
