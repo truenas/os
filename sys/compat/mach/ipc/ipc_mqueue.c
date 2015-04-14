@@ -458,6 +458,7 @@ ipc_mqueue_deliver(
 		return (MACH_MSG_SUCCESS);
 	}
 
+	assert(port->ip_msgcount >= 0);
 	ipc_kmsg_enqueue_macro(&mqueue->imq_messages, kmsg);
 	port->ip_msgcount++;
 	ip_unlock(port);
@@ -465,7 +466,6 @@ ipc_mqueue_deliver(
 		KNOTE_LOCKED(&pset->ips_note, 1);
 		ips_unlock(pset);
 	}
-	assert(port->ip_msgcount > 0);
 
 
 
