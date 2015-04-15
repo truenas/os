@@ -1,4 +1,4 @@
-.include <src.opts.mk>
+.include <bsd.own.mk>
 
 PROG= launchctl
 MAN=
