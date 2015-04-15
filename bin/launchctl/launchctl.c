@@ -194,9 +194,7 @@ cmd_bootstrap(int argc, const char *argv[])
             printf("\t");
             asprintf(&path, "%s/%s", bootstrap_paths[i], name);
             args[1] = path;
-            printf("about to submit\n");
             cmd_submit(2, args);
-            printf("submitted\n");
         }
     }
 }
@@ -209,16 +207,12 @@ cmd_submit(int argc, const char *argv[])
     json_t *msg, *plist;
     launch_data_t result;
 
-    if (argc < 2) {
-        errx("Usage: launchctl submit <plist>");
-        return (1);
-    }
+    if (argc < 2)
+        errx(1, "Usage: launchctl submit <plist>");
 
     input = strcmp(argv[1], "-") ? fopen(argv[1], "r") : stdin;
-    if (input == NULL) {
-        errx("Cannot open file %s: %s\n", argv[1], strerror(errno));
-        return (1);
-    }
+    if (input == NULL)
+        errx(1, "Cannot open file %s: %s\n", argv[1], strerror(errno));
 
     plist = json_loadf(input, JSON_DECODE_ANY, &err);
     msg = json_object();
@@ -264,10 +258,8 @@ cmd_list(int argc, const char *argv[])
     msg = json_string("GetJobs");
     result = launch_msg_json(msg);
 
-    if (result == NULL) {
-        errx("Invalid response from launchd");
-        return (1);
-    }
+    if (result == NULL)
+        errx(1, "Invalid response from launchd");
 
     json_object_foreach(result, key, job) {
         printf("%s\n", key);
