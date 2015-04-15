@@ -130,6 +130,7 @@ ipc_right_lookup(
 	int xlock)
 {
 	ipc_entry_t entry;
+	ipc_port_t port;
 
 	assert(space != IS_NULL);
 
@@ -152,6 +153,14 @@ ipc_right_lookup(
 		else
 			is_read_unlock(space);
 		return KERN_INVALID_NAME;
+	}
+
+	/* we can only write lock a port belonging to the caller's space */
+	if (xlock && (port = (ipc_port_t)entry->ie_object) != NULL &&
+		port->ip_receiver != space) {
+		ipc_entry_dealloc(space, name, entry);
+		is_write_unlock(space);
+		return KERN_INVALID_RIGHT;
 	}
 
 	*entryp = entry;
