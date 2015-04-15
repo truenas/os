@@ -48,20 +48,13 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/mach/mach_types.h>
 
-#undef DPRINTF
-#ifdef MACH_DEBUG
-#define DPRINTF(x) printf x
-#else
-#define DPRINTF(x)
-#endif
-
 MALLOC_DEFINE(M_MACH, "mach", "mach compatibility subsystem");
 
 int
 sys_semaphore_timedwait_trap(struct thread *td, struct semaphore_timedwait_trap_args *uap)
 {
 
-	DPRINTF(("%s(0x%x, %d, %d);\n",
+	MDPRINTF(("%s(0x%x, %d, %d);\n",
 			 __FUNCTION__, uap->wait_name, uap->sec, uap->nsec));
 	return (ENOSYS);
 }
@@ -71,7 +64,7 @@ int
 sys_semaphore_timedwait_signal_trap(struct thread *td, struct semaphore_timedwait_signal_trap_args *uap)
 {
 
-	DPRINTF(("%s(0x%x, 0x%x, %d, %d);\n", __FUNCTION__,
+	MDPRINTF(("%s(0x%x, 0x%x, %d, %d);\n", __FUNCTION__,
 	    uap->wait_name, uap->signal_name, uap->sec,
 	    uap->nsec));
 	return (ENOSYS);
@@ -82,7 +75,7 @@ int
 sys_pid_for_task(struct thread *td, struct pid_for_task_args *uap)
 {
 
-	DPRINTF(("sys_mach_pid_for_task(0x%x, %p);\n",
+	MDPRINTF(("sys_mach_pid_for_task(0x%x, %p);\n",
 	    uap->t, uap->pid));
 	return (ENOSYS);
 }
@@ -92,7 +85,7 @@ int
 sys_macx_swapon(struct thread *td, struct macx_swapon_args *uap)
 {
 
-	DPRINTF(("sys_mach_macx_swapon(%p, %d, %d, %d);\n",
+	MDPRINTF(("sys_mach_macx_swapon(%p, %d, %d, %d);\n",
 	    uap->name, uap->flags, uap->size,
 			 uap->priority));
 	return (ENOSYS);
@@ -102,7 +95,7 @@ int
 sys_macx_swapoff(struct thread *td, struct macx_swapoff_args *uap)
 {
 
-	DPRINTF(("sys_mach_macx_swapoff(%p, %d);\n",
+	MDPRINTF(("sys_mach_macx_swapoff(%p, %d);\n",
 			 uap->name, uap->flags));
 	return (ENOSYS);
 }
@@ -111,7 +104,7 @@ int
 sys_macx_triggers(struct thread *td, struct macx_triggers_args *uap)
 {
 
-	DPRINTF(("sys_mach_macx_triggers(%d, %d, %d, 0x%x);\n",
+	MDPRINTF(("sys_mach_macx_triggers(%d, %d, %d, 0x%x);\n",
 	    uap->hi_water, uap->low_water, uap->flags,
 			 uap->alert_port));
 	return (ENOSYS);
@@ -122,7 +115,7 @@ int
 sys_mach_wait_until(struct thread *td, struct mach_wait_until_args *uap)
 {
 
-	DPRINTF(("sys_mach_wait_until(%lu);\n", uap->deadline));
+	MDPRINTF(("sys_mach_wait_until(%lu);\n", uap->deadline));
 	return (ENOSYS);
 }
 
@@ -130,7 +123,7 @@ sys_mach_wait_until(struct thread *td, struct mach_wait_until_args *uap)
 int
 sys_mk_timer_create(struct thread *td, struct mk_timer_create_args *uap)
 {
-	DPRINTF(("sys_mach_timer_create();\n"));
+	MDPRINTF(("sys_mach_timer_create();\n"));
 	return (ENOSYS);
 }
 
@@ -139,7 +132,7 @@ int
 sys_mk_timer_destroy(struct thread *td, struct mk_timer_destroy_args *uap)
 {
 
-	DPRINTF(("sys_mach_timer_destroy(0x%x);\n", uap->name));
+	MDPRINTF(("sys_mach_timer_destroy(0x%x);\n", uap->name));
 	return (ENOSYS);
 }
 
@@ -148,7 +141,7 @@ int
 sys_mk_timer_arm(struct thread *td, struct mk_timer_arm_args *uap)
 {
 
-	DPRINTF(("sys_mach_timer_arm(0x%x, %d);\n",
+	MDPRINTF(("sys_mach_timer_arm(0x%x, %d);\n",
 	    uap->name, uap->expire_time));
 	return (ENOSYS);
 }
@@ -157,7 +150,7 @@ int
 sys_mk_timer_cancel(struct thread *td, struct mk_timer_cancel_args *uap)
 {
 
-	DPRINTF(("sys_mach_timer_cancel(0x%x, %p);\n",
+	MDPRINTF(("sys_mach_timer_cancel(0x%x, %p);\n",
 	    uap->name, uap->result_time));
 	return (ENOSYS);
 }
