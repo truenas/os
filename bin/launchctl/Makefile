@@ -1,6 +1,7 @@
 .include <src.opts.mk>
 
 PROG= launchctl
+MAN=
 
 BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
 BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
