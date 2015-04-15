@@ -83,6 +83,8 @@ mach_clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_
 	ticks = tts.tv_sec * hz;
 	ticks += (tts.tv_nsec * hz) / 100000000L;
 
+	if (ticks <= 0)
+		return (EINVAL);
 	/* mach thread abort ignores uninterruptible sleep so this works */
 	pause("sleep", ticks);
 

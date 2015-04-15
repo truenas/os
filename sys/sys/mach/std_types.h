@@ -97,6 +97,22 @@
 #include <sys/systm.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
+
+
+#ifndef MACH_VERBOSE_DEBUGGING
+#define MACH_VERBOSE_DEBUGGING 0
+#endif
+
+#ifndef MDPRINTF
+#if MACH_VERBOSE_DEBUGGING
+#define MDPRINTF printf
+#else
+#define MDPRINTF(...)
+#endif
+#endif
+
+
+
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
 #define mach_mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF|MTX_DUPOK)
@@ -122,8 +138,10 @@
 #define KFREE(ptr, size, rt) free((void *)(ptr), M_MACH)
 #define copyinmsg copyin
 #define copyoutmsg copyout
-#ifdef INVARIANTS
+#if defined(INVARIANTS) && defined(MACH_DEBUG)
 #define UNSUPPORTED { panic("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
+#elif defined(INVARIANTS)
+#define UNSUPPORTED { printf("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
 #else
 #define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
 #endif

@@ -174,16 +174,6 @@
 #include <sys/mach/ipc_kobject.h>
 
 
-#define VERBOSE_DEBUGGING 1
-
-#ifndef DPRINTF
-#if VERBOSE_DEBUGGING
-#define DPRINTF printf
-#else
-#define DPRINTF(...)
-#endif
-#endif
-
 /*
  * Forward declarations
  */
@@ -269,7 +259,7 @@ mach_msg_send(
 	if (mr != MACH_MSG_SUCCESS)
 		return mr;
 
-	DPRINTF("send to remote port %d notify %d id %d name %s\n", (int)kmsg->ikm_header->msgh_remote_port,
+	MDPRINTF("send to remote port %d notify %d id %d name %s\n", (int)kmsg->ikm_header->msgh_remote_port,
 			notify, kmsg->ikm_header->msgh_id, curproc->p_comm);
 
 	mr = ipc_kmsg_copyin(kmsg, space, map, MACH_PORT_NAME_NULL);
@@ -474,10 +464,10 @@ mach_msg_overwrite_trap(
 		else
 		    rcv = msg;
 
-		DPRINTF("%s:%d receiving on %d ... ", curproc->p_comm, curthread->td_tid, rcv_name);
+		MDPRINTF("%s:%d receiving on %d ... ", curproc->p_comm, curthread->td_tid, rcv_name);
 		mr = mach_msg_receive(rcv, option, rcv_size, rcv_name, 
 							  timeout, scatter_list_size);
-		DPRINTF("%s:%d done on %d\n",curproc->p_comm, curthread->td_tid, rcv_name);
+		MDPRINTF("%s:%d done on %d\n",curproc->p_comm, curthread->td_tid, rcv_name);
 
 	}
 

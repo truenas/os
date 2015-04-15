@@ -1267,7 +1267,7 @@ ipc_right_info(
 /*
  *	Routine:	ipc_right_copyin_check
  *	Purpose:
- *		Check if a subsequent ipc_right_copyin would succeed.
+ *		Check if a subsequent ipc_right_copyin (for receiver) would succeed.
  *	Conditions:
  *		The space is locked (read or write) and active.
  */
@@ -1279,6 +1279,7 @@ ipc_right_copyin_check(
 	ipc_entry_t		entry,
 	mach_msg_type_name_t	msgt_name)
 {
+	ipc_port_t port = (ipc_port_t) entry->ie_object;
 	ipc_entry_bits_t bits = entry->ie_bits;
 
 	assert(space->is_active);
@@ -1289,23 +1290,27 @@ ipc_right_copyin_check(
 	    case MACH_MSG_TYPE_MOVE_RECEIVE:
 		if ((bits & MACH_PORT_TYPE_RECEIVE) == 0)
 			return FALSE;
-
+		if (port == NULL)
+			return (FALSE);
+		if (port->ip_receiver != space)
+			return (FALSE);
 		break;
 
 	    case MACH_MSG_TYPE_COPY_SEND:
 	    case MACH_MSG_TYPE_MOVE_SEND:
 	    case MACH_MSG_TYPE_MOVE_SEND_ONCE: {
-		ipc_port_t port;
 		boolean_t active;
 
 		if (bits & MACH_PORT_TYPE_DEAD_NAME)
 			break;
 
+		if (port == NULL)
+			return (FALSE);
+		if (port->ip_receiver != space)
+			return (FALSE);
+
 		if ((bits & MACH_PORT_TYPE_SEND_RIGHTS) == 0)
 			return FALSE;
-
-		port = (ipc_port_t) entry->ie_object;
-		assert(port != IP_NULL);
 
 		ip_lock(port);
 		active = ip_active(port);

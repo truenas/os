@@ -405,9 +405,11 @@ ipc_kmsg_alloc(
 	} else
 		max_expanded_size = msg_and_trailer_size;
 
-	if (max_expanded_size <= IKM_SAVED_MSG_SIZE)
+#ifdef notyet	
+	if (ikm_plus_overhead(max_expanded_size) <= IKM_SAVED_KMSG_SIZE)
 		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
 	else
+#endif		
 		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH, mflags);
 
 	if (kmsg != IKM_NULL) {
@@ -735,9 +737,11 @@ void
 ipc_kmsg_free(ipc_kmsg_t	kmsg)
 {
 
+#ifdef notyet	
 	if (kmsg->ikm_size <= IKM_SAVED_MSG_SIZE)
 		uma_zfree(ipc_kmsg_zone, kmsg);
 	else
+#endif		
 		free(kmsg, M_MACH);
 }
 
@@ -900,7 +904,7 @@ ipc_kmsg_put(
 
 	ikm_check_initialized(kmsg, kmsg->ikm_size);
 
-	printf("doing kmsg_put size=%d to addr=%p", size, msg);
+	MDPRINTF("doing kmsg_put size=%d to addr=%p", size, msg);
 #if defined(__LP64__)
 	if (current_task() != kernel_task) { /* don't if receiver expects fully-cooked in-kernel msg; ux_exception */
 		mach_msg_legacy_header_t *legacy_header =
@@ -920,13 +924,13 @@ ipc_kmsg_put(
 		legacy_header->msgh_size		= msg_size - LEGACY_HEADER_SIZE_DELTA;
 		legacy_header->msgh_bits		= bits;
 
-		printf(" msg_size=%d", msg_size);
+		MDPRINTF(" msg_size=%d", msg_size);
 
 		size -= LEGACY_HEADER_SIZE_DELTA;
 		kmsg->ikm_header = (mach_msg_header_t *)legacy_header;
 	}
 #endif
-	printf("\n");
+	MDPRINTF("\n");
 	if (copyoutmsg((const char *) kmsg->ikm_header, (char *) msg, size))
 		mr = MACH_RCV_INVALID_DATA;
 	else
@@ -1288,8 +1292,8 @@ ipc_kmsg_copyin_header(
 		assert(dest_entry != reply_entry); /* names are not equal */
 		assert(reply_type != 0); /* because reply_name not null */
 
-		if (!ipc_right_copyin_check(space, reply_name, reply_entry,
-					    reply_type))
+		if (ipc_right_copyin_check(space, reply_name, reply_entry,
+					    reply_type) == FALSE)
 			goto invalid_reply;
 
 		kr = ipc_right_copyin(space, dest_name, dest_entry,
@@ -2284,7 +2288,6 @@ ipc_kmsg_copyout_header(
 
 				assert(entry->ie_bits &
 					   MACH_PORT_TYPE_SEND_RECEIVE);
-				ip_lock(reply);
 				break;
 			}
 
@@ -2546,7 +2549,7 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
             disp, 
             &name);
 
-	printf("ipc_kmsg_copyout_port_descriptor name is %d\n",name);
+	MDPRINTF("ipc_kmsg_copyout_port_descriptor name is %d\n",name);
     if(current_task() == kernel_task)
     {
         mach_msg_port_descriptor_t *user_dsc = (mach_msg_port_descriptor_t *)dest_dsc;
@@ -2622,8 +2625,7 @@ ipc_kmsg_copyout_body(
 	switch (kern_dsc[i].type.type) {
 	    
 	case MACH_MSG_PORT_DESCRIPTOR: {
-		pause("ports!!!", 30);
-		printf("copying out port descriptor\n");
+		MDPRINTF("copying out port descriptor\n");
 		user_dsc = ipc_kmsg_copyout_port_descriptor(kern_dsc + i, user_dsc, space, &mr);
 		break;
 	}
@@ -2797,7 +2799,7 @@ ipc_kmsg_copyout_body(
     }
 	if(user_dsc != kern_dsc) {
         vm_offset_t dsc_adjust = (vm_offset_t)user_dsc - (vm_offset_t)kern_dsc;
-		printf("dsc_adjust=%ld\n", dsc_adjust);
+		MDPRINTF("dsc_adjust=%ld\n", dsc_adjust);
         memmove((char *)((vm_offset_t)kmsg->ikm_header + dsc_adjust), kmsg->ikm_header, sizeof(mach_msg_base_t));
         kmsg->ikm_header = (mach_msg_header_t *)((vm_offset_t)kmsg->ikm_header + dsc_adjust);
         /* Update the message size for the smaller user representation */
@@ -2833,10 +2835,8 @@ ipc_kmsg_copyout_size(
 #if defined(__LP64__)
 	send_size -= LEGACY_HEADER_SIZE_DELTA;
 #endif
-#ifdef VERBOSE_DEBUGGING
-	printf("ipc_kmsg_copyout_size() is_task_64bit=%d -> send_size=%d msgh_bits=0x%x delta=%d\n",
+	MDPRINTF("ipc_kmsg_copyout_size() is_task_64bit=%d -> send_size=%d msgh_bits=0x%x delta=%d\n",
 		   is_task_64bit, send_size, kmsg->ikm_header->msgh_bits, LEGACY_HEADER_SIZE_DELTA);
-#endif
     if (kmsg->ikm_header->msgh_bits & MACH_MSGH_BITS_COMPLEX) {
         mach_msg_body_t *body;
         mach_msg_descriptor_t *saddr, *eaddr;
