@@ -429,14 +429,14 @@ mach_port_type(
 	if (space == IS_NULL)
 		return KERN_INVALID_TASK;
 
-	kr = ipc_right_lookup_write(space, name, &entry);
+	kr = ipc_right_lookup_read(space, name, &entry);
 	if (kr != KERN_SUCCESS)
 		return kr;
 	/* space is write-locked and active */
 
 	kr = ipc_right_info(space, name, entry, typep, &urefs);
 	if (kr == KERN_SUCCESS)
-		is_write_unlock(space);
+		is_read_unlock(space);
 	/* space is unlocked */
 	return kr;
 }
@@ -780,15 +780,15 @@ mach_port_get_refs(
 	if (right >= MACH_PORT_RIGHT_NUMBER)
 		return KERN_INVALID_VALUE;
 
-	kr = ipc_right_lookup_write(space, name, &entry);
+	kr = ipc_right_lookup_read(space, name, &entry);
 	if (kr != KERN_SUCCESS)
 		return kr;
-	/* space is write-locked and active */
+	/* space is read-locked and active */
 
 	kr = ipc_right_info(space, name, entry, &type, &urefs);	/* unlocks */
 	if (kr != KERN_SUCCESS)
 		return kr;	/* space is unlocked */
-	is_write_unlock(space);
+	is_read_unlock(space);
 
 	if (type & MACH_PORT_TYPE(right))
 		switch (right) {
