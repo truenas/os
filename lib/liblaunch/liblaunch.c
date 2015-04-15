@@ -1225,6 +1225,8 @@ launchd_msg_recv(launch_t lh, void (*cb)(launch_data_t, void *), void *context)
 	struct iovec iov;
 	int r;
 
+	printf("launchd_msg_recv(lh=%p, context=%p)\n", lh, context);
+
 	int fd2use = launchd_getfd(lh);
 	if (fd2use == -1) {
 		errno = EPERM;
