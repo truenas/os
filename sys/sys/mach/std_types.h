@@ -138,7 +138,7 @@
 #define KFREE(ptr, size, rt) free((void *)(ptr), M_MACH)
 #define copyinmsg copyin
 #define copyoutmsg copyout
-#if defined(INVARIANTS) && defined(MACH_DEBUG)
+#if MACH_DEBUG && defined(INVARIANTS)
 #define UNSUPPORTED { panic("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
 #elif defined(INVARIANTS)
 #define UNSUPPORTED { printf("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
