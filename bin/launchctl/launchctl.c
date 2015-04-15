@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <dirent.h>
+#include <err.h>
 #include <launch.h>
 #include <jansson.h>
 
@@ -180,6 +181,9 @@ cmd_bootstrap(int argc, const char *argv[])
 	unsigned long i;
 	int n;
 
+	(void)argc;
+	(void)argv;
+
 	printf("Bootstrap:\n");
 
 	system("/sbin/mount -uw /");
@@ -200,6 +204,8 @@ cmd_bootstrap(int argc, const char *argv[])
 			cmd_submit(2, args);
 		}
 	}
+
+	return (0);
 }
 
 static int
@@ -301,6 +307,9 @@ cmd_help(int argc, const char *argv[])
 {
 	size_t i;
 
+	(void)argc;
+	(void)argc;
+
 	fprintf(stderr, "Usage: launchctl <subcommand> [arguments...]\n");
 	fprintf(stderr, "\n");
 
@@ -313,7 +322,7 @@ cmd_help(int argc, const char *argv[])
 
 
 int
-main(int argc, const char *argv[])
+main(int argc, char * const argv[])
 {
 	const char *cmd;
 	size_t i;
