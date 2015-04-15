@@ -6,11 +6,22 @@ Basic Mach IPC is supported through the mach kernel module or COMPAT_MACH_STATIC
 It is now a module by default to workaround the limited typeid space (15 bits) of
 dtrace.
 
+
+The Mach services kernel module (mach.ko) can only be loaded at boot time. Add the following line
+to /boot/loader.conf:
+mach_load="YES"
+
 Note that launchctl in-tree is not used, instead a much simpler version that uses
 json that lives out of tree (for now).
 
 As it stands, launchd will dispatch jobs but as it is is currently set to only link
 dynamically - preventing from running as pid1. It is considered early alpha.
+
+launchd can be run as pid1 by adding the following to loader.conf:
+init_path="/sbin/launchd"
+or at the loader prompt:
+set init_path="/sbin/launchd"
+
 
 
 Unsupported OSX / Mach functionality:
