@@ -410,7 +410,7 @@ ipc_kmsg_alloc(
 		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
 	else
 #endif		
-		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH, mflags);
+		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
 
 	if (kmsg != IKM_NULL) {
 		ikm_init(kmsg, max_expanded_size);
@@ -513,6 +513,54 @@ ipc_kmsg_queue_next(
 }
 
 /*
+ *	Routine:	ipc_kmsg_delayed_destroy
+ *	Purpose:
+ *		Enqueues a kernel message for deferred destruction.
+ *	Returns:
+ *		Boolean indicator that the caller is responsible to reap
+ *		deferred messages.
+ */
+
+static boolean_t
+ipc_kmsg_delayed_destroy(
+	ipc_kmsg_t kmsg)
+{
+	ipc_kmsg_queue_t queue = &(current_thread()->ith_messages);
+	boolean_t first = ipc_kmsg_queue_empty(queue);
+
+	ipc_kmsg_enqueue(queue, kmsg);
+	return first;
+}
+
+
+
+/*
+ *	Routine:	ipc_kmsg_reap_delayed
+ *	Purpose:
+ *		Destroys messages from the per-thread
+ *		deferred free queue.
+ *	Conditions:
+ *		No locks held.
+ */
+
+static void
+ipc_kmsg_reap_delayed(void)
+{
+	ipc_kmsg_queue_t queue = &(current_thread()->ith_messages);
+	ipc_kmsg_t kmsg;
+
+	/*
+	 * must leave kmsg in queue while cleaning it to assure
+	 * no nested calls recurse into here.
+	 */
+	while ((kmsg = ipc_kmsg_queue_first(queue)) != IKM_NULL) {
+		ipc_kmsg_clean(kmsg);
+		ipc_kmsg_rmqueue(queue, kmsg);
+		ipc_kmsg_free(kmsg);
+	}
+}
+
+/*
  *	Routine:	ipc_kmsg_destroy
  *	Purpose:
  *		Destroys a kernel message.  Releases all rights,
@@ -525,29 +573,16 @@ ipc_kmsg_queue_next(
 void
 ipc_kmsg_destroy(ipc_kmsg_t	kmsg)
 {
-	ipc_kmsg_queue_t queue;
-	boolean_t empty;
 
 	/*
 	 *	ipc_kmsg_clean can cause more messages to be destroyed.
 	 *	Curtail recursion by queueing messages.  If a message
 	 *	is already queued, then this is a recursive call.
 	 */
-
-	queue = &current_thread()->ith_messages;
-	empty = ipc_kmsg_queue_empty(queue);
-	ipc_kmsg_enqueue(queue, kmsg);
-
-	if (empty) {
-		/* must leave kmsg in queue while cleaning it */
-
-		while ((kmsg = ipc_kmsg_queue_first(queue)) != IKM_NULL) {
-			ipc_kmsg_clean(kmsg);
-			ipc_kmsg_rmqueue(queue, kmsg);
-			ikm_free(kmsg);
-		}
-	}
+	if (ipc_kmsg_delayed_destroy(kmsg))
+		ipc_kmsg_reap_delayed();
 }
+
 
 /*
  *	Routine:	ipc_kmsg_clean_body
@@ -742,7 +777,7 @@ ipc_kmsg_free(ipc_kmsg_t	kmsg)
 		uma_zfree(ipc_kmsg_zone, kmsg);
 	else
 #endif		
-		free(kmsg, M_MACH);
+		free(kmsg, M_MACH_IPC_KMSG);
 }
 
 /*
