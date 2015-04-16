@@ -340,6 +340,9 @@ main(int argc, char * const argv[])
 		}
 	}
 
+	if (optind == argc)
+		return cmd_help(NULL, NULL);
+
 	cmd = argv[optind];
 
 	for (i = 0; i < N(cmds); i++) {
