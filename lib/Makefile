@@ -37,7 +37,6 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libcom_err} \
 	libcompat \
 	libcrypt \
-	libdevctl \
 	libdevinfo \
 	libdevstat \
 	${_libdispatch} \
