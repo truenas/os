@@ -26,6 +26,6 @@ SRCS+= libbootstrap.c liblaunch.c libvproc.c
 machine:
 	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include machine
 
-CLEANFILES+= machine User.c *Server.c job.h helper.h *Server.h launchd_helper.h *~
+CLEANFILES+= machine *User.c *Server.c job.h helper.h *Server.h launchd_helper.h *~
 
 .include <bsd.lib.mk>
