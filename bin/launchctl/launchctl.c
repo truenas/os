@@ -44,7 +44,7 @@ static json_t *launch_msg_json(json_t *msg);
 
 static int cmd_start_stop(int argc, char * const argv[]);
 static int cmd_bootstrap(int argc, char * const argv[]);
-static int cmd_submit(int argc, char * const argv[]);
+static int cmd_load(int argc, char * const argv[]);
 static int cmd_remove(int argc, char * const argv[]);
 static int cmd_list(int argc, char * const argv[]);
 static int cmd_dump(int argc, char * const argv[]);
@@ -59,7 +59,7 @@ static const struct {
 } cmds[] = {
 	{ "start",	cmd_start_stop,	"Start specified job" },
 	{ "stop",	cmd_start_stop,	"Stop specified job" },
-	{ "submit",	cmd_submit,	"Submit a job from the command line" },
+	{ "load",	cmd_load,	"Submit a job from the command line" },
 	{ "remove",	cmd_remove, 	"Remove specified job" },
 	{ "bootstrap",	cmd_bootstrap,	"Bootstrap launchd" },
 	{ "list",	cmd_list,	"List jobs and information about jobs" },
@@ -181,7 +181,7 @@ static int
 cmd_bootstrap(int argc, char * const argv[])
 {
 	struct dirent **files;
-	char *args[2] = {(char *)"submit", NULL};
+	char *args[2] = {(char *)"load", NULL};
 	char *name, *path;
 	unsigned long i;
 	int n;
@@ -206,7 +206,7 @@ cmd_bootstrap(int argc, char * const argv[])
 			printf("\t");
 			asprintf(&path, "%s/%s", bootstrap_paths[i], name);
 			args[1] = path;
-			cmd_submit(2, args);
+			cmd_load(2, args);
 		}
 	}
 
@@ -214,14 +214,14 @@ cmd_bootstrap(int argc, char * const argv[])
 }
 
 static int
-cmd_submit(int argc, char * const argv[])
+cmd_load(int argc, char * const argv[])
 {
 	FILE *input;
 	json_error_t err;
 	json_t *msg, *plist;
 
 	if (argc < 2)
-		errx(1, "Usage: launchctl submit <plist>");
+		errx(1, "Usage: launchctl load <plist>");
 
 	input = strcmp(argv[1], "-") ? fopen(argv[1], "r") : stdin;
 	if (input == NULL)
