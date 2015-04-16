@@ -11,9 +11,6 @@ The Mach services kernel module (mach.ko) can only be loaded at boot time. Add t
 to /boot/loader.conf:
 mach_load="YES"
 
-Note that launchctl in-tree is not used, instead a much simpler version that uses
-json that lives out of tree (for now).
-
 As it stands, launchd will dispatch jobs but as it is is currently set to only link
 dynamically - preventing from running as pid1. It is considered early alpha.
 
@@ -22,6 +19,10 @@ init_path="/sbin/launchd"
 or at the loader prompt:
 set init_path="/sbin/launchd"
 
+
+Note that launchctl has just been added to the build. It uses json plists. XML
+plists can be converted with the help of OSX's plutil. Basic plists will be added
+to the tree shortly.
 
 
 Unsupported OSX / Mach functionality:
