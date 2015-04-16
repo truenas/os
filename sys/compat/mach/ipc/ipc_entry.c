@@ -141,16 +141,6 @@ mach_port_stat(struct file *fp __unused, struct stat *sb __unused,
 	return (0);
 }
 
-static int
-mach_port_fill_kinfo(struct file *fp __unused, struct kinfo_file *kif __unused,
-					 struct filedesc *fdp __unused)
-{
-	/* placeholder to prevent us from panicking */
-	return (0);
-}
-
-
-
 /*
  *	Routine:	ipc_entry_release
  *	Purpose:
