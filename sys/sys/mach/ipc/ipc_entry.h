@@ -188,6 +188,10 @@ extern ipc_entry_t ipc_entry_lookup(
 	ipc_space_t	space,
 	mach_port_name_t	name);
 
+/* release a reference to an entry */
+void ipc_entry_release(
+	ipc_entry_t entry);
+
 /* Allocate an entry in a space */
 extern kern_return_t ipc_entry_get(
 	ipc_space_t	space,
