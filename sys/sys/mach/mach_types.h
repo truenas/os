@@ -224,7 +224,11 @@ typedef struct clock                    *clock_serv_t;
 typedef struct clock                    *clock_ctrl_t;
 typedef struct ledger					*ledger_t;
 typedef processor_set_t         processor_set_name_t;
-MALLOC_DECLARE(M_MACH);
+MALLOC_DECLARE(M_MACH_TMP);
+MALLOC_DECLARE(M_MACH_IPC_KMSG);
+MALLOC_DECLARE(M_MACH_IPC_ENTRY);
+MALLOC_DECLARE(M_MACH_IPC_TABLE);
+MALLOC_DECLARE(M_MACH_KALLOC);
 
 #else	/* MACH_KERNEL */
 

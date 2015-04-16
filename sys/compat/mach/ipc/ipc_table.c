@@ -205,7 +205,7 @@ ipc_table_alloc(
 	vm_size_t	size)
 {
 
-	return ((vm_offset_t)malloc(size, M_MACH, M_ZERO|M_WAITOK));
+	return ((vm_offset_t)malloc(size, M_MACH_IPC_TABLE, M_ZERO|M_WAITOK));
 }
 
 /*
@@ -227,7 +227,7 @@ ipc_table_realloc(
 	vm_size_t	new_size)
 {
 
-	return ((vm_offset_t)realloc((void*)old_table, new_size, M_MACH, M_WAITOK));
+	return ((vm_offset_t)realloc((void*)old_table, new_size, M_MACH_IPC_TABLE, M_WAITOK));
 }
 
 /*
@@ -245,5 +245,5 @@ ipc_table_free(
 	vm_offset_t	table)
 {
 
-	free((void *)table, M_MACH);
+	free((void *)table, M_MACH_IPC_TABLE);
 }

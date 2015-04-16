@@ -128,7 +128,7 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 	assert(fp->f_data != NULL);
 	entry = fp->f_data;
 	assert(entry->ie_object == NULL);
-	free(entry, M_MACH);
+	free(entry, M_MACH_IPC_ENTRY);
 
 	return (0);
 }
@@ -223,7 +223,7 @@ ipc_entry_get(
 	assert(space->is_active);
 
 	flags = 0;
-	if ((free_entry = malloc(sizeof(*free_entry), M_MACH, M_WAITOK|M_ZERO)) == NULL)
+	if ((free_entry = malloc(sizeof(*free_entry), M_MACH_IPC_ENTRY, M_WAITOK|M_ZERO)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
 	if (*namep != MACH_PORT_NAME_NULL) {
@@ -233,7 +233,7 @@ ipc_entry_get(
 		flags = FMINALLOC;
 
 	if (falloc(td, &fp, &fd, flags)) {
-		free(free_entry, M_MACH);
+		free(free_entry, M_MACH_IPC_ENTRY);
 		return KERN_RESOURCE_SHORTAGE;
 	}
 	free_entry->ie_bits = 0;

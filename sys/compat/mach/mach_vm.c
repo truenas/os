@@ -384,7 +384,7 @@ mach_make_memory_entry(vm_map_t target_task, memory_object_size_t *size,
 	mp->mp_flags |= (MACH_MP_INKERNEL | MACH_MP_DATA_ALLOCATED);
 	mp->mp_datatype = MACH_MP_MEMORY_ENTRY;
 	
-	mme = malloc(sizeof(*mme), M_MACH, M_WAITOK);
+	mme = malloc(sizeof(*mme), M_MACH_MEMORY_ENTRY, M_WAITOK);
 	mme->mme_proc = td->td_proc;
 	mme->mme_offset = req->req_offset;
 	mme->mme_size = req->req_size;
@@ -606,21 +606,21 @@ mach_vm_read(vm_map_t map, mach_vm_address_t addr, mach_vm_size_t size,
 	 * This is reasonable for small chunk of data, but we should
 	 * remap COW for areas bigger than a page.
 	 */
-	tbuf = malloc(size, M_MACH, M_WAITOK);
+	tbuf = malloc(size, M_MACH_TMP, M_WAITOK);
 
 	if ((error = copyin_vm_map(map, (caddr_t)addr, tbuf, size)) != 0) {
 		printf("copyin_proc error = %d, addr = %lx, size = %zx\n", error, addr, size);
-		free(tbuf, M_MACH);
+		free(tbuf, M_MACH_TMP);
 		return (KERN_PROTECTION_FAILURE);
 	}
 
 	if ((error = copyout(tbuf, (void *)dstaddr, size)) != 0) {
 		printf("copyout error = %d\n", error);
-		free(tbuf, M_MACH);
+		free(tbuf, M_MACH_TMP);
 		return (KERN_PROTECTION_FAILURE);
 	}
 
-	free(tbuf, M_MACH);
+	free(tbuf, M_MACH_TMP);
 	return (0);
 }
 
@@ -637,21 +637,21 @@ mach_vm_write(vm_map_t target_task, mach_vm_address_t address, vm_offset_t data,
 	 * This is reasonable for small chunk of data, but we should
 	 * remap COW for areas bigger than a page.
 	 */
-	tbuf = malloc(size, M_MACH, M_WAITOK);
+	tbuf = malloc(size, M_MACH_TMP, M_WAITOK);
 
 	if ((error = copyin((void *)address, tbuf, size)) != 0) {
 		printf("copyin error = %d\n", error);
-		free(tbuf, M_MACH);
+		free(tbuf, M_MACH_TMP);
 		return (KERN_PROTECTION_FAILURE);
 	}
 
 	if ((error = copyout_vm_map(target_task, tbuf, (void *)data, size)) != 0) {
 		printf("copyout_proc error = %d\n", error);
-		free(tbuf, M_MACH);
+		free(tbuf, M_MACH_TMP);
 		return (KERN_PROTECTION_FAILURE);
 	}
 
-	free(tbuf, M_MACH);
+	free(tbuf, M_MACH_TMP);
 
 	return (0);
 }

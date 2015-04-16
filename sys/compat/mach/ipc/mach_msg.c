@@ -393,12 +393,13 @@ mach_msg_receive(
 
 	mr = ipc_kmsg_copyout(kmsg, space, map, slist, 0);
 	if (mr != MACH_MSG_SUCCESS) {
+		/* XXX do we know that the message always gets freed */
 		if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR
 		    ) {
 			if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header->msgh_size +
 			   trailer->msgh_trailer_size) == MACH_RCV_INVALID_DATA)
 				mr = MACH_RCV_INVALID_DATA;
-		} 
+		}
 		else {
 			if (msg_receive_error(kmsg, msg, option, seqno, space) 
 						== MACH_RCV_INVALID_DATA)

@@ -132,10 +132,10 @@
 /* XXX FIX THIS */
 #define zinit(size1, sizemax, size2, name) uma_zcreate(name, size1, NULL, NULL, NULL, NULL, 0, 0)
 #define zone_change(zone, flag, val)
-#define kalloc(size) malloc(size, M_MACH, M_WAITOK)
-#define KALLOC(size, rt) ((vm_offset_t)malloc(size, M_MACH, M_WAITOK))
-#define kfree(ptr, size) free((void *)(ptr), M_MACH)
-#define KFREE(ptr, size, rt) free((void *)(ptr), M_MACH)
+#define kalloc(size) malloc(size, M_MACH_KALLOC, M_WAITOK)
+#define KALLOC(size, rt) ((vm_offset_t)malloc(size, M_MACH_KALLOC, M_WAITOK))
+#define kfree(ptr, size) free((void *)(ptr), M_MACH_KALLOC)
+#define KFREE(ptr, size, rt) free((void *)(ptr), M_MACH_KALLOC)
 #define copyinmsg copyin
 #define copyoutmsg copyout
 #if MACH_DEBUG && defined(INVARIANTS)
