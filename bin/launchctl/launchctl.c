@@ -42,29 +42,29 @@ static void to_json_dict(const launch_data_t lval, const char *key, void *ctx);
 static json_t *to_json(launch_data_t ld);
 static json_t *launch_msg_json(json_t *msg);
 
-static int cmd_start_stop(int argc, const char *argv[]);
-static int cmd_bootstrap(int argc, const char *argv[]);
-static int cmd_submit(int argc, const char *argv[]);
-static int cmd_remove(int argc, const char *argv[]);
-static int cmd_list(int argc, const char *argv[]);
-static int cmd_dump(int argc, const char *argv[]);
-static int cmd_help(int argc, const char *argv[]);
+static int cmd_start_stop(int argc, char * const argv[]);
+static int cmd_bootstrap(int argc, char * const argv[]);
+static int cmd_submit(int argc, char * const argv[]);
+static int cmd_remove(int argc, char * const argv[]);
+static int cmd_list(int argc, char * const argv[]);
+static int cmd_dump(int argc, char * const argv[]);
+static int cmd_help(int argc, char * const argv[]);
 
 mach_port_t bootstrap_port;
 
 static const struct {
 	const char *name;
-	int (*func)(int argc, const char *argv[]);
+	int (*func)(int argc, char * const argv[]);
 	const char *desc;
 } cmds[] = {
-	{ "start",			cmd_start_stop,	"Start specified job" },
-	{ "stop",			cmd_start_stop,	"Stop specified job" },
-	{ "submit",			cmd_submit,		"Submit a job from the command line" },
-	{ "remove",			cmd_remove, 	"Remove specified job" },
-	{ "bootstrap",		cmd_bootstrap,	"Bootstrap launchd" },
-	{ "list",			cmd_list,		"List jobs and information about jobs" },
-	{ "dump",           cmd_dump,       "Dumps job(s) plis(s)"},
-	{ "help",			cmd_help,		"This help output" },
+	{ "start",	cmd_start_stop,	"Start specified job" },
+	{ "stop",	cmd_start_stop,	"Stop specified job" },
+	{ "submit",	cmd_submit,	"Submit a job from the command line" },
+	{ "remove",	cmd_remove, 	"Remove specified job" },
+	{ "bootstrap",	cmd_bootstrap,	"Bootstrap launchd" },
+	{ "list",	cmd_list,	"List jobs and information about jobs" },
+	{ "dump",	cmd_dump,       "Dumps job(s) plis(s)"},
+	{ "help",	cmd_help,	"This help output" },
 };
 
 
@@ -111,6 +111,11 @@ to_launchd(json_t *json)
 		}
 
 		return dict;
+
+	case JSON_REAL:
+	case JSON_NULL:
+		return NULL;
+
 	}
 
 	return NULL;
@@ -173,10 +178,10 @@ launch_msg_json(json_t *input)
 }
 
 static int
-cmd_bootstrap(int argc, const char *argv[])
+cmd_bootstrap(int argc, char * const argv[])
 {
 	struct dirent **files;
-	char *args[2] = {"submit", NULL};
+	char *args[2] = {(char *)"submit", NULL};
 	char *name, *path;
 	unsigned long i;
 	int n;
@@ -209,7 +214,7 @@ cmd_bootstrap(int argc, const char *argv[])
 }
 
 static int
-cmd_submit(int argc, const char *argv[])
+cmd_submit(int argc, char * const argv[])
 {
 	FILE *input;
 	json_error_t err;
@@ -234,7 +239,7 @@ cmd_submit(int argc, const char *argv[])
 }
 
 static int
-cmd_start_stop(int argc, const char *argv[])
+cmd_start_stop(int argc, char * const argv[])
 {
 	json_t *msg;
 
@@ -250,10 +255,11 @@ cmd_start_stop(int argc, const char *argv[])
 		json_object_set(msg, "StartJob", json_string(argv[1]));
 
 	launch_msg_json(msg);
+	return (0);
 }
 
 static int
-cmd_remove(int argc, const char *argv[])
+cmd_remove(int argc, char * const argv[])
 {
 	(void)argc;
 	(void)argv;
@@ -262,7 +268,7 @@ cmd_remove(int argc, const char *argv[])
 }
 
 static int
-cmd_list(int argc, const char *argv[])
+cmd_list(int argc, char * const argv[])
 {
 	json_t *msg, *result, *job;
 	const char *key;
@@ -285,7 +291,7 @@ cmd_list(int argc, const char *argv[])
 
 
 static int
-cmd_dump(int argc, const char *argv[])
+cmd_dump(int argc, char * const argv[])
 {
 	json_t *msg, *result;
 
@@ -303,12 +309,12 @@ cmd_dump(int argc, const char *argv[])
 }
 
 static int
-cmd_help(int argc, const char *argv[])
+cmd_help(int argc, char * const argv[])
 {
 	size_t i;
 
 	(void)argc;
-	(void)argc;
+	(void)argv;
 
 	fprintf(stderr, "Usage: launchctl <subcommand> [arguments...]\n");
 	fprintf(stderr, "\n");
