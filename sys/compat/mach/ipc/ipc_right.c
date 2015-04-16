@@ -158,7 +158,7 @@ ipc_right_lookup(
 	/* we can only write lock a port belonging to the caller's space */
 	if (xlock && (port = (ipc_port_t)entry->ie_object) != NULL &&
 		port->ip_receiver != space) {
-		ipc_entry_dealloc(space, name, entry);
+		ipc_entry_release(entry);
 		is_write_unlock(space);
 		return KERN_INVALID_RIGHT;
 	}
