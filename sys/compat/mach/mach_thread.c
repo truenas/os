@@ -144,9 +144,10 @@ thread_block(void)
 	if (rc == EINTR || rc == ERESTART)
 		thread->wait_result = THREAD_INTERRUPTED;
 	else if (rc == EWOULDBLOCK)
+		/* XXX ? */
 		thread->wait_result = THREAD_TIMED_OUT;
 	else
-		thread->wait_result = 0;
+		thread->wait_result = THREAD_TIMED_OUT;
 }
 
 void
@@ -163,6 +164,7 @@ thread_will_wait(thread_t thread)
 {
 
 	thread->sleep_stamp = ticks;
+	thread->timeout = 0;
 }
 
 static void
