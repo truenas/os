@@ -409,9 +409,14 @@ ipc_kmsg_alloc(
 	if (ikm_plus_overhead(max_expanded_size) <= IKM_SAVED_KMSG_SIZE)
 		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
 	else
-#endif		
+#endif
+#ifdef NO_MEMORY_OVERWRITE
 		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
-
+#endif
+	if (ikm_plus_overhead(max_expanded_size) > PAGE_SIZE)
+		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
+	else
+		kmsg = malloc(PAGE_SIZE, M_MACH_IPC_KMSG, mflags);
 	if (kmsg != IKM_NULL) {
 		ikm_init(kmsg, max_expanded_size);
 		ikm_set_header(kmsg, msg_and_trailer_size);
