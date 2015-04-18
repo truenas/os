@@ -1572,6 +1572,11 @@ ipc_kmsg_copyin_body(
 	    case MACH_MSG_OOL_PORTS_DESCRIPTOR:
 		    descriptor_size += 16;
             naddr = (mach_msg_descriptor_t *)((vm_offset_t)daddr + 16);
+
+			/* XXX */
+			printf("OOL descriptor type: %d not supported yet\n", daddr->type.type);
+			ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
+			return MACH_SEND_INVALID_TYPE;
             break;
 	    default:
 		    descriptor_size += 12;
@@ -1589,6 +1594,8 @@ ipc_kmsg_copyin_body(
 			goto out;
 		}
 	}
+
+	/* XXX we don't support OOL descriptors yet */
 
 	/* user_addr = just after base as it was copied in */
     user_addr = (mach_msg_descriptor_t *)((vm_offset_t)kmsg->ikm_header + sizeof(mach_msg_base_t));
@@ -1608,13 +1615,13 @@ ipc_kmsg_copyin_body(
     /* handle the OOL regions and port descriptors. */
     for(i=0;i<dsc_count;i++) {
         switch (user_addr->type.type) {
-            case MACH_MSG_PORT_DESCRIPTOR:
-                user_addr = ipc_kmsg_copyin_port_descriptor((mach_msg_port_descriptor_t *)kern_addr,
-								(mach_msg_legacy_port_descriptor_t *)user_addr, space, dest, kmsg, &mr);
+		case MACH_MSG_PORT_DESCRIPTOR:
+			user_addr = ipc_kmsg_copyin_port_descriptor((mach_msg_port_descriptor_t *)kern_addr,
+							(mach_msg_legacy_port_descriptor_t *)user_addr, space, dest, kmsg, &mr);
 
-                kern_addr++;
-                complex = TRUE;
-                break;
+			kern_addr++;
+			complex = TRUE;
+			break;
 #ifdef notyet
             case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
             case MACH_MSG_OOL_DESCRIPTOR:
@@ -1630,7 +1637,8 @@ ipc_kmsg_copyin_body(
                 complex = TRUE;
                 break;
 #endif
-            default:
+		default:
+			printf("bad descriptor type: %d idx: %d\n", user_addr->type.type, i);
                 /* Invalid descriptor */
                 mr = MACH_SEND_INVALID_TYPE;
                 break;
