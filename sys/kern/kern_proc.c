@@ -478,7 +478,12 @@ enterpgrp(p, pgid, pgrp, sess)
 	PGRP_UNLOCK(pgrp);
 
 	doenterpgrp(p, pgrp);
-
+/*
+  temporary to demonstrate that later equivalent assert
+  is invalid
+	if (pgrp->pg_session->s_ttyp)
+		MPASS(pgrp == pgrp->pg_session->s_ttyp->t_pgrp);
+*/
 	return (0);
 }
 
