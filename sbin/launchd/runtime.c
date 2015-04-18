@@ -849,8 +849,7 @@ launchd_mport_create_recv(mach_port_t *name)
 kern_return_t
 launchd_mport_deallocate(mach_port_t name)
 {
-	return (0);
-	/* not yet */
+
 	return errno = mach_port_deallocate(mach_task_self(), name);
 }
 
