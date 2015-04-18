@@ -321,22 +321,15 @@ ipc_mqueue_send(
 				ip_unlock(port);
 				return MACH_SEND_TIMED_OUT;
 			}
-
-			self->ith_state = MACH_SEND_IN_PROGRESS;
-			ipc_thread_enqueue(&port->ip_blocked, self);
-
 			thread_will_wait_with_timeout(self, timeout);
-
 		} else {
-
-			self->ith_state = MACH_SEND_IN_PROGRESS;
-			ipc_thread_enqueue(&port->ip_blocked, self);
-
 			thread_will_wait(self);
 		}
 
 		counter(c_ipc_mqueue_send_block++);
+		self->ith_state = MACH_SEND_IN_PROGRESS;
 		self->ith_block_lock_data = &port->port_comm.rcd_io_lock_data;
+		ipc_thread_enqueue(&port->ip_blocked, self);
 		thread_block();
 
 		/* Save proper wait_result in case we block */
@@ -345,14 +338,14 @@ ipc_mqueue_send(
 			/* XXX */
 #if 0
 			callout_reset(&current_thread()->timer, timeout*hz, NULL);
-#endif			
+#endif
 		}
 
-
-		/* why did we wake up? */
+		/* why did we wake up? - finish_receive will remove us from the queue */
 
 		if (self->ith_state == MACH_MSG_SUCCESS)
 			continue;
+		ipc_thread_rmqueue(&port->ip_blocked, self);
 		assert(self->ith_state == MACH_SEND_IN_PROGRESS);
 
 		/*
@@ -376,7 +369,7 @@ ipc_mqueue_send(
 
 		    case THREAD_RESTART:
 		    default:
-			panic("ipc_mqueue_send");
+				panic("ipc_mqueue_send %d", save_wait_result);
 		}
 	}
 	(void) ipc_mqueue_deliver(port, kmsg, TRUE);
@@ -545,11 +538,8 @@ ipc_mqueue_copyin(
 					ips_unlock(pset);
 					ip_lock(port);
 					ips_lock(pset);
-					if (port->ip_msgcount == 0) {
-						ip_unlock(port);
-						goto restart;
-					}
-				} else if (port->ip_msgcount == 0) {
+				}
+				if (port->ip_msgcount == 0) {
 					ip_unlock(port);
 					goto restart;
 				} else
@@ -859,7 +849,7 @@ ipc_mqueue_finish_receive(
 		{
 			senders = &port->ip_blocked;
 			sender = ipc_thread_queue_first(senders);
-	
+
 			if ((sender != ITH_NULL) &&
 			    (port->ip_msgcount < port->ip_qlimit)) {
 				ipc_thread_rmqueue(senders, sender);
