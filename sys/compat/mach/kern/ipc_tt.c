@@ -616,7 +616,6 @@ task_get_special_port(
 
 	    case TASK_BOOTSTRAP_PORT:
 			port = ipc_port_copy_send(task->itk_bootstrap);
-			log(LOG_DEBUG, "get bootstrap port: %p", port);
 		break;
 
 	    case TASK_SEATBELT_PORT:
