@@ -1271,7 +1271,8 @@ nfsvno_fsync(struct vnode *vp, u_int64_t off, int cnt, struct ucred *cred,
 	 * byte count parameters so call VOP_FSYNC the whole file for now.
 	 * The same is true for NFSv4: RFC 3530 Sec. 14.2.3.
 	 */
-	if (cnt == 0 || cnt > MAX_COMMIT_COUNT) {
+	if (cnt == 0 || cnt > MAX_COMMIT_COUNT ||
+	    strcmp(vp->v_mount->mnt_vfc->vfc_name, "zfs") == 0) {
 		/*
 		 * Give up and do the whole thing
 		 */
