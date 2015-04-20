@@ -363,6 +363,7 @@ mach_msg_return_t ipc_kmsg_copyin_body(
 
 void ikm_cache_init(void);
 
+
 /*
  *	Routine:	ipc_kmsg_alloc
  *	Purpose:
@@ -405,18 +406,7 @@ ipc_kmsg_alloc(
 	} else
 		max_expanded_size = msg_and_trailer_size;
 
-#ifdef notyet	
-	if (ikm_plus_overhead(max_expanded_size) <= IKM_SAVED_KMSG_SIZE)
-		kmsg = uma_zalloc(ipc_kmsg_zone, mflags);
-	else
-#endif
-#ifdef NO_MEMORY_OVERWRITE
-		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
-#endif
-	if (ikm_plus_overhead(max_expanded_size) > PAGE_SIZE)
-		kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
-	else
-		kmsg = malloc(PAGE_SIZE, M_MACH_IPC_KMSG, mflags);
+	kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
 	if (kmsg != IKM_NULL) {
 		ikm_init(kmsg, max_expanded_size);
 		ikm_set_header(kmsg, msg_and_trailer_size);
@@ -812,6 +802,7 @@ ipc_kmsg_get(
 	mach_msg_max_trailer_t 	*trailer;
 	mach_msg_legacy_base_t	    legacy_base;
 	mach_msg_size_t		len_copied;
+	task_t task;
 	caddr_t msg_addr = (caddr_t)msg;
 
 	legacy_base.body.msgh_descriptor_count = 0;
@@ -845,7 +836,7 @@ ipc_kmsg_get(
 	kmsg->ikm_header->msgh_id			= legacy_base.header.msgh_id;
 
 	/* ipc_kmsg_print(kmsg);*/
-	if (copyinmsg(msg_addr, (char *)(kmsg->ikm_header + 1), size - (mach_msg_size_t)sizeof(mach_msg_header_t))) {
+	if (copyinmsg(msg_addr, (caddr_t)(kmsg->ikm_header + 1), size - (mach_msg_size_t)sizeof(mach_msg_header_t))) {
 		ipc_kmsg_free(kmsg);
 		return MACH_SEND_INVALID_DATA;
 	}
@@ -855,12 +846,12 @@ ipc_kmsg_get(
 	 * is initialized to the minimum (sizeof(mach_msg_trailer_t)), to optimize
 	 * the cases where no implicit data is requested.
 	 */
-	trailer = (mach_msg_max_trailer_t *) ((vm_offset_t)kmsg->ikm_header + size);
-	trailer->msgh_sender = current_task()->sec_token;
-	trailer->msgh_audit = current_task()->audit_token;
+	trailer = (mach_msg_max_trailer_t *) (((caddr_t)(kmsg->ikm_header)) + size);
+	task = current_task();
 	trailer->msgh_trailer_type = MACH_MSG_TRAILER_FORMAT_0;
 	trailer->msgh_trailer_size = MACH_MSG_TRAILER_MINIMUM_SIZE;
-
+	trailer->msgh_sender = task->sec_token;
+	trailer->msgh_audit = task->audit_token;
 	*kmsgp = kmsg;
 	return MACH_MSG_SUCCESS;
 }
