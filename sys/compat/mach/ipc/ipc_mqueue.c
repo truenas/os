@@ -334,12 +334,6 @@ ipc_mqueue_send(
 
 		/* Save proper wait_result in case we block */
 		save_wait_result = self->wait_result;
-		if (option & MACH_SEND_TIMEOUT) {
-			/* XXX */
-#if 0
-			callout_reset(&current_thread()->timer, timeout*hz, NULL);
-#endif
-		}
 
 		/* why did we wake up? - finish_receive will remove us from the queue */
 
@@ -412,6 +406,8 @@ int	tr_ipc_mqueue_deliver = 0;
 static void
 ipc_mqueue_run(thread_act_t receiver, ipc_mqueue_t mqueue, ipc_kmsg_t kmsg, ipc_port_t port)
 {
+	MPASS(receiver->ith_state == MACH_RCV_IN_PROGRESS ||
+		  receiver->ith_state == MACH_RCV_IN_PROGRESS_TIMED);
 	receiver->ith_state = MACH_MSG_SUCCESS;
 	receiver->ith_kmsg = kmsg;
 	receiver->ith_seqno = port->ip_seqno++;
@@ -762,7 +758,6 @@ ipc_mqueue_receive(
 	}
 
 		/* must block waiting for a message */
-
 	if (option & MACH_RCV_TIMEOUT) {
 		if (timeout == 0) {
 			return MACH_RCV_TIMED_OUT;
@@ -849,6 +844,9 @@ ipc_mqueue_finish_receive(
 		{
 			senders = &port->ip_blocked;
 			sender = ipc_thread_queue_first(senders);
+
+			if (sender != NULL)
+				MPASS(sender->ith_state == MACH_SEND_IN_PROGRESS);
 
 			if ((sender != ITH_NULL) &&
 			    (port->ip_msgcount < port->ip_qlimit)) {
