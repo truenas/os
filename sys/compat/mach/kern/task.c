@@ -584,13 +584,13 @@ task_terminate(
 		queue_enter(list, cur_thr_act, thread_act_t, thr_acts);
 		act_unlock_thread(cur_thr_act);
 		mutex_unlock(&task->act_list_lock);
-#endif
 		/*
 		 *	Shut down this thread's ipc now because it must
 		 *	be left alone to terminate the task.
 		 */
 		ipc_thr_act_disable(cur_thr_act);
 		ipc_thr_act_terminate(cur_thr_act);
+#endif
 	}
 	else {
 		/*
