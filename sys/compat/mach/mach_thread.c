@@ -141,10 +141,9 @@ void
 thread_block(void)
 {
 	thread_t thread = current_thread();
-	struct thread *td = curthread;
 	int rc;
 
-	MPASS(td == curthread);
+	MPASS(curthread == thread->ith_td);
 
 	rc = msleep(thread, thread->ith_block_lock_data, PCATCH|PSOCK, "thread_block", thread->timeout);
 	thread->ith_block_lock_data = NULL;
