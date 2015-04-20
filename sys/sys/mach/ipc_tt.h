@@ -176,4 +176,7 @@ extern void set_security_token(task_t);
 
 
 extern void ipc_thr_act_init(thread_act_t);
+
+extern void ipc_thr_act_terminate(thread_act_t);
+
 #endif	/* _KERN_IPC_TT_H_ */

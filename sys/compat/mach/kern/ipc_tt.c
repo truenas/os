@@ -400,6 +400,7 @@ ipc_thr_act_disable_act_locked(thread_act_t thr_act)
 	if (kport != IP_NULL)
 		ipc_kobject_set(kport, IKO_NULL, IKOT_NONE);
 }
+#endif
 
 void
 ipc_thr_act_terminate(thread_act_t thr_act)
@@ -425,12 +426,12 @@ ipc_thr_act_terminate(thread_act_t thr_act)
 	for (i = FIRST_EXCEPTION; i < EXC_TYPES_COUNT; i++) {
 	    if (IP_VALID(thr_act->exc_actions[i].port))
 		ipc_port_release_send(thr_act->exc_actions[i].port);
-        }
+	}
 
 	/* destroy the kernel port */
 	ipc_port_dealloc_kernel(kport);
 }
-#endif
+
 
 /*
  *	Routine:	retrieve_task_self_fast
