@@ -197,8 +197,8 @@ MACRO_END
 
 #define ikm_set_header(kmsg, mtsize)					\
 MACRO_BEGIN												\
-	(kmsg)->ikm_header = (mach_msg_header_t *) 			\
-	((vm_offset_t)((kmsg) + 1) + (kmsg)->ikm_size - (mtsize));	\
+(kmsg)->ikm_header = (mach_msg_header_t *)(kmsg + 1);	\
+MPASS(kmsg->ikm_size >= mtsize + sizeof(*kmsg));		\
 MACRO_END
 
 /*
