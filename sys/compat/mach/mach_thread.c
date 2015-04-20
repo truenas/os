@@ -124,6 +124,10 @@ thread_go(thread_t thread)
 	int needunlock = 0;
 	struct mtx *block_lock = thread->ith_block_lock_data;
 
+	MPASS(thread->ith_state != MACH_SEND_IN_PROGRESS &&
+		  thread->ith_state != MACH_RCV_IN_PROGRESS &&
+		  thread->ith_state != MACH_RCV_IN_PROGRESS_TIMED);
+
 	if (block_lock != NULL && !mtx_owned(block_lock)) {
 		needunlock = 1;
 		mtx_lock(block_lock);
@@ -137,17 +141,35 @@ void
 thread_block(void)
 {
 	thread_t thread = current_thread();
+	struct thread *td = curthread;
 	int rc;
+
+	MPASS(td == curthread);
 
 	rc = msleep(thread, thread->ith_block_lock_data, PCATCH|PSOCK, "thread_block", thread->timeout);
 	thread->ith_block_lock_data = NULL;
-	if (rc == EINTR || rc == ERESTART)
+	switch (rc) {
+	case EINTR:
+	case ERESTART:
 		thread->wait_result = THREAD_INTERRUPTED;
-	else if (rc == EWOULDBLOCK)
-		/* XXX ? */
+		break;
+	case EWOULDBLOCK:
 		thread->wait_result = THREAD_TIMED_OUT;
-	else
-		thread->wait_result = THREAD_TIMED_OUT;
+		break;
+	case 0:
+		thread->wait_result = THREAD_AWAKENED;
+		break;
+	default:
+		panic("unexpected return from msleep: %d\n", rc);
+	}
+#ifdef INVARIANTS
+	if (thread->timeout == 0) {
+		if(rc == 0)
+			MPASS(thread->ith_state == MACH_MSG_SUCCESS);
+		else
+			MPASS(rc == EINTR || rc == ERESTART);
+	}
+#endif
 }
 
 void
@@ -172,9 +194,7 @@ mach_thread_create(struct thread *td, thread_t thread)
 {
 
 	thread->ref_count = 1;
-	thread->ith_td = td;
 	ipc_thread_init(thread);
-	ipc_thr_act_init(thread);
 }
 
 
@@ -198,10 +218,26 @@ mach_thread_init(void *arg __unused, struct thread *td)
 {
 	thread_t thread;
 
-	thread = uma_zalloc(thread_shuttle_zone, M_WAITOK);
+	thread = uma_zalloc(thread_shuttle_zone, M_WAITOK|M_ZERO);
 	mtx_init(&thread->ith_lock_data, "mach_thread lock", NULL, MTX_DEF);
 
+	MPASS(td->td_machdata == NULL);
 	td->td_machdata = thread;
+	thread->ith_td = td;
+	ipc_thr_act_init(thread);
+}
+
+static void
+mach_thread_fini(void *arg __unused, struct thread *td)
+{
+	thread_t thread = td->td_machdata;
+
+	MPASS(thread->ith_kmsg == NULL);
+	MPASS(thread->ith_block_lock_data == NULL);
+	MPASS(thread->ith_td == td);
+	mtx_destroy(&thread->ith_lock_data);
+	ipc_thr_act_terminate(thread);
+	uma_zfree(thread_shuttle_zone, thread);
 }
 
 static void
@@ -209,6 +245,7 @@ mach_thread_ctor(void *arg __unused, struct thread *td)
 {
 	thread_t thread = td->td_machdata;
 
+	MPASS(thread->ith_td == td);
 	mach_thread_create(td, thread);
 }
 
@@ -222,6 +259,7 @@ thread_sysinit(void *arg __unused)
 
 	EVENTHANDLER_REGISTER(thread_ctor, mach_thread_ctor, NULL, EVENTHANDLER_PRI_ANY);
 	EVENTHANDLER_REGISTER(thread_init, mach_thread_init, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(thread_fini, mach_thread_fini, NULL, EVENTHANDLER_PRI_ANY);
 }
 
 /* before SI_SUB_INTRINSIC and after SI_SUB_EVENTHANDLER */
