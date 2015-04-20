@@ -613,21 +613,11 @@ extern void		consider_thread_collect(void);
 
 #define thread_map(thread) (&(thread)->ith_td->td_proc->p_vmspace->vm_map)
 
-struct mach_port;
-
-#ifndef _MACH_EXEC_H_
-struct mach_thread_emuldata {
-	struct mach_port *mle_kernel;	/* Thread's kernel port */
-	thread_t mle_thread;
-};
-#endif
-
 static __inline thread_t
 current_thread(void)
 {
-	struct mach_thread_emuldata *mle = curthread->td_machdata;
 
-	return (mle->mle_thread);
+	return (curthread->td_machdata);
 }
 
 
