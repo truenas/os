@@ -59,11 +59,11 @@ static const struct {
 } cmds[] = {
 	{ "start",	cmd_start_stop,	"Start specified job" },
 	{ "stop",	cmd_start_stop,	"Stop specified job" },
-	{ "load",	cmd_load,	"Submit a job from the command line" },
+	{ "load",	cmd_load,	"Load a plist" },
 	{ "remove",	cmd_remove, 	"Remove specified job" },
 	{ "bootstrap",	cmd_bootstrap,	"Bootstrap launchd" },
 	{ "list",	cmd_list,	"List jobs and information about jobs" },
-	{ "dump",	cmd_dump,       "Dumps job(s) plis(s)"},
+	{ "dump",	cmd_dump,       "Dumps job(s) plist(s)"},
 	{ "help",	cmd_help,	"This help output" },
 };
 
