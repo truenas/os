@@ -27,7 +27,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd February 7, 2015
+.Dd April 19, 2015
 .Dt CTL.CONF 5
 .Os
 .Sh NAME
@@ -307,16 +307,25 @@ The default backend is block.
 .It Ic blocksize Aq Ar size
 Specifies blocksize visible to the initiator.
 The default blocksize is 512.
-.It Ic device-id Aq Ar string
-Specifies SCSI Device Identification string presented to the initiator.
-.It Ic option Ao Ar name Ac Aq Ar value
-Specifies CTL-specific options passed to the kernel.
-.It Ic path Aq Ar path
-Specifies path to file or device node used to back the LUN.
-.It Ic serial Aq Ar string
-Specifies SCSI serial number presented to the initiator.
-.It Ic size Aq Ar size
-Specifies LUN size, in bytes.
+.It Ic device-id Ar string
+The SCSI Device Identification string presented to the initiator.
+.It Ic option Ar name Ar value
+The CTL-specific options passed to the kernel.
+All CTL-specific options are documented in the
+.Sx OPTIONS
+section of
+.Xr ctladm 8 .
+.It Ic path Ar path
+The path to the file, device node, or
+.Xr zfs 8
+volume used to back the LUN.
+For optimal performance, create the volume with the
+.Qq Ar volmode=dev
+property set.
+.It Ic serial Ar string
+The SCSI serial number presented to the initiator.
+.It Ic size Ar size
+The LUN size, in bytes.
 .El
 .Sh FILES
 .Bl -tag -width ".Pa /etc/ctl.conf" -compact
@@ -382,7 +391,8 @@ target iqn.2012-06.com.example:target2 {
 .Sh SEE ALSO
 .Xr ctl 4 ,
 .Xr ctladm 8 ,
-.Xr ctld 8
+.Xr ctld 8 ,
+.Xr zfs 8
 .Sh AUTHORS
 The
 .Nm
