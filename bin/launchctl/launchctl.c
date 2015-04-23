@@ -69,9 +69,8 @@ static const struct {
 
 
 static const char *bootstrap_paths[] = {
-	"/conf/base/etc/plists",
-	"/etc/plists",
-	"/usr/local/etc/plists",
+	"/etc/launchd.d",
+	"/usr/local/etc/launchd.d",
 };
 
 
