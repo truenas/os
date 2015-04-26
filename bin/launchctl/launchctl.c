@@ -190,7 +190,7 @@ cmd_bootstrap(int argc, char * const argv[])
 
 	printf("Bootstrap:\n");
 
-	system("/sbin/mount -uw /");
+	system("/etc/bootstrap");
 
 	for (i = 0; i < N(bootstrap_paths); i++) {
 		n = scandir(bootstrap_paths[i], &files, NULL, alphasort);

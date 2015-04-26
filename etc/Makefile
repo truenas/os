@@ -14,7 +14,8 @@ SUBDIR+=sendmail
 SUBDIR+=tests
 .endif
 
-BIN1=	crontab \
+BIN1=	bootstrap \
+	crontab \
 	devd.conf \
 	devfs.conf \
 	ddb.conf \
