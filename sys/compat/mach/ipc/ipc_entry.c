@@ -168,6 +168,7 @@ ipc_entry_t
 ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 {
 	struct file *fp;
+	ipc_entry_t entry;
 
 	assert(space->is_active);
 
@@ -183,7 +184,9 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 		fdrop(fp, curthread);
 		return (NULL);
 	}
-	return (fp->f_data);
+	entry = fp->f_data;
+	fdrop(fp, curthread);
+	return (entry);
 }
 
 /*
