@@ -91,6 +91,7 @@
 #include <sys/file.h>
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
+#include <sys/syscallsubr.h>
 #include <sys/syslog.h>
 
 #include <sys/mach/mach_types.h>
@@ -125,10 +126,16 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 {
 	ipc_entry_t entry;
 
-	assert(fp->f_data != NULL);
+	MACH_VERIFY(fp->f_data != NULL, ("expected fp->f_data != NULL - got NULL\n"));
+	if (fp->f_data == NULL)
+		return (0);
 	entry = fp->f_data;
-	assert(entry->ie_object == NULL);
+	if (entry->ie_object != NULL) {
+		ipc_object_release(entry->ie_object);
+		entry->ie_object = NULL;
+	}
 	free(entry, M_MACH_IPC_ENTRY);
+	fp->f_data = NULL;
 
 	return (0);
 }
@@ -236,7 +243,8 @@ ipc_entry_get(
 	free_entry->ie_index = UINT_MAX;
 
 	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
-
+	fdrop(fp, td);
+	assert(fp->f_count == 1);
 	*namep = fd;
 	*entryp = free_entry;
 
@@ -370,7 +378,7 @@ ipc_entry_dealloc(
 			}
 		}
 	}
-	fdrop(entry->ie_fp, curthread);
+	kern_close(curthread, name);
 }
 
 /*
