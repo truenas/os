@@ -348,7 +348,6 @@ ipc_right_dnrequest(
 
 		if ((bits & MACH_PORT_TYPE_DEAD_NAME) &&
 		    immediate && (notify != IP_NULL)) {
-			mach_port_urefs_t urefs = entry->ie_fp->f_count;
 
 			assert(IE_BITS_TYPE(bits) == MACH_PORT_TYPE_DEAD_NAME);
 			assert(urefs > 0);
@@ -1906,7 +1905,6 @@ ipc_right_copyout(
 		assert(port->ip_srights > 0);
 
 		if (bits & MACH_PORT_TYPE_SEND) {
-			mach_port_urefs_t urefs = entry->ie_fp->f_count;
 
 			assert(port->ip_srights > 1);
 			assert(urefs > 0);
