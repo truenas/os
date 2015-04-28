@@ -350,7 +350,7 @@ ipc_right_dnrequest(
 		    immediate && (notify != IP_NULL)) {
 
 			assert(IE_BITS_TYPE(bits) == MACH_PORT_TYPE_DEAD_NAME);
-			assert(urefs > 0);
+			assert(entry->ie_fp->f_count > 0);
 
 			fhold(entry->ie_fp); /* increment urefs */
 			is_write_unlock(space);
@@ -1907,7 +1907,7 @@ ipc_right_copyout(
 		if (bits & MACH_PORT_TYPE_SEND) {
 
 			assert(port->ip_srights > 1);
-			assert(urefs > 0);
+			assert(entry->ie_fp->f_count > 0);
 
 			port->ip_srights--;
 			ip_unlock(port);
