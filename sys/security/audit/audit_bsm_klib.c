@@ -475,7 +475,7 @@ audit_canon_path(struct thread *td, int dirfd, char *path, char *cpath)
 	copy = path;
 	rvnp = cvnp = NULL;
 	fdp = td->td_proc->p_fd;
-	FILEDESC_SLOCK_DIR(fdp);
+	FILEDESC_SLOCK(fdp);
 	/*
 	 * Make sure that we handle the chroot(2) case.  If there is an
 	 * alternate root directory, prepend it to the audited pathname.
@@ -510,7 +510,7 @@ audit_canon_path(struct thread *td, int dirfd, char *path, char *cpath)
 	} else {
 		needslash = 1;
 	}
-	FILEDESC_SUNLOCK_DIR(fdp);
+	FILEDESC_SUNLOCK(fdp);
 	/*
 	 * NB: We require that the supplied array be at least MAXPATHLEN bytes
 	 * long.  If this is not the case, then we can run into serious trouble.

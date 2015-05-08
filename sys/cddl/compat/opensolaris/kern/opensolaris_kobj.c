@@ -72,7 +72,7 @@ kobj_open_file_vnode(const char *file)
 	int error, flags;
 
 	fd = td->td_proc->p_fd;
-	FILEDESC_XLOCK_DIR(fd);
+	FILEDESC_XLOCK(fd);
 	if (fd->fd_rdir == NULL) {
 		fd->fd_rdir = rootvnode;
 		vref(fd->fd_rdir);
@@ -81,7 +81,7 @@ kobj_open_file_vnode(const char *file)
 		fd->fd_cdir = rootvnode;
 		vref(fd->fd_cdir);
 	}
-	FILEDESC_XUNLOCK_DIR(fd);
+	FILEDESC_XUNLOCK(fd);
 
 	flags = FREAD | O_NOFOLLOW;
 	NDINIT(&nd, LOOKUP, 0, UIO_SYSSPACE, file, td);

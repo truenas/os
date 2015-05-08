@@ -386,7 +386,7 @@ set_rootvnode(void *arg, int npending)
 	struct thread *td = curthread;
 	struct proc *p = td->td_proc;
 
-	FILEDESC_XLOCK_DIR(p->p_fd);
+	FILEDESC_XLOCK(p->p_fd);
 	if (p->p_fd->fd_cdir == NULL) {
 		p->p_fd->fd_cdir = rootvnode;
 		VREF(rootvnode);
@@ -395,7 +395,7 @@ set_rootvnode(void *arg, int npending)
 		p->p_fd->fd_rdir = rootvnode;
 		VREF(rootvnode);
 	}
-	FILEDESC_XUNLOCK_DIR(p->p_fd);
+	FILEDESC_XUNLOCK(p->p_fd);
 
 	free(arg, M_TEMP);
 }
