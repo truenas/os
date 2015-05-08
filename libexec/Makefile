@@ -8,6 +8,7 @@ SUBDIR=	${_atf} \
 	${_comsat} \
 	getty \
 	${_hyperv} \
+	launchproxy \
 	${_mail.local} \
 	${_mknetid} \
 	${_pppoed} \
