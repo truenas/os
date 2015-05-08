@@ -206,6 +206,16 @@ struct mbuf {
 #define	m_pktdat	M_dat.MH.MH_dat.MH_databuf
 #define	m_dat		M_dat.M_databuf
 
+/* 
+ * NOTE: forwards compatibility definitions for mbuf(9)
+ *
+ * These aren't 1:1 with the macros in r277203; in particular they're exposed
+ * to both userland and kernel, whereas this is exposed to just _KERNEL -- to
+ * avoid disruption with existing KBI/KPIs
+ */
+#define	MHSIZE		offsetof(struct mbuf, m_dat)
+#define	MPKTHSIZE	offsetof(struct mbuf, m_pktdat)
+
 /*
  * mbuf flags of global significance and layer crossing.
  * Those of only protocol/layer specific significance are to be mapped
@@ -220,7 +230,7 @@ struct mbuf {
 #define	M_MCAST		0x00000020 /* send/received as link-level multicast */
 #define	M_PROMISC	0x00000040 /* packet was not for us */
 #define	M_VLANTAG	0x00000080 /* ether_vtag is valid */
-#define	M_FLOWID	0x00000100 /* deprecated: flowid is valid */
+#define	M_UNUSED_8	0x00000100 /* --available-- */
 #define	M_NOFREE	0x00000200 /* do not free mbuf, embedded in cluster */
 
 #define	M_PROTO1	0x00001000 /* protocol-specific */
@@ -247,7 +257,7 @@ struct mbuf {
  * Flags preserved when copying m_pkthdr.
  */
 #define M_COPYFLAGS \
-    (M_PKTHDR|M_EOR|M_RDONLY|M_BCAST|M_MCAST|M_PROMISC|M_VLANTAG|M_FLOWID| \
+    (M_PKTHDR|M_EOR|M_RDONLY|M_BCAST|M_MCAST|M_PROMISC|M_VLANTAG| \
      M_PROTOFLAGS)
 
 /*
@@ -255,7 +265,7 @@ struct mbuf {
  */
 #define	M_FLAG_BITS \
     "\20\1M_EXT\2M_PKTHDR\3M_EOR\4M_RDONLY\5M_BCAST\6M_MCAST" \
-    "\7M_PROMISC\10M_VLANTAG\11M_FLOWID"
+    "\7M_PROMISC\10M_VLANTAG"
 #define	M_FLAG_PROTOBITS \
     "\15M_PROTO1\16M_PROTO2\17M_PROTO3\20M_PROTO4\21M_PROTO5" \
     "\22M_PROTO6\23M_PROTO7\24M_PROTO8\25M_PROTO9\26M_PROTO10" \
@@ -564,6 +574,7 @@ m_extaddref(struct mbuf *m, caddr_t buf, u_int size, u_int *ref_cnt,
 	m->m_ext.ext_arg1 = arg1;
 	m->m_ext.ext_arg2 = arg2;
 	m->m_ext.ext_type = EXT_EXTREF;
+	m->m_ext.ext_flags = 0;
 }
 
 static __inline uma_zone_t

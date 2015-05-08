@@ -746,6 +746,12 @@ vmem_periodic(void *unused, int pending)
 		/* Grow in powers of two.  Shrink less aggressively. */
 		if (desired >= current * 2 || desired * 4 <= current)
 			vmem_rehash(vm, desired);
+
+		/*
+		 * Periodically wake up threads waiting for resources,
+		 * so they could ask for reclamation again.
+		 */
+		VMEM_CONDVAR_BROADCAST(vm);
 	}
 	mtx_unlock(&vmem_list_lock);
 
@@ -1313,6 +1319,7 @@ vmem_add(vmem_t *vm, vmem_addr_t addr, vmem_size_t size, int flags)
 vmem_size_t
 vmem_size(vmem_t *vm, int typemask)
 {
+	int i;
 
 	switch (typemask) {
 	case VMEM_ALLOC:
@@ -1321,6 +1328,17 @@ vmem_size(vmem_t *vm, int typemask)
 		return vm->vm_size - vm->vm_inuse;
 	case VMEM_FREE|VMEM_ALLOC:
 		return vm->vm_size;
+	case VMEM_MAXFREE:
+		VMEM_LOCK(vm);
+		for (i = VMEM_MAXORDER - 1; i >= 0; i--) {
+			if (LIST_EMPTY(&vm->vm_freelist[i]))
+				continue;
+			VMEM_UNLOCK(vm);
+			return ((vmem_size_t)ORDER2SIZE(i) <<
+			    vm->vm_quantum_shift);
+		}
+		VMEM_UNLOCK(vm);
+		return (0);
 	default:
 		panic("vmem_size");
 	}

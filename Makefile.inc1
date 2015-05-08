@@ -311,7 +311,7 @@ X${COMPILER}?=	${CROSS_COMPILER_PREFIX}${${COMPILER}}
 X${COMPILER}?=	${${COMPILER}}
 .endif
 .endfor
-XBINUTILS=	AS AR LD NM OBJDUMP RANLIB STRINGS
+XBINUTILS=	AS AR LD NM OBJCOPY OBJDUMP RANLIB STRINGS
 .for BINUTIL in ${XBINUTILS}
 .if defined(CROSS_BINUTILS_PREFIX)
 X${BINUTIL}?=	${CROSS_BINUTILS_PREFIX}${${BINUTIL}}
@@ -322,7 +322,8 @@ X${BINUTIL}?=	${${BINUTIL}}
 WMAKEENV+=	CC="${XCC} ${XFLAGS}" CXX="${XCXX} ${XFLAGS}" \
 		CPP="${XCPP} ${XFLAGS}" \
 		AS="${XAS}" AR="${XAR}" LD="${XLD}" NM=${XNM} \
-		OBJDUMP=${XOBJDUMP} RANLIB=${XRANLIB} STRINGS=${XSTRINGS}
+		OBJDUMP=${XOBJDUMP} OBJCOPY="${XOBJCOPY}" \
+		RANLIB=${XRANLIB} STRINGS=${XSTRINGS}
 
 .if ${XCC:T:Mgcc} == "gcc"
 WMAKE_COMPILER_TYPE=	gcc
@@ -375,8 +376,9 @@ LIB32CPUFLAGS=	-march=${TARGET_CPUTYPE}
 LIB32WMAKEENV=	MACHINE=i386 MACHINE_ARCH=i386 \
 		MACHINE_CPU="i686 mmx sse sse2"
 LIB32WMAKEFLAGS=	\
-		AS="${AS} --32" \
-		LD="${LD} -m elf_i386_fbsd -Y P,${LIB32TMP}/usr/lib32"
+		AS="${XAS} --32" \
+		LD="${XLD} -m elf_i386_fbsd -Y P,${LIB32TMP}/usr/lib32" \
+		OBJCOPY="${XOBJCOPY}"
 
 .elif ${TARGET_ARCH} == "powerpc64"
 .if empty(TARGET_CPUTYPE)
@@ -386,7 +388,8 @@ LIB32CPUFLAGS=	-mcpu=${TARGET_CPUTYPE}
 .endif
 LIB32WMAKEENV=	MACHINE=powerpc MACHINE_ARCH=powerpc
 LIB32WMAKEFLAGS=	\
-		LD="${LD} -m elf32ppc_fbsd"
+		LD="${XLD} -m elf32ppc_fbsd" \
+		OBJCOPY="${XOBJCOPY}"
 .endif
 
 
@@ -1490,6 +1493,94 @@ cross-tools: .MAKE
 		${MAKE} DIRPRFX=${_tool}/ depend && \
 		${MAKE} DIRPRFX=${_tool}/ all && \
 		${MAKE} DIRPRFX=${_tool}/ DESTDIR=${MAKEOBJDIRPREFIX} install
+.endfor
+
+NXBENV=		MAKEOBJDIRPREFIX=${OBJTREE}/nxb \
+		INSTALL="sh ${.CURDIR}/tools/install.sh" \
+		VERSION="${VERSION}"
+NXBMAKE=	${NXBENV} ${MAKE} \
+		TBLGEN=${OBJTREE}/nxb-bin/usr/bin/tblgen \
+		CLANG_TBLGEN=${OBJTREE}/nxb-bin/usr/bin/clang-tblgen \
+		MACHINE=${TARGET} MACHINE_ARCH=${TARGET_ARCH} \
+		-DWITHOUT_GDB -DNO_TESTS \
+		SSP_CFLAGS= \
+		-DWITHOUT_HTML -DWITHOUT_INFO -DNO_LINT -DWITHOUT_MAN \
+		-DNO_PIC -DNO_PROFILE -DNO_SHARED \
+		-DNO_CPU_CFLAGS -DNO_WARNS -DNO_CTF \
+		-DWITHOUT_CLANG_FULL -DWITHOUT_LLDB
+
+native-xtools: .MAKE
+	mkdir -p ${OBJTREE}/nxb-bin/bin
+	mkdir -p ${OBJTREE}/nxb-bin/sbin
+	mkdir -p ${OBJTREE}/nxb-bin/usr
+	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.usr.dist \
+	    -p ${OBJTREE}/nxb-bin/usr >/dev/null
+	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.include.dist \
+	    -p ${OBJTREE}/nxb-bin/usr/include >/dev/null
+.for _tool in \
+    bin/cat \
+    bin/chmod \
+    bin/cp \
+    bin/csh \
+    bin/echo \
+    bin/expr \
+    bin/hostname \
+    bin/ln \
+    bin/ls \
+    bin/mkdir \
+    bin/mv \
+    bin/ps \
+    bin/realpath \
+    bin/rm \
+    bin/rmdir \
+    bin/sh \
+    bin/sleep \
+    ${_clang_tblgen} \
+    usr.bin/ar \
+    ${_binutils} \
+    ${_cc} \
+    ${_gcc_tools} \
+    ${_clang_libs} \
+    ${_clang} \
+    sbin/md5 \
+    sbin/sysctl \
+    gnu/usr.bin/diff \
+    usr.bin/awk \
+    usr.bin/basename \
+    usr.bin/bmake \
+    usr.bin/bzip2 \
+    usr.bin/cmp \
+    usr.bin/dirname \
+    usr.bin/env \
+    usr.bin/fetch \
+    usr.bin/find \
+    usr.bin/grep \
+    usr.bin/gzip \
+    usr.bin/id \
+    usr.bin/lex \
+    usr.bin/lorder \
+    usr.bin/mktemp \
+    usr.bin/mt \
+    usr.bin/patch \
+    usr.bin/sed \
+    usr.bin/sort \
+    usr.bin/tar \
+    usr.bin/touch \
+    usr.bin/tr \
+    usr.bin/true \
+    usr.bin/uniq \
+    usr.bin/unzip \
+    usr.bin/xargs \
+    usr.bin/xinstall \
+    usr.bin/xz \
+    usr.bin/yacc \
+    usr.sbin/chown
+	${_+_}@${ECHODIR} "===> ${_tool} (obj,depend,all,install)"; \
+		cd ${.CURDIR}/${_tool} && \
+		${NXBMAKE} DIRPRFX=${_tool}/ obj && \
+		${NXBMAKE} DIRPRFX=${_tool}/ depend && \
+		${NXBMAKE} DIRPRFX=${_tool}/ all && \
+		${NXBMAKE} DIRPRFX=${_tool}/ DESTDIR=${OBJTREE}/nxb-bin install
 .endfor
 
 #

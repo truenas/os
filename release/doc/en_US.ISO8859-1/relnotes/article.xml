@@ -22,7 +22,7 @@
 
     <pubdate>$FreeBSD$</pubdate>
 
-    <!-- Last rev: 279055 -->
+    <!-- Last rev: 282497 -->
 
     <copyright>
       <year>2015</year>
@@ -182,13 +182,41 @@
       <para revision="277434" contrib="sponsor" sponsor="&ff;">The
 	&man.fstyp.8; utility has been added, which is used to
 	determine the filesystem on a specified device.</para>
+
+      <para revision="281044">A regression in the &man.libarchive.3;
+	library that would prevent a directory from being included in
+	the archive when <literal>--one-file-system</literal> is used
+	has been fixed.</para>
+
+      <para revision="281161" contrib="sponsor"
+	sponsor="&limelight;">A new flag, <literal>-R</literal>, has
+	been added to the &man.netstat.8; utility, which is used to
+	dump <acronym>RSS</acronym>/flow information.</para>
+
+      <para revision="281936" contrib="sponsor" sponsor="&ff;">The
+	&man.ar.1; utility has been updated to set
+	<literal>ARCHIVE_EXTRACT_SECURE_SYMLINKS</literal> and
+	<literal>ARCHIVE_EXTRACT_SECURE_NODOTDOT</literal> to disallow
+	directory traversal when extracting an archive, similar to
+	&man.tar.1;.</para>
+
+      <para revision="282278">A race condition in &man.wc.1; that
+	would cause final results to be sent to &man.stderr.4; when
+	receiving the <literal>SIGINFO</literal> signal has been
+	fixed.</para>
     </sect2>
 
     <sect2 xml:id="userland-contrib">
       <title>Contributed Software</title>
 
-      <para revision="277597"><application>OpenSSL</application> has
-	been updated to version 1.0.1l.</para>
+      <para revision="277592"><application>file</application> has been
+	updated to version 5.22.</para>
+
+      <para revision="280304"><application>OpenSSL</application> has
+	been updated to version 1.0.1m.</para>
+
+      <para revision="281687">The &man.acpi.4; subsystem has been
+	updated to version 20150410.</para>
     </sect2>
 
     <sect2 xml:id="userland-installer">
@@ -216,6 +244,10 @@
 
       <para revision="275040">A new file configuration library,
 	&man.figpar.3;, has been added to the base system.</para>
+
+      <para revision="280392">The &man.setmode.3; function has been
+	updated to consistently set <literal>errno</literal> on
+	failure.</para>
     </sect2>
 
     <sect2 xml:id="userland-abi">
@@ -255,6 +287,18 @@
 	&man.hwpmc.4; default and maximum callchain depths have been
 	increased.  The default has been increased from 16 to 32, and
 	the maximum increased from 32 to 128.</para>
+
+      <para revision="281255" contrib="sponsor"
+	sponsor="&ix;, &ff;">The &man.devfs.5; device filesystem has
+	been changed to update timestamps for read/write operations
+	using seconds precision.  A new &man.sysctl.8;,
+	<literal>vfs.devfs.dotimes</literal> has been added, which
+	when set to a non-zero value, enables default precision
+	timestamps for these operations.</para>
+
+      <para revision="280632">The <literal>kern.osrelease</literal>
+	and <literal>kern.osreldate</literal> are now configurable
+	&man.jail.8; parameters.</para>
     </sect2>
   </sect1>
 
@@ -267,13 +311,15 @@
     <sect2 xml:id="drivers-device">
       <title>Device Drivers</title>
 
-      <para>&nbsp;</para>
+      <para revision="282199">The <literal>drm</literal> code has
+	been updated to match &linux; version 3.8.13.</para>
     </sect2>
 
     <sect2 xml:id="drivers-storage">
       <title>Storage Drivers</title>
 
-      <para>&nbsp;</para>
+      <para revision="281957">The &man.hptnr.4; driver has been
+	updated to version 1.1.1.</para>
     </sect2>
 
     <sect2 xml:id="drivers-network">
@@ -300,13 +346,18 @@
     <sect2 xml:id="hardware-virtualization">
       <title>Virtualization Support</title>
 
-      <para>&nbsp;</para>
+      <para revision="280370">The &man.bhyve.8; hypervisor has been
+	updated to support <literal>DSM TRIM</literal> commands for
+	virtual <acronym>AHCI</acronym> disks.</para>
     </sect2>
 
     <sect2 xml:id="hardware-arm">
       <title>ARM Support</title>
 
-      <para>&nbsp;</para>
+      <para revision="278608">The <literal>bcm2835_cpufreq</literal>
+	driver has been added, which supports <acronym>CPU</acronym>
+	frequency and voltage control on the Raspberry Pi
+	<acronym>SOC</acronym>.</para>
     </sect2>
   </sect1>
 
@@ -318,6 +369,7 @@
 
     <sect2 xml:id="storage-general">
       <title>General Storage</title>
+
       <para revision="279002" contrib="sponsor" sponsor="&ix;">The
 	&man.ctl.4; <acronym>LUN</acronym> mapping has been rewritten,
 	replacing <acronym>iSCSI</acronym>-specific mapping mechanisms
@@ -376,7 +428,11 @@
     <sect2 xml:id="boot-loader">
       <title>Boot Loader Changes</title>
 
-      <para>&nbsp;</para>
+      <para revision="281843">The boot loader has been updated to
+	support entering the <acronym>GELI</acronym> passphrase before
+	loading the kernel.  To enable this behavior, add
+	<literal>geom_eli_passphrase_prompt="YES"</literal> to
+	&man.loader.conf.5;.</para>
     </sect2>
 
     <sect2 xml:id="boot-menu">

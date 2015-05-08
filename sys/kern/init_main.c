@@ -707,6 +707,9 @@ start_init(void *dummy)
 
 	vfs_mountroot();
 
+	/* Wipe GELI passphrase from the environment. */
+	unsetenv("kern.geom.eli.passphrase");
+
 	/*
 	 * Need just enough stack to hold the faked-up "execve()" arguments.
 	 */

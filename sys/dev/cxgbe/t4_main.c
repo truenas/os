@@ -386,6 +386,7 @@ static int t4_free_irq(struct adapter *, struct irq *);
 static void reg_block_dump(struct adapter *, uint8_t *, unsigned int,
     unsigned int);
 static void t4_get_regs(struct adapter *, struct t4_regdump *, uint8_t *);
+static void cxgbe_refresh_stats(struct adapter *, struct port_info *);
 static void cxgbe_tick(void *);
 static void cxgbe_vlan_config(void *, struct ifnet *, uint16_t);
 static int cpl_not_handled(struct sge_iq *, const struct rss_header *,
@@ -610,6 +611,8 @@ t4_attach(device_t dev)
 	mtx_init(&sc->sfl_lock, "starving freelists", 0, MTX_DEF);
 	TAILQ_INIT(&sc->sfl);
 	callout_init(&sc->sfl_callout, CALLOUT_MPSAFE);
+
+	mtx_init(&sc->regwin_lock, "register and memory window", 0, MTX_DEF);
 
 	rc = map_bars_0_and_4(sc);
 	if (rc != 0)
@@ -1011,6 +1014,8 @@ t4_detach(device_t dev)
 		mtx_destroy(&sc->sfl_lock);
 	if (mtx_initialized(&sc->ifp_lock))
 		mtx_destroy(&sc->ifp_lock);
+	if (mtx_initialized(&sc->regwin_lock))
+		mtx_destroy(&sc->regwin_lock);
 
 	bzero(sc, sizeof(*sc));
 
@@ -1392,7 +1397,8 @@ cxgbe_transmit(struct ifnet *ifp, struct mbuf *m)
 		return (ENETDOWN);
 	}
 
-	if (m->m_flags & M_FLOWID)
+	/* check if flowid is set */
+	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE)
 		txq += ((m->m_pkthdr.flowid % (pi->ntxq - pi->rsrv_noflowq))
 		    + pi->rsrv_noflowq);
 	br = txq->br;
@@ -2807,9 +2813,6 @@ build_medialist(struct port_info *pi, struct ifmedia *media)
 
 	switch(pi->port_type) {
 	case FW_PORT_TYPE_BT_XFI:
-		ifmedia_add(media, m | IFM_10G_T, data, NULL);
-		break;
-
 	case FW_PORT_TYPE_BT_XAUI:
 		ifmedia_add(media, m | IFM_10G_T, data, NULL);
 		/* fall through */
@@ -2996,8 +2999,10 @@ update_mac_settings(struct ifnet *ifp, int flags)
 		TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
 			if (ifma->ifma_addr->sa_family != AF_LINK)
 				continue;
-			mcaddr[i++] =
+			mcaddr[i] =
 			    LLADDR((struct sockaddr_dl *)ifma->ifma_addr);
+			MPASS(ETHER_IS_MULTICAST(mcaddr[i]));
+			i++;
 
 			if (i == FW_MAC_EXACT_CHUNK) {
 				rc = t4_alloc_mac_filt(sc, sc->mbox, viid, del,
@@ -3049,6 +3054,9 @@ mcfail:
 	return (rc);
 }
 
+/*
+ * {begin|end}_synchronized_op must be called from the same thread.
+ */
 int
 begin_synchronized_op(struct adapter *sc, struct port_info *pi, int flags,
     char *wmesg)
@@ -3104,6 +3112,9 @@ done:
 	return (rc);
 }
 
+/*
+ * {begin|end}_synchronized_op must be called from the same thread.
+ */
 void
 end_synchronized_op(struct adapter *sc, int flags)
 {
@@ -3311,6 +3322,7 @@ adapter_full_init(struct adapter *sc)
 {
 	int rc, i;
 
+	ASSERT_SYNCHRONIZED_OP(sc);
 	ADAPTER_LOCK_ASSERT_NOTOWNED(sc);
 	KASSERT((sc->flags & FULL_INIT_DONE) == 0,
 	    ("%s: FULL_INIT_DONE already", __func__));
@@ -4236,20 +4248,19 @@ t4_get_regs(struct adapter *sc, struct t4_regdump *regs, uint8_t *buf)
 }
 
 static void
-cxgbe_tick(void *arg)
+cxgbe_refresh_stats(struct adapter *sc, struct port_info *pi)
 {
-	struct port_info *pi = arg;
-	struct adapter *sc = pi->adapter;
 	struct ifnet *ifp = pi->ifp;
 	struct sge_txq *txq;
 	int i, drops;
 	struct port_stats *s = &pi->stats;
+	struct timeval tv;
+	const struct timeval interval = {0, 250000};	/* 250ms */
 
-	PORT_LOCK(pi);
-	if (!(ifp->if_drv_flags & IFF_DRV_RUNNING)) {
-		PORT_UNLOCK(pi);
-		return;	/* without scheduling another callout */
-	}
+	getmicrotime(&tv);
+	timevalsub(&tv, &interval);
+	if (timevalcmp(&tv, &pi->last_refreshed, <))
+		return;
 
 	t4_get_port_stats(sc, pi->tx_chan, s);
 
@@ -4262,16 +4273,14 @@ cxgbe_tick(void *arg)
 	ifp->if_iqdrops = s->rx_ovflow0 + s->rx_ovflow1 + s->rx_ovflow2 +
 	    s->rx_ovflow3 + s->rx_trunc0 + s->rx_trunc1 + s->rx_trunc2 +
 	    s->rx_trunc3;
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < NCHAN; i++) {
 		if (pi->rx_chan_map & (1 << i)) {
 			uint32_t v;
 
-			/*
-			 * XXX: indirect reads from the same ADDR/DATA pair can
-			 * race with each other.
-			 */
+			mtx_lock(&sc->regwin_lock);
 			t4_read_indirect(sc, A_TP_MIB_INDEX, A_TP_MIB_DATA, &v,
 			    1, A_TP_MIB_TNL_CNG_DROP_0 + i);
+			mtx_unlock(&sc->regwin_lock);
 			ifp->if_iqdrops += v;
 		}
 	}
@@ -4284,6 +4293,24 @@ cxgbe_tick(void *arg)
 	ifp->if_oerrors = s->tx_error_frames;
 	ifp->if_ierrors = s->rx_jabber + s->rx_runt + s->rx_too_long +
 	    s->rx_fcs_err + s->rx_len_err;
+
+	getmicrotime(&pi->last_refreshed);
+}
+
+static void
+cxgbe_tick(void *arg)
+{
+	struct port_info *pi = arg;
+	struct adapter *sc = pi->adapter;
+	struct ifnet *ifp = pi->ifp;
+
+	PORT_LOCK(pi);
+	if (!(ifp->if_drv_flags & IFF_DRV_RUNNING)) {
+		PORT_UNLOCK(pi);
+		return;	/* without scheduling another callout */
+	}
+
+	cxgbe_refresh_stats(sc, pi);
 
 	callout_schedule(&pi->tick, hz);
 	PORT_UNLOCK(pi);
@@ -4587,7 +4614,7 @@ t4_sysctls(struct adapter *sc)
 
 	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "ddp_stats",
 	    CTLTYPE_STRING | CTLFLAG_RD, sc, 0,
-	    sysctl_ddp_stats, "A", "DDP statistics");
+	    sysctl_ddp_stats, "A", "non-TCP DDP statistics");
 
 	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "devlog",
 	    CTLTYPE_STRING | CTLFLAG_RD, sc, 0,
@@ -4689,6 +4716,10 @@ t4_sysctls(struct adapter *sc)
 		sc->tt.rx_coalesce = 1;
 		SYSCTL_ADD_INT(ctx, children, OID_AUTO, "rx_coalesce",
 		    CTLFLAG_RW, &sc->tt.rx_coalesce, 0, "receive coalescing");
+
+		sc->tt.tx_align = 1;
+		SYSCTL_ADD_INT(ctx, children, OID_AUTO, "tx_align",
+		    CTLFLAG_RW, &sc->tt.tx_align, 0, "chop and align payload");
 	}
 #endif
 
@@ -4943,13 +4974,16 @@ cxgbe_sysctls(struct port_info *pi)
 static int
 sysctl_int_array(SYSCTL_HANDLER_ARGS)
 {
-	int rc, *i;
+	int rc, *i, space = 0;
 	struct sbuf sb;
 
 	sbuf_new(&sb, NULL, 32, SBUF_AUTOEXTEND);
-	for (i = arg1; arg2; arg2 -= sizeof(int), i++)
-		sbuf_printf(&sb, "%d ", *i);
-	sbuf_trim(&sb);
+	for (i = arg1; arg2; arg2 -= sizeof(int), i++) {
+		if (space)
+			sbuf_printf(&sb, " ");
+		sbuf_printf(&sb, "%d", *i);
+		space = 1;
+	}
 	sbuf_finish(&sb);
 	rc = sysctl_handle_string(oidp, sbuf_data(&sb), sbuf_len(&sb), req);
 	sbuf_delete(&sb);
@@ -7045,10 +7079,9 @@ get_filter_mode(struct adapter *sc, uint32_t *mode)
 		log(LOG_WARNING, "%s: cached filter mode out of sync %x %x.\n",
 		    device_get_nameunit(sc->dev), sc->params.tp.vlan_pri_map,
 		    fconf);
-		sc->params.tp.vlan_pri_map = fconf;
 	}
 
-	*mode = fconf_to_mode(sc->params.tp.vlan_pri_map);
+	*mode = fconf_to_mode(fconf);
 
 	end_synchronized_op(sc, LOCK_HELD);
 	return (0);
@@ -7079,14 +7112,7 @@ set_filter_mode(struct adapter *sc, uint32_t mode)
 	}
 #endif
 
-#ifdef notyet
 	rc = -t4_set_filter_mode(sc, fconf);
-	if (rc == 0)
-		sc->filter_mode = fconf;
-#else
-	rc = ENOTSUP;
-#endif
-
 done:
 	end_synchronized_op(sc, LOCK_HELD);
 	return (rc);
@@ -8153,7 +8179,12 @@ toe_capability(struct port_info *pi, int enable)
 		return (ENODEV);
 
 	if (enable) {
-		if (!(sc->flags & FULL_INIT_DONE)) {
+		/*
+		 * We need the port's queues around so that we're able to send
+		 * and receive CPLs to/from the TOE even if the ifnet for this
+		 * port has never been UP'd administratively.
+		 */
+		if (!(pi->flags & PORT_INIT_DONE)) {
 			rc = cxgbe_init_synchronized(pi);
 			if (rc)
 				return (rc);
@@ -8251,6 +8282,12 @@ t4_activate_uld(struct adapter *sc, int id)
 
 	SLIST_FOREACH(ui, &t4_uld_list, link) {
 		if (ui->uld_id == id) {
+			if (!(sc->flags & FULL_INIT_DONE)) {
+				rc = adapter_full_init(sc);
+				if (rc != 0)
+					goto done;
+			}
+
 			rc = ui->activate(sc);
 			if (rc == 0)
 				ui->refcount++;

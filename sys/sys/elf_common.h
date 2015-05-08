@@ -251,6 +251,9 @@ typedef struct {
 #define	SHN_LOPROC	0xff00		/* First processor-specific. */
 #define	SHN_HIPROC	0xff1f		/* Last processor-specific. */
 #define	SHN_LOOS	0xff20		/* First operating system-specific. */
+#define	SHN_FBSD_CACHED	SHN_LOOS	/* Transient, for sys/kern/link_elf_obj
+					   linker only: Cached global in local
+					   symtab. */
 #define	SHN_HIOS	0xff3f		/* Last operating system-specific. */
 #define	SHN_ABS		0xfff1		/* Absolute values. */
 #define	SHN_COMMON	0xfff2		/* Common data. */
@@ -994,6 +997,19 @@ typedef struct {
 #define	R_X86_64_DTPOFF32	21	/* Offset in TLS block */
 #define	R_X86_64_GOTTPOFF	22	/* PC relative offset to IE GOT entry */
 #define	R_X86_64_TPOFF32	23	/* Offset in static TLS block */
+#define	R_X86_64_PC64		24	/* PC-relative 64 bit signed sym value. */
+#define	R_X86_64_GOTOFF64	25
+#define	R_X86_64_GOTPC32	26
+#define	R_X86_64_GOT64		27
+#define	R_X86_64_GOTPCREL64	28
+#define	R_X86_64_GOTPC64	29
+#define	R_X86_64_GOTPLT64	30
+#define	R_X86_64_PLTOFF64	31
+#define	R_X86_64_SIZE32		32
+#define	R_X86_64_SIZE64		33
+#define	R_X86_64_GOTPC32_TLSDESC 34
+#define	R_X86_64_TLSDESC_CALL	35
+#define	R_X86_64_TLSDESC	36
 #define	R_X86_64_IRELATIVE	37
 
 

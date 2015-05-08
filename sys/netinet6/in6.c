@@ -155,6 +155,8 @@ in6_ifaddloop(struct ifaddr *ifa)
 
 	ia = ifa2ia6(ifa);
 	ifp = ifa->ifa_ifp;
+	if (nd6_need_cache(ifp) == 0)
+		return;
 	IF_AFDATA_LOCK(ifp);
 	ifa->ifa_rtrequest = nd6_rtrequest;
 	ln = lla_lookup(LLTABLE6(ifp), (LLE_CREATE | LLE_IFADDR |
@@ -2368,7 +2370,8 @@ in6if_do_dad(struct ifnet *ifp)
 	if ((ifp->if_flags & IFF_LOOPBACK) != 0)
 		return (0);
 
-	if (ND_IFINFO(ifp)->flags & ND6_IFF_IFDISABLED)
+	if ((ND_IFINFO(ifp)->flags & ND6_IFF_IFDISABLED) ||
+	    (ND_IFINFO(ifp)->flags & ND6_IFF_NO_DAD))
 		return (0);
 
 	switch (ifp->if_type) {

@@ -1244,9 +1244,6 @@ t4_teardown_port_queues(struct port_info *pi)
 			free_ofld_rxq(pi, ofld_rxq);
 	}
 #endif
-#ifdef DEV_NETMAP
-	CXGBE_UNIMPLEMENTED(__func__);
-#endif
 
 	return (0);
 }
@@ -1745,7 +1742,7 @@ t4_eth_rx(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m0)
 	m0->m_data += fl_pktshift;
 
 	m0->m_pkthdr.rcvif = ifp;
-	m0->m_flags |= M_FLOWID;
+	M_HASHTYPE_SET(m0, M_HASHTYPE_OPAQUE);
 	m0->m_pkthdr.flowid = be32toh(rss->hash_val);
 
 	if (cpl->csum_calc && !cpl->err_vec) {
@@ -2563,7 +2560,7 @@ free_mgmtq(struct adapter *sc)
 	return free_wrq(sc, &sc->sge.mgmtq);
 }
 
-static inline int
+int
 tnl_cong(struct port_info *pi)
 {
 

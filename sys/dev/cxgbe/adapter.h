@@ -263,7 +263,9 @@ struct port_info {
 
 	int linkdnrc;
 	struct link_config link_cfg;
-	struct port_stats stats;
+
+	struct timeval last_refreshed;
+ 	struct port_stats stats;
 
 	eventhandler_tag vlan_c;
 
@@ -786,6 +788,8 @@ struct adapter {
 	TAILQ_HEAD(, sge_fl) sfl;
 	struct callout sfl_callout;
 
+	struct mtx regwin_lock;	/* for indirect reads and memory windows */
+
 	an_handler_t an_handler __aligned(CACHE_LINE_SIZE);
 	fw_msg_handler_t fw_msg_handler[5];	/* NUM_FW6_TYPES */
 	cpl_handler_t cpl_handler[0xef];	/* NUM_CPL_CMDS */
@@ -803,7 +807,6 @@ struct adapter {
 #define ADAPTER_LOCK_ASSERT_OWNED(sc)	mtx_assert(&(sc)->sc_lock, MA_OWNED)
 #define ADAPTER_LOCK_ASSERT_NOTOWNED(sc) mtx_assert(&(sc)->sc_lock, MA_NOTOWNED)
 
-/* XXX: not bulletproof, but much better than nothing */
 #define ASSERT_SYNCHRONIZED_OP(sc)	\
     KASSERT(IS_BUSY(sc) && \
 	(mtx_owned(&(sc)->sc_lock) || sc->last_op_thr == curthread), \
@@ -1023,6 +1026,7 @@ void t4_wrq_tx_locked(struct adapter *, struct sge_wrq *, struct wrqe *);
 int t4_eth_tx(struct ifnet *, struct sge_txq *, struct mbuf *);
 void t4_update_fl_bufsize(struct ifnet *);
 int can_resume_tx(struct sge_eq *);
+int tnl_cong(struct port_info *);
 
 /* t4_tracer.c */
 struct t4_tracer;
