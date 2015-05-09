@@ -198,6 +198,8 @@ create_socket(json_t *json)
 		memset(&hints, 0, sizeof(hints));
 
 		hints.ai_socktype = st;
+		hints.ai_family = AF_INET;
+		
 		if (passive) {
 			hints.ai_flags |= AI_PASSIVE;
 		}
