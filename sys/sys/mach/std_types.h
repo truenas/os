@@ -167,6 +167,9 @@
 #define copyoutmap(a, b, c, d) 0
 #define copyinmap(a, b, c, d) 0
 
+#define vm_allocate mach_vm_allocate
+#define vm_deallocate mach_vm_deallocate
+
 #define decl_simple_lock_data(a, b) a struct mtx b;
 	
 #include <vm/vm.h>
