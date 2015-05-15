@@ -36,7 +36,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/capsicum.h>
+#include <sys/capability.h>
 #include <sys/condvar.h>
 #include <sys/conf.h>
 #include <sys/file.h>
@@ -786,7 +786,7 @@ icl_receive_thread(void *arg)
 		 * is enough data received to read the PDU.
 		 */
 		SOCKBUF_LOCK(&so->so_rcv);
-		available = sbavail(&so->so_rcv);
+		available = so->so_rcv.sb_cc;
 		if (available < ic->ic_receive_len) {
 			so->so_rcv.sb_lowat = ic->ic_receive_len;
 			cv_wait(&ic->ic_receive_cv, &so->so_rcv.sb_mtx);
@@ -1316,7 +1316,9 @@ icl_soft_conn_handoff(struct icl_conn *ic, int fd)
 {
 	struct file *fp;
 	struct socket *so;
+#ifdef cap_rights_init
 	cap_rights_t rights;
+#endif
 	int error;
 
 	ICL_CONN_LOCK_ASSERT_NOT(ic);
@@ -1324,8 +1326,12 @@ icl_soft_conn_handoff(struct icl_conn *ic, int fd)
 	/*
 	 * Steal the socket from userland.
 	 */
+#ifdef cap_rights_init
 	error = fget(curthread, fd,
 	    cap_rights_init(&rights, CAP_SOCK_CLIENT), &fp);
+#else
+	error = fget(curthread, fd, 0, &fp);
+#endif
 	if (error != 0)
 		return (error);
 	if (fp->f_type != DTYPE_SOCKET) {
