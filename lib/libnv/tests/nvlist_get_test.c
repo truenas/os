@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <uuid.h>
 
 #include <nv.h>
 
@@ -54,6 +55,7 @@ main(void)
 {
 	const nvlist_t *cnvl;
 	nvlist_t *nvl;
+	uuid_t uuid;
 	size_t size;
 
 	printf("1..83\n");
@@ -133,6 +135,12 @@ main(void)
 	CHECK(memcmp(nvlist_get_binary(nvl, "nvlist/binary/abcdefghijklmnopqrstuvwxyz", NULL), "abcdefghijklmnopqrstuvwxyz", sizeof("abcdefghijklmnopqrstuvwxyz")) == 0);
 	CHECK(memcmp(nvlist_get_binary(nvl, "nvlist/binary/abcdefghijklmnopqrstuvwxyz", &size), "abcdefghijklmnopqrstuvwxyz", sizeof("abcdefghijklmnopqrstuvwxyz")) == 0);
 	CHECK(size == sizeof("abcdefghijklmnopqrstuvwxyz"));
+
+	CHECK(!nvlist_exists_binary(nvl, "nvlist/uuid/x"));
+	uuid_create(&uuid, NULL);
+	nvlist_add_uuid(nvl, "nvlist/uuid/x", &uuid);
+	CHECK(nvlist_error(nvl) == 0);
+	CHECK(memcmp(nvlist_get_uuid(nvl, "nvlist/uuid/x"), &uuid, sizeof(uuid_t)) == 0);
 
 	CHECK(!nvlist_exists_nvlist(nvl, "nvlist/nvlist"));
 	nvlist_add_nvlist(nvl, "nvlist/nvlist", nvl);

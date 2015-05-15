@@ -200,6 +200,10 @@ nvpair_clone(const nvpair_t *nvp)
 		data = nvpair_get_binary(nvp, &datasize);
 		newnvp = nvpair_create_binary(name, data, datasize);
 		break;
+	case NV_TYPE_UUID:
+		data = nvpair_get_uuid(nvp);
+		newnvp = nvpair_create_uuid(name, data);
+		break;
 	default:
 		PJDLOG_ABORT("Unknown type: %d.", nvpair_type(nvp));
 	}
@@ -825,6 +829,13 @@ nvpair_create_binary(const char *name, const void *value, size_t size)
 }
 
 nvpair_t *
+nvpair_create_uuid(const char *name, const uuid_t *value)
+{
+
+	return (nvpair_createf_uuid(value, "%s", name));
+}
+
+nvpair_t *
 nvpair_createf_null(const char *namefmt, ...)
 {
 	va_list nameap;
@@ -910,6 +921,19 @@ nvpair_createf_binary(const void *value, size_t size, const char *namefmt, ...)
 
 	va_start(nameap, namefmt);
 	nvp = nvpair_createv_binary(value, size, namefmt, nameap);
+	va_end(nameap);
+
+	return (nvp);
+}
+
+nvpair_t *
+nvpair_createf_uuid(const uuid_t *value, const char *namefmt, ...)
+{
+	va_list nameap;
+	nvpair_t *nvp;
+
+	va_start(nameap, namefmt);
+	nvp = nvpair_createv_uuid(value, namefmt, nameap);
 	va_end(nameap);
 
 	return (nvp);
@@ -1039,6 +1063,34 @@ nvpair_createv_binary(const void *value, size_t size, const char *namefmt,
 }
 
 nvpair_t *
+nvpair_createv_uuid(const uuid_t *value,  const char *namefmt,
+    va_list nameap)
+{
+	nvpair_t *nvp;
+	void *data;
+	size_t size;
+
+	size = sizeof(uuid_t);
+
+	if (value == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	data = malloc(size);
+	if (data == NULL)
+		return (NULL);
+	memcpy(data, value, size);
+
+	nvp = nvpair_allocv(NV_TYPE_UUID, (uint64_t)(uintptr_t)data, size,
+	    namefmt, nameap);
+	if (nvp == NULL)
+		free(data);
+
+	return (nvp);	
+}
+
+nvpair_t *
 nvpair_move_string(const char *name, char *value)
 {
 
@@ -1126,6 +1178,19 @@ nvpair_movef_binary(void *value, size_t size, const char *namefmt, ...)
 }
 
 nvpair_t *
+nvpair_movef_uuid(uuid_t *value, const char *namefmt, ...)
+{
+	va_list nameap;
+	nvpair_t *nvp;
+
+	va_start(nameap, namefmt);
+	nvp = nvpair_movev_uuid(value, namefmt, nameap);
+	va_end(nameap);
+
+	return (nvp);
+}
+
+nvpair_t *
 nvpair_movev_string(char *value, const char *namefmt, va_list nameap)
 {
 	nvpair_t *nvp;
@@ -1190,6 +1255,20 @@ nvpair_movev_binary(void *value, size_t size, const char *namefmt,
 	    namefmt, nameap));
 }
 
+nvpair_t *
+nvpair_movev_uuid(uuid_t *value, const char *namefmt,
+    va_list nameap)
+{
+
+	if (value == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	return (nvpair_allocv(NV_TYPE_UUID, (uint64_t)(uintptr_t)value,
+	    sizeof(uuid_t), namefmt, nameap));
+}
+
 bool
 nvpair_get_bool(const nvpair_t *nvp)
 {
@@ -1252,6 +1331,16 @@ nvpair_get_binary(const nvpair_t *nvp, size_t *sizep)
 	return ((const void *)(intptr_t)nvp->nvp_data);
 }
 
+const uuid_t *
+nvpair_get_uuid(const nvpair_t *nvp)
+{
+
+	NVPAIR_ASSERT(nvp);
+	PJDLOG_ASSERT(nvp->nvp_type == NV_TYPE_UUID);
+
+	return ((const uuid_t *)(intptr_t)nvp->nvp_data);
+}
+
 void
 nvpair_free(nvpair_t *nvp)
 {
@@ -1275,6 +1364,9 @@ nvpair_free(nvpair_t *nvp)
 	case NV_TYPE_BINARY:
 		free((void *)(intptr_t)nvp->nvp_data);
 		break;
+	case NV_TYPE_UUID:
+		free((void *)(intptr_t)nvp->nvp_data);
+		break;	
 	}
 	free(nvp);
 }
@@ -1321,6 +1413,8 @@ nvpair_type_string(int type)
 		return ("INT64");
 	case NV_TYPE_ENDPOINT:
 		return ("ENDPOINT");
+	case NV_TYPE_UUID:
+		return ("UUID");
 	default:
 		return ("<UNKNOWN>");
 	}
