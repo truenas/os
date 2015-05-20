@@ -384,6 +384,21 @@ nvpair_pack_binary(const nvpair_t *nvp, unsigned char *ptr, size_t *leftp)
 	return (ptr);
 }
 
+unsigned char *
+nvpair_pack_uuid(const nvpair_t *nvp, unsigned char *ptr, size_t *leftp)
+{
+
+	NVPAIR_ASSERT(nvp);
+	PJDLOG_ASSERT(nvp->nvp_type == NV_TYPE_UUID);
+
+	PJDLOG_ASSERT(*leftp >= nvp->nvp_datasize);
+	memcpy(ptr, (const void *)(intptr_t)nvp->nvp_data, nvp->nvp_datasize);
+	ptr += nvp->nvp_datasize;
+	*leftp -= nvp->nvp_datasize;
+
+	return (ptr);	
+}
+
 void
 nvpair_init_datasize(nvpair_t *nvp)
 {

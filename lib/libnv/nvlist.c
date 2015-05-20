@@ -1764,6 +1764,13 @@ nvlist_get_binary(const nvlist_t *nvl, const char *name, size_t *sizep)
 	return (nvlist_getf_binary(nvl, sizep, "%s", name));
 }
 
+uint64_t
+nvlist_get_number_type(const nvlist_t *nvl, const char *name, int type)
+{
+
+	return (nvlist_getf_number_type(nvl, type, "%s", name));
+}
+
 #define	NVLIST_GETF(ftype, type)					\
 ftype									\
 nvlist_getf_##type(const nvlist_t *nvl, const char *namefmt, ...)	\
@@ -1799,6 +1806,19 @@ nvlist_getf_binary(const nvlist_t *nvl, size_t *sizep, const char *namefmt, ...)
 	va_end(nameap);
 
 	return (value);
+}
+
+uint64_t
+nvlist_getf_number_type(const nvlist_t *nvl, int type, const char *namefmt, ...)
+{
+	va_list nameap;
+	uint64_t value;
+
+	va_start(nameap, namefmt);
+	value = nvlist_getv_number_type(nvl, type, namefmt, nameap);
+	va_end(nameap);
+
+	return (value);	
 }
 
 const nvpair_t *
@@ -1847,6 +1867,22 @@ nvlist_getv_binary(const nvlist_t *nvl, size_t *sizep, const char *namefmt,
 		nvlist_report_missing(NV_TYPE_BINARY, namefmt, nameap);
 
 	return (nvpair_get_binary(nvp, sizep));
+}
+
+uint64_t
+nvlist_getv_number_type(const nvlist_t *nvl, int type, const char *namefmt,
+    va_list nameap)
+{
+	va_list cnameap;
+	const nvpair_t *nvp;
+
+	va_copy(cnameap, nameap);
+	nvp = nvlist_findv(nvl, type, namefmt, cnameap);
+	va_end(cnameap);
+	if (nvp == NULL)
+		nvlist_report_missing(type, namefmt, nameap);
+
+	return (nvpair_get_number(nvp));	
 }
 
 #define	NVLIST_TAKE(ftype, type)					\
