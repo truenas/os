@@ -2496,15 +2496,6 @@ ixgbe_setup_interface(device_t dev, struct adapter *adapter)
 	ifp->if_softc = adapter;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_ioctl = ixgbe_ioctl;
-#if __FreeBSD_version >= 1100036
-	if_setgetcounterfn(ifp, ixgbe_get_counter);
-#endif
-#if __FreeBSD_version >= 1100045
-	/* TSO parameters */
-	ifp->if_hw_tsomax = 65518;
-	ifp->if_hw_tsomaxsegcount = IXGBE_82599_SCATTER;
-	ifp->if_hw_tsomaxsegsize = 2048;
-#endif
 #ifndef IXGBE_LEGACY_TX
 	ifp->if_transmit = ixgbe_mq_start;
 	ifp->if_qflush = ixgbe_qflush;
