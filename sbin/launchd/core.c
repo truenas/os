@@ -8219,7 +8219,7 @@ job_mig_swap_complex(job_t j, vproc_gsk_t inkey, vproc_gsk_t outkey,
 
 	job_log(j, LOG_DEBUG, "%s key: %u", action, inkey ? inkey : outkey);
 
-	*outvalCnt = 16 * 1024 - 1;
+	*outvalCnt = 20 * 1024 * 1024;
 	mig_allocate(outval, *outvalCnt);
 	if (!job_assumes(j, *outval != 0)) {
 		return 1;
