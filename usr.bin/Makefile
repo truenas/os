@@ -115,6 +115,7 @@ SUBDIR=	alias \
 	nice \
 	nl \
 	nohup \
+	notifyutil \
 	opieinfo \
 	opiekey \
 	opiepasswd \
