@@ -373,13 +373,6 @@ extern mach_msg_return_t ipc_kmsg_copyin(
 extern void ipc_kmsg_copyin_from_kernel(
 	ipc_kmsg_t	kmsg);
 
-/* Copyout a port right returning a name */
-extern mach_msg_return_t ipc_kmsg_copyout_object(
-	ipc_space_t		space,
-	ipc_object_t		object,
-	mach_msg_type_name_t	msgt_name,
-	mach_port_name_t		*namep);
-
 /* Copyout the header and body to a user message */
 extern mach_msg_return_t ipc_kmsg_copyout(
 	ipc_kmsg_t		kmsg,
@@ -392,13 +385,6 @@ extern mach_msg_return_t ipc_kmsg_copyout(
 extern mach_msg_size_t ipc_kmsg_copyout_size(
 	ipc_kmsg_t		kmsg,
 	vm_map_t		map);
-
-/* Copyout port rights and out-of-line memory from the body of a message */
-extern mach_msg_return_t ipc_kmsg_copyout_body(
-    	ipc_kmsg_t		kmsg,
-	ipc_space_t		space,
-	vm_map_t		map,
-	mach_msg_body_t		*slist);
 
 /* Copyout port rights and out-of-line memory to a user message,
    not reversing the ports in the header */
