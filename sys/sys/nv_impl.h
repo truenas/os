@@ -53,6 +53,37 @@ typedef struct nvpair nvpair_t;
 
 #define	NV_FLAG_BIG_ENDIAN		0x80
 
+#ifdef _KERNEL
+#define	nv_malloc(size)			malloc((size), M_NVLIST, M_NOWAIT)
+#define	nv_calloc(n, size)		malloc((n) * (size), M_NVLIST, \
+					    M_NOWAIT | M_ZERO)
+#define	nv_realloc(buf, size)		realloc((buf), (size), M_NVLIST, \
+					    M_NOWAIT)
+#define	nv_free(buf)			free((buf), M_NVLIST)
+#define	nv_strdup(buf)			strdup((buf), M_NVLIST)
+#define	nv_vasprintf(ptr, ...)		vasprintf(ptr, M_NVLIST, __VA_ARGS__)
+
+#define	SAVE_ERRNO(var)			((void)(var))
+#define	RESTORE_ERRNO(var)		((void)(var))
+
+#define	ERRNO_OR_DEFAULT(default)	(default)
+
+#else
+
+#define	nv_malloc(size)			malloc((size))
+#define	nv_calloc(n, size)		calloc((n), (size))
+#define	nv_realloc(buf, size)		realloc((buf), (size))
+#define	nv_free(buf)			free((buf))
+#define	nv_strdup(buf)			strdup((buf))
+#define	nv_vasprintf(ptr, ...)		vasprintf(ptr, __VA_ARGS__)
+
+#define	SAVE_ERRNO(var) 		(var) = errno
+#define	RESTORE_ERRNO(var) 		errno = (var)
+
+#define	ERRNO_OR_DEFAULT(default)	(errno == 0 ? (default) : errno)
+
+#endif
+
 int	*nvlist_descriptors(const nvlist_t *nvl, size_t *nitemsp);
 size_t	 nvlist_ndescriptors(const nvlist_t *nvl);
 
@@ -90,14 +121,12 @@ nvpair_t *nvpair_create_nvlist(const char *name, const nvlist_t *value);
 nvpair_t *nvpair_create_nvlist_type(const char *name, const nvlist_t *value, int type);
 nvpair_t *nvpair_create_descriptor(const char *name, int value);
 nvpair_t *nvpair_create_binary(const char *name, const void *value, size_t size);
-nvpair_t *nvpair_create_uuid(const char *name, const uuid_t *value);
 
 nvpair_t *nvpair_move_string(const char *name, char *value);
 nvpair_t *nvpair_move_nvlist(const char *name, nvlist_t *value);
 nvpair_t *nvpair_move_nvlist_type(const char *name, nvlist_t *value, int type);
 nvpair_t *nvpair_move_descriptor(const char *name, int value);
 nvpair_t *nvpair_move_binary(const char *name, void *value, size_t size);
-nvpair_t *nvpair_move_uuid(const char *name, uuid_t *value);
 
 bool		 nvpair_get_bool(const nvpair_t *nvp);
 uint64_t	 nvpair_get_number(const nvpair_t *nvp);
@@ -105,17 +134,8 @@ const char	*nvpair_get_string(const nvpair_t *nvp);
 const nvlist_t	*nvpair_get_nvlist(const nvpair_t *nvp);
 int		 nvpair_get_descriptor(const nvpair_t *nvp);
 const void	*nvpair_get_binary(const nvpair_t *nvp, size_t *sizep);
-const uuid_t	*nvpair_get_uuid(const nvpair_t *nvp);
 
 void nvpair_free(nvpair_t *nvp);
-
-const nvpair_t *nvlist_getf_nvpair(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
-
-const nvpair_t *nvlist_getv_nvpair(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
-
-nvpair_t *nvlist_takef_nvpair(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
-
-nvpair_t *nvlist_takev_nvpair(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 
 nvpair_t *nvpair_createf_null(const char *namefmt, ...) __printflike(1, 2);
 nvpair_t *nvpair_createf_bool(bool value, const char *namefmt, ...) __printflike(2, 3);
@@ -124,7 +144,6 @@ nvpair_t *nvpair_createf_string(const char *value, const char *namefmt, ...) __p
 nvpair_t *nvpair_createf_nvlist_type(const nvlist_t *value, int type, const char *namefmt, ...) __printflike(3, 4);
 nvpair_t *nvpair_createf_descriptor(int value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_createf_binary(const void *value, size_t size, const char *namefmt, ...) __printflike(3, 4);
-nvpair_t *nvpair_createf_uuid(const uuid_t *value, const char *namefmt, ...) __printflike(2, 3);
 
 nvpair_t *nvpair_createv_null(const char *namefmt, va_list nameap) __printflike(1, 0);
 nvpair_t *nvpair_createv_bool(bool value, const char *namefmt, va_list nameap) __printflike(2, 0);
@@ -134,18 +153,15 @@ nvpair_t *nvpair_createv_string(const char *value, const char *namefmt, va_list 
 nvpair_t *nvpair_createv_nvlist_type(const nvlist_t *value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
 nvpair_t *nvpair_createv_descriptor(int value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_createv_binary(const void *value, size_t size, const char *namefmt, va_list nameap) __printflike(3, 0);
-nvpair_t *nvpair_createv_uuid(const uuid_t *value, const char *namefmt, va_list nameap) __printflike(2, 0);
 
 nvpair_t *nvpair_movef_string(char *value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_movef_nvlist_type(nvlist_t *value, int type, const char *namefmt, ...) __printflike(3, 4);
 nvpair_t *nvpair_movef_descriptor(int value, const char *namefmt, ...) __printflike(2, 3);
 nvpair_t *nvpair_movef_binary(void *value, size_t size, const char *namefmt, ...) __printflike(3, 4);
-nvpair_t *nvpair_movef_uuid(uuid_t *value, const char *namefmt, ...) __printflike(2, 3);
 
 nvpair_t *nvpair_movev_string(char *value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_movev_nvlist_type(nvlist_t *value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
 nvpair_t *nvpair_movev_descriptor(int value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_movev_binary(void *value, size_t size, const char *namefmt, va_list nameap) __printflike(3, 0);
-nvpair_t *nvpair_movev_uuid(uuid_t *value, const char *namefmt, va_list nameap) __printflike(2, 0);
 
 #endif	/* !_NV_IMPL_H_ */
