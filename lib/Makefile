@@ -23,6 +23,7 @@ SUBDIR_ORDERED=	${_csu} \
 SUBDIR=	${SUBDIR_ORDERED} \
 	.WAIT \
 	libalias \
+	${_libasl} \
 	libarchive \
 	${_libatm} \
 	libauditd \
@@ -244,6 +245,7 @@ _libcfxlite= libcfxlite
 _libdispatch= libdispatch
 _liblaunch=	liblaunch
 _libmach= libmach
+_libasl= libasl
 _libvmmapi=	libvmmapi
 .endif
 .endif
