@@ -4,6 +4,7 @@
 .include <bsd.own.mk>
 
 SUBDIR=	adduser \
+	asl \
 	arp \
 	binmiscctl \
 	bsdconfig \
