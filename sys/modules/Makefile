@@ -209,7 +209,7 @@ SUBDIR=	\
 	mac_seeotheruids \
 	mac_stub \
 	mac_test \
-	${_mach} \
+	mach \
 	malo \
 	mcd \
 	md \
