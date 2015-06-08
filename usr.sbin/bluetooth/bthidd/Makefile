@@ -13,6 +13,7 @@ DEBUG_FLAGS=	-g
 DPADD=          ${LIBBLUETOOTH} ${LIBUSBHID}
 LDADD=		-lbluetooth -lusbhid
 
+NO_WCAST_ALIGN=
 NO_WMISSING_VARIABLE_DECLARATIONS=
 
 .include <bsd.prog.mk>

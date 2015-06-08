@@ -7,4 +7,5 @@ SRCS=	ctl.c ctl_transact.c display.c get_addrs.c get_iface.c get_names.c \
 DPADD=	${LIBNCURSESW}
 LDADD=	-lncursesw
 
+NO_WCAST_ALIGN=
 .include <bsd.prog.mk>
