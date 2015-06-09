@@ -18,9 +18,6 @@
 #
 # $FreeBSD$
 
-makeoptions	MODULES_OVERRIDE=""
-makeoptions	WITHOUT_MODULES="ahc"
-
 makeoptions	WERROR="-Werror"
 
 options 	HZ=100
@@ -99,8 +96,8 @@ device		gpio
 options 	USB_HOST_ALIGN=64	# Align usb buffers to cache line size.
 device		usb
 options 	USB_DEBUG
-#options	USB_REQ_DEBUG
-#options	USB_VERBOSE
+#options 	USB_REQ_DEBUG
+#options 	USB_VERBOSE
 #device		musb
 device		ehci
 #device		ohci

@@ -166,6 +166,10 @@ device		mrsas			# LSI/Avago MegaRAID SAS/SATA, 6Gb/s and 12Gb/s
 device		pst			# Promise Supertrak SX6000
 device		twe			# 3ware ATA RAID
 
+# NVM Express (NVMe) support
+device		nvme			# base NVMe driver
+device		nvd			# expose NVMe namespace as disks, depends on nvme
+
 # atkbdc0 controls both the keyboard and the PS/2 mouse
 device		atkbdc			# AT keyboard controller
 device		atkbd			# AT keyboard
@@ -352,7 +356,9 @@ device		virtio_blk		# VirtIO Block device
 device		virtio_scsi		# VirtIO SCSI device
 device		virtio_balloon		# VirtIO Memory Balloon device
 
-# HyperV drivers
+# HyperV drivers and enchancement support
+# NOTE: HYPERV depends on hyperv.  They must be added or removed together.
+options 	HYPERV			# Hyper-V kernel infrastructure
 device		hyperv			# HyperV drivers 
 
 # Xen HVM Guest Optimizations

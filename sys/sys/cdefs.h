@@ -213,7 +213,9 @@
 #define	__packed
 #define	__aligned(x)
 #define	__section(x)
+#define	__weak
 #else
+#define	__weak		__attribute__((__weak__))
 #if !__GNUC_PREREQ__(2, 5) && !defined(__INTEL_COMPILER)
 #define	__dead2
 #define	__pure2
@@ -439,7 +441,7 @@
 #define __predict_false(exp)    (exp)
 #endif
 
-#if __GNUC_PREREQ__(4, 2)
+#if __GNUC_PREREQ__(4, 0)
 #define	__hidden	__attribute__((__visibility__("hidden")))
 #define	__exported	__attribute__((__visibility__("default")))
 #else

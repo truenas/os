@@ -88,6 +88,7 @@ SUBDIR=	adduser \
 	traceroute \
 	trpt \
 	tzsetup \
+	uefisign \
 	ugidfw \
 	vipw \
 	wake \

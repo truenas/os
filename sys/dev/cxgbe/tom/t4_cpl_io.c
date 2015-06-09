@@ -390,19 +390,17 @@ t4_rcvd(struct toedev *tod, struct tcpcb *tp)
 		toep->rx_credits += toep->sb_cc - sb->sb_cc;
 		toep->sb_cc = sb->sb_cc;
 	}
-	credits = toep->rx_credits;
-	SOCKBUF_UNLOCK(sb);
+	if (toep->rx_credits > 0 &&
+	    (tp->rcv_wnd <= 32 * 1024 || toep->rx_credits >= 64 * 1024 ||
+	    (toep->rx_credits >= 16 * 1024 && tp->rcv_wnd <= 128 * 1024) ||
+	    toep->sb_cc + tp->rcv_wnd < sb->sb_lowat)) {
 
-	if (credits > 0 &&
-	    (credits + 16384 >= tp->rcv_wnd || credits >= 15 * 1024)) {
-
-		credits = send_rx_credits(sc, toep, credits);
-		SOCKBUF_LOCK(sb);
+		credits = send_rx_credits(sc, toep, toep->rx_credits);
 		toep->rx_credits -= credits;
-		SOCKBUF_UNLOCK(sb);
 		tp->rcv_wnd += credits;
 		tp->rcv_adv += credits;
 	}
+	SOCKBUF_UNLOCK(sb);
 }
 
 /*
@@ -769,7 +767,7 @@ t4_push_frames(struct adapter *sc, struct toepcb *toep, int drop)
 		    toep->tx_nocompl >= toep->tx_total / 4)
 			compl = 1;
 
-		if (compl) {
+		if (compl || toep->ulp_mode == ULP_MODE_RDMA) {
 			txwr->op_to_immdlen |= htobe32(F_FW_WR_COMPL);
 			toep->tx_nocompl = 0;
 			toep->plen_nocompl = 0;
@@ -1618,6 +1616,14 @@ do_rx_data(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	toep->rx_credits += toep->sb_cc - sb->sb_cc;
 	sbappendstream_locked(sb, m);
 	toep->sb_cc = sb->sb_cc;
+	if (toep->rx_credits > 0 && toep->sb_cc + tp->rcv_wnd < sb->sb_lowat) {
+		int credits;
+
+		credits = send_rx_credits(sc, toep, toep->rx_credits);
+		toep->rx_credits -= credits;
+		tp->rcv_wnd += credits;
+		tp->rcv_adv += credits;
+	}
 	sorwakeup_locked(so);
 	SOCKBUF_UNLOCK_ASSERT(sb);
 

@@ -3160,8 +3160,6 @@ again_with_private_addresses_allowed:
 				sifa = NULL;
 				continue;
 			}
-		} else {
-			SCTP_PRINTF("Stcb is null - no print\n");
 		}
 		atomic_add_int(&sifa->refcount, 1);
 		goto out;
@@ -3846,13 +3844,7 @@ sctp_add_cookie(struct mbuf *init, int init_offset,
 	}
 #ifdef SCTP_MBUF_LOGGING
 	if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-		struct mbuf *mat;
-
-		for (mat = copy_init; mat; mat = SCTP_BUF_NEXT(mat)) {
-			if (SCTP_BUF_IS_EXTENDED(mat)) {
-				sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-			}
-		}
+		sctp_log_mbc(copy_init, SCTP_MBUF_ICOPY);
 	}
 #endif
 	copy_initack = SCTP_M_COPYM(initack, initack_offset, M_COPYALL,
@@ -3864,13 +3856,7 @@ sctp_add_cookie(struct mbuf *init, int init_offset,
 	}
 #ifdef SCTP_MBUF_LOGGING
 	if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-		struct mbuf *mat;
-
-		for (mat = copy_initack; mat; mat = SCTP_BUF_NEXT(mat)) {
-			if (SCTP_BUF_IS_EXTENDED(mat)) {
-				sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-			}
-		}
+		sctp_log_mbc(copy_initack, SCTP_MBUF_ICOPY);
 	}
 #endif
 	/* easy side we just drop it on the end */
@@ -4075,7 +4061,7 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 			sctp_route_t iproute;
 			int len;
 
-			len = sizeof(struct ip) + sizeof(struct sctphdr);
+			len = SCTP_MIN_V4_OVERHEAD;
 			if (port) {
 				len += sizeof(struct udphdr);
 			}
@@ -4357,7 +4343,7 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 				flowlabel = ntohl(((struct in6pcb *)inp)->in6p_flowinfo);
 			}
 			flowlabel &= 0x000fffff;
-			len = sizeof(struct ip6_hdr) + sizeof(struct sctphdr);
+			len = SCTP_MIN_OVERHEAD;
 			if (port) {
 				len += sizeof(struct udphdr);
 			}
@@ -5119,10 +5105,11 @@ sctp_arethere_unrecognized_parameters(struct mbuf *in_initpkt,
 				if (op_err == NULL) {
 					/* Ok need to try to get a mbuf */
 #ifdef INET6
-					l_len = sizeof(struct ip6_hdr) + sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr);
+					l_len = SCTP_MIN_OVERHEAD;
 #else
-					l_len = sizeof(struct ip) + sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr);
+					l_len = SCTP_MIN_V4_OVERHEAD;
 #endif
+					l_len += sizeof(struct sctp_chunkhdr);
 					l_len += plen;
 					l_len += sizeof(struct sctp_paramhdr);
 					op_err = sctp_get_mbuf_for_msg(l_len, 0, M_NOWAIT, 1, MT_DATA);
@@ -5188,10 +5175,11 @@ sctp_arethere_unrecognized_parameters(struct mbuf *in_initpkt,
 
 					/* Ok need to try to get an mbuf */
 #ifdef INET6
-					l_len = sizeof(struct ip6_hdr) + sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr);
+					l_len = SCTP_MIN_OVERHEAD;
 #else
-					l_len = sizeof(struct ip) + sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr);
+					l_len = SCTP_MIN_V4_OVERHEAD;
 #endif
+					l_len += sizeof(struct sctp_chunkhdr);
 					l_len += plen;
 					l_len += sizeof(struct sctp_paramhdr);
 					op_err = sctp_get_mbuf_for_msg(l_len, 0, M_NOWAIT, 1, MT_DATA);
@@ -5263,10 +5251,11 @@ invalid_size:
 		int l_len;
 
 #ifdef INET6
-		l_len = sizeof(struct ip6_hdr) + sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr);
+		l_len = SCTP_MIN_OVERHEAD;
 #else
-		l_len = sizeof(struct ip) + sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr);
+		l_len = SCTP_MIN_V4_OVERHEAD;
 #endif
+		l_len += sizeof(struct sctp_chunkhdr);
 		l_len += (2 * sizeof(struct sctp_paramhdr));
 		op_err = sctp_get_mbuf_for_msg(l_len, 0, M_NOWAIT, 1, MT_DATA);
 		if (op_err) {
@@ -5600,11 +5589,7 @@ do_a_abort:
 		stc.ipv6_addr_legal = 0;
 		stc.ipv4_addr_legal = 1;
 	}
-#ifdef SCTP_DONT_DO_PRIVADDR_SCOPE
-	stc.ipv4_scope = 1;
-#else
 	stc.ipv4_scope = 0;
-#endif
 	if (net == NULL) {
 		to = src;
 		switch (dst->sa_family) {
@@ -5625,13 +5610,10 @@ do_a_abort:
 				stc.laddr_type = SCTP_IPV4_ADDRESS;
 				/* scope_id is only for v6 */
 				stc.scope_id = 0;
-#ifndef SCTP_DONT_DO_PRIVADDR_SCOPE
-				if (IN4_ISPRIVATE_ADDRESS(&src4->sin_addr)) {
+				if ((IN4_ISPRIVATE_ADDRESS(&src4->sin_addr)) ||
+				    (IN4_ISPRIVATE_ADDRESS(&dst4->sin_addr))) {
 					stc.ipv4_scope = 1;
 				}
-#else
-				stc.ipv4_scope = 1;
-#endif				/* SCTP_DONT_DO_PRIVADDR_SCOPE */
 				/* Must use the address in this case */
 				if (sctp_is_address_on_local_host(src, vrf_id)) {
 					stc.loopback_scope = 1;
@@ -5653,16 +5635,18 @@ do_a_abort:
 					stc.local_scope = 0;
 					stc.site_scope = 1;
 					stc.ipv4_scope = 1;
-				} else if (IN6_IS_ADDR_LINKLOCAL(&src6->sin6_addr)) {
+				} else if (IN6_IS_ADDR_LINKLOCAL(&src6->sin6_addr) ||
+				    IN6_IS_ADDR_LINKLOCAL(&dst6->sin6_addr)) {
 					/*
-					 * If the new destination is a
-					 * LINK_LOCAL we must have common
-					 * both site and local scope. Don't
-					 * set local scope though since we
-					 * must depend on the source to be
-					 * added implicitly. We cannot
-					 * assure just because we share one
-					 * link that all links are common.
+					 * If the new destination or source
+					 * is a LINK_LOCAL we must have
+					 * common both site and local scope.
+					 * Don't set local scope though
+					 * since we must depend on the
+					 * source to be added implicitly. We
+					 * cannot assure just because we
+					 * share one link that all links are
+					 * common.
 					 */
 					stc.local_scope = 0;
 					stc.site_scope = 1;
@@ -5678,11 +5662,12 @@ do_a_abort:
 					 * pull out the scope_id from
 					 * incoming pkt
 					 */
-				} else if (IN6_IS_ADDR_SITELOCAL(&src6->sin6_addr)) {
+				} else if (IN6_IS_ADDR_SITELOCAL(&src6->sin6_addr) ||
+				    IN6_IS_ADDR_SITELOCAL(&dst6->sin6_addr)) {
 					/*
-					 * If the new destination is
-					 * SITE_LOCAL then we must have site
-					 * scope in common.
+					 * If the new destination or source
+					 * is SITE_LOCAL then we must have
+					 * site scope in common.
 					 */
 					stc.site_scope = 1;
 				}
@@ -6482,13 +6467,7 @@ error_out:
 			appendchain = SCTP_M_COPYM(clonechain, 0, M_COPYALL, M_NOWAIT);
 #ifdef SCTP_MBUF_LOGGING
 			if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-				struct mbuf *mat;
-
-				for (mat = appendchain; mat; mat = SCTP_BUF_NEXT(mat)) {
-					if (SCTP_BUF_IS_EXTENDED(mat)) {
-						sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-					}
-				}
+				sctp_log_mbc(appendchain, SCTP_MBUF_ICOPY);
 			}
 #endif
 		}
@@ -6581,13 +6560,7 @@ sctp_sendall_iterator(struct sctp_inpcb *inp, struct sctp_tcb *stcb, void *ptr,
 		}
 #ifdef SCTP_MBUF_LOGGING
 		if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-			struct mbuf *mat;
-
-			for (mat = m; mat; mat = SCTP_BUF_NEXT(mat)) {
-				if (SCTP_BUF_IS_EXTENDED(mat)) {
-					sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-				}
-			}
+			sctp_log_mbc(m, SCTP_MBUF_ICOPY);
 		}
 #endif
 	} else {
@@ -6734,7 +6707,7 @@ sctp_sendall_iterator(struct sctp_inpcb *inp, struct sctp_tcb *stcb, void *ptr,
 	if (do_chunk_output)
 		sctp_chunk_output(inp, stcb, SCTP_OUTPUT_FROM_USR_SEND, SCTP_SO_NOT_LOCKED);
 	else if (added_control) {
-		int num_out = 0, reason = 0, now_filled = 0;
+		int num_out, reason, now_filled = 0;
 		struct timeval now;
 		int frag_point;
 
@@ -7371,13 +7344,7 @@ dont_do_it:
 		}
 #ifdef SCTP_MBUF_LOGGING
 		if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-			struct mbuf *mat;
-
-			for (mat = chk->data; mat; mat = SCTP_BUF_NEXT(mat)) {
-				if (SCTP_BUF_IS_EXTENDED(mat)) {
-					sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-				}
-			}
+			sctp_log_mbc(chk->data, SCTP_MBUF_ICOPY);
 		}
 #endif
 		/* Pull off the data */
@@ -7450,7 +7417,7 @@ dont_do_it:
 				SCTP_TCB_SEND_LOCK(stcb);
 				send_lock_up = 1;
 			}
-			if (chk->data == NULL) {
+			if (sp->data == NULL) {
 				/* unsteal the data */
 				sp->data = chk->data;
 				sp->tail_mbuf = chk->last_mbuf;
@@ -7800,6 +7767,7 @@ sctp_med_chunk_output(struct sctp_inpcb *inp,
 	int quit_now = 0;
 
 	*num_out = 0;
+	*reason_code = 0;
 	auth_keyid = stcb->asoc.authinfo.active_keyid;
 	if ((asoc->state & SCTP_STATE_SHUTDOWN_PENDING) ||
 	    (asoc->state & SCTP_STATE_SHUTDOWN_RECEIVED) ||
@@ -8006,12 +7974,12 @@ again_one_more_time:
 		switch (((struct sockaddr *)&net->ro._l_addr)->sa_family) {
 #ifdef INET
 		case AF_INET:
-			mtu = net->mtu - (sizeof(struct ip) + sizeof(struct sctphdr));
+			mtu = net->mtu - SCTP_MIN_V4_OVERHEAD;
 			break;
 #endif
 #ifdef INET6
 		case AF_INET6:
-			mtu = net->mtu - (sizeof(struct ip6_hdr) + sizeof(struct sctphdr));
+			mtu = net->mtu - SCTP_MIN_OVERHEAD;
 			break;
 #endif
 		default:
@@ -8372,7 +8340,8 @@ again_one_more_time:
 						/* turn off the timer */
 						if (SCTP_OS_TIMER_PENDING(&stcb->asoc.dack_timer.timer)) {
 							sctp_timer_stop(SCTP_TIMER_TYPE_RECV,
-							    inp, stcb, net, SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_1);
+							    inp, stcb, net,
+							    SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_1);
 						}
 					}
 					ctl_cnt++;
@@ -8557,16 +8526,16 @@ again_one_more_time:
 		switch (((struct sockaddr *)&net->ro._l_addr)->sa_family) {
 #ifdef INET
 		case AF_INET:
-			if (net->mtu > (sizeof(struct ip) + sizeof(struct sctphdr)))
-				omtu = net->mtu - (sizeof(struct ip) + sizeof(struct sctphdr));
+			if (net->mtu > SCTP_MIN_V4_OVERHEAD)
+				omtu = net->mtu - SCTP_MIN_V4_OVERHEAD;
 			else
 				omtu = 0;
 			break;
 #endif
 #ifdef INET6
 		case AF_INET6:
-			if (net->mtu > (sizeof(struct ip6_hdr) + sizeof(struct sctphdr)))
-				omtu = net->mtu - (sizeof(struct ip6_hdr) + sizeof(struct sctphdr));
+			if (net->mtu > SCTP_MIN_OVERHEAD)
+				omtu = net->mtu - SCTP_MIN_OVERHEAD;
 			else
 				omtu = 0;
 			break;
@@ -8576,7 +8545,8 @@ again_one_more_time:
 			omtu = 0;
 			break;
 		}
-		if ((((asoc->state & SCTP_STATE_OPEN) == SCTP_STATE_OPEN) &&
+		if ((((SCTP_GET_STATE(asoc) == SCTP_STATE_OPEN) ||
+		    (SCTP_GET_STATE(asoc) == SCTP_STATE_SHUTDOWN_RECEIVED)) &&
 		    (skip_data_for_this_net == 0)) ||
 		    (cookie)) {
 			TAILQ_FOREACH_SAFE(chk, &asoc->send_queue, sctp_next, nchk) {
@@ -8946,12 +8916,11 @@ sctp_send_cookie_echo(struct mbuf *m,
 	struct sctp_tmit_chunk *chk;
 	uint16_t ptype, plen;
 
+	SCTP_TCB_LOCK_ASSERT(stcb);
 	/* First find the cookie in the param area */
 	cookie = NULL;
 	at = offset + sizeof(struct sctp_init_chunk);
-
-	SCTP_TCB_LOCK_ASSERT(stcb);
-	do {
+	for (;;) {
 		phdr = sctp_get_next_param(m, at, &parm, sizeof(parm));
 		if (phdr == NULL) {
 			return (-3);
@@ -8972,25 +8941,14 @@ sctp_send_cookie_echo(struct mbuf *m,
 			}
 #ifdef SCTP_MBUF_LOGGING
 			if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-				struct mbuf *mat;
-
-				for (mat = cookie; mat; mat = SCTP_BUF_NEXT(mat)) {
-					if (SCTP_BUF_IS_EXTENDED(mat)) {
-						sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-					}
-				}
+				sctp_log_mbc(cookie, SCTP_MBUF_ICOPY);
 			}
 #endif
 			break;
 		}
 		at += SCTP_SIZE32(plen);
-	} while (phdr);
-	if (cookie == NULL) {
-		/* Did not find the cookie */
-		return (-3);
 	}
 	/* ok, we got the cookie lets change it into a cookie echo chunk */
-
 	/* first the change from param to cookie */
 	hdr = mtod(cookie, struct sctp_chunkhdr *);
 	hdr->chunk_type = SCTP_COOKIE_ECHO;
@@ -9044,13 +9002,7 @@ sctp_send_heartbeat_ack(struct sctp_tcb *stcb,
 	}
 #ifdef SCTP_MBUF_LOGGING
 	if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-		struct mbuf *mat;
-
-		for (mat = outchain; mat; mat = SCTP_BUF_NEXT(mat)) {
-			if (SCTP_BUF_IS_EXTENDED(mat)) {
-				sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-			}
-		}
+		sctp_log_mbc(outchain, SCTP_MBUF_ICOPY);
 	}
 #endif
 	chdr = mtod(outchain, struct sctp_chunkhdr *);
@@ -9329,13 +9281,7 @@ sctp_send_asconf_ack(struct sctp_tcb *stcb)
 		}
 #ifdef SCTP_MBUF_LOGGING
 		if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_MBUF_LOGGING_ENABLE) {
-			struct mbuf *mat;
-
-			for (mat = m_ack; mat; mat = SCTP_BUF_NEXT(mat)) {
-				if (SCTP_BUF_IS_EXTENDED(mat)) {
-					sctp_log_mb(mat, SCTP_MBUF_ICOPY);
-				}
-			}
+			sctp_log_mbc(m_ack, SCTP_MBUF_ICOPY);
 		}
 #endif
 
@@ -9355,8 +9301,6 @@ sctp_send_asconf_ack(struct sctp_tcb *stcb)
 			atomic_add_int(&chk->whoTo->ref_count, 1);
 		}
 		chk->data = m_ack;
-		chk->send_size = 0;
-		/* Get size */
 		chk->send_size = ack->len;
 		chk->sent = SCTP_DATAGRAM_UNSENT;
 		chk->snd_count = 0;
@@ -9851,7 +9795,7 @@ one_chunk_around:
 						 * t3-expiring.
 						 */
 						sctp_timer_stop(SCTP_TIMER_TYPE_SEND, inp, stcb, net,
-						    SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_4);
+						    SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_2);
 						sctp_timer_start(SCTP_TIMER_TYPE_SEND, inp, stcb, net);
 					}
 				}
@@ -9931,7 +9875,7 @@ sctp_chunk_output(struct sctp_inpcb *inp,
 	 */
 	struct sctp_association *asoc;
 	struct sctp_nets *net;
-	int error = 0, num_out = 0, tot_out = 0, ret = 0, reason_code = 0;
+	int error = 0, num_out, tot_out = 0, ret = 0, reason_code;
 	unsigned int burst_cnt = 0;
 	struct timeval now;
 	int now_filled = 0;
@@ -10458,7 +10402,8 @@ sctp_send_sack(struct sctp_tcb *stcb, int so_locked
 			/* No memory so we drop the idea, and set a timer */
 			if (stcb->asoc.delayed_ack) {
 				sctp_timer_stop(SCTP_TIMER_TYPE_RECV,
-				    stcb->sctp_ep, stcb, NULL, SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_5);
+				    stcb->sctp_ep, stcb, NULL,
+				    SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_3);
 				sctp_timer_start(SCTP_TIMER_TYPE_RECV,
 				    stcb->sctp_ep, stcb, NULL);
 			} else {
@@ -10480,32 +10425,17 @@ sctp_send_sack(struct sctp_tcb *stcb, int so_locked
 	a_chk->sent = SCTP_DATAGRAM_UNSENT;
 	a_chk->whoTo = NULL;
 
-	if ((asoc->numduptsns) ||
-	    (!(asoc->last_data_chunk_from->dest_state & SCTP_ADDR_REACHABLE))) {
+	if (!(asoc->last_data_chunk_from->dest_state & SCTP_ADDR_REACHABLE)) {
 		/*-
-		 * Ok, we have some duplicates or the destination for the
-		 * sack is unreachable, lets see if we can select an
-		 * alternate than asoc->last_data_chunk_from
+		 * Ok, the destination for the SACK is unreachable, lets see if
+		 * we can select an alternate to asoc->last_data_chunk_from
 		 */
-		if ((asoc->last_data_chunk_from->dest_state & SCTP_ADDR_REACHABLE) &&
-		    (asoc->used_alt_onsack > asoc->numnets)) {
-			/* We used an alt last time, don't this time */
-			a_chk->whoTo = NULL;
-		} else {
-			asoc->used_alt_onsack++;
-			a_chk->whoTo = sctp_find_alternate_net(stcb, asoc->last_data_chunk_from, 0);
-		}
+		a_chk->whoTo = sctp_find_alternate_net(stcb, asoc->last_data_chunk_from, 0);
 		if (a_chk->whoTo == NULL) {
 			/* Nope, no alternate */
 			a_chk->whoTo = asoc->last_data_chunk_from;
-			asoc->used_alt_onsack = 0;
 		}
 	} else {
-		/*
-		 * No duplicates so we use the last place we received data
-		 * from.
-		 */
-		asoc->used_alt_onsack = 0;
 		a_chk->whoTo = asoc->last_data_chunk_from;
 	}
 	if (a_chk->whoTo) {
@@ -10541,7 +10471,8 @@ sctp_send_sack(struct sctp_tcb *stcb, int so_locked
 		/* sa_ignore NO_NULL_CHK */
 		if (stcb->asoc.delayed_ack) {
 			sctp_timer_stop(SCTP_TIMER_TYPE_RECV,
-			    stcb->sctp_ep, stcb, NULL, SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_6);
+			    stcb->sctp_ep, stcb, NULL,
+			    SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_4);
 			sctp_timer_start(SCTP_TIMER_TYPE_RECV,
 			    stcb->sctp_ep, stcb, NULL);
 		} else {
@@ -12082,9 +12013,6 @@ sctp_copy_one(struct sctp_stream_queue_pending *sp,
     struct uio *uio,
     int resv_upfront)
 {
-	int left;
-
-	left = sp->length;
 	sp->data = m_uiotombuf(uio, M_WAITOK, sp->length,
 	    resv_upfront, 0);
 	if (sp->data == NULL) {
@@ -12513,7 +12441,8 @@ sctp_lower_sosend(struct socket *so,
 
 			if (control) {
 				if (sctp_process_cmsgs_for_init(stcb, control, &error)) {
-					sctp_free_assoc(inp, stcb, SCTP_PCBFREE_FORCE, SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_7);
+					sctp_free_assoc(inp, stcb, SCTP_PCBFREE_FORCE,
+					    SCTP_FROM_SCTP_OUTPUT + SCTP_LOC_5);
 					hold_tcblock = 0;
 					stcb = NULL;
 					goto out_unlocked;

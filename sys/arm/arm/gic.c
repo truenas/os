@@ -204,7 +204,7 @@ gic_decode_fdt(uint32_t iparent, uint32_t *intr, int *interrupt,
 		*trig = INTR_TRIGGER_CONFORM;
 		*pol = INTR_POLARITY_CONFORM;
 	} else {
-		if (intr[0] == 0)
+		if (fdt32_to_cpu(intr[0]) == 0)
 			*interrupt = fdt32_to_cpu(intr[1]) + GIC_FIRST_SPI;
 		else
 			*interrupt = fdt32_to_cpu(intr[1]) + GIC_FIRST_PPI;
@@ -216,13 +216,13 @@ gic_decode_fdt(uint32_t iparent, uint32_t *intr, int *interrupt,
 		 *   8 = active low level-sensitive
 		 * The hardware only supports active-high-level or rising-edge.
 		 */
-		if (intr[2] & 0x0a) {
+		if (fdt32_to_cpu(intr[2]) & 0x0a) {
 			printf("unsupported trigger/polarity configuration "
-			    "0x%2x\n", intr[2] & 0x0f);
+			    "0x%2x\n", fdt32_to_cpu(intr[2]) & 0x0f);
 			return (ENOTSUP);
 		}
 		*pol  = INTR_POLARITY_CONFORM;
-		if (intr[2] & 0x01)
+		if (fdt32_to_cpu(intr[2]) & 0x01)
 			*trig = INTR_TRIGGER_EDGE;
 		else
 			*trig = INTR_TRIGGER_LEVEL;
@@ -273,7 +273,7 @@ arm_gic_attach(device_t dev)
 	arm_config_irq = gic_config_irq;
 
 	icciidr = gic_c_read_4(GICC_IIDR);
-	device_printf(dev,"pn 0x%x, arch 0x%x, rev 0x%x, implementer 0x%x sc->nirqs %u\n",
+	device_printf(dev,"pn 0x%x, arch 0x%x, rev 0x%x, implementer 0x%x irqs %u\n",
 			icciidr>>20, (icciidr>>16) & 0xF, (icciidr>>12) & 0xf,
 			(icciidr & 0xfff), sc->nirqs);
 

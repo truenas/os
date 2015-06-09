@@ -83,16 +83,14 @@
 #define	ISSIGVALID(sig)	((sig) > 0 && (sig) < NSIG)
 
 #define	VT_SYSCTL_INT(_name, _default, _descr)				\
-static int vt_##_name = _default;					\
-SYSCTL_INT(_kern_vt, OID_AUTO, _name, CTLFLAG_RW, &vt_##_name, _default,\
+static int vt_##_name = (_default);					\
+SYSCTL_INT(_kern_vt, OID_AUTO, _name, CTLFLAG_RWTUN, &vt_##_name, 0,	\
 		_descr);						\
-TUNABLE_INT("kern.vt." #_name, &vt_##_name);
+TUNABLE_INT("kern.vt." #_name, &vt_##_name)
 
 struct vt_driver;
 
 void vt_allocate(struct vt_driver *, void *);
-void vt_resume(void);
-void vt_suspend(void);
 
 typedef unsigned int 	vt_axis_t;
 
@@ -162,6 +160,9 @@ struct vt_device {
 #define	VD_PASTEBUF(vd)	((vd)->vd_pastebuf.vpb_buf)
 #define	VD_PASTEBUFSZ(vd)	((vd)->vd_pastebuf.vpb_bufsz)
 #define	VD_PASTEBUFLEN(vd)	((vd)->vd_pastebuf.vpb_len)
+
+void vt_resume(struct vt_device *vd);
+void vt_suspend(struct vt_device *vd);
 
 /*
  * Per-window terminal screen buffer.
@@ -315,6 +316,8 @@ typedef int vd_fb_mmap_t(struct vt_device *, vm_ooffset_t, vm_paddr_t *, int,
 typedef void vd_drawrect_t(struct vt_device *, int, int, int, int, int,
     term_color_t);
 typedef void vd_setpixel_t(struct vt_device *, int, int, term_color_t);
+typedef void vd_suspend_t(struct vt_device *);
+typedef void vd_resume_t(struct vt_device *);
 
 struct vt_driver {
 	char		 vd_name[16];
@@ -337,6 +340,10 @@ struct vt_driver {
 
 	/* Update display setting on vt switch. */
 	vd_postswitch_t	*vd_postswitch;
+
+	/* Suspend/resume handlers. */
+	vd_suspend_t	*vd_suspend;
+	vd_resume_t	*vd_resume;
 
 	/* Priority to know which one can override */
 	int		vd_priority;

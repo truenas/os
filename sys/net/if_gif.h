@@ -111,13 +111,25 @@ void gif_input(struct mbuf *, struct ifnet *, int, uint8_t);
 int gif_output(struct ifnet *, struct mbuf *, const struct sockaddr *,
 	       struct route *);
 int gif_encapcheck(const struct mbuf *, int, int, void *);
+#ifdef INET
+int in_gif_output(struct ifnet *, struct mbuf *, int, uint8_t);
+int in_gif_encapcheck(const struct mbuf *, int, int, void *);
+int in_gif_attach(struct gif_softc *);
+#endif
+#ifdef INET6
+int in6_gif_output(struct ifnet *, struct mbuf *, int, uint8_t);
+int in6_gif_encapcheck(const struct mbuf *, int, int, void *);
+int in6_gif_attach(struct gif_softc *);
+#endif
 #endif /* _KERNEL */
 
 #define GIFGOPTS	_IOWR('i', 150, struct ifreq)
 #define GIFSOPTS	_IOW('i', 151, struct ifreq)
 
 #define	GIF_ACCEPT_REVETHIP	0x0001
+#define	GIF_IGNORE_SOURCE	0x0002
 #define	GIF_SEND_REVETHIP	0x0010
-#define	GIF_OPTMASK		(GIF_ACCEPT_REVETHIP|GIF_SEND_REVETHIP)
+#define	GIF_OPTMASK		(GIF_ACCEPT_REVETHIP|GIF_SEND_REVETHIP| \
+    GIF_IGNORE_SOURCE)
 
 #endif /* _NET_IF_GIF_H_ */

@@ -1181,6 +1181,8 @@ dev/cxgb/sys/uipc_mvec.c	optional cxgb pci \
 	compile-with "${NORMAL_C} -I$S/dev/cxgb"
 dev/cxgb/cxgb_t3fw.c		optional cxgb cxgb_t3fw \
 	compile-with "${NORMAL_C} -I$S/dev/cxgb"
+dev/cxgbe/t4_mp_ring.c		optional cxgbe pci \
+	compile-with "${NORMAL_C} -I$S/dev/cxgbe ${GCC_MS_EXTENSIONS}"
 dev/cxgbe/t4_main.c		optional cxgbe pci \
 	compile-with "${NORMAL_C} -I$S/dev/cxgbe"
 dev/cxgbe/t4_netmap.c		optional cxgbe pci \
@@ -1764,29 +1766,35 @@ dev/ixgb/ixgb_ee.c		optional ixgb
 dev/ixgb/ixgb_hw.c		optional ixgb
 dev/ixgbe/ixgbe.c		optional ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
-dev/ixgbe/ixv.c			optional ixgbe inet \
+dev/ixgbe/if_ix.c		optional ix inet | ixgbe inet \
+	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
+dev/ixgbe/if_ixv.c		optional ixv inet | ixgbe inet \
+	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
+dev/ixgbe/ix_txrx.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_phy.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_phy.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_api.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_api.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_common.c	optional ixgbe inet \
+dev/ixgbe/ixgbe_common.c	optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_mbx.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_mbx.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_vf.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_vf.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_82598.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_82598.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_82599.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_82599.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_x540.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_x540.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_dcb.c		optional ixgbe inet \
+dev/ixgbe/ixgbe_x550.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_dcb_82598.c	optional ixgbe inet \
+dev/ixgbe/ixgbe_dcb.c		optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
-dev/ixgbe/ixgbe_dcb_82599.c	optional ixgbe inet \
+dev/ixgbe/ixgbe_dcb_82598.c	optional ix inet | ixv inet | ixgbe inet \
+	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
+dev/ixgbe/ixgbe_dcb_82599.c	optional ix inet | ixv inet | ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/ixl/if_ixl.c		optional ixl inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixl"
@@ -3273,11 +3281,12 @@ net/if_fddisubr.c		optional fddi
 net/if_fwsubr.c			optional fwip
 net/if_gif.c			optional gif inet | gif inet6 | \
 					 netgraph_gif inet | netgraph_gif inet6
-net/if_gre.c			optional gre inet
+net/if_gre.c			optional gre inet | gre inet6
 net/if_iso88025subr.c		optional token
 net/if_lagg.c			optional lagg
 net/if_loop.c			optional loop
 net/if_llatbl.c			standard
+net/if_me.c			optional me inet
 net/if_media.c			standard
 net/if_mib.c			standard
 net/if_spppfr.c			optional sppp | netgraph_sppp
@@ -3483,6 +3492,7 @@ netinet/sctp_sysctl.c		optional inet sctp | inet6 sctp
 netinet/sctp_timer.c		optional inet sctp | inet6 sctp
 netinet/sctp_usrreq.c		optional inet sctp | inet6 sctp
 netinet/sctputil.c		optional inet sctp | inet6 sctp
+netinet/siftr.c			optional inet siftr alq | inet6 siftr alq
 netinet/tcp_debug.c		optional tcpdebug
 netinet/tcp_hostcache.c		optional inet | inet6
 netinet/tcp_input.c		optional inet | inet6
@@ -3517,6 +3527,7 @@ netinet6/in6_proto.c		optional inet6
 netinet6/in6_rmx.c		optional inet6
 netinet6/in6_src.c		optional inet6
 netinet6/ip6_forward.c		optional inet6
+netinet6/ip6_gre.c		optional gre inet6
 netinet6/ip6_id.c		optional inet6
 netinet6/ip6_input.c		optional inet6
 netinet6/ip6_mroute.c		optional mrouting inet6

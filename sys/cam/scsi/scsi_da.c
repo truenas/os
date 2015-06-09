@@ -1177,9 +1177,16 @@ static struct da_quirk_entry da_quirk_table[] =
 	},
 	{
 		/*
+		 * Hama Innostor USB-Stick 
+		 */
+		{ T_DIRECT, SIP_MEDIA_REMOVABLE, "Innostor", "Innostor*", "*" }, 
+		/*quirks*/DA_Q_NO_RC16
+	},
+	{
+		/*
 		 * MX-ES USB Drive by Mach Xtreme
 		 */
-		{ T_DIRECT, SIP_MEDIA_REMOVABLE, "MX", "MXUB3SES*", "*"},
+		{ T_DIRECT, SIP_MEDIA_REMOVABLE, "MX", "MXUB3*", "*"},
 		/*quirks*/DA_Q_NO_RC16
 	},
 };

@@ -72,7 +72,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet/ip_ecn.h>
 #ifdef	INET
 #include <netinet/in_var.h>
-#include <netinet/in_gif.h>
 #include <netinet/ip_var.h>
 #endif	/* INET */
 
@@ -85,7 +84,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet6/ip6_ecn.h>
 #include <netinet6/ip6_var.h>
 #include <netinet6/scope6_var.h>
-#include <netinet6/in6_gif.h>
 #include <netinet6/ip6protosw.h>
 #endif /* INET6 */
 
@@ -921,6 +919,17 @@ gif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 #endif
 		}
 		break;
+	case SIOCGTUNFIB:
+		ifr->ifr_fib = sc->gif_fibnum;
+		break;
+	case SIOCSTUNFIB:
+		if ((error = priv_check(curthread, PRIV_NET_GIF)) != 0)
+			break;
+		if (ifr->ifr_fib >= rt_numfibs)
+			error = EINVAL;
+		else
+			sc->gif_fibnum = ifr->ifr_fib;
+		break;
 	case GIFGOPTS:
 		options = sc->gif_options;
 		error = copyout(&options, ifr->ifr_data, sizeof(options));
@@ -936,7 +945,6 @@ gif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		else
 			sc->gif_options = options;
 		break;
-
 	default:
 		error = EINVAL;
 		break;

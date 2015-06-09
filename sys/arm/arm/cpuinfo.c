@@ -34,7 +34,14 @@ __FBSDID("$FreeBSD$");
 #include <machine/cpuinfo.h>
 #include <machine/cpu-v6.h>
 
-struct cpuinfo cpuinfo;
+struct cpuinfo cpuinfo =
+{
+	/* Use safe defaults for start */
+	.dcache_line_size = 32,
+	.dcache_line_mask = 31,
+	.icache_line_size = 32,
+	.icache_line_mask = 31,
+};
 
 /* Read and parse CPU id scheme */
 void
@@ -58,9 +65,13 @@ cpuinfo_init(void)
 			/* ARMv4T CPU */
 			cpuinfo.architecture = 1;
 			cpuinfo.revision = (cpuinfo.midr >> 16) & 0x7F;
-		} 
+		} else {
+			/* ARM new id scheme */
+			cpuinfo.architecture = (cpuinfo.midr >> 16) & 0x0F;
+			cpuinfo.revision = (cpuinfo.midr >> 20) & 0x0F;
+		}
 	} else {
-		/* must be new id scheme */
+		/* non ARM -> must be new id scheme */
 		cpuinfo.architecture = (cpuinfo.midr >> 16) & 0x0F;
 		cpuinfo.revision = (cpuinfo.midr >> 20) & 0x0F;
 	}	
@@ -118,4 +129,10 @@ cpuinfo_init(void)
 	cpuinfo.generic_timer_ext = (cpuinfo.id_pfr1 >> 16) & 0xF;
 	cpuinfo.virtualization_ext = (cpuinfo.id_pfr1 >> 12) & 0xF;
 	cpuinfo.security_ext = (cpuinfo.id_pfr1 >> 4) & 0xF;
+
+	/* L1 Cache sizes */
+	cpuinfo.dcache_line_size = 1 << (CPU_CT_DMINLINE(cpuinfo.ctr ) + 2);
+	cpuinfo.dcache_line_mask = cpuinfo.dcache_line_size - 1;
+	cpuinfo.icache_line_size= 1 << (CPU_CT_IMINLINE(cpuinfo.ctr ) + 2);
+	cpuinfo.icache_line_mask = cpuinfo.icache_line_size - 1;
 }
