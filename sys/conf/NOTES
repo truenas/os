@@ -2992,3 +2992,5 @@ options 	RCTL
 options 	BROOKTREE_ALLOC_PAGES=(217*4+1)
 options 	MAXFILES=999
 
+# Intel em(4) driver
+options		EM_MULTIQUEUE # Activate multiqueue features/disable MSI-X
