@@ -75,6 +75,7 @@ __FBSDID("$FreeBSD$");
 struct ctlfe_softc {
 	struct ctl_port port;
 	path_id_t path_id;
+	target_id_t target_id;
 	u_int	maxio;
 	struct cam_sim *sim;
 	char port_name[DEV_IDLEN];
@@ -363,6 +364,7 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 		}
 
 		softc->path_id = cpi->ccb_h.path_id;
+		softc->target_id = cpi->initiator_id;
 		softc->sim = xpt_path_sim(path);
 		if (cpi->maxio != 0)
 			softc->maxio = cpi->maxio;
@@ -1561,6 +1563,8 @@ ctlfe_onoffline(void *arg, int online)
 		return;
 	}
 	xpt_setup_ccb(&ccb->ccb_h, path, CAM_PRIORITY_NONE);
+	ccb->ccb_h.func_code = XPT_GET_SIM_KNOB;
+	xpt_action(ccb);
 
 	/*
 	 * Copan WWN format:
@@ -1574,15 +1578,7 @@ ctlfe_onoffline(void *arg, int online)
 	 *					3 == NL-Port
 	 * Bits 7-0:			0 == Node Name, >0 == Port Number
 	 */
-
 	if (online != 0) {
-
-		ccb->ccb_h.func_code = XPT_GET_SIM_KNOB;
-
-
-		xpt_action(ccb);
-
-
 		if ((ccb->knob.xport_specific.valid & KNOB_VALID_ADDRESS) != 0){
 #ifdef RANDOM_WWNN
 			uint64_t random_bits;
@@ -1681,9 +1677,9 @@ ctlfe_onoffline(void *arg, int online)
 		ccb->knob.xport_specific.valid |= KNOB_VALID_ADDRESS;
 
 	if (online != 0)
-		ccb->knob.xport_specific.fc.role = KNOB_ROLE_TARGET;
+		ccb->knob.xport_specific.fc.role |= KNOB_ROLE_TARGET;
 	else
-		ccb->knob.xport_specific.fc.role = KNOB_ROLE_NONE;
+		ccb->knob.xport_specific.fc.role &= ~KNOB_ROLE_TARGET;
 
 	xpt_action(ccb);
 
@@ -1837,7 +1833,7 @@ ctlfe_lun_enable(void *arg, int lun_id)
 	sim = bus_softc->sim;
 
 	status = xpt_create_path_unlocked(&path, /*periph*/ NULL,
-				  bus_softc->path_id, 0, lun_id);
+				  bus_softc->path_id, bus_softc->target_id, lun_id);
 	/* XXX KDM need some way to return status to CTL here? */
 	if (status != CAM_REQ_CMP) {
 		printf("%s: could not create path, status %#x\n", __func__,
