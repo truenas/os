@@ -1199,7 +1199,7 @@ dump_config(int fd, struct mfi_config_data *config, const char *msg_prefix)
 
 #ifdef DEBUG
 static int
-debug_config(int ac, char **av)
+debug_config(int ac, char **av __unused)
 {
 	struct mfi_config_data *config;
 	int error, fd;
@@ -1234,7 +1234,7 @@ debug_config(int ac, char **av)
 MFI_COMMAND(top, debug, debug_config);
 
 static int
-dump(int ac, char **av)
+dump(int ac, char **av __unused)
 {
 	struct mfi_config_data *config;
 	char buf[64];
