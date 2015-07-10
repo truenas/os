@@ -4417,6 +4417,7 @@ isp_start(XS_T *xs)
 		if (sdp->update) {
 			isp_spi_update(isp, XS_CHANNEL(xs));
 		}
+		lp = NULL;
 	}
 
  start_again:
