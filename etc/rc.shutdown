@@ -44,6 +44,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin
 export HOME PATH
 
 if grep -q TrueNAS /etc/version ; then
+	/bin/pkill -f fenced
 	/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down
 	if [ -f /tmp/failover.json ]; then
 		/usr/local/bin/python /usr/local/libexec/truenas/carp-state-change-hook.py carp0 shutdown
