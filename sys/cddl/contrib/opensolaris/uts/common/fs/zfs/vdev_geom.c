@@ -86,21 +86,6 @@ vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
 }
 
 static void
-vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
-{
-	vdev_t *vd;
-
-	vd = cp->private;
-	if (vd == NULL)
-		return;
-
-	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
-		vdev_geom_set_rotation_rate(vd, cp);
-		return;
-	}
-}
-
-static void
 vdev_geom_orphan(struct g_consumer *cp)
 {
 	vdev_t *vd;
@@ -138,6 +123,12 @@ vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
 	int error, physpath_len;
 
 	g_topology_assert();
+	vd = cp->private;
+
+	if (strcmp(attr, "GEOM::rotation_rate") == 0) {
+		vdev_geom_set_rotation_rate(vd, cp);
+		return;
+	}
 
 	if (strcmp(attr, "GEOM::physpath") != 0)
 		return;
@@ -148,7 +139,6 @@ vdev_geom_attrchanged(struct g_consumer *cp, const char *attr)
 	/*
 	 * Record/Update physical path information for this device.
 	 */
-	vd = cp->private;
 	spa = vd->vdev_spa;
 	physpath_len = MAXPATHLEN;
 	physpath = g_malloc(physpath_len, M_WAITOK|M_ZERO);
