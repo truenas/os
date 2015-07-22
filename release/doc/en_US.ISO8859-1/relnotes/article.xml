@@ -183,6 +183,11 @@
 	&man.fstyp.8; utility has been added, which is used to
 	determine the filesystem on a specified device.</para>
 
+      <para revision="278968" contrib="sponsor" sponsor="&ff;">The
+	&man.mkimg.1; utility has been updated to support the
+	<acronym>MBR</acronym> <acronym>EFI</acronym> partition
+	type.</para>
+
       <para revision="281044">A regression in the &man.libarchive.3;
 	library that would prevent a directory from being included in
 	the archive when <literal>--one-file-system</literal> is used
@@ -218,26 +223,52 @@
 	&man.chmod.1;, and &man.chown.8; utilities now affect symbolic
 	links when the <literal>-R</literal> flag is specified, as
 	documented in &man.symlink.7;.</para>
+
+      <para revision="283258">The &man.date.1; utility has been
+	updated to print the modification time of the file passed as
+	an argument to the <literal>-r</literal> flag, improving
+	compatibility with the <acronym>GNU</acronym> &man.date.1;
+	utility behavior.</para>
+
+      <para revision="284523">A new flag, <literal>-c</literal>, has
+	been added to the &man.mkimg.1; utility, which allows
+	specifying the capacity of the target disk image.</para>
+
+      <para revision="285092">The &man.pw.8; utility has been updated
+	with a new flag, <literal>-R</literal>, that sets the root
+	directory within which the utility will operate.</para>
     </sect2>
 
     <sect2 xml:id="userland-contrib">
       <title>Contributed Software</title>
 
-      <para revision="277592"><application>file</application> has been
-	updated to version 5.22.</para>
-
       <para revision="282746" contrib="sponsor" sponsor="&ff;">The
 	&man.resolvconf.8; utility has been updated to version
 	3.7.0.</para>
 
-      <para revision="284330"><application>OpenSSL</application> has
-	been updated to version 1.0.1o.</para>
+      <para revision="283270">The &man.nc.1; utility has been updated
+	to the OpenBSD 5.7 version.</para>
+
+      <para revision="284398">Timezone data files have been updated to
+	version 2015e.</para>
 
       <para revision="284460">The &man.acpi.4; subsystem has been
 	updated to version 20150515.</para>
 
       <para revision="284778">The &man.file.1; utility has been
 	updated to version 5.23.</para>
+
+      <para revision="285206">The &man.unbound.8; utility has been
+	updated to version 1.5.3.</para>
+
+      <para revision="285305">The <application>sendmail</application>
+	utility has been updated to version 8.15.2.</para>
+
+      <para revision="285330"><application>OpenSSL</application> has
+	been updated to version 1.0.1p.</para>
+
+      <para revision="285612">The <application>ntp</application>
+	suite has been updated to version 4.2.8p3.</para>
     </sect2>
 
     <sect2 xml:id="userland-installer">
@@ -250,14 +281,23 @@
       <title><filename class="directory">/etc/rc.d</filename>
 	Scripts</title>
 
-      <para>&nbsp;</para>
+      <para revision="284009">A new &man.rc.8; script,
+	<filename>growfs</filename>, has been added, which will resize
+	the root filesystem on boot if <filename>/firstboot</filename>
+	exists.</para>
     </sect2>
 
     <sect2 xml:id="userland-periodic">
       <title><filename class="directory">/etc/periodic</filename>
 	Scripts</title>
 
-      <para>&nbsp;</para>
+      <para revision="277520" contrib="sponsor" sponsor="&ff;">A new
+	&man.periodic.8; script,
+	<filename>510.status-world-kernel</filename>, has been added,
+	which evaluates the running userland and kernel versions from
+	the &man.uname.1; <literal>-U</literal> and
+	<literal>-K</literal> arguments, and prints an error if the
+	system userland and kernel are not in sync.</para>
     </sect2>
 
     <sect2 xml:id="userland-libraries">
@@ -265,6 +305,11 @@
 
       <para revision="275040">A new file configuration library,
 	&man.figpar.3;, has been added to the base system.</para>
+
+      <para revision="276686" contrib="sponsor" sponsor="&ff;">The
+	&man.procctl.2; system call has been updated to include
+	a facility for non-&man.init.8; processes to be declared as
+	the reaper of child processes and their decendants.</para>
 
       <para revision="280392">The &man.setmode.3; function has been
 	updated to consistently set <literal>errno</literal> on
@@ -274,7 +319,12 @@
     <sect2 xml:id="userland-abi">
       <title>ABI Compatibility</title>
 
-      <para>&nbsp;</para>
+      <para revision="275807">The &linux; compatibility version has
+	been updated to <literal>2.6.18</literal>.  The
+	<literal>compat.linux.osrelease</literal> &man.sysctl.8; is
+	evaluated when building the <filename
+	  role="package">emulators/linux-c6</filename> and related
+	ports.</para>
     </sect2>
   </sect1>
 
@@ -288,11 +338,53 @@
     <sect2 xml:id="kernel-bugfix">
       <title>Kernel Bug Fixes</title>
 
-      <para>&nbsp;</para>
+      <para revision="276068">A kernel panic triggered when destroying
+	a &man.vnet.9; &man.jail.8; configured with &man.gif.4; has
+	been fixed.</para>
+
+      <para revision="284018">A kernel panic triggered when destroying
+	a &man.vnet.9; &man.jail.8; configured with &man.gre.4; has
+	been fixed.</para>
     </sect2>
 
     <sect2 xml:id="kernel-config">
       <title>Kernel Configuration</title>
+
+      <para revision="282065" contrib="sponsor" sponsor="&ff;">The
+	<literal>PAE_TABLES</literal> kernel configuration option has
+	been added for &os;/&arch.i386;, which instructs &man.pmap.9;
+	to use <acronym>PAE</acronym> format for page tables.</para>
+
+      <para revision="282826">The <literal>SIFTR</literal> kernel
+	configuration has been added, allowing building &man.siftr.4;
+	statically into the kernel.</para>
+
+      <para revision="283076" contrib="sponsor" sponsor="&intelcorp;"
+	arch="amd64,i386">The &man.nvd.4; and &man.nvme.4; drivers are
+	now included in the <filename>GENERIC</filename> kernel
+	configuration by default.</para>
+
+      <para revision="283505" arch="arm">The &arch.arm; boot loader,
+	<filename>ubldr</filename>, is now relocatable.  In addition,
+	<filename>ubldr.bin</filename> is now created during build
+	time, which is a stripped binary with an entry point of
+	<literal>0</literal>, providing the ability to specify the
+	load address by running <literal>go
+	  &dollar;{loadaddr}</literal> in
+	<literal>u-boot</literal>.</para>
+
+      <para revision="284094" arch="arm">A new module for creating
+	<filename>rpi.dtb</filename> has been added for the Raspberry
+	Pi.</para>
+
+      <para revision="284094" arch="arm">The
+	<filename>rpi.dtb</filename> module is now installed to
+	<filename class="directory">/boot/dtb/</filename> by
+	default for the Raspberry Pi system.</para>
+
+      <para revision="284096" arch="arm">A new module for creating
+	the <filename>dtb</filename> module for AM335x systems has
+	been added.</para>
 
       <para revision="284522" contrib="sponsor"
 	sponsor="&limelight;">A new kernel configuration option,
@@ -362,6 +454,11 @@
 
       <para revision="282199">The <literal>drm</literal> code has
 	been updated to match &linux; version 3.8.13.</para>
+
+      <para revision="281708">The &man.psm.4; driver has been updated
+	to include improved support for newer Synaptics&nbsp;&reg;
+	touchpads and the ClickPad&nbsp;&reg; mouse on newer
+	Lenovo&nbsp;&trade; laptops.</para>
     </sect2>
 
     <sect2 xml:id="drivers-storage">
@@ -374,7 +471,32 @@
     <sect2 xml:id="drivers-network">
       <title>Network Drivers</title>
 
-      <para>&nbsp;</para>
+      <para revision="274486">The &man.pfil.9; interface default hash
+	has been changed from <literal>Jenkins</literal> to
+	<literal>Murmur3</literal>, providing a 3-percent performance
+	increase in packets-per-second.</para>
+
+      <para revision="279157">The &man.ral.4; driver has been updated
+	to support the RT5390 and RT5392 chipsets.</para>
+
+      <para revision="284066" contrib="sponsor" sponsor="&yandex;">The
+	&man.gre.4; driver has been significantly overhauled, and has
+	been split into two separate modules, &man.gre.4; and
+	&man.me.4;.</para>
+
+      <para revision="284365">The &man.vxlan.4; driver has been added,
+	which creates a virtual Layer 2 (Ethernet) network overlaid in
+	a Layer 3 (IP/UDP) network.  The &man.vxlan.4; driver is
+	analogous to &man.vlan.4;, but is designed to be better suited
+	for large, multiple-tenant datacenter environments.</para>
+
+      <para revision="284499">The &man.cdce.4; driver has been updated
+	to include support for the RTL8153 chipset.</para>
+
+      <para revision="284555" contrib="sponsor"
+	sponsor="&solarflare;">The &man.sfxge.4; driver has been
+	updated to support Solarflare Flareon Ultra 7000-series
+	chipsets.</para>
     </sect2>
   </sect1>
 
@@ -394,6 +516,15 @@
 
     <sect2 xml:id="hardware-virtualization">
       <title>Virtualization Support</title>
+
+      <para revision="275273">The &man.virtio.console.4; driver has
+	been added, which provides an interface to VirtIO console
+	devices through a &man.tty.4; device.</para>
+
+      <para revision="276403">The &man.bhyve.8; hypervisor has been
+	updated to support &amd; processors with
+	<acronym>SVM</acronym> and <acronym>AMD-V</acronym> hardware
+	extensions.</para>
 
       <para revision="280370">The &man.bhyve.8; hypervisor has been
 	updated to support <literal>DSM TRIM</literal> commands for
@@ -419,15 +550,40 @@
 	    fixes.</para>
 	</listitem>
       </itemizedlist>
+
+      <para revision="285236" contrib="sponsor" sponsor="&msostc;">The
+	&man.hv.netvsc.4; driver has been updated to support checksum
+	offloading and <acronym>TSO</acronym>.</para>
     </sect2>
 
     <sect2 xml:id="hardware-arm">
       <title>ARM Support</title>
 
+      <para revision="278079" arch="arm">Support to turn off the
+	BeagleBone Black system with the &man.shutdown.8;
+	<literal>-p</literal> flag or by invoking &man.poweroff.8; has
+	been added.</para>
+
+      <para revision="278599" arch="arm">Support for the Exynos 5420
+	Octa system has been added.</para>
+
+      <para revision="278599" arch="arm">The <acronym>SMP</acronym>
+	option has been enabled for all Exynos 5 systems supported by
+	&os;.</para>
+
       <para revision="278608">The <literal>bcm2835_cpufreq</literal>
 	driver has been added, which supports <acronym>CPU</acronym>
 	frequency and voltage control on the Raspberry Pi
 	<acronym>SOC</acronym>.</para>
+
+      <para revision="283500" arch="arm">Support for the Toradex
+	Apalis i.MX6 development board has been added.</para>
+
+      <para revision="283500" arch="arm">Audio transmission drivers
+	have been added for Digital Audio Multiplexer
+	(<acronym>AUDMUXM</acronym>), Smart Direct Memory Access
+	Controller (<acronym>SDMA</acronym>), and Syncronous Serial
+	Interface (<acronym>SSI</acronym>).</para>
     </sect2>
   </sect1>
 
@@ -473,6 +629,11 @@
 	which allows <acronym>iSCSI</acronym> initiators to find
 	targets and portals without requiring active
 	discovery.</para>
+
+      <para revision="275249" contrib="sponsor" sponsor="&ff;">Support
+	for the <literal>timeo</literal>, <literal>actimeo</literal>,
+	<literal>noac</literal>, and <literal>proto</literal> options
+	have been added to &man.mount.nfs.8;.</para>
     </sect2>
 
     <sect2 xml:id="storage-zfs">
@@ -499,6 +660,11 @@
 	limit from <literal>128</literal> to <literal>256</literal>,
 	and <acronym>LUN</acronym> limit from <literal>256</literal>
 	to <literal>1024</literal>.</para>
+
+      <para revision="282861">Support for the
+	<literal>apple-boot</literal>, <literal>apple-hfs</literal>,
+	and <literal>apple-ufs</literal> <acronym>MBR</acronym>
+	partitioning schemes have been added to &man.gpart.8;.</para>
     </sect2>
   </sect1>
 
@@ -511,6 +677,9 @@
     <sect2 xml:id="boot-loader">
       <title>Boot Loader Changes</title>
 
+      <para revision="281323">Support for <literal>bzipfs</literal>
+	has been added to the <acronym>EFI</acronym> loader.</para>
+
       <para revision="281843">The boot loader has been updated to
 	support entering the <acronym>GELI</acronym> passphrase before
 	loading the kernel.  To enable this behavior, add
@@ -520,6 +689,17 @@
       <para revision="283262" contrib="sponsor" sponsor="&ff;">The
 	memory test run at boot time on &os;/&arch.amd64; platforms
 	has been disabled by default.</para>
+
+      <para revision="283972">A new &man.ttys.5; class,
+	<literal>3wire</literal>, has been added.  This is similar to
+	the existing terminal classes, but does not have a defined
+	baudrate.</para>
+
+      <para revision="284775" contrib="sponsor" sponsor="&ff;"
+	arch="arm">The &man.ttys.5; file for &os;/&arch.arm; has been
+	updated to enable <filename>ttyu1</filename>,
+	<filename>ttyu2</filename>, and <filename>ttyu3</filename> by
+	default, if the callin port is an active console port.</para>
     </sect2>
 
     <sect2 xml:id="boot-menu">
@@ -590,7 +770,17 @@
     <sect2 xml:id="releng-changes">
       <title>Integration Changes</title>
 
-      <para>&nbsp;</para>
+      <para revision="283161" contrib="sponsor" sponsor="&ff;">The
+	Release Engineering build tools have been updated to support
+	building &os;/&arch.arm; images without external utilities for
+	supported boards where a corresponding
+	<literal>u-boot</literal> port exists in the Ports
+	Collection.</para>
+
+      <para revision="283548" contrib="sponsor" sponsor="&ff;">The
+	&os;/&arch.i386; memory stick installation images are now
+	created using the &man.mkimg.1; utility, matching the way
+	the &os;/&arch.amd64; images are created.</para>
     </sect2>
   </sect1>
 </article>
