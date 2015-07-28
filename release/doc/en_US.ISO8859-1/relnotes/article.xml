@@ -269,12 +269,33 @@
 
       <para revision="285612">The <application>ntp</application>
 	suite has been updated to version 4.2.8p3.</para>
+
+      <para revision="285750" contrib="sponsor" sponsor="&dell;">The
+	&man.ssh.1; utility has been updated to re-implement hostname
+	canonicalization before locating the host in
+	<filename>known_hosts</filename>.</para>
     </sect2>
 
     <sect2 xml:id="userland-installer">
       <title>Installation and Configuration Tools</title>
 
-      <para>&nbsp;</para>
+      <para revision="285769" contrib="sponsor"
+	sponsor="&scaleengine;">Support for detecting and implementing
+	a workaround for various laptops and motherboards that do not
+	boot properly from <acronym>GPT</acronym>-partitioned disks
+	has been added to &man.bsdinstall.8;.  Additionally, the
+	<literal>active</literal> flag will be set on the partition
+	when needed.</para>
+
+      <para revision="285721" contrib="sponsor"
+	sponsor="&scaleengine;">Support for detecting and implementing
+	aligning partitions on 1Mb boundaries has been added to
+	&man.bsdinstall.8;.</para>
+
+      <para revision="285769" contrib="sponsor"
+	sponsor="&scaleengine;">Support for selecting the partitioning
+	scheme when installing on the <acronym>UFS</acronym>
+	filesystem has been added to &man.bsdinstall.8;.</para>
     </sect2>
 
     <sect2 xml:id="userland-rc">
@@ -353,7 +374,19 @@
       <para revision="282065" contrib="sponsor" sponsor="&ff;">The
 	<literal>PAE_TABLES</literal> kernel configuration option has
 	been added for &os;/&arch.i386;, which instructs &man.pmap.9;
-	to use <acronym>PAE</acronym> format for page tables.</para>
+	to use <acronym>PAE</acronym> format for page tables while
+	maintaining a 32-bit physical address size elsewhere in the
+	kernel.  The use of this option can enhance application-level
+	security by enabling the creation of <quote>no execute</quote>
+	mappings on modern &arch.i386; processors.  Unlike the
+	<literal>PAE</literal> option, <literal>PAE_TABLES</literal>
+	preserves kernel binary interface (<acronym>KBI</acronym>)
+	compatibility with non-<literal>PAE</literal> kernels,
+	allowing non-<literal>PAE</literal> kernel modules and drivers
+	to work with a <literal>PAE_TABLES</literal>-enabled kernel.
+	Additionally, system limits are tuned for 4GB maximum
+	<acronym>RAM</acronym>, avoiding kernel virtual address space
+	(<acronym>KVA</acronym>) exhaustion.</para>
 
       <para revision="282826">The <literal>SIFTR</literal> kernel
 	configuration has been added, allowing building &man.siftr.4;
@@ -471,7 +504,7 @@
     <sect2 xml:id="drivers-network">
       <title>Network Drivers</title>
 
-      <para revision="274486">The &man.pfil.9; interface default hash
+      <para revision="274486">The &man.pf.4; interface default hash
 	has been changed from <literal>Jenkins</literal> to
 	<literal>Murmur3</literal>, providing a 3-percent performance
 	increase in packets-per-second.</para>
@@ -718,7 +751,80 @@
     <sect2 xml:id="network-protocols">
       <title>Network Procols</title>
 
-      <para>&nbsp;</para>
+      <para revision="273838" contrib="sponsor"
+	sponsor="&limelight;">Support for <acronym>PLPMTUD</acronym>
+	blackhole detection (<acronym>RFC</acronym> 4821) has been
+	added to the &man.tcp.4; stack, disabled by default.  New
+	control tunables have been added:</para>
+
+      <informaltable frame="none" pgwide="0">
+	<tgroup cols="2">
+	  <colspec colwidth="1*"/>
+	  <colspec colwidth="1*"/>
+	  <thead>
+	    <row>
+	      <entry>Tunable</entry>
+	      <entry>Description</entry>
+	    </row>
+	  </thead>
+
+	  <tbody>
+	    <row>
+	      <entry><literal>net.inet.tcp.pmtud_blackhole_detection</literal></entry>
+	      <entry>Enables or disables <acronym>PLPMTUD</acronym>
+		blackhole detection</entry>
+	    </row>
+
+	    <row>
+	      <entry><literal>net.inet.tcp.pmtud_blackhole_mss</literal></entry>
+	      <entry><acronym>MSS</acronym> to try for IPv4</entry>
+	    </row>
+
+	    <row>
+	      <entry><literal>net.inet.tcp.v6pmtud_blackhole_mss</literal></entry>
+	      <entry><acronym>MSS to try for IPv6</acronym></entry>
+	    </row>
+	  </tbody>
+	</tgroup>
+      </informaltable>
+
+      <para>New monitoring &man.sysctl.8;s haven been added:</para>
+
+      <informaltable frame="none" pgwide="0">
+	<tgroup cols="2">
+	  <colspec colwidth="1*"/>
+	  <colspec colwidth="1*"/>
+	  <thead>
+	    <row>
+	      <entry>Tunable</entry>
+	      <entry>Description</entry>
+	    </row>
+	  </thead>
+
+	  <tbody>
+	    <row>
+	      <entry><literal>net.inet.tcp.pmtud_blackhole_activated</literal></entry>
+	      <entry>Number of times the code was activated to attempt
+		downshifting the <acronym>MSS</acronym></entry>
+	    </row>
+
+	    <row>
+	      <entry><literal>net.inet.tcp.pmtud_blackhole_min_activated</literal></entry>
+	      <entry>Number of times the blackhole
+		<acronym>MSS</acronym> was used in an attempt to
+		downshift</entry>
+	    </row>
+
+	    <row>
+	      <entry><literal>net.inet.tcp.pmtud_blackhole_failed</literal></entry>
+	      <entry>Number of times that the blackhole failed to
+		connect after downshifting the
+		<acronym>MSS</acronym></entry>
+	    </row>
+	  </tbody>
+	</tgroup>
+      </informaltable>
+
     </sect2>
   </sect1>
 
