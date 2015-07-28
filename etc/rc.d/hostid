@@ -113,11 +113,11 @@ hostid_generate()
 	# First look for UUID in hardware.
 	uuid=`hostid_hardware`
 	if [ -z "${uuid}" ]; then
-		warn "unable to figure out a UUID from DMI data, PLEASE FIX if you are an integrator."
+		# Hardware UUID not found, fall back to software-generated UUID
+		# and warn that a software UUID was generated.
+		warn "Unable to detect a UUID in the DMI data, PLEASE FIX if you are an integrator."
+		warn "Generating a random UUID from software."
 		sleep 15
-		warn "generating a random one."
-		sleep 5
-		# If not found, fall back to software-generated UUID.
 		uuid=`uuidgen`
 	fi
 	hostid_set $uuid
