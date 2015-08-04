@@ -472,6 +472,7 @@ struct hpt_iop_srb {
 	u_int64_t            phy_addr;
 	u_int32_t            srb_flag;
 	int                  index;
+	struct callout_handle	timeout_ch;
 };
 
 #if __FreeBSD_version >= 500000
