@@ -1033,12 +1033,12 @@ smu_attach_fans(device_t dev, phandle_t fanroot)
 					      OID_AUTO, sysctl_name,
 					      CTLFLAG_RD, 0, "Fan Information");
 			SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(oid), OID_AUTO,
-				       "minrpm", CTLFLAG_RD,
-				       &fan->fan.min_rpm, 0,
+				       "minrpm", CTLTYPE_INT | CTLFLAG_RD,
+				       &fan->fan.min_rpm, sizeof(int),
 				       "Minimum allowed RPM");
 			SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(oid), OID_AUTO,
-				       "maxrpm", CTLFLAG_RD,
-				       &fan->fan.max_rpm, 0,
+				       "maxrpm", CTLTYPE_INT | CTLFLAG_RD,
+				       &fan->fan.max_rpm, sizeof(int),
 				       "Maximum allowed RPM");
 			SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(oid), OID_AUTO,
 					"rpm",CTLTYPE_INT | CTLFLAG_RW |
@@ -1054,12 +1054,12 @@ smu_attach_fans(device_t dev, phandle_t fanroot)
 					      OID_AUTO, sysctl_name,
 					      CTLFLAG_RD, 0, "Fan Information");
 			SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(oid), OID_AUTO,
-				       "minpwm", CTLFLAG_RD,
-				       &fan->fan.min_rpm, 0,
+				       "minpwm", CTLTYPE_INT | CTLFLAG_RD,
+				       &fan->fan.min_rpm, sizeof(int),
 				       "Minimum allowed PWM in %");
 			SYSCTL_ADD_INT(ctx, SYSCTL_CHILDREN(oid), OID_AUTO,
-				       "maxpwm", CTLFLAG_RD,
-				       &fan->fan.max_rpm, 0,
+				       "maxpwm", CTLTYPE_INT | CTLFLAG_RD,
+				       &fan->fan.max_rpm, sizeof(int),
 				       "Maximum allowed PWM in %");
 			SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(oid), OID_AUTO,
 					"pwm",CTLTYPE_INT | CTLFLAG_RW |

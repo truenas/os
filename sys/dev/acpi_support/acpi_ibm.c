@@ -192,70 +192,79 @@ static struct {
 	char	*name;
 	int	method;
 	char	*description;
-	int	flag_rdonly;
+	int	access;
 } acpi_ibm_sysctls[] = {
 	{
 		.name		= "events",
 		.method		= ACPI_IBM_METHOD_EVENTS,
 		.description	= "ACPI events enable",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "eventmask",
 		.method		= ACPI_IBM_METHOD_EVENTMASK,
 		.description	= "ACPI eventmask",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "hotkey",
 		.method		= ACPI_IBM_METHOD_HOTKEY,
 		.description	= "Key Status",
-		.flag_rdonly	= 1
+		.access		= CTLTYPE_INT | CTLFLAG_RD
 	},
 	{
 		.name		= "lcd_brightness",
 		.method		= ACPI_IBM_METHOD_BRIGHTNESS,
 		.description	= "LCD Brightness",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "volume",
 		.method		= ACPI_IBM_METHOD_VOLUME,
 		.description	= "Volume",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "mute",
 		.method		= ACPI_IBM_METHOD_MUTE,
 		.description	= "Mute",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "thinklight",
 		.method		= ACPI_IBM_METHOD_THINKLIGHT,
 		.description	= "Thinklight enable",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "bluetooth",
 		.method		= ACPI_IBM_METHOD_BLUETOOTH,
 		.description	= "Bluetooth enable",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "wlan",
 		.method		= ACPI_IBM_METHOD_WLAN,
 		.description	= "WLAN enable",
-		.flag_rdonly	= 1
+		.access		= CTLTYPE_INT | CTLFLAG_RD
 	},
 	{
 		.name		= "fan_speed",
 		.method		= ACPI_IBM_METHOD_FANSPEED,
 		.description	= "Fan speed",
-		.flag_rdonly	= 1
+		.access		= CTLTYPE_INT | CTLFLAG_RD
 	},
 	{
 		.name		= "fan_level",
 		.method		= ACPI_IBM_METHOD_FANLEVEL,
 		.description	= "Fan level",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 	{
 		.name		= "fan",
 		.method		= ACPI_IBM_METHOD_FANSTATUS,
 		.description	= "Fan enable",
+		.access		= CTLTYPE_INT | CTLFLAG_RW
 	},
 
 	{ NULL, 0, NULL, 0 }
@@ -406,19 +415,11 @@ acpi_ibm_attach(device_t dev)
 		if (!acpi_ibm_sysctl_init(sc, acpi_ibm_sysctls[i].method))
 			continue;
 
-		if (acpi_ibm_sysctls[i].flag_rdonly != 0) {
-			SYSCTL_ADD_PROC(sc->sysctl_ctx,
-			    SYSCTL_CHILDREN(sc->sysctl_tree), OID_AUTO,
-			    acpi_ibm_sysctls[i].name, CTLTYPE_INT | CTLFLAG_RD,
-			    sc, i, acpi_ibm_sysctl, "I",
-			    acpi_ibm_sysctls[i].description);
-		} else {
-			SYSCTL_ADD_PROC(sc->sysctl_ctx,
-			    SYSCTL_CHILDREN(sc->sysctl_tree), OID_AUTO,
-			    acpi_ibm_sysctls[i].name, CTLTYPE_INT | CTLFLAG_RW,
-			    sc, i, acpi_ibm_sysctl, "I",
-			    acpi_ibm_sysctls[i].description);
-		}
+		SYSCTL_ADD_PROC(sc->sysctl_ctx,
+		    SYSCTL_CHILDREN(sc->sysctl_tree), OID_AUTO,
+		    acpi_ibm_sysctls[i].name, acpi_ibm_sysctls[i].access,
+		    sc, i, acpi_ibm_sysctl, "I",
+		    acpi_ibm_sysctls[i].description);
 	}
 
 	/* Hook up thermal node */
@@ -482,10 +483,15 @@ acpi_ibm_resume(device_t dev)
 	for (int i = 0; acpi_ibm_sysctls[i].name != NULL; i++) {
 		int val;
 
+		if ((acpi_ibm_sysctls[i].access & CTLFLAG_RD) == 0) {
+			continue;
+		}
+
 		val = acpi_ibm_sysctl_get(sc, i);
 
-		if (acpi_ibm_sysctls[i].flag_rdonly != 0)
+		if ((acpi_ibm_sysctls[i].access & CTLFLAG_WR) == 0) {
 			continue;
+		}
 
 		acpi_ibm_sysctl_set(sc, i, val);
 	}
