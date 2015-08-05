@@ -31,6 +31,7 @@
       <year>2012</year>
       <year>2013</year>
       <year>2014</year>
+      <year>2015</year>
       <holder role="mailto:doc@FreeBSD.org">The &os; Documentation
 	Project</holder>
     </copyright>
@@ -765,6 +766,8 @@
 
       &hwlist.nsp;
 
+      &hwlist.pms;
+
       &hwlist.pst;
 
       &hwlist.siis;
@@ -896,6 +899,8 @@
       &hwlist.ixgb;
 
       &hwlist.ixgbe;
+
+      &hwlist.ixl;
 
       &hwlist.jme;
 
