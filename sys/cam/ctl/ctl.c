@@ -376,9 +376,11 @@ SYSCTL_INT(_kern_cam_ctl, OID_AUTO, debug, CTLFLAG_RWTUN,
  */
 #define SCSI_EVPD_NUM_SUPPORTED_PAGES	10
 
+#ifdef notyet
 static void ctl_isc_event_handler(ctl_ha_channel chanel, ctl_ha_event event,
 				  int param);
 static void ctl_copy_sense_data(union ctl_ha_msg *src, union ctl_io *dest);
+#endif
 static int ctl_init(void);
 void ctl_shutdown(void);
 static int ctl_open(struct cdev *dev, int flags, int fmt, struct thread *td);
@@ -446,7 +448,9 @@ static int ctl_scsiio_lun_check(struct ctl_lun *lun,
 				const struct ctl_cmd_entry *entry,
 				struct ctl_scsiio *ctsio);
 //static int ctl_check_rtr(union ctl_io *pending_io, struct ctl_softc *softc);
+#ifdef notyet
 static void ctl_failover(void);
+#endif
 static void ctl_clear_ua(struct ctl_softc *ctl_softc, uint32_t initidx,
 			 ctl_ua_type ua_type);
 static int ctl_scsiio_precheck(struct ctl_softc *ctl_softc,
@@ -485,7 +489,9 @@ static void ctl_work_thread(void *arg);
 static void ctl_enqueue_incoming(union ctl_io *io);
 static void ctl_enqueue_rtr(union ctl_io *io);
 static void ctl_enqueue_done(union ctl_io *io);
+#ifdef notyet
 static void ctl_enqueue_isc(union ctl_io *io);
+#endif
 static const struct ctl_cmd_entry *
     ctl_get_cmd_entry(struct ctl_scsiio *ctsio, int *sa);
 static const struct ctl_cmd_entry *
@@ -530,6 +536,7 @@ static struct ctl_frontend ioctl_frontend =
 	.name = "ioctl",
 };
 
+#ifdef notyet
 static void
 ctl_isc_handler_finish_xfer(struct ctl_softc *ctl_softc,
 			    union ctl_ha_msg *msg_info)
@@ -964,6 +971,7 @@ ctl_copy_sense_data(union ctl_ha_msg *src, union ctl_io *dest)
 	dest->scsiio.sense_len = src->scsi.sense_len;
 	dest->io_hdr.status = src->hdr.status;
 }
+#endif
 
 static void
 ctl_est_ua(struct ctl_lun *lun, uint32_t initidx, ctl_ua_type ua)
@@ -11309,6 +11317,7 @@ ctl_failover_io(union ctl_io *io, int have_lock)
 	ctl_done(io);
 }
 
+#ifdef notyet
 static void
 ctl_failover(void)
 {
@@ -11549,6 +11558,7 @@ ctl_failover(void)
 	ctl_pause_rtr = 0;
 	mtx_unlock(&softc->ctl_lock);
 }
+#endif
 
 static void
 ctl_clear_ua(struct ctl_softc *ctl_softc, uint32_t initidx,
@@ -14188,6 +14198,7 @@ ctl_enqueue_done(union ctl_io *io)
 	wakeup(thr);
 }
 
+#ifdef notyet
 static void
 ctl_enqueue_isc(union ctl_io *io)
 {
@@ -14209,7 +14220,6 @@ ctl_init_isc_msg(void)
 	printf("CTL: Still calling this thing\n");
 }
 
-#ifdef notyet
 /*
  * Init component
  * 	Initializes component into configuration defined by bootMode
