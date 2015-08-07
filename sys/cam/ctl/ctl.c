@@ -513,7 +513,6 @@ static struct cdevsw ctl_cdevsw = {
 
 
 MALLOC_DEFINE(M_CTL, "ctlmem", "Memory used for CTL");
-MALLOC_DEFINE(M_CTLIO, "ctlio", "Memory used for CTL requests");
 
 static int ctl_module_event_handler(module_t, int /*modeventtype_t*/, void *);
 
@@ -14210,6 +14209,7 @@ ctl_init_isc_msg(void)
 	printf("CTL: Still calling this thing\n");
 }
 
+#ifdef notyet
 /*
  * Init component
  * 	Initializes component into configuration defined by bootMode
@@ -14301,6 +14301,7 @@ struct ctl_ha_component ctl_ha_component_ctlisc =
 	.start = ctl_isc_start,
 	.quiesce = ctl_isc_quiesce
 };
+#endif
 
 /*
  *  vim: ts=8
