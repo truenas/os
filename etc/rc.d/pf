@@ -26,6 +26,7 @@ required_modules="pf"
 
 pf_start()
 {
+	checkyesno failover_enable && exit
 	check_startmsgs && echo -n 'Enabling pf'
 	$pf_program -F all > /dev/null 2>&1
 	$pf_program -f "$pf_rules" $pf_flags
