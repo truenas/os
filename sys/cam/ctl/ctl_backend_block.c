@@ -2040,6 +2040,7 @@ ctl_be_block_close(struct ctl_be_block_lun *be_lun)
 {
 	struct ctl_be_lun *cbe_lun = &be_lun->cbe_lun;
 	int flags;
+	int vfs_is_locked = 0;
 
 	if (be_lun->vn) {
 		switch (be_lun->dev_type) {
