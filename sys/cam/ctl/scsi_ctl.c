@@ -405,6 +405,7 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 		 */
 		port->max_targets = cpi->max_target;
 		port->max_target_id = cpi->max_target;
+		port->targ_port = -1;
 		
 		/*
 		 * XXX KDM need to figure out whether we're the master or
