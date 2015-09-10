@@ -808,8 +808,7 @@ ctl_isc_port_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 	port->status = msg->port.status;
 	i = 0;
 	free(port->port_name, M_CTL);
-	port->port_name = strndup(&msg->port.data[i], msg->port.name_len,
-	    M_CTL);
+	port->port_name = strdup(&msg->port.data[i], M_CTL);
 	i += msg->port.name_len;
 	if (msg->port.lun_map_len != 0) {
 		if (port->lun_map == NULL)
@@ -1336,6 +1335,7 @@ ctl_init(void)
 	 */
 	softc->flags = CTL_FLAG_REAL_SYNC;
 
+	TUNABLE_INT_FETCH("kern.cam.ctl.ha_mode", (int *)&softc->ha_mode);
 	SYSCTL_ADD_INT(&softc->sysctl_ctx, SYSCTL_CHILDREN(softc->sysctl_tree),
 	    OID_AUTO, "ha_mode", CTLFLAG_RDTUN, (int *)&softc->ha_mode, 0,
 	    "HA mode (0 - act/stby, 1 - serialize only, 2 - xfer)");
@@ -1345,6 +1345,7 @@ ctl_init(void)
 	 * figured out through the slot the controller is in.  Although it
 	 * is an active/active system, someone has to be in charge.
 	 */
+	TUNABLE_INT_FETCH("kern.cam.ctl.ha_id", &softc->ha_id);
 	SYSCTL_ADD_INT(&softc->sysctl_ctx, SYSCTL_CHILDREN(softc->sysctl_tree),
 	    OID_AUTO, "ha_id", CTLFLAG_RDTUN, &softc->ha_id, 0,
 	    "HA head ID (0 - no HA)");
@@ -1782,10 +1783,6 @@ ctl_serialize_other_sc_cmd(struct ctl_scsiio *ctsio)
 	 * Every I/O goes into the OOA queue for a
 	 * particular LUN, and stays there until completion.
 	 */
-#ifdef CTL_TIME_IO
-	if (TAILQ_EMPTY(&lun->ooa_queue))
-		lun->idle_time += getsbinuptime() - lun->last_busy;
-#endif
 	TAILQ_INSERT_TAIL(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
 
 	switch (ctl_check_ooa(lun, (union ctl_io *)ctsio,
