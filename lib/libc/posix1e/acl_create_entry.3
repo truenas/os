@@ -69,13 +69,20 @@ function fails if:
 Argument
 .Fa acl_p
 does not point to a pointer to a valid ACL.
-Argument
-.Fa index
-is out of bounds.
 .It Bq Er ENOMEM
 The ACL working storage requires more memory than is
 allowed by the hardware or system-imposed memory
 management constraints.
+.El
+.Pp
+In addition, the
+.Fn acl_create_entry_np
+function fails if:
+.Bl -tag -width Er
+.It Bq Er ERANGE
+Argument
+.Fa index
+is out of bounds.
 .El
 .Sh SEE ALSO
 .Xr acl 3 ,
