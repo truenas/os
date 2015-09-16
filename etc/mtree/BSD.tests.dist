@@ -368,6 +368,8 @@
             regress.multitest.out
             ..
         ..
+        timeout
+        ..
         tr
         ..
         truncate
@@ -385,6 +387,8 @@
     ..
     usr.sbin
         etcupdate
+        ..
+        fstyp
         ..
         newsyslog
         ..

@@ -466,6 +466,19 @@ zfs_register_callbacks(vfs_t *vfsp)
 	}
 
 	/*
+	 * We need to enter pool configuration here, so that we can use
+	 * dsl_prop_get_int_ds() to handle the special nbmand property below.
+	 * dsl_prop_get_integer() can not be used, because it has to acquire
+	 * spa_namespace_lock and we can not do that because we already hold
+	 * z_teardown_lock.  The problem is that spa_config_sync() is called
+	 * with spa_namespace_lock held and the function calls ZFS vnode
+	 * operations to write the cache file and thus z_teardown_lock is
+	 * acquired after spa_namespace_lock.
+	 */
+	ds = dmu_objset_ds(os);
+	dsl_pool_config_enter(dmu_objset_pool(os), FTAG);
+
+	/*
 	 * nbmand is a special property.  It can only be changed at
 	 * mount time.
 	 *
@@ -476,14 +489,9 @@ zfs_register_callbacks(vfs_t *vfsp)
 		nbmand = B_FALSE;
 	} else if (vfs_optionisset(vfsp, MNTOPT_NBMAND, NULL)) {
 		nbmand = B_TRUE;
-	} else {
-		char osname[MAXNAMELEN];
-
-		dmu_objset_name(os, osname);
-		if (error = dsl_prop_get_integer(osname, "nbmand", &nbmand,
-		    NULL)) {
-			return (error);
-		}
+	} else if (error = dsl_prop_get_int_ds(ds, "nbmand", &nbmand) != 0) {
+		dsl_pool_config_exit(dmu_objset_pool(os), FTAG);
+		return (error);
 	}
 
 	/*
@@ -493,8 +501,6 @@ zfs_register_callbacks(vfs_t *vfsp)
 	 * the first prop_register(), but I guess I like to go
 	 * overboard...
 	 */
-	ds = dmu_objset_ds(os);
-	dsl_pool_config_enter(dmu_objset_pool(os), FTAG);
 	error = dsl_prop_register(ds,
 	    zfs_prop_to_name(ZFS_PROP_ATIME), atime_changed_cb, zfsvfs);
 	error = error ? error : dsl_prop_register(ds,
@@ -1700,9 +1706,19 @@ zfs_mount(vfs_t *vfsp)
 	 * according to those options set in the current VFS options.
 	 */
 	if (vfsp->vfs_flag & MS_REMOUNT) {
-		/* refresh mount options */
-		zfs_unregister_callbacks(vfsp->vfs_data);
+		zfsvfs_t *zfsvfs = vfsp->vfs_data;
+
+		/*
+		 * Refresh mount options with z_teardown_lock blocking I/O while
+		 * the filesystem is in an inconsistent state.
+		 * The lock also serializes this code with filesystem
+		 * manipulations between entry to zfs_suspend_fs() and return
+		 * from zfs_resume_fs().
+		 */
+		rrm_enter(&zfsvfs->z_teardown_lock, RW_WRITER, FTAG);
+		zfs_unregister_callbacks(zfsvfs);
 		error = zfs_register_callbacks(vfsp);
+		rrm_exit(&zfsvfs->z_teardown_lock, FTAG);
 		goto out;
 	}
 
