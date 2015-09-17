@@ -2463,12 +2463,16 @@ main(int argc, char **argv)
 	const char *config_path = DEFAULT_CONFIG_PATH;
 	int debug = 0, ch, error;
 	bool dont_daemonize = false;
+	bool use_ucl = false;
 
-	while ((ch = getopt(argc, argv, "df:R")) != -1) {
+	while ((ch = getopt(argc, argv, "duf:R")) != -1) {
 		switch (ch) {
 		case 'd':
 			dont_daemonize = true;
 			debug++;
+			break;
+		case 'u':
+			use_ucl = true;
 			break;
 		case 'f':
 			config_path = optarg;
@@ -2493,7 +2497,12 @@ main(int argc, char **argv)
 	kernel_init();
 
 	oldconf = conf_new_from_kernel();
-	newconf = conf_new_from_file(config_path, oldconf);
+
+	if (use_ucl)
+		newconf = conf_new_from_ucl(config_path, oldconf);
+	else
+		newconf = conf_new_from_file(config_path, oldconf);
+
 	if (newconf == NULL)
 		log_errx(1, "configuration error; exiting");
 	if (debug > 0) {

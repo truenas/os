@@ -291,6 +291,7 @@ void			rchap_delete(struct rchap *rchap);
 
 struct conf		*conf_new(void);
 struct conf		*conf_new_from_file(const char *path, struct conf *old);
+struct conf		*conf_new_from_ucl(const char *path, struct conf *old);
 struct conf		*conf_new_from_kernel(void);
 void			conf_delete(struct conf *conf);
 int			conf_verify(struct conf *conf);
