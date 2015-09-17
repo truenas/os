@@ -974,8 +974,7 @@ ctl_isc_iid_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 	port->wwpn_iid[iid].wwpn = msg->iid.wwpn;
 	free(port->wwpn_iid[iid].name, M_CTL);
 	if (msg->iid.name_len) {
-		port->wwpn_iid[iid].name = strndup(&msg->iid.data[0],
-		    msg->iid.name_len, M_CTL);
+		port->wwpn_iid[iid].name = strdup(&msg->iid.data[0], M_CTL);
 	} else
 		port->wwpn_iid[iid].name = NULL;
 }
