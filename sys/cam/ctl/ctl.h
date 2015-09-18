@@ -169,6 +169,7 @@ int ctl_lbp_log_sense_handler(struct ctl_scsiio *ctsio,
 				   int pc);
 int ctl_config_move_done(union ctl_io *io);
 void ctl_datamove(union ctl_io *io);
+void ctl_serseq_done(union ctl_io *io);
 void ctl_done(union ctl_io *io);
 void ctl_data_submit_done(union ctl_io *io);
 void ctl_config_read_done(union ctl_io *io);
