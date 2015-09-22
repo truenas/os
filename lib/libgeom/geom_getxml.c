@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2003 Poul-Henning Kamp
+ * Copyright (c) 2015 iXsystems, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +32,8 @@
 
 #include <sys/types.h>
 #include <sys/sysctl.h>
+#include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "libgeom.h"
@@ -39,22 +42,42 @@ char *
 geom_getxml(void)
 {
 	char *p;
-	size_t l = 0;
+	size_t len = 0, oldlen;
 	int mib[3];
 	size_t sizep;
+	bool first = true;
 
 	sizep = sizeof(mib) / sizeof(*mib);
 	if (sysctlnametomib("kern.geom.confxml", mib, &sizep) != 0)
 		return (NULL);
-	if (sysctl(mib, sizep, NULL, &l, NULL, 0) != 0)
-		return (NULL);
-	l += 4096;
-	p = malloc(l);
-	if (p == NULL)
-		return (NULL);
-	if (sysctl(mib, sizep, p, &l, NULL, 0) != 0) {
-		free(p);
-		return (NULL);
-	}
-	return (reallocf(p, strlen(p) + 1));
+
+	do {
+		if (sysctl(mib, sizep, NULL, &len, NULL, 0) != 0)
+			return (NULL);
+		/*
+		 * Use a buffer of 2x size than estimated if it
+		 * is not our first run, which may happen when
+		 * the GEOM tree is growing.
+		 */
+		if (first)
+			first = false;
+		else
+			len *= 2;
+
+		p = malloc(len);
+		if (p == NULL)
+			return (NULL);
+
+		oldlen = len;
+
+		if (sysctl(mib, sizep, p, &len, NULL, 0) == 0) {
+			/* truncate buffer to the ASCIIZ string */
+			return (reallocf(p, strlen(p) + 1));
+		} else {
+			free(p);
+			p = NULL;
+		}
+	} while (oldlen < len);
+
+	return (NULL);
 }
