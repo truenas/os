@@ -38,46 +38,58 @@
 #include <string.h>
 #include "libgeom.h"
 
+#include <syslog.h>
+
 char *
 geom_getxml(void)
 {
 	char *p;
-	size_t len = 0, oldlen;
+	size_t len = 0;
 	int mib[3];
 	size_t sizep;
-	bool first = true;
 
 	sizep = sizeof(mib) / sizeof(*mib);
 	if (sysctlnametomib("kern.geom.confxml", mib, &sizep) != 0)
 		return (NULL);
 
-	do {
-		if (sysctl(mib, sizep, NULL, &len, NULL, 0) != 0)
-			return (NULL);
-		/*
-		 * Use a buffer of 2x size than estimated if it
-		 * is not our first run, which may happen when
-		 * the GEOM tree is growing.
-		 */
-		if (first)
-			first = false;
-		else
-			len *= 2;
+	/*
+	 * Get an initial estimate for the size of the buffer.
+	 * If we're lucky, and things aren't in flux, that'll be
+	 * the size we want.
+	 */
+	if (sysctl(mib, sizep, NULL, &len, NULL, 0) != 0)
+		return (NULL);
 
+	do {
 		p = malloc(len);
 		if (p == NULL)
 			return (NULL);
 
-		oldlen = len;
-
 		if (sysctl(mib, sizep, p, &len, NULL, 0) == 0) {
 			/* truncate buffer to the ASCIIZ string */
-			return (reallocf(p, strlen(p) + 1));
+			return (reallocf(p, len));
+		} else if (errno == ENOMEM) {
+			/*
+			 * This is extremely annoying:  if the buffer wasn't large
+			 * enough, sysctl returns -1, with errno set to ENOMEM, but
+			 * doesn't tell us the size it thought it should be.
+			 * So I hate doing this, but let's add another 64k to it.
+			 * (We could double it, but we'd start using serious memory
+			 * pretty quickly.  What we're trying to handle here is the
+			 * case where the available partitions is causing the geom xml
+			 * to change in size rapidly.  We could also call sysctl with
+			 * NULL for the buffer again, instead.)
+			 */
+			len += 64 * 1024;
+			free(p);
 		} else {
 			free(p);
 			p = NULL;
+			break;
 		}
-	} while (oldlen < len);
+	} while (1);
+	
+	syslog(LOG_ALERT | LOG_CONSOLE, "%s: len = %zd: %m", __FUNCTION__, len);
 
 	return (NULL);
 }
