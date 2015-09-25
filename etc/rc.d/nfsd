@@ -12,6 +12,7 @@
 name="nfsd"
 desc="Remote NFS server"
 rcvar="nfs_server_enable"
+pidfile="/var/run/${name}.pid"
 command="/usr/sbin/${name}"
 
 load_rc_config $name

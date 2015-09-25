@@ -75,9 +75,11 @@ static const char rcsid[] =
 #include <sysexits.h>
 
 #include <getopt.h>
+#include <libutil.h>
 
 static int	debug = 0;
 
+#define	_PATH_NFSDPID		"/var/run/nfsd.pid"
 #define	NFSD_STABLERESTART	"/var/db/nfs-stablerestart"
 #define	NFSD_STABLEBACKUP	"/var/db/nfs-stablerestart.bak"
 #define	MAXNFSDCNT	256
@@ -95,6 +97,7 @@ static const char *getopt_usage;
 
 static int minthreads_set;
 static int maxthreads_set;
+static struct pidfh *pfh;
 
 static struct option longopts[] = {
 	{ "debug", no_argument, &debug, 1 },
@@ -160,7 +163,7 @@ main(int argc, char **argv)
 	int longindex = 0;
 	const char *lopt;
 	char **bindhost = NULL;
-	pid_t pid;
+	pid_t pid, otherpid;
 
 	nfsdcnt = DEFNFSDCNT;
 	unregister = reregister = tcpflag = maxsock = 0;
@@ -232,6 +235,13 @@ main(int argc, char **argv)
 		usage();
 	if (argc == 1)
 		set_nfsdcnt(atoi(argv[0]));
+
+	pfh = pidfile_open(_PATH_NFSDPID, 0600, &otherpid);
+	if (pfh == NULL) {
+		if (errno == EEXIST)
+			errx(1, "nfsd already running, pid: %d.", otherpid);
+		warn("cannot open or create pidfile");
+	}
 
 	/*
 	 * Unless the "-o" option was specified, try and run "nfsd".
@@ -702,6 +712,8 @@ main(int argc, char **argv)
 		nfsd_exit(1);
 	}
 
+	pidfile_write(pfh);
+
 	setproctitle("master");
 	/*
 	 * We always want a master to have a clean way to to shut nfsd down
@@ -913,6 +925,7 @@ nfsd_exit(int status)
 {
 	killchildren();
 	unregistration();
+	pidfile_remove(pfh);
 	exit(status);
 }
 
