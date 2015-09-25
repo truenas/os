@@ -56,8 +56,9 @@ nfsd_precmd()
 		fi
 	fi
 
-	force_depend rpcbind || return 1
-	force_depend mountd || return 1
+	# Commented-out because confuses FreNAS middleware
+	# force_depend rpcbind || return 1
+	# force_depend mountd || return 1
 }
 
 run_rc_command "$1"
