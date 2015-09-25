@@ -21,9 +21,6 @@ start_precmd='lockd_precmd'
 #
 lockd_precmd()
 {
-	force_depend rpcbind || return 1
-	force_depend statd rpc_statd || return 1
-	
 	rc_flags=${rpc_lockd_flags}
 }
 

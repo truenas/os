@@ -21,8 +21,6 @@ start_precmd='statd_precmd'
 #
 statd_precmd()
 {
-	force_depend rpcbind || return 1
-	
 	rc_flags=${rpc_statd_flags}
 }
 
