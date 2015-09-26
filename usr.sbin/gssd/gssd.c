@@ -51,6 +51,7 @@ __FBSDID("$FreeBSD$");
 #include <gssapi/gssapi.h>
 #include <rpc/rpc.h>
 #include <rpc/rpc_com.h>
+#include <libutil.h>
 
 #include "gssd.h"
 
@@ -60,6 +61,7 @@ __FBSDID("$FreeBSD$");
 #ifndef _PATH_GSSDSOCK
 #define _PATH_GSSDSOCK	"/var/run/gssd.sock"
 #endif
+#define	_PATH_GSSDPID	"/var/run/gssd.pid"
 #define GSSD_CREDENTIAL_CACHE_FILE	"/tmp/krb5cc_gssd"
 
 struct gss_resource {
@@ -77,6 +79,7 @@ static char pref_realm[1024];
 static int verbose;
 static int use_old_des;
 static int hostbased_initiator_cred;
+static struct pidfh *pfh;
 #ifndef WITHOUT_KERBEROS
 /* 1.2.752.43.13.14 */
 static gss_OID_desc gss_krb5_set_allowable_enctypes_x_desc =
@@ -112,6 +115,7 @@ main(int argc, char **argv)
 	 */
 	struct sockaddr_un sun;
 	int fd, oldmask, ch, debug;
+	pid_t otherpid;
 	SVCXPRT *xprt;
 
 	/*
@@ -192,6 +196,13 @@ main(int argc, char **argv)
 
 	gssd_load_mech();
 
+	pfh = pidfile_open(_PATH_GSSDPID, 0600, &otherpid);
+	if (pfh == NULL) {
+		if (errno == EEXIST)
+			errx(1, "gssd already running, pid: %d.", otherpid);
+		warn("cannot open or create pidfile");
+	}
+
 	if (!debug_level) {
 		if (daemon(0, 0) != 0)
 			err(1, "Can't daemonize");
@@ -252,10 +263,12 @@ main(int argc, char **argv)
 	gss_next_id = 1;
 	gss_start_time = time(0);
 
+	pidfile_write(pfh);
+
 	gssd_syscall(_PATH_GSSDSOCK);
 	svc_run();
 	gssd_syscall("");
-
+	pidfile_remove(pfh);
 	return (0);
 }
 
@@ -1287,6 +1300,7 @@ void gssd_terminate(int sig __unused)
 		unlink(GSSD_CREDENTIAL_CACHE_FILE);
 #endif
 	gssd_syscall("");
+	pidfile_remove(pfh);
 	exit(0);
 }
 

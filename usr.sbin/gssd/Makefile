@@ -11,7 +11,12 @@ WARNS?= 1
 
 LIBADD=	gssapi
 .if ${MK_KERBEROS_SUPPORT} != "no"
+<<<<<<< HEAD
 LIBADD+=	krb5 roken
+=======
+DPADD+=	${LIBKRB5} ${LIBHX509} ${LIBASN1} ${LIBROKEN} ${LIBCOM_ERR} ${LIBCRYPT} ${LIBCRYPTO} ${LIBUTIL}
+LDADD+=	-lkrb5 -lhx509 -lasn1 -lroken -lcom_err -lcrypt -lcrypto -lutil
+>>>>>>> 023a613... Make rpcbind and gssd write their pidfiles in /var/run.
 .else
 CFLAGS+= -DWITHOUT_KERBEROS
 .endif

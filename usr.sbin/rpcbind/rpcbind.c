@@ -84,6 +84,7 @@ rpcblist_ptr list_rbl;	/* A list of version 3/4 rpcbind services */
 #define RUN_AS  "daemon"
 
 #define RPCBINDDLOCK "/var/run/rpcbind.lock"
+#define	_PATH_RPCBINDPID "/var/run/rpcbind.pid"
 
 static int runasdaemon = 0;
 int insecure = 0;
@@ -114,6 +115,7 @@ char *tcp_uaddr;	/* Universal TCP address */
 #endif
 static char servname[] = "rpcbind";
 static char superuser[] = "superuser";
+static struct pidfh *pfh;
 
 int main(int, char *[]);
 
@@ -131,6 +133,7 @@ main(int argc, char *argv[])
 	void *nc_handle;	/* Net config handle */
 	struct rlimit rl;
 	int maxrec = RPC_MAXDATASIZE;
+	pid_t otherpid;
 
 	parseargs(argc, argv);
 
@@ -143,6 +146,13 @@ main(int argc, char *argv[])
 
 	if(flock(rpcbindlockfd, LOCK_EX|LOCK_NB) == -1 && errno == EWOULDBLOCK)
 		errx(1, "another rpcbind is already running. Aborting");
+
+	pfh = pidfile_open(_PATH_RPCBINDPID, 0600, &otherpid);
+	if (pfh == NULL) {
+		if (errno == EEXIST)
+			errx(1, "nfsd already running, pid: %d.", otherpid);
+		warn("cannot open or create pidfile");
+	}
 
 	getrlimit(RLIMIT_NOFILE, &rl);
 	if (rl.rlim_cur < 128) {
@@ -231,6 +241,8 @@ main(int argc, char *argv[])
 	}
 
 	network_init();
+
+	pidfile_write(pfh);
 
 	my_svc_run();
 	syslog(LOG_ERR, "svc_run returned unexpectedly");
@@ -765,6 +777,7 @@ terminate(int dummy __unused)
 		"rpcbind terminating on signal. Restart with \"rpcbind -w\"");
 	write_warmstart();	/* Dump yourself */
 #endif
+	pidfile_remove(pfh);
 	exit(2);
 }
 
@@ -774,6 +787,7 @@ rpcbind_abort(void)
 #ifdef WARMSTART
 	write_warmstart();	/* Dump yourself */
 #endif
+	pidfile_remove(pfh);
 	abort();
 }
 
