@@ -11,6 +11,7 @@
 
 name="rpcbind"
 rcvar="rpcbind_enable"
+pidfile="/var/run/${name}.pid"
 command="/usr/sbin/${name}"
 
 stop_postcmd='/bin/rm -f /var/run/rpcbind.*'
