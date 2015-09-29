@@ -408,10 +408,13 @@ more:
 			ib = 0;
 			break;
 		}
-		vm_page_lock(p);
 		vm_page_test_dirty(p);
-		if (p->dirty == 0 ||
-		    p->queue != PQ_INACTIVE ||
+		if (p->dirty == 0) {
+			ib = 0;
+			break;
+		}
+		vm_page_lock(p);
+		if (p->queue != PQ_INACTIVE ||
 		    p->hold_count != 0) {	/* may be undergoing I/O */
 			vm_page_unlock(p);
 			ib = 0;
@@ -435,10 +438,11 @@ more:
 
 		if ((p = vm_page_next(ps)) == NULL || vm_page_busied(p))
 			break;
-		vm_page_lock(p);
 		vm_page_test_dirty(p);
-		if (p->dirty == 0 ||
-		    p->queue != PQ_INACTIVE ||
+		if (p->dirty == 0)
+			break;
+		vm_page_lock(p);
+		if (p->queue != PQ_INACTIVE ||
 		    p->hold_count != 0) {	/* may be undergoing I/O */
 			vm_page_unlock(p);
 			break;
@@ -922,9 +926,10 @@ vm_pageout_scan(struct vm_domain *vmd, int pass)
 	vm_page_t m, next;
 	struct vm_pagequeue *pq;
 	vm_object_t object;
+	long min_scan;
 	int act_delta, addl_page_shortage, deficit, maxscan, page_shortage;
 	int vnodes_skipped = 0;
-	int maxlaunder;
+	int maxlaunder, scan_tick, scanned;
 	int lockmode;
 	boolean_t queues_locked;
 
@@ -1115,9 +1120,11 @@ vm_pageout_scan(struct vm_domain *vmd, int pass)
 		 * then the page may still be modified until the last of those
 		 * mappings are removed.
 		 */
-		vm_page_test_dirty(m);
-		if (m->dirty == 0 && object->ref_count != 0)
-			pmap_remove_all(m);
+		if (object->ref_count != 0) {
+			vm_page_test_dirty(m);
+			if (m->dirty == 0)
+				pmap_remove_all(m);
+		}
 
 		if (m->valid == 0) {
 			/*
@@ -1353,34 +1360,37 @@ relock_queues:
 	 * If we're just idle polling attempt to visit every
 	 * active page within 'update_period' seconds.
 	 */
-	if (pass == 0 && vm_pageout_update_period != 0) {
-		maxscan /= vm_pageout_update_period;
-		page_shortage = maxscan;
-	}
+	scan_tick = ticks;
+	if (vm_pageout_update_period != 0) {
+		min_scan = pq->pq_cnt;
+		min_scan *= scan_tick - vmd->vmd_last_active_scan;
+		min_scan /= hz * vm_pageout_update_period;
+	} else
+		min_scan = 0;
+	if (min_scan > 0 || (page_shortage > 0 && maxscan > 0))
+		vmd->vmd_last_active_scan = scan_tick;
 
 	/*
-	 * Scan the active queue for things we can deactivate. We nominally
-	 * track the per-page activity counter and use it to locate
-	 * deactivation candidates.
+	 * Scan the active queue for pages that can be deactivated.  Update
+	 * the per-page activity counter and use it to identify deactivation
+	 * candidates.
 	 */
-	m = TAILQ_FIRST(&pq->pq_pl);
-	while (m != NULL && maxscan-- > 0 && page_shortage > 0) {
+	for (m = TAILQ_FIRST(&pq->pq_pl), scanned = 0; m != NULL && (scanned <
+	    min_scan || (page_shortage > 0 && scanned < maxscan)); m = next,
+	    scanned++) {
 
 		KASSERT(m->queue == PQ_ACTIVE,
 		    ("vm_pageout_scan: page %p isn't active", m));
 
 		next = TAILQ_NEXT(m, plinks.q);
-		if ((m->flags & PG_MARKER) != 0) {
-			m = next;
+		if ((m->flags & PG_MARKER) != 0)
 			continue;
-		}
 		KASSERT((m->flags & PG_FICTITIOUS) == 0,
 		    ("Fictitious page %p cannot be in active queue", m));
 		KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 		    ("Unmanaged page %p cannot be in active queue", m));
 		if (!vm_pageout_page_lock(m, &next)) {
 			vm_page_unlock(m);
-			m = next;
 			continue;
 		}
 
@@ -1433,7 +1443,6 @@ relock_queues:
 		} else
 			vm_page_requeue_locked(m);
 		vm_page_unlock(m);
-		m = next;
 	}
 	vm_pagequeue_unlock(pq);
 #if !defined(NO_SWAPPING)
@@ -1621,6 +1630,7 @@ vm_pageout_worker(void *arg)
 	 */
 
 	KASSERT(domain->vmd_segs != 0, ("domain without segments"));
+	domain->vmd_last_active_scan = ticks;
 	vm_pageout_init_marker(&domain->vmd_marker, PQ_INACTIVE);
 
 	/*
@@ -1641,9 +1651,15 @@ vm_pageout_worker(void *arg)
 		}
 		if (vm_pages_needed) {
 			/*
-			 * Still not done, take a second pass without waiting
-			 * (unlimited dirty cleaning), otherwise sleep a bit
-			 * and try again.
+			 * We're still not done.  Either vm_pages_needed was
+			 * set by another thread during the previous scan
+			 * (typically, this happens during a level 0 scan) or
+			 * vm_pages_needed was already set and the scan failed
+			 * to free enough pages.  If we haven't yet performed
+			 * a level >= 2 scan (unlimited dirty cleaning), then
+			 * upgrade the level and scan again now.  Otherwise,
+			 * sleep a bit and try again later.  While sleeping,
+			 * vm_pages_needed can be cleared.
 			 */
 			if (domain->vmd_pass > 1)
 				msleep(&vm_pages_needed,
@@ -1654,15 +1670,14 @@ vm_pageout_worker(void *arg)
 			 * Good enough, sleep until required to refresh
 			 * stats.
 			 */
-			domain->vmd_pass = 0;
 			msleep(&vm_pages_needed, &vm_page_queue_free_mtx,
 			    PVM, "psleep", hz);
-
 		}
 		if (vm_pages_needed) {
 			cnt.v_pdwakeups++;
 			domain->vmd_pass++;
-		}
+		} else
+			domain->vmd_pass = 0;
 		mtx_unlock(&vm_page_queue_free_mtx);
 		vm_pageout_scan(domain, domain->vmd_pass);
 	}

@@ -114,6 +114,8 @@ typedef struct {
 #define	ELFOSABI_OPENVMS	13	/* Open VMS */
 #define	ELFOSABI_NSK		14	/* HP Non-Stop Kernel */
 #define	ELFOSABI_AROS		15	/* Amiga Research OS */
+#define	ELFOSABI_FENIXOS	16	/* FenixOS */
+#define	ELFOSABI_CLOUDABI	17	/* Nuxi CloudABI */
 #define	ELFOSABI_ARM		97	/* ARM */
 #define	ELFOSABI_STANDALONE	255	/* Standalone (embedded) application */
 
@@ -144,6 +146,7 @@ typedef struct {
 #define	EM_386		3	/* Intel i386. */
 #define	EM_68K		4	/* Motorola 68000. */
 #define	EM_88K		5	/* Motorola 88000. */
+#define	EM_IAMCU	6	/* Intel MCU. */
 #define	EM_860		7	/* Intel i860. */
 #define	EM_MIPS		8	/* MIPS R3000 Big-Endian only. */
 #define	EM_S370		9	/* IBM System/370. */
@@ -238,6 +241,7 @@ typedef struct {
 #define	EM_UNICORE	110	/* Microprocessor series from PKU-Unity Ltd.
 				   and MPRC of Peking University */
 #define	EM_AARCH64	183	/* AArch64 (64-bit ARM) */
+#define	EM_RISCV	243	/* RISC-V */
 
 /* Non-standard or deprecated. */
 #define	EM_486		6	/* Intel i486. */
@@ -514,6 +518,7 @@ typedef struct {
 #define	NT_PROCSTAT_OSREL	14	/* Procstat osreldate data. */
 #define	NT_PROCSTAT_PSSTRINGS	15	/* Procstat ps_strings data. */
 #define	NT_PROCSTAT_AUXV	16	/* Procstat auxv data. */
+#define	NT_PPC_VMX	0x100	/* PowerPC Altivec/VMX registers */
 #define	NT_X86_XSTATE	0x202	/* x86 XSAVE extended state. */
 
 /* Symbol Binding - ELFNN_ST_BIND - st_info */
@@ -646,6 +651,23 @@ typedef struct {
 #define	R_386_TLS_DTPOFF32	36	/* GOT entry containing TLS offset */
 #define	R_386_TLS_TPOFF32	37	/* GOT entry of -ve static TLS offset */
 #define	R_386_IRELATIVE		42	/* PLT entry resolved indirectly at runtime */
+
+#define	R_AARCH64_NONE		0	/* No relocation */
+#define	R_AARCH64_ABS64		257	/* Absolute offset */
+#define	R_AARCH64_ABS32		258	/* Absolute, 32-bit overflow check */
+#define	R_AARCH64_ABS16		259	/* Absolute, 16-bit overflow check */
+#define	R_AARCH64_PREL64	260	/* PC relative */
+#define	R_AARCH64_PREL32	261	/* PC relative, 32-bit overflow check */
+#define	R_AARCH64_PREL16	262	/* PC relative, 16-bit overflow check */
+#define	R_AARCH64_COPY		1024	/* Copy data from shared object */
+#define	R_AARCH64_GLOB_DAT	1025	/* Set GOT entry to data address */
+#define	R_AARCH64_JUMP_SLOT	1026	/* Set GOT entry to code address */
+#define	R_AARCH64_RELATIVE 	1027	/* Add load address of shared object */
+#define	R_AARCH64_TLS_DTPREL64	1028
+#define	R_AARCH64_TLS_DTPMOD64	1029
+#define	R_AARCH64_TLS_TPREL64 	1030
+#define	R_AARCH64_TLSDESC 	1031	/* Identify the TLS descriptor */
+#define	R_AARCH64_IRELATIVE	1032
 
 #define	R_ARM_NONE		0	/* No relocation. */
 #define	R_ARM_PC24		1

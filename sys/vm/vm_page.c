@@ -1710,6 +1710,7 @@ vm_page_alloc_contig_vdrop(struct spglist *lst)
  *
  *	optional allocation flags:
  *	VM_ALLOC_NOBUSY		do not exclusive busy the page
+ *	VM_ALLOC_NODUMP		do not include the page in a kernel core dump
  *	VM_ALLOC_NOOBJ		page is not associated with an object and
  *				should not be exclusive busy 
  *	VM_ALLOC_SBUSY		shared busy the allocated page
@@ -3009,7 +3010,8 @@ vm_page_set_invalid(vm_page_t m, int base, int size)
 		bits = VM_PAGE_BITS_ALL;
 	else
 		bits = vm_page_bits(base, size);
-	if (m->valid == VM_PAGE_BITS_ALL && bits != 0)
+	if (object->ref_count != 0 && m->valid == VM_PAGE_BITS_ALL &&
+	    bits != 0)
 		pmap_remove_all(m);
 	KASSERT((bits == 0 && m->valid == VM_PAGE_BITS_ALL) ||
 	    !pmap_page_is_mapped(m),
