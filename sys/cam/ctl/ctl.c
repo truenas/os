@@ -783,9 +783,9 @@ alloc:
 	msg->hdr.nexus.targ_lun = lun->lun;
 	msg->hdr.nexus.targ_mapped_lun = lun->lun;
 	msg->lun.flags = lun->flags;
-	msg->lun.pr_generation = lun->PRGeneration;
+	msg->lun.pr_generation = lun->pr_generation;
 	msg->lun.pr_res_idx = lun->pr_res_idx;
-	msg->lun.pr_res_type = lun->res_type;
+	msg->lun.pr_res_type = lun->pr_res_type;
 	msg->lun.pr_key_count = lun->pr_key_count;
 	i = 0;
 	if (lun->lun_devid) {
@@ -1087,9 +1087,9 @@ ctl_isc_lun_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 		/* If peer is primary and we are not -- use data */
 		if ((lun->flags & CTL_LUN_PRIMARY_SC) == 0 &&
 		    (lun->flags & CTL_LUN_PEER_SC_PRIMARY)) {
-			lun->PRGeneration = msg->lun.pr_generation;
+			lun->pr_generation = msg->lun.pr_generation;
 			lun->pr_res_idx = msg->lun.pr_res_idx;
-			lun->res_type = msg->lun.pr_res_type;
+			lun->pr_res_type = msg->lun.pr_res_type;
 			lun->pr_key_count = msg->lun.pr_key_count;
 			for (k = 0; k < CTL_MAX_INITIATORS; k++)
 				ctl_clr_prkey(lun, k);
@@ -5123,7 +5123,7 @@ ctl_start_stop(struct ctl_scsiio *ctsio)
 
 			residx = ctl_get_initindex(&ctsio->io_hdr.nexus);
 			if (ctl_get_prkey(lun, residx) == 0 ||
-			    (lun->pr_res_idx != residx && lun->res_type < 4)) {
+			    (lun->pr_res_idx != residx && lun->pr_res_type < 4)) {
 
 				ctl_set_reservation_conflict(ctsio);
 				ctl_done((union ctl_io *)ctsio);
@@ -7472,7 +7472,7 @@ retry:
 			goto retry;
 		}
 
-		scsi_ulto4b(lun->PRGeneration, res_keys->header.generation);
+		scsi_ulto4b(lun->pr_generation, res_keys->header.generation);
 
 		scsi_ulto4b(sizeof(struct scsi_per_res_key) *
 			     lun->pr_key_count, res_keys->header.length);
@@ -7503,7 +7503,7 @@ retry:
 
 		res = (struct scsi_per_res_in_rsrv *)ctsio->kern_data_ptr;
 
-		scsi_ulto4b(lun->PRGeneration, res->header.generation);
+		scsi_ulto4b(lun->pr_generation, res->header.generation);
 
 		if (lun->flags & CTL_LUN_PR_RESERVED)
 		{
@@ -7546,7 +7546,7 @@ retry:
 			scsi_u64to8b(ctl_get_prkey(lun, lun->pr_res_idx),
 			    res->data.reservation);
 		}
-		res->data.scopetype = lun->res_type;
+		res->data.scopetype = lun->pr_res_type;
 		break;
 	}
 	case SPRI_RC:     //report capabilities
@@ -7591,7 +7591,7 @@ retry:
 			goto retry;
 		}
 
-		scsi_ulto4b(lun->PRGeneration, res_status->header.generation);
+		scsi_ulto4b(lun->pr_generation, res_status->header.generation);
 
 		res_desc = &res_status->desc[0];
 		for (i = 0; i < CTL_MAX_INITIATORS; i++) {
@@ -7603,7 +7603,7 @@ retry:
 			    (lun->pr_res_idx == i ||
 			     lun->pr_res_idx == CTL_PR_ALL_REGISTRANTS)) {
 				res_desc->flags = SPRI_FULL_R_HOLDER;
-				res_desc->scopetype = lun->res_type;
+				res_desc->scopetype = lun->pr_res_type;
 			}
 			scsi_ulto2b(i / CTL_MAX_INIT_PER_PORT,
 			    res_desc->rel_trgt_port_id);
@@ -7692,11 +7692,11 @@ ctl_pro_preempt(struct ctl_softc *softc, struct ctl_lun *lun, uint64_t res_key,
 				ctl_est_ua(lun, i, CTL_UA_REG_PREEMPT);
 			}
 			lun->pr_key_count = 1;
-			lun->res_type = type;
-			if (lun->res_type != SPR_TYPE_WR_EX_AR
-			 && lun->res_type != SPR_TYPE_EX_AC_AR)
+			lun->pr_res_type = type;
+			if (lun->pr_res_type != SPR_TYPE_WR_EX_AR &&
+			    lun->pr_res_type != SPR_TYPE_EX_AC_AR)
 				lun->pr_res_idx = residx;
-			lun->PRGeneration++;
+			lun->pr_generation++;
 			mtx_unlock(&lun->lun_lock);
 
 			/* send msg to other side */
@@ -7766,7 +7766,7 @@ ctl_pro_preempt(struct ctl_softc *softc, struct ctl_lun *lun, uint64_t res_key,
 			ctl_done((union ctl_io *)ctsio);
 			return (CTL_RETVAL_COMPLETE);
 		}
-		lun->PRGeneration++;
+		lun->pr_generation++;
 		mtx_unlock(&lun->lun_lock);
 
 		/* send msg to other side */
@@ -7832,19 +7832,19 @@ ctl_pro_preempt(struct ctl_softc *softc, struct ctl_lun *lun, uint64_t res_key,
 					ctl_clr_prkey(lun, i);
 					lun->pr_key_count--;
 					ctl_est_ua(lun, i, CTL_UA_REG_PREEMPT);
-				} else if (type != lun->res_type
-					&& (lun->res_type == SPR_TYPE_WR_EX_RO
-					 || lun->res_type ==SPR_TYPE_EX_AC_RO)){
+				} else if (type != lun->pr_res_type &&
+				    (lun->pr_res_type == SPR_TYPE_WR_EX_RO ||
+				     lun->pr_res_type == SPR_TYPE_EX_AC_RO)) {
 					ctl_est_ua(lun, i, CTL_UA_RES_RELEASE);
 				}
 			}
-			lun->res_type = type;
-			if (lun->res_type != SPR_TYPE_WR_EX_AR
-			 && lun->res_type != SPR_TYPE_EX_AC_AR)
+			lun->pr_res_type = type;
+			if (lun->pr_res_type != SPR_TYPE_WR_EX_AR &&
+			    lun->pr_res_type != SPR_TYPE_EX_AC_AR)
 				lun->pr_res_idx = residx;
 			else
 				lun->pr_res_idx = CTL_PR_ALL_REGISTRANTS;
-			lun->PRGeneration++;
+			lun->pr_generation++;
 			mtx_unlock(&lun->lun_lock);
 
 			persis_io.hdr.nexus = ctsio->io_hdr.nexus;
@@ -7881,7 +7881,7 @@ ctl_pro_preempt(struct ctl_softc *softc, struct ctl_lun *lun, uint64_t res_key,
 				ctl_done((union ctl_io *)ctsio);
 		        	return (1);
 			}
-			lun->PRGeneration++;
+			lun->pr_generation++;
 			mtx_unlock(&lun->lun_lock);
 
 			persis_io.hdr.nexus = ctsio->io_hdr.nexus;
@@ -7925,9 +7925,9 @@ ctl_pro_preempt_other(struct ctl_lun *lun, union ctl_ha_msg *msg)
 			}
 
 			lun->pr_key_count = 1;
-			lun->res_type = msg->pr.pr_info.res_type;
-			if (lun->res_type != SPR_TYPE_WR_EX_AR
-			 && lun->res_type != SPR_TYPE_EX_AC_AR)
+			lun->pr_res_type = msg->pr.pr_info.res_type;
+			if (lun->pr_res_type != SPR_TYPE_WR_EX_AR &&
+			    lun->pr_res_type != SPR_TYPE_EX_AC_AR)
 				lun->pr_res_idx = msg->pr.pr_info.residx;
 		} else {
 		        for (i = 0; i < CTL_MAX_INITIATORS; i++) {
@@ -7949,20 +7949,20 @@ ctl_pro_preempt_other(struct ctl_lun *lun, union ctl_ha_msg *msg)
 				ctl_clr_prkey(lun, i);
 				lun->pr_key_count--;
 				ctl_est_ua(lun, i, CTL_UA_REG_PREEMPT);
-			} else if (msg->pr.pr_info.res_type != lun->res_type
-				&& (lun->res_type == SPR_TYPE_WR_EX_RO
-				 || lun->res_type == SPR_TYPE_EX_AC_RO)) {
+			} else if (msg->pr.pr_info.res_type != lun->pr_res_type
+			    && (lun->pr_res_type == SPR_TYPE_WR_EX_RO ||
+			     lun->pr_res_type == SPR_TYPE_EX_AC_RO)) {
 				ctl_est_ua(lun, i, CTL_UA_RES_RELEASE);
 			}
 		}
-		lun->res_type = msg->pr.pr_info.res_type;
-		if (lun->res_type != SPR_TYPE_WR_EX_AR
-		 && lun->res_type != SPR_TYPE_EX_AC_AR)
+		lun->pr_res_type = msg->pr.pr_info.res_type;
+		if (lun->pr_res_type != SPR_TYPE_WR_EX_AR &&
+		    lun->pr_res_type != SPR_TYPE_EX_AC_AR)
 			lun->pr_res_idx = msg->pr.pr_info.residx;
 		else
 			lun->pr_res_idx = CTL_PR_ALL_REGISTRANTS;
 	}
-	lun->PRGeneration++;
+	lun->pr_generation++;
 
 }
 
@@ -8144,9 +8144,9 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 				lun->flags &= ~CTL_LUN_PR_RESERVED;
 				lun->pr_res_idx = CTL_PR_NO_RESERVATION;
 
-				if ((lun->res_type == SPR_TYPE_WR_EX_RO
-				  || lun->res_type == SPR_TYPE_EX_AC_RO)
-				 && lun->pr_key_count) {
+				if ((lun->pr_res_type == SPR_TYPE_WR_EX_RO ||
+				     lun->pr_res_type == SPR_TYPE_EX_AC_RO) &&
+				    lun->pr_key_count) {
 					/*
 					 * If the reservation is a registrants
 					 * only type we need to generate a UA
@@ -8162,15 +8162,15 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 						    CTL_UA_RES_RELEASE);
 					}
 				}
-				lun->res_type = 0;
+				lun->pr_res_type = 0;
 			} else if (lun->pr_res_idx == CTL_PR_ALL_REGISTRANTS) {
 				if (lun->pr_key_count==0) {
 					lun->flags &= ~CTL_LUN_PR_RESERVED;
-					lun->res_type = 0;
+					lun->pr_res_type = 0;
 					lun->pr_res_idx = CTL_PR_NO_RESERVATION;
 				}
 			}
-			lun->PRGeneration++;
+			lun->pr_generation++;
 			mtx_unlock(&lun->lun_lock);
 
 			persis_io.hdr.nexus = ctsio->io_hdr.nexus;
@@ -8189,7 +8189,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 			if (ctl_get_prkey(lun, residx) == 0)
 				lun->pr_key_count++;
 			ctl_set_prkey(lun, residx, sa_res_key);
-			lun->PRGeneration++;
+			lun->pr_generation++;
 			mtx_unlock(&lun->lun_lock);
 
 			persis_io.hdr.nexus = ctsio->io_hdr.nexus;
@@ -8218,7 +8218,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 			 */
 			if ((lun->pr_res_idx != residx
 			  && lun->pr_res_idx != CTL_PR_ALL_REGISTRANTS)
-			 || lun->res_type != type) {
+			 || lun->pr_res_type != type) {
 				mtx_unlock(&lun->lun_lock);
 				free(ctsio->kern_data_ptr, M_CTL);
 				ctl_set_reservation_conflict(ctsio);
@@ -8238,7 +8238,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 				lun->pr_res_idx = CTL_PR_ALL_REGISTRANTS;
 
 			lun->flags |= CTL_LUN_PR_RESERVED;
-			lun->res_type = type;
+			lun->pr_res_type = type;
 
 			mtx_unlock(&lun->lun_lock);
 
@@ -8273,7 +8273,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 			goto done;
 		}
 
-		if (lun->res_type != type) {
+		if (lun->pr_res_type != type) {
 			mtx_unlock(&lun->lun_lock);
 			free(ctsio->kern_data_ptr, M_CTL);
 			ctl_set_illegal_pr_release(ctsio);
@@ -8284,7 +8284,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 		/* okay to release */
 		lun->flags &= ~CTL_LUN_PR_RESERVED;
 		lun->pr_res_idx = CTL_PR_NO_RESERVATION;
-		lun->res_type = 0;
+		lun->pr_res_type = 0;
 
 		/*
 		 * if this isn't an exclusive access
@@ -8314,7 +8314,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 
 		mtx_lock(&lun->lun_lock);
 		lun->flags &= ~CTL_LUN_PR_RESERVED;
-		lun->res_type = 0;
+		lun->pr_res_type = 0;
 		lun->pr_key_count = 0;
 		lun->pr_res_idx = CTL_PR_NO_RESERVATION;
 
@@ -8324,7 +8324,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 				ctl_clr_prkey(lun, i);
 				ctl_est_ua(lun, i, CTL_UA_REG_PREEMPT);
 			}
-		lun->PRGeneration++;
+		lun->pr_generation++;
 		mtx_unlock(&lun->lun_lock);
 
 		persis_io.hdr.nexus = ctsio->io_hdr.nexus;
@@ -8391,7 +8391,7 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 			lun->pr_key_count++;
 		ctl_set_prkey(lun, msg->pr.pr_info.residx,
 		    scsi_8btou64(msg->pr.pr_info.sa_res_key));
-		lun->PRGeneration++;
+		lun->pr_generation++;
 		break;
 
 	case CTL_PR_UNREG_KEY:
@@ -8404,9 +8404,9 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 			lun->flags &= ~CTL_LUN_PR_RESERVED;
 			lun->pr_res_idx = CTL_PR_NO_RESERVATION;
 
-			if ((lun->res_type == SPR_TYPE_WR_EX_RO
-			  || lun->res_type == SPR_TYPE_EX_AC_RO)
-			 && lun->pr_key_count) {
+			if ((lun->pr_res_type == SPR_TYPE_WR_EX_RO ||
+			     lun->pr_res_type == SPR_TYPE_EX_AC_RO) &&
+			    lun->pr_key_count) {
 				/*
 				 * If the reservation is a registrants
 				 * only type we need to generate a UA
@@ -8422,20 +8422,20 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 					ctl_est_ua(lun, i, CTL_UA_RES_RELEASE);
 				}
 			}
-			lun->res_type = 0;
+			lun->pr_res_type = 0;
 		} else if (lun->pr_res_idx == CTL_PR_ALL_REGISTRANTS) {
 			if (lun->pr_key_count==0) {
 				lun->flags &= ~CTL_LUN_PR_RESERVED;
-				lun->res_type = 0;
+				lun->pr_res_type = 0;
 				lun->pr_res_idx = CTL_PR_NO_RESERVATION;
 			}
 		}
-		lun->PRGeneration++;
+		lun->pr_generation++;
 		break;
 
 	case CTL_PR_RESERVE:
 		lun->flags |= CTL_LUN_PR_RESERVED;
-		lun->res_type = msg->pr.pr_info.res_type;
+		lun->pr_res_type = msg->pr.pr_info.res_type;
 		lun->pr_res_idx = msg->pr.pr_info.residx;
 
 		break;
@@ -8445,8 +8445,8 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 		 * if this isn't an exclusive access res generate UA for all
 		 * other registrants.
 		 */
-		if (lun->res_type != SPR_TYPE_EX_AC
-		 && lun->res_type != SPR_TYPE_WR_EX) {
+		if (lun->pr_res_type != SPR_TYPE_EX_AC &&
+		    lun->pr_res_type != SPR_TYPE_WR_EX) {
 			for (i = softc->init_min; i < softc->init_max; i++)
 				if (i == residx || ctl_get_prkey(lun, i) == 0)
 					continue;
@@ -8455,7 +8455,7 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 
 		lun->flags &= ~CTL_LUN_PR_RESERVED;
 		lun->pr_res_idx = CTL_PR_NO_RESERVATION;
-		lun->res_type = 0;
+		lun->pr_res_type = 0;
 		break;
 
 	case CTL_PR_PREEMPT:
@@ -8463,7 +8463,7 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 		break;
 	case CTL_PR_CLEAR:
 		lun->flags &= ~CTL_LUN_PR_RESERVED;
-		lun->res_type = 0;
+		lun->pr_res_type = 0;
 		lun->pr_key_count = 0;
 		lun->pr_res_idx = CTL_PR_NO_RESERVATION;
 
@@ -8473,7 +8473,7 @@ ctl_hndl_per_res_out_on_other_sc(union ctl_ha_msg *msg)
 			ctl_clr_prkey(lun, i);
 			ctl_est_ua(lun, i, CTL_UA_REG_PREEMPT);
 		}
-		lun->PRGeneration++;
+		lun->pr_generation++;
 		break;
 	}
 
@@ -11222,9 +11222,9 @@ ctl_scsiio_lun_check(struct ctl_lun *lun,
 	    (entry->flags & CTL_CMD_FLAG_ALLOW_ON_PR_RESV)) {
 		/* No reservation or command is allowed. */;
 	} else if ((entry->flags & CTL_CMD_FLAG_ALLOW_ON_PR_WRESV) &&
-	    (lun->res_type == SPR_TYPE_WR_EX ||
-	     lun->res_type == SPR_TYPE_WR_EX_RO ||
-	     lun->res_type == SPR_TYPE_WR_EX_AR)) {
+	    (lun->pr_res_type == SPR_TYPE_WR_EX ||
+	     lun->pr_res_type == SPR_TYPE_WR_EX_RO ||
+	     lun->pr_res_type == SPR_TYPE_WR_EX_AR)) {
 		/* The command is allowed for Write Exclusive resv. */;
 	} else {
 		/*
@@ -11232,8 +11232,8 @@ ctl_scsiio_lun_check(struct ctl_lun *lun,
 		 * reservation and this isn't the res holder then set a
 		 * conflict.
 		 */
-		if (ctl_get_prkey(lun, residx) == 0
-		 || (residx != lun->pr_res_idx && lun->res_type < 4)) {
+		if (ctl_get_prkey(lun, residx) == 0 ||
+		    (residx != lun->pr_res_idx && lun->pr_res_type < 4)) {
 			ctl_set_reservation_conflict(ctsio);
 			retval = 1;
 			goto bailout;
