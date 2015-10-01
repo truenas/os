@@ -788,10 +788,7 @@ carp_input_c(struct mbuf *m, struct carp_header *ch, sa_family_t af)
 	sc->sc_counter = tmp_counter;
 
 	sc_tv.tv_sec = sc->sc_advbase;
-	if (carp_suppress_preempt && sc->sc_advskew <  240)
-		sc_tv.tv_usec = 240 * 1000000 / 256;
-	else
-		sc_tv.tv_usec = sc->sc_advskew * 1000000 / 256;
+	sc_tv.tv_usec = sc->sc_advskew * 1000000 / 256;
 	ch_tv.tv_sec = ch->carp_advbase;
 	ch_tv.tv_usec = ch->carp_advskew * 1000000 / 256;
 
