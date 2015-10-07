@@ -35,7 +35,6 @@
 #include <sys/stat.h>
 #include <assert.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -58,11 +57,12 @@ extern void	yyrestart(FILE *);
 %}
 
 %token ALIAS AUTH_GROUP AUTH_TYPE BACKEND BLOCKSIZE CHAP CHAP_MUTUAL
-%token CLOSING_BRACKET DEBUG DEVICE_ID DISCOVERY_AUTH_GROUP DISCOVERY_FILTER
+%token CLOSING_BRACKET CTL_LUN DEBUG DEVICE_ID DEVICE_TYPE
+%token DISCOVERY_AUTH_GROUP DISCOVERY_FILTER FOREIGN
 %token INITIATOR_NAME INITIATOR_PORTAL ISNS_SERVER ISNS_PERIOD ISNS_TIMEOUT
 %token LISTEN LISTEN_ISER LUN MAXPROC OPENING_BRACKET OPTION
 %token PATH PIDFILE PORT PORTAL_GROUP REDIRECT SEMICOLON SERIAL SIZE STR
-%token TARGET TIMEOUT 
+%token TAG TARGET TIMEOUT
 
 %union
 {
@@ -338,11 +338,15 @@ portal_group_entry:
 	|
 	portal_group_discovery_filter
 	|
+	portal_group_foreign
+	|
 	portal_group_listen
 	|
 	portal_group_listen_iser
 	|
 	portal_group_redirect
+	|
+	portal_group_tag
 	;
 
 portal_group_discovery_auth_group:	DISCOVERY_AUTH_GROUP STR
@@ -376,6 +380,13 @@ portal_group_discovery_filter:	DISCOVERY_FILTER STR
 	}
 	;
 
+portal_group_foreign:	FOREIGN
+	{
+
+		portal_group->pg_foreign = 1;
+	}
+	;
+
 portal_group_listen:	LISTEN STR
 	{
 		int error;
@@ -406,6 +417,20 @@ portal_group_redirect:	REDIRECT STR
 		free($2);
 		if (error != 0)
 			return (1);
+	}
+	;
+
+portal_group_tag:	TAG STR
+	{
+		uint64_t tmp;
+
+		if (expand_number($2, &tmp) != 0) {
+			yyerror("invalid numeric value");
+			free($2);
+			return (1);
+		}
+
+		portal_group->pg_tag = tmp;
 	}
 	;
 
@@ -761,6 +786,7 @@ target_lun:	LUN lun_number
 lun_number:	STR
 	{
 		uint64_t tmp;
+		int ret;
 		char *name;
 
 		if (expand_number($1, &tmp) != 0) {
@@ -769,7 +795,9 @@ lun_number:	STR
 			return (1);
 		}
 
-		asprintf(&name, "%s,lun,%ju", target->t_name, tmp);
+		ret = asprintf(&name, "%s,lun,%ju", target->t_name, tmp);
+		if (ret <= 0)
+			log_err(1, "asprintf");
 		lun = lun_new(conf, name);
 		if (lun == NULL)
 			return (1);
@@ -813,6 +841,10 @@ lun_entry:
 	lun_blocksize
 	|
 	lun_device_id
+	|
+	lun_device_type
+	|
+	lun_ctl_lun
 	|
 	lun_option
 	|
@@ -868,6 +900,51 @@ lun_device_id:	DEVICE_ID STR
 		}
 		lun_set_device_id(lun, $2);
 		free($2);
+	}
+	;
+
+lun_device_type:	DEVICE_TYPE STR
+	{
+		uint64_t tmp;
+
+		if (strcasecmp($2, "disk") == 0 ||
+		    strcasecmp($2, "direct") == 0)
+			tmp = 0;
+		else if (strcasecmp($2, "processor") == 0)
+			tmp = 3;
+		else if (strcasecmp($2, "cd") == 0 ||
+		    strcasecmp($2, "cdrom") == 0 ||
+		    strcasecmp($2, "dvd") == 0 ||
+		    strcasecmp($2, "dvdrom") == 0)
+			tmp = 5;
+		else if (expand_number($2, &tmp) != 0 ||
+		    tmp > 15) {
+			yyerror("invalid numeric value");
+			free($2);
+			return (1);
+		}
+
+		lun_set_device_type(lun, tmp);
+	}
+	;
+
+lun_ctl_lun:	CTL_LUN STR
+	{
+		uint64_t tmp;
+
+		if (expand_number($2, &tmp) != 0) {
+			yyerror("invalid numeric value");
+			free($2);
+			return (1);
+		}
+
+		if (lun->l_ctl_lun >= 0) {
+			log_warnx("ctl_lun for lun \"%s\" "
+			    "specified more than once",
+			    lun->l_name);
+			return (1);
+		}
+		lun_set_ctl_lun(lun, tmp);
 	}
 	;
 

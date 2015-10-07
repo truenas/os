@@ -75,6 +75,7 @@ __FBSDID("$FreeBSD$");
 struct ctlfe_softc {
 	struct ctl_port port;
 	path_id_t path_id;
+	target_id_t target_id;
 	u_int	maxio;
 	struct cam_sim *sim;
 	char port_name[DEV_IDLEN];
@@ -118,11 +119,7 @@ typedef enum {
 	CTLFE_CMD_PIECEWISE	= 0x01
 } ctlfe_cmd_flags;
 
-/*
- * The size limit of this structure is CTL_PORT_PRIV_SIZE, from ctl_io.h.
- * Currently that is 600 bytes.
- */
-struct ctlfe_lun_cmd_info {
+struct ctlfe_cmd_info {
 	int cur_transfer_index;
 	size_t cur_transfer_off;
 	ctlfe_cmd_flags flags;
@@ -134,7 +131,6 @@ struct ctlfe_lun_cmd_info {
 #define CTLFE_MAX_SEGS	32
 	bus_dma_segment_t cam_sglist[CTLFE_MAX_SEGS];
 };
-CTASSERT(sizeof(struct ctlfe_lun_cmd_info) <= CTL_PORT_PRIV_SIZE);
 
 /*
  * When we register the adapter/bus, request that this many ctl_ios be
@@ -357,6 +353,7 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 		}
 
 		softc->path_id = cpi->ccb_h.path_id;
+		softc->target_id = cpi->initiator_id;
 		softc->sim = xpt_path_sim(path);
 		if (cpi->maxio != 0)
 			softc->maxio = cpi->maxio;
@@ -403,6 +400,7 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 		 */
 		port->max_targets = cpi->max_target;
 		port->max_target_id = cpi->max_target;
+		port->targ_port = -1;
 		
 		/*
 		 * XXX KDM need to figure out whether we're the master or
@@ -531,6 +529,7 @@ ctlferegister(struct cam_periph *periph, void *arg)
 	for (i = 0; i < CTLFE_ATIO_PER_LUN; i++) {
 		union ccb *new_ccb;
 		union ctl_io *new_io;
+		struct ctlfe_cmd_info *cmd_info;
 
 		new_ccb = (union ccb *)malloc(sizeof(*new_ccb), M_CTLFE,
 					      M_ZERO|M_NOWAIT);
@@ -544,6 +543,15 @@ ctlferegister(struct cam_periph *periph, void *arg)
 			status = CAM_RESRC_UNAVAIL;
 			break;
 		}
+		cmd_info = malloc(sizeof(*cmd_info), M_CTLFE,
+		    M_ZERO | M_NOWAIT);
+		if (cmd_info == NULL) {
+			ctl_free_io(new_io);
+			free(new_ccb, M_CTLFE);
+			status = CAM_RESRC_UNAVAIL;
+			break;
+		}
+		new_io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr = cmd_info;
 		softc->atios_alloced++;
 		new_ccb->ccb_h.io_ptr = new_io;
 
@@ -554,6 +562,7 @@ ctlferegister(struct cam_periph *periph, void *arg)
 		xpt_action(new_ccb);
 		status = new_ccb->ccb_h.status;
 		if ((status & CAM_STATUS_MASK) != CAM_REQ_INPROG) {
+			free(cmd_info, M_CTLFE);
 			ctl_free_io(new_io);
 			free(new_ccb, M_CTLFE);
 			break;
@@ -684,13 +693,13 @@ ctlfedata(struct ctlfe_lun_softc *softc, union ctl_io *io,
     u_int16_t *sglist_cnt)
 {
 	struct ctlfe_softc *bus_softc;
-	struct ctlfe_lun_cmd_info *cmd_info;
+	struct ctlfe_cmd_info *cmd_info;
 	struct ctl_sg_entry *ctl_sglist;
 	bus_dma_segment_t *cam_sglist;
 	size_t off;
 	int i, idx;
 
-	cmd_info = (struct ctlfe_lun_cmd_info *)io->io_hdr.port_priv;
+	cmd_info = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr;
 	bus_softc = softc->parent_softc;
 
 	/*
@@ -766,7 +775,7 @@ static void
 ctlfestart(struct cam_periph *periph, union ccb *start_ccb)
 {
 	struct ctlfe_lun_softc *softc;
-	struct ctlfe_lun_cmd_info *cmd_info;
+	struct ctlfe_cmd_info *cmd_info;
 	struct ccb_hdr *ccb_h;
 	struct ccb_accept_tio *atio;
 	struct ccb_scsiio *csio;
@@ -794,7 +803,7 @@ ctlfestart(struct cam_periph *periph, union ccb *start_ccb)
 
 	flags = atio->ccb_h.flags &
 		(CAM_DIS_DISCONNECT|CAM_TAG_ACTION_VALID|CAM_DIR_MASK);
-	cmd_info = (struct ctlfe_lun_cmd_info *)io->io_hdr.port_priv;
+	cmd_info = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr;
 	cmd_info->cur_transfer_index = 0;
 	cmd_info->cur_transfer_off = 0;
 	cmd_info->flags = 0;
@@ -966,12 +975,17 @@ static void
 ctlfe_free_ccb(struct cam_periph *periph, union ccb *ccb)
 {
 	struct ctlfe_lun_softc *softc;
+	union ctl_io *io;
+	struct ctlfe_cmd_info *cmd_info;
 
 	softc = (struct ctlfe_lun_softc *)periph->softc;
+	io = ccb->ccb_h.io_ptr;
 
 	switch (ccb->ccb_h.func_code) {
 	case XPT_ACCEPT_TARGET_IO:
 		softc->atios_freed++;
+		cmd_info = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr;
+		free(cmd_info, M_CTLFE);
 		break;
 	case XPT_IMMEDIATE_NOTIFY:
 	case XPT_NOTIFY_ACKNOWLEDGE:
@@ -981,7 +995,7 @@ ctlfe_free_ccb(struct cam_periph *periph, union ccb *ccb)
 		break;
 	}
 
-	ctl_free_io(ccb->ccb_h.io_ptr);
+	ctl_free_io(io);
 	free(ccb, M_CTLFE);
 
 	KASSERT(softc->atios_freed <= softc->atios_alloced, ("%s: "
@@ -1054,7 +1068,6 @@ ctlfe_adjust_cdb(struct ccb_accept_tio *atio, uint32_t offset)
 	}
 	case READ_16:
 	case WRITE_16:
-	case WRITE_ATOMIC_16:
 	{
 		struct scsi_rw_16 *cdb = (struct scsi_rw_16 *)cmdbyt;
 		lba = scsi_8btou64(cdb->addr);
@@ -1076,6 +1089,7 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 {
 	struct ctlfe_lun_softc *softc;
 	struct ctlfe_softc *bus_softc;
+	struct ctlfe_cmd_info *cmd_info;
 	struct ccb_accept_tio *atio = NULL;
 	union ctl_io *io = NULL;
 	struct mtx *mtx;
@@ -1137,10 +1151,12 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 		 */
 		mtx_unlock(mtx);
 		io = done_ccb->ccb_h.io_ptr;
+		cmd_info = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr;
 		ctl_zero_io(io);
 
 		/* Save pointers on both sides */
 		io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr = done_ccb;
+		io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr = cmd_info;
 		done_ccb->ccb_h.io_ptr = io;
 
 		/*
@@ -1148,9 +1164,8 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 		 * down the immediate notify path below.
 		 */
 		io->io_hdr.io_type = CTL_IO_SCSI;
-		io->io_hdr.nexus.initid.id = atio->init_id;
+		io->io_hdr.nexus.initid = atio->init_id;
 		io->io_hdr.nexus.targ_port = bus_softc->port.targ_port;
-		io->io_hdr.nexus.targ_target.id = atio->ccb_h.target_id;
 		io->io_hdr.nexus.targ_lun = atio->ccb_h.target_lun;
 		io->scsiio.tag_num = atio->tag_id;
 		switch (atio->tag_action) {
@@ -1184,10 +1199,9 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 		      io->scsiio.cdb_len);
 
 #ifdef CTLFEDEBUG
-		printf("%s: %ju:%d:%ju:%d: tag %04x CDB %02x\n", __func__,
-		        (uintmax_t)io->io_hdr.nexus.initid.id,
+		printf("%s: %u:%u:%u: tag %04x CDB %02x\n", __func__,
+		        io->io_hdr.nexus.initid,
 		        io->io_hdr.nexus.targ_port,
-		        (uintmax_t)io->io_hdr.nexus.targ_target.id,
 		        io->io_hdr.nexus.targ_lun,
 			io->scsiio.tag_num, io->scsiio.cdb[0]);
 #endif
@@ -1289,12 +1303,11 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 				return;
 			}
 		} else {
-			struct ctlfe_lun_cmd_info *cmd_info;
+			struct ctlfe_cmd_info *cmd_info;
 			struct ccb_scsiio *csio;
 
 			csio = &done_ccb->csio;
-			cmd_info = (struct ctlfe_lun_cmd_info *)
-				io->io_hdr.port_priv;
+			cmd_info = io->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr;
 
 			io->io_hdr.flags &= ~CTL_FLAG_DMA_INPROG;
 
@@ -1425,9 +1438,8 @@ ctlfedone(struct cam_periph *periph, union ccb *done_ccb)
 		io->io_hdr.io_type = CTL_IO_TASK;
 		io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr =done_ccb;
 		inot->ccb_h.io_ptr = io;
-		io->io_hdr.nexus.initid.id = inot->initiator_id;
+		io->io_hdr.nexus.initid = inot->initiator_id;
 		io->io_hdr.nexus.targ_port = bus_softc->port.targ_port;
-		io->io_hdr.nexus.targ_target.id = inot->ccb_h.target_id;
 		io->io_hdr.nexus.targ_lun = inot->ccb_h.target_lun;
 		/* XXX KDM should this be the tag_id? */
 		io->taskio.tag_num = inot->seq_id;
@@ -1557,6 +1569,8 @@ ctlfe_onoffline(void *arg, int online)
 	}
 	ccb = xpt_alloc_ccb();
 	xpt_setup_ccb(&ccb->ccb_h, path, CAM_PRIORITY_NONE);
+	ccb->ccb_h.func_code = XPT_GET_SIM_KNOB;
+	xpt_action(ccb);
 
 	/*
 	 * Copan WWN format:
@@ -1570,15 +1584,7 @@ ctlfe_onoffline(void *arg, int online)
 	 *					3 == NL-Port
 	 * Bits 7-0:			0 == Node Name, >0 == Port Number
 	 */
-
 	if (online != 0) {
-
-		ccb->ccb_h.func_code = XPT_GET_SIM_KNOB;
-
-
-		xpt_action(ccb);
-
-
 		if ((ccb->knob.xport_specific.valid & KNOB_VALID_ADDRESS) != 0){
 #ifdef RANDOM_WWNN
 			uint64_t random_bits;
@@ -1677,9 +1683,9 @@ ctlfe_onoffline(void *arg, int online)
 		ccb->knob.xport_specific.valid |= KNOB_VALID_ADDRESS;
 
 	if (online != 0)
-		ccb->knob.xport_specific.fc.role = KNOB_ROLE_TARGET;
+		ccb->knob.xport_specific.fc.role |= KNOB_ROLE_TARGET;
 	else
-		ccb->knob.xport_specific.fc.role = KNOB_ROLE_NONE;
+		ccb->knob.xport_specific.fc.role &= ~KNOB_ROLE_TARGET;
 
 	xpt_action(ccb);
 
@@ -1809,7 +1815,7 @@ ctlfe_lun_enable(void *arg, int lun_id)
 	bus_softc = (struct ctlfe_softc *)arg;
 
 	status = xpt_create_path(&path, /*periph*/ NULL,
-				  bus_softc->path_id, 0, lun_id);
+				  bus_softc->path_id, bus_softc->target_id, lun_id);
 	/* XXX KDM need some way to return status to CTL here? */
 	if (status != CAM_REQ_CMP) {
 		printf("%s: could not create path, status %#x\n", __func__,
