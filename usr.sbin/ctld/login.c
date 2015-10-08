@@ -33,8 +33,6 @@ __FBSDID("$FreeBSD$");
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -603,6 +601,11 @@ login_negotiate_key(struct pdu *request, const char *name,
 		keys_add(response_keys, name, "No");
 	} else if (strcmp(name, "IFMarker") == 0) {
 		keys_add(response_keys, name, "No");
+	} else if (strcmp(name, "iSCSIProtocolLevel") == 0) {
+		tmp = strtoul(value, NULL, 10);
+		if (tmp > 2)
+			tmp = 2;
+		keys_add_int(response_keys, name, tmp);
 	} else {
 		log_debugx("unknown key \"%s\"; responding "
 		    "with NotUnderstood", name);

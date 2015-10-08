@@ -359,7 +359,7 @@ zvol_map_block(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	zvol_extent_t *ze;
 	int bs = ma->ma_zv->zv_volblocksize;
 
-	if (BP_IS_HOLE(bp) ||
+	if (bp == NULL || BP_IS_HOLE(bp) ||
 	    zb->zb_object != ZVOL_OBJ || zb->zb_level != 0)
 		return (0);
 
@@ -2776,7 +2776,11 @@ zvol_geom_worker(void *arg)
 			break;
 		case BIO_READ:
 		case BIO_WRITE:
+		case BIO_DELETE:
 			zvol_strategy(bp);
+			break;
+		default:
+			g_io_deliver(bp, EOPNOTSUPP);
 			break;
 		}
 	}
