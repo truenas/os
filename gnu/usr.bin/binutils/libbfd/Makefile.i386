@@ -17,5 +17,3 @@ VECS=	${DEFAULT_VECTOR} \
 
 peigen.c: peXXigen.c
 	sed -e s/XX/pe/g ${.ALLSRC} > ${.TARGET}
-
-CLEANFILES+=	peigen.c

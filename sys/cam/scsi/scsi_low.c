@@ -326,13 +326,15 @@ scsi_low_find_ccb(slp, target, lun, osdep)
 	if ((cb = slp->sl_Qnexus) != NULL && cb->osdep == osdep)
 		return cb;
 
-	TAILQ_FOREACH(cb, &slp->sl_start, ccb_chain)
+	for (cb = TAILQ_FIRST(&slp->sl_start); cb != NULL;
+	     cb = TAILQ_NEXT(cb, ccb_chain))
 	{
 		if (cb->osdep == osdep)
 			return cb;
 	}
 
-	TAILQ_FOREACH(cb, &li->li_discq, ccb_chain)
+	for (cb = TAILQ_FIRST(&li->li_discq); cb != NULL;
+	     cb = TAILQ_NEXT(cb, ccb_chain))
 	{
 		if (cb->osdep == osdep)
 			return cb;
@@ -4182,7 +4184,8 @@ scsi_low_info(slp, ti, s)
 	printf(">>>>> SCSI_LOW_INFO(0x%lx): %s\n", (u_long) slp->sl_Tnexus, s);
 	if (ti == NULL)
 	{
-		TAILQ_FOREACH(ti, &slp->sl_titab, ti_chain)
+		for (ti = TAILQ_FIRST(&slp->sl_titab); ti != NULL;
+		     ti = TAILQ_NEXT(ti, ti_chain))
 		{
 			scsi_low_print(slp, ti);
 		}

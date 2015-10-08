@@ -21,7 +21,6 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011, 2014 by Delphix. All rights reserved.
- * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  */
 
 #include <sys/zio.h>
@@ -394,8 +393,7 @@ mzap_open(objset_t *os, uint64_t obj, dmu_buf_t *db)
 	 * it, because zap_lockdir() checks zap_ismicro without the lock
 	 * held.
 	 */
-	dmu_buf_init_user(&zap->zap_dbu, zap_evict, &zap->zap_dbuf);
-	winner = dmu_buf_set_user(db, &zap->zap_dbu);
+	winner = dmu_buf_set_user(db, zap, zap_evict);
 
 	if (winner != NULL) {
 		rw_exit(&zap->zap_rwlock);
@@ -549,7 +547,7 @@ mzap_upgrade(zap_t **zapp, dmu_tx_t *tx, zap_flags_t flags)
 	ASSERT(RW_WRITE_HELD(&zap->zap_rwlock));
 
 	sz = zap->zap_dbuf->db_size;
-	mzp = zio_buf_alloc(sz);
+	mzp = kmem_alloc(sz, KM_SLEEP);
 	bcopy(zap->zap_dbuf->db_data, mzp, sz);
 	nchunks = zap->zap_m.zap_num_chunks;
 
@@ -557,7 +555,7 @@ mzap_upgrade(zap_t **zapp, dmu_tx_t *tx, zap_flags_t flags)
 		err = dmu_object_set_blocksize(zap->zap_objset, zap->zap_object,
 		    1ULL << fzap_default_block_shift, 0, tx);
 		if (err) {
-			zio_buf_free(mzp, sz);
+			kmem_free(mzp, sz);
 			return (err);
 		}
 	}
@@ -583,7 +581,7 @@ mzap_upgrade(zap_t **zapp, dmu_tx_t *tx, zap_flags_t flags)
 		if (err)
 			break;
 	}
-	zio_buf_free(mzp, sz);
+	kmem_free(mzp, sz);
 	*zapp = zap;
 	return (err);
 }
@@ -692,10 +690,11 @@ zap_destroy(objset_t *os, uint64_t zapobj, dmu_tx_t *tx)
 	return (dmu_object_free(os, zapobj, tx));
 }
 
+_NOTE(ARGSUSED(0))
 void
-zap_evict(void *dbu)
+zap_evict(dmu_buf_t *db, void *vzap)
 {
-	zap_t *zap = dbu;
+	zap_t *zap = vzap;
 
 	rw_destroy(&zap->zap_rwlock);
 

@@ -43,7 +43,6 @@
 #define	DEFAULT_CONFIG_PATH		"/etc/ctl.conf"
 #define	DEFAULT_PIDFILE			"/var/run/ctld.pid"
 #define	DEFAULT_BLOCKSIZE		512
-#define	DEFAULT_CD_BLOCKSIZE		2048
 
 #define	MAX_LUNS			1024
 #define	MAX_NAME_LEN			223
@@ -117,7 +116,6 @@ struct portal_group {
 	char				*pg_name;
 	struct auth_group		*pg_discovery_auth_group;
 	int				pg_discovery_filter;
-	int				pg_foreign;
 	bool				pg_unassigned;
 	TAILQ_HEAD(, portal)		pg_portals;
 	TAILQ_HEAD(, port)		pg_ports;
@@ -146,7 +144,6 @@ struct port {
 	struct portal_group		*p_portal_group;
 	struct pport			*p_pport;
 	struct target			*p_target;
-	int				p_foreign;
 
 	uint32_t			p_ctl_port;
 };
@@ -164,7 +161,6 @@ struct lun {
 	TAILQ_HEAD(, lun_option)	l_options;
 	char				*l_name;
 	char				*l_backend;
-	uint8_t				l_device_type;
 	int				l_blocksize;
 	char				*l_device_id;
 	char				*l_path;
@@ -374,7 +370,6 @@ struct lun		*lun_new(struct conf *conf, const char *name);
 void			lun_delete(struct lun *lun);
 struct lun		*lun_find(const struct conf *conf, const char *name);
 void			lun_set_backend(struct lun *lun, const char *value);
-void			lun_set_device_type(struct lun *lun, uint8_t value);
 void			lun_set_blocksize(struct lun *lun, size_t value);
 void			lun_set_device_id(struct lun *lun, const char *value);
 void			lun_set_path(struct lun *lun, const char *value);
@@ -393,11 +388,11 @@ void			lun_option_set(struct lun_option *clo,
 
 void			kernel_init(void);
 int			kernel_lun_add(struct lun *lun);
-int			kernel_lun_modify(struct lun *lun);
+int			kernel_lun_resize(struct lun *lun);
 int			kernel_lun_remove(struct lun *lun);
 void			kernel_handoff(struct connection *conn);
 int			kernel_port_add(struct port *port);
-int			kernel_port_update(struct port *port, struct port *old);
+int			kernel_port_update(struct port *port);
 int			kernel_port_remove(struct port *port);
 void			kernel_capsicate(void);
 
@@ -416,6 +411,7 @@ void			keys_delete(struct keys *keys);
 void			keys_load(struct keys *keys, const struct pdu *pdu);
 void			keys_save(struct keys *keys, struct pdu *pdu);
 const char		*keys_find(struct keys *keys, const char *name);
+int			keys_find_int(struct keys *keys, const char *name);
 void			keys_add(struct keys *keys,
 			    const char *name, const char *value);
 void			keys_add_int(struct keys *keys,

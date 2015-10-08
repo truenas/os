@@ -159,10 +159,11 @@ kmem_alloc_attr(vmem_t *vmem, vm_size_t size, int flags, vm_paddr_t low,
     vm_paddr_t high, vm_memattr_t memattr)
 {
 	vm_object_t object = vmem == kmem_arena ? kmem_object : kernel_object;
-	vm_offset_t addr, i;
+	vm_offset_t addr;
 	vm_ooffset_t offset;
 	vm_page_t m;
 	int pflags, tries;
+	int i;
 
 	size = round_page(size);
 	if (vmem_alloc(vmem, size, M_BESTFIT | flags, &addr))
@@ -183,7 +184,18 @@ retry:
 				tries++;
 				goto retry;
 			}
-			kmem_unback(object, addr, i);
+			/* 
+			 * Unmap and free the pages.
+			 */
+			if (i != 0)
+				pmap_remove(kernel_pmap, addr, addr + i);
+			while (i != 0) {
+				i -= PAGE_SIZE;
+				m = vm_page_lookup(object,
+				    OFF_TO_IDX(offset + i));
+				vm_page_unwire(m, 0);
+				vm_page_free(m);
+			}
 			vmem_free(vmem, addr, size);
 			return (0);
 		}
@@ -341,13 +353,25 @@ retry:
 		 * aren't on any queues.
 		 */
 		if (m == NULL) {
-			VM_OBJECT_WUNLOCK(object);
 			if ((flags & M_NOWAIT) == 0) {
+				VM_OBJECT_WUNLOCK(object);
 				VM_WAIT;
 				VM_OBJECT_WLOCK(object);
 				goto retry;
 			}
-			kmem_unback(object, addr, i);
+			/* 
+			 * Unmap and free the pages.
+			 */
+			if (i != 0)
+				pmap_remove(kernel_pmap, addr, addr + i);
+			while (i != 0) {
+				i -= PAGE_SIZE;
+				m = vm_page_lookup(object,
+						   OFF_TO_IDX(offset + i));
+				vm_page_unwire(m, 0);
+				vm_page_free(m);
+			}
+			VM_OBJECT_WUNLOCK(object);
 			return (KERN_NO_SPACE);
 		}
 		if (flags & M_ZERO && (m->flags & PG_ZERO) == 0)
@@ -363,15 +387,6 @@ retry:
 	return (KERN_SUCCESS);
 }
 
-/*
- *	kmem_unback:
- *
- *	Unmap and free the physical pages underlying the specified virtual
- *	address range.
- *
- *	A physical page must exist within the specified object at each index
- *	that is being unmapped.
- */
 void
 kmem_unback(vm_object_t object, vm_offset_t addr, vm_size_t size)
 {

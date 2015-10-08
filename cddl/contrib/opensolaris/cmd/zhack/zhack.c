@@ -20,7 +20,7 @@
  */
 
 /*
- * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2011, 2014 by Delphix. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
  */
 
@@ -294,8 +294,8 @@ zhack_feature_enable_sync(void *arg, dmu_tx_t *tx)
 	feature_enable_sync(spa, feature, tx);
 
 	spa_history_log_internal(spa, "zhack enable feature", tx,
-	    "guid=%s flags=%x",
-	    feature->fi_guid, feature->fi_flags);
+	    "name=%s can_readonly=%u",
+	    feature->fi_guid, feature->fi_can_readonly);
 }
 
 static void
@@ -314,7 +314,9 @@ zhack_do_feature_enable(int argc, char **argv)
 	 */
 	desc = NULL;
 	feature.fi_uname = "zhack";
-	feature.fi_flags = 0;
+	feature.fi_mos = B_FALSE;
+	feature.fi_can_readonly = B_FALSE;
+	feature.fi_activate_on_enable = B_FALSE;
 	feature.fi_depends = nodeps;
 	feature.fi_feature = SPA_FEATURE_NONE;
 
@@ -322,7 +324,7 @@ zhack_do_feature_enable(int argc, char **argv)
 	while ((c = getopt(argc, argv, "rmd:")) != -1) {
 		switch (c) {
 		case 'r':
-			feature.fi_flags |= ZFEATURE_FLAG_READONLY_COMPAT;
+			feature.fi_can_readonly = B_TRUE;
 			break;
 		case 'd':
 			desc = strdup(optarg);
@@ -411,7 +413,7 @@ zhack_do_feature_ref(int argc, char **argv)
 	 * disk later.
 	 */
 	feature.fi_uname = "zhack";
-	feature.fi_flags = 0;
+	feature.fi_mos = B_FALSE;
 	feature.fi_desc = NULL;
 	feature.fi_depends = nodeps;
 	feature.fi_feature = SPA_FEATURE_NONE;
@@ -420,7 +422,7 @@ zhack_do_feature_ref(int argc, char **argv)
 	while ((c = getopt(argc, argv, "md")) != -1) {
 		switch (c) {
 		case 'm':
-			feature.fi_flags |= ZFEATURE_FLAG_MOS;
+			feature.fi_mos = B_TRUE;
 			break;
 		case 'd':
 			decr = B_TRUE;
@@ -453,10 +455,10 @@ zhack_do_feature_ref(int argc, char **argv)
 
 	if (0 == zap_contains(mos, spa->spa_feat_for_read_obj,
 	    feature.fi_guid)) {
-		feature.fi_flags &= ~ZFEATURE_FLAG_READONLY_COMPAT;
+		feature.fi_can_readonly = B_FALSE;
 	} else if (0 == zap_contains(mos, spa->spa_feat_for_write_obj,
 	    feature.fi_guid)) {
-		feature.fi_flags |= ZFEATURE_FLAG_READONLY_COMPAT;
+		feature.fi_can_readonly = B_TRUE;
 	} else {
 		fatal(spa, FTAG, "feature is not enabled: %s", feature.fi_guid);
 	}

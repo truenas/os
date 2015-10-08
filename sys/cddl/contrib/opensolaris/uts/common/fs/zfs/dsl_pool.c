@@ -22,7 +22,6 @@
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011, 2014 by Delphix. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
- * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  */
 
 #include <sys/dsl_pool.h>
@@ -419,18 +418,9 @@ dsl_pool_close(dsl_pool_t *dp)
 	txg_list_destroy(&dp->dp_sync_tasks);
 	txg_list_destroy(&dp->dp_dirty_dirs);
 
-	/*
-	 * We can't set retry to TRUE since we're explicitly specifying
-	 * a spa to flush. This is good enough; any missed buffers for
-	 * this spa won't cause trouble, and they'll eventually fall
-	 * out of the ARC just like any other unused buffer.
-	 */
-	arc_flush(dp->dp_spa, FALSE);
-
+	arc_flush(dp->dp_spa);
 	txg_fini(dp);
 	dsl_scan_fini(dp);
-	dmu_buf_user_evict_wait();
-
 	rrw_destroy(&dp->dp_config_rwlock);
 	mutex_destroy(&dp->dp_lock);
 	taskq_destroy(dp->dp_vnrele_taskq);
@@ -862,7 +852,7 @@ dsl_pool_upgrade_clones(dsl_pool_t *dp, dmu_tx_t *tx)
 	ASSERT(dp->dp_origin_snap != NULL);
 
 	VERIFY0(dmu_objset_find_dp(dp, dp->dp_root_dir_obj, upgrade_clones_cb,
-	    tx, DS_FIND_CHILDREN | DS_FIND_SERIALIZE));
+	    tx, DS_FIND_CHILDREN));
 }
 
 /* ARGSUSED */
@@ -916,7 +906,7 @@ dsl_pool_upgrade_dir_clones(dsl_pool_t *dp, dmu_tx_t *tx)
 	VERIFY0(bpobj_open(&dp->dp_free_bpobj, dp->dp_meta_objset, obj));
 
 	VERIFY0(dmu_objset_find_dp(dp, dp->dp_root_dir_obj,
-	    upgrade_dir_clones_cb, tx, DS_FIND_CHILDREN | DS_FIND_SERIALIZE));
+	    upgrade_dir_clones_cb, tx, DS_FIND_CHILDREN));
 }
 
 void
@@ -1150,13 +1140,6 @@ dsl_pool_config_enter(dsl_pool_t *dp, void *tag)
 }
 
 void
-dsl_pool_config_enter_prio(dsl_pool_t *dp, void *tag)
-{
-	ASSERT(!rrw_held(&dp->dp_config_rwlock, RW_READER));
-	rrw_enter_read_prio(&dp->dp_config_rwlock, tag);
-}
-
-void
 dsl_pool_config_exit(dsl_pool_t *dp, void *tag)
 {
 	rrw_exit(&dp->dp_config_rwlock, tag);
@@ -1166,10 +1149,4 @@ boolean_t
 dsl_pool_config_held(dsl_pool_t *dp)
 {
 	return (RRW_LOCK_HELD(&dp->dp_config_rwlock));
-}
-
-boolean_t
-dsl_pool_config_held_writer(dsl_pool_t *dp)
-{
-	return (RRW_WRITE_HELD(&dp->dp_config_rwlock));
 }

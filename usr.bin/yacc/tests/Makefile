@@ -17,8 +17,6 @@ TEST_METADATA.yacc_tests+=	required_user="unprivileged"
 SCRIPTS=	run_test
 SCRIPTSDIR=	${TESTSDIR}
 
-CLEANFILES=	run_test
-
 FILESGROUPS=	FILES FILEStest FILEStest_yacc
 
 FILEStestDIR=	${TESTSDIR}

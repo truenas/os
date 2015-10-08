@@ -410,7 +410,7 @@ static uint64_t
 dsl_scan_ds_maxtxg(dsl_dataset_t *ds)
 {
 	uint64_t smt = ds->ds_dir->dd_pool->dp_scan->scn_phys.scn_max_txg;
-	if (ds->ds_is_snapshot)
+	if (dsl_dataset_is_snapshot(ds))
 		return (MIN(smt, dsl_dataset_phys(ds)->ds_creation_txg));
 	return (smt);
 }
@@ -610,8 +610,7 @@ dsl_scan_check_resume(dsl_scan_t *scn, const dnode_phys_t *dnp,
 		 * If we already visited this bp & everything below (in
 		 * a prior txg sync), don't bother doing it again.
 		 */
-		if (zbookmark_subtree_completed(dnp, zb,
-		    &scn->scn_phys.scn_bookmark))
+		if (zbookmark_is_before(dnp, zb, &scn->scn_phys.scn_bookmark))
 			return (B_TRUE);
 
 		/*
@@ -847,7 +846,7 @@ dsl_scan_ds_destroyed(dsl_dataset_t *ds, dmu_tx_t *tx)
 		return;
 
 	if (scn->scn_phys.scn_bookmark.zb_objset == ds->ds_object) {
-		if (ds->ds_is_snapshot) {
+		if (dsl_dataset_is_snapshot(ds)) {
 			/* Note, scn_cur_{min,max}_txg stays the same. */
 			scn->scn_phys.scn_bookmark.zb_objset =
 			    dsl_dataset_phys(ds)->ds_next_snap_obj;
@@ -869,7 +868,7 @@ dsl_scan_ds_destroyed(dsl_dataset_t *ds, dmu_tx_t *tx)
 		ASSERT3U(dsl_dataset_phys(ds)->ds_num_children, <=, 1);
 		VERIFY3U(0, ==, zap_remove_int(dp->dp_meta_objset,
 		    scn->scn_phys.scn_queue_obj, ds->ds_object, tx));
-		if (ds->ds_is_snapshot) {
+		if (dsl_dataset_is_snapshot(ds)) {
 			/*
 			 * We keep the same mintxg; it could be >
 			 * ds_creation_txg if the previous snapshot was
@@ -1053,7 +1052,7 @@ dsl_scan_visitds(dsl_scan_t *scn, uint64_t dsobj, dmu_tx_t *tx)
 	 * ZIL here, rather than in scan_recurse(), because the regular
 	 * snapshot block-sharing rules don't apply to it.
 	 */
-	if (DSL_SCAN_IS_SCRUB_RESILVER(scn) && !ds->ds_is_snapshot)
+	if (DSL_SCAN_IS_SCRUB_RESILVER(scn) && !dsl_dataset_is_snapshot(ds))
 		dsl_scan_zil(dp, &os->os_zil_header);
 
 	/*

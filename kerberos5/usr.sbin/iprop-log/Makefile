@@ -14,8 +14,6 @@ LDADD=	-lkadm5srv -lhdb -lkrb5 -lasn1 -lcrypto -lcrypt ${LIBSL} -lroken \
 	${LIBVERS} -ledit
 LDFLAGS=${LDAPLDFLAGS}
 
-CLEANFILES=	iprop-commands.h iprop-commands.c
-
 iprop-commands.h: iprop-commands.in
 	${SLC} ${.ALLSRC:M*.in}
 

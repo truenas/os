@@ -23,7 +23,6 @@
  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Portions Copyright 2011 iXsystems, Inc
  * Copyright (c) 2013 by Delphix. All rights reserved.
- * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  */
 
 #include <sys/zfs_context.h>
@@ -211,6 +210,12 @@ sa_cache_constructor(void *buf, void *unused, int kmflag)
 {
 	sa_handle_t *hdl = buf;
 
+	hdl->sa_bonus_tab = NULL;
+	hdl->sa_spill_tab = NULL;
+	hdl->sa_os = NULL;
+	hdl->sa_userp = NULL;
+	hdl->sa_bonus = NULL;
+	hdl->sa_spill = NULL;
 	mutex_init(&hdl->sa_lock, NULL, MUTEX_DEFAULT, NULL);
 	return (0);
 }
@@ -1299,10 +1304,10 @@ sa_build_index(sa_handle_t *hdl, sa_buf_type_t buftype)
 }
 
 /*ARGSUSED*/
-static void
-sa_evict(void *dbu)
+void
+sa_evict(dmu_buf_t *db, void *sap)
 {
-	panic("evicting sa dbuf\n");
+	panic("evicting sa dbuf %p\n", (void *)db);
 }
 
 static void
@@ -1341,16 +1346,18 @@ sa_idx_tab_hold(objset_t *os, sa_idx_tab_t *idx_tab)
 void
 sa_handle_destroy(sa_handle_t *hdl)
 {
-	dmu_buf_t *db = hdl->sa_bonus;
-
 	mutex_enter(&hdl->sa_lock);
-	(void) dmu_buf_remove_user(db, &hdl->sa_dbu);
+	(void) dmu_buf_update_user((dmu_buf_t *)hdl->sa_bonus, hdl,
+	    NULL, NULL);
 
-	if (hdl->sa_bonus_tab)
+	if (hdl->sa_bonus_tab) {
 		sa_idx_tab_rele(hdl->sa_os, hdl->sa_bonus_tab);
-
-	if (hdl->sa_spill_tab)
+		hdl->sa_bonus_tab = NULL;
+	}
+	if (hdl->sa_spill_tab) {
 		sa_idx_tab_rele(hdl->sa_os, hdl->sa_spill_tab);
+		hdl->sa_spill_tab = NULL;
+	}
 
 	dmu_buf_rele(hdl->sa_bonus, NULL);
 
@@ -1367,7 +1374,7 @@ sa_handle_get_from_db(objset_t *os, dmu_buf_t *db, void *userp,
 {
 	int error = 0;
 	dmu_object_info_t doi;
-	sa_handle_t *handle = NULL;
+	sa_handle_t *handle;
 
 #ifdef ZFS_DEBUG
 	dmu_object_info_from_db(db, &doi);
@@ -1377,31 +1384,22 @@ sa_handle_get_from_db(objset_t *os, dmu_buf_t *db, void *userp,
 	/* find handle, if it exists */
 	/* if one doesn't exist then create a new one, and initialize it */
 
-	if (hdl_type == SA_HDL_SHARED)
-		handle = dmu_buf_get_user(db);
-
+	handle = (hdl_type == SA_HDL_SHARED) ? dmu_buf_get_user(db) : NULL;
 	if (handle == NULL) {
-		sa_handle_t *winner = NULL;
-
+		sa_handle_t *newhandle;
 		handle = kmem_cache_alloc(sa_cache, KM_SLEEP);
-		handle->sa_dbu.dbu_evict_func = NULL;
 		handle->sa_userp = userp;
 		handle->sa_bonus = db;
 		handle->sa_os = os;
 		handle->sa_spill = NULL;
-		handle->sa_bonus_tab = NULL;
-		handle->sa_spill_tab = NULL;
 
 		error = sa_build_index(handle, SA_BONUS);
+		newhandle = (hdl_type == SA_HDL_SHARED) ?
+		    dmu_buf_set_user_ie(db, handle, sa_evict) : NULL;
 
-		if (hdl_type == SA_HDL_SHARED) {
-			dmu_buf_init_user(&handle->sa_dbu, sa_evict, NULL);
-			winner = dmu_buf_set_user_ie(db, &handle->sa_dbu);
-		}
-
-		if (winner != NULL) {
+		if (newhandle != NULL) {
 			kmem_cache_free(sa_cache, handle);
-			handle = winner;
+			handle = newhandle;
 		}
 	}
 	*handlepp = handle;
@@ -1916,6 +1914,14 @@ sa_object_size(sa_handle_t *hdl, uint32_t *blksize, u_longlong_t *nblocks)
 {
 	dmu_object_size_from_db((dmu_buf_t *)hdl->sa_bonus,
 	    blksize, nblocks);
+}
+
+void
+sa_update_user(sa_handle_t *newhdl, sa_handle_t *oldhdl)
+{
+	(void) dmu_buf_update_user((dmu_buf_t *)newhdl->sa_bonus,
+	    oldhdl, newhdl, sa_evict);
+	oldhdl->sa_bonus = NULL;
 }
 
 void
