@@ -1119,9 +1119,9 @@ ctl_init(void)
 	 * figured out through the slot the controller is in.  Although it
 	 * is an active/active system, someone has to be in charge.
 	 */
-//	SYSCTL_ADD_INT(&softc->sysctl_ctx, SYSCTL_CHILDREN(softc->sysctl_tree),
-//	    OID_AUTO, "ha_id", CTLFLAG_RDTUN, &softc->ha_id, 0,
-//	    "HA head ID (0 - no HA)");
+	SYSCTL_ADD_INT(&softc->sysctl_ctx, SYSCTL_CHILDREN(softc->sysctl_tree),
+	    OID_AUTO, "ha_id", CTLFLAG_RDTUN, &softc->ha_id, 0,
+	    "HA head ID (0 - no HA)");
 	if (softc->ha_id == 0) {
 		softc->flags |= CTL_FLAG_ACTIVE_SHELF;
 		softc->is_single = 1;
