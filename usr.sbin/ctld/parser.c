@@ -229,6 +229,7 @@ parse_toplevel(const ucl_object_t *top)
 	const ucl_object_t *obj = NULL, *child = NULL;
 	int err = 0;
 
+	/* Pass 1 - everything except targets */
 	while ((obj = ucl_iterate_object(top, &it, true))) {
 		const char *key = ucl_object_key(obj);
 
@@ -299,44 +300,54 @@ parse_toplevel(const ucl_object_t *top)
 		}
 
 		if (!strcmp(key, "auth-group")) {
-			if (obj->type == UCL_OBJECT)
+			if (obj->type == UCL_OBJECT) {
+				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
 					parse_auth_group(ucl_object_key(child), child);
 				}
-			else {
+			} else {
 				log_warnx("\"auth-group\" section is not an object");
 				return (1);
 			}
 		}
 
 		if (!strcmp(key, "portal-group")) {
-			if (obj->type == UCL_OBJECT)
+			if (obj->type == UCL_OBJECT) {
+				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
 					parse_portal_group(ucl_object_key(child), child);
 				}
-			else {
+			} else {
 				log_warnx("\"portal-group\" section is not an object");
 				return (1);
 			}
 		}
 
 		if (!strcmp(key, "lun")) {
-			if (obj->type == UCL_OBJECT)
+			if (obj->type == UCL_OBJECT) {
+				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
 					parse_lun(ucl_object_key(child), child);
 				}
-			else {
+			} else {
 				log_warnx("\"lun\" section is not an object");
 				return (1);
 			}
 		}
+	}
+
+	/* Pass 2 - targets */
+	it = NULL;
+	while ((obj = ucl_iterate_object(top, &it, true))) {
+		const char *key = ucl_object_key(obj);
 
 		if (!strcmp(key, "target")) {
-			if (obj->type == UCL_OBJECT)
+			if (obj->type == UCL_OBJECT) {
+				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
 					parse_target(ucl_object_key(child), child);
 				}
-			else {
+			} else {
 				log_warnx("\"target\" section is not an object");
 				return (1);
 			}
@@ -414,8 +425,8 @@ static int
 parse_portal_group(const char *name, const ucl_object_t *top)
 {
 	struct portal_group *portal_group;
-	ucl_object_iter_t it = NULL;
-	const ucl_object_t *obj = NULL;
+	ucl_object_iter_t it = NULL, it2 = NULL;
+	const ucl_object_t *obj = NULL, *tmp = NULL;
 	const char *key;
 
 	if (strcmp(name, "default") == 0 &&
@@ -452,32 +463,53 @@ parse_portal_group(const char *name, const ucl_object_t *top)
 				return (1);
 			}
 
-			if (portal_group_set_filter(portal_group, ucl_object_tostring(obj)) != 0)
+			if (portal_group_set_filter(portal_group,
+			    ucl_object_tostring(obj)) != 0)
 				return (1);
 		}
 
 		if (!strcmp(key, "listen")) {
-			if (obj->type != UCL_STRING) {
+			if (obj->type == UCL_STRING) {
+				if (portal_group_add_listen(portal_group,
+				    ucl_object_tostring(obj), false) != 0)
+					return (1);
+			} else if (obj->type == UCL_ARRAY) {
+				while ((tmp = ucl_iterate_object(obj, &it2,
+				    true))) {
+					if (portal_group_add_listen(
+					    portal_group, 
+					    ucl_object_tostring(tmp),
+					    false) != 0)
+						return (1);
+				}
+			} else {
 				log_warnx("\"listen\" property of "
 				    "portal-group \"%s\" is not a string",
 				    portal_group->pg_name);
 				return (1);
 			}
-
-			if (portal_group_add_listen(portal_group, ucl_object_tostring(obj), false) != 0)
-				return (1);
 		}
 
 		if (!strcmp(key, "listen-iser")) {
-			if (obj->type != UCL_STRING) {
+			if (obj->type == UCL_STRING) {
+				if (portal_group_add_listen(portal_group,
+				    ucl_object_tostring(obj), true) != 0)
+					return (1);
+			} else if (obj->type == UCL_ARRAY) {
+				while ((tmp = ucl_iterate_object(obj, &it2,
+				    true))) {
+					if (portal_group_add_listen(
+					    portal_group,
+					    ucl_object_tostring(tmp),
+					    true) != 0)
+						return (1);
+				}
+			} else {
 				log_warnx("\"listen\" property of "
 				    "portal-group \"%s\" is not a string",
 				    portal_group->pg_name);
 				return (1);
 			}
-
-			if (portal_group_add_listen(portal_group, ucl_object_tostring(obj), true) != 0)
-				return (1);			
 		}
 
 		if (!strcmp(key, "redirect")) {
@@ -501,8 +533,8 @@ static int
 parse_target(const char *name, const ucl_object_t *top)
 {
 	struct target *target;
-	ucl_object_iter_t it = NULL;
-	const ucl_object_t *obj = NULL;
+	ucl_object_iter_t it = NULL, it2 = NULL;
+	const ucl_object_t *obj = NULL, *tmp = NULL;
 	const char *key;
 
 	target = target_new(conf, name);
@@ -658,8 +690,10 @@ parse_target(const char *name, const ucl_object_t *top)
 		}
 
 		if (!strcmp(key, "lun")) {
-			if (parse_target_lun(target, obj) != 0)
-				return (1);	
+			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
+				if (parse_target_lun(target, tmp) != 0)
+					return (1);
+			}
 		}
 	}
 
@@ -675,7 +709,7 @@ parse_lun(const char *name, const ucl_object_t *top)
 	const char *key;
 
 	lun = lun_new(conf, name);
-		
+
 	while ((obj = ucl_iterate_object(top, &it, true))) {
 		key = ucl_object_key(obj);
 
@@ -686,6 +720,7 @@ parse_lun(const char *name, const ucl_object_t *top)
 				    lun->l_name);
 				return (1);
 			}
+
 			lun_set_backend(lun, ucl_object_tostring(obj));
 		}
 
@@ -705,6 +740,7 @@ parse_lun(const char *name, const ucl_object_t *top)
 				    "\"%s\" is not an integer", lun->l_name);
 				return (1);
 			}
+
 			lun_set_device_id(lun, ucl_object_tostring(obj));
 		}
 
