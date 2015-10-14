@@ -2555,7 +2555,14 @@ main(int argc, char **argv)
 		if (sighup_received) {
 			sighup_received = false;
 			log_debugx("received SIGHUP, reloading configuration");
-			tmpconf = conf_new_from_file(config_path, newconf);
+			if (use_ucl) {
+				tmpconf = conf_new_from_ucl(config_path,
+				    newconf);
+			} else {
+				tmpconf = conf_new_from_file(config_path,
+				    newconf);
+			}
+
 			if (tmpconf == NULL) {
 				log_warnx("configuration error, "
 				    "continuing with old configuration");
