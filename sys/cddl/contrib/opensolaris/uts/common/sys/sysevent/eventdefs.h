@@ -250,6 +250,7 @@ extern "C" {
 #define	ESC_ZFS_RESILVER_FINISH		"ESC_ZFS_resilver_finish"
 #define	ESC_ZFS_VDEV_ATTACH		"ESC_ZFS_vdev_attach"
 #define	ESC_ZFS_VDEV_REMOVE		"ESC_ZFS_vdev_remove"
+#define	ESC_ZFS_VDEV_STATECHANGE	"ESC_ZFS_vdev_statechange"
 #define	ESC_ZFS_POOL_CREATE		"ESC_ZFS_pool_create"
 #define	ESC_ZFS_POOL_DESTROY		"ESC_ZFS_pool_destroy"
 #define	ESC_ZFS_DATASET_CREATE		"ESC_ZFS_dataset_create"
