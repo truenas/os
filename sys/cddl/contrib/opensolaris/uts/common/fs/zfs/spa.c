@@ -7281,6 +7281,30 @@ spa_has_active_shared_spare(spa_t *spa)
 	return (B_FALSE);
 }
 
+static const char *
+spa_vdev_state_to_str(vdev_state_t state)
+{
+
+	switch (state) {
+	case VDEV_STATE_HEALTHY:
+		return "ONLINE";
+	case VDEV_STATE_DEGRADED:
+		return "DEGRADED";
+	case VDEV_STATE_FAULTED:
+		return "FAULTED";
+	case VDEV_STATE_CANT_OPEN:
+		return "CANT_OPEN";
+	case VDEV_STATE_REMOVED:
+		return "REMOVED";
+	case VDEV_STATE_OFFLINE:
+		return "OFFLINE";
+	case VDEV_STATE_CLOSED:
+		return "CLOSED";
+	case VDEV_STATE_UNKNOWN:
+		return "UNKNOWN";
+	}
+}
+
 static sysevent_t *
 spa_event_create(spa_t *spa, vdev_t *vd, const char *name)
 {
@@ -7317,6 +7341,12 @@ spa_event_create(spa_t *spa, vdev_t *vd, const char *name)
 			    &value, SE_SLEEP) != 0)
 				goto done;
 		}
+
+		value.value_type = SE_DATA_TYPE_STRING;
+		value.value.sv_string = (char *)spa_vdev_state_to_str(vd->vdev_state);
+		if (sysevent_add_attr(&attr, ZFS_EV_VDEV_STATE,
+		    &value, SE_SLEEP) != 0)
+			goto done;
 	}
 
 	if (sysevent_attach_attributes(ev, attr) != 0)

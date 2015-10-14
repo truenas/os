@@ -1621,6 +1621,8 @@ vdev_close(vdev_t *vd)
 		vd->vdev_state = VDEV_STATE_OFFLINE;
 	else
 		vd->vdev_state = VDEV_STATE_CLOSED;
+
+	spa_event_notify(spa, vd, ESC_ZFS_VDEV_STATECHANGE);
 	vd->vdev_stat.vs_aux = VDEV_AUX_NONE;
 }
 
@@ -3470,6 +3472,9 @@ vdev_set_state(vdev_t *vd, boolean_t isopen, vdev_state_t state, vdev_aux_t aux)
 
 	if (!isopen && vd->vdev_parent)
 		vdev_propagate_state(vd->vdev_parent);
+
+	if (vd->vdev_state != save_state)
+		spa_event_notify(spa, vd, ESC_ZFS_VDEV_STATECHANGE);
 }
 
 /*
