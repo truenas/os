@@ -363,8 +363,8 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 	struct auth_group *auth_group;
 	const struct auth_name *an;
 	const struct auth_portal *ap;
-	ucl_object_iter_t it = NULL;
-	const ucl_object_t *obj = NULL;
+	ucl_object_iter_t it = NULL, it2 = NULL;
+	const ucl_object_t *obj = NULL, *tmp = NULL;
 	const char *key;
 	int err;
 
@@ -391,29 +391,69 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 		}
 
 		if (!strcmp(key, "chap")) {
-			if (parse_chap(auth_group, obj) != 0)
+			if (obj->type != UCL_ARRAY) {
+				log_warnx("\"chap\" property of "
+				    "auth-group \"%s\" is not an array",
+				    name;
 				return (1);
+			}
+
+			it2 = NULL;
+			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
+				if (parse_chap(auth_group, tmp) != 0)
+					return (1);
+			}
 		}
 
 		if (!strcmp(key, "chap-mutual")) {
-			if (parse_chap_mutual(auth_group, obj) != 0)
+			if (obj->type != UCL_ARRAY) {
+				log_warnx("\"chap-mutual\" property of "
+				    "auth-group \"%s\" is not an array",
+				    name;
 				return (1);
+			}
+
+			it2 = NULL;
+			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
+				if (parse_chap_mutual(auth_group, tmp) != 0)
+					return (1);
+			}
 		}
 
 		if (!strcmp(key, "initiator-name")) {
-			const char *value = ucl_object_tostring(obj);
-
-			an = auth_name_new(auth_group, value);
-			if (an == NULL)
+			if (obj->type != UCL_ARRAY) {
+				log_warnx("\"initiator-name\" property of "
+				    "auth-group \"%s\" is not an array",
+				    name;
 				return (1);
+			}
+
+			it2 = NULL;
+			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
+				const char *value = ucl_object_tostring(tmp);
+				
+				an = auth_name_new(auth_group, value);
+				if (an == NULL)
+					return (1);
+			}
 		}
 
 		if (!strcmp(key, "initiator-portal")) {
-			const char *value = ucl_object_tostring(obj);
-
-			ap = auth_portal_new(auth_group, value);
-			if (ap == NULL)
+			if (obj->type != UCL_ARRAY) {
+				log_warnx("\"initiator-portal\" property of "
+				    "auth-group \"%s\" is not an array",
+				    name;
 				return (1);
+			}
+
+			it2 = NULL;
+			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
+				const char *value = ucl_object_tostring(tmp);
+
+				ap = auth_portal_new(auth_group, value);
+				if (ap == NULL)
+					return (1);
+			}
 		}
 
 	}
