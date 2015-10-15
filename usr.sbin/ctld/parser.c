@@ -394,7 +394,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 			if (obj->type != UCL_ARRAY) {
 				log_warnx("\"chap\" property of "
 				    "auth-group \"%s\" is not an array",
-				    name;
+				    name);
 				return (1);
 			}
 
@@ -409,7 +409,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 			if (obj->type != UCL_ARRAY) {
 				log_warnx("\"chap-mutual\" property of "
 				    "auth-group \"%s\" is not an array",
-				    name;
+				    name);
 				return (1);
 			}
 
@@ -424,7 +424,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 			if (obj->type != UCL_ARRAY) {
 				log_warnx("\"initiator-name\" property of "
 				    "auth-group \"%s\" is not an array",
-				    name;
+				    name);
 				return (1);
 			}
 
@@ -442,7 +442,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 			if (obj->type != UCL_ARRAY) {
 				log_warnx("\"initiator-portal\" property of "
 				    "auth-group \"%s\" is not an array",
-				    name;
+				    name);
 				return (1);
 			}
 
