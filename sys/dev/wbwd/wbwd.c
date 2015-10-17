@@ -610,7 +610,7 @@ wb_probe_enable(device_t dev, int probe)
 		}
 
 		if (!found) {
-			if (probe && dev != NULL)
+			if (probe && dev != NULL && bootverbose)
 				device_printf(dev, "DevID 0x%02x DevRev 0x%02x, "
 				    "will not attach, please report this.\n", dev_id, dev_rev);
 		}
