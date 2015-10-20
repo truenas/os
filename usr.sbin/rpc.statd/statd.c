@@ -54,9 +54,11 @@ __FBSDID("$FreeBSD$");
 #include <netdb.h>
 #include <signal.h>
 #include <unistd.h>
+#include <libutil.h>
 #include "statd.h"
 
 #define	GETPORT_MAXTRY	20	/* Max tries to get a port # */
+#define	_PATH_STATDPID	"/var/run/rpc.statd.pid"
 
 int debug = 0;		/* Controls syslog() calls for debug messages	*/
 
@@ -67,12 +69,14 @@ static int	mallocd_svcport = 0;
 static int	*sock_fd;
 static int	sock_fdcnt;
 static int	sock_fdpos;
+static struct pidfh *pfh;
 
 static int	create_service(struct netconfig *nconf);
 static void	complete_service(struct netconfig *nconf, char *port_str);
 static void	clearout_service(void);
 static void handle_sigchld(int sig);
-void out_of_mem(void) __dead2;
+static void handle_sigterm(int sig);
+void out_of_mem(void);
 
 static void usage(void) __dead2;
 
@@ -89,6 +93,7 @@ main(int argc, char **argv)
   int maxrec = RPC_MAXDATASIZE;
   int attempt_cnt, port_len, port_pos, ret;
   char **port_list;
+  pid_t otherpid;
 
   while ((ch = getopt(argc, argv, "dh:p:")) != -1)
     switch (ch) {
@@ -283,6 +288,14 @@ main(int argc, char **argv)
 
   init_file("/var/db/statd.status");
 
+
+  pfh = pidfile_open(_PATH_STATDPID, 0600, &otherpid);
+  if (pfh == NULL) {
+    if (errno == EEXIST)
+      errx(1, "rpc.statd already running, pid: %d.", otherpid);
+    warn("cannot open or create pidfile");
+  }
+
   /* Note that it is NOT sensible to run this program from inetd - the 	*/
   /* protocol assumes that it will run immediately at boot time.	*/
   daemon(0, 0);
@@ -297,11 +310,20 @@ main(int argc, char **argv)
   sa.sa_flags = SA_RESTART;
   sigaction(SIGCHLD, &sa, NULL);
 
+  /* Install SIGTERM handler to remove pidfile */
+  sa.sa_handler = handle_sigterm;
+  sigemptyset(&sa.sa_mask);
+  sigaddset(&sa.sa_mask, SIGTERM);
+  sigaction(SIGTERM, &sa, NULL);
+
+  pidfile_write(pfh);
+
   /* Initialisation now complete - start operating			*/
   notify_hosts();	/* Forks a process (if necessary) to do the	*/
 			/* SM_NOTIFY calls, which may be slow.		*/
 
   svc_run();	/* Should never return					*/
+  pidfile_remove(pfh);
   exit(1);
 }
 
@@ -643,6 +665,13 @@ static void handle_sigchld(int sig __unused)
     WEXITSTATUS(status));
 }
 
+static void
+handle_sigterm(int sig __unused)
+{
+	pidfile_remove(pfh);
+	exit(0);
+}
+
 /*
  * Out of memory, fatal
  */
@@ -651,5 +680,6 @@ out_of_mem(void)
 {
 
 	syslog(LOG_ERR, "out of memory");
+	pidfile_remove(pfh);
 	exit(2);
 }
