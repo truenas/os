@@ -270,13 +270,19 @@ parse_toplevel(const ucl_object_t *top)
 		}
 
 		if (!strcmp(key, "isns-server")) {
-			if (obj->type == UCL_STRING)
-				err = isns_new(conf, ucl_object_tostring(obj));
-				if (err != 0) {
-					return (1);
+			if (obj->type == UCL_ARRAY) {
+				iter = NULL;
+				while ((child = ucl_iterate_object(obj, &iter, true))) {
+					if (child->type != UCL_STRING)
+						return (1);
+
+					err = isns_new(conf, ucl_object_tostring(child));
+					if (err != 0) {
+						return (1);
+					}
 				}
-			else {
-				log_warnx("\"isns-server\" property value is not string");
+			} else {
+				log_warnx("\"isns-server\" property value is not an array");
 				return (1);
 			}
 		}
