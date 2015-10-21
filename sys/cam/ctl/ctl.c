@@ -3808,7 +3808,7 @@ ctl_expand_number(const char *buf, uint64_t *num)
 static int
 ctl_init_page_index(struct ctl_lun *lun)
 {
-	int i;
+	int i, page_code;
 	struct ctl_page_index *page_index;
 	const char *value;
 	uint64_t ival;
@@ -3829,10 +3829,12 @@ ctl_init_page_index(struct ctl_lun *lun)
 		    (page_index->page_flags & CTL_PAGE_FLAG_CDROM) == 0)
 			continue;
 
-		switch (page_index->page_code & SMPH_PC_MASK) {
+		page_code = page_index->page_code & SMPH_PC_MASK;
+		switch (page_code) {
 		case SMS_RW_ERROR_RECOVERY_PAGE: {
-			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
-				panic("subpage is incorrect!");
+			KASSERT(page_index->subpage == SMS_SUBPAGE_PAGE_0,
+			    ("subpage %#x for page %#x is incorrect!",
+			    page_index->subpage, page_code));
 			memcpy(&lun->mode_pages.rw_er_page[CTL_PAGE_CURRENT],
 			       &rw_er_page_default,
 			       sizeof(rw_er_page_default));
@@ -3852,8 +3854,9 @@ ctl_init_page_index(struct ctl_lun *lun)
 		case SMS_FORMAT_DEVICE_PAGE: {
 			struct scsi_format_page *format_page;
 
-			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
-				panic("subpage is incorrect!");
+			KASSERT(page_index->subpage == SMS_SUBPAGE_PAGE_0,
+			    ("subpage %#x for page %#x is incorrect!",
+			    page_index->subpage, page_code));
 
 			/*
 			 * Sectors per track are set above.  Bytes per
@@ -3899,9 +3902,9 @@ ctl_init_page_index(struct ctl_lun *lun)
 			int shift;
 #endif /* !__XSCALE__ */
 
-			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
-				panic("invalid subpage value %d",
-				      page_index->subpage);
+			KASSERT(page_index->subpage == SMS_SUBPAGE_PAGE_0,
+			    ("subpage %#x for page %#x is incorrect!",
+			    page_index->subpage, page_code));
 
 			/*
 			 * Rotation rate and sectors per track are set
@@ -3979,9 +3982,9 @@ ctl_init_page_index(struct ctl_lun *lun)
 		case SMS_CACHING_PAGE: {
 			struct scsi_caching_page *caching_page;
 
-			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
-				panic("invalid subpage value %d",
-				      page_index->subpage);
+			KASSERT(page_index->subpage == SMS_SUBPAGE_PAGE_0,
+			    ("subpage %#x for page %#x is incorrect!",
+			    page_index->subpage, page_code));
 			memcpy(&lun->mode_pages.caching_page[CTL_PAGE_DEFAULT],
 			       &caching_page_default,
 			       sizeof(caching_page_default));
@@ -4064,6 +4067,9 @@ ctl_init_page_index(struct ctl_lun *lun)
 				page_index->page_data =
 				    (uint8_t *)lun->mode_pages.control_ext_page;
 				break;
+			default:
+				panic("subpage %#x for page %#x is incorrect!",
+				      page_index->subpage, page_code);
 			}
 			break;
 		}
@@ -4155,10 +4161,18 @@ ctl_init_page_index(struct ctl_lun *lun)
 				       sizeof(lbp_page_default));
 				page_index->page_data =
 					(uint8_t *)lun->mode_pages.lbp_page;
-			}}
+				break;
+			}
+			default:
+				panic("subpage %#x for page %#x is incorrect!",
+				      page_index->subpage, page_code);
+			}
 			break;
 		}
 		case SMS_CDDVD_CAPS_PAGE:{
+			KASSERT(page_index->subpage == SMS_SUBPAGE_PAGE_0,
+			    ("subpage %#x for page %#x is incorrect!",
+			    page_index->subpage, page_code));
 			memcpy(&lun->mode_pages.cddvd_page[CTL_PAGE_DEFAULT],
 			       &cddvd_page_default,
 			       sizeof(cddvd_page_default));
@@ -4199,17 +4213,14 @@ ctl_init_page_index(struct ctl_lun *lun)
 				break;
 			}
 			default:
-				panic("invalid subpage value %d",
-				      page_index->subpage);
-				break;
+				panic("subpage %#x for page %#x is incorrect!",
+				      page_index->subpage, page_code);
 			}
-   			break;
+			break;
 		}
 		default:
-			panic("invalid page value %d",
-			      page_index->page_code & SMPH_PC_MASK);
-			break;
-    	}
+			panic("invalid page code value %#x", page_code);
+		}
 	}
 
 	return (CTL_RETVAL_COMPLETE);
@@ -6216,8 +6227,7 @@ ctl_mode_select(struct ctl_scsiio *ctsio)
 		break;
 	}
 	default:
-		panic("Invalid CDB type %#x", ctsio->cdb[0]);
-		break;
+		panic("%s: Invalid CDB type %#x", __func__, ctsio->cdb[0]);
 	}
 
 	if (param_len < (header_size + bd_len)) {
@@ -6480,8 +6490,7 @@ ctl_mode_sense(struct ctl_scsiio *ctsio)
 		break;
 	}
 	default:
-		panic("invalid CDB type %#x", ctsio->cdb[0]);
-		break; /* NOTREACHED */
+		panic("%s: Invalid CDB type %#x", __func__, ctsio->cdb[0]);
 	}
 
 	/*
@@ -7434,7 +7443,7 @@ retry:
 		    lun->pr_key_count;
 		break;
 	default:
-		panic("Invalid PR type %x", cdb->action);
+		panic("%s: Invalid PR type %#x", __func__, cdb->action);
 	}
 	mtx_unlock(&lun->lun_lock);
 
@@ -7630,12 +7639,7 @@ retry:
 		break;
 	}
 	default:
-		/*
-		 * This is a bug, because we just checked for this above,
-		 * and should have returned an error.
-		 */
-		panic("Invalid PR type %x", cdb->action);
-		break; /* NOTREACHED */
+		panic("%s: Invalid PR type %#x", __func__, cdb->action);
 	}
 	mtx_unlock(&lun->lun_lock);
 
@@ -8353,7 +8357,7 @@ ctl_persistent_reserve_out(struct ctl_scsiio *ctsio)
 		break;
 	}
 	default:
-		panic("Invalid PR type %x", cdb->action);
+		panic("%s: Invalid PR type %#x", __func__, cdb->action);
 	}
 
 done:
@@ -10966,8 +10970,9 @@ ctl_check_for_blockage(struct ctl_lun *lun, union ctl_io *pending_io,
 	case CTL_SER_SKIP:
 		return (CTL_ACTION_SKIP);
 	default:
-		panic("invalid serialization value %d",
-		      serialize_row[pending_entry->seridx]);
+		panic("%s: Invalid serialization value %d for %d => %d",
+		    __func__, serialize_row[pending_entry->seridx],
+		    pending_entry->seridx, ooa_entry->seridx);
 	}
 
 	return (CTL_ACTION_ERROR);
@@ -11016,8 +11021,7 @@ ctl_check_ooa(struct ctl_lun *lun, union ctl_io *pending_io,
 		case CTL_ACTION_PASS:
 			break;
 		default:
-			panic("invalid action %d", action);
-			break;  /* NOTREACHED */
+			panic("%s: Invalid action %d\n", __func__, action);
 		}
 	}
 
@@ -12488,9 +12492,8 @@ ctl_datamove(union ctl_io *io)
 				    io->taskio.tag_num, io->taskio.tag_type);
 			break;
 		default:
-			printf("Invalid CTL I/O type %d\n", io->io_hdr.io_type);
-			panic("Invalid CTL I/O type %d\n", io->io_hdr.io_type);
-			break;
+			panic("%s: Invalid CTL I/O type %d\n",
+			    __func__, io->io_hdr.io_type);
 		}
 		sbuf_cat(&sb, path_str);
 		sbuf_printf(&sb, "ctl_datamove: %jd seconds\n",
@@ -13023,9 +13026,8 @@ ctl_process_done(union ctl_io *io)
 				    io->taskio.tag_num, io->taskio.tag_type);
 			break;
 		default:
-			printf("Invalid CTL I/O type %d\n", io->io_hdr.io_type);
-			panic("Invalid CTL I/O type %d\n", io->io_hdr.io_type);
-			break;
+			panic("%s: Invalid CTL I/O type %d\n",
+			    __func__, io->io_hdr.io_type);
 		}
 		sbuf_cat(&sb, path_str);
 		sbuf_printf(&sb, "ctl_process_done: %jd seconds\n",
@@ -13044,9 +13046,8 @@ ctl_process_done(union ctl_io *io)
 		fe_done(io);
 		return;
 	default:
-		panic("ctl_process_done: invalid io type %d\n",
-		      io->io_hdr.io_type);
-		break; /* NOTREACHED */
+		panic("%s: Invalid CTL I/O type %d\n",
+		    __func__, io->io_hdr.io_type);
 	}
 
 	lun = (struct ctl_lun *)io->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
