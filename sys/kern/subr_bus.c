@@ -678,7 +678,7 @@ devctl_notify_params(const char *system, const char *subsystem,
 	char *msg;
 	size_t i;
 
-	sbuf_new(&sb, buf, sizeof(buf), SBUF_FIXEDLEN);
+	sbuf_new(&sb, buf, sizeof(buf), SBUF_FIXEDLEN | SBUF_INCLUDENUL);
 	sbuf_printf(&sb, "<event><system>%s</system><subsystem>%s</subsystem>",
 	    system, subsystem);
 
