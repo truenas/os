@@ -143,11 +143,31 @@ struct devreq {
  * hook to send the message.  However, devctl_queue_data is also
  * included in case devctl_notify isn't sufficiently general.
  */
+typedef enum devctl_type {
+	DT_STRING = 0,
+	DT_UINT,
+	DT_INT,
+	DT_BOOL
+} devctl_type_t;
+
+struct devctl_param {
+	const char *	dp_key;
+	devctl_type_t	dp_type;
+	union {
+		const char *	dp_string;
+		uint64_t	dp_uint;
+		int64_t		dp_int;
+		bool		dp_bool;
+	};
+};
+
 boolean_t devctl_process_running(void);
 void devctl_notify_f(const char *__system, const char *__subsystem,
     const char *__type, const char *__data, int __flags);
 void devctl_notify(const char *__system, const char *__subsystem,
     const char *__type, const char *__data);
+void devctl_notify_params(const char *__system, const char *__subsystem,
+    const struct devctl_param *params, size_t nparams, int flags);
 void devctl_queue_data_f(char *__data, int __flags);
 void devctl_queue_data(char *__data);
 void devctl_safe_quote(char *__dst, const char *__src, size_t len);
