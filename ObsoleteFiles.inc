@@ -38,6 +38,14 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20151025: remove links to removed/unimplemented mbuf(9) macros
+OLD_FILES+=usr/share/man/man9/MEXT_ADD_REF.9.gz
+OLD_FILES+=usr/share/man/man9/MEXTFREE.9.gz
+OLD_FILES+=usr/share/man/man9/MEXT_IS_REF.9.gz
+OLD_FILES+=usr/share/man/man9/MEXT_REM_REF.9.gz
+OLD_FILES+=usr/share/man/man9/MFREE.9.gz
+# 20151023: unused sgsmsg utility is removed
+OLD_FILES+=usr/bin/sgsmsg
 # 20150506
 OLD_FILES+=usr/share/man/man9/NDHASGIANT.9.gz
 # 20141223: remove in6_gif.h and in_gif.h

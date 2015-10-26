@@ -1283,6 +1283,8 @@ _cat=		bin/cat
 
 .if ${BOOTSTRAPPING} < 1000033
 _lex=		usr.bin/lex
+
+${_bt}-usr.bin/lex: ${_bt}-usr.bin/m4
 .endif
 
 .if ${BOOTSTRAPPING} >= 900040 && ${BOOTSTRAPPING} < 900041
@@ -1309,7 +1311,7 @@ ${_bt}-usr.bin/clang/tblgen: ${_bt}-lib/clang/libllvmtablegen ${_bt}-lib/clang/l
     ((${BOOTSTRAPPING} < 1000034 && \
           !(${BOOTSTRAPPING} >= 901505 && ${BOOTSTRAPPING} < 999999)) \
       || (${MACHINE} != ${TARGET} || ${MACHINE_ARCH} != ${TARGET_ARCH}))
-_dtrace_tools= cddl/usr.bin/sgsmsg cddl/lib/libctf lib/libelf \
+_dtrace_tools= cddl/lib/libctf lib/libelf \
     lib/libdwarf cddl/usr.bin/ctfconvert cddl/usr.bin/ctfmerge
 
 ${_bt}-cddl/usr.bin/ctfconvert: ${_bt}-lib/libelf ${_bt}-lib/libdwarf ${_bt}-cddl/lib/libctf
@@ -1900,6 +1902,13 @@ delete-old-files:
 			chflags noschg "${DESTDIR}/$${file}" 2>/dev/null || true; \
 			rm ${RM_I} "${DESTDIR}/$${file}" <&3; \
 		fi; \
+		for ext in debug symbols; do \
+		  if ! [ -e "${DESTDIR}/$${file}" ] && [ -f \
+		      "${DESTDIR}${DEBUGDIR}/$${file}.$${ext}" ]; then \
+			  rm ${RM_I} "${DESTDIR}${DEBUGDIR}/$${file}.$${ext}" \
+			      <&3; \
+		  fi; \
+		done; \
 	done
 # Remove catpages without corresponding manpages.
 	@exec 3<&0; \
@@ -1922,6 +1931,11 @@ check-old-files:
 		if [ -f "${DESTDIR}/$${file}" -o -L "${DESTDIR}/$${file}" ]; then \
 		 	echo "${DESTDIR}/$${file}"; \
 		fi; \
+		for ext in debug symbols; do \
+		  if [ -f "${DESTDIR}${DEBUGDIR}/$${file}.$${ext}" ]; then \
+			  echo "${DESTDIR}${DEBUGDIR}/$${file}.$${ext}"; \
+		  fi; \
+		done; \
 	done
 # Check for catpages without corresponding manpages.
 	@find ${DESTDIR}/usr/share/man/cat* ! -type d | \
