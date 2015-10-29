@@ -534,21 +534,17 @@ giant_mmap_single(struct cdev *dev, vm_ooffset_t *offset, vm_size_t size,
 static void
 notify(struct cdev *dev, const char *ev, int flags)
 {
-	static const char prefix[] = "cdev=";
-	char *data;
-	int namelen, mflags;
+	struct devctl_param param;
+	int mflags;
 
 	if (cold)
 		return;
+
 	mflags = (flags & MAKEDEV_NOWAIT) ? M_NOWAIT : M_WAITOK;
-	namelen = strlen(dev->si_name);
-	data = malloc(namelen + sizeof(prefix), M_TEMP, mflags);
-	if (data == NULL)
-		return;
-	memcpy(data, prefix, sizeof(prefix) - 1);
-	memcpy(data + sizeof(prefix) - 1, dev->si_name, namelen + 1);
-	devctl_notify_f("DEVFS", "CDEV", ev, data, mflags);
-	free(data, M_TEMP);
+	param.dp_type = DT_STRING;
+	param.dp_key = "cdev";
+	param.dp_string = dev->si_name;
+	devctl_notify_params("DEVFS", "CDEV", ev, &param, 1, mflags);
 }
 
 static void
