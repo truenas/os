@@ -653,8 +653,7 @@ void
 devctl_notify_f(const char *system, const char *subsystem, const char *type,
     const char *data, int flags)
 {
-	struct devctl_param params[2] = {
-		{.dp_key = "type", .dp_string = type, .dp_type = DT_STRING},
+	struct devctl_param params[1] = {
 		{.dp_key = "data", .dp_string = data, .dp_type = DT_STRING}
 	};
 
@@ -665,22 +664,26 @@ devctl_notify_f(const char *system, const char *subsystem, const char *type,
 	if (type == NULL)
 		return;		/* BOGUS!  Must specify type. */
 
-	devctl_notify_params(system, subsystem, params,
-	    data == NULL ? 1 : 2, flags);
+	devctl_notify_params(system, subsystem, type, params,
+	    data == NULL ? 0 : 1, flags);
 }
 
 void
 devctl_notify_params(const char *system, const char *subsystem,
-    const struct devctl_param *params, size_t nparams, int flags)
+    const char *type, const struct devctl_param *params, size_t nparams,
+    int flags)
 {
 	struct sbuf sb;
 	char buf[1024];
 	char *msg;
 	size_t i;
 
-	sbuf_new(&sb, buf, sizeof(buf), SBUF_FIXEDLEN | SBUF_INCLUDENUL);
+	sbuf_new(&sb, buf, sizeof(buf), SBUF_FIXEDLEN);
 	sbuf_printf(&sb, "<event><system>%s</system><subsystem>%s</subsystem>",
 	    system, subsystem);
+
+        if (type != NULL)
+		sbuf_printf(&sb, "<type>%s</type>", type);
 
 	for (i = 0; i < nparams; i++) {
 		sbuf_printf(&sb, "<%s>", params[i].dp_key);
@@ -713,7 +716,7 @@ devctl_notify_params(const char *system, const char *subsystem,
 	sbuf_finish(&sb);
 	
 	msg = malloc(sbuf_len(&sb), M_BUS, flags);
-	strncpy(msg, sbuf_data(&sb), sbuf_len(&sb));
+	strncpy(msg, sbuf_data(&sb), sbuf_len(&sb) + 1);
 	devctl_queue_data_f(msg, flags);
 }
 
@@ -772,9 +775,12 @@ devaddq(const char *type, const char *what, device_t dev)
 		parstr = ".";	/* Or '/' ? */
 	else
 		parstr = device_get_nameunit(device_get_parent(dev));
+
 	/* String it all together. */
-	snprintf(data, 1024, "%s%s at %s %s on %s\n", type, what, loc, pnp,
-	  parstr);
+	snprintf(data, 1024, "<%s><name>%s</name><location>%s</location>"
+	    "<pnp>%s</pnp><parent>%s</parent></%s>\n", type, what, loc, pnp,
+	    parstr, type);
+
 	free(loc, M_BUS);
 	free(pnp, M_BUS);
 	devctl_queue_data(data);
@@ -796,7 +802,7 @@ bad:
 static void
 devadded(device_t dev)
 {
-	devaddq("+", device_get_nameunit(dev), dev);
+	devaddq("attach", device_get_nameunit(dev), dev);
 }
 
 /*
@@ -806,7 +812,7 @@ devadded(device_t dev)
 static void
 devremoved(device_t dev)
 {
-	devaddq("-", device_get_nameunit(dev), dev);
+	devaddq("detach", device_get_nameunit(dev), dev);
 }
 
 /*
@@ -819,7 +825,7 @@ devremoved(device_t dev)
 static void
 devnomatch(device_t dev)
 {
-	devaddq("?", "", dev);
+	devaddq("unknown", "", dev);
 }
 
 static int

@@ -39,6 +39,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysevent.h>
 #include <sys/fm/protocol.h>
 
+#define	MAX_DEVCTL_PARAMS	16
+
 struct sysevent {
 	nvlist_t	*se_nvl;
 	char		 se_class[128];
@@ -164,7 +166,7 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 {
 	struct sysevent *ev = (struct sysevent *)evp;
 	struct sbuf *sb;
-	struct devctl_param params[16];
+	struct devctl_param params[MAX_DEVCTL_PARAMS];
 	const char *type;
 	char typestr[128];
 	nvpair_t *elem = NULL;
@@ -178,6 +180,9 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 	type = NULL;
 
 	while ((elem = nvlist_next_nvpair(ev->se_nvl, elem)) != NULL) {
+		if (nparams == MAX_DEVCTL_PARAMS - 1)
+			break;
+
 		switch (nvpair_type(elem)) {
 		case DATA_TYPE_BOOLEAN:
 		    {
@@ -362,14 +367,7 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 		type = typestr;
 	}
 
-	params[nparams++] = (struct devctl_param) {
-		.dp_type = DT_STRING,
-		.dp_key = "type",
-		.dp_string = type
-	};
-
-	devctl_notify_params("ZFS", "ZFS", params, nparams, 0);
-
+	devctl_notify_params("ZFS", "ZFS", type, params, nparams, M_WAITOK);
 	return (0);
 }
 

@@ -166,8 +166,9 @@ void devctl_notify_f(const char *__system, const char *__subsystem,
     const char *__type, const char *__data, int __flags);
 void devctl_notify(const char *__system, const char *__subsystem,
     const char *__type, const char *__data);
-void devctl_notify_params(const char *__system, const char *__subsystem,
-    const struct devctl_param *params, size_t nparams, int flags);
+void devctl_notify_params(const char *system, const char *subsystem,
+    const char *type, const struct devctl_param *params, size_t nparams,
+    int flags);
 void devctl_queue_data_f(char *__data, int __flags);
 void devctl_queue_data(char *__data);
 void devctl_safe_quote(char *__dst, const char *__src, size_t len);
