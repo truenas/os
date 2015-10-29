@@ -1275,7 +1275,7 @@ static void
 asmc_sms_task(void *arg, int pending)
 {
 	struct asmc_softc *sc = (struct asmc_softc *)arg;
-	char notify[16];
+	struct devctl_param param;
 	int type;
 
 	switch (sc->sc_sms_intrtype) {
@@ -1292,8 +1292,10 @@ asmc_sms_task(void *arg, int pending)
 		type = 255;
 	}
 
-	snprintf(notify, sizeof(notify), " notify=0x%x", type);
-	devctl_notify("ACPI", "asmc", "SMS", notify); 
+	param.dp_type = DT_UINT;
+	param.dp_key = "notify";
+	param.dp_value = type;
+	devctl_notify_params("ACPI", "asmc", "SMS", &param, 1, 0);
 }
 
 static int

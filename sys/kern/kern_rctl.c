@@ -496,10 +496,11 @@ rctl_enforce(struct proc *p, int resource, uint64_t amount)
 	struct rctl_rule *rule;
 	struct rctl_rule_link *link;
 	struct sbuf sb;
-	char *buf;
 	int64_t available;
 	uint64_t sleep_ms, sleep_ratio;
 	int should_deny = 0;
+	struct devctl_param params[4];
+	char *buf;
 
 	ASSERT_RACCT_ENABLED();
 	RACCT_LOCK_ASSERT();
@@ -573,19 +574,41 @@ rctl_enforce(struct proc *p, int resource, uint64_t amount)
 				continue;
 
 			buf = malloc(RCTL_LOG_BUFSIZE, M_RCTL, M_NOWAIT);
+			sbuf_new(&sb, buf, RCTL_LOG_BUFSIZE, SBUF_FIXEDLEN);
+			rctl_rule_to_sbuf(&sb, rule);
+
 			if (buf == NULL) {
 				printf("rctl_enforce: out of memory\n");
 				continue;
 			}
-			sbuf_new(&sb, buf, RCTL_LOG_BUFSIZE, SBUF_FIXEDLEN);
-			sbuf_printf(&sb, "rule=");
-			rctl_rule_to_sbuf(&sb, rule);
-			sbuf_printf(&sb, " pid=%d ruid=%d jail=%s",
-			    p->p_pid, p->p_ucred->cr_ruid,
-			    p->p_ucred->cr_prison->pr_prison_racct->prr_name);
-			sbuf_finish(&sb);
-			devctl_notify_f("RCTL", "rule", "matched",
-			    sbuf_data(&sb), M_NOWAIT);
+
+			params[0] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = "rule",
+				.dp_string = sbuf_data(&sb)
+			};
+
+			params[1] = (struct devctl_param) {
+				.dp_type = DT_INT,
+				.dp_key = "pid",
+				.dp_int = p->p_pid
+			};
+
+			params[2] = (struct devctl_param) {
+				.dp_type = DT_INT,
+				.dp_key = "ruid",
+				.dp_int = p->p_ucred->cr_ruid
+			};
+
+			params[3] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = "jail",
+				.dp_string = p->p_ucred->cr_prison->
+				    pr_prison_racct->prr_name
+			};
+
+			devctl_notify_params("RCTL", "rule", "matched", params,
+			    4, M_NOWAIT);
 			sbuf_delete(&sb);
 			free(buf, M_RCTL);
 			link->rrl_exceeded = 1;

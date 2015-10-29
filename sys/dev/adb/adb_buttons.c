@@ -118,12 +118,11 @@ abtn_receive_packet(device_t dev, u_char status,
 
 	switch (cmd) {
 	case 0x0a:	/* decrease brightness */
-		devctl_notify("PMU", "keys", "brightness",
-		    "notify=down");
+		devctl_notify("PMU", "keys", "brightness", "down");
 		break;
 
 	case 0x09:	/* increase brightness */
-		devctl_notify("PMU", "keys", "brightness", "notify=up");
+		devctl_notify("PMU", "keys", "brightness", "up");
 		break;
 
 	case 0x08:	/* mute */
@@ -132,11 +131,11 @@ abtn_receive_packet(device_t dev, u_char status,
 		break;
 	case 0x07:	/* decrease volume */
 	case 0x02:	/* decrease volume, AV hardware */
-		devctl_notify("PMU", "keys", "volume", "notify=down");
+		devctl_notify("PMU", "keys", "volume", "down");
 		break;
 	case 0x06:	/* increase volume */
 	case 0x03:	/* increase volume, AV hardware */
-		devctl_notify("PMU", "keys", "volume", "notify=up");
+		devctl_notify("PMU", "keys", "volume", "up");
 		break;
 	case 0x0c:	/* mirror display key */
 		/* Need callback to do something with this */

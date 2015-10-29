@@ -3743,7 +3743,7 @@ acpi_sleep_state_sysctl(SYSCTL_HANDLER_ARGS)
 void
 acpi_UserNotify(const char *subsystem, ACPI_HANDLE h, uint8_t notify)
 {
-    char		notify_buf[16];
+    struct devctl_param param;
     ACPI_BUFFER		handle_buf;
     ACPI_STATUS		status;
 
@@ -3755,8 +3755,11 @@ acpi_UserNotify(const char *subsystem, ACPI_HANDLE h, uint8_t notify)
     status = AcpiNsHandleToPathname(h, &handle_buf, FALSE);
     if (ACPI_FAILURE(status))
 	return;
-    snprintf(notify_buf, sizeof(notify_buf), "notify=0x%02x", notify);
-    devctl_notify("ACPI", subsystem, handle_buf.Pointer, notify_buf);
+
+    param.dp_type = DT_UINT;
+    param.dp_key = "notify";
+    param.dp_uint = notify;
+    devctl_notify_params("ACPI", subsystem, handle_buf.Pointer, &param, 1, 0);
     AcpiOsFree(handle_buf.Pointer);
 }
 

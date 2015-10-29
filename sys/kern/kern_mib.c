@@ -271,7 +271,7 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	struct prison *pr, *cpr;
 	size_t pr_offset;
 	char tmpname[MAXHOSTNAMELEN];
-	char buf[MAXHOSTNAMELEN + 16];
+	struct devctl_param param;
 	int descend, error, len;
 
 	/*
@@ -317,21 +317,29 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 		/* Notify userland about hostname change */
 		switch (pr_offset) {
 			case offsetof(struct prison, pr_hostname):
-				snprintf(buf, sizeof(buf), "hostname=%s", tmpname);
+				param.dp_type = DT_STRING;
+				param.dp_key = "hostname";
+				param.dp_string = tmpname;
 				break;
 
 			case offsetof(struct prison, pr_domainname):
-				snprintf(buf, sizeof(buf), "domainname=%s", tmpname);
+				param.dp_type = DT_STRING;
+				param.dp_key = "domainname";
+				param.dp_string = tmpname;
 				break;
 
 			case offsetof(struct prison, pr_hostuuid):
-				snprintf(buf, sizeof(buf), "hostuuid=%s", tmpname);
+				param.dp_type = DT_STRING;
+				param.dp_key = "hostuuid";
+				param.dp_string = tmpname;
 				break;
 			default:
 				return (EINVAL);		
 		}
 
-		devctl_notify("SYSTEM", "HOSTNAME", "CHANGE", buf);
+		
+		devctl_notify_params("SYSTEM", "HOSTNAME", "CHANGE", &param,
+		    1, 0);
 	}
 	return (error);
 }

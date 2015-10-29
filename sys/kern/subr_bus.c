@@ -654,7 +654,7 @@ devctl_notify_f(const char *system, const char *subsystem, const char *type,
     const char *data, int flags)
 {
 	struct devctl_param params[1] = {
-		{.dp_key = "data", .dp_string = data, .dp_type = DT_STRING}
+		{.dp_key = "notify", .dp_string = data, .dp_type = DT_STRING}
 	};
 
 	if (system == NULL)

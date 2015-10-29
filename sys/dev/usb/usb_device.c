@@ -2531,49 +2531,84 @@ static void
 usb_notify_addq(const char *type, struct usb_device *udev)
 {
 	struct usb_interface *iface;
-	struct sbuf *sb;
+	struct devctl_param params[16];
 	int i;
+	size_t nparams = 0;
 
 	/* announce the device */
-	sb = sbuf_new_auto();
-	sbuf_printf(sb,
 #if USB_HAVE_UGEN
-	    "ugen=%s "
-	    "cdev=%s "
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_STRING,
+		.dp_key = "ugen",
+		.dp_string = udev->ugen_name
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_STRING,
+		.dp_key = "cdev",
+		.dp_string = udev->ugen_name
+	};
 #endif
-	    "vendor=0x%04x "
-	    "product=0x%04x "
-	    "devclass=0x%02x "
-	    "devsubclass=0x%02x "
-	    "sernum=\"%s\" "
-	    "release=0x%04x "
-	    "mode=%s "
-	    "port=%u "
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "vendor",
+		.dp_uint = UGETW(udev->ddesc.idVendor)
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "product",
+		.dp_uint = UGETW(udev->ddesc.idProduct)
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "devclass",
+		.dp_uint = udev->ddesc.bDeviceClass
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "devsubclass",
+		.dp_uint = udev->ddesc.bDeviceSubClass
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_STRING,
+		.dp_key = "sernum",
+		.dp_string = usb_get_serial(udev)
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "release",
+		.dp_uint = UGETW(udev->ddesc.bcdDevice)
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_STRING,
+		.dp_key = "mode",
+		.dp_string = (udev->flags.usb_mode == USB_MODE_HOST)
+		    ? "host" : "device",
+	};
+
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "port",
+		.dp_uint = udev->port_no
+	};
+
 #if USB_HAVE_UGEN
-	    "parent=%s"
+	params[nparams++] = (struct devctl_param) {
+		.dp_type = DT_UINT,
+		.dp_key = "parent",
+		.dp_string = udev->parent_hub != NULL ?
+		    udev->parent_hub->ugen_name :
+		    device_get_nameunit(device_get_parent(udev->bus->bdev))
+	};
 #endif
-	    "",
-#if USB_HAVE_UGEN
-	    udev->ugen_name,
-	    udev->ugen_name,
-#endif
-	    UGETW(udev->ddesc.idVendor),
-	    UGETW(udev->ddesc.idProduct),
-	    udev->ddesc.bDeviceClass,
-	    udev->ddesc.bDeviceSubClass,
-	    usb_get_serial(udev),
-	    UGETW(udev->ddesc.bcdDevice),
-	    (udev->flags.usb_mode == USB_MODE_HOST) ? "host" : "device",
-	    udev->port_no
-#if USB_HAVE_UGEN
-	    , udev->parent_hub != NULL ?
-		udev->parent_hub->ugen_name :
-		device_get_nameunit(device_get_parent(udev->bus->bdev))
-#endif
-	    );
-	sbuf_finish(sb);
-	devctl_notify("USB", "DEVICE", type, sbuf_data(sb));
-	sbuf_delete(sb);
+
+	devctl_notify_params("USB", "DEVICE", type, params, nparams, 0);
 
 	/* announce each interface */
 	for (i = 0; i < USB_IFACE_MAX; i++) {
@@ -2583,43 +2618,90 @@ usb_notify_addq(const char *type, struct usb_device *udev)
 		if (iface->idesc == NULL)
 			continue;	/* no interface descriptor */
 
-		sb = sbuf_new_auto();
-		sbuf_printf(sb,
+		nparams = 0;
+		
 #if USB_HAVE_UGEN
-		    "ugen=%s "
-		    "cdev=%s "
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_STRING,
+			.dp_key = "ugen",
+			.dp_string = udev->ugen_name
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_STRING,
+			.dp_key = "cdev",
+			.dp_string = udev->ugen_name
+		};
 #endif
-		    "vendor=0x%04x "
-		    "product=0x%04x "
-		    "devclass=0x%02x "
-		    "devsubclass=0x%02x "
-		    "sernum=\"%s\" "
-		    "release=0x%04x "
-		    "mode=%s "
-		    "interface=%d "
-		    "endpoints=%d "
-		    "intclass=0x%02x "
-		    "intsubclass=0x%02x "
-		    "intprotocol=0x%02x",
-#if USB_HAVE_UGEN
-		    udev->ugen_name,
-		    udev->ugen_name,
-#endif
-		    UGETW(udev->ddesc.idVendor),
-		    UGETW(udev->ddesc.idProduct),
-		    udev->ddesc.bDeviceClass,
-		    udev->ddesc.bDeviceSubClass,
-		    usb_get_serial(udev),
-		    UGETW(udev->ddesc.bcdDevice),
-		    (udev->flags.usb_mode == USB_MODE_HOST) ? "host" : "device",
-		    iface->idesc->bInterfaceNumber,
-		    iface->idesc->bNumEndpoints,
-		    iface->idesc->bInterfaceClass,
-		    iface->idesc->bInterfaceSubClass,
-		    iface->idesc->bInterfaceProtocol);
-		sbuf_finish(sb);
-		devctl_notify("USB", "INTERFACE", type, sbuf_data(sb));
-		sbuf_delete(sb);
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_UINT,
+			.dp_key = "vendor",
+			.dp_uint = UGETW(udev->ddesc.idVendor)
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_UINT,
+			.dp_key = "product",
+			.dp_uint = UGETW(udev->ddesc.idProduct)
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_UINT,
+			.dp_key = "devclass",
+			.dp_uint = udev->ddesc.bDeviceClass
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_UINT,
+			.dp_key = "devsubclass",
+			.dp_uint = udev->ddesc.bDeviceSubClass
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_STRING,
+			.dp_key = "sernum",
+			.dp_string = usb_get_serial(udev)
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_UINT,
+			.dp_key = "release",
+			.dp_uint = UGETW(udev->ddesc.bcdDevice)
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_STRING,
+			.dp_key = "mode",
+			.dp_string = (udev->flags.usb_mode == USB_MODE_HOST)
+			    ? "host" : "device",
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_INT,
+			.dp_key = "interface",
+			.dp_int = iface->idesc->bInterfaceNumber
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_INT,
+			.dp_key = "endpoints",
+			.dp_int = iface->idesc->bNumEndpoints
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_INT,
+			.dp_key = "intsubclass",
+			.dp_int = iface->idesc->bInterfaceSubClass
+		};
+
+		params[nparams++] = (struct devctl_param) {
+			.dp_type = DT_INT,
+			.dp_key = "intprotocol",
+			.dp_int = iface->idesc->bInterfaceProtocol
+		};
+
+		devctl_notify_params("USB", "INTERFACE", type, params,
+		    nparams, 0);
 	}
 }
 #endif
