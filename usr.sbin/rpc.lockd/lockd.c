@@ -75,6 +75,7 @@ __RCSID("$NetBSD: lockd.c,v 1.7 2000/08/12 18:08:44 thorpej Exp $");
 #include <rpcsvc/nlm_prot.h>
 
 #define	GETPORT_MAXTRY	20	/* Max tries to get a port # */
+#define	_PATH_LOCKDPID	"/var/run/rpc.lockd.pid"
 
 int		debug_level = 0;	/* 0 = no debugging syslog() calls */
 int		_rpcsvcdirty = 0;
@@ -90,6 +91,7 @@ static int	mallocd_svcport = 0;
 static int	*sock_fd;
 static int	sock_fdcnt;
 static int	sock_fdpos;
+static struct pidfh *pfh;
 int nhosts = 0;
 int xcreated = 0;
 char **addrs;			/* actually (netid, uaddr) pairs */
@@ -99,6 +101,7 @@ char localhost[] = "localhost";
 static int	create_service(struct netconfig *nconf);
 static void	complete_service(struct netconfig *nconf, char *port_str);
 static void	clearout_service(void);
+static void	handle_atexit(void);
 void 	lookup_addresses(struct netconfig *nconf);
 void	init_nsm(void);
 void	out_of_mem(void);
@@ -125,6 +128,7 @@ main(int argc, char **argv)
 	in_port_t svcport = 0;
 	int attempt_cnt, port_len, port_pos, ret;
 	char **port_list;
+	pid_t otherpid;
 
 	while ((ch = getopt(argc, argv, "d:g:h:p:")) != (-1)) {
 		switch (ch) {
@@ -420,6 +424,14 @@ main(int argc, char **argv)
 		}
 	}
 
+
+	pfh = pidfile_open(_PATH_LOCKDPID, 0600, &otherpid);
+	if (pfh == NULL) {
+		if (errno == EEXIST)
+			errx(1, "rpc.lockd already running, pid: %d.", otherpid);
+		warn("cannot open or create pidfile");
+	}
+
 	/*
 	 * Note that it is NOT sensible to run this program from inetd - the
 	 * protocol assumes that it will run immediately at boot time.
@@ -444,6 +456,11 @@ main(int argc, char **argv)
 		    strerror(errno));
 		exit(1);
 	}
+
+	/* Install atexit handler to remove pidfile */
+	atexit(&handle_atexit);
+
+	pidfile_write(pfh);
 
 	if (kernel_lockd) {
 		if (!kernel_lockd_client) {
@@ -477,6 +494,8 @@ main(int argc, char **argv)
 
 		svc_run();		/* Should never return */
 	}
+
+	pidfile_remove(pfh);
 	exit(1);
 }
 
@@ -1015,11 +1034,19 @@ init_nsm(void)
 	mon_host.mon_id.my_id.my_proc = NLM_SM_NOTIFY;  /* bsdi addition */
 }
 
+static void
+handle_atexit(void)
+{
+
+	pidfile_remove(pfh);
+}
+
 /*
  * Out of memory, fatal
  */
 void out_of_mem()
 {
 	syslog(LOG_ERR, "out of memory");
+	pidfile_remove(pfh);
 	exit(2);
 }
