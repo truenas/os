@@ -101,7 +101,7 @@ char localhost[] = "localhost";
 static int	create_service(struct netconfig *nconf);
 static void	complete_service(struct netconfig *nconf, char *port_str);
 static void	clearout_service(void);
-static void	handle_atexit(void);
+static void	handle_sigterm(int);
 void 	lookup_addresses(struct netconfig *nconf);
 void	init_nsm(void);
 void	out_of_mem(void);
@@ -457,8 +457,8 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	/* Install atexit handler to remove pidfile */
-	atexit(&handle_atexit);
+	/* Install SIGTERM handler to remove pidfile */
+	signal(SIGTERM, &handle_sigterm);
 
 	pidfile_write(pfh);
 
@@ -1035,7 +1035,7 @@ init_nsm(void)
 }
 
 static void
-handle_atexit(void)
+handle_sigterm(int signo __unused)
 {
 
 	pidfile_remove(pfh);
