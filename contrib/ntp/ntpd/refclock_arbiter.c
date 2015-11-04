@@ -17,12 +17,6 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#ifdef SYS_WINNT
-extern int async_write(int, const void *, unsigned int);
-#undef write
-#define write(fd, data, octets)	async_write(fd, data, octets)
-#endif
-
 /*
  * This driver supports the Arbiter 1088A/B Satellite Controlled Clock.
  * The claimed accuracy of this clock is 100 ns relative to the PPS
@@ -103,15 +97,6 @@ extern int async_write(int, const void *, unsigned int);
 #define MAXSTA		40	/* max length of status string */
 #define MAXPOS		80	/* max length of position string */
 
-#ifdef PRE_NTP420
-#define MODE ttlmax
-#else
-#define MODE ttl
-#endif
-
-#define COMMAND_HALT_BCAST ( (peer->MODE % 2) ? "O0" : "B0" )
-#define COMMAND_START_BCAST ( (peer->MODE % 2) ? "O5" : "B5" )
-
 /*
  * ARB unit control structure
  */
@@ -126,10 +111,10 @@ struct arbunit {
 /*
  * Function prototypes
  */
-static	int	arb_start	(int, struct peer *);
-static	void	arb_shutdown	(int, struct peer *);
-static	void	arb_receive	(struct recvbuf *);
-static	void	arb_poll	(int, struct peer *);
+static	int	arb_start	P((int, struct peer *));
+static	void	arb_shutdown	P((int, struct peer *));
+static	void	arb_receive	P((struct recvbuf *));
+static	void	arb_poll	P((int, struct peer *));
 
 /*
  * Transfer vector
@@ -162,27 +147,29 @@ arb_start(
 	/*
 	 * Open serial port. Use CLK line discipline, if available.
 	 */
-	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(device, SPEED232, LDISC_CLK);
-	if (fd <= 0)
+	(void)sprintf(device, DEVICE, unit);
+	if (!(fd = refclock_open(device, SPEED232, LDISC_CLK)))
 		return (0);
 
 	/*
 	 * Allocate and initialize unit structure
 	 */
-	up = emalloc_zero(sizeof(*up));
+	if (!(up = (struct arbunit *)emalloc(sizeof(struct arbunit)))) {
+		(void) close(fd);
+		return (0);
+	}
+	memset((char *)up, 0, sizeof(struct arbunit));
 	pp = peer->procptr;
 	pp->io.clock_recv = arb_receive;
-	pp->io.srcclock = peer;
+	pp->io.srcclock = (caddr_t)peer;
 	pp->io.datalen = 0;
 	pp->io.fd = fd;
 	if (!io_addclock(&pp->io)) {
-		close(fd);
-		pp->io.fd = -1;
+		(void) close(fd);
 		free(up);
 		return (0);
 	}
-	pp->unitptr = up;
+	pp->unitptr = (caddr_t)up;
 
 	/*
 	 * Initialize miscellaneous variables
@@ -190,17 +177,7 @@ arb_start(
 	peer->precision = PRECISION;
 	pp->clockdesc = DESCRIPTION;
 	memcpy((char *)&pp->refid, REFID, 4);
-	if (peer->MODE > 1) {
-		msyslog(LOG_NOTICE, "ARBITER: Invalid mode %d", peer->MODE);
-		close(fd);
-		pp->io.fd = -1;
-		free(up);
-		return (0);
-	}
-#ifdef DEBUG
-	if(debug) { printf("arbiter: mode = %d.\n", peer->MODE); }
-#endif
-	write(pp->io.fd, COMMAND_HALT_BCAST, 2);
+	write(pp->io.fd, "B0", 2);
 	return (1);
 }
 
@@ -218,11 +195,9 @@ arb_shutdown(
 	struct refclockproc *pp;
 
 	pp = peer->procptr;
-	up = pp->unitptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
+	up = (struct arbunit *)pp->unitptr;
+	io_closeclock(&pp->io);
+	free(up);
 }
 
 
@@ -245,10 +220,10 @@ arb_receive(
 	/*
 	 * Initialize pointers and read the timecode and timestamp
 	 */
-	peer = rbufp->recv_peer;
+	peer = (struct peer *)rbufp->recv_srcclock;
 	pp = peer->procptr;
-	up = pp->unitptr;
-	temp = refclock_gtlin(rbufp, tbuf, sizeof(tbuf), &trtmp);
+	up = (struct arbunit *)pp->unitptr;
+	temp = refclock_gtlin(rbufp, tbuf, BMAX, &trtmp);
 
 	/*
 	 * Note we get a buffer and timestamp for both a <cr> and <lf>,
@@ -289,40 +264,39 @@ arb_receive(
 			return;
 
 		} else if (!strncmp(tbuf, "SR", 2)) {
-			strlcpy(up->status, tbuf + 2,
-				sizeof(up->status));
+			strcpy(up->status, tbuf + 2);
 			if (pp->sloppyclockflag & CLK_FLAG4)
 				write(pp->io.fd, "LA", 2);
 			else
-				write(pp->io.fd, COMMAND_START_BCAST, 2);
+				write(pp->io.fd, "B5", 2);
 			return;
 
 		} else if (!strncmp(tbuf, "LA", 2)) {
-			strlcpy(up->latlon, tbuf + 2, sizeof(up->latlon));
+			strcpy(up->latlon, tbuf + 2);
 			write(pp->io.fd, "LO", 2);
 			return;
 
 		} else if (!strncmp(tbuf, "LO", 2)) {
-			strlcat(up->latlon, " ", sizeof(up->latlon));
-			strlcat(up->latlon, tbuf + 2, sizeof(up->latlon));
+			strcat(up->latlon, " ");
+			strcat(up->latlon, tbuf + 2);
 			write(pp->io.fd, "LH", 2);
 			return;
 
 		} else if (!strncmp(tbuf, "LH", 2)) {
-			strlcat(up->latlon, " ", sizeof(up->latlon));
-			strlcat(up->latlon, tbuf + 2, sizeof(up->latlon));
+			strcat(up->latlon, " ");
+			strcat(up->latlon, tbuf + 2);
 			write(pp->io.fd, "DB", 2);
 			return;
 
 		} else if (!strncmp(tbuf, "DB", 2)) {
-			strlcat(up->latlon, " ", sizeof(up->latlon));
-			strlcat(up->latlon, tbuf + 2, sizeof(up->latlon));
+			strcat(up->latlon, " ");
+			strcat(up->latlon, tbuf + 2);
 			record_clock_stats(&peer->srcadr, up->latlon);
 #ifdef DEBUG
 			if (debug)
 				printf("arbiter: %s\n", up->latlon);
 #endif
-			write(pp->io.fd, COMMAND_START_BCAST, 2);
+			write(pp->io.fd, "B5", 2);
 		}
 	}
 
@@ -342,16 +316,16 @@ arb_receive(
 	/*
 	 * Timecode format B5: "i yy ddd hh:mm:ss.000   "
 	 */
-	strlcpy(pp->a_lastcode, tbuf, sizeof(pp->a_lastcode));
+	strncpy(pp->a_lastcode, tbuf, BMAX);
 	pp->a_lastcode[LENARB - 2] = up->qualchar;
-	strlcat(pp->a_lastcode, up->status, sizeof(pp->a_lastcode));
+	strcat(pp->a_lastcode, up->status);
 	pp->lencode = strlen(pp->a_lastcode);
 	syncchar = ' ';
 	if (sscanf(pp->a_lastcode, "%c%2d %3d %2d:%2d:%2d",
 	    &syncchar, &pp->year, &pp->day, &pp->hour,
 	    &pp->minute, &pp->second) != 6) {
 		refclock_report(peer, CEVNT_BADREPLY);
-		write(pp->io.fd, COMMAND_HALT_BCAST, 2);
+		write(pp->io.fd, "B0", 2);
 		return;
 	}
 
@@ -401,13 +375,13 @@ arb_receive(
 	    case 'F':		/* clock failure */
 		pp->disp = MAXDISPERSE;
 		refclock_report(peer, CEVNT_FAULT);
-		write(pp->io.fd, COMMAND_HALT_BCAST, 2);
+		write(pp->io.fd, "B0", 2);
 		return;
 
 	    default:
 		pp->disp = MAXDISPERSE;
 		refclock_report(peer, CEVNT_BADREPLY);
-		write(pp->io.fd, COMMAND_HALT_BCAST, 2);
+		write(pp->io.fd, "B0", 2);
 		return;
 	}
 	if (syncchar != ' ')
@@ -424,9 +398,9 @@ arb_receive(
 	else if (peer->disp > MAXDISTANCE)
 		refclock_receive(peer);
 
-	/* if (up->tcswitch >= MAXSTAGE) { */
-	write(pp->io.fd, COMMAND_HALT_BCAST, 2);
-	/* } */
+	if (up->tcswitch >= MAXSTAGE) {
+		write(pp->io.fd, "B0", 2);
+	}
 }
 
 
@@ -451,7 +425,7 @@ arb_poll(
 	 * need poll the clock; all others just listen in.
 	 */
 	pp = peer->procptr;
-	up = pp->unitptr;
+	up = (struct arbunit *)pp->unitptr;
 	pp->polls++;
 	up->tcswitch = 0;
 	if (write(pp->io.fd, "TQ", 2) != 2)

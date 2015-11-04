@@ -266,13 +266,13 @@ main(
 	/*
 	 * Parse options
 	 */
-	strlcpy(device, DEVICE, sizeof(device));
+	strcpy(device, DEVICE);
 	year = 0;
 	while ((temp = getopt(argc, argv, "a:dhilsu:v:y:")) != -1) {
 		switch (temp) {
 
 		case 'a':	/* specify audio device (/dev/audio) */
-			strlcpy(device, optarg, sizeof(device));
+			strcpy(device, optarg);
 			break;
 
 		case 'd':	/* set DST for summer (WWV/H only) */
@@ -374,8 +374,8 @@ main(
 	case WWV:
 		printf("year %d day %d time %02d:%02d:%02d tone %d\n",
 		    year, day, hour, minute, second, tone);
-		snprintf(code, sizeof(code), "%01d%03d%02d%02d%01d",
-		    year / 10, day, hour, minute, year % 10);
+		sprintf(code, "%01d%03d%02d%02d%01d", year / 10, day,
+		    hour, minute, year % 10);
 		printf("%s\n", code);
 		ptr = 8;
 		for (i = 0; i <= second; i++) {
@@ -431,17 +431,16 @@ main(
 				year++;
 			}
 			if (encode == WWV) {
-				snprintf(code, sizeof(code),
-				    "%01d%03d%02d%02d%01d", year / 10,
-				    day, hour, minute, year % 10);
+				sprintf(code, "%01d%03d%02d%02d%01d",
+				    year / 10, day, hour, minute, year %
+				    10);
 				printf("\n%s\n", code);
 				ptr = 8;
 			}
 		}
 		if (encode == IRIG) {
-			snprintf(code, sizeof(code),
-			    "%04x%04d%06d%02d%02d%02d", 0, year, day,
-			    hour, minute, second);
+			sprintf(code, "%04x%04d%06d%02d%02d%02d", 0,
+			    year, day, hour, minute, second);
 			printf("%s\n", code);
 			ptr = 19;
 		}

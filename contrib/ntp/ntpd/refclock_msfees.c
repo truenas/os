@@ -4,8 +4,6 @@
 #include <config.h>
 #endif
 
-#include "ntp_types.h"
-
 #if defined(REFCLOCK) && defined(CLOCK_MSFEES) && defined(PPS)
 
 /* Currently REQUIRES STREAM and PPSCD. CLK and CBREAK modes
@@ -16,7 +14,8 @@
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_refclock.h"
-#include "timevalops.h"
+#include "ntp_unixtime.h"
+#include "ntp_calendar.h"
 
 #include <ctype.h>
 #if defined(HAVE_BSD_TTYS)
@@ -350,7 +349,11 @@ static	void	dump_buf	P((l_fp *coffs, int from, int to, char *text));
 static	void	ees_report_event P((struct eesunit *ees, int code));
 static	void	ees_receive	P((struct recvbuf *rbufp));
 static	void	ees_process	P((struct eesunit *ees));
+#ifdef QSORT_USES_VOID_P
 static	int	offcompare	P((const void *va, const void *vb));
+#else
+static	int	offcompare	P((const l_fp *a, const l_fp *b));
+#endif /* QSORT_USES_VOID_P */
 
 
 /*
@@ -379,15 +382,11 @@ dump_buf(
 	int i;
 	register char *ptr = buff;
 
-	snprintf(buff, sizeof(buff), text);
-	for (i = from; i < to; i++) {
-		ptr += strlen(ptr);
-		if ((ptr - buff) > DUMP_BUF_SIZE) {
-			msyslog(LOG_DEBUG, "D: %s", buff);
-			ptr = buff;
-		}
-		snprintf(ptr, sizeof(buff) - (ptr - buff),
-			 " %06d", ((int)coffs[i].l_f) / 4295);
+	sprintf(ptr, text);
+	for (i=from; i<to; i++)
+	{	while (*ptr) ptr++;
+	if ((ptr-buff) > DUMP_BUF_SIZE) msyslog(LOG_DEBUG, "D: %s", ptr=buff);
+	sprintf(ptr, " %06d", ((int)coffs[i].l_f) / 4295);
 	}
 	msyslog(LOG_DEBUG, "D: %s", buff);
 }
@@ -451,7 +450,7 @@ msfees_start(
 
 	/* Unit okay, attempt to open the devices.  We do them both at
 	 * once to make sure we can */
-	snprintf(eesdev, sizeof(eesdev), EES232, unit);
+	(void) sprintf(eesdev, EES232, unit);
 
 	fd232 = open(eesdev, O_RDWR, 0777);
 	if (fd232 == -1) {
@@ -534,7 +533,7 @@ msfees_start(
 	ees->timestarted= current_time;
 	ees->ttytype	= 0;
 	ees->io.clock_recv= ees_receive;
-	ees->io.srcclock= peer;
+	ees->io.srcclock= (caddr_t)ees;
 	ees->io.datalen	= 0;
 	ees->io.fd	= fd232;
 
@@ -586,7 +585,7 @@ msfees_start(
 		peer->refid = htonl(EESHSREFID);
 	}
 	unitinuse[unit] = 1;
-	pp->unitptr = &eesunits[unit];
+	pp->unitptr = (caddr_t) &eesunits[unit];
 	pp->clockdesc = EESDESCRIPTION;
 	msyslog(LOG_ERR, "ees clock: %s OK on %d", eesdev, unit);
 	return (1);
@@ -674,7 +673,7 @@ ees_receive(
 #endif
 
 	/* Get the clock this applies to and a pointer to the data */
-	ees = (struct eesunit *)rbufp->recv_peer->procptr->unitptr;
+	ees = (struct eesunit *)rbufp->recv_srcclock;
 	dpt = (u_char *)&rbufp->recv_space;
 	dpend = dpt + rbufp->recv_length;
 	if ((dbg & DB_LOG_AWAITMORE) && (rbufp->recv_length != LENEESCODE))
@@ -918,9 +917,9 @@ ees_receive(
 		if (pps_step != 1 && pps_step != 2)
 		    fprintf(stderr, "PPS step: %d too far off %ld (%d)\n",
 			    ppsclockev.serial, ees->last_pps_no, pps_step);
-		else {
-			pps_arrvstamp = tval_stamp_to_lfp(ppsclockev.tv);
-			/* if ((ABS(time difference) - 0.25) < 0)
+		else if (!buftvtots((char *) &(ppsclockev.tv), &pps_arrvstamp))
+		    fprintf(stderr, "buftvtots failed\n");
+		else {	/* if ((ABS(time difference) - 0.25) < 0)
 			 * then believe it ...
 			 */
 			l_fp diff;
@@ -988,20 +987,17 @@ ees_receive(
 
 	/* Dump the deltas each minute */
 	if (dbg & DB_DUMP_DELTAS)
-	{	
-		if (/*0 <= ees->second && */
-		    ees->second < COUNTOF(deltas))
-			deltas[ees->second] = delta_sfsec;
+	{	if (/*0 <= ees->second && */
+		ees->second < ((sizeof deltas) / (sizeof deltas[0]))) deltas[ees->second] = delta_sfsec;
 	/* Dump on second 1, as second 0 sometimes missed */
 	if (ees->second == 1) {
-		char text[16 * COUNTOF(deltas)];
+		char text[16 * ((sizeof deltas) / (sizeof deltas[0]))];
 		char *cptr=text;
 		int i;
-		for (i = 0; i < COUNTOF(deltas); i++) {
-			snprintf(cptr, sizeof(text) / COUNTOF(deltas),
-				" %d.%04d", msec(deltas[i]),
-				subms(deltas[i]));
-			cptr += strlen(cptr);
+		for (i=0; i<((sizeof deltas) / (sizeof deltas[0])); i++) {
+			sprintf(cptr, " %d.%04d",
+				msec(deltas[i]), subms(deltas[i]));
+			while (*cptr) cptr++;
 		}
 		msyslog(LOG_ERR, "Deltas: %d.%04d<->%d.%04d: %s",
 			msec(EES_STEP_F - EES_STEP_F_GRACE), subms(EES_STEP_F - EES_STEP_F_GRACE),
@@ -1224,6 +1220,7 @@ ees_receive(
 
 /* offcompare - auxiliary comparison routine for offset sort */
 
+#ifdef QSORT_USES_VOID_P
 static int
 offcompare(
 	const void *va,
@@ -1234,6 +1231,16 @@ offcompare(
 	const l_fp *b = (const l_fp *)vb;
 	return(L_ISGEQ(a, b) ? (L_ISEQU(a, b) ? 0 : 1) : -1);
 }
+#else
+static int
+offcompare(
+	const l_fp *a,
+	const l_fp *b
+	)
+{
+	return(L_ISGEQ(a, b) ? (L_ISEQU(a, b) ? 0 : 1) : -1);
+}
+#endif /* QSORT_USES_VOID_P */
 
 
 /* ees_process - process a pile of samples from the clock */
@@ -1275,11 +1282,16 @@ ees_process(
 	if (samples < 1) return;
 
 	/* If requested, dump the raw data we have in the buffer */
-	if (ees->dump_vals)
-		dump_buf(coffs, 0, samples, "Raw  data  is:");
+	if (ees->dump_vals) dump_buf(coffs, 0, samples, "Raw  data  is:");
 
 	/* Sort the offsets, trim off the extremes, then choose one. */
-	qsort(coffs, (size_t)samples, sizeof(coffs[0]), offcompare);
+	qsort(
+#ifdef QSORT_USES_VOID_P
+	    (void *)
+#else
+	    (char *)
+#endif
+	    coffs, (size_t)samples, sizeof(l_fp), offcompare);
 
 	noff = samples;
 	i = 0;
@@ -1411,7 +1423,7 @@ ees_process(
 	 * reference time, and lastsampletime as the receive time.
 	 */
 	if (ees->fix_pending) {
-		msyslog(LOG_ERR, "MSF%d: fix_pending=%d -> jump %x.%08x",
+		msyslog(LOG_ERR, "MSF%d: fix_pending=%d -> jump %x.%08x\n",
 			ees->fix_pending, ees->unit, offset.l_i, offset.l_f);
 		ees->fix_pending = 0;
 	}
@@ -1446,5 +1458,5 @@ msfees_poll(
 
 
 #else
-NONEMPTY_TRANSLATION_UNIT
+int refclock_msfees_bs;
 #endif /* REFCLOCK */

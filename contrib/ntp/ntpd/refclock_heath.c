@@ -186,10 +186,10 @@ static int speed[] = {B1200, B2400, B4800, B9600};
 /*
  * Function prototypes
  */
-static	int	heath_start	(int, struct peer *);
-static	void	heath_shutdown	(int, struct peer *);
-static	void	heath_receive	(struct recvbuf *);
-static	void	heath_poll	(int, struct peer *);
+static	int	heath_start	P((int, struct peer *));
+static	void	heath_shutdown	P((int, struct peer *));
+static	void	heath_receive	P((struct recvbuf *));
+static	void	heath_poll	P((int, struct peer *));
 
 /*
  * Transfer vector
@@ -221,19 +221,17 @@ heath_start(
 	/*
 	 * Open serial port
 	 */
-	snprintf(device, sizeof(device), DEVICE, unit);
-	fd = refclock_open(device, speed[peer->ttl & 0x3],
-			   LDISC_REMOTE);
-	if (fd <= 0)
+	sprintf(device, DEVICE, unit);
+	if (!(fd = refclock_open(device, speed[peer->ttl & 0x3],
+	    LDISC_REMOTE)))
 		return (0);
 	pp = peer->procptr;
 	pp->io.clock_recv = heath_receive;
-	pp->io.srcclock = peer;
+	pp->io.srcclock = (caddr_t)peer;
 	pp->io.datalen = 0;
 	pp->io.fd = fd;
 	if (!io_addclock(&pp->io)) {
-		close(fd);
-		pp->io.fd = -1;
+		(void) close(fd);
 		return (0);
 	}
 
@@ -241,8 +239,9 @@ heath_start(
 	 * Initialize miscellaneous variables
 	 */
 	peer->precision = PRECISION;
+	peer->burst = NSTAGE;
 	pp->clockdesc = DESCRIPTION;
-	memcpy(&pp->refid, REFID, 4);
+	memcpy((char *)&pp->refid, REFID, 4);
 	return (1);
 }
 
@@ -259,8 +258,7 @@ heath_shutdown(
 	struct refclockproc *pp;
 
 	pp = peer->procptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
+	io_closeclock(&pp->io);
 }
 
 
@@ -282,7 +280,7 @@ heath_receive(
 	/*
 	 * Initialize pointers and read the timecode and timestamp
 	 */
-	peer = rbufp->recv_peer;
+	peer = (struct peer *)rbufp->recv_srcclock;
 	pp = peer->procptr;
 	pp->lencode = refclock_gtlin(rbufp, pp->a_lastcode, BMAX,
 	    &trtmp);
@@ -379,7 +377,7 @@ heath_receive(
 	/*
 	 * Determine synchronization and last update
 	 */
-	if (!isdigit((unsigned char)dsec))
+	if (!isdigit((int)dsec))
 		pp->leap = LEAP_NOTINSYNC;
 	else {
 		pp->nsec = (dsec - '0') * 100000000;
@@ -430,6 +428,8 @@ heath_poll(
 	if (write(pp->io.fd, "T", 1) != 1)
 		refclock_report(peer, CEVNT_FAULT);
 	ioctl(pp->io.fd, TIOCMBIS, (char *)&bits);
+	if (peer->burst > 0)
+		return;
 	if (pp->coderecv == pp->codeproc) {
 		refclock_report(peer, CEVNT_TIMEOUT);
 		return;
@@ -442,6 +442,7 @@ heath_poll(
 	    printf("heath: timecode %d %s\n", pp->lencode,
 		   pp->a_lastcode);
 #endif
+	peer->burst = MAXSTAGE;
 	pp->polls++;
 }
 

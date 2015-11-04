@@ -1,7 +1,6 @@
 /*
  * authusekey - decode a key from ascii and use it
  */
-#include <config.h>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -16,6 +15,9 @@
  * high order bit of each byte a parity bit.  "Ascii" means a 1-to-8
  * character string whose ascii representation is used as the key.
  */
+
+#define	KEY_TYPE_MD5	4
+
 int
 authusekey(
 	keyid_t keyno,
@@ -23,12 +25,23 @@ authusekey(
 	const u_char *str
 	)
 {
+	const u_char *cp;
 	int len;
 
-	len = strlen((const char *)str);
-	if (0 == len)
-		return 0;
+	cp = str;
+	len = strlen((const char *)cp);
+	if (len == 0)
+	    return 0;
 
-	MD5auth_setkey(keyno, keytype, str, len);
+	switch(keytype) {
+	    case KEY_TYPE_MD5:
+		MD5auth_setkey(keyno, str, (int)strlen((const char *)str));
+		break;
+
+	    default:
+		/* Oh, well */
+		return 0;
+	}
+
 	return 1;
 }

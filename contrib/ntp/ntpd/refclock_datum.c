@@ -11,8 +11,6 @@
 # include <config.h>
 #endif
 
-#include "ntp_types.h"
-
 #if defined(REFCLOCK) && defined(CLOCK_DATUM)
 
 /*
@@ -21,16 +19,29 @@
 
 #include "ntpd.h"
 #include "ntp_io.h"
-#include "ntp_tty.h"
 #include "ntp_refclock.h"
-#include "timevalops.h"
+#include "ntp_unixtime.h"
 #include "ntp_stdlib.h"
 
 #include <stdio.h>
 #include <ctype.h>
 
+#if defined(HAVE_BSD_TTYS)
+#include <sgtty.h>
+#endif /* HAVE_BSD_TTYS */
+
+#if defined(HAVE_SYSV_TTYS)
+#include <termio.h>
+#endif /* HAVE_SYSV_TTYS */
+
+#if defined(HAVE_TERMIOS)
+#include <termios.h>
+#endif
 #if defined(STREAM)
 #include <stropts.h>
+#if defined(WWVBCLK)
+#include <sys/clkdefs.h>
+#endif /* WWVBCLK */
 #endif /* STREAM */
 
 #include "ntp_stdlib.h"
@@ -128,6 +139,7 @@
 
 struct datum_pts_unit {
 	struct peer *peer;		/* peer used by ntp */
+	struct refclockio io;		/* io structure used by ntp */
 	int PTS_fd;			/* file descriptor for PTS */
 	u_int unit;			/* id for unit */
 	u_long timestarted;		/* time started */
@@ -154,18 +166,20 @@ struct datum_pts_unit {
 
 static char TIME_REQUEST[6];	/* request message sent to datum for time */
 static int nunits;		/* number of active units */
+static struct datum_pts_unit
+**datum_pts_unit;	/* dynamic array of datum PTS structures */
 
 /*
 ** Callback function prototypes that ntpd needs to know about.
 */
 
-static	int	datum_pts_start		(int, struct peer *);
-static	void	datum_pts_shutdown	(int, struct peer *);
-static	void	datum_pts_poll		(int, struct peer *);
-static	void	datum_pts_control	(int, const struct refclockstat *,
-					 struct refclockstat *, struct peer *);
-static	void	datum_pts_init		(void);
-static	void	datum_pts_buginfo	(int, struct refclockbug *, struct peer *);
+static	int	datum_pts_start		P((int, struct peer *));
+static	void	datum_pts_shutdown	P((int, struct peer *));
+static	void	datum_pts_poll		P((int, struct peer *));
+static	void	datum_pts_control	P((int, struct refclockstat *,
+					   struct refclockstat *, struct peer *));
+static	void	datum_pts_init		P((void));
+static	void	datum_pts_buginfo	P((int, struct refclockbug *, struct peer *));
 
 /*
 ** This is the call back function structure that ntpd actually uses for
@@ -205,7 +219,7 @@ struct	refclock refclock_datum = {
 ** the adjtime() call.
 */
 
-static	void	datum_pts_receive	(struct recvbuf *);
+static	void	datum_pts_receive	P((struct recvbuf *));
 
 /*......................................................................*/
 /*	datum_pts_start - start up the datum PTS. This means open the	*/
@@ -218,11 +232,10 @@ datum_pts_start(
 	struct peer *peer
 	)
 {
-	struct refclockproc *pp;
+	struct datum_pts_unit **temp_datum_pts_unit;
 	struct datum_pts_unit *datum_pts;
 	int fd;
 #ifdef HAVE_TERMIOS
-	int rc;
 	struct termios arg;
 #endif
 
@@ -244,16 +257,24 @@ datum_pts_start(
 	/*
 	** Create the memory for the new unit
 	*/
-	datum_pts = emalloc_zero(sizeof(*datum_pts));
+
+	temp_datum_pts_unit = (struct datum_pts_unit **)
+		malloc((nunits+1)*sizeof(struct datum_pts_unit *));
+	if (nunits > 0) memcpy(temp_datum_pts_unit, datum_pts_unit,
+			       nunits*sizeof(struct datum_pts_unit *));
+	free(datum_pts_unit);
+	datum_pts_unit = temp_datum_pts_unit;
+	datum_pts_unit[nunits] = (struct datum_pts_unit *)
+		malloc(sizeof(struct datum_pts_unit));
+	datum_pts = datum_pts_unit[nunits];
+
 	datum_pts->unit = unit;	/* set my unit id */
 	datum_pts->yearstart = 0;	/* initialize the yearstart to 0 */
 	datum_pts->sigma2 = 0.0;	/* initialize the sigma2 to 0 */
 
 	datum_pts->PTS_fd = fd;
 
-	if (-1 == fcntl(datum_pts->PTS_fd, F_SETFL, 0)) /* clear the descriptor flags */
-		msyslog(LOG_ERR, "MSF_ARCRON(%d): fcntl(F_SETFL, 0): %m.",
-			unit);
+	fcntl(datum_pts->PTS_fd, F_SETFL, 0); /* clear the descriptor flags */
 
 #ifdef DEBUG_DATUM_PTC
 	if (debug)
@@ -269,7 +290,7 @@ datum_pts_start(
 	** ntp folks so that it can become part of their regular distribution.
 	*/
 
-	memset(&arg, 0, sizeof(arg));
+#ifdef HAVE_TERMIOS
 
 	arg.c_iflag = IGNBRK;
 	arg.c_oflag = 0;
@@ -278,39 +299,43 @@ datum_pts_start(
 	arg.c_cc[VMIN] = 0;		/* start timeout timer right away (not used) */
 	arg.c_cc[VTIME] = 30;		/* 3 second timout on reads (not used) */
 
-	rc = tcsetattr(datum_pts->PTS_fd, TCSANOW, &arg);
-	if (rc < 0) {
-		msyslog(LOG_ERR, "Datum_PTS: tcsetattr(\"%s\") failed: %m", DATUM_DEV);
-		close(datum_pts->PTS_fd);
-		free(datum_pts);
-		return 0;
-	}
+	tcsetattr(datum_pts->PTS_fd, TCSANOW, &arg);
+
+#else
+
+	msyslog(LOG_ERR, "Datum_PTS: Termios not supported in this driver");
+	(void)close(datum_pts->PTS_fd);
+
+	peer->precision = PRECISION;
+	pp->clockdesc = DESCRIPTION;
+	memcpy((char *)&pp->refid, REFID, 4);
+
+	return 0;
+
+#endif
 
 	/*
 	** Initialize the ntpd IO structure
 	*/
 
 	datum_pts->peer = peer;
-	pp = peer->procptr;
-	pp->io.clock_recv = datum_pts_receive;
-	pp->io.srcclock = peer;
-	pp->io.datalen = 0;
-	pp->io.fd = datum_pts->PTS_fd;
+	datum_pts->io.clock_recv = datum_pts_receive;
+	datum_pts->io.srcclock = (caddr_t)datum_pts;
+	datum_pts->io.datalen = 0;
+	datum_pts->io.fd = datum_pts->PTS_fd;
 
-	if (!io_addclock(&pp->io)) {
-		pp->io.fd = -1;
+	if (!io_addclock(&(datum_pts->io))) {
+
 #ifdef DEBUG_DATUM_PTC
 		if (debug)
 		    printf("Problem adding clock\n");
 #endif
 
 		msyslog(LOG_ERR, "Datum_PTS: Problem adding clock");
-		close(datum_pts->PTS_fd);
-		free(datum_pts);
+		(void)close(datum_pts->PTS_fd);
 
 		return 0;
 	}
-	peer->procptr->unitptr = datum_pts;
 
 	/*
 	** Now add one to the number of units and return a successful code
@@ -333,8 +358,8 @@ datum_pts_shutdown(
 	struct peer *peer
 	)
 {
-	struct refclockproc *pp;
-	struct datum_pts_unit *datum_pts;
+	int i,j;
+	struct datum_pts_unit **temp_datum_pts_unit;
 
 #ifdef DEBUG_DATUM_PTC
 	if (debug)
@@ -344,17 +369,63 @@ datum_pts_shutdown(
 	msyslog(LOG_ERR, "Datum_PTS: Shutdown Datum PTS");
 
 	/*
-	** We found the unit so close the file descriptor and free up the memory used
-	** by the structure.
+	** First we have to find the right unit (i.e., the one with the same id).
+	** We do this by looping through the dynamic array of units intil we find
+	** it. Note, that I don't simply use an array with a maximimum number of
+	** Datum PTS units. Everything is completely dynamic.
 	*/
-	pp = peer->procptr;
-	datum_pts = pp->unitptr;
-	if (NULL != datum_pts) {
-		io_closeclock(&pp->io);
-		free(datum_pts);
-	}
-}
 
+	for (i=0; i<nunits; i++) {
+		if (datum_pts_unit[i]->unit == unit) {
+
+			/*
+			** We found the unit so close the file descriptor and free up the memory used
+			** by the structure.
+			*/
+
+			io_closeclock(&datum_pts_unit[i]->io);
+			close(datum_pts_unit[i]->PTS_fd);
+			free(datum_pts_unit[i]);
+
+			/*
+			** Now clean up the datum_pts_unit dynamic array so that there are no holes.
+			** This may mean moving pointers around, etc., to keep things compact.
+			*/
+
+			if (nunits > 1) {
+
+				temp_datum_pts_unit = (struct datum_pts_unit **)
+					malloc((nunits-1)*sizeof(struct datum_pts_unit *));
+				if (i!= 0) memcpy(temp_datum_pts_unit, datum_pts_unit,
+						  i*sizeof(struct datum_pts_unit *));
+
+				for (j=i+1; j<nunits; j++) {
+					temp_datum_pts_unit[j-1] = datum_pts_unit[j];
+				}
+
+				free(datum_pts_unit);
+				datum_pts_unit = temp_datum_pts_unit;
+
+			}else{
+
+				free(datum_pts_unit);
+				datum_pts_unit = NULL;
+
+			}
+
+			return;
+
+		}
+	}
+
+#ifdef DEBUG_DATUM_PTC
+	if (debug)
+	    printf("Error, could not shut down unit %d\n",unit);
+#endif
+
+	msyslog(LOG_ERR, "Datum_PTS: Could not shut down Datum PTS unit %d",unit);
+
+}
 
 /*......................................................................*/
 /*	datum_pts_poll - this routine sends out the time request to the */
@@ -368,10 +439,10 @@ datum_pts_poll(
 	struct peer *peer
 	)
 {
+	int i;
+	int unit_index;
 	int error_code;
 	struct datum_pts_unit *datum_pts;
-
-	datum_pts = peer->procptr->unitptr;
 
 #ifdef DEBUG_DATUM_PTC
 	if (debug)
@@ -381,10 +452,35 @@ datum_pts_poll(
 	/*
 	** Find the right unit and send out a time request once it is found.
 	*/
-	error_code = write(datum_pts->PTS_fd, TIME_REQUEST, 6);
-	if (error_code != 6)
-		perror("TIME_REQUEST");
-	datum_pts->nbytes = 0;
+
+	unit_index = -1;
+	for (i=0; i<nunits; i++) {
+		if (datum_pts_unit[i]->unit == unit) {
+			unit_index = i;
+			datum_pts = datum_pts_unit[i];
+			error_code = write(datum_pts->PTS_fd, TIME_REQUEST, 6);
+			if (error_code != 6) perror("TIME_REQUEST");
+			datum_pts->nbytes = 0;
+			break;
+		}
+	}
+
+	/*
+	** Print out an error message if we could not find the right unit.
+	*/
+
+	if (unit_index == -1) {
+
+#ifdef DEBUG_DATUM_PTC
+		if (debug)
+		    printf("Error, could not poll unit %d\n",unit);
+#endif
+
+		msyslog(LOG_ERR, "Datum_PTS: Could not poll unit %d",unit);
+		return;
+
+	}
+
 }
 
 
@@ -395,7 +491,7 @@ datum_pts_poll(
 static void
 datum_pts_control(
 	int unit,
-	const struct refclockstat *in,
+	struct refclockstat *in,
 	struct refclockstat *out,
 	struct peer *peer
 	)
@@ -446,6 +542,7 @@ datum_pts_init(void)
 	** NULL since there are no units defined yet.
 	*/
 
+	datum_pts_unit = NULL;
 	nunits = 0;
 
 }
@@ -487,7 +584,6 @@ datum_pts_receive(
 {
 	int i;
 	l_fp tstmp;
-	struct peer *p;
 	struct datum_pts_unit *datum_pts;
 	char *dpt;
 	int dpend;
@@ -504,14 +600,13 @@ datum_pts_receive(
 	** Get the time code (maybe partial) message out of the rbufp buffer.
 	*/
 
-	p = rbufp->recv_peer;
-	datum_pts = p->procptr->unitptr;
+	datum_pts = (struct datum_pts_unit *)rbufp->recv_srcclock;
 	dpt = (char *)&rbufp->recv_space;
 	dpend = rbufp->recv_length;
 
 #ifdef DEBUG_DATUM_PTC
 	if (debug)
-		printf("Receive Datum PTS: %d bytes\n", dpend);
+	    printf("Receive Datum PTS: %d bytes\n", dpend);
 #endif
 
 	/*									*/
@@ -778,5 +873,5 @@ datum_pts_receive(
 
 }
 #else
-NONEMPTY_TRANSLATION_UNIT
+int refclock_datum_bs;
 #endif /* REFCLOCK */

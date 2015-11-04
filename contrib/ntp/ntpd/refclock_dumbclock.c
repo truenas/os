@@ -35,7 +35,7 @@ extern int async_write(int, const void *, unsigned int);
  *
  * Input format:
  *
- *	hh:mm:ss   <cr>
+ *      hh:mm:ss   <cr>
  *
  * hh:mm:ss -- what you'd expect, with a 24 hour clock.  (Heck, that's the only
  * way it could get stupider.)  We take time on the <cr>.
@@ -64,21 +64,21 @@ extern int async_write(int, const void *, unsigned int);
  * Dumb clock control structure
  */
 struct dumbclock_unit {
-	u_char	  tcswitch;	/* timecode switch */
-	l_fp	  laststamp;	/* last receive timestamp */
-	u_char	  lasthour;	/* last hour (for monitor) */
-	u_char	  linect;	/* count ignored lines (for monitor */
-	struct tm ymd;		/* struct tm for y/m/d only */
+	u_char	  tcswitch;		     /* timecode switch */
+	l_fp	  laststamp;		     /* last receive timestamp */
+	u_char	  lasthour;		     /* last hour (for monitor) */
+	u_char	  linect;		     /* count ignored lines (for monitor */
+        struct tm ymd;			     /* struct tm for y/m/d only */
 };
 
 /*
  * Function prototypes
  */
-static	int	dumbclock_start		(int, struct peer *);
-static	void	dumbclock_shutdown	(int, struct peer *);
-static	void	dumbclock_receive	(struct recvbuf *);
+static	int	dumbclock_start		P((int, struct peer *));
+static	void	dumbclock_shutdown	P((int, struct peer *));
+static	void	dumbclock_receive	P((struct recvbuf *));
 #if 0
-static	void	dumbclock_poll		(int, struct peer *);
+static	void	dumbclock_poll		P((int, struct peer *));
 #endif
 
 /*
@@ -115,30 +115,33 @@ dumbclock_start(
 	 * Open serial port. Don't bother with CLK line discipline, since
 	 * it's not available.
 	 */
-	snprintf(device, sizeof(device), DEVICE, unit);
+	(void)sprintf(device, DEVICE, unit);
 #ifdef DEBUG
 	if (debug)
 		printf ("starting Dumbclock with device %s\n",device);
 #endif
 	fd = refclock_open(device, SPEED232, 0);
-	if (fd <= 0)
+	if (fd < 0)
 		return (0);
 
 	/*
 	 * Allocate and initialize unit structure
 	 */
-	up = emalloc_zero(sizeof(*up));
+	up = (struct dumbclock_unit *)emalloc(sizeof(struct dumbclock_unit));
+	if (up == NULL) {
+		(void) close(fd);
+		return (0);
+	}
+	memset((char *)up, 0, sizeof(struct dumbclock_unit));
 	pp = peer->procptr;
-	pp->unitptr = up;
+	pp->unitptr = (caddr_t)up;
 	pp->io.clock_recv = dumbclock_receive;
-	pp->io.srcclock = peer;
+	pp->io.srcclock = (caddr_t)peer;
 	pp->io.datalen = 0;
 	pp->io.fd = fd;
 	if (!io_addclock(&pp->io)) {
-		close(fd);
-		pp->io.fd = -1;
+		(void) close(fd);
 		free(up);
-		pp->unitptr = NULL;
 		return (0);
 	}
 
@@ -150,10 +153,14 @@ dumbclock_start(
 	tm_time_p = gmtime(&now);
 #endif
 	if (tm_time_p)
-		up->ymd = *tm_time_p;
+	{
+	    up->ymd = *tm_time_p;
+	}
 	else
-		return 0;
-
+	{
+	    return 0;
+	}
+	    
 	/*
 	 * Initialize miscellaneous variables
 	 */
@@ -177,11 +184,9 @@ dumbclock_shutdown(
 	struct refclockproc *pp;
 
 	pp = peer->procptr;
-	up = pp->unitptr;
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
+	up = (struct dumbclock_unit *)pp->unitptr;
+	io_closeclock(&pp->io);
+	free(up);
 }
 
 
@@ -197,19 +202,19 @@ dumbclock_receive(
 	struct refclockproc *pp;
 	struct peer *peer;
 
-	l_fp	trtmp;		/* arrival timestamp */
-	int	hours;		/* hour-of-day */
-	int	minutes;	/* minutes-past-the-hour */
-	int	seconds;	/* seconds */
-	int	temp;		/* int temp */
-	int	got_good;	/* got a good time flag */
+	l_fp	     trtmp;	/* arrival timestamp */
+	int          hours;	/* hour-of-day */
+	int	     minutes;	/* minutes-past-the-hour */
+	int          seconds;	/* seconds */
+	int	     temp;	/* int temp */
+	int          got_good;	/* got a good time flag */
 
 	/*
 	 * Initialize pointers and read the timecode and timestamp
 	 */
-	peer = rbufp->recv_peer;
+	peer = (struct peer *)rbufp->recv_srcclock;
 	pp = peer->procptr;
-	up = pp->unitptr;
+	up = (struct dumbclock_unit *)pp->unitptr;
 	temp = refclock_gtlin(rbufp, pp->a_lastcode, BMAX, &trtmp);
 
 	if (temp == 0) {
@@ -217,7 +222,7 @@ dumbclock_receive(
 			up->tcswitch = 1;
 			up->laststamp = trtmp;
 		} else
-			up->tcswitch = 0;
+		    up->tcswitch = 0;
 		return;
 	}
 	pp->lencode = (u_short)temp;
@@ -244,17 +249,15 @@ dumbclock_receive(
 	    struct tm  asserted_tm;	     /* the struct tm of the same */
 	    int        adjyear;
 	    int        adjmon;
-	    time_t     reality_delta;
+	    int        reality_delta;
 	    time_t     now;
 
 
 	    /*
 	     * Convert to GMT for sites that distribute localtime.  This
-	     * means we have to figure out what day it is.  Easier said
+             * means we have to figure out what day it is.  Easier said
 	     * than done...
 	     */
-
-	    memset(&asserted_tm, 0, sizeof(asserted_tm));
 
 	    asserted_tm.tm_year  = up->ymd.tm_year;
 	    asserted_tm.tm_mon   = up->ymd.tm_mon;
@@ -363,7 +366,7 @@ dumbclock_poll(
 	 */
 #if 0
 	pp = peer->procptr;
-	up = pp->unitptr;
+	up = (struct dumbclock_unit *)pp->unitptr;
 	if (peer->reach == 0)
 		refclock_report(peer, CEVNT_TIMEOUT);
 	if (up->linect > 0)
@@ -380,4 +383,4 @@ dumbclock_poll(
 
 #else
 int refclock_dumbclock_bs;
-#endif	/* defined(REFCLOCK) && defined(CLOCK_DUMBCLOCK) */
+#endif /* REFCLOCK */

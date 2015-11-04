@@ -8,13 +8,10 @@
 #include "config.h"
 #endif
 
-#include "ntp.h"
 #include "ntp_machine.h"
 #include "ntp_syslog.h"
 #include "ntp_stdlib.h"
 #include "ntp_unixtime.h"
-#include "lib_strbuf.h"
-#include "ntp_debug.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -40,7 +37,7 @@ struct hostent *gethostbyname(char *name)
 	{
 	struct hostent *host1;
 	h_errno = 0;					/* we are always successful!!! */
-	host1 = (struct hostent *) emalloc (sizeof(struct hostent));
+	host1 = (struct hostent *) malloc (sizeof(struct hostent));
 	host1->h_name = name;
 	host1->h_addrtype = AF_INET;
 	host1->h_aliases = name;
@@ -54,7 +51,7 @@ struct hostent *gethostbyaddr(char *name, int size, int addr_type)
 	{
 	struct hostent *host1;
 	h_errno = 0;  /* we are always successful!!! */
-	host1 = (struct hostent *) emalloc (sizeof(struct hostent));
+	host1 = (struct hostent *) malloc (sizeof(struct hostent));
 	host1->h_name = name;
 	host1->h_addrtype = AF_INET;
 	host1->h_aliases = name;
@@ -66,7 +63,7 @@ struct hostent *gethostbyaddr(char *name, int size, int addr_type)
 struct servent *getservbyname (char *name, char *type)
 	{
 	struct servent *serv1;
-	serv1 = (struct servent *) emalloc (sizeof(struct servent));
+	serv1 = (struct servent *) malloc (sizeof(struct servent));
 	serv1->s_name = "ntp";      /* official service name */
 	serv1->s_aliases = NULL;	/* alias list */
 	serv1->s_port = 123;		/* port # */
@@ -412,20 +409,7 @@ return 0;
 }
 #endif /* MPE */
 
-#define SET_TOD_UNDETERMINED	0
-#define SET_TOD_CLOCK_SETTIME	1
-#define SET_TOD_SETTIMEOFDAY	2
-#define SET_TOD_STIME		3
-
-const char * const set_tod_used[] = {
-	"undetermined",
-	"clock_settime",
-	"settimeofday",
-	"stime"
-};
-
-pset_tod_using	set_tod_using = NULL;
-
+const char *set_tod_using = "UNKNOWN";
 
 int
 ntp_set_tod(
@@ -433,35 +417,37 @@ ntp_set_tod(
 	void *tzp
 	)
 {
-	static int	tod;
-	int		rc;
-	int		saved_errno;
+	int rc = -1;
 
-	TRACE(1, ("In ntp_set_tod\n"));
-	rc = -1;
-	saved_errno = 0;
+#ifdef DEBUG
+	if (debug)
+	    printf("In ntp_set_tod\n");
+#endif
 
 #ifdef HAVE_CLOCK_SETTIME
-	if (rc && (SET_TOD_CLOCK_SETTIME == tod || !tod)) {
+	if (rc) {
 		struct timespec ts;
 
+		set_tod_using = "clock_settime";
 		/* Convert timeval to timespec */
 		ts.tv_sec = tvp->tv_sec;
 		ts.tv_nsec = 1000 *  tvp->tv_usec;
 
 		errno = 0;
 		rc = clock_settime(CLOCK_REALTIME, &ts);
-		saved_errno = errno;
-		TRACE(1, ("ntp_set_tod: clock_settime: %d %m\n", rc));
-		if (!tod && !rc)
-			tod = SET_TOD_CLOCK_SETTIME;
-
+#ifdef DEBUG
+		if (debug) {
+			printf("ntp_set_tod: %s: %d: %s\n",
+			       set_tod_using, rc, strerror(errno));
+		}
+#endif
 	}
 #endif /* HAVE_CLOCK_SETTIME */
 #ifdef HAVE_SETTIMEOFDAY
-	if (rc && (SET_TOD_SETTIMEOFDAY == tod || !tod)) {
+	if (rc) {
 		struct timeval adjtv;
 
+		set_tod_using = "settimeofday";
 		/*
 		 * Some broken systems don't reset adjtime() when the
 		 * clock is stepped.
@@ -470,39 +456,37 @@ ntp_set_tod(
 		adjtime(&adjtv, NULL);
 		errno = 0;
 		rc = SETTIMEOFDAY(tvp, tzp);
-		saved_errno = errno;
-		TRACE(1, ("ntp_set_tod: settimeofday: %d %m\n", rc));
-		if (!tod && !rc)
-			tod = SET_TOD_SETTIMEOFDAY;
+#ifdef DEBUG
+		if (debug) {
+			printf("ntp_set_tod: %s: %d: %s\n",
+			       set_tod_using, rc, strerror(errno));
+		}
+#endif
 	}
 #endif /* HAVE_SETTIMEOFDAY */
 #ifdef HAVE_STIME
-	if (rc && (SET_TOD_STIME == tod || !tod)) {
+	if (rc) {
 		long tp = tvp->tv_sec;
 
+		set_tod_using = "stime";
 		errno = 0;
 		rc = stime(&tp); /* lie as bad as SysVR4 */
-		saved_errno = errno;
-		TRACE(1, ("ntp_set_tod: stime: %d %m\n", rc));
-		if (!tod && !rc)
-			tod = SET_TOD_STIME;
+#ifdef DEBUG
+		if (debug) {
+			printf("ntp_set_tod: %s: %d: %s\n",
+			       set_tod_using, rc, strerror(errno));
+		}
+#endif
 	}
 #endif /* HAVE_STIME */
-
-	errno = saved_errno;	/* for %m below */
-	TRACE(1, ("ntp_set_tod: Final result: %s: %d %m\n",
-		  set_tod_used[tod], rc));
-	/*
-	 * Say how we're setting the time of day
-	 */
-	if (!rc && NULL != set_tod_using) {
-		(*set_tod_using)(set_tod_used[tod]);
-		set_tod_using = NULL;
-	}
-
 	if (rc)
-		errno = saved_errno;
-
+	    set_tod_using = "Failed!";
+#ifdef DEBUG
+	if (debug) {
+		printf("ntp_set_tod: Final result: %s: %d: %s\n",
+			set_tod_using, rc, strerror(errno));
+	}
+#endif
 	return rc;
 }
 
@@ -525,9 +509,19 @@ getpass(const char * prompt)
 	}
 	password[i] = '\0';
 
-	fputc('\n', stderr);
-	fflush(stderr);
-
 	return password;
 }
 #endif /* SYS_WINNT */
+
+#if !defined(HAVE_MEMSET)
+void
+ntp_memset(
+	char *a,
+	int x,
+	int c
+	)
+{
+	while (c-- > 0)
+		*a++ = (char) x;
+}
+#endif /*POSIX*/

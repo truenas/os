@@ -1,24 +1,13 @@
-NULL=
-
-BUILT_SOURCES =
-CLEANFILES =
+#AUTOMAKE_OPTIONS = ../util/ansi2knr no-dependencies
+AUTOMAKE_OPTIONS = ../util/ansi2knr
 noinst_PROGRAMS = @TESTDCF@ @DCFD@
 EXTRA_PROGRAMS = testdcf dcfd
-
-AM_CFLAGS = $(CFLAGS_NTP)
-
-AM_CPPFLAGS  = $(NTP_INCS)
-AM_CPPFLAGS += $(CPPFLAGS_NTP)
-
-LDADD = ../libntp/libntp.a $(LDADD_LIBNTP) $(LIBM)
-
+INCLUDES = -I$(top_srcdir)/include
 ETAGS_ARGS = Makefile.am
 DISTCLEANFILES = $(EXTRA_PROGRAMS)
+#EXTRA_DIST= TAGS
 
 check-local: @DCFD@
 	case "$(noinst_PROGRAMS)" in	\
 	 *dcfd*) ./dcfd -Y ;;		\
 	esac
-
-include $(top_srcdir)/depsver.mf
-include $(top_srcdir)/includes.mf

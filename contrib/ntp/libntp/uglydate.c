@@ -2,7 +2,6 @@
  * uglydate - convert a time stamp to something barely readable
  *	      The string returned is 37 characters long.
  */
-#include <config.h>
 #include <stdio.h>
 
 #include "ntp_fp.h"
@@ -42,10 +41,8 @@ uglydate(
 		while (year >= 100)
 		    year -= 100;
 	}
-	snprintf(bp, LIB_BUFLENGTH,
-		 "%17s %02d:%03d:%02d:%02d:%02d.%03ld", timep, year,
-		 tm->tm_yday, tm->tm_hour, tm->tm_min, tm->tm_sec,
-		 msec);
-
+	(void) sprintf(bp, "%17s %02d:%03d:%02d:%02d:%02d.%03ld",
+		       timep, year, tm->tm_yday, tm->tm_hour, tm->tm_min,
+		       tm->tm_sec, msec);
 	return bp;
 }

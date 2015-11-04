@@ -1,10 +1,8 @@
-#include <config.h>
-
-#include <ntp_assert.h>
 #include "ntp_malloc.h"
-#include <string.h>
 
-#ifndef HAVE_STRDUP
+#if !HAVE_STRDUP
+
+#define NULL 0
 
 char *strdup(const char *s);
 
@@ -13,17 +11,18 @@ strdup(
 	const char *s
 	)
 {
-	size_t	octets;
-	char *	cp;
+        char *cp;
 
-	REQUIRE(s);
-	octets = strlen(s) + 1;
-	if ((cp = malloc(octets)) == NULL)
-		return NULL;
-	memcpy(cp, s, octets);
-
-	return cp;
+        if (s) {
+                cp = (char *) malloc((unsigned) (strlen(s)+1));
+                if (cp) {
+                        (void) strcpy(cp, s);
+		}
+        } else {
+                cp = (char *) NULL;
+	}
+        return(cp);
 }
 #else
-int strdup_c_nonempty_compilation_unit;
+int strdup_bs;
 #endif

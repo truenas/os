@@ -1,34 +1,16 @@
 # $FreeBSD$
 
-.include <bsd.own.mk>
-
-.PATH:	${.CURDIR}/../../../contrib/ntp/sntp
+.PATH: ${.CURDIR}/../../../contrib/ntp/sntp
 
 PROG=	sntp
-MK_MAN=	no
-SRCS= 	crypto.c kod_management.c log.c main.c networking.c \
-	sntp-opts.c sntp.c utilities.c
+MAN=	sntp.1
+SRCS= 	internet.c main.c socket.c timing.c unix.c
 
-CFLAGS+= -I${.CURDIR}/../../../contrib/ntp/include \
-	-I${.CURDIR}/../../../contrib/ntp/include \
-	-I${.CURDIR}/../../../contrib/ntp/lib/isc/include \
-	-I${.CURDIR}/../../../contrib/ntp/lib/isc/unix/include \
-	-I${.CURDIR}/../../../contrib/ntp/lib/isc/pthreads/include \
-	-I${.CURDIR}/../../../contrib/ntp/sntp \
-	-I${.CURDIR}/../../../contrib/ntp/sntp/libopts \
-	-I${.CURDIR}/../../../contrib/ntp/sntp/libevent/include \
-	-I${.CURDIR}/../libntpevent \
-	-I${.CURDIR}/../
+CFLAGS+= -I${.CURDIR}/../../../contrib/ntp/include -I${.CURDIR}/../ \
+	-DPACKAGE=\"sntp\" -DVERSION=\"1.6\" \
+	-I${.CURDIR}/../../../contrib/ntp/libopts
 
-DPADD=	${LIBM} ${LIBOPTS} ${LIBNTP} ${LIBNTPEVENT} ${LIBPTHREAD}
-LDADD=	-lm ${LIBOPTS} ${LIBNTP} ${LIBNTPEVENT} -lpthread
-
-.if ${MK_OPENSSL} != "no"
-DPADD+=	${LIBCRYPTO}
-LDADD+=	-lcrypto
-.else
-DPADD+=	${LIBMD}
-LDADD+=	-lmd
-.endif
+DPADD=	${LIBM} ${LIBOPTS}
+LDADD=	-lm ${LIBOPTS}
 
 .include <bsd.prog.mk>

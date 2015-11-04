@@ -104,9 +104,13 @@ psc_start(
 	return 0;
     }
 
+    if (!up) {
+	msyslog(LOG_ERR, "psc_start: unit: %d, emalloc: %m", unit);
+	return 0;
+    }
     memset(up, '\0', sizeof *up);
 
-    snprintf(buf, sizeof(buf), DEVICE, unit);	/* dev file name	*/
+    sprintf(buf, DEVICE, unit);		/* dev file name	*/
     fd[unit] = open(buf, O_RDONLY);	/* open device file	*/
     if (fd[unit] < 0) {
 	msyslog(LOG_ERR, "psc_start: unit: %d, open failed.  %m", unit);
@@ -122,12 +126,12 @@ psc_start(
     /* initialize peer variables	*/
     pp = peer->procptr;
     pp->io.clock_recv = noentry;
-    pp->io.srcclock = peer;
+    pp->io.srcclock = (caddr_t) peer;
     pp->io.datalen = 0;
     pp->io.fd = -1;
-    pp->unitptr = up;
+    pp->unitptr = (caddr_t) up;
     get_systime(&pp->lastrec);
-    memcpy(&pp->refid, REFID, 4);
+    memcpy((char *)&pp->refid, REFID, 4);
     peer->precision = PRECISION;
     pp->clockdesc = DESCRIPTION;
     up->unit = unit;
@@ -145,10 +149,8 @@ psc_shutdown(
     struct peer	*peer
     )
 {
-    if (NULL != peer->procptr->unitptr)
-	free(peer->procptr->unitptr);
-    if (fd[unit] > 0)
-	close(fd[unit]);
+    free(peer->procptr->unitptr);
+    close(fd[unit]);
 }
 
 /* psc_poll:  read, decode, and record device time */
@@ -173,7 +175,7 @@ psc_poll(
 	if (!up->msg_flag[unit]) {	/* write once to system log	*/
 	    msyslog(LOG_WARNING,
 		"SYNCHRONIZATION LOST on unit %1d, status %02x\n",
-		unit, status);
+		status, unit);
 	    up->msg_flag[unit] = 1;
 	}
 	return;
@@ -194,10 +196,9 @@ psc_poll(
     pp->nsec	= 1000000*BCD2INT3((tlo & 0x00FFF000) >> 12) +
 	BCD2INT3(tlo & 0x00000FFF);
 
-    snprintf(pp->a_lastcode, sizeof(pp->a_lastcode),
-	     "%3.3d %2.2d:%2.2d:%2.2d.%09ld %02x %08x %08x", pp->day,
-	     pp->hour, pp->minute, pp->second, pp->nsec, status, thi,
-	     tlo);
+    sprintf(pp->a_lastcode, "%3.3d %2.2d:%2.2d:%2.2d.%09ld %02x %08x %08x",
+	pp->day, pp->hour, pp->minute, pp->second, pp->nsec, status, thi,
+	tlo);
     pp->lencode = strlen(pp->a_lastcode);
 
     /* compute the timecode timestamp	*/

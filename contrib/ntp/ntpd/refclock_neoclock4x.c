@@ -3,10 +3,17 @@
  * Refclock_neoclock4x.c
  * - NeoClock4X driver for DCF77 or FIA Timecode
  *
- * Date: 2009-12-04 v1.16
+ * Date: 2006-01-11 v1.15
  *
  * see http://www.linum.com/redir/jump/id=neoclock4x&action=redir
  * for details about the NeoClock4X device
+ *
+ * Copyright (C) 2002-2004 by Linum Software GmbH <neoclock4x@linum.com>
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
  *
  */
 
@@ -102,7 +109,7 @@
 #define NEOCLOCK4X_OFFSET_ANTENNA2         33
 #define NEOCLOCK4X_OFFSET_CRC              35
 
-#define NEOCLOCK4X_DRIVER_VERSION          "1.16 (2009-12-04)"
+#define NEOCLOCK4X_DRIVER_VERSION          "1.15 (2006-01-11)"
 
 #define NSEC_TO_MILLI                      1000000
 
@@ -131,20 +138,20 @@ struct neoclock4x_unit {
   int   utc_msec;
 };
 
-static	int	neoclock4x_start	(int, struct peer *);
-static	void	neoclock4x_shutdown	(int, struct peer *);
-static	void	neoclock4x_receive	(struct recvbuf *);
-static	void	neoclock4x_poll		(int, struct peer *);
-static	void	neoclock4x_control	(int, const struct refclockstat *, struct refclockstat *, struct peer *);
+static	int	neoclock4x_start        P((int, struct peer *));
+static	void	neoclock4x_shutdown	P((int, struct peer *));
+static	void	neoclock4x_receive	P((struct recvbuf *));
+static	void	neoclock4x_poll		P((int, struct peer *));
+static	void	neoclock4x_control      P((int, struct refclockstat *, struct refclockstat *, struct peer *));
 
-static int	neol_atoi_len		(const char str[], int *, int);
-static int	neol_hexatoi_len	(const char str[], int *, int);
-static void	neol_jdn_to_ymd		(unsigned long, int *, int *, int *);
-static void	neol_localtime		(unsigned long, int* , int*, int*, int*, int*, int*);
-static unsigned long neol_mktime	(int, int, int, int, int, int);
+static int      neol_atoi_len           P((const char str[], int *, int));
+static int      neol_hexatoi_len        P((const char str[], int *, int));
+static void     neol_jdn_to_ymd         P((unsigned long, int *, int *, int *));
+static void     neol_localtime          P((unsigned long, int* , int*, int*, int*, int*, int*));
+static unsigned long neol_mktime        P((int, int, int, int, int, int));
 #if !defined(NEOCLOCK4X_FIRMWARE)
-static int	neol_query_firmware	(int, int, char *, size_t);
-static int	neol_check_firmware	(int, const char*, char *);
+static int      neol_query_firmware     P((int, int, char *, int));
+static int      neol_check_firmware     P((int, const char*, char *));
 #endif
 
 struct refclock refclock_neoclock4x = {
@@ -294,9 +301,9 @@ neoclock4x_start(int unit,
   memset((char *)up, 0, sizeof(struct neoclock4x_unit));
   pp = peer->procptr;
   pp->clockdesc = "NeoClock4X";
-  pp->unitptr = up;
+  pp->unitptr = (caddr_t)up;
   pp->io.clock_recv = neoclock4x_receive;
-  pp->io.srcclock = peer;
+  pp->io.srcclock = (caddr_t)peer;
   pp->io.datalen = 0;
   pp->io.fd = fd;
   /*
@@ -312,14 +319,15 @@ neoclock4x_start(int unit,
    * Initialize miscellaneous variables
    */
   peer->precision = -10;
+  peer->burst = NSTAGE;
   memcpy((char *)&pp->refid, "neol", 4);
 
   up->leap_status = 0;
   up->unit = unit;
-  strlcpy(up->firmware, "?", sizeof(up->firmware));
+  strcpy(up->firmware, "?");
   up->firmwaretag = '?';
-  strlcpy(up->serial, "?", sizeof(up->serial));
-  strlcpy(up->radiosignal, "?", sizeof(up->radiosignal));
+  strcpy(up->serial, "?");
+  strcpy(up->radiosignal, "?");
   up->timesource  = '?';
   up->dststatus   = '?';
   up->quarzstatus = '?';
@@ -335,8 +343,7 @@ neoclock4x_start(int unit,
 
 #if defined(NEOCLOCK4X_FIRMWARE)
 #if NEOCLOCK4X_FIRMWARE == NEOCLOCK4X_FIRMWARE_VERSION_A
-  strlcpy(up->firmware, "(c) 2002 NEOL S.A. FRANCE / L0.01 NDF:A:* (compile time)",
-	  sizeof(up->firmware));
+  strcpy(up->firmware, "(c) 2002 NEOL S.A. FRANCE / L0.01 NDF:A:* (compile time)");
   up->firmwaretag = 'A';
 #else
   msyslog(LOG_EMERG, "NeoClock4X(%d): unknown firmware defined at compile time for NeoClock4X",
@@ -400,7 +407,7 @@ neoclock4x_shutdown(int unit,
       pp = peer->procptr;
       if(pp != NULL)
         {
-          up = pp->unitptr;
+          up = (struct neoclock4x_unit *)pp->unitptr;
           if(up != NULL)
             {
               if(-1 !=  pp->io.fd)
@@ -454,9 +461,9 @@ neoclock4x_receive(struct recvbuf *rbufp)
   unsigned char calc_chksum;
   int recv_chksum;
 
-  peer = rbufp->recv_peer;
+  peer = (struct peer *)rbufp->recv_srcclock;
   pp = peer->procptr;
-  up = pp->unitptr;
+  up = (struct neoclock4x_unit *)pp->unitptr;
 
   /* wait till poll interval is reached */
   if(0 == up->recvnow)
@@ -663,7 +670,7 @@ neoclock4x_poll(int unit,
   struct refclockproc *pp;
 
   pp = peer->procptr;
-  up = pp->unitptr;
+  up = (struct neoclock4x_unit *)pp->unitptr;
 
   pp->polls++;
   up->recvnow = 1;
@@ -671,7 +678,7 @@ neoclock4x_poll(int unit,
 
 static void
 neoclock4x_control(int unit,
-		   const struct refclockstat *in,
+		   struct refclockstat *in,
 		   struct refclockstat *out,
 		   struct peer *peer)
 {
@@ -691,7 +698,7 @@ neoclock4x_control(int unit,
       return;
     }
 
-  up = pp->unitptr;
+  up = (struct neoclock4x_unit *)pp->unitptr;
   if(NULL == up)
     {
       msyslog(LOG_ERR, "NeoClock4X(%d): control: unit invalid/inactive", unit);
@@ -785,9 +792,9 @@ neol_hexatoi_len(const char str[],
   int i;
   int n = 0;
 
-  for(i=0; isxdigit((unsigned char)str[i]) && i < maxlen; i++)
+  for(i=0; isxdigit((int)str[i]) && i < maxlen; i++)
     {
-      hexdigit = isdigit((unsigned char)str[i]) ? toupper((unsigned char)str[i]) - '0' : toupper((unsigned char)str[i]) - 'A' + 10;
+      hexdigit = isdigit((int)str[i]) ? toupper(str[i]) - '0' : toupper(str[i]) - 'A' + 10;
       n = 16 * n + hexdigit;
     }
   *result = n;
@@ -803,7 +810,7 @@ neol_atoi_len(const char str[],
   int i;
   int n = 0;
 
-  for(i=0; isdigit((unsigned char)str[i]) && i < maxlen; i++)
+  for(i=0; isdigit((int)str[i]) && i < maxlen; i++)
     {
       digit = str[i] - '0';
       n = 10 * n + digit;
@@ -898,10 +905,10 @@ static int
 neol_query_firmware(int fd,
 		    int unit,
 		    char *firmware,
-		    size_t maxlen)
+		    int maxlen)
 {
   char tmpbuf[256];
-  size_t len;
+  int len;
   int lastsearch;
   unsigned char c;
   int last_c_was_crlf;
@@ -931,20 +938,20 @@ neol_query_firmware(int fd,
 	  if(read_errors > 5)
 	    {
 	      msyslog(LOG_ERR, "NeoClock4X(%d): can't read firmware version (timeout)", unit);
-	      strlcpy(tmpbuf, "unknown due to timeout", sizeof(tmpbuf));
+	      strcpy(tmpbuf, "unknown due to timeout");
 	      break;
 	    }
           if(chars_read > 500)
             {
 	      msyslog(LOG_ERR, "NeoClock4X(%d): can't read firmware version (garbage)", unit);
-	      strlcpy(tmpbuf, "unknown due to garbage input", sizeof(tmpbuf));
+	      strcpy(tmpbuf, "unknown due to garbage input");
 	      break;
             }
 	  if(-1 == read(fd, &c, 1))
 	    {
               if(EAGAIN != errno)
                 {
-                  msyslog(LOG_DEBUG, "NeoClock4x(%d): read: %m", unit);
+                  msyslog(LOG_DEBUG, "NeoClock4x(%d): read: %s", unit ,strerror(errno));
                   read_errors++;
                 }
               else
@@ -963,7 +970,7 @@ neol_query_firmware(int fd,
 	      if(0xA9 != c) /* wait for (c) char in input stream */
 		continue;
 
-	      strlcpy(tmpbuf, "(c)", sizeof(tmpbuf));
+	      strcpy(tmpbuf, "(c)");
 	      len = 3;
 	      init = 0;
 	      continue;
@@ -1001,28 +1008,22 @@ neol_query_firmware(int fd,
 		tmpbuf[len++] = (char) c;
 	    }
 	  tmpbuf[len] = '\0';
-	  if (len > sizeof(tmpbuf)-5)
+	  if(len > sizeof(tmpbuf)-5)
 	    break;
 	}
     }
   else
     {
       msyslog(LOG_ERR, "NeoClock4X(%d): can't query firmware version", unit);
-      strlcpy(tmpbuf, "unknown error", sizeof(tmpbuf));
+      strcpy(tmpbuf, "unknown error");
     }
-  if (strlcpy(firmware, tmpbuf, maxlen) >= maxlen)
-    strlcpy(firmware, "buffer too small", maxlen);
+  strncpy(firmware, tmpbuf, maxlen);
+  firmware[maxlen] = '\0';
 
   if(flag)
     {
       NLOG(NLOG_CLOCKINFO)
 	msyslog(LOG_INFO, "NeoClock4X(%d): firmware version: %s", unit, firmware);
-
-      if(strstr(firmware, "/R2"))
-	{
-	  msyslog(LOG_INFO, "NeoClock4X(%d): Your NeoClock4X uses the new R2 firmware release. Please note the changed LED behaviour.", unit);
-	}
-
     }
 
   return (flag);
@@ -1109,16 +1110,4 @@ int refclock_neoclock4x_bs;
  * - remove some unsued #ifdefs
  * - fix nsec calculation, closes #499
  *
- * 2009/12/04 cjh
- * Revision 1.16
- * - change license to ntp COPYRIGHT notice. This should allow Debian
- *   to add this refclock driver in further releases.
- * - detect R2 hardware
- *
  */
-
-
-
-
-
-

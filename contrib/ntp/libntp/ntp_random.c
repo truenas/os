@@ -39,13 +39,15 @@ static char sccsid[] = "@(#)random.c	8.2 (Berkeley) 5/19/95";
 #endif /* LIBC_SCCS and not lint */
 
 #include "config.h"
-#include <sys/types.h>
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
 #include <stdio.h>
 
-#include <l_stdlib.h>
+#include <ntp_types.h>
 #include <ntp_random.h>
 #include <ntp_unixtime.h>
 
@@ -140,7 +142,14 @@ static char sccsid[] = "@(#)random.c	8.2 (Berkeley) 5/19/95";
 #define	DEG_4		63
 #define	SEP_4		1
 
+/*
+ * Array versions of the above information to make code run faster --
+ * relies on fact that TYPE_i == i.
+ */
 #define	MAX_TYPES	5		/* max number of types above */
+
+static long degrees[MAX_TYPES] =	{ DEG_0, DEG_1, DEG_2, DEG_3, DEG_4 };
+static long seps [MAX_TYPES] =	{ SEP_0, SEP_1, SEP_2, SEP_3, SEP_4 };
 
 /*
  * Initially, everything is set up as if from:
@@ -156,7 +165,7 @@ static char sccsid[] = "@(#)random.c	8.2 (Berkeley) 5/19/95";
  *	MAX_TYPES * (rptr - state) + TYPE_3 == TYPE_3.
  */
 
-static unsigned long randtbl[DEG_3 + 1] = {
+static long randtbl[DEG_3 + 1] = {
 	TYPE_3,
 #ifdef  USE_WEAK_SEEDING
 /* Historic implementation compatibility */
@@ -191,8 +200,8 @@ static unsigned long randtbl[DEG_3 + 1] = {
  * in the initialization of randtbl) because the state table pointer is set
  * to point to randtbl[1] (as explained below).
  */
-static unsigned long *fptr = &randtbl[SEP_3 + 1];
-static unsigned long *rptr = &randtbl[1];
+static long *fptr = &randtbl[SEP_3 + 1];
+static long *rptr = &randtbl[1];
 
 /*
  * The following things are the pointer to the state information table, the
@@ -204,13 +213,13 @@ static unsigned long *rptr = &randtbl[1];
  * this is more efficient than indexing every time to find the address of
  * the last element to see if the front and rear pointers have wrapped.
  */
-static unsigned long *state = &randtbl[1];
+static long *state = &randtbl[1];
 static long rand_type = TYPE_3;
 static long rand_deg = DEG_3;
 static long rand_sep = SEP_3;
-static unsigned long *end_ptr = &randtbl[DEG_3 + 1];
+static long *end_ptr = &randtbl[DEG_3 + 1];
 
-static inline long good_rand (long);
+static inline long good_rand P((long));
 
 static inline long
 good_rand (
@@ -261,22 +270,19 @@ ntp_srandom(
 	unsigned long x
 	)
 {
-	long i;
+	register long i;
 
-	if (rand_type == TYPE_0) {
+	if (rand_type == TYPE_0)
 		state[0] = x;
-	} else {
+	else {
 		state[0] = x;
 		for (i = 1; i < rand_deg; i++)
 			state[i] = good_rand(state[i - 1]);
 		fptr = &state[rand_sep];
 		rptr = &state[0];
 		for (i = 0; i < 10 * rand_deg; i++)
-			x = ntp_random();
+			(void)ntp_random();
 	}
-
-	/* seed the likely faster (and poorer) rand() as well */
-	srand((u_int)x);
 }
 
 /*
@@ -302,24 +308,6 @@ ntp_srandomdev( void )
 	return;
 }
 #endif
-
-
-/*
- * ntp_initstate() and ntp_setstate() are unused in our codebase and
- * trigger warnings due to casting to a more-strictly-aligned pointer
- * on alignment-sensitive platforms.  #ifdef them away to save noise,
- * build time, and binary space, but retain the code in case we find a
- * use.
- */
-#ifdef COMPILE_UNUSED_FUNCTIONS
-/*
- * Array versions of the above information to make code run faster --
- * relies on fact that TYPE_i == i.
- */
-#define	MAX_TYPES	5		/* max number of types above */
-
-static long degrees[MAX_TYPES] =	{ DEG_0, DEG_1, DEG_2, DEG_3, DEG_4 };
-static long seps [MAX_TYPES] =	{ SEP_0, SEP_1, SEP_2, SEP_3, SEP_4 };
 
 /*
  * initstate:
@@ -384,7 +372,7 @@ ntp_initstate(
 		rand_deg = DEG_4;
 		rand_sep = SEP_4;
 	}
-	state = (unsigned long *) (long_arg_state + 1); /* first location */
+	state = (long *) (long_arg_state + 1); /* first location */
 	end_ptr = &state[rand_deg];	/* must set end_ptr before srandom */
 	ntp_srandom(seed);
 	if (rand_type == TYPE_0)
@@ -418,7 +406,7 @@ ntp_setstate(
 	char *arg_state			/* pointer to state array */
 	)
 {
-	register unsigned long *new_state = (unsigned long *) arg_state;
+	register long *new_state = (long *) arg_state;
 	register long type = new_state[0] % MAX_TYPES;
 	register long rear = new_state[0] / MAX_TYPES;
 	char *ostate = (char *)(&state[-1]);
@@ -441,7 +429,7 @@ ntp_setstate(
 		(void)fprintf(stderr,
 		    "random: state info corrupted; not changed.\n");
 	}
-	state = (new_state + 1);
+	state = (long *) (new_state + 1);
 	if (rand_type != TYPE_0) {
 		rptr = &state[rear];
 		fptr = &state[(rear + rand_sep) % rand_deg];
@@ -449,8 +437,6 @@ ntp_setstate(
 	end_ptr = &state[rand_deg];		/* set end_ptr too */
 	return(ostate);
 }
-#endif	/* COMPILE_UNUSED_FUNCTIONS */
-
 
 /*
  * random:
@@ -473,7 +459,7 @@ long
 ntp_random( void )
 {
 	register long i;
-	register unsigned long *f, *r;
+	register long *f, *r;
 
 	if (rand_type == TYPE_0) {
 		i = state[0];
