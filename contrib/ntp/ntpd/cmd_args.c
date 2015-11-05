@@ -7,15 +7,23 @@
 
 #include "ntpd.h"
 #include "ntp_stdlib.h"
-#include "ntp_config.h"
 #include "ntp_cmdargs.h"
 
-#include "ntpd-opts.h"
+#ifdef SIM
+# include "ntpsim.h"
+# include "ntpdsim-opts.h"
+# define OPTSTRUCT	ntpdsimOptions
+#else
+# include "ntpd-opts.h"
+# define OPTSTRUCT	ntpdOptions
+#endif /* SIM */
 
 /*
  * Definitions of things either imported from or exported to outside
  */
 extern char const *progname;
+extern const char *specific_interface;
+extern short default_ai_family;
 
 #ifdef HAVE_NETINFO
 extern int	check_netinfo;
@@ -23,41 +31,39 @@ extern int	check_netinfo;
 
 
 /*
- * getCmdOpts - apply most command line options
- *
- * A few options are examined earlier in ntpd.c ntpdmain() and
- * ports/winnt/ntpd/ntservice.c main().
+ * getCmdOpts - get command line options
  */
 void
 getCmdOpts(
-	int	argc,
-	char **	argv
+	int argc,
+	char *argv[]
 	)
 {
 	extern const char *config_file;
 	int errflg;
+	tOptions *myOptions = &OPTSTRUCT;
 
 	/*
 	 * Initialize, initialize
 	 */
 	errflg = 0;
 
-	if (ipv4_works && ipv6_works) {
-		if (HAVE_OPT( IPV4 ))
-			ipv6_works = 0;
-		else if (HAVE_OPT( IPV6 ))
-			ipv4_works = 0;
-	} else if (!ipv4_works && !ipv6_works) {
-		msyslog(LOG_ERR, "Neither IPv4 nor IPv6 networking detected, fatal.");
-		exit(1);
-	} else if (HAVE_OPT( IPV4 ) && !ipv4_works)
-		msyslog(LOG_WARNING, "-4/--ipv4 ignored, IPv4 networking not found.");
-	else if (HAVE_OPT( IPV6 ) && !ipv6_works)
-		msyslog(LOG_WARNING, "-6/--ipv6 ignored, IPv6 networking not found.");
+	switch (WHICH_IDX_IPV4) {
+	    case INDEX_OPT_IPV4:
+		default_ai_family = AF_INET;
+		break;
+	    case INDEX_OPT_IPV6:
+		default_ai_family = AF_INET6;
+		break;
+	    default:
+		/* ai_fam_templ = ai_fam_default;	*/
+		break;
+	}
 
 	if (HAVE_OPT( AUTHREQ ))
 		proto_config(PROTO_AUTHENTICATE, 1, 0., NULL);
-	else if (HAVE_OPT( AUTHNOREQ ))
+
+	if (HAVE_OPT( AUTHNOREQ ))
 		proto_config(PROTO_AUTHENTICATE, 0, 0., NULL);
 
 	if (HAVE_OPT( BCASTSYNC ))
@@ -76,15 +82,24 @@ getCmdOpts(
 	if (HAVE_OPT( PANICGATE ))
 		allow_panic = TRUE;
 
-	if (HAVE_OPT( FORCE_STEP_ONCE ))
-		force_step_once = TRUE;
-
-#ifdef HAVE_DROPROOT
 	if (HAVE_OPT( JAILDIR )) {
-		droproot = 1;
-		chrootdir = OPT_ARG( JAILDIR );
-	}
+#ifdef HAVE_DROPROOT
+			droproot = 1;
+			chrootdir = OPT_ARG( JAILDIR );
+#else
+			fprintf(stderr, 
+				"command line -i option (jaildir) is not supported by this binary"
+# ifndef SYS_WINNT
+				",\n" "can not drop root privileges.  See configure options\n"
+				"--enable-clockctl and --enable-linuxcaps.\n");
+# else
+				".\n");
+# endif
+			msyslog(LOG_ERR, 
+				"command line -i option (jaildir) is not supported by this binary.");
+			errflg++;
 #endif
+	}
 
 	if (HAVE_OPT( KEYFILE ))
 		getauthkeys(OPT_ARG( KEYFILE ));
@@ -131,33 +146,40 @@ getCmdOpts(
 		} while (--ct > 0);
 	}
 
-#ifdef HAVE_DROPROOT
 	if (HAVE_OPT( USER )) {
-		droproot = 1;
-		user = estrdup(OPT_ARG( USER ));
-		group = strrchr(user, ':');
-		if (group != NULL) {
-			size_t	len;
+#ifdef HAVE_DROPROOT
+		char *ntp_optarg = OPT_ARG( USER );
 
+		droproot = 1;
+		user = emalloc(strlen(ntp_optarg) + 1);
+		(void)strncpy(user, ntp_optarg, strlen(ntp_optarg) + 1);
+		group = rindex(user, ':');
+		if (group)
 			*group++ = '\0'; /* get rid of the ':' */
-			len = group - user;
-			group = estrdup(group);
-			user = erealloc(user, len);
-		}
-	}
+#else
+		fprintf(stderr, 
+			"command line -u/--user option is not supported by this binary"
+# ifndef SYS_WINNT
+			",\n" "can not drop root privileges.  See configure options\n"
+			"--enable-clockctl and --enable-linuxcaps.\n");
+# else
+			".\n");
+# endif
+		msyslog(LOG_ERR, 
+			"command line -u/--user option is not supported by this binary.");
+		errflg++;
 #endif
+	}
 
 	if (HAVE_OPT( VAR )) {
-		int		ct;
-		const char **	pp;
-		const char *	v_assign;
-
-		ct = STACKCT_OPT(  VAR );
-		pp = STACKLST_OPT( VAR );
+		int		ct = STACKCT_OPT(  VAR );
+		const char**	pp = STACKLST_OPT( VAR );
 
 		do  {
-			v_assign = *pp++;
-			set_sys_var(v_assign, strlen(v_assign) + 1, RW);
+			const char* my_ntp_optarg = *pp++;
+
+			set_sys_var(my_ntp_optarg, strlen(my_ntp_optarg)+1,
+			    (u_short) (RW));
 		} while (--ct > 0);
 	}
 
@@ -174,32 +196,57 @@ getCmdOpts(
 	}
 
 	if (HAVE_OPT( SLEW ))
-		loop_config(LOOP_MAX, 600);
+		clock_max = 600;
 
 	if (HAVE_OPT( UPDATEINTERVAL )) {
 		long val = OPT_VALUE_UPDATEINTERVAL;
-
+			  
 		if (val >= 0)
 			interface_interval = val;
 		else {
-			fprintf(stderr,
+			fprintf(stderr, 
 				"command line interface update interval %ld must not be negative\n",
 				val);
-			msyslog(LOG_ERR,
+			msyslog(LOG_ERR, 
 				"command line interface update interval %ld must not be negative",
 				val);
 			errflg++;
 		}
 	}
+#ifdef SIM
+	if (HAVE_OPT( SIMBROADCASTDELAY ))
+		sscanf(OPT_ARG( SIMBROADCASTDELAY ), "%lf", &ntp_node.bdly);
 
+	if (HAVE_OPT( PHASENOISE ))
+		sscanf(OPT_ARG( PHASENOISE ), "%lf", &ntp_node.snse);
 
-	/* save list of servers from cmd line for config_peers() use */
-	if (argc > 0) {
-		cmdline_server_count = argc;
-		cmdline_servers = argv;
+	if (HAVE_OPT( SIMSLEW ))
+		sscanf(OPT_ARG( SIMSLEW ), "%lf", &ntp_node.slew);
+
+	if (HAVE_OPT( SERVERTIME ))
+		sscanf(OPT_ARG( SERVERTIME ), "%lf", &ntp_node.clk_time);
+
+	if (HAVE_OPT( ENDSIMTIME ))
+		sscanf(OPT_ARG( ENDSIMTIME ), "%lf", &ntp_node.sim_time);
+
+	if (HAVE_OPT( FREQERR ))
+		sscanf(OPT_ARG( FREQERR ), "%lf", &ntp_node.ferr);
+
+	if (HAVE_OPT( WALKNOISE ))
+		sscanf(OPT_ARG( WALKNOISE ), "%lf", &ntp_node.fnse);
+
+	if (HAVE_OPT( NDELAY ))
+		sscanf(OPT_ARG( NDELAY ), "%lf", &ntp_node.ndly);
+
+	if (HAVE_OPT( PDELAY ))
+		sscanf(OPT_ARG( PDELAY ), "%lf", &ntp_node.pdly);
+
+#endif /* SIM */
+
+	if (errflg || argc) {
+		if (argc)
+			fprintf(stderr, "argc after processing is <%d>\n", argc);
+		optionUsage(myOptions, 2);
 	}
-
-	/* display usage & exit with any option processing errors */
-	if (errflg)
-		optionUsage(&ntpdOptions, 2);	/* does not return */
+	return;
 }

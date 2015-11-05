@@ -1,40 +1,28 @@
-NULL =
+#AUTOMAKE_OPTIONS=	../util/ansi2knr
 
-BUILT_SOURCES =
-CLEANFILES =
+bindir=		${exec_prefix}/${BINSUBDIR}
+#bin_PROGRAMS=	ntpdate ntptimeset
+bin_PROGRAMS=	ntpdate
+EXTRA_PROGRAMS=	ntptimeset
 
-bin_PROGRAMS = $(NTPDATE_DB)
-libexec_PROGRAMS = $(NTPDATE_DL)
-sbin_PROGRAMS = $(NTPDATE_DS)
-
-EXTRA_PROGRAMS = ntpdate
-
-AM_CFLAGS = $(CFLAGS_NTP)
-
-AM_CPPFLAGS  = $(NTP_INCS)
-AM_CPPFLAGS += $(CPPFLAGS_NTP)
-
-AM_LDFLAGS = $(LDFLAGS_NTP)
-
+ntptimeset_SOURCES=	ntptimeset.c ntptime_config.c
+AM_CPPFLAGS=	-I$(top_srcdir)/include
 # LDADD might need RESLIB and ADJLIB
-LDADD = version.o ../libntp/libntp.a
-ntpdate_LDADD  = $(LDADD) $(LDADD_LIBNTP) $(PTHREAD_LIBS) $(LIBOPTS_LDADD)
-ntpdate_LDADD += $(LIBM) $(LDADD_NTP)
+LDADD=		version.o ../libntp/libntp.a
 DISTCLEANFILES=	.version version.c stamp-v
 noinst_HEADERS=	ntpdate.h
+ETAGS_ARGS=	Makefile.am
 
 $(PROGRAMS): $(LDADD)
 
-$(top_srcdir)/sntp/scm-rev:
-	cd ../sntp && $(MAKE) $(AM_MAKEFLAGS) check-scm-rev
+../libntp/libntp.a:
+	cd ../libntp && $(MAKE)
 
-version.c: $(ntpdate_OBJECTS) ../libntp/libntp.a Makefile $(top_srcdir)/sntp/scm-rev
-	env CSET=`cat $(top_srcdir)/sntp/scm-rev` $(top_builddir)/scripts/build/mkver ntpdate
-	
-version.o: version.c
-	env CCACHE_DISABLE=1 $(COMPILE) -c version.c -o version.o
+$(top_srcdir)/version :
+	cd $(top_srcdir) && $(MAKE) version
 
-include $(top_srcdir)/bincheck.mf
-include $(top_srcdir)/sntp/check-libntp.mf
-include $(top_srcdir)/depsver.mf
-include $(top_srcdir)/includes.mf
+version.o: $(ntpdate_OBJECTS) ../libntp/libntp.a Makefile $(top_srcdir)/version
+	env CSET=`cat $(top_srcdir)/version` $(top_builddir)/scripts/mkver ntpdate
+	$(COMPILE) -c version.c
+
+include ../bincheck.mf

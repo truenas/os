@@ -32,10 +32,11 @@
  * SUCH DAMAGE.
  *
  */
-#include <config.h>
 #include "ntp_fp.h"
-#include "ntp_calendar.h"
-#include "parse.h"
+
+#define GPSORIGIN	ULONG_CONST(2524953600)	/* NTP origin - GPS origin in seconds */
+#define SECSPERWEEK	(unsigned)(604800)	/* seconds per week - GPS tells us about weeks */
+#define GPSWRAP		990	/* assume week count less than this in the previous epoch */
 
 void
 gpstolfp(
@@ -47,10 +48,10 @@ gpstolfp(
 {
   if (weeks < GPSWRAP)
     {
-      weeks += GPSWEEKS;
+      weeks += 1024;
     }
 
-  lfp->l_ui = (uint32_t)(weeks * SECSPERWEEK + days * SECSPERDAY + seconds + GPSORIGIN); /* convert to NTP time */
+  lfp->l_ui = weeks * SECSPERWEEK + days * 86400 + seconds + GPSORIGIN; /* convert to NTP time */
   lfp->l_uf = 0;
 }
 

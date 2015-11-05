@@ -59,14 +59,9 @@
  * by hand.  Sorry about that.
  */
 
-#include <config.h>
 #include "ntp_machine.h"
 
-#if !defined(HAVE_MKTIME) || ( !defined(HAVE_TIMEGM) && defined(WANT_TIMEGM) )
-
-#if SIZEOF_TIME_T >= 8
-#error libntp supplied mktime()/timegm() do not support 64-bit time_t
-#endif
+#if !defined(HAVE_MKTIME) || !defined(HAVE_TIMEGM)
 
 #ifndef DSTMINUTES
 #define DSTMINUTES 60
@@ -231,9 +226,9 @@ time2(
 	t = (t < 0) ? 0 : ((time_t) 1 << bits);
 	for ( ; ; ) {
 		if (usezn)
-			mytm = *localtime(&t);
+	        	mytm = *localtime(&t);
 		else
-			mytm = *gmtime(&t);
+	        	mytm = *gmtime(&t);
 		dir = tmcomp(&mytm, &yourtm);
 		if (dir != 0) {
 			if (bits-- < 0)
@@ -289,7 +284,6 @@ mktime(
 }
 #endif /* !HAVE_MKTIME */
 
-#ifdef WANT_TIMEGM
 #ifndef HAVE_TIMEGM
 time_t
 timegm(
@@ -307,4 +301,3 @@ timegm(
 	return WRONG;
 }
 #endif /* !HAVE_TIMEGM */
-#endif /* WANT_TIMEGM */

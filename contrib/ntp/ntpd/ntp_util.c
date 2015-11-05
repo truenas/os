@@ -1,19 +1,17 @@
 /*
  * ntp_util.c - stuff I didn't have any other place for
  */
+
 #ifdef HAVE_CONFIG_H
 # include <config.h>
 #endif
 
 #include "ntpd.h"
+#include "ntp_io.h"
 #include "ntp_unixtime.h"
 #include "ntp_filegen.h"
 #include "ntp_if.h"
 #include "ntp_stdlib.h"
-#include "ntp_assert.h"
-#include "ntp_calendar.h"
-#include "ntp_leapsec.h"
-#include "lib_strbuf.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -21,10 +19,6 @@
 #ifdef HAVE_SYS_IOCTL_H
 # include <sys/ioctl.h>
 #endif
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-#include <sys/stat.h>
 
 #ifdef HAVE_IEEEFP_H
 # include <ieeefp.h>
@@ -33,35 +27,35 @@
 # include <math.h>
 #endif
 
+#ifdef  DOSYNCTODR
+# if !defined(VMS)
+#  include <sys/resource.h>
+# endif /* VMS */
+#endif
+
 #if defined(VMS)
 # include <descrip.h>
 #endif /* VMS */
 
 /*
- * Defines used by the leapseconds stuff
+ * This contains odds and ends.  Right now the only thing you'll find
+ * in here is the hourly stats printer and some code to support
+ * rereading the keys file, but I may eventually put other things in
+ * here such as code to do something with the leap bits.
  */
-#define	MAX_TAI	100			/* max TAI offset (s) */
-#define	L_DAY	86400UL			/* seconds per day */
-#define	L_YEAR	(L_DAY * 365)		/* days per year */
-#define	L_LYEAR	(L_YEAR + L_DAY)	/* days per leap year */
-#define	L_4YEAR	(L_LYEAR + 3 * L_YEAR)	/* days per leap cycle */
-#define	L_CENT	(L_4YEAR * 25)		/* days per century */
+/*
+ * Name of the keys file
+ */
+static	char *key_file_name;
 
 /*
- * This contains odds and ends, including the hourly stats, various
- * configuration items, leapseconds stuff, etc.
+ * The name of the drift_comp file and the temporary.
  */
-/*
- * File names
- */
-static	char *key_file_name;		/* keys file name */
-static char	  *leapfile_name;		/* leapseconds file name */
-static struct stat leapfile_stat;	/* leapseconds file stat() buffer */
-static int /*BOOL*/have_leapfile = FALSE;
-char	*stats_drift_file;		/* frequency file name */
-static	char *stats_temp_file;		/* temp frequency file name */
-static double wander_resid;		/* last frequency update */
-double	wander_threshold = 1e-7;	/* initial frequency threshold */
+static	char *stats_drift_file;
+static	char *stats_temp_file;
+int stats_write_period = 3600;	/* # of seconds between writes. */
+double stats_write_tolerance = 0;
+static double prev_drift_comp = 99999.;
 
 /*
  * Statistics file stuff
@@ -70,20 +64,27 @@ double	wander_threshold = 1e-7;	/* initial frequency threshold */
 # ifndef SYS_WINNT
 #  define NTP_VAR "/var/NTP/"		/* NOTE the trailing '/' */
 # else
-#  define NTP_VAR "c:\\var\\ntp\\"	/* NOTE the trailing '\\' */
+#  define NTP_VAR "c:\\var\\ntp\\"		/* NOTE the trailing '\\' */
 # endif /* SYS_WINNT */
 #endif
 
+#ifndef MAXPATHLEN
+# define MAXPATHLEN 256
+#endif
 
-char statsdir[MAXFILENAME] = NTP_VAR;
+static	char statsdir[MAXPATHLEN] = NTP_VAR;
+
 static FILEGEN peerstats;
 static FILEGEN loopstats;
 static FILEGEN clockstats;
 static FILEGEN rawstats;
 static FILEGEN sysstats;
-static FILEGEN protostats;
-static FILEGEN cryptostats;
+#ifdef DEBUG_TIMING
 static FILEGEN timingstats;
+#endif
+#ifdef OPENSSL
+static FILEGEN cryptostats;
+#endif /* OPENSSL */
 
 /*
  * This controls whether stats are written to the fileset. Provided
@@ -92,86 +93,37 @@ static FILEGEN timingstats;
 int stats_control;
 
 /*
- * Last frequency written to file.
+ * Initial frequency offset later passed to the loopfilter.
  */
-static double prev_drift_comp;		/* last frequency update */
+double	old_drift;
 
 /*
- * Function prototypes
- */
-static	void	record_sys_stats(void);
-	void	ntpd_time_stepped(void);
-static  void	check_leap_expiration(int, uint32_t, const time_t*);
-
-/* 
- * Prototypes
- */
-#ifdef DEBUG
-void	uninit_util(void);
-#endif
-
-/*
- * uninit_util - free memory allocated by init_util
- */
-#ifdef DEBUG
-void
-uninit_util(void)
-{
-#if defined(_MSC_VER) && defined (_DEBUG)
-	_CrtCheckMemory();
-#endif
-	if (stats_drift_file) {
-		free(stats_drift_file);
-		free(stats_temp_file);
-		stats_drift_file = NULL;
-		stats_temp_file = NULL;
-	}
-	if (key_file_name) {
-		free(key_file_name);
-		key_file_name = NULL;
-	}
-	filegen_unregister("peerstats");
-	filegen_unregister("loopstats");
-	filegen_unregister("clockstats");
-	filegen_unregister("rawstats");
-	filegen_unregister("sysstats");
-	filegen_unregister("protostats");
-#ifdef AUTOKEY
-	filegen_unregister("cryptostats");
-#endif	/* AUTOKEY */
-#ifdef DEBUG_TIMING
-	filegen_unregister("timingstats");
-#endif	/* DEBUG_TIMING */
-
-#if defined(_MSC_VER) && defined (_DEBUG)
-	_CrtCheckMemory();
-#endif
-}
-#endif /* DEBUG */
-
-
-/*
- * init_util - initialize the util module of ntpd
+ * init_util - initialize the utilities
  */
 void
 init_util(void)
 {
-	filegen_register(statsdir, "peerstats",	  &peerstats);
-	filegen_register(statsdir, "loopstats",	  &loopstats);
-	filegen_register(statsdir, "clockstats",  &clockstats);
-	filegen_register(statsdir, "rawstats",	  &rawstats);
-	filegen_register(statsdir, "sysstats",	  &sysstats);
-	filegen_register(statsdir, "protostats",  &protostats);
-	filegen_register(statsdir, "cryptostats", &cryptostats);
-	filegen_register(statsdir, "timingstats", &timingstats);
-	/*
-	 * register with libntp ntp_set_tod() to call us back
-	 * when time is stepped.
-	 */
-	step_callback = &ntpd_time_stepped;
-#ifdef DEBUG
-	atexit(&uninit_util);
-#endif /* DEBUG */
+	stats_drift_file = 0;
+	stats_temp_file = 0;
+	key_file_name = 0;
+
+	filegen_register(&statsdir[0], "peerstats", &peerstats);
+
+	filegen_register(&statsdir[0], "loopstats", &loopstats);
+
+	filegen_register(&statsdir[0], "clockstats", &clockstats);
+
+	filegen_register(&statsdir[0], "rawstats", &rawstats);
+
+	filegen_register(&statsdir[0], "sysstats", &sysstats);
+
+#ifdef OPENSSL
+	filegen_register(&statsdir[0], "cryptostats", &cryptostats);
+#endif /* OPENSSL */
+
+#ifdef DEBUG_TIMING
+	filegen_register(&statsdir[0], "timingstats", &timingstats);
+#endif
 }
 
 
@@ -181,16 +133,17 @@ init_util(void)
 void
 write_stats(void)
 {
-	FILE	*fp;
+	FILE *fp;
+
 #ifdef DOSYNCTODR
 	struct timeval tv;
 #if !defined(VMS)
-	int	prio_set;
+	int prio_set;
 #endif
 #ifdef HAVE_GETCLOCK
-	struct timespec ts;
+        struct timespec ts;
 #endif
-	int	o_prio;
+	int o_prio;
 
 	/*
 	 * Sometimes having a Sun can be a drag.
@@ -210,13 +163,12 @@ write_stats(void)
 	 * thing to do.
 	 *
 	 * CAVEAT: settimeofday() steps the sun clock by about 800 us,
-	 *	   so setting DOSYNCTODR seems a bad idea in the
-	 *	   case of us resolution
+	 *         so setting DOSYNCTODR seems a bad idea in the
+	 *         case of us resolution
 	 */
 
 #if !defined(VMS)
-	/*
-	 * (prr) getpriority returns -1 on error, but -1 is also a valid
+	/* (prr) getpriority returns -1 on error, but -1 is also a valid
 	 * return value (!), so instead we have to zero errno before the
 	 * call and check it for non-zero afterwards.
 	 */
@@ -240,45 +192,37 @@ write_stats(void)
 		prio_set = 1;	/* overdrive */
 #endif /* VMS */
 #ifdef HAVE_GETCLOCK
-	(void) getclock(TIMEOFDAY, &ts);
-	tv.tv_sec = ts.tv_sec;
-	tv.tv_usec = ts.tv_nsec / 1000;
+        (void) getclock(TIMEOFDAY, &ts);
+        tv.tv_sec = ts.tv_sec;
+        tv.tv_usec = ts.tv_nsec / 1000;
 #else /*  not HAVE_GETCLOCK */
 	GETTIMEOFDAY(&tv,(struct timezone *)NULL);
 #endif /* not HAVE_GETCLOCK */
-	if (ntp_set_tod(&tv,(struct timezone *)NULL) != 0)
+	if (ntp_set_tod(&tv,(struct timezone *)NULL) != 0) {
 		msyslog(LOG_ERR, "can't sync battery time: %m");
+	}
 #if !defined(VMS)
 	if (prio_set)
 		setpriority(PRIO_PROCESS, 0, o_prio); /* downshift */
 #endif /* VMS */
 #endif /* DOSYNCTODR */
-	record_sys_stats();
-	if (stats_drift_file != 0) {
 
-		/*
-		 * When the frequency file is written, initialize the
-		 * prev_drift_comp and wander_resid. Thereafter,
-		 * reduce the wander_resid by half each hour. When
-		 * the difference between the prev_drift_comp and
-		 * drift_comp is less than the wander_resid, update
-		 * the frequncy file. This minimizes the file writes to
-		 * nonvolaile storage.
-		 */
-#ifdef DEBUG
-		if (debug)
-			printf("write_stats: frequency %.6lf thresh %.6lf, freq %.6lf\n",
-			    (prev_drift_comp - drift_comp) * 1e6, wander_resid *
-			    1e6, drift_comp * 1e6);
-#endif
-		if (fabs(prev_drift_comp - drift_comp) < wander_resid) {
-			wander_resid *= 0.5;
-			return;
-		}
-		prev_drift_comp = drift_comp;
-		wander_resid = wander_threshold;
+	NLOG(NLOG_SYSSTATIST)
+		msyslog(LOG_INFO,
+		    "offset %.6f sec freq %.3f ppm error %.6f poll %d",
+		    last_offset, drift_comp * 1e6, sys_jitter,
+		    sys_poll);
+
+	
+	record_sys_stats();
+	if ((u_long)(fabs(prev_drift_comp - drift_comp) * 1e9) <=
+	    (u_long)(fabs(stats_write_tolerance * drift_comp) * 1e9)) {
+	     return;
+	}
+	prev_drift_comp = drift_comp;
+	if (stats_drift_file != 0) {
 		if ((fp = fopen(stats_temp_file, "w")) == NULL) {
-			msyslog(LOG_ERR, "frequency file %s: %m",
+			msyslog(LOG_ERR, "can't open %s: %m",
 			    stats_temp_file);
 			return;
 		}
@@ -286,26 +230,19 @@ write_stats(void)
 		(void)fclose(fp);
 		/* atomic */
 #ifdef SYS_WINNT
-		if (_unlink(stats_drift_file)) /* rename semantics differ under NT */
-			msyslog(LOG_WARNING, 
-				"Unable to remove prior drift file %s, %m", 
-				stats_drift_file);
+		(void) _unlink(stats_drift_file); /* rename semantics differ under NT */
 #endif /* SYS_WINNT */
 
 #ifndef NO_RENAME
-		if (rename(stats_temp_file, stats_drift_file))
-			msyslog(LOG_WARNING, 
-				"Unable to rename temp drift file %s to %s, %m", 
-				stats_temp_file, stats_drift_file);
+		(void) rename(stats_temp_file, stats_drift_file);
 #else
 		/* we have no rename NFS of ftp in use */
-		if ((fp = fopen(stats_drift_file, "w")) ==
-		    NULL) {
-			msyslog(LOG_ERR,
-			    "frequency file %s: %m",
+		if ((fp = fopen(stats_drift_file, "w")) == NULL) {
+			msyslog(LOG_ERR, "can't open %s: %m",
 			    stats_drift_file);
 			return;
 		}
+
 #endif
 
 #if defined(VMS)
@@ -313,10 +250,9 @@ write_stats(void)
 		{
 			$DESCRIPTOR(oldvers,";-1");
 			struct dsc$descriptor driftdsc = {
-				strlen(stats_drift_file), 0, 0,
-				    stats_drift_file };
-			while(lib$delete_file(&oldvers,
-			    &driftdsc) & 1);
+				strlen(stats_drift_file),0,0,stats_drift_file };
+
+			while(lib$delete_file(&oldvers,&driftdsc) & 1) ;
 		}
 #endif
 	}
@@ -332,17 +268,9 @@ stats_config(
 	const char *invalue	/* only one type so far */
 	)
 {
-	FILE	*fp;
+	FILE *fp;
 	const char *value;
-	int	len;
-	double	old_drift;
-	l_fp	now;
-	time_t  ttnow;
-#ifndef VMS
-	const char temp_ext[] = ".TEMP";
-#else
-	const char temp_ext[] = "-TEMP";
-#endif
+	int len;
 
 	/*
 	 * Expand environment strings under Windows NT, since the
@@ -352,192 +280,170 @@ stats_config(
 	char newvalue[MAX_PATH], parameter[MAX_PATH];
 
 	if (!ExpandEnvironmentStrings(invalue, newvalue, MAX_PATH)) {
-		switch (item) {
-		case STATS_FREQ_FILE:
-			strlcpy(parameter, "STATS_FREQ_FILE",
-				sizeof(parameter));
+ 		switch(item) {
+		    case STATS_FREQ_FILE:
+			strcpy(parameter,"STATS_FREQ_FILE");
 			break;
-
-		case STATS_LEAP_FILE:
-			strlcpy(parameter, "STATS_LEAP_FILE",
-				sizeof(parameter));
+		    case STATS_STATSDIR:
+			strcpy(parameter,"STATS_STATSDIR");
 			break;
-
-		case STATS_STATSDIR:
-			strlcpy(parameter, "STATS_STATSDIR",
-				sizeof(parameter));
+		    case STATS_PID_FILE:
+			strcpy(parameter,"STATS_PID_FILE");
 			break;
-
-		case STATS_PID_FILE:
-			strlcpy(parameter, "STATS_PID_FILE",
-				sizeof(parameter));
-			break;
-
-		default:
-			strlcpy(parameter, "UNKNOWN",
-				sizeof(parameter));
+		    default:
+			strcpy(parameter,"UNKNOWN");
 			break;
 		}
 		value = invalue;
+
 		msyslog(LOG_ERR,
-			"ExpandEnvironmentStrings(%s) failed: %m\n",
-			parameter);
+		    "ExpandEnvironmentStrings(%s) failed: %m\n", parameter);
 	} else {
 		value = newvalue;
 	}
-#else	 
+#else    
 	value = invalue;
 #endif /* SYS_WINNT */
 
-	switch (item) {
+	switch(item) {
+	    case STATS_FREQ_FILE:
+		if (stats_drift_file != 0) {
+			(void) free(stats_drift_file);
+			(void) free(stats_temp_file);
+			stats_drift_file = 0;
+			stats_temp_file = 0;
+		}
 
-	/*
-	 * Open and read frequency file.
-	 */
-	case STATS_FREQ_FILE:
-		if (!value || (len = strlen(value)) == 0)
-			break;
+		if (value == 0 || (len = strlen(value)) == 0)
+		    break;
 
-		stats_drift_file = erealloc(stats_drift_file, len + 1);
-		stats_temp_file = erealloc(stats_temp_file, 
-		    len + sizeof(".TEMP"));
-		memcpy(stats_drift_file, value, (size_t)(len+1));
-		memcpy(stats_temp_file, value, (size_t)len);
-		memcpy(stats_temp_file + len, temp_ext, sizeof(temp_ext));
+		stats_drift_file = (char*)emalloc((u_int)(len + 1));
+#if !defined(VMS)
+		stats_temp_file = (char*)emalloc((u_int)(len +
+		    sizeof(".TEMP")));
+#else
+		stats_temp_file = (char*)emalloc((u_int)(len +
+		    sizeof("-TEMP")));
+#endif /* VMS */
+		memmove(stats_drift_file, value, (unsigned)(len+1));
+		memmove(stats_temp_file, value, (unsigned)len);
+#if !defined(VMS)
+		memmove(stats_temp_file + len, ".TEMP",
+		    sizeof(".TEMP"));
+#else
+		memmove(stats_temp_file + len, "-TEMP",
+		    sizeof("-TEMP"));
+#endif /* VMS */
 
 		/*
 		 * Open drift file and read frequency. If the file is
 		 * missing or contains errors, tell the loop to reset.
 		 */
-		if ((fp = fopen(stats_drift_file, "r")) == NULL)
+		if ((fp = fopen(stats_drift_file, "r")) == NULL) {
+			old_drift = 1e9;
 			break;
-
+		}
 		if (fscanf(fp, "%lf", &old_drift) != 1) {
-			msyslog(LOG_ERR,
-				"format error frequency file %s", 
-				stats_drift_file);
+			msyslog(LOG_ERR, "Frequency format error in %s", 
+			    stats_drift_file);
+			old_drift = 1e9;
 			fclose(fp);
 			break;
-
 		}
 		fclose(fp);
-		loop_config(LOOP_FREQ, old_drift);
-		prev_drift_comp = drift_comp;
+		prev_drift_comp = old_drift / 1e6;
+		msyslog(LOG_INFO,
+		    "frequency initialized %.3f PPM from %s",
+			old_drift, stats_drift_file);
 		break;
-
-	/*
-	 * Specify statistics directory.
-	 */
-	case STATS_STATSDIR:
-
-		/* - 1 since value may be missing the DIR_SEP. */
-		if (strlen(value) >= sizeof(statsdir) - 1) {
+	
+	    case STATS_STATSDIR:
+		if (strlen(value) >= sizeof(statsdir)) {
 			msyslog(LOG_ERR,
-			    "statsdir too long (>%d, sigh)",
-			    (int)sizeof(statsdir) - 2);
+			    "value for statsdir too long (>%d, sigh)",
+			    (int)sizeof(statsdir)-1);
 		} else {
-			int add_dir_sep;
-			int value_l;
-
-			/* Add a DIR_SEP unless we already have one. */
-			value_l = strlen(value);
-			if (0 == value_l)
-				add_dir_sep = FALSE;
-			else
-				add_dir_sep = (DIR_SEP !=
-				    value[value_l - 1]);
-
-			if (add_dir_sep)
-				snprintf(statsdir, sizeof(statsdir),
-				    "%s%c", value, DIR_SEP);
-			else
-				snprintf(statsdir, sizeof(statsdir),
-				    "%s", value);
-			filegen_statsdir();
-		}
-		break;
-
-	/*
-	 * Open pid file.
-	 */
-	case STATS_PID_FILE:
-		if ((fp = fopen(value, "w")) == NULL) {
-			msyslog(LOG_ERR, "pid file %s: %m",
-			    value);
-			break;
-		}
-		fprintf(fp, "%d", (int)getpid());
-		fclose(fp);
-		break;
-
-	/*
-	 * Read leapseconds file.
-	 *
-	 * Note: Currently a leap file without SHA1 signature is
-	 * accepted, but if there is a signature line, the signature
-	 * must be valid or the file is rejected.
-	 */
-	case STATS_LEAP_FILE:
-		if (!value || (len = strlen(value)) == 0)
-			break;
-
-		leapfile_name = erealloc(leapfile_name, len + 1);
-		memcpy(leapfile_name, value, len + 1);
-
-		if (leapsec_load_file(
-			    leapfile_name, &leapfile_stat, TRUE, TRUE))
-		{
-			leap_signature_t lsig;
+			l_fp now;
 
 			get_systime(&now);
-			time(&ttnow);
-			leapsec_getsig(&lsig);
-			mprintf_event(EVNT_TAI, NULL,
-				      "%d leap %s %s %s",
-				      lsig.taiof,
-				      fstostr(lsig.ttime),
-				      leapsec_expired(now.l_ui, NULL)
-					  ? "expired"
-					  : "expires",
-				      fstostr(lsig.etime));
-
-			have_leapfile = TRUE;
-
-			/* force an immediate daily expiration check of
-			 * the leap seconds table
-			 */
-			check_leap_expiration(TRUE, now.l_ui, &ttnow);
+			strcpy(statsdir,value);
+			if(peerstats.prefix == &statsdir[0] &&
+			    peerstats.fp != NULL) {
+				fclose(peerstats.fp);
+				peerstats.fp = NULL;
+				filegen_setup(&peerstats, now.l_ui);
+			}
+			if(loopstats.prefix == &statsdir[0] &&
+			    loopstats.fp != NULL) {
+				fclose(loopstats.fp);
+				loopstats.fp = NULL;
+				filegen_setup(&loopstats, now.l_ui);
+			}
+			if(clockstats.prefix == &statsdir[0] &&
+			    clockstats.fp != NULL) {
+				fclose(clockstats.fp);
+				clockstats.fp = NULL;
+				filegen_setup(&clockstats, now.l_ui);
+			}
+			if(rawstats.prefix == &statsdir[0] &&
+			    rawstats.fp != NULL) {
+				fclose(rawstats.fp);
+				rawstats.fp = NULL;
+				filegen_setup(&rawstats, now.l_ui);
+			}
+			if(sysstats.prefix == &statsdir[0] &&
+			    sysstats.fp != NULL) {
+				fclose(sysstats.fp);
+				sysstats.fp = NULL;
+				filegen_setup(&sysstats, now.l_ui);
+			}
+#ifdef OPENSSL
+			if(cryptostats.prefix == &statsdir[0] &&
+			    cryptostats.fp != NULL) {
+				fclose(cryptostats.fp);
+				cryptostats.fp = NULL;
+				filegen_setup(&cryptostats, now.l_ui);
+			}
+#endif /* OPENSSL */
 		}
 		break;
 
-	default:
+	    case STATS_PID_FILE:
+		if ((fp = fopen(value, "w")) == NULL) {
+			msyslog(LOG_ERR, "Can't open %s: %m", value);
+			break;
+		}
+		fprintf(fp, "%d", (int) getpid());
+		fclose(fp);;
+		break;
+
+	    default:
 		/* oh well */
 		break;
 	}
 }
 
-
 /*
  * record_peer_stats - write peer statistics to file
  *
  * file format:
- * day (MJD)
+ * day (mjd)
  * time (s past UTC midnight)
- * IP address
- * status word (hex)
- * offset
- * delay
- * dispersion
- * jitter
+ * peer (ip address)
+ * peer status word (hex)
+ * peer offset (s)
+ * peer delay (s)
+ * peer error bound (s)
+ * peer error (s)
 */
 void
 record_peer_stats(
-	sockaddr_u *addr,
+	struct sockaddr_storage *addr,
 	int	status,
-	double	offset,		/* offset */
-	double	delay,		/* delay */
-	double	dispersion,	/* dispersion */
-	double	jitter		/* jitter */
+	double	offset,
+	double	delay,
+	double	dispersion,
+	double	skew
 	)
 {
 	l_fp	now;
@@ -552,32 +458,29 @@ record_peer_stats(
 	now.l_ui %= 86400;
 	if (peerstats.fp != NULL) {
 		fprintf(peerstats.fp,
-		    "%lu %s %s %x %.9f %.9f %.9f %.9f\n", day,
-		    ulfptoa(&now, 3), stoa(addr), status, offset,
-		    delay, dispersion, jitter);
+		    "%lu %s %s %x %.9f %.9f %.9f %.9f\n",
+		    day, ulfptoa(&now, 3), stoa(addr), status, offset,
+		    delay, dispersion, skew);
 		fflush(peerstats.fp);
 	}
 }
-
 
 /*
  * record_loop_stats - write loop filter statistics to file
  *
  * file format:
- * day (MJD)
+ * day (mjd)
  * time (s past midnight)
- * offset
- * frequency (PPM)
- * jitter
- * wnder (PPM)
- * time constant (log2)
+ * offset (s)
+ * frequency (approx ppm)
+ * time constant (log base 2)
  */
 void
 record_loop_stats(
-	double	offset,		/* offset */
-	double	freq,		/* frequency (PPM) */
-	double	jitter,		/* jitter */
-	double	wander,		/* wander (PPM) */
+	double	offset,
+	double	freq,
+	double	jitter,
+	double	stability,
 	int spoll
 	)
 {
@@ -594,25 +497,24 @@ record_loop_stats(
 	if (loopstats.fp != NULL) {
 		fprintf(loopstats.fp, "%lu %s %.9f %.3f %.9f %.6f %d\n",
 		    day, ulfptoa(&now, 3), offset, freq * 1e6, jitter,
-		    wander * 1e6, spoll);
+		    stability * 1e6, spoll);
 		fflush(loopstats.fp);
 	}
 }
-
 
 /*
  * record_clock_stats - write clock statistics to file
  *
  * file format:
- * day (MJD)
+ * day (mjd)
  * time (s past midnight)
- * IP address
+ * peer (ip address)
  * text message
  */
 void
 record_clock_stats(
-	sockaddr_u *addr,
-	const char *text	/* timecode string */
+	struct sockaddr_storage *addr,
+	const char *text
 	)
 {
 	l_fp	now;
@@ -626,64 +528,30 @@ record_clock_stats(
 	day = now.l_ui / 86400 + MJD_1900;
 	now.l_ui %= 86400;
 	if (clockstats.fp != NULL) {
-		fprintf(clockstats.fp, "%lu %s %s %s\n", day,
-		    ulfptoa(&now, 3), stoa(addr), text);
+		fprintf(clockstats.fp, "%lu %s %s %s\n",
+		    day, ulfptoa(&now, 3), stoa(addr), text);
 		fflush(clockstats.fp);
 	}
-}
-
-
-/*
- * mprintf_clock_stats - write clock statistics to file with
- *			msnprintf-style formatting.
- */
-int
-mprintf_clock_stats(
-	sockaddr_u *addr,
-	const char *fmt,
-	...
-	)
-{
-	va_list	ap;
-	int	rc;
-	char	msg[512];
-
-	va_start(ap, fmt);
-	rc = mvsnprintf(msg, sizeof(msg), fmt, ap);
-	va_end(ap);
-	if (stats_control)
-		record_clock_stats(addr, msg);
-
-	return rc;
 }
 
 /*
  * record_raw_stats - write raw timestamps to file
  *
+ *
  * file format
- * day (MJD)
  * time (s past midnight)
  * peer ip address
- * IP address
+ * local ip address
  * t1 t2 t3 t4 timestamps
  */
 void
 record_raw_stats(
-	sockaddr_u *srcadr,
-	sockaddr_u *dstadr,
-	l_fp	*t1,		/* originate timestamp */
-	l_fp	*t2,		/* receive timestamp */
-	l_fp	*t3,		/* transmit timestamp */
-	l_fp	*t4,		/* destination timestamp */
-	int	leap,
-	int	version,
-	int	mode,
-	int	stratum,
-	int	ppoll,
-	int	precision,
-	double	root_delay,	/* seconds */
-	double	root_dispersion,/* seconds */
-	u_int32	refid
+        struct sockaddr_storage *srcadr,
+        struct sockaddr_storage *dstadr,
+	l_fp	*t1,
+	l_fp	*t2,
+	l_fp	*t3,
+	l_fp	*t4
 	)
 {
 	l_fp	now;
@@ -697,13 +565,10 @@ record_raw_stats(
 	day = now.l_ui / 86400 + MJD_1900;
 	now.l_ui %= 86400;
 	if (rawstats.fp != NULL) {
-		fprintf(rawstats.fp, "%lu %s %s %s %s %s %s %s %d %d %d %d %d %d %.6f %.6f %s\n",
-		    day, ulfptoa(&now, 3),
-		    stoa(srcadr), dstadr ?  stoa(dstadr) : "-",
-		    ulfptoa(t1, 9), ulfptoa(t2, 9),
-		    ulfptoa(t3, 9), ulfptoa(t4, 9),
-		    leap, version, mode, stratum, ppoll, precision,
-		    root_delay, root_dispersion, refid_str(refid, stratum));
+                fprintf(rawstats.fp, "%lu %s %s %s %s %s %s %s\n",
+			day, ulfptoa(&now, 3), stoa(srcadr), dstadr ? stoa(dstadr) : "-",
+			ulfptoa(t1, 9), ulfptoa(t2, 9), ulfptoa(t3, 9),
+			ulfptoa(t4, 9));
 		fflush(rawstats.fp);
 	}
 }
@@ -713,19 +578,17 @@ record_raw_stats(
  * record_sys_stats - write system statistics to file
  *
  * file format
- * day (MJD)
  * time (s past midnight)
- * time since reset
+ * time since startup (hr)
  * packets recieved
- * packets for this host
+ * packets processed
  * current version
- * old version
+ * previous version
+ * bad version
  * access denied
  * bad length or format
  * bad authentication
- * declined
  * rate exceeded
- * KoD sent
  */
 void
 record_sys_stats(void)
@@ -741,64 +604,33 @@ record_sys_stats(void)
 	day = now.l_ui / 86400 + MJD_1900;
 	now.l_ui %= 86400;
 	if (sysstats.fp != NULL) {
-		fprintf(sysstats.fp,
-		    "%lu %s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu\n",
-		    day, ulfptoa(&now, 3), current_time - sys_stattime,
-		    sys_received, sys_processed, sys_newversion,
-		    sys_oldversion, sys_restricted, sys_badlength,
-		    sys_badauth, sys_declined, sys_limitrejected,
-		    sys_kodsent);
+                fprintf(sysstats.fp,
+		    "%lu %s %lu %lu %lu %lu %lu %lu %lu %lu %lu %lu\n",
+		    day, ulfptoa(&now, 3), sys_stattime / 3600,
+		    sys_received, sys_processed, sys_newversionpkt,
+		    sys_oldversionpkt, sys_unknownversion,
+		    sys_restricted, sys_badlength, sys_badauth,
+		    sys_limitrejected);
 		fflush(sysstats.fp);
 		proto_clr_stats();
 	}
 }
 
 
-/*
- * record_proto_stats - write system statistics to file
- *
- * file format
- * day (MJD)
- * time (s past midnight)
- * text message
- */
-void
-record_proto_stats(
-	char	*str		/* text string */
-	)
-{
-	l_fp	now;
-	u_long	day;
-
-	if (!stats_control)
-		return;
-
-	get_systime(&now);
-	filegen_setup(&protostats, now.l_ui);
-	day = now.l_ui / 86400 + MJD_1900;
-	now.l_ui %= 86400;
-	if (protostats.fp != NULL) {
-		fprintf(protostats.fp, "%lu %s %s\n", day,
-		    ulfptoa(&now, 3), str);
-		fflush(protostats.fp);
-	}
-}
-
-
-#ifdef AUTOKEY
+#ifdef OPENSSL
 /*
  * record_crypto_stats - write crypto statistics to file
  *
  * file format:
  * day (mjd)
  * time (s past midnight)
- * peer ip address
+ * peer (ip address)
  * text message
  */
 void
 record_crypto_stats(
-	sockaddr_u *addr,
-	const char *text	/* text message */
+	struct sockaddr_storage *addr,
+	const char *text
 	)
 {
 	l_fp	now;
@@ -813,7 +645,7 @@ record_crypto_stats(
 	now.l_ui %= 86400;
 	if (cryptostats.fp != NULL) {
 		if (addr == NULL)
-			fprintf(cryptostats.fp, "%lu %s 0.0.0.0 %s\n",
+			fprintf(cryptostats.fp, "%lu %s %s\n",
 			    day, ulfptoa(&now, 3), text);
 		else
 			fprintf(cryptostats.fp, "%lu %s %s %s\n",
@@ -821,12 +653,11 @@ record_crypto_stats(
 		fflush(cryptostats.fp);
 	}
 }
-#endif	/* AUTOKEY */
-
+#endif /* OPENSSL */
 
 #ifdef DEBUG_TIMING
 /*
- * record_timing_stats - write timing statistics to file
+ * record_crypto_stats - write crypto statistics to file
  *
  * file format:
  * day (mjd)
@@ -835,7 +666,7 @@ record_crypto_stats(
  */
 void
 record_timing_stats(
-	const char *text	/* text message */
+	const char *text
 	)
 {
 	static unsigned int flshcnt;
@@ -850,81 +681,13 @@ record_timing_stats(
 	day = now.l_ui / 86400 + MJD_1900;
 	now.l_ui %= 86400;
 	if (timingstats.fp != NULL) {
-		fprintf(timingstats.fp, "%lu %s %s\n", day, lfptoa(&now,
-		    3), text);
+		fprintf(timingstats.fp, "%lu %s %s\n",
+			    day, lfptoa(&now, 3), text);
 		if (++flshcnt % 100 == 0)
 			fflush(timingstats.fp);
 	}
 }
 #endif
-
-
-/*
- * check_leap_file - See if the leapseconds file has been updated.
- *
- * Returns: n/a
- *
- * Note: This loads a new leapfile on the fly. Currently a leap file
- * without SHA1 signature is accepted, but if there is a signature line,
- * the signature must be valid or the file is rejected.
- */
-void
-check_leap_file(
-	int           is_daily_check,
-	uint32_t      ntptime       ,
-	const time_t *systime
-	)
-{
-	/* just do nothing if there is no leap file */
-	if ( ! (leapfile_name && *leapfile_name))
-		return;
-	
-	/* try to load leapfile, force it if no leapfile loaded yet */
-	if (leapsec_load_file(
-		    leapfile_name, &leapfile_stat,
-		    !have_leapfile, is_daily_check))
-		have_leapfile = TRUE;
-	else if (!have_leapfile)
-		return;
-
-	check_leap_expiration(is_daily_check, ntptime, systime);
-}
-
-/*
- * check expiration of a loaded leap table
- */
-static void
-check_leap_expiration(
-	int           is_daily_check,
-	uint32_t      ntptime       ,
-	const time_t *systime
-	)
-{
-	static const char * const logPrefix = "leapsecond file";
-	int  rc;
-
-	/* test the expiration of the leap data and log with proper
-	 * level and frequency (once/hour or once/day, depending on the
-	 * state.
-	 */
-	rc = leapsec_daystolive(ntptime, systime);	
-	if (rc == 0) {
-		msyslog(LOG_WARNING,
-			"%s ('%s'): will expire in less than one day",
-			logPrefix, leapfile_name);
-	} else if (is_daily_check && rc < 28) {
-		if (rc < 0)
-			msyslog(LOG_ERR,
-				"%s ('%s'): expired less than %d day%s ago",
-				logPrefix, leapfile_name, -rc, (rc == -1 ? "" : "s"));
-		else
-			msyslog(LOG_WARNING,
-				"%s ('%s'): will expire in less than %d days",
-				logPrefix, leapfile_name, 1+rc);
-	}
-}
-
-
 /*
  * getauthkeys - read the authentication keys from the specified file
  */
@@ -936,24 +699,31 @@ getauthkeys(
 	int len;
 
 	len = strlen(keyfile);
-	if (!len)
+	if (len == 0)
 		return;
 	
-#ifndef SYS_WINNT
-	key_file_name = erealloc(key_file_name, len + 1);
-	memcpy(key_file_name, keyfile, len + 1);
-#else
-	key_file_name = erealloc(key_file_name, _MAX_PATH);
-	if (len + 1 > _MAX_PATH)
-		return;
-	if (!ExpandEnvironmentStrings(keyfile, key_file_name,
-				      _MAX_PATH)) {
-		msyslog(LOG_ERR,
-			"ExpandEnvironmentStrings(KEY_FILE) failed: %m");
-		strlcpy(key_file_name, keyfile, _MAX_PATH);
+	if (key_file_name != 0) {
+		if (len > (int)strlen(key_file_name)) {
+			(void) free(key_file_name);
+			key_file_name = 0;
+		}
 	}
-	key_file_name = erealloc(key_file_name,
-				 1 + strlen(key_file_name));
+
+	if (key_file_name == 0) {
+#ifndef SYS_WINNT
+		key_file_name = (char*)emalloc((u_int) (len + 1));
+#else
+		key_file_name = (char*)emalloc((u_int)  (MAXPATHLEN));
+#endif
+	}
+#ifndef SYS_WINNT
+ 	memmove(key_file_name, keyfile, (unsigned)(len+1));
+#else
+	if (!ExpandEnvironmentStrings(keyfile, key_file_name, MAXPATHLEN)) 
+	{
+		msyslog(LOG_ERR,
+		    "ExpandEnvironmentStrings(KEY_FILE) failed: %m\n");
+	}
 #endif /* SYS_WINNT */
 
 	authreadkeys(key_file_name);
@@ -966,10 +736,57 @@ getauthkeys(
 void
 rereadkeys(void)
 {
-	if (NULL != key_file_name)
-		authreadkeys(key_file_name);
+	if (key_file_name != 0)
+	    authreadkeys(key_file_name);
 }
 
+/*
+ * sock_hash - hash an sockaddr_storage structure
+ */
+int
+sock_hash(
+	struct sockaddr_storage *addr
+	)
+{
+	int hashVal;
+	int i;
+	int len;
+	char *ch;
+
+	hashVal = 0;
+	len = 0;
+	/*
+	 * We can't just hash the whole thing because there are hidden
+	 * fields in sockaddr_in6 that might be filled in by recvfrom(),
+	 * so just use the family, port and address.
+	 */
+	ch = (char *)&addr->ss_family;
+	hashVal = 37 * hashVal + (int)*ch;
+	if (sizeof(addr->ss_family) > 1) {
+		ch++;
+		hashVal = 37 * hashVal + (int)*ch;
+	}
+	switch(addr->ss_family) {
+	case AF_INET:
+		ch = (char *)&((struct sockaddr_in *)addr)->sin_addr;
+		len = sizeof(struct in_addr);
+		break;
+	case AF_INET6:
+		ch = (char *)&((struct sockaddr_in6 *)addr)->sin6_addr;
+		len = sizeof(struct in6_addr);
+		break;
+	}
+
+	for (i = 0; i < len ; i++)
+		hashVal = 37 * hashVal + (int)*(ch + i);
+
+	hashVal = hashVal % 128;  /* % MON_HASH_SIZE hardcoded */
+
+	if (hashVal < 0)
+		hashVal += 128;
+
+	return hashVal;
+}
 
 #if notyet
 /*
@@ -978,54 +795,7 @@ rereadkeys(void)
 void
 ntp_exit(int retval)
 {
-	msyslog(LOG_ERR, "EXITING with return code %d", retval);
-	exit(retval);
+  msyslog(LOG_ERR, "EXITING with return code %d", retval);
+  exit(retval);
 }
 #endif
-
-/*
- * fstostr - prettyprint NTP seconds
- */
-char * fstostr(
-	time_t	ntp_stamp
-	)
-{
-	char *		buf;
-	struct calendar tm;
-
-	LIB_GETBUF(buf);
-	if (ntpcal_ntp_to_date(&tm, (u_int32)ntp_stamp, NULL) < 0)
-		snprintf(buf, LIB_BUFLENGTH, "ntpcal_ntp_to_date: %ld: range error",
-			 (long)ntp_stamp);
-	else
-		snprintf(buf, LIB_BUFLENGTH, "%04d%02d%02d%02d%02d",
-			 tm.year, tm.month, tm.monthday,
-			 tm.hour, tm.minute);
-	return buf;
-}
-
-
-/*
- * ntpd_time_stepped is called back by step_systime(), allowing ntpd
- * to do any one-time processing necessitated by the step.
- */
-void
-ntpd_time_stepped(void)
-{
-	u_int saved_mon_enabled;
-
-	/*
-	 * flush the monitor MRU list which contains l_fp timestamps
-	 * which should not be compared across the step.
-	 */
-	if (MON_OFF != mon_enabled) {
-		saved_mon_enabled = mon_enabled;
-		mon_stop(MON_OFF);
-		mon_start(saved_mon_enabled);
-	}
-
-	/* inform interpolating Windows code to allow time to go back */
-#ifdef SYS_WINNT
-	win_time_stepped();
-#endif
-}

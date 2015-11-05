@@ -22,13 +22,13 @@ FindConfig(
 	struct utsname unamebuf; 
 
 	/* All keyed by initial target being a directory */
-	strlcpy(result, base, sizeof(result));
+	(void) strcpy(result, base);
 	if (stat(result, &sbuf) == 0) {
 		if (S_ISDIR(sbuf.st_mode)) {
 
 			/* First choice is my hostname */
 			if (gethostname(hostname, BUFSIZ) >= 0) {
-				snprintf(result, sizeof(result), "%s/%s", base, hostname);
+				(void) sprintf(result, "%s/%s", base, hostname);
 				if (stat(result, &sbuf) == 0) {
 					goto outahere;
 				} else {
@@ -39,19 +39,17 @@ FindConfig(
 					    cp = unamebuf.machine + 5;
 					else
 					    cp = unamebuf.machine;
-					snprintf(result, sizeof(result), "%s/default.%s", base, cp);
+					(void) sprintf(result, "%s/default.%s", base, cp);
 					if (stat(result, &sbuf) == 0) {
 						goto outahere;
 					} else {
 
 						/* Last choice is just default */
-						snprintf(result, sizeof(result), "%s/default", base);
+						(void) sprintf(result, "%s/default", base);
 						if (stat(result, &sbuf) == 0) {
 							goto outahere;
 						} else {
-							strlcpy(result,
-								"/not/found",
-								sizeof(result));
+							(void) strcpy(result, "/not/found");
 						}
 					}
 				}
