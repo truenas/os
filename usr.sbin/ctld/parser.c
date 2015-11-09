@@ -219,7 +219,7 @@ parse_target_lun(struct target *target, const ucl_object_t *obj)
 		target->t_luns[ucl_object_toint(num)] = lun;
 	}
 
-	return (1);
+	return (0);
 }
 
 static int
