@@ -90,6 +90,7 @@ __FBSDID("$FreeBSD$");
 #include <regex.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <bsdxml.h>
 
 #include <algorithm>
 #include <map>
@@ -135,6 +136,12 @@ typedef struct client {
 	int fd;
 	int socktype;
 } client_t;
+
+typedef struct event {
+	string type;
+	string key;
+	map<string, string> params;
+} event_t;
 
 extern FILE *yyin;
 extern int lineno;
@@ -780,6 +787,49 @@ config::find_and_execute(char type)
 		}
 	}
 
+}
+
+static void
+handle_start_element(void *priv, const char *name, const char **attrs)
+{
+	event_t *event = (event_t *)priv;
+
+	if (event->type.empty()) {
+		event->type = name;
+		return;
+	}
+
+	event->key = name;
+}
+
+static void
+handle_end_element(void *priv, const char *name)
+{
+	event_t *event = (event_t *)priv;
+
+	event->key.clear();
+}
+
+static void
+handle_data(void *priv, const char *data, int length)
+{
+	event_t *event = (event_t *)priv;
+
+	if (!event->key.empty()) {
+		event->params[event->key] = data;
+		event->key.clear();
+	}
+}
+
+static bool
+parse_event(char *buffer, event_t &event)
+{
+	XML_Parser parser = XML_ParserCreate(NULL);
+	XML_SetElementHandler(parser, handle_start_element, handle_end_element);
+	XML_SetCharacterDataHandler(parser, handle_data);
+	XML_SetUserData(parser, &event);
+
+	return (XML_Parse(parser, buffer, strlen(buffer), XML_TRUE) == XML_STATUS_ERROR);
 }
 
 

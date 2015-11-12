@@ -11,7 +11,7 @@ WARNS?=	3
 
 NO_SHARED?=YES
 
-LIBADD=	l util
+LIBADD=	l util bsdxml
 
 YFLAGS+=-v
 CFLAGS+=-I. -I${.CURDIR}
