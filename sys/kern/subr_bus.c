@@ -679,7 +679,7 @@ devctl_notify_params(const char *system, const char *subsystem,
 	size_t i;
 
 	sbuf_new(&sb, buf, sizeof(buf), SBUF_FIXEDLEN);
-	sbuf_printf(&sb, "<event><system>%s</system><subsystem>%s</subsystem>",
+	sbuf_printf(&sb, "<notify><system>%s</system><subsystem>%s</subsystem>",
 	    system, subsystem);
 
         if (type != NULL)
@@ -712,7 +712,7 @@ devctl_notify_params(const char *system, const char *subsystem,
 		sbuf_printf(&sb, "</%s>", params[i].dp_key);
 	}
 
-	sbuf_printf(&sb, "</event>\n");
+	sbuf_printf(&sb, "</notify>\n");
 	sbuf_finish(&sb);
 	
 	msg = malloc(sbuf_len(&sb), M_BUS, flags);
