@@ -31,6 +31,12 @@
 
 class config;
 
+typedef struct event {
+	std::string type;
+	std::string key;
+	std::map<std::string, std::string> params;
+} event_t;
+
 /**
  * var_list is a collection of variables.  These collections of variables
  * are stacked up and popped down for each event that we have to process.
@@ -157,11 +163,11 @@ public:
 	void remove_pidfile();
 	void push_var_table();
 	void pop_var_table();
-	void set_variable(const char *var, const char *val);
+	void set_variable(const std::string &var, const std::string &val);
 	const std::string &get_variable(const std::string &var);
 	const std::string expand_string(const char * var, 
 	    const char * prepend = NULL, const char * append = NULL);
-	char *set_vars(char *);
+	void set_vars(const event_t &event);
 	void find_and_execute(char);
 protected:
 	void sort_vector(std::vector<event_proc *> &);
