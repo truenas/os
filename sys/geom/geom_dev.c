@@ -285,7 +285,7 @@ g_dev_taste(struct g_class *mp, struct g_provider *pp, int insist __unused)
 	int error, len;
 	struct cdev *dev, *adev;
 	struct devctl_param param;
-	char *val;
+	char buf[64], *val;
 
 	g_trace(G_T_TOPOLOGY, "dev_taste(%s,%s)", mp->name, pp->name);
 	g_topology_assert();
@@ -341,7 +341,7 @@ g_dev_taste(struct g_class *mp, struct g_provider *pp, int insist __unused)
 
 	g_dev_attrchanged(cp, "GEOM::physpath");
 
-	param.dp_type = DP_STRING;
+	param.dp_type = DT_STRING;
 	param.dp_key = "cdev";
 	param.dp_string = gp->name;
 	devctl_notify_params("GEOM", "DEV", "CREATE", &param, 1, M_WAITOK);
