@@ -803,7 +803,7 @@ handle_data(void *priv, const char *data, int length)
 	event_t *event = (event_t *)priv;
 
 	if (!event->key.empty()) {
-		event->params[event->key] = data;
+		event->params[event->key] = string(data, length);
 		event->key.clear();
 	}
 }
@@ -826,7 +826,7 @@ process_event(char *buffer)
 	event_t event;
 	char type;
 
-	if (!parse_event(buffer, event))
+	if (parse_event(buffer, event))
 		return;
 
 	devdlog(LOG_INFO, "Processing event '%s'\n", buffer);
