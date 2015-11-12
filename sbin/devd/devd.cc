@@ -137,12 +137,6 @@ typedef struct client {
 	int socktype;
 } client_t;
 
-typedef struct event {
-	string type;
-	string key;
-	map<string, string> params;
-} event_t;
-
 extern FILE *yyin;
 extern int lineno;
 
@@ -601,7 +595,7 @@ config::pop_var_table()
 }
 
 void
-config::set_variable(const char *var, const char *val)
+config::set_variable(const string &var, const string &val)
 {
 	_var_list_table.back()->set_variable(var, val);
 }
@@ -737,19 +731,12 @@ config::chop_var(char *&buffer, char *&lhs, char *&rhs) const
 	return (true);
 }
 
-
-char *
-config::set_vars(char *buffer)
+void
+config::set_vars(const event_t &event)
 {
-	char *lhs;
-	char *rhs;
-
-	while (1) {
-		if (!chop_var(buffer, lhs, rhs))
-			break;
-		set_variable(lhs, rhs);
+	for (auto const &it: event.params) {
+		cfg.set_variable(it.first, it.second);
 	}
-	return (buffer);
 }
 
 void
@@ -836,69 +823,15 @@ parse_event(char *buffer, event_t &event)
 static void
 process_event(char *buffer)
 {
+	event_t event;
 	char type;
-	char *sp;
-	struct timeval tv;
-	char *timestr;
 
-	sp = buffer + 1;
+	if (!parse_event(buffer, event))
+		return;
+
 	devdlog(LOG_INFO, "Processing event '%s'\n", buffer);
-	type = *buffer++;
 	cfg.push_var_table();
-	// $* is the entire line
-	cfg.set_variable("*", buffer - 1);
-	// $_ is the entire line without the initial character
-	cfg.set_variable("_", buffer);
-
-	// Save the time this happened (as approximated by when we got
-	// around to processing it).
-	gettimeofday(&tv, NULL);
-	asprintf(&timestr, "%jd.%06ld", (uintmax_t)tv.tv_sec, tv.tv_usec);
-	cfg.set_variable("timestamp", timestr);
-	free(timestr);
-
-	// Match doesn't have a device, and the format is a little
-	// different, so handle it separately.
-	switch (type) {
-	case notify:
-		//! (k=v)*
-		sp = cfg.set_vars(sp);
-		break;
-	case nomatch:
-		//? at location pnp-info on bus
-		sp = strchr(sp, ' ');
-		if (sp == NULL)
-			return;	/* Can't happen? */
-		*sp++ = '\0';
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "at ", 3) == 0)
-			sp += 3;
-		sp = cfg.set_vars(sp);
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "on ", 3) == 0)
-			cfg.set_variable("bus", sp + 3);
-		break;
-	case attach:	/*FALLTHROUGH*/
-	case detach:
-		sp = strchr(sp, ' ');
-		if (sp == NULL)
-			return;	/* Can't happen? */
-		*sp++ = '\0';
-		cfg.set_variable("device-name", buffer);
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "at ", 3) == 0)
-			sp += 3;
-		sp = cfg.set_vars(sp);
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "on ", 3) == 0)
-			cfg.set_variable("bus", sp + 3);
-		break;
-	}
-
+	cfg.set_vars(event);
 	cfg.find_and_execute(type);
 	cfg.pop_var_table();
 }
