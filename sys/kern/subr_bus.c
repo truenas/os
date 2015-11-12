@@ -825,7 +825,7 @@ devremoved(device_t dev)
 static void
 devnomatch(device_t dev)
 {
-	devaddq("unknown", "", dev);
+	devaddq("nomatch", "", dev);
 }
 
 static int
