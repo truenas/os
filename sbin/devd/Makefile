@@ -10,8 +10,8 @@ WARNS?=	3
 
 NO_SHARED?=YES
 
-DPADD=	${LIBL} ${LIBUTIL}
-LDADD=	-ll -lutil
+DPADD=	${LIBL} ${LIBUTIL} ${LIBBSDXML}
+LDADD=	-ll -lutil -lbsdxml
 
 YFLAGS+=-v
 CFLAGS+=-I. -I${.CURDIR}

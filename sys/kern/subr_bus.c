@@ -48,6 +48,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/random.h>
 #include <sys/rman.h>
 #include <sys/selinfo.h>
+#include <sys/sbuf.h>
 #include <sys/signalvar.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
@@ -498,7 +499,7 @@ devread(struct cdev *dev, struct uio *uio, int ioflag)
 	TAILQ_REMOVE(&devsoftc.devq, n1, dei_link);
 	devsoftc.queued--;
 	mtx_unlock(&devsoftc.mtx);
-	rv = uiomove(n1->dei_data, strlen(n1->dei_data), uio);
+	rv = uiomove(n1->dei_data, strlen(n1->dei_data) + 1, uio);
 	free(n1->dei_data, M_BUS);
 	free(n1, M_BUS);
 	return (rv);
@@ -658,8 +659,9 @@ void
 devctl_notify_f(const char *system, const char *subsystem, const char *type,
     const char *data, int flags)
 {
-	int len = 0;
-	char *msg;
+	struct devctl_param params[1] = {
+		{.dp_key = "notify", .dp_string = data, .dp_type = DT_STRING}
+	};
 
 	if (system == NULL)
 		return;		/* BOGUS!  Must specify system. */
@@ -667,22 +669,60 @@ devctl_notify_f(const char *system, const char *subsystem, const char *type,
 		return;		/* BOGUS!  Must specify subsystem. */
 	if (type == NULL)
 		return;		/* BOGUS!  Must specify type. */
-	len += strlen(" system=") + strlen(system);
-	len += strlen(" subsystem=") + strlen(subsystem);
-	len += strlen(" type=") + strlen(type);
-	/* add in the data message plus newline. */
-	if (data != NULL)
-		len += strlen(data);
-	len += 3;	/* '!', '\n', and NUL */
-	msg = malloc(len, M_BUS, flags);
-	if (msg == NULL)
-		return;		/* Drop it on the floor */
-	if (data != NULL)
-		snprintf(msg, len, "!system=%s subsystem=%s type=%s %s\n",
-		    system, subsystem, type, data);
-	else
-		snprintf(msg, len, "!system=%s subsystem=%s type=%s\n",
-		    system, subsystem, type);
+
+	devctl_notify_params(system, subsystem, type, params,
+	    data == NULL ? 0 : 1, flags);
+}
+
+void
+devctl_notify_params(const char *system, const char *subsystem,
+    const char *type, const struct devctl_param *params, size_t nparams,
+    int flags)
+{
+	struct sbuf sb;
+	char buf[1024];
+	char *msg;
+	size_t i;
+
+	sbuf_new(&sb, buf, sizeof(buf), SBUF_FIXEDLEN);
+	sbuf_printf(&sb, "<notify><system>%s</system><subsystem>%s</subsystem>",
+	    system, subsystem);
+
+        if (type != NULL)
+		sbuf_printf(&sb, "<type>%s</type>", type);
+
+	for (i = 0; i < nparams; i++) {
+		sbuf_printf(&sb, "<%s>", params[i].dp_key);
+
+		switch (params[i].dp_type) {
+		case DT_STRING:
+			sbuf_printf(&sb, "%s", params[i].dp_string);
+			break;
+
+		case DT_INT:
+			sbuf_printf(&sb, "%ld", params[i].dp_int);
+			break;
+
+		case DT_UINT:
+			sbuf_printf(&sb, "%lu", params[i].dp_uint);
+			break;
+
+		case DT_BOOL:
+			sbuf_printf(&sb, "%s", params[i].dp_bool ? "true" : "false");
+			break;
+
+		default:
+			break;
+		}
+
+		sbuf_printf(&sb, "</%s>", params[i].dp_key);
+	}
+
+	sbuf_printf(&sb, "</notify>\n");
+	sbuf_finish(&sb);
+	
+	msg = malloc(sbuf_len(&sb), M_BUS, flags);
+	strncpy(msg, sbuf_data(&sb), sbuf_len(&sb) + 1);
 	devctl_queue_data_f(msg, flags);
 }
 
@@ -741,9 +781,12 @@ devaddq(const char *type, const char *what, device_t dev)
 		parstr = ".";	/* Or '/' ? */
 	else
 		parstr = device_get_nameunit(device_get_parent(dev));
+
 	/* String it all together. */
-	snprintf(data, 1024, "%s%s at %s %s on %s\n", type, what, loc, pnp,
-	  parstr);
+	snprintf(data, 1024, "<%s><name>%s</name><location>%s</location>"
+	    "<pnp>%s</pnp><parent>%s</parent></%s>\n", type, what, loc, pnp,
+	    parstr, type);
+
 	free(loc, M_BUS);
 	free(pnp, M_BUS);
 	devctl_queue_data(data);
@@ -765,7 +808,7 @@ bad:
 static void
 devadded(device_t dev)
 {
-	devaddq("+", device_get_nameunit(dev), dev);
+	devaddq("attach", device_get_nameunit(dev), dev);
 }
 
 /*
@@ -775,7 +818,7 @@ devadded(device_t dev)
 static void
 devremoved(device_t dev)
 {
-	devaddq("-", device_get_nameunit(dev), dev);
+	devaddq("detach", device_get_nameunit(dev), dev);
 }
 
 /*
@@ -788,7 +831,7 @@ devremoved(device_t dev)
 static void
 devnomatch(device_t dev)
 {
-	devaddq("?", "", dev);
+	devaddq("nomatch", "", dev);
 }
 
 static int

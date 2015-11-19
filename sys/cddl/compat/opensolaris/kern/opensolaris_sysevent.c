@@ -39,6 +39,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysevent.h>
 #include <sys/fm/protocol.h>
 
+#define	MAX_DEVCTL_PARAMS	16
+
 struct sysevent {
 	nvlist_t	*se_nvl;
 	char		 se_class[128];
@@ -164,29 +166,34 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 {
 	struct sysevent *ev = (struct sysevent *)evp;
 	struct sbuf *sb;
+	struct devctl_param params[MAX_DEVCTL_PARAMS];
 	const char *type;
 	char typestr[128];
 	nvpair_t *elem = NULL;
+	size_t nparams = 0;
 
 	ASSERT(evp != NULL);
 	ASSERT(ev->se_nvl != NULL);
 	ASSERT(flag == SE_SLEEP);
 	ASSERT(eid != NULL);
 
-	sb = sbuf_new_auto();
-	if (sb == NULL)
-		return (SE_ENOMEM);
 	type = NULL;
 
 	while ((elem = nvlist_next_nvpair(ev->se_nvl, elem)) != NULL) {
+		if (nparams == MAX_DEVCTL_PARAMS - 1)
+			break;
+
 		switch (nvpair_type(elem)) {
 		case DATA_TYPE_BOOLEAN:
 		    {
 			boolean_t value;
 
 			(void) nvpair_value_boolean_value(elem, &value);
-			sbuf_printf(sb, " %s=%s", nvpair_name(elem),
-			    value ? "true" : "false");
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_BOOL,
+				.dp_key = nvpair_name(elem),
+				.dp_bool = value
+			};
 			break;
 		    }
 		case DATA_TYPE_UINT8:
@@ -194,7 +201,11 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint8_t value;
 
 			(void) nvpair_value_uint8(elem, &value);
-			sbuf_printf(sb, " %s=%hhu", nvpair_name(elem), value);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_UINT,
+				.dp_key = nvpair_name(elem),
+				.dp_uint = (uint64_t)value
+			};
 			break;
 		    }
 		case DATA_TYPE_INT32:
@@ -202,8 +213,11 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			int32_t value;
 
 			(void) nvpair_value_int32(elem, &value);
-			sbuf_printf(sb, " %s=%jd", nvpair_name(elem),
-			    (intmax_t)value);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_INT,
+				.dp_key = nvpair_name(elem),
+				.dp_int = (int64_t)value
+			};
 			break;
 		    }
 		case DATA_TYPE_UINT32:
@@ -211,8 +225,11 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint32_t value;
 
 			(void) nvpair_value_uint32(elem, &value);
-			sbuf_printf(sb, " %s=%ju", nvpair_name(elem),
-			    (uintmax_t)value);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_UINT,
+				.dp_key = nvpair_name(elem),
+				.dp_uint = (uint64_t)value
+			};
 			break;
 		    }
 		case DATA_TYPE_INT64:
@@ -220,8 +237,11 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			int64_t value;
 
 			(void) nvpair_value_int64(elem, &value);
-			sbuf_printf(sb, " %s=%jd", nvpair_name(elem),
-			    (intmax_t)value);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_INT,
+				.dp_key = nvpair_name(elem),
+				.dp_int = value
+			};
 			break;
 		    }
 		case DATA_TYPE_UINT64:
@@ -229,8 +249,11 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint64_t value;
 
 			(void) nvpair_value_uint64(elem, &value);
-			sbuf_printf(sb, " %s=%ju", nvpair_name(elem),
-			    (uintmax_t)value);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_UINT,
+				.dp_key = nvpair_name(elem),
+				.dp_uint = value
+			};
 			break;
 		    }
 		case DATA_TYPE_STRING:
@@ -238,7 +261,12 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			char *value;
 
 			(void) nvpair_value_string(elem, &value);
-			sbuf_printf(sb, " %s=%s", nvpair_name(elem), value);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = nvpair_name(elem),
+				.dp_string = value
+			};
+
 			if (strcmp(FM_CLASS, nvpair_name(elem)) == 0)
 				type = value;
 			break;
@@ -249,9 +277,18 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint_t ii, nelem;
 
 			(void) nvpair_value_uint8_array(elem, &value, &nelem);
-			sbuf_printf(sb, " %s=", nvpair_name(elem));
+			sb = sbuf_new_auto();
 			for (ii = 0; ii < nelem; ii++)
 				sbuf_printf(sb, "%02hhx", value[ii]);
+
+			sbuf_finish(sb);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = nvpair_name(elem),
+				.dp_string = sbuf_data(sb)
+			};
+
+			sbuf_delete(sb);
 			break;
 		    }
 		case DATA_TYPE_UINT16_ARRAY:
@@ -260,9 +297,18 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint_t ii, nelem;
 
 			(void) nvpair_value_uint16_array(elem, &value, &nelem);
-			sbuf_printf(sb, " %s=", nvpair_name(elem));
+			sb = sbuf_new_auto();
 			for (ii = 0; ii < nelem; ii++)
 				sbuf_printf(sb, "%04hx", value[ii]);
+
+			sbuf_finish(sb);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = nvpair_name(elem),
+				.dp_string = sbuf_data(sb)
+			};
+
+			sbuf_delete(sb);
 			break;
 		    }
 		case DATA_TYPE_UINT32_ARRAY:
@@ -271,9 +317,18 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint_t ii, nelem;
 
 			(void) nvpair_value_uint32_array(elem, &value, &nelem);
-			sbuf_printf(sb, " %s=", nvpair_name(elem));
+			sb = sbuf_new_auto();
 			for (ii = 0; ii < nelem; ii++)
 				sbuf_printf(sb, "%08jx", (uintmax_t)value[ii]);
+
+			sbuf_finish(sb);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = nvpair_name(elem),
+				.dp_string = sbuf_data(sb)
+			};
+
+			sbuf_delete(sb);
 			break;
 		    }
 		case DATA_TYPE_UINT64_ARRAY:
@@ -282,9 +337,18 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 			uint_t ii, nelem;
 
 			(void) nvpair_value_uint64_array(elem, &value, &nelem);
-			sbuf_printf(sb, " %s=", nvpair_name(elem));
+			sb = sbuf_new_auto();
 			for (ii = 0; ii < nelem; ii++)
 				sbuf_printf(sb, "%016jx", (uintmax_t)value[ii]);
+
+			sbuf_finish(sb);
+			params[nparams++] = (struct devctl_param) {
+				.dp_type = DT_STRING,
+				.dp_key = nvpair_name(elem),
+				.dp_string = sbuf_data(sb)
+			};
+
+			sbuf_delete(sb);
 			break;
 		    }
 		default:
@@ -296,20 +360,14 @@ log_sysevent(sysevent_t *evp, int flag, sysevent_id_t *eid)
 		}
 	}
 
-	if (sbuf_finish(sb) != 0) {
-		sbuf_delete(sb);
-		return (SE_ENOMEM);
-	}
-
 	if (type == NULL)
 		type = ev->se_subclass;
 	if (strncmp(type, "ESC_ZFS_", 8) == 0) {
 		snprintf(typestr, sizeof(typestr), "misc.fs.zfs.%s", type + 8);
 		type = typestr;
 	}
-	devctl_notify("ZFS", "ZFS", type, sbuf_data(sb));
-	sbuf_delete(sb);
 
+	devctl_notify_params("ZFS", "ZFS", type, params, nparams, M_WAITOK);
 	return (0);
 }
 

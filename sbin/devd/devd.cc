@@ -90,6 +90,7 @@ __FBSDID("$FreeBSD$");
 #include <regex.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <bsdxml.h>
 
 #include <algorithm>
 #include <map>
@@ -583,7 +584,7 @@ config::pop_var_table()
 }
 
 void
-config::set_variable(const char *var, const char *val)
+config::set_variable(const string &var, const string &val)
 {
 	_var_list_table.back()->set_variable(var, val);
 }
@@ -719,19 +720,12 @@ config::chop_var(char *&buffer, char *&lhs, char *&rhs) const
 	return (true);
 }
 
-
-char *
-config::set_vars(char *buffer)
+void
+config::set_vars(const event_t &event)
 {
-	char *lhs;
-	char *rhs;
-
-	while (1) {
-		if (!chop_var(buffer, lhs, rhs))
-			break;
-		set_variable(lhs, rhs);
+	for (auto const &it: event.params) {
+		cfg.set_variable(it.first, it.second);
 	}
-	return (buffer);
 }
 
 void
@@ -771,58 +765,62 @@ config::find_and_execute(char type)
 
 }
 
+static void
+handle_start_element(void *priv, const char *name, const char **attrs)
+{
+	event_t *event = (event_t *)priv;
+
+	if (event->type.empty()) {
+		event->type = name;
+		return;
+	}
+
+	event->key = name;
+}
+
+static void
+handle_end_element(void *priv, const char *name)
+{
+	event_t *event = (event_t *)priv;
+
+	event->key.clear();
+}
+
+static void
+handle_data(void *priv, const char *data, int length)
+{
+	event_t *event = (event_t *)priv;
+
+	if (!event->key.empty()) {
+		event->params[event->key] = string(data, length);
+		event->key.clear();
+	}
+}
+
+static bool
+parse_event(char *buffer, event_t &event)
+{
+	XML_Parser parser = XML_ParserCreate(NULL);
+	XML_SetElementHandler(parser, handle_start_element, handle_end_element);
+	XML_SetCharacterDataHandler(parser, handle_data);
+	XML_SetUserData(parser, &event);
+
+	return (XML_Parse(parser, buffer, strlen(buffer), XML_TRUE) == XML_STATUS_ERROR);
+}
+
 
 static void
 process_event(char *buffer)
 {
+	event_t event;
 	char type;
-	char *sp;
 
-	sp = buffer + 1;
+	if (parse_event(buffer, event))
+		return;
+
 	devdlog(LOG_INFO, "Processing event '%s'\n", buffer);
-	type = *buffer++;
 	cfg.push_var_table();
-	// No match doesn't have a device, and the format is a little
-	// different, so handle it separately.
-	switch (type) {
-	case notify:
-		sp = cfg.set_vars(sp);
-		break;
-	case nomatch:
-		//? at location pnp-info on bus
-		sp = strchr(sp, ' ');
-		if (sp == NULL)
-			return;	/* Can't happen? */
-		*sp++ = '\0';
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "at ", 3) == 0)
-			sp += 3;
-		sp = cfg.set_vars(sp);
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "on ", 3) == 0)
-			cfg.set_variable("bus", sp + 3);
-		break;
-	case attach:	/*FALLTHROUGH*/
-	case detach:
-		sp = strchr(sp, ' ');
-		if (sp == NULL)
-			return;	/* Can't happen? */
-		*sp++ = '\0';
-		cfg.set_variable("device-name", buffer);
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "at ", 3) == 0)
-			sp += 3;
-		sp = cfg.set_vars(sp);
-		while (isspace(*sp))
-			sp++;
-		if (strncmp(sp, "on ", 3) == 0)
-			cfg.set_variable("bus", sp + 3);
-		break;
-	}
-
+	cfg.set_vars(event);
 	cfg.find_and_execute(type);
 	cfg.pop_var_table();
 }
