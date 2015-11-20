@@ -4013,6 +4013,15 @@ recverror:
 	if (limitds != NULL)
 		nvlist_free(limitds);
 
+	/*
+	 * zfs_receive() can return 0, two different negative values
+	 * (-1 or -2) or a positive value (libzfs error code). -2 means
+	 * "soft error" which is not fatal (as receive completed successfully
+	 * after all). Return 0 in that case.
+	 */
+	if (err == -2)
+		return (0);
+
 	return (err != 0);
 }
 
