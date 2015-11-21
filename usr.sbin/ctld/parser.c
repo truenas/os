@@ -144,7 +144,7 @@ parse_target_portal_group(struct target *target, const ucl_object_t *obj)
 	}
 
 	auth_group = ucl_object_find_key(obj, "auth-group-name");
-	if (!auth_group || auth_group->type != UCL_STRING) {
+	if (auth_group && auth_group->type != UCL_STRING) {
 		log_warnx("portal-group section in target \"%s\" is missing "
 		    "\"auth-group-name\" string key", target->t_name);
 		return (1);
@@ -162,7 +162,8 @@ parse_target_portal_group(struct target *target, const ucl_object_t *obj)
 		tag = auth_group_find(conf, ucl_object_tostring(auth_group));
 		if (tag == NULL) {
 			log_warnx("unknown auth-group \"%s\" for target "
-			    "\"%s\"", ucl_object_tostring(auth_group), target->t_name);
+			    "\"%s\"", ucl_object_tostring(auth_group),
+			    target->t_name);
 			return (1);
 		}
 	}
@@ -186,7 +187,8 @@ parse_target_lun(struct target *target, const ucl_object_t *obj)
 	if (obj->type == UCL_INT) {
 		char *name;
 
-		asprintf(&name, "%s,lun,%ju", target->t_name, ucl_object_toint(obj));
+		asprintf(&name, "%s,lun,%ju", target->t_name,
+		    ucl_object_toint(obj));
 		lun = lun_new(conf, name);
 		if (lun == NULL)
 			return (1);
@@ -262,7 +264,8 @@ parse_toplevel(const ucl_object_t *top)
 
 		if (!strcmp(key, "pidfile")) {
 			if (obj->type == UCL_STRING)
-				conf->conf_pidfile_path = strdup(ucl_object_tostring(obj));
+				conf->conf_pidfile_path = strdup(
+				    ucl_object_tostring(obj));
 			else {
 				log_warnx("\"pidfile\" property value is not string");
 				return (1);
@@ -272,17 +275,20 @@ parse_toplevel(const ucl_object_t *top)
 		if (!strcmp(key, "isns-server")) {
 			if (obj->type == UCL_ARRAY) {
 				iter = NULL;
-				while ((child = ucl_iterate_object(obj, &iter, true))) {
+				while ((child = ucl_iterate_object(obj, &iter,
+				    true))) {
 					if (child->type != UCL_STRING)
 						return (1);
 
-					err = isns_new(conf, ucl_object_tostring(child));
+					err = isns_new(conf,
+					    ucl_object_tostring(child));
 					if (err != 0) {
 						return (1);
 					}
 				}
 			} else {
-				log_warnx("\"isns-server\" property value is not an array");
+				log_warnx("\"isns-server\" property value is "
+				    "not an array");
 				return (1);
 			}
 		}
@@ -350,8 +356,10 @@ parse_toplevel(const ucl_object_t *top)
 		if (!strcmp(key, "target")) {
 			if (obj->type == UCL_OBJECT) {
 				iter = NULL;
-				while ((child = ucl_iterate_object(obj, &iter, true))) {
-					parse_target(ucl_object_key(child), child);
+				while ((child = ucl_iterate_object(obj, &iter,
+				    true))) {
+					parse_target(ucl_object_key(child),
+					    child);
 				}
 			} else {
 				log_warnx("\"target\" section is not an object");
@@ -566,7 +574,8 @@ parse_portal_group(const char *name, const ucl_object_t *top)
 				return (1);
 			}
 
-			if (portal_group_set_redirection(portal_group, ucl_object_tostring(obj)) != 0)
+			if (portal_group_set_redirection(portal_group,
+			    ucl_object_tostring(obj)) != 0)
 				return (1);
 		}
 
@@ -602,17 +611,20 @@ parse_target(const char *name, const ucl_object_t *top)
 			if (target->t_auth_group != NULL) {
 				if (target->t_auth_group->ag_name != NULL)
 					log_warnx("auth-group for target \"%s\" "
-					    "specified more than once", target->t_name);
-				else
-					log_warnx("cannot use both auth-group and explicit "
-					    "authorisations for target \"%s\"",
+					    "specified more than once",
 					    target->t_name);
+				else
+					log_warnx("cannot use both auth-group "
+					    "and explicit authorisations for "
+					    "target \"%s\"", target->t_name);
 				return (1);
 			}
-			target->t_auth_group = auth_group_find(conf, ucl_object_tostring(obj));
+			target->t_auth_group = auth_group_find(conf,
+			    ucl_object_tostring(obj));
 			if (target->t_auth_group == NULL) {
 				log_warnx("unknown auth-group \"%s\" for target "
-				    "\"%s\"", ucl_object_tostring(obj), target->t_name);
+				    "\"%s\"", ucl_object_tostring(obj),
+				    target->t_name);
 				return (1);
 			}
 		}
@@ -634,7 +646,8 @@ parse_target(const char *name, const ucl_object_t *top)
 				}
 				target->t_auth_group->ag_target = target;
 			}
-			error = auth_group_set_type(target->t_auth_group, ucl_object_tostring(obj));
+			error = auth_group_set_type(target->t_auth_group,
+			    ucl_object_tostring(obj));
 			if (error != 0)
 				return (1);
 		}
@@ -666,7 +679,8 @@ parse_target(const char *name, const ucl_object_t *top)
 				}
 				target->t_auth_group->ag_target = target;
 			}
-			an = auth_name_new(target->t_auth_group, ucl_object_tostring(obj));
+			an = auth_name_new(target->t_auth_group,
+			    ucl_object_tostring(obj));
 			if (an == NULL)
 				return (1);
 		}
@@ -683,19 +697,31 @@ parse_target(const char *name, const ucl_object_t *top)
 				}
 			} else {
 				target->t_auth_group = auth_group_new(conf, NULL);
-				if (target->t_auth_group == NULL) {
+				if (target->t_auth_group == NULL)
 					return (1);
-				}
+
 				target->t_auth_group->ag_target = target;
 			}
-			ap = auth_portal_new(target->t_auth_group, ucl_object_tostring(obj));
+			ap = auth_portal_new(target->t_auth_group,
+			    ucl_object_tostring(obj));
 			if (ap == NULL)
 				return (1);
 		}
 
 		if (!strcmp(key, "portal-group")) {
-			if (parse_target_portal_group(target, obj) != 0)
-				return (1);
+			if (obj->type == UCL_OBJECT) {
+				if (parse_target_portal_group(target, obj) != 0)
+					return (1);
+			}
+
+			if (obj->type == UCL_ARRAY) {
+				while ((tmp = ucl_iterate_object(obj, &it2,
+				    true))) {
+					if (parse_target_portal_group(target,
+					    tmp) != 0)
+						return (1);
+				}
+			}
 		}
 
 		if (!strcmp(key, "port")) {
@@ -797,7 +823,8 @@ parse_lun(const char *name, const ucl_object_t *top)
 				return (1);
 			}
 
-			while ((child = ucl_iterate_object(obj, &child_it, true))) {
+			while ((child = ucl_iterate_object(obj, &child_it,
+			    true))) {
 				lun_option_new(lun, ucl_object_key(child),
 				    ucl_object_tostring_forced(child));
 			}
