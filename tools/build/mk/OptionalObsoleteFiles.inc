@@ -172,6 +172,10 @@ OLD_DIRS+=etc/autofs
 .endif
 
 .if ${MK_BHYVE} == no
+OLD_FILES+=usr/lib/libvmmapi.a
+OLD_FILES+=usr/lib/libvmmapi.so
+OLD_LIBS+=usr/lib/libvmmapi.so.5
+OLD_FILES+=usr/include/vmmapi.h
 OLD_FILES+=usr/sbin/bhyve
 OLD_FILES+=usr/sbin/bhyvectl
 OLD_FILES+=usr/sbin/bhyveload
@@ -292,6 +296,10 @@ OLD_FILES+=usr/share/man/man3/sdp_register_service.3.gz
 OLD_FILES+=usr/share/man/man3/sdp_search.3.gz
 OLD_FILES+=usr/share/man/man3/sdp_unregister_service.3.gz
 OLD_FILES+=usr/share/man/man3/sdp_uuid2desc.3.gz
+OLD_FILES+=usr/share/man/man4/ng_bluetooth.4.gz
+OLD_FILES+=usr/share/man/man5/bluetooth.device.conf.5.gz
+OLD_FILES+=usr/share/man/man5/bluetooth.hosts.5.gz
+OLD_FILES+=usr/share/man/man5/bluetooth.protocols.5.gz
 OLD_FILES+=usr/share/man/man5/hcsecd.conf.5.gz
 OLD_FILES+=usr/share/man/man8/bcmfw.8.gz
 OLD_FILES+=usr/share/man/man8/bt3cfw.8.gz

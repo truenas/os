@@ -207,12 +207,10 @@ struct isp_pcmd {
  * Per nexus info.
  */
 struct isp_nexus {
-	struct isp_nexus *	next;
-	uint32_t
-		crnseed	:	8;	/* next command reference number */
-	uint32_t
-		tgt	:	16,	/* TGT for target */
-		lun	:	16;	/* LUN for target */
+	uint64_t lun;			/* LUN for target */
+	uint32_t tgt;			/* TGT for target */
+	uint8_t crnseed;		/* next command reference number */
+	struct isp_nexus *next;
 };
 #define	NEXUS_HASH_WIDTH	32
 #define	INITIAL_NEXUS_COUNT	MAX_FC_TARG
@@ -242,9 +240,6 @@ struct isp_fc {
 	struct isp_nexus *nexus_free_list;
 	uint32_t
 #ifdef	ISP_TARGET_MODE
-#ifdef	ISP_INTERNAL_TARGET
-		proc_active	: 1,
-#endif
 		tm_luns_enabled	: 1,
 		tm_enable_defer	: 1,
 		tm_enabled	: 1,
@@ -263,9 +258,6 @@ struct isp_fc {
 	struct task gtask;
 #ifdef	ISP_TARGET_MODE
 	struct tslist lun_hash[LUN_HASH_SIZE];
-#ifdef	ISP_INTERNAL_TARGET
-	struct proc *		target_proc;
-#endif
 #if defined(DEBUG)
 	unsigned int inject_lost_data_frame;
 #endif
@@ -278,9 +270,6 @@ struct isp_spi {
 	struct cam_path *path;
 	uint32_t
 #ifdef	ISP_TARGET_MODE
-#ifdef	ISP_INTERNAL_TARGET
-		proc_active	: 1,
-#endif
 		tm_luns_enabled	: 1,
 		tm_enable_defer	: 1,
 		tm_enabled	: 1,
@@ -290,9 +279,6 @@ struct isp_spi {
 		iid		: 4;
 #ifdef	ISP_TARGET_MODE
 	struct tslist lun_hash[LUN_HASH_SIZE];
-#ifdef	ISP_INTERNAL_TARGET
-	struct proc *		target_proc;
-#endif
 #endif
 	int			num_threads;
 };
@@ -734,7 +720,6 @@ extern int isp_fabric_hysteresis;
 extern int isp_loop_down_limit;
 extern int isp_gone_device_time;
 extern int isp_quickboot_time;
-extern int isp_autoconfig;
 
 /*
  * Platform private flags

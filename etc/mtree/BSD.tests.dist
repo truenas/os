@@ -10,6 +10,8 @@
         ..
         date
         ..
+        dd
+        ..
         expr
         ..
         ls
@@ -78,6 +80,8 @@
             test-programs
             ..
         ..
+        libarchive
+        ..
         libc
             c063
             ..
@@ -106,6 +110,8 @@
             regex
                 data
                 ..
+            ..
+            rpc
             ..
             ssp
             ..
@@ -182,6 +188,8 @@
         ..
     ..
     sys
+        acl
+        ..
         aio
         ..
         fifo
@@ -189,7 +197,11 @@
         file
         ..
         kern
+            acct
+            ..
             execve
+            ..
+            pipe
             ..
         ..
         kqueue
@@ -229,6 +241,8 @@
             ..
             unlink
             ..
+        ..
+        posixshm
         ..
         vfs
         ..
@@ -342,6 +356,8 @@
         ..
         cmp
         ..
+        cpio
+        ..
         col
         ..
         comm
@@ -362,6 +378,8 @@
         ..
         lastcomm
         ..
+        limits
+        ..
         m4
         ..
         ncal
@@ -373,6 +391,8 @@
         sed
             regress.multitest.out
             ..
+        ..
+        tar
         ..
         timeout
         ..
@@ -395,6 +415,8 @@
         etcupdate
         ..
         fstyp
+        ..
+        makefs
         ..
         newsyslog
         ..
