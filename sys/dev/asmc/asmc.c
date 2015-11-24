@@ -1294,7 +1294,7 @@ asmc_sms_task(void *arg, int pending)
 
 	param.dp_type = DT_UINT;
 	param.dp_key = "notify";
-	param.dp_value = type;
+	param.dp_int = type;
 	devctl_notify_params("ACPI", "asmc", "SMS", &param, 1, 0);
 }
 
