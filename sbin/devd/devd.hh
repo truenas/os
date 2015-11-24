@@ -168,7 +168,7 @@ public:
 	const std::string expand_string(const char * var, 
 	    const char * prepend = NULL, const char * append = NULL);
 	void set_vars(const event_t &event);
-	void find_and_execute(char);
+	void find_and_execute(const std::string type);
 protected:
 	void sort_vector(std::vector<event_proc *> &);
 	void parse_one_file(const char *fn);

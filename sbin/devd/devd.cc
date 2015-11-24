@@ -740,33 +740,24 @@ config::set_vars(const event_t &event)
 }
 
 void
-config::find_and_execute(char type)
+config::find_and_execute(const string type)
 {
-	vector<event_proc *> *l;
+	vector<event_proc *> *l = NULL;
 	vector<event_proc *>::const_iterator i;
-	const char *s;
 
-	switch (type) {
-	default:
-		return;
-	case notify:
+	if (type == "notify")
 		l = &_notify_list;
-		s = "notify";
-		break;
-	case nomatch:
+	else if (type == "nomatch")
 		l = &_nomatch_list;
-		s = "nomatch";
-		break;
-	case attach:
+	else if (type == "attach")
 		l = &_attach_list;
-		s = "attach";
-		break;
-	case detach:
+	else if (type == "detach")
 		l = &_detach_list;
-		s = "detach";
-		break;
-	}
-	devdlog(LOG_DEBUG, "Processing %s event\n", s);
+
+	if (!l)
+		return;
+
+	devdlog(LOG_DEBUG, "Processing %s event\n", type.c_str());
 	for (i = l->begin(); i != l->end(); ++i) {
 		if ((*i)->matches(*this)) {
 			(*i)->run(*this);
@@ -824,7 +815,6 @@ static void
 process_event(char *buffer)
 {
 	event_t event;
-	char type;
 
 	if (parse_event(buffer, event))
 		return;
@@ -832,7 +822,7 @@ process_event(char *buffer)
 	devdlog(LOG_INFO, "Processing event '%s'\n", buffer);
 	cfg.push_var_table();
 	cfg.set_vars(event);
-	cfg.find_and_execute(type);
+	cfg.find_and_execute(event.type);
 	cfg.pop_var_table();
 }
 
