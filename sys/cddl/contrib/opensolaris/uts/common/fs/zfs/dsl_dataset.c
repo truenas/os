@@ -1468,6 +1468,7 @@ dsl_dataset_snapshot_sync_impl(dsl_dataset_t *ds, const char *snapname,
 
 	dsl_dir_snap_cmtime_update(ds->ds_dir);
 
+	dsl_event_notify(ds->ds_prev, ESC_ZFS_DATASET_CREATE);
 	spa_history_log_internal_ds(ds->ds_prev, "snapshot", tx, "");
 }
 
