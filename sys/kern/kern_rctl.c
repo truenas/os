@@ -338,6 +338,7 @@ rctl_enforce(struct proc *p, int resource, uint64_t amount)
 	int should_deny = 0;
 	static int curtime = 0;
 	static struct timeval lasttime;
+	char *buf;
 
 	ASSERT_RACCT_ENABLED();
 
