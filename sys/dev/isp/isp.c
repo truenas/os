@@ -5643,7 +5643,7 @@ isp_parse_async_fc(ispsoftc_t *isp, uint16_t mbox)
 #endif
 		break;
 	case ASYNC_LIP_ERROR:
-	case ASYNC_LIP_F8:
+	case ASYNC_LIP_NOS_OLS_RECV:
 	case ASYNC_LIP_OCCURRED:
 	case ASYNC_PTPMODE:
 		/*
