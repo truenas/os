@@ -437,7 +437,7 @@ rctl_enforce(struct proc *p, int resource, uint64_t amount)
 				.dp_key = "jail",
 				.dp_string = p->p_ucred->cr_prison->
 				    pr_prison_racct->prr_name
-			}
+			};
 
 			devctl_notify_params("RCTL", "rule", "matched", params,
 			    4, M_NOWAIT);
