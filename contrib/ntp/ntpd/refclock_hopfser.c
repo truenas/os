@@ -95,11 +95,11 @@ struct hopfclock_unit {
  * Function prototypes
  */
 
-static	int	hopfserial_start	(int, struct peer *);
-static	void	hopfserial_shutdown	(int, struct peer *);
-static	void	hopfserial_receive	(struct recvbuf *);
-static	void	hopfserial_poll		(int, struct peer *);
-/* static  void hopfserial_io		(struct recvbuf *); */
+static	int	hopfserial_start	P((int, struct peer *));
+static	void	hopfserial_shutdown	P((int, struct peer *));
+static	void	hopfserial_receive	P((struct recvbuf *));
+static	void	hopfserial_poll		P((int, struct peer *));
+/* static  void hopfserial_io		P((struct recvbuf *)); */
 /*
  * Transfer vector
  */
@@ -127,8 +127,11 @@ hopfserial_start (
 	int fd;
 	char gpsdev[20];
 
-	snprintf(gpsdev, sizeof(gpsdev), DEVICE, unit);
-
+#ifdef SYS_WINNT
+	(void) sprintf(gpsdev, "COM%d:", unit);
+#else
+	(void) sprintf(gpsdev, DEVICE, unit);
+#endif
 	/* LDISC_STD, LDISC_RAW
 	 * Open serial port. Use CLK line discipline, if available.
 	 */
@@ -146,21 +149,30 @@ hopfserial_start (
 	/*
 	 * Allocate and initialize unit structure
 	 */
-	up = emalloc_zero(sizeof(*up));
+	up = (struct hopfclock_unit *) emalloc(sizeof(struct hopfclock_unit));
+
+	if (!(up)) {
+                msyslog(LOG_ERR, "hopfSerialClock(%d) emalloc: %m",unit);
+#ifdef DEBUG
+                printf("hopfSerialClock(%d) emalloc\n",unit);
+#endif
+		(void) close(fd);
+		return (0);
+	}
+
+	memset((char *)up, 0, sizeof(struct hopfclock_unit));
 	pp = peer->procptr;
-	pp->unitptr = up;
+	pp->unitptr = (caddr_t)up;
 	pp->io.clock_recv = hopfserial_receive;
-	pp->io.srcclock = peer;
+	pp->io.srcclock = (caddr_t)peer;
 	pp->io.datalen = 0;
 	pp->io.fd = fd;
 	if (!io_addclock(&pp->io)) {
 #ifdef DEBUG
-		printf("hopfSerialClock(%d) io_addclock\n", unit);
+                printf("hopfSerialClock(%d) io_addclock\n",unit);
 #endif
-		close(fd);
-		pp->io.fd = -1;
+		(void) close(fd);
 		free(up);
-		pp->unitptr = NULL;
 		return (0);
 	}
 
@@ -169,6 +181,7 @@ hopfserial_start (
 	 */
 	pp->clockdesc = DESCRIPTION;
 	peer->precision = PRECISION;
+	peer->burst = NSTAGE;
 	memcpy((char *)&pp->refid, REFID, 4);
 
 	up->leap_status = 0;
@@ -191,12 +204,9 @@ hopfserial_shutdown (
 	struct refclockproc *pp;
 
 	pp = peer->procptr;
-	up = pp->unitptr;
-
-	if (-1 != pp->io.fd)
-		io_closeclock(&pp->io);
-	if (NULL != up)
-		free(up);
+	up = (struct hopfclock_unit *)pp->unitptr;
+	io_closeclock(&pp->io);
+	free(up);
 }
 
 
@@ -214,31 +224,30 @@ hopfserial_receive (
 	struct refclockproc *pp;
 	struct peer *peer;
 
-	int	synch;	/* synchhronization indicator */
-	int	DoW;	/* Day of Week */
+	int		synch;	/* synchhronization indicator */
+	int		DoW;	/* Dow */
 
 	int	day, month;	/* ddd conversion */
-	int	converted;
 
 	/*
 	 * Initialize pointers and read the timecode and timestamp.
 	 */
-	peer = rbufp->recv_peer;
+	peer = (struct peer *)rbufp->recv_srcclock;
 	pp = peer->procptr;
-	up = pp->unitptr;
+	up = (struct hopfclock_unit *)pp->unitptr;
 
 	if (up->rpt_next == 0 )
 		return;
 
+
 	up->rpt_next = 0; /* wait until next poll interval occur */
 
-	pp->lencode = (u_short)refclock_gtlin(rbufp, pp->a_lastcode,
-					      sizeof(pp->a_lastcode),
-					      &pp->lastrec);
-	if (pp->lencode == 0)
+	pp->lencode = (u_short)refclock_gtlin(rbufp, pp->a_lastcode, BMAX, &pp->lastrec);
+
+	if (pp->lencode  == 0)
 		return;
 
-	converted = sscanf(pp->a_lastcode,
+	sscanf(pp->a_lastcode,
 #if 1
 	       "%1x%1x%2d%2d%2d%2d%2d%2d",   /* ...cr,lf */
 #else
@@ -258,9 +267,9 @@ hopfserial_receive (
 	  Validate received values at least enough to prevent internal
 	  array-bounds problems, etc.
 	*/
-	if ((8 != converted) || (pp->hour < 0) || (pp->hour > 23) ||
-	   (pp->minute < 0) || (pp->minute > 59) || (pp->second < 0) ||
-	   (pp->second > 60) /*Allow for leap seconds.*/ ||
+	if((pp->hour < 0) || (pp->hour > 23) ||
+	   (pp->minute < 0) || (pp->minute > 59) ||
+	   (pp->second < 0) || (pp->second > 60) /*Allow for leap seconds.*/ ||
 	   (day < 1) || (day > 31) ||
 	   (month < 1) || (month > 12) ||
 	   (pp->year < 0) || (pp->year > 99)) {
@@ -283,7 +292,7 @@ hopfserial_receive (
 	/* preparation for timecode ntpq rl command ! */
 
 #if 0
-	snprintf(pp->a_lastcode, sizeof(pp->a_lastcode),
+	wsprintf(pp->a_lastcode,
 		 "STATUS: %1X%1X, DATE: %02d.%02d.%04d  TIME: %02d:%02d:%02d",
 		 synch,
 		 DoW,
@@ -355,7 +364,7 @@ hopfserial_poll (
 	struct refclockproc *pp;
 	pp = peer->procptr;
 
-	up = pp->unitptr;
+	up = (struct hopfclock_unit *)pp->unitptr;
 
 	pp->polls++;
 	up->rpt_next = 1;

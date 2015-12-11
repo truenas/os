@@ -1,17 +1,18 @@
-noinst_PROGRAMS = @PROPDELAY@ @CHUTEST@
-EXTRA_PROGRAMS = propdelay chutest
+#AUTOMAKE_OPTIONS = ../ansi2knr no-dependencies
+AUTOMAKE_OPTIONS = ../util/ansi2knr
+noinst_PROGRAMS = @PROPDELAY@ @CHUTEST@ @CLKTEST@
+EXTRA_PROGRAMS = propdelay chutest clktest
 
-AM_CFLAGS = $(CFLAGS_NTP)
+INCLUDES = -I$(top_srcdir)/include
+# We need -lm (and perhaps $(COMPAT) for propdelay, -lntp for {chu,clk}test
+propdelay_LDADD = -lm ../libntp/libntp.a
+chutest_LDADD = ../libntp/libntp.a
+clktest_LDADD = ../libntp/libntp.a
+ETAGS_ARGS = Makefile.am
+#EXTRA_DIST = TAGS
 
-AM_CPPFLAGS  = $(NTP_INCS)
-AM_CPPFLAGS += $(CPPFLAGS_NTP)
+# clktest-opts.def wants ../include/copyright.def ../include/homerc.def
 
-LDADD = ../libntp/libntp.a $(LDADD_LIBNTP) $(LIBM) $(PTHREAD_LIBS)
-propdelay_LDADD = $(LDADD)
+chutest$(EXEEXT): ../libntp/libntp.a
 
-BUILT_SOURCES =
-CLEANFILES =
-
-include $(top_srcdir)/sntp/check-libntp.mf
-include $(top_srcdir)/depsver.mf
-include $(top_srcdir)/includes.mf
+clktest$(EXEEXT): ../libntp/libntp.a

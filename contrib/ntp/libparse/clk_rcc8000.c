@@ -1,6 +1,6 @@
 /*
  * /src/NTP/ntp4-dev/libparse/clk_rcc8000.c,v 4.9 2004/11/14 15:29:41 kardel RELEASE_20050508_A
- *
+ *  
  * clk_rcc8000.c,v 4.9 2004/11/14 15:29:41 kardel RELEASE_20050508_A
  *
  * Radiocode Clocks Ltd RCC 8000 Intelligent Off-Air Master Clock support
@@ -30,7 +30,7 @@
 #include <stdio.h>
 #else
 #include "sys/parsestreams.h"
-extern int printf (const char *, ...);
+extern void printf P((const char *, ...));
 #endif
 
 /* Type II Serial Output format
@@ -49,16 +49,16 @@ extern int printf (const char *, ...);
 
 #define	O_USEC		O_WDAY
 static struct format rcc8000_fmt =
-{ { { 13, 2 }, {16, 2}, { 19, 2}, /* Day, Month, Year */
-    {  0, 2 }, { 3, 2}, {  6, 2}, /* Hour, Minute, Second */
+{ { { 13, 2 }, {16, 2}, { 19, 2}, /* Day, Month, Year */ 
+    {  0, 2 }, { 3, 2}, {  6, 2}, /* Hour, Minute, Second */ 
     {  9, 3 }, {28, 1}, {  0, 0}, /* uSec, Status (Valid,Reject,BST,Leapyear) */  },
-  (const unsigned char *)"  :  :  .      /  /          \r\n",
+  (const unsigned char *)"  :  :  .      /  /          \r\n", 
   /*"15:50:36.534 30/09/94 273 5 A\x0d\x0a" */
-  0
+  0 
 };
 
-static parse_cvt_fnc_t cvt_rcc8000;
-static parse_inp_fnc_t inp_rcc8000;
+static unsigned long cvt_rcc8000 P((unsigned char *, int, struct format *, clocktime_t *, void *));
+static unsigned long inp_rcc8000 P((parse_t *, unsigned int, timestamp_t *));
 
 clockformat_t clock_rcc8000 =
 {
@@ -71,8 +71,7 @@ clockformat_t clock_rcc8000 =
   0				/* no private data */
 };
 
-/* parse_cvt_fnc_t cvt_rcc8000 */
-static u_long
+static unsigned long
 cvt_rcc8000(
 	    unsigned char *buffer,
 	    int            size,
@@ -122,27 +121,27 @@ cvt_rcc8000(
 		    clock_time->flags |= PARSEB_POWERUP;
 
 		clock_time->flags |= PARSEB_UTC; /* British special - guess why 8-) */
-
+    
 		/* other flags not used */
 	}
 	return CVT_OK;
 }
 /*
- * parse_inp_fnc_t inp_rcc8000
+ * inp_rcc8000
  *
- * grab data from input stream
+ * grep data from input stream
  */
 static u_long
 inp_rcc8000(
 	    parse_t      *parseio,
-	    char         ch,
+	    unsigned int  ch,
 	    timestamp_t  *tstamp
 	  )
 {
 	unsigned int rtc;
-
+	
 	parseprintf(DD_PARSE, ("inp_rcc8000(0x%lx, 0x%x, ...)\n", (long)parseio, ch));
-
+	
 	switch (ch)
 	{
 	case '\n':
@@ -151,7 +150,7 @@ inp_rcc8000(
 			return parse_end(parseio);
 		else
 			return rtc;
-
+		
 
 	default:
 		if (parseio->parse_index == 0) /* take sample at start of message */

@@ -6,17 +6,23 @@
 # include <config.h>
 #endif
 
-#include "ntp_types.h"
-
 #if defined(REFCLOCK) && defined(CLOCK_LEITCH)
-
-#include <stdio.h>
-#include <ctype.h>
 
 #include "ntpd.h"
 #include "ntp_io.h"
 #include "ntp_refclock.h"
-#include "timevalops.h"
+#include "ntp_unixtime.h"
+
+#include <stdio.h>
+#include <ctype.h>
+
+#ifdef STREAM
+#include <stropts.h>
+#if defined(LEITCHCLK)
+#include <sys/clkdefs.h>
+#endif /* LEITCHCLK */
+#endif /* STREAM */
+
 #include "ntp_stdlib.h"
 
 
@@ -37,7 +43,6 @@
  *	STATUS: G (good), D (diag fail), T (time not provided) or
  *		P (last phone update failed)
  */
-#define PRECISION	(-20)	/* 1x10-8 */
 #define MAXUNITS 1		/* max number of LEITCH units */
 #define LEITCHREFID	"ATOM"	/* reference id */
 #define LEITCH_DESCRIPTION "Leitch: CSD 5300 Master Clock System Driver"
@@ -91,20 +96,20 @@ struct leitchunit {
 /*
  * Function prototypes
  */
-static	void	leitch_init	(void);
-static	int	leitch_start	(int, struct peer *);
-static	void	leitch_shutdown	(int, struct peer *);
-static	void	leitch_poll	(int, struct peer *);
-static	void	leitch_control	(int, const struct refclockstat *, struct refclockstat *, struct peer *);
+static	void	leitch_init	P((void));
+static	int	leitch_start	P((int, struct peer *));
+static	void	leitch_shutdown	P((int, struct peer *));
+static	void	leitch_poll	P((int, struct peer *));
+static	void	leitch_control	P((int, struct refclockstat *, struct refclockstat *, struct peer *));
 #define	leitch_buginfo	noentry
-static	void	leitch_receive	(struct recvbuf *);
-static	void	leitch_process	(struct leitchunit *);
+static	void	leitch_receive	P((struct recvbuf *));
+static	void	leitch_process	P((struct leitchunit *));
 #if 0
-static	void	leitch_timeout	(struct peer *);
+static	void	leitch_timeout	P((struct peer *));
 #endif
-static	int	leitch_get_date	(struct recvbuf *, struct leitchunit *);
-static	int	leitch_get_time	(struct recvbuf *, struct leitchunit *, int);
-static	int	days_per_year		(int);
+static	int	leitch_get_date	P((struct recvbuf *, struct leitchunit *));
+static	int	leitch_get_time	P((struct recvbuf *, struct leitchunit *, int));
+static	int	days_per_year		P((int));
 
 static struct leitchunit leitchunits[MAXUNITS];
 static u_char unitinuse[MAXUNITS];
@@ -144,17 +149,9 @@ leitch_shutdown(
 	struct peer *peer
 	)
 {
-	struct leitchunit *leitch;
-
-	if (unit >= MAXUNITS) {
-		return;
-	}
-	leitch = &leitchunits[unit];
-	if (-1 != leitch->leitchio.fd)
-		io_closeclock(&leitch->leitchio);
 #ifdef DEBUG
 	if (debug)
-		fprintf(stderr, "leitch_shutdown()\n");
+	    fprintf(stderr, "leitch_shutdown()\n");
 #endif
 }
 
@@ -195,7 +192,7 @@ leitch_poll(
 static void
 leitch_control(
 	int unit,
-	const struct refclockstat *in,
+	struct refclockstat *in,
 	struct refclockstat *out,
 	struct peer *passed_peer
 	)
@@ -260,7 +257,7 @@ leitch_start(
 	/*
 	 * Open serial port.
 	 */
-	snprintf(leitchdev, sizeof(leitchdev), LEITCH232, unit);
+	(void) sprintf(leitchdev, LEITCH232, unit);
 	fd232 = open(leitchdev, O_RDWR, 0777);
 	if (fd232 == -1) {
 		msyslog(LOG_ERR,
@@ -269,7 +266,7 @@ leitch_start(
 	}
 
 	leitch = &leitchunits[unit];
-	memset(leitch, 0, sizeof(*leitch));
+	memset((char*)leitch, 0, sizeof(*leitch));
 
 #if defined(HAVE_SYSV_TTYS)
 	/*
@@ -297,6 +294,9 @@ leitch_start(
 #if defined(HAVE_TERMIOS)
 	/*
 	 * POSIX serial line parameters (termios interface)
+	 *
+	 * The LEITCHCLK option provides timestamping at the driver level. 
+	 * It requires the tty_clk streams module.
 	 */
 	{	struct termios ttyb, *ttyp;
 
@@ -323,12 +323,27 @@ leitch_start(
 	}
 	}
 #endif /* HAVE_TERMIOS */
+#ifdef STREAM
+#if defined(LEITCHCLK)
+	if (ioctl(fd232, I_PUSH, "clk") < 0)
+	    msyslog(LOG_ERR,
+		    "leitch_start: ioctl(%s, I_PUSH, clk): %m", leitchdev);
+	if (ioctl(fd232, CLK_SETSTR, "\n") < 0)
+	    msyslog(LOG_ERR,
+		    "leitch_start: ioctl(%s, CLK_SETSTR): %m", leitchdev);
+#endif /* LEITCHCLK */
+#endif /* STREAM */
 #if defined(HAVE_BSD_TTYS)
 	/*
 	 * 4.3bsd serial line parameters (sgttyb interface)
+	 *
+	 * The LEITCHCLK option provides timestamping at the driver level. 
+	 * It requires the tty_clk line discipline and 4.3bsd or later.
 	 */
-	{
-		struct sgttyb ttyb;
+	{	struct sgttyb ttyb;
+#if defined(LEITCHCLK)
+	int ldisc = CLKLDISC;
+#endif /* LEITCHCLK */
 
 	if (ioctl(fd232, TIOCGETP, &ttyb) < 0) {
 		msyslog(LOG_ERR,
@@ -336,13 +351,25 @@ leitch_start(
 		goto screwed;
 	}
 	ttyb.sg_ispeed = ttyb.sg_ospeed = SPEED232;
+#if defined(LEITCHCLK)
+	ttyb.sg_erase = ttyb.sg_kill = '\r';
+	ttyb.sg_flags = RAW;
+#else
 	ttyb.sg_erase = ttyb.sg_kill = '\0';
 	ttyb.sg_flags = EVENP|ODDP|CRMOD;
+#endif /* LEITCHCLK */
 	if (ioctl(fd232, TIOCSETP, &ttyb) < 0) {
 		msyslog(LOG_ERR,
 			"leitch_start: ioctl(%s, TIOCSETP): %m", leitchdev);
 		goto screwed;
 	}
+#if defined(LEITCHCLK)
+	if (ioctl(fd232, TIOCSETD, &ldisc) < 0) {
+		msyslog(LOG_ERR,
+			"leitch_start: ioctl(%s, TIOCSETD): %m",leitchdev);
+		goto screwed;
+	}
+#endif /* LEITCHCLK */
 	}
 #endif /* HAVE_BSD_TTYS */
 
@@ -355,11 +382,10 @@ leitch_start(
 	leitch->fudge1 = 15;	/* 15ms */
 
 	leitch->leitchio.clock_recv = leitch_receive;
-	leitch->leitchio.srcclock = peer;
+	leitch->leitchio.srcclock = (caddr_t) leitch;
 	leitch->leitchio.datalen = 0;
 	leitch->leitchio.fd = fd232;
 	if (!io_addclock(&leitch->leitchio)) {
-		leitch->leitchio.fd = -1;
 		goto screwed;
 	}
 
@@ -367,7 +393,7 @@ leitch_start(
 	 * All done.  Initialize a few random peer variables, then
 	 * return success.
 	 */
-	peer->precision = PRECISION;
+	peer->precision = 0;
 	peer->stratum = stratumtouse[unit];
 	peer->refid = refid[unit];
 	unitinuse[unit] = 1;
@@ -390,7 +416,7 @@ leitch_receive(
 	struct recvbuf *rbufp
 	)
 {
-	struct leitchunit *leitch = rbufp->recv_peer->procptr->unitptr;
+	struct leitchunit *leitch = (struct leitchunit *)rbufp->recv_srcclock;
 
 #ifdef DEBUG
 	if (debug)
@@ -596,5 +622,5 @@ leitch_get_time(
 }
 
 #else
-NONEMPTY_TRANSLATION_UNIT
+int refclock_leitch_bs;
 #endif /* REFCLOCK */
