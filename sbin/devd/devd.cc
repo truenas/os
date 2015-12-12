@@ -1018,8 +1018,6 @@ event_loop(void)
 				}
 				notify_clients(buffer, rv);
 				buffer[rv] = '\0';
-				while (buffer[--rv] == '\n')
-					buffer[rv] = '\0';
 				process_event(buffer);
 			} else if (rv < 0) {
 				if (errno != EINTR)
