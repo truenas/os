@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -2473,6 +2474,105 @@ register_signals(void)
 		log_err(1, "sigaction");
 }
 
+static void
+check_perms(const char *path)
+{
+	struct stat sb;
+	int error;
+
+	error = stat(path, &sb);
+	if (error != 0) {
+		log_warn("stat");
+		return;
+	}
+	if (sb.st_mode & S_IWOTH) {
+		log_warnx("%s is world-writable", path);
+	} else if (sb.st_mode & S_IROTH) {
+		log_warnx("%s is world-readable", path);
+	} else if (sb.st_mode & S_IXOTH) {
+		/*
+		 * Ok, this one doesn't matter, but still do it,
+		 * just for consistency.
+		 */
+		log_warnx("%s is world-executable", path);
+	}
+
+	/*
+	 * XXX: Should we also check for owner != 0?
+	 */
+}
+
+static struct conf *
+conf_new_from_file(const char *path, struct conf *oldconf, bool ucl)
+{
+	struct conf *conf;
+	struct auth_group *ag;
+	struct portal_group *pg;
+	struct pport *pp;
+	int error;
+
+	log_debugx("obtaining configuration from %s", path);
+
+	conf = conf_new();
+
+	TAILQ_FOREACH(pp, &oldconf->conf_pports, pp_next)
+		pport_copy(pp, conf);
+
+	ag = auth_group_new(conf, "default");
+	assert(ag != NULL);
+
+	ag = auth_group_new(conf, "no-authentication");
+	assert(ag != NULL);
+	ag->ag_type = AG_TYPE_NO_AUTHENTICATION;
+
+	ag = auth_group_new(conf, "no-access");
+	assert(ag != NULL);
+	ag->ag_type = AG_TYPE_DENY;
+
+	pg = portal_group_new(conf, "default");
+	assert(pg != NULL);
+
+	check_perms(path);
+
+	if (ucl) {
+		error = uclparse_conf(conf, path);
+	} else {
+		error = parse_conf(conf, path);
+	}
+
+	if (error != 0) {
+		conf_delete(conf);
+		return (NULL);
+	}
+
+	if (conf->conf_default_ag_defined == false) {
+		log_debugx("auth-group \"default\" not defined; "
+		    "going with defaults");
+		ag = auth_group_find(conf, "default");
+		assert(ag != NULL);
+		ag->ag_type = AG_TYPE_DENY;
+	}
+
+	if (conf->conf_default_pg_defined == false) {
+		log_debugx("portal-group \"default\" not defined; "
+		    "going with defaults");
+		pg = portal_group_find(conf, "default");
+		assert(pg != NULL);
+		portal_group_add_listen(pg, "0.0.0.0:3260", false);
+		portal_group_add_listen(pg, "[::]:3260", false);
+	}
+
+	conf->conf_kernel_port_on = true;
+
+	error = conf_verify(conf);
+	if (error != 0) {
+		conf_delete(conf);
+		return (NULL);
+	}
+
+	return (conf);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2515,11 +2615,7 @@ main(int argc, char **argv)
 	kernel_init();
 
 	oldconf = conf_new_from_kernel();
-
-	if (use_ucl)
-		newconf = conf_new_from_ucl(config_path, oldconf);
-	else
-		newconf = conf_new_from_file(config_path, oldconf);
+	newconf = conf_new_from_file(config_path, oldconf, use_ucl);
 
 	if (newconf == NULL)
 		log_errx(1, "configuration error; exiting");
@@ -2555,13 +2651,8 @@ main(int argc, char **argv)
 		if (sighup_received) {
 			sighup_received = false;
 			log_debugx("received SIGHUP, reloading configuration");
-			if (use_ucl) {
-				tmpconf = conf_new_from_ucl(config_path,
-				    newconf);
-			} else {
-				tmpconf = conf_new_from_file(config_path,
-				    newconf);
-			}
+			tmpconf = conf_new_from_file(config_path, newconf,
+			    use_ucl);
 
 			if (tmpconf == NULL) {
 				log_warnx("configuration error, "

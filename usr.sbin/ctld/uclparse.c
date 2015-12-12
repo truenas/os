@@ -31,7 +31,6 @@
 
 #include <sys/queue.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -43,17 +42,17 @@
 
 static struct conf *conf = NULL;
 
-static int parse_chap(struct auth_group *, const ucl_object_t *);
-static int parse_chap_mutual(struct auth_group *, const ucl_object_t *);
-static int parse_lun(const char *, const ucl_object_t *);
-static int parse_auth_group(const char *, const ucl_object_t *);
-static int parse_portal_group(const char *, const ucl_object_t *);
-static int parse_target(const char *, const ucl_object_t *);
-static int parse_target_portal_group(struct target *, const ucl_object_t *);
-static int parse_target_lun(struct target *, const ucl_object_t *);
+static int uclparse_chap(struct auth_group *, const ucl_object_t *);
+static int uclparse_chap_mutual(struct auth_group *, const ucl_object_t *);
+static int uclparse_lun(const char *, const ucl_object_t *);
+static int uclparse_auth_group(const char *, const ucl_object_t *);
+static int uclparse_portal_group(const char *, const ucl_object_t *);
+static int uclparse_target(const char *, const ucl_object_t *);
+static int uclparse_target_portal_group(struct target *, const ucl_object_t *);
+static int uclparse_target_lun(struct target *, const ucl_object_t *);
 
 static int
-parse_chap(struct auth_group *auth_group, const ucl_object_t *obj)
+uclparse_chap(struct auth_group *auth_group, const ucl_object_t *obj)
 {
 	const struct auth *ca;
 	const ucl_object_t *user, *secret;
@@ -82,7 +81,7 @@ parse_chap(struct auth_group *auth_group, const ucl_object_t *obj)
 }
 
 static int
-parse_chap_mutual(struct auth_group *auth_group, const ucl_object_t *obj)
+uclparse_chap_mutual(struct auth_group *auth_group, const ucl_object_t *obj)
 {
 	const struct auth *ca;
 	const ucl_object_t *user, *secret, *mutual_user;
@@ -129,7 +128,7 @@ parse_chap_mutual(struct auth_group *auth_group, const ucl_object_t *obj)
 }
 
 static int
-parse_target_portal_group(struct target *target, const ucl_object_t *obj)
+uclparse_target_portal_group(struct target *target, const ucl_object_t *obj)
 {
 	struct portal_group *tpg;
 	struct auth_group *tag;
@@ -180,7 +179,7 @@ parse_target_portal_group(struct target *target, const ucl_object_t *obj)
 }
 
 static int
-parse_target_lun(struct target *target, const ucl_object_t *obj)
+uclparse_target_lun(struct target *target, const ucl_object_t *obj)
 {
 	struct lun *lun;
 
@@ -315,7 +314,7 @@ parse_toplevel(const ucl_object_t *top)
 			if (obj->type == UCL_OBJECT) {
 				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
-					parse_auth_group(ucl_object_key(child), child);
+					uclparse_auth_group(ucl_object_key(child), child);
 				}
 			} else {
 				log_warnx("\"auth-group\" section is not an object");
@@ -327,7 +326,7 @@ parse_toplevel(const ucl_object_t *top)
 			if (obj->type == UCL_OBJECT) {
 				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
-					parse_portal_group(ucl_object_key(child), child);
+					uclparse_portal_group(ucl_object_key(child), child);
 				}
 			} else {
 				log_warnx("\"portal-group\" section is not an object");
@@ -339,7 +338,7 @@ parse_toplevel(const ucl_object_t *top)
 			if (obj->type == UCL_OBJECT) {
 				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter, true))) {
-					parse_lun(ucl_object_key(child), child);
+					uclparse_lun(ucl_object_key(child), child);
 				}
 			} else {
 				log_warnx("\"lun\" section is not an object");
@@ -358,7 +357,7 @@ parse_toplevel(const ucl_object_t *top)
 				iter = NULL;
 				while ((child = ucl_iterate_object(obj, &iter,
 				    true))) {
-					parse_target(ucl_object_key(child),
+					uclparse_target(ucl_object_key(child),
 					    child);
 				}
 			} else {
@@ -372,7 +371,7 @@ parse_toplevel(const ucl_object_t *top)
 }
 
 static int
-parse_auth_group(const char *name, const ucl_object_t *top)
+uclparse_auth_group(const char *name, const ucl_object_t *top)
 {
 	struct auth_group *auth_group;
 	const struct auth_name *an;
@@ -414,7 +413,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 
 			it2 = NULL;
 			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
-				if (parse_chap(auth_group, tmp) != 0)
+				if (uclparse_chap(auth_group, tmp) != 0)
 					return (1);
 			}
 		}
@@ -429,7 +428,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 
 			it2 = NULL;
 			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
-				if (parse_chap_mutual(auth_group, tmp) != 0)
+				if (uclparse_chap_mutual(auth_group, tmp) != 0)
 					return (1);
 			}
 		}
@@ -476,7 +475,7 @@ parse_auth_group(const char *name, const ucl_object_t *top)
 }
 
 static int
-parse_portal_group(const char *name, const ucl_object_t *top)
+uclparse_portal_group(const char *name, const ucl_object_t *top)
 {
 	struct portal_group *portal_group;
 	ucl_object_iter_t it = NULL, it2 = NULL;
@@ -585,7 +584,7 @@ parse_portal_group(const char *name, const ucl_object_t *top)
 }
 
 static int
-parse_target(const char *name, const ucl_object_t *top)
+uclparse_target(const char *name, const ucl_object_t *top)
 {
 	struct target *target;
 	ucl_object_iter_t it = NULL, it2 = NULL;
@@ -653,12 +652,12 @@ parse_target(const char *name, const ucl_object_t *top)
 		}
 
 		if (!strcmp(key, "chap")) {
-			if (parse_chap(target->t_auth_group, obj) != 0)
+			if (uclparse_chap(target->t_auth_group, obj) != 0)
 				return (1);
 		}
 
 		if (!strcmp(key, "chap-mutual")) {
-			if (parse_chap_mutual(target->t_auth_group, obj) != 0)
+			if (uclparse_chap_mutual(target->t_auth_group, obj) != 0)
 				return (1);
 		}
 
@@ -710,14 +709,14 @@ parse_target(const char *name, const ucl_object_t *top)
 
 		if (!strcmp(key, "portal-group")) {
 			if (obj->type == UCL_OBJECT) {
-				if (parse_target_portal_group(target, obj) != 0)
+				if (uclparse_target_portal_group(target, obj) != 0)
 					return (1);
 			}
 
 			if (obj->type == UCL_ARRAY) {
 				while ((tmp = ucl_iterate_object(obj, &it2,
 				    true))) {
-					if (parse_target_portal_group(target,
+					if (uclparse_target_portal_group(target,
 					    tmp) != 0)
 						return (1);
 				}
@@ -763,7 +762,7 @@ parse_target(const char *name, const ucl_object_t *top)
 
 		if (!strcmp(key, "lun")) {
 			while ((tmp = ucl_iterate_object(obj, &it2, true))) {
-				if (parse_target_lun(target, tmp) != 0)
+				if (uclparse_target_lun(target, tmp) != 0)
 					return (1);
 			}
 		}
@@ -773,7 +772,7 @@ parse_target(const char *name, const ucl_object_t *top)
 }
 
 static int
-parse_lun(const char *name, const ucl_object_t *top)
+uclparse_lun(const char *name, const ucl_object_t *top)
 {
 	struct lun *lun;
 	ucl_object_iter_t it = NULL, child_it = NULL;
@@ -864,108 +863,23 @@ parse_lun(const char *name, const ucl_object_t *top)
 	return (0);
 }
 
-static void
-check_perms(const char *path)
+int
+uclparse_conf(struct conf *newconf, const char *path)
 {
-	struct stat sb;
-	int error;
-
-	error = stat(path, &sb);
-	if (error != 0) {
-		log_warn("stat");
-		return;
-	}
-	if (sb.st_mode & S_IWOTH) {
-		log_warnx("%s is world-writable", path);
-	} else if (sb.st_mode & S_IROTH) {
-		log_warnx("%s is world-readable", path);
-	} else if (sb.st_mode & S_IXOTH) {
-		/*
-		 * Ok, this one doesn't matter, but still do it,
-		 * just for consistency.
-		 */
-		log_warnx("%s is world-executable", path);
-	}
-
-	/*
-	 * XXX: Should we also check for owner != 0?
-	 */
-}
-
-struct conf *
-conf_new_from_ucl(const char *path, struct conf *oldconf)
-{
-	struct auth_group *ag;
-	struct portal_group *pg;
-	struct pport *pp;
-	int error;
 	struct ucl_parser *parser;
+	int error; 
 
-	log_debugx("obtaining configuration from %s", path);
-
-	conf = conf_new();
-
-	TAILQ_FOREACH(pp, &oldconf->conf_pports, pp_next)
-		pport_copy(pp, conf);
-
-	ag = auth_group_new(conf, "default");
-	assert(ag != NULL);
-
-	ag = auth_group_new(conf, "no-authentication");
-	assert(ag != NULL);
-	ag->ag_type = AG_TYPE_NO_AUTHENTICATION;
-
-	ag = auth_group_new(conf, "no-access");
-	assert(ag != NULL);
-	ag->ag_type = AG_TYPE_DENY;
-
-	pg = portal_group_new(conf, "default");
-	assert(pg != NULL);
-
-	check_perms(path);
-	
+	conf = newconf;
 	parser = ucl_parser_new(0);
 	ucl_parser_add_file(parser, path);
 
 	if (ucl_parser_get_error(parser)) {
 		log_warn("unable to parse configuration file %s: %s", path,
 		    ucl_parser_get_error(parser));
-		conf_delete(conf);
-		return (NULL);
+		return (1);
 	}
 
 	error = parse_toplevel(ucl_parser_get_object(parser));
 
-	if (error != 0) {
-		conf_delete(conf);
-		return (NULL);
-	}
-
-	if (conf->conf_default_ag_defined == false) {
-		log_debugx("auth-group \"default\" not defined; "
-		    "going with defaults");
-		ag = auth_group_find(conf, "default");
-		assert(ag != NULL);
-		ag->ag_type = AG_TYPE_DENY;
-	}
-
-	if (conf->conf_default_pg_defined == false) {
-		log_debugx("portal-group \"default\" not defined; "
-		    "going with defaults");
-		pg = portal_group_find(conf, "default");
-		assert(pg != NULL);
-		portal_group_add_listen(pg, "0.0.0.0:3260", false);
-		portal_group_add_listen(pg, "[::]:3260", false);
-	}
-
-	conf->conf_kernel_port_on = true;
-
-	error = conf_verify(conf);
-	if (error != 0) {
-		conf_delete(conf);
-		return (NULL);
-	}
-
-	return (conf);
+	return (error);
 }
-

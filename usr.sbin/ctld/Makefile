@@ -5,7 +5,7 @@ CFLAGS+=-I${.CURDIR}/../../contrib/libucl/include
 
 PROG=		ctld
 SRCS=		chap.c ctld.c discovery.c isns.c kernel.c keys.c log.c
-SRCS+=		login.c parse.y pdu.c token.l y.tab.h parser.c
+SRCS+=		login.c parse.y pdu.c token.l y.tab.h uclparse.c
 CFLAGS+=	-I${.CURDIR} -g -O0
 CFLAGS+=	-I${.CURDIR}/../../sys
 CFLAGS+=	-I${.CURDIR}/../../sys/cam/ctl
