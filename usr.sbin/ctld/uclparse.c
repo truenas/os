@@ -106,7 +106,7 @@ uclparse_chap_mutual(struct auth_group *auth_group, const ucl_object_t *obj)
 		log_warnx("chap-mutual section in auth-group \"%s\" is missing "
 		    "\"mutual-user\" string key", auth_group->ag_name);
 		return (1);
-	}	
+	}
 
 	mutual_secret = ucl_object_find_key(obj, "mutual-secret");
 	if (!secret || secret->type != UCL_STRING) {
@@ -299,7 +299,7 @@ parse_toplevel(const ucl_object_t *top)
 				log_warnx("\"isns-period\" property value is not integer");
 				return (1);
 			}
-		}			
+		}
 
 		if (!strcmp(key, "isns-timeout")) {
 			if (obj->type == UCL_INT)
@@ -578,7 +578,7 @@ uclparse_portal_group(const char *name, const ucl_object_t *top)
 				return (1);
 		}
 
-	}	
+	}
 
 	return (0);
 }
@@ -867,7 +867,7 @@ int
 uclparse_conf(struct conf *newconf, const char *path)
 {
 	struct ucl_parser *parser;
-	int error; 
+	int error;
 
 	conf = newconf;
 	parser = ucl_parser_new(0);
