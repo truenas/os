@@ -69,7 +69,6 @@ SUBDIR=adjkerntz \
 	sysctl \
 	tunefs \
 	umount \
-	zfsd
 
 .if ${MK_ATM} != "no"
 SUBDIR+=	atm
