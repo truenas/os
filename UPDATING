@@ -16,6 +16,11 @@ from older versions of FreeBSD, try WITHOUT_CLANG to bootstrap to the tip of
 stable/10, and then rebuild without this option. The bootstrap process from
 older version of current is a bit fragile.
 
+20151214:
+	r292223 changed the internal interface between the nfsd.ko and
+	nfscommon.ko modules. As such, they must both be upgraded to-gether.
+	__FreeBSD_version has been bumped because of this.
+
 20151113:
 	Qlogic 24xx/25xx firmware images were updated from 5.5.0 to 7.3.0.
 	Kernel modules isp_2400_multi and isp_2500_multi were removed and
@@ -399,14 +404,6 @@ older version of current is a bit fragile.
 	Most of network statistics structures were changed to be able
 	keep 64-bits counters. Thus all tools, that work with networking
 	statistics, must be rebuilt (netstat(1), bsnmpd(1), etc.)
-
-20130629:
-	Fix targets that run multiple make's to use && rather than ;
-	so that subsequent steps depend on success of previous.
-
-	NOTE: if building 'universe' with -j* on stable/8 or stable/9
-	it would be better to start the build using bmake, to avoid
-	overloading the machine.
 
 20130618:
 	Fix a bug that allowed a tracing process (e.g. gdb) to write

@@ -35,6 +35,9 @@ UPDATE_DEPENDFILE_PROG?= no
 # They may have asked us to build just one
 .for t in ${PROGS}
 .if make($t)
+.if ${PROGS_CXX:U:M${t}}
+PROG_CXX ?= $t
+.endif
 PROG ?= $t
 .endif
 .endfor
@@ -67,7 +70,7 @@ UPDATE_DEPENDFILE ?= NO
 # ensure that we don't clobber each other's dependencies
 DEPENDFILE?= .depend.${PROG}
 # prog.mk will do the rest
-.else
+.else # !defined(PROG)
 all: ${PROGS}
 
 # We cannot capture dependencies for meta mode here
@@ -88,9 +91,31 @@ $v =
 # handle being called [bsd.]progs.mk
 .include <bsd.prog.mk>
 
-.if !empty(PROGS) && !defined(_RECURSING_PROGS)
+.if !empty(PROGS) && !defined(_RECURSING_PROGS) && !defined(PROG)
 # tell progs.mk we might want to install things
 PROGS_TARGETS+= checkdpadd clean cleandepend cleandir depend install
+
+# Find common sources among the PROGS and depend on them before building
+# anything.  This allows parallelization without them each fighting over
+# the same objects.
+_PROGS_COMMON_SRCS=
+_PROGS_ALL_SRCS=
+.for p in ${PROGS}
+.for s in ${SRCS.${p}}
+.if ${_PROGS_ALL_SRCS:M${s}} && !${_PROGS_COMMON_SRCS:M${s}}
+_PROGS_COMMON_SRCS+=	${s}
+.else
+_PROGS_ALL_SRCS+=	${s}
+.endif
+.endfor
+.endfor
+.if !empty(_PROGS_COMMON_SRCS)
+_PROGS_COMMON_OBJS=	${_PROGS_COMMON_SRCS:M*.[dhly]}
+.if !empty(_PROGS_COMMON_SRCS:N*.[dhly])
+_PROGS_COMMON_OBJS+=	${_PROGS_COMMON_SRCS:N*.[dhly]:R:S/$/.o/g}
+.endif
+${PROGS}: ${_PROGS_COMMON_OBJS}
+.endif
 
 .for p in ${PROGS}
 .if defined(PROGS_CXX) && !empty(PROGS_CXX:M$p)
@@ -100,16 +125,18 @@ x.$p= PROG_CXX=$p
 
 # Main PROG target
 $p ${p}_p: .PHONY .MAKE
-	(cd ${.CURDIR} && ${MAKE} -f ${MAKEFILE} _RECURSING_PROGS= \
-	    SUBDIR= PROG=$p \
+	(cd ${.CURDIR} && \
+	    NO_SUBDIR=1 ${MAKE} -f ${MAKEFILE} _RECURSING_PROGS= \
+	    PROG=$p \
 	    DEPENDFILE=.depend.$p .MAKE.DEPENDFILE=.depend.$p \
 	    ${x.$p})
 
 # Pseudo targets for PROG, such as 'install'.
 .for t in ${PROGS_TARGETS:O:u}
 $p.$t: .PHONY .MAKE
-	(cd ${.CURDIR} && ${MAKE} -f ${MAKEFILE} _RECURSING_PROGS= \
-	    SUBDIR= PROG=$p \
+	(cd ${.CURDIR} && \
+	    NO_SUBDIR=1 ${MAKE} -f ${MAKEFILE} _RECURSING_PROGS= \
+	    PROG=$p \
 	    DEPENDFILE=.depend.$p .MAKE.DEPENDFILE=.depend.$p \
 	    ${x.$p} ${@:E})
 .endfor
@@ -119,4 +146,4 @@ $p.$t: .PHONY .MAKE
 .for t in ${PROGS_TARGETS:O:u}
 $t: ${PROGS:%=%.$t}
 .endfor
-.endif
+.endif	# !empty(PROGS) && !defined(_RECURSING_PROGS) && !defined(PROG)
