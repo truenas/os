@@ -824,7 +824,8 @@ uclparse_lun(const char *name, const ucl_object_t *top)
 
 			while ((child = ucl_iterate_object(obj, &child_it,
 			    true))) {
-				lun_option_new(lun, ucl_object_key(child),
+				option_new(&lun->l_options,
+				    ucl_object_key(child),
 				    ucl_object_tostring_forced(child));
 			}
 		}
