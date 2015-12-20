@@ -257,17 +257,6 @@ int nfsrv_mtostr(struct nfsrv_descript *, char *, int);
 int nfsrv_checkutf8(u_int8_t *, int);
 int newnfs_sndlock(int *);
 void newnfs_sndunlock(int *);
-int nfsv4_getipaddr(struct nfsrv_descript *, struct sockaddr_storage *,
-    int *);
-int nfsv4_seqsession(uint32_t, uint32_t, uint32_t, struct nfsslot *,
-    struct mbuf **, uint16_t);
-void nfsv4_seqsess_cacherep(uint32_t, struct nfsslot *, int, struct mbuf **);
-void nfsv4_setsequence(struct nfsmount *, struct nfsrv_descript *,
-    struct nfsclsession *, int);
-int nfsv4_sequencelookup(struct nfsmount *, struct nfsclsession *, int *,
-    int *, uint32_t *, uint8_t *);
-void nfsv4_freeslot(struct nfsclsession *, int);
-struct ucred *nfsrv_getgrpscred(struct ucred *);
 
 /* nfs_clcomsubs.c */
 void nfsm_uiombuf(struct nfsrv_descript *, struct uio *, int);

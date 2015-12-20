@@ -46,22 +46,23 @@ LIST_HEAD(nfslockhashhead, nfslockfile);
 /*
  * List head for nfsusrgrp.
  */
-TAILQ_HEAD(nfsuserhashhead, nfsusrgrp);
+LIST_HEAD(nfsuserhashhead, nfsusrgrp);
+TAILQ_HEAD(nfsuserlruhead, nfsusrgrp);
 
 #define	NFSCLIENTHASH(id)						\
 	(&nfsclienthash[(id).lval[1] % NFSCLIENTHASHSIZE])
 #define	NFSSTATEHASH(clp, id)						\
 	(&((clp)->lc_stateid[(id).other[2] % NFSSTATEHASHSIZE]))
 #define	NFSUSERHASH(id)							\
-	(&nfsuserhash[(id) % nfsrv_lughashsize])
+	(&nfsuserhash[(id) % NFSUSERHASHSIZE])
 #define	NFSUSERNAMEHASH(p, l)						\
 	(&nfsusernamehash[((l)>=4?(*(p)+*((p)+1)+*((p)+2)+*((p)+3)):*(p)) \
-		% nfsrv_lughashsize])
+		% NFSUSERHASHSIZE])
 #define	NFSGROUPHASH(id)						\
-	(&nfsgrouphash[(id) % nfsrv_lughashsize])
+	(&nfsgrouphash[(id) % NFSGROUPHASHSIZE])
 #define	NFSGROUPNAMEHASH(p, l)						\
 	(&nfsgroupnamehash[((l)>=4?(*(p)+*((p)+1)+*((p)+2)+*((p)+3)):*(p)) \
-		% nfsrv_lughashsize])
+		% NFSGROUPHASHSIZE])
 
 /*
  * Client server structure for V4. It is doubly linked into two lists.
@@ -216,14 +217,14 @@ struct nfslockfile {
  * names.
  */
 struct nfsusrgrp {
-	TAILQ_ENTRY(nfsusrgrp)	lug_numhash;	/* Hash by id# */
-	TAILQ_ENTRY(nfsusrgrp)	lug_namehash;	/* and by name */
+	TAILQ_ENTRY(nfsusrgrp)	lug_lru;	/* LRU list */
+	LIST_ENTRY(nfsusrgrp)	lug_numhash;	/* Hash by id# */
+	LIST_ENTRY(nfsusrgrp)	lug_namehash;	/* and by name */
 	time_t			lug_expiry;	/* Expiry time in sec */
 	union {
 		uid_t		un_uid;		/* id# */
 		gid_t		un_gid;
 	} lug_un;
-	struct ucred		*lug_cred;	/* Cred. with groups list */
 	int			lug_namelen;	/* Name length */
 	u_char			lug_name[1];	/* malloc'd correct length */
 };

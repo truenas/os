@@ -91,6 +91,12 @@
 #define	NFSLOCKHASHSIZE		20	/* Size of server nfslock hash table */
 #endif
 #define	NFSSTATEHASHSIZE	10	/* Size of server stateid hash table */
+#ifndef NFSUSERHASHSIZE
+#define	NFSUSERHASHSIZE		30	/* Size of user id hash table */
+#endif
+#ifndef NFSGROUPHASHSIZE
+#define	NFSGROUPHASHSIZE	5	/* Size of group id hash table */
+#endif
 #ifndef	NFSCLDELEGHIGHWATER
 #define	NFSCLDELEGHIGHWATER	10000	/* limit for client delegations */
 #endif
@@ -183,18 +189,6 @@ struct nfscbd_args {
 };
 
 struct nfsd_idargs {
-	int		nid_flag;	/* Flags (see below) */
-	uid_t		nid_uid;	/* user/group id */
-	gid_t		nid_gid;
-	int		nid_usermax;	/* Upper bound on user name cache */
-	int		nid_usertimeout;/* User name timeout (minutes) */
-	u_char		*nid_name;	/* Name */
-	int		nid_namelen;	/* and its length */
-	gid_t		*nid_grps;	/* and the list */
-	int		nid_ngroup;	/* Size of groups list */
-};
-
-struct nfsd_oidargs {
 	int		nid_flag;	/* Flags (see below) */
 	uid_t		nid_uid;	/* user/group id */
 	gid_t		nid_gid;
