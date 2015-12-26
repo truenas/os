@@ -60,7 +60,7 @@ nfsd_precmd()
 		fi
 	fi
 
-	# Commented-out because confuses FreNAS middleware
+	# Commented-out because confuses FreeNAS middleware
 	# force_depend rpcbind || return 1
 	# force_depend mountd || return 1
 }
