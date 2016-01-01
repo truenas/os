@@ -94,6 +94,7 @@ static void gssd_verbose_out(const char *, ...);
 #ifndef WITHOUT_KERBEROS
 static OM_uint32 gssd_get_user_cred(OM_uint32 *, uid_t, gss_cred_id_t *);
 #endif
+void gssd_terminate(int);
 
 extern void gssd_1(struct svc_req *rqstp, SVCXPRT *transp);
 extern int gssd_syscall(char *path);
@@ -182,6 +183,7 @@ main(int argc, char **argv)
 		signal(SIGQUIT, SIG_IGN);
 		signal(SIGHUP, SIG_IGN);
 	}
+	signal(SIGTERM, gssd_terminate);
 
 	memset(&sun, 0, sizeof sun);
 	sun.sun_family = AF_LOCAL;
@@ -236,6 +238,7 @@ main(int argc, char **argv)
 
 	gssd_syscall(_PATH_GSSDSOCK);
 	svc_run();
+	gssd_syscall("");
 
 	return (0);
 }
@@ -1159,3 +1162,9 @@ gssd_get_user_cred(OM_uint32 *min_statp, uid_t uid, gss_cred_id_t *credp)
 	return (maj_stat);
 }
 #endif /* !WITHOUT_KERBEROS */
+
+void gssd_terminate(int sig __unused)
+{
+	gssd_syscall("");
+	exit();
+}
