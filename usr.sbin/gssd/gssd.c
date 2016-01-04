@@ -1166,5 +1166,5 @@ gssd_get_user_cred(OM_uint32 *min_statp, uid_t uid, gss_cred_id_t *credp)
 void gssd_terminate(int sig __unused)
 {
 	gssd_syscall("");
-	exit();
+	exit(0);
 }
