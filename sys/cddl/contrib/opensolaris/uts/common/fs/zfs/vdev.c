@@ -1617,12 +1617,12 @@ vdev_close(vdev_t *vd)
 	 */
 	vd->vdev_prevstate = vd->vdev_state;
 
-	if (vd->vdev_offline)
+	if (vd->vdev_offline) {
 		vd->vdev_state = VDEV_STATE_OFFLINE;
-	else
+		spa_event_notify(spa, vd, ESC_ZFS_VDEV_STATECHANGE);
+	} else
 		vd->vdev_state = VDEV_STATE_CLOSED;
 
-	spa_event_notify(spa, vd, ESC_ZFS_VDEV_STATECHANGE);
 	vd->vdev_stat.vs_aux = VDEV_AUX_NONE;
 }
 
