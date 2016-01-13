@@ -3473,7 +3473,9 @@ vdev_set_state(vdev_t *vd, boolean_t isopen, vdev_state_t state, vdev_aux_t aux)
 	if (!isopen && vd->vdev_parent)
 		vdev_propagate_state(vd->vdev_parent);
 
-	if (vd->vdev_state != save_state)
+	if (vd->vdev_state != save_state &&
+	    vd->vdev_state != VDEV_STATE_CANT_OPEN &&
+	    vd->vdev_state != VDEV_STATE_CLOSED)
 		spa_event_notify(spa, vd, ESC_ZFS_VDEV_STATECHANGE);
 }
 
