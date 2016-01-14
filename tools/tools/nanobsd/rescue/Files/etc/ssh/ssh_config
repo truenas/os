@@ -44,3 +44,4 @@
 #   TunnelDevice any:any
 #   PermitLocalCommand no
 #   VersionAddendum FreeBSD-20061110
+    UseRoaming no
