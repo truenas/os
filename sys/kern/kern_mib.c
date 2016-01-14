@@ -271,7 +271,7 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	struct prison *pr, *cpr;
 	size_t pr_offset;
 	char tmpname[MAXHOSTNAMELEN];
-	struct devctl_param param;
+	struct devctl_param param[2];
 	int descend, error, len;
 
 	/*
@@ -317,29 +317,32 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 		/* Notify userland about hostname change */
 		switch (pr_offset) {
 			case offsetof(struct prison, pr_hostname):
-				param.dp_type = DT_STRING;
-				param.dp_key = "hostname";
-				param.dp_string = tmpname;
+				param[0].dp_type = DT_STRING;
+				param[0].dp_key = "hostname";
+				param[0].dp_string = tmpname;
 				break;
 
 			case offsetof(struct prison, pr_domainname):
-				param.dp_type = DT_STRING;
-				param.dp_key = "domainname";
-				param.dp_string = tmpname;
+				param[0].dp_type = DT_STRING;
+				param[0].dp_key = "domainname";
+				param[0].dp_string = tmpname;
 				break;
 
 			case offsetof(struct prison, pr_hostuuid):
-				param.dp_type = DT_STRING;
-				param.dp_key = "hostuuid";
-				param.dp_string = tmpname;
+				param[0].dp_type = DT_STRING;
+				param[0].dp_key = "hostuuid";
+				param[0].dp_string = tmpname;
 				break;
 			default:
 				return (EINVAL);		
 		}
 
+		param[1].dp_type = DT_INT;
+		param[1].dp_key = "jid";
+		param[1].dp_int = req->td->td_ucred->cr_prison->pr_id;
 		
-		devctl_notify_params("SYSTEM", "HOSTNAME", "CHANGE", &param,
-		    1, 0);
+		devctl_notify_params("SYSTEM", "HOSTNAME", "CHANGE", param,
+		    2, 0);
 	}
 	return (error);
 }
