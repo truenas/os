@@ -95,6 +95,11 @@ static struct mntarg *parse_mountroot_options(struct mntarg *, const char *);
  */
 struct vnode *rootvnode;
 
+/*
+ * Mount of the system's /dev.
+ */
+struct mount *rootdevmp;
+
 char *rootdevnames[2] = {NULL, NULL};
 
 struct mtx root_holds_mtx;
@@ -215,27 +220,39 @@ vfs_mountroot_devfs(struct thread *td, struct mount **mpp)
 
 	*mpp = NULL;
 
-	vfsp = vfs_byname("devfs");
-	KASSERT(vfsp != NULL, ("Could not find devfs by name"));
-	if (vfsp == NULL)
-		return (ENOENT);
+	if (rootdevmp != NULL) {
+		/*
+		 * Already have /dev; this happens during rerooting.
+		 */
+		error = vfs_busy(rootdevmp, 0);
+		if (error != 0)
+			return (error);
+		*mpp = rootdevmp;
+	} else {
+		vfsp = vfs_byname("devfs");
+		KASSERT(vfsp != NULL, ("Could not find devfs by name"));
+		if (vfsp == NULL)
+			return (ENOENT);
 
-	mp = vfs_mount_alloc(NULLVP, vfsp, "/dev", td->td_ucred);
+		mp = vfs_mount_alloc(NULLVP, vfsp, "/dev", td->td_ucred);
 
-	error = VFS_MOUNT(mp);
-	KASSERT(error == 0, ("VFS_MOUNT(devfs) failed %d", error));
-	if (error)
-		return (error);
+		error = VFS_MOUNT(mp);
+		KASSERT(error == 0, ("VFS_MOUNT(devfs) failed %d", error));
+		if (error)
+			return (error);
 
-	opts = malloc(sizeof(struct vfsoptlist), M_MOUNT, M_WAITOK);
-	TAILQ_INIT(opts);
-	mp->mnt_opt = opts;
+		opts = malloc(sizeof(struct vfsoptlist), M_MOUNT, M_WAITOK);
+		TAILQ_INIT(opts);
+		mp->mnt_opt = opts;
 
-	mtx_lock(&mountlist_mtx);
-	TAILQ_INSERT_HEAD(&mountlist, mp, mnt_list);
-	mtx_unlock(&mountlist_mtx);
+		mtx_lock(&mountlist_mtx);
+		TAILQ_INSERT_HEAD(&mountlist, mp, mnt_list);
+		mtx_unlock(&mountlist_mtx);
 
-	*mpp = mp;
+		*mpp = mp;
+		rootdevmp = mp;
+	}
+
 	set_rootvnode();
 
 	error = kern_symlink(td, "/", "dev", UIO_SYSSPACE);

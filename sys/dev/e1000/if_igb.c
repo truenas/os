@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2001-2013, Intel Corporation 
+  Copyright (c) 2001-2015, Intel Corporation 
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -408,6 +408,13 @@ SYSCTL_INT(_hw_igb, OID_AUTO, rx_process_limit, CTLFLAG_RDTUN,
     &igb_rx_process_limit, 0,
     "Maximum number of received packets to process at a time, -1 means unlimited");
 
+/* How many packets txeof tries to clean at a time */
+static int igb_tx_process_limit = -1;
+TUNABLE_INT("hw.igb.tx_process_limit", &igb_tx_process_limit);
+SYSCTL_INT(_hw_igb, OID_AUTO, tx_process_limit, CTLFLAG_RDTUN,
+    &igb_tx_process_limit, 0,
+    "Maximum number of sent packets to process at a time, -1 means unlimited");
+
 #ifdef DEV_NETMAP	/* see ixgbe.c for details */
 #include <dev/netmap/if_igb_netmap.h>
 #endif /* DEV_NETMAP */
@@ -526,10 +533,14 @@ igb_attach(device_t dev)
 
 	e1000_get_bus_info(&adapter->hw);
 
-	/* Sysctl for limiting the amount of work done in the taskqueue */
+	/* Sysctls for limiting the amount of work done in the taskqueues */
 	igb_set_sysctl_value(adapter, "rx_processing_limit",
 	    "max number of rx packets to process",
 	    &adapter->rx_process_limit, igb_rx_process_limit);
+
+	igb_set_sysctl_value(adapter, "tx_processing_limit",
+	    "max number of tx packets to process",
+	    &adapter->tx_process_limit, igb_tx_process_limit);
 
 	/*
 	 * Validate number of transmit and receive descriptors. It
@@ -1312,7 +1323,8 @@ igb_init_locked(struct adapter *adapter)
 	if (ifp->if_capenable & IFCAP_TXCSUM) {
 		ifp->if_hwassist |= (CSUM_TCP | CSUM_UDP);
 #if __FreeBSD_version >= 800000
-		if (adapter->hw.mac.type == e1000_82576)
+		if ((adapter->hw.mac.type == e1000_82576) ||
+		    (adapter->hw.mac.type == e1000_82580))
 			ifp->if_hwassist |= CSUM_SCTP;
 #endif
 	}
@@ -1877,7 +1889,8 @@ retry:
 			/* Try it again? - one try */
 			if (remap == TRUE) {
 				remap = FALSE;
-				m = m_defrag(*m_headp, M_NOWAIT);
+				m = m_collapse(*m_headp, M_NOWAIT,
+				    IGB_MAX_SCATTER);
 				if (m == NULL) {
 					adapter->mbuf_defrag_failed++;
 					m_freem(*m_headp);
@@ -1888,9 +1901,6 @@ retry:
 				goto retry;
 			} else
 				return (error);
-		case ENOMEM:
-			txr->no_tx_dma_setup++;
-			return (error);
 		default:
 			txr->no_tx_dma_setup++;
 			m_freem(*m_headp);
@@ -3258,7 +3268,6 @@ fail_2:
 	bus_dmamem_free(dma->dma_tag, dma->dma_vaddr, dma->dma_map);
 	bus_dma_tag_destroy(dma->dma_tag);
 fail_0:
-	dma->dma_map = NULL;
 	dma->dma_tag = NULL;
 
 	return (error);
@@ -3269,12 +3278,15 @@ igb_dma_free(struct adapter *adapter, struct igb_dma_alloc *dma)
 {
 	if (dma->dma_tag == NULL)
 		return;
-	if (dma->dma_map != NULL) {
+	if (dma->dma_paddr != 0) {
 		bus_dmamap_sync(dma->dma_tag, dma->dma_map,
 		    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 		bus_dmamap_unload(dma->dma_tag, dma->dma_map);
+		dma->dma_paddr = 0;
+	}
+	if (dma->dma_vaddr != NULL) {
 		bus_dmamem_free(dma->dma_tag, dma->dma_vaddr, dma->dma_map);
-		dma->dma_map = NULL;
+		dma->dma_vaddr = NULL;
 	}
 	bus_dma_tag_destroy(dma->dma_tag);
 	dma->dma_tag = NULL;
@@ -3956,7 +3968,7 @@ igb_txeof(struct tx_ring *txr)
 	struct adapter		*adapter = txr->adapter;
 	struct ifnet		*ifp = adapter->ifp;
 	u32			work, processed = 0;
-	u16			limit = txr->process_limit;
+	int			limit = adapter->tx_process_limit;
 	struct igb_tx_buf	*buf;
 	union e1000_adv_tx_desc *txd;
 
@@ -4598,8 +4610,9 @@ igb_initialize_receive_units(struct adapter *adapter)
 		rxcsum |= E1000_RXCSUM_PCSD;
 #if __FreeBSD_version >= 800000
 		/* For SCTP Offload */
-		if ((hw->mac.type == e1000_82576)
-		    && (ifp->if_capenable & IFCAP_RXCSUM))
+		if (((hw->mac.type == e1000_82576) ||
+		     (hw->mac.type == e1000_82580)) &&
+		    (ifp->if_capenable & IFCAP_RXCSUM))
 			rxcsum |= E1000_RXCSUM_CRCOFL;
 #endif
 	} else {
@@ -4607,7 +4620,8 @@ igb_initialize_receive_units(struct adapter *adapter)
 		if (ifp->if_capenable & IFCAP_RXCSUM) {
 			rxcsum |= E1000_RXCSUM_IPPCSE;
 #if __FreeBSD_version >= 800000
-			if (adapter->hw.mac.type == e1000_82576)
+			if ((adapter->hw.mac.type == e1000_82576) ||
+			    (adapter->hw.mac.type == e1000_82580))
 				rxcsum |= E1000_RXCSUM_CRCOFL;
 #endif
 		} else
@@ -5625,12 +5639,15 @@ igb_add_hw_stats(struct adapter *adapter)
 	char namebuf[QUEUE_NAME_LEN];
 
 	/* Driver Statistics */
-	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "link_irq", 
-			CTLFLAG_RD, &adapter->link_irq,
-			"Link MSIX IRQ Handled");
 	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "dropped", 
 			CTLFLAG_RD, &adapter->dropped_pkts,
 			"Driver dropped packets");
+	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "link_irq", 
+			CTLFLAG_RD, &adapter->link_irq,
+			"Link MSIX IRQ Handled");
+	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "mbuf_defrag_fail",
+			CTLFLAG_RD, &adapter->mbuf_defrag_failed,
+			"Defragmenting mbuf chain failed");
 	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "tx_dma_fail", 
 			CTLFLAG_RD, &adapter->no_tx_dma_setup,
 			"Driver tx dma failure in xmit");

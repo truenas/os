@@ -336,25 +336,44 @@ OLD_FILES+=usr/include/bsnmp/snmpagent.h
 OLD_FILES+=usr/include/bsnmp/snmpclient.h
 OLD_FILES+=usr/include/bsnmp/snmpmod.h
 OLD_FILES+=usr/lib/libbsnmp.a
+OLD_FILES+=usr/lib/libbsnmp.so
 OLD_LIBS+=usr/lib/libbsnmp.so.6
 OLD_FILES+=usr/lib/libbsnmp_p.a
 OLD_FILES+=usr/lib/libbsnmptools.a
+OLD_FILES+=usr/lib/libbsnmptools.so
 OLD_LIBS+=usr/lib/libbsnmptools.so.0
 OLD_FILES+=usr/lib/libbsnmptools_p.a
+OLD_FILES+=usr/lib/snmp_atm.so
 OLD_LIBS+=usr/lib/snmp_atm.so.6
+OLD_FILES+=usr/lib/snmp_bridge.so
 OLD_LIBS+=usr/lib/snmp_bridge.so.6
+OLD_FILES+=usr/lib/snmp_hast.so
 OLD_LIBS+=usr/lib/snmp_hast.so.6
+OLD_FILES+=usr/lib/snmp_hostres.so
 OLD_LIBS+=usr/lib/snmp_hostres.so.6
+OLD_FILES+=usr/lib/snmp_lm75.so
 OLD_LIBS+=usr/lib/snmp_lm75.so.6
+OLD_FILES+=usr/lib/snmp_mibII.so
 OLD_LIBS+=usr/lib/snmp_mibII.so.6
+OLD_FILES+=usr/lib/snmp_netgraph.so
 OLD_LIBS+=usr/lib/snmp_netgraph.so.6
+OLD_FILES+=usr/lib/snmp_pf.so
 OLD_LIBS+=usr/lib/snmp_pf.so.6
+OLD_FILES+=usr/lib/snmp_target.so
 OLD_LIBS+=usr/lib/snmp_target.so.6
+OLD_FILES+=usr/lib/snmp_usm.so
 OLD_LIBS+=usr/lib/snmp_usm.so.6
+OLD_FILES+=usr/lib/snmp_vacm.so
 OLD_LIBS+=usr/lib/snmp_vacm.so.6
+OLD_FILES+=usr/lib/snmp_wlan.so
 OLD_LIBS+=usr/lib/snmp_wlan.so.6
+OLD_FILES+=usr/lib32/libbsnmp.a
+OLD_FILES+=usr/lib32/libbsnmp.so
+OLD_LIBS+=usr/lib32/libbsnmp.so.6
+OLD_FILES+=usr/lib32/libbsnmp_p.a
 OLD_FILES+=usr/sbin/bsnmpd
 OLD_FILES+=usr/sbin/gensnmptree
+OLD_FILES+=usr/share/examples/etc/snmpd.config
 OLD_FILES+=usr/share/man/man1/bsnmpd.1.gz
 OLD_FILES+=usr/share/man/man1/bsnmpget.1.gz
 OLD_FILES+=usr/share/man/man1/bsnmpset.1.gz
@@ -2204,6 +2223,13 @@ OLD_FILES+=rescue/ping6
 # to be filled in
 #.endif
 
+.if ${MK_INETD} == no
+OLD_FILES+=etc/rc.d/inetd
+OLD_FILES+=usr/sbin/inetd
+OLD_FILES+=usr/share/man/man5/inetd.conf.5.gz
+OLD_FILES+=usr/share/man/man8/inetd.8.gz
+.endif
+
 .if ${MK_IPFILTER} == no
 OLD_FILES+=etc/periodic/security/510.ipfdenied
 OLD_FILES+=rescue/ipf
@@ -3478,6 +3504,7 @@ OLD_FILES+=usr/include/c++/v1/unwind.h
 OLD_FILES+=usr/include/c++/v1/utility
 OLD_FILES+=usr/include/c++/v1/valarray
 OLD_FILES+=usr/include/c++/v1/vector
+OLD_DIRS+=usr/include/c++/v1/tr1
 OLD_DIRS+=usr/include/c++/v1/experimental
 OLD_DIRS+=usr/include/c++/v1/ext
 OLD_DIRS+=usr/include/c++/v1
@@ -3486,6 +3513,11 @@ OLD_DIRS+=usr/include/c++/v1
 #.if ${MK_LIBTHR} == no
 # to be filled in
 #.endif
+
+.if ${MK_LLDB} == no
+OLD_FILES+=usr/bin/lldb
+OLD_FILES+=usr/share/man/man1/lldb.1.gz
+.endif
 
 #.if ${MK_LOCALES} == no
 # to be filled in
@@ -4081,6 +4113,7 @@ OLD_FILES+=usr/bin/rcsdiff
 OLD_FILES+=usr/bin/rcsfreeze
 OLD_FILES+=usr/bin/rcsmerge
 OLD_FILES+=usr/bin/rlog
+OLD_FILES+=usr/sbin/etcupdate
 OLD_FILES+=usr/share/man/man1/ci.1.gz
 OLD_FILES+=usr/share/man/man1/co.1.gz
 OLD_FILES+=usr/share/man/man1/ident.1.gz
@@ -4093,6 +4126,7 @@ OLD_FILES+=usr/share/man/man1/rcsintro.1.gz
 OLD_FILES+=usr/share/man/man1/rcsmerge.1.gz
 OLD_FILES+=usr/share/man/man1/rlog.1.gz
 OLD_FILES+=usr/share/man/man5/rcsfile.5.gz
+OLD_FILES+=usr/share/man/man8/etcupdate.8.gz
 .endif
 
 #.if ${MK_RESCUE} == no

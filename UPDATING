@@ -16,6 +16,10 @@ from older versions of FreeBSD, try WITHOUT_CLANG to bootstrap to the tip of
 stable/10, and then rebuild without this option. The bootstrap process from
 older version of current is a bit fragile.
 
+20160124:
+	The NONE and HPN patches has been removed from OpenSSH.  They are
+	still available in the security/openssh-portable port.
+
 20151214:
 	r292223 changed the internal interface between the nfsd.ko and
 	nfscommon.ko modules. As such, they must both be upgraded to-gether.
@@ -25,6 +29,11 @@ older version of current is a bit fragile.
 	Qlogic 24xx/25xx firmware images were updated from 5.5.0 to 7.3.0.
 	Kernel modules isp_2400_multi and isp_2500_multi were removed and
 	should be replaced with isp_2400 and isp_2500 modules respectively.
+
+20150806:
+	The menu.rc and loader.rc files will now be replaced during 
+	upgrades. Please migrate local changes to menu.rc.local and
+	loader.rc.local instead.
 
 20151026:
 	NTP has been upgraded to 4.2.8p4.

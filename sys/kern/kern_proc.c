@@ -139,6 +139,21 @@ struct sx proctree_lock;
 struct mtx ppeers_lock;
 uma_zone_t proc_zone;
 
+/*
+ * The offset of various fields in struct proc and struct thread.
+ * These are used by kernel debuggers to enumerate kernel threads and
+ * processes.
+ */
+const int proc_off_p_pid = offsetof(struct proc, p_pid);
+const int proc_off_p_comm = offsetof(struct proc, p_comm);
+const int proc_off_p_list = offsetof(struct proc, p_list);
+const int proc_off_p_threads = offsetof(struct proc, p_threads);
+const int thread_off_td_tid = offsetof(struct thread, td_tid);
+const int thread_off_td_name = offsetof(struct thread, td_name);
+const int thread_off_td_oncpu = offsetof(struct thread, td_oncpu);
+const int thread_off_td_pcb = offsetof(struct thread, td_pcb);
+const int thread_off_td_plist = offsetof(struct thread, td_plist);
+
 int kstack_pages = KSTACK_PAGES;
 SYSCTL_INT(_kern, OID_AUTO, kstack_pages, CTLFLAG_RD, &kstack_pages, 0,
     "Kernel stack size in pages");
@@ -234,6 +249,7 @@ proc_init(void *mem, int size, int flags)
 	TAILQ_INIT(&p->p_threads);	     /* all threads in proc */
 	EVENTHANDLER_INVOKE(process_init, p);
 	p->p_stats = pstats_alloc();
+	p->p_pgrp = NULL;
 	SDT_PROBE3(proc, kernel, init, return, p, size, flags);
 	return (0);
 }
@@ -871,11 +887,11 @@ fill_kinfo_proc_only(struct proc *p, struct kinfo_proc *kp)
 	kp->ki_fibnum = p->p_fibnum;
 	kp->ki_start = p->p_stats->p_start;
 	timevaladd(&kp->ki_start, &boottime);
-	PROC_SLOCK(p);
+	PROC_STATLOCK(p);
 	rufetch(p, &kp->ki_rusage);
 	kp->ki_runtime = cputick2usec(p->p_rux.rux_runtime);
 	calcru(p, &kp->ki_rusage.ru_utime, &kp->ki_rusage.ru_stime);
-	PROC_SUNLOCK(p);
+	PROC_STATUNLOCK(p);
 	calccru(p, &kp->ki_childutime, &kp->ki_childstime);
 	/* Some callers want child times in a single value. */
 	kp->ki_childtime = kp->ki_childstime;
@@ -940,7 +956,7 @@ fill_kinfo_thread(struct thread *td, struct kinfo_proc *kp, int preferthread)
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 
 	if (preferthread)
-		PROC_SLOCK(p);
+		PROC_STATLOCK(p);
 	thread_lock(td);
 	if (td->td_wmesg != NULL)
 		strlcpy(kp->ki_wmesg, td->td_wmesg, sizeof(kp->ki_wmesg));
@@ -1007,7 +1023,7 @@ fill_kinfo_thread(struct thread *td, struct kinfo_proc *kp, int preferthread)
 	kp->ki_sigmask = td->td_sigmask;
 	thread_unlock(td);
 	if (preferthread)
-		PROC_SUNLOCK(p);
+		PROC_STATUNLOCK(p);
 }
 
 /*

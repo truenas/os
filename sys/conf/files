@@ -126,9 +126,9 @@ cddl/compat/opensolaris/kern/opensolaris_vm.c				optional zfs compile-with "${ZF
 cddl/compat/opensolaris/kern/opensolaris_zone.c				optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/common/acl/acl_common.c			optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/common/avl/avl.c				optional zfs compile-with "${ZFS_C}"
-cddl/contrib/opensolaris/common/nvpair/fnvpair.c			optional zfs compile-with "${ZFS_C}"
-cddl/contrib/opensolaris/common/nvpair/nvpair.c				optional zfs compile-with "${ZFS_C}"
-cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.c		optional zfs compile-with "${ZFS_C}"
+cddl/contrib/opensolaris/common/nvpair/opensolaris_fnvpair.c		optional zfs compile-with "${ZFS_C}"
+cddl/contrib/opensolaris/common/nvpair/opensolaris_nvpair.c		optional zfs compile-with "${ZFS_C}"
+cddl/contrib/opensolaris/common/nvpair/opensolaris_nvpair_alloc_fixed.c	optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/common/unicode/u8_textprep.c			optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/common/zfs/zfeature_common.c			optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/common/zfs/zfs_comutil.c			optional zfs compile-with "${ZFS_C}"
@@ -1523,6 +1523,7 @@ dev/iscsi_initiator/isc_cam.c	optional iscsi_initiator scbus
 dev/iscsi_initiator/isc_soc.c	optional iscsi_initiator scbus
 dev/iscsi_initiator/isc_sm.c	optional iscsi_initiator scbus
 dev/iscsi_initiator/isc_subr.c	optional iscsi_initiator scbus
+dev/ismt/ismt.c			optional ismt
 dev/isp/isp.c			optional isp
 dev/isp/isp_freebsd.c		optional isp
 dev/isp/isp_library.c		optional isp
@@ -2211,6 +2212,7 @@ dev/random/hash.c		optional random
 dev/random/rwfile.c		optional random
 dev/rc/rc.c			optional rc
 dev/re/if_re.c			optional re
+dev/rl/if_rl.c			optional rl pci
 dev/rndtest/rndtest.c		optional rndtest
 dev/rp/rp.c			optional rp
 dev/rp/rp_isa.c			optional rp isa
@@ -3075,6 +3077,7 @@ kern/subr_clock.c		standard
 kern/subr_counter.c		standard
 kern/subr_devstat.c		standard
 kern/subr_disk.c		standard
+kern/subr_dnvlist.c		standard
 kern/subr_eventhandler.c	standard
 kern/subr_fattime.c		standard
 kern/subr_firmware.c		optional firmware
@@ -3088,6 +3091,8 @@ kern/subr_mbpool.c		optional libmbpool
 kern/subr_mchain.c		optional libmchain
 kern/subr_module.c		standard
 kern/subr_msgbuf.c		standard
+kern/subr_nvlist.c		standard
+kern/subr_nvpair.c		standard
 kern/subr_param.c		standard
 kern/subr_pcpu.c		standard
 kern/subr_pctrie.c		standard
@@ -3502,6 +3507,7 @@ netinet/sctp_usrreq.c		optional inet sctp | inet6 sctp
 netinet/sctputil.c		optional inet sctp | inet6 sctp
 netinet/siftr.c			optional inet siftr alq | inet6 siftr alq
 netinet/tcp_debug.c		optional tcpdebug
+netinet/tcp_fastopen.c		optional inet tcp_rfc7413 | inet6 tcp_rfc7413
 netinet/tcp_hostcache.c		optional inet | inet6
 netinet/tcp_input.c		optional inet | inet6
 netinet/tcp_lro.c		optional inet | inet6
@@ -3995,7 +4001,6 @@ opencrypto/xform.c		optional crypto
 pci/alpm.c			optional alpm pci
 pci/amdpm.c			optional amdpm pci | nfpm pci
 pci/amdsmb.c			optional amdsmb pci
-pci/if_rl.c			optional rl pci
 pci/intpm.c			optional intpm pci
 pci/ncr.c			optional ncr pci \
 	compile-with "${NORMAL_C} -Wno-unused"

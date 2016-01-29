@@ -10,6 +10,12 @@
 
 __<bsd.test.mk>__:
 
+# Third-party software (kyua, etc) prefix.
+LOCALBASE?=	/usr/local
+
+# Tests install directory
+TESTSDIR?=	${TESTSBASE}/${RELDIR:H}
+
 # List of subdirectories containing tests into which to recurse.  This has the
 # same semantics as SUBDIR at build-time.  However, the directories listed here
 # get registered into the run-time test suite definitions so that the test

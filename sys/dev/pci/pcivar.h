@@ -190,11 +190,6 @@ typedef struct pcicfg {
 
 /* additional type 1 device config header information (PCI to PCI bridge) */
 
-#define	PCI_PPBMEMBASE(h,l)  ((((pci_addr_t)(h) << 32) + ((l)<<16)) & ~0xfffff)
-#define	PCI_PPBMEMLIMIT(h,l) ((((pci_addr_t)(h) << 32) + ((l)<<16)) | 0xfffff)
-#define	PCI_PPBIOBASE(h,l)   ((((h)<<16) + ((l)<<8)) & ~0xfff)
-#define	PCI_PPBIOLIMIT(h,l)  ((((h)<<16) + ((l)<<8)) | 0xfff)
-
 typedef struct {
     pci_addr_t	pmembase;	/* base address of prefetchable memory */
     pci_addr_t	pmemlimit;	/* topmost address of prefetchable memory */
@@ -458,6 +453,24 @@ pci_alloc_msix(device_t dev, int *count)
     return (PCI_ALLOC_MSIX(device_get_parent(dev), dev, count));
 }
 
+static __inline void
+pci_enable_msi(device_t dev, uint64_t address, uint16_t data)
+{
+    PCI_ENABLE_MSI(device_get_parent(dev), dev, address, data);
+}
+
+static __inline void
+pci_enable_msix(device_t dev, u_int index, uint64_t address, uint32_t data)
+{
+    PCI_ENABLE_MSIX(device_get_parent(dev), dev, index, address, data);
+}
+
+static __inline void
+pci_disable_msi(device_t dev)
+{
+    PCI_DISABLE_MSI(device_get_parent(dev), dev);
+}
+
 static __inline int
 pci_remap_msix(device_t dev, int count, const u_int *vectors)
 {
@@ -482,10 +495,29 @@ pci_msix_count(device_t dev)
     return (PCI_MSIX_COUNT(device_get_parent(dev), dev));
 }
 
+static __inline int
+pci_msix_pba_bar(device_t dev)
+{
+    return (PCI_MSIX_PBA_BAR(device_get_parent(dev), dev));
+}
+
+static __inline int
+pci_msix_table_bar(device_t dev)
+{
+    return (PCI_MSIX_TABLE_BAR(device_get_parent(dev), dev));
+}
+
 static __inline uint16_t
 pci_get_rid(device_t dev)
 {
 	return (PCI_GET_RID(device_get_parent(dev), dev));
+}
+
+static __inline void
+pci_child_added(device_t dev)
+{
+
+    return (PCI_CHILD_ADDED(device_get_parent(dev), dev));
 }
 
 device_t pci_find_bsf(uint8_t, uint8_t, uint8_t);

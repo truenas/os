@@ -323,6 +323,7 @@ struct thread {
 	void		*td_su;		/* (k) FFS SU private */
 	u_int		td_dbg_sc_code;	/* (c) Syscall code to debugger. */
 	u_int		td_dbg_sc_narg;	/* (c) Syscall arg count to debugger.*/
+	void		*td_emuldata;	/* Emulator state data */
 };
 
 struct mtx *thread_lock_block(struct thread *);
@@ -558,7 +559,7 @@ struct proc {
 	int		p_osrel;	/* (x) osreldate for the
 					       binary (from ELF note, if any) */
 	char		p_comm[MAXCOMLEN + 1];	/* (b) Process name. */
-	struct pgrp	*p_pgrp;	/* (c + e) Pointer to process group. */
+	void		*p_pad0;
 	struct sysentvec *p_sysent;	/* (b) Syscall dispatch info. */
 	struct pargs	*p_args;	/* (c) Process arguments. */
 	rlim_t		p_cpulimit;	/* (c) Current CPU limit in seconds. */
@@ -604,6 +605,7 @@ struct proc {
 	pid_t		p_reapsubtree;	/* (e) Pid of the direct child of the
 					       reaper which spawned
 					       our subtree. */
+	struct pgrp	*p_pgrp;	/* (c + e) Pointer to process group. */
 };
 
 #define	p_session	p_pgrp->pg_session
@@ -614,6 +616,18 @@ struct proc {
 #define	PROC_SLOCK(p)	mtx_lock_spin(&(p)->p_slock)
 #define	PROC_SUNLOCK(p)	mtx_unlock_spin(&(p)->p_slock)
 #define	PROC_SLOCK_ASSERT(p, type)	mtx_assert(&(p)->p_slock, (type))
+
+#define	PROC_STATLOCK(p)	mtx_lock_spin(&(p)->p_slock)
+#define	PROC_STATUNLOCK(p)	mtx_unlock_spin(&(p)->p_slock)
+#define	PROC_STATLOCK_ASSERT(p, type)	mtx_assert(&(p)->p_slock, (type))
+
+#define	PROC_ITIMLOCK(p)	mtx_lock_spin(&(p)->p_slock)
+#define	PROC_ITIMUNLOCK(p)	mtx_unlock_spin(&(p)->p_slock)
+#define	PROC_ITIMLOCK_ASSERT(p, type)	mtx_assert(&(p)->p_slock, (type))
+
+#define	PROC_PROFLOCK(p)	mtx_lock_spin(&(p)->p_slock)
+#define	PROC_PROFUNLOCK(p)	mtx_unlock_spin(&(p)->p_slock)
+#define	PROC_PROFLOCK_ASSERT(p, type)	mtx_assert(&(p)->p_slock, (type))
 
 /* These flags are kept in p_flag. */
 #define	P_ADVLOCK	0x00001	/* Process may hold a POSIX advisory lock. */

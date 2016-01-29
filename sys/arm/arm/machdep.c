@@ -259,10 +259,6 @@ sendsig(catcher, ksi, mask)
 		sigexit(td, SIGILL);
 	}
 
-	/* Translate the signal if appropriate. */
-	if (p->p_sysent->sv_sigtbl && sig <= p->p_sysent->sv_sigsize)
-		sig = p->p_sysent->sv_sigtbl[_SIG_IDX(sig)];
-
 	/*
 	 * Build context to run handler in.  We invoke the handler
 	 * directly, only returning via the trampoline.  Note the
@@ -830,13 +826,15 @@ fake_preload_metadata(struct arm_boot_params *abp __unused)
 	fake_preload[i] = 0;
 	preload_metadata = (void *)fake_preload;
 
+	init_static_kenv(NULL, 0);
+
 	return (lastaddr);
 }
 
 void
 pcpu0_init(void)
 {
-#if ARM_ARCH_6 || ARM_ARCH_7A || defined(CPU_MV_PJ4B)
+#if __ARM_ARCH >= 6
 	set_curthread(&thread0);
 #endif
 	pcpu_init(pcpup, 0, sizeof(struct pcpu));
@@ -905,6 +903,8 @@ linux_parse_boot_param(struct arm_boot_params *abp)
 	bcopy(atag_list, atags,
 	    (char *)walker - (char *)atag_list + ATAG_SIZE(walker));
 
+	init_static_kenv(NULL, 0);
+
 	return fake_preload_metadata(abp);
 }
 #endif
@@ -933,7 +933,7 @@ freebsd_parse_boot_param(struct arm_boot_params *abp)
 		return 0;
 
 	boothowto = MD_FETCH(kmdp, MODINFOMD_HOWTO, int);
-	kern_envp = MD_FETCH(kmdp, MODINFOMD_ENVP, char *);
+	init_static_kenv(MD_FETCH(kmdp, MODINFOMD_ENVP, char *), 0);
 	lastaddr = MD_FETCH(kmdp, MODINFOMD_KERNEND, vm_offset_t);
 #ifdef DDB
 	ksym_start = MD_FETCH(kmdp, MODINFOMD_SSYM, uintptr_t);

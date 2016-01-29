@@ -110,11 +110,6 @@ static int		pci_write_vpd_reg(device_t pcib, pcicfgregs *cfg,
 			    int reg, uint32_t data);
 #endif
 static void		pci_read_vpd(device_t pcib, pcicfgregs *cfg);
-static void		pci_disable_msi(device_t dev);
-static void		pci_enable_msi(device_t dev, uint64_t address,
-			    uint16_t data);
-static void		pci_enable_msix(device_t dev, u_int index,
-			    uint64_t address, uint32_t data);
 static void		pci_mask_msix(device_t dev, u_int index);
 static void		pci_unmask_msix(device_t dev, u_int index);
 static int		pci_msi_blacklisted(void);
@@ -180,11 +175,17 @@ static device_method_t pci_methods[] = {
 	DEVMETHOD(pci_find_htcap,	pci_find_htcap_method),
 	DEVMETHOD(pci_alloc_msi,	pci_alloc_msi_method),
 	DEVMETHOD(pci_alloc_msix,	pci_alloc_msix_method),
+	DEVMETHOD(pci_enable_msi,	pci_enable_msi_method),
+	DEVMETHOD(pci_enable_msix,	pci_enable_msix_method),
+	DEVMETHOD(pci_disable_msi,	pci_disable_msi_method),
 	DEVMETHOD(pci_remap_msix,	pci_remap_msix_method),
 	DEVMETHOD(pci_release_msi,	pci_release_msi_method),
 	DEVMETHOD(pci_msi_count,	pci_msi_count_method),
 	DEVMETHOD(pci_msix_count,	pci_msix_count_method),
+	DEVMETHOD(pci_msix_pba_bar,	pci_msix_pba_bar_method),
+	DEVMETHOD(pci_msix_table_bar,	pci_msix_table_bar_method),
 	DEVMETHOD(pci_get_rid,		pci_get_rid_method),
+	DEVMETHOD(pci_child_added,	pci_child_added_method),
 
 	DEVMETHOD_END
 };
@@ -616,8 +617,6 @@ pci_read_device(device_t pcib, int d, int b, int s, int f, size_t size)
 
 	if (REG(PCIR_DEVVENDOR, 4) != 0xfffffffful) {
 		devlist_entry = malloc(size, M_DEVBUF, M_WAITOK | M_ZERO);
-		if (devlist_entry == NULL)
-			return (NULL);
 
 		cfg = &devlist_entry->cfg;
 
@@ -1374,9 +1373,10 @@ pci_find_extcap_method(device_t dev, device_t child, int capability,
  * Support for MSI-X message interrupts.
  */
 void
-pci_enable_msix(device_t dev, u_int index, uint64_t address, uint32_t data)
+pci_enable_msix_method(device_t dev, device_t child, u_int index,
+    uint64_t address, uint32_t data)
 {
-	struct pci_devinfo *dinfo = device_get_ivars(dev);
+	struct pci_devinfo *dinfo = device_get_ivars(child);
 	struct pcicfg_msix *msix = &dinfo->cfg.msix;
 	uint32_t offset;
 
@@ -1387,7 +1387,7 @@ pci_enable_msix(device_t dev, u_int index, uint64_t address, uint32_t data)
 	bus_write_4(msix->msix_table_res, offset + 8, data);
 
 	/* Enable MSI -> HT mapping. */
-	pci_ht_map_msi(dev, address);
+	pci_ht_map_msi(child, address);
 }
 
 void
@@ -1829,6 +1829,28 @@ pci_msix_count_method(device_t dev, device_t child)
 	return (0);
 }
 
+int
+pci_msix_pba_bar_method(device_t dev, device_t child)
+{
+	struct pci_devinfo *dinfo = device_get_ivars(child);
+	struct pcicfg_msix *msix = &dinfo->cfg.msix;
+
+	if (pci_do_msix && msix->msix_location != 0)
+		return (msix->msix_pba_bar);
+	return (-1);
+}
+
+int
+pci_msix_table_bar_method(device_t dev, device_t child)
+{
+	struct pci_devinfo *dinfo = device_get_ivars(child);
+	struct pcicfg_msix *msix = &dinfo->cfg.msix;
+
+	if (pci_do_msix && msix->msix_location != 0)
+		return (msix->msix_table_bar);
+	return (-1);
+}
+
 /*
  * HyperTransport MSI mapping control
  */
@@ -1956,45 +1978,46 @@ pcie_adjust_config(device_t dev, int reg, uint32_t mask, uint32_t value,
  * Support for MSI message signalled interrupts.
  */
 void
-pci_enable_msi(device_t dev, uint64_t address, uint16_t data)
+pci_enable_msi_method(device_t dev, device_t child, uint64_t address,
+    uint16_t data)
 {
-	struct pci_devinfo *dinfo = device_get_ivars(dev);
+	struct pci_devinfo *dinfo = device_get_ivars(child);
 	struct pcicfg_msi *msi = &dinfo->cfg.msi;
 
 	/* Write data and address values. */
-	pci_write_config(dev, msi->msi_location + PCIR_MSI_ADDR,
+	pci_write_config(child, msi->msi_location + PCIR_MSI_ADDR,
 	    address & 0xffffffff, 4);
 	if (msi->msi_ctrl & PCIM_MSICTRL_64BIT) {
-		pci_write_config(dev, msi->msi_location + PCIR_MSI_ADDR_HIGH,
+		pci_write_config(child, msi->msi_location + PCIR_MSI_ADDR_HIGH,
 		    address >> 32, 4);
-		pci_write_config(dev, msi->msi_location + PCIR_MSI_DATA_64BIT,
+		pci_write_config(child, msi->msi_location + PCIR_MSI_DATA_64BIT,
 		    data, 2);
 	} else
-		pci_write_config(dev, msi->msi_location + PCIR_MSI_DATA, data,
+		pci_write_config(child, msi->msi_location + PCIR_MSI_DATA, data,
 		    2);
 
 	/* Enable MSI in the control register. */
 	msi->msi_ctrl |= PCIM_MSICTRL_MSI_ENABLE;
-	pci_write_config(dev, msi->msi_location + PCIR_MSI_CTRL, msi->msi_ctrl,
-	    2);
+	pci_write_config(child, msi->msi_location + PCIR_MSI_CTRL,
+	    msi->msi_ctrl, 2);
 
 	/* Enable MSI -> HT mapping. */
-	pci_ht_map_msi(dev, address);
+	pci_ht_map_msi(child, address);
 }
 
 void
-pci_disable_msi(device_t dev)
+pci_disable_msi_method(device_t dev, device_t child)
 {
-	struct pci_devinfo *dinfo = device_get_ivars(dev);
+	struct pci_devinfo *dinfo = device_get_ivars(child);
 	struct pcicfg_msi *msi = &dinfo->cfg.msi;
 
 	/* Disable MSI -> HT mapping. */
-	pci_ht_map_msi(dev, 0);
+	pci_ht_map_msi(child, 0);
 
 	/* Disable MSI in the control register. */
 	msi->msi_ctrl &= ~PCIM_MSICTRL_MSI_ENABLE;
-	pci_write_config(dev, msi->msi_location + PCIR_MSI_CTRL, msi->msi_ctrl,
-	    2);
+	pci_write_config(child, msi->msi_location + PCIR_MSI_CTRL,
+	    msi->msi_ctrl, 2);
 }
 
 /*
@@ -3604,6 +3627,13 @@ pci_add_child(device_t bus, struct pci_devinfo *dinfo)
 	pci_cfg_restore(dinfo->cfg.dev, dinfo);
 	pci_print_verbose(dinfo);
 	pci_add_resources(bus, dinfo->cfg.dev, 0, 0);
+	pci_child_added(dinfo->cfg.dev);
+}
+
+void
+pci_child_added_method(device_t dev, device_t child)
+{
+
 }
 
 static int

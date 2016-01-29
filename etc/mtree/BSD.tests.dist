@@ -6,6 +6,8 @@
 /set type=dir uname=root gname=wheel mode=0755
 .
     bin
+        cat
+        ..
         chown
         ..
         date
@@ -107,9 +109,13 @@
                     ..
                 ..
             ..
+            nss
+            ..
             regex
                 data
                 ..
+            ..
+            resolv
             ..
             rpc
             ..
@@ -137,6 +143,8 @@
         libcrypt
         ..
         libmp
+        ..
+        libnv
         ..
         librt
         ..
@@ -205,6 +213,12 @@
             ..
         ..
         kqueue
+        ..
+        mac
+            bsdextended
+            ..
+            portacl
+            ..
         ..
         mqueue
         ..

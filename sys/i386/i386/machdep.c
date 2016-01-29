@@ -400,10 +400,6 @@ osendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	} else
 		fp = (struct osigframe *)regs->tf_esp - 1;
 
-	/* Translate the signal if appropriate. */
-	if (p->p_sysent->sv_sigtbl && sig <= p->p_sysent->sv_sigsize)
-		sig = p->p_sysent->sv_sigtbl[_SIG_IDX(sig)];
-
 	/* Build the argument list for the signal handler. */
 	sf.sf_signum = sig;
 	sf.sf_scp = (register_t)&fp->sf_siginfo.si_sc;
@@ -550,10 +546,6 @@ freebsd4_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 #endif
 	} else
 		sfp = (struct sigframe4 *)regs->tf_esp - 1;
-
-	/* Translate the signal if appropriate. */
-	if (p->p_sysent->sv_sigtbl && sig <= p->p_sysent->sv_sigsize)
-		sig = p->p_sysent->sv_sigtbl[_SIG_IDX(sig)];
 
 	/* Build the argument list for the signal handler. */
 	sf.sf_signum = sig;
@@ -3198,10 +3190,11 @@ init386(first)
 	} else {
 		metadata_missing = 1;
 	}
-	if (envmode == 1)
-		kern_envp = static_env;
-	else if (bootinfo.bi_envp)
-		kern_envp = (caddr_t)bootinfo.bi_envp + KERNBASE;
+
+	if (bootinfo.bi_envp)
+		init_static_kenv((caddr_t)bootinfo.bi_envp + KERNBASE, 0);
+	else
+		init_static_kenv(NULL, 0);
 
 	/* Init basic tunables, hz etc */
 	init_param1();

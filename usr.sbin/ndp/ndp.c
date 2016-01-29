@@ -655,6 +655,8 @@ again:;
 			if (rtm->rtm_flags & RTF_CLONED)
 				delete(host_buf);
 #else
+			if (rtm->rtm_flags & RTF_PINNED)
+				continue;
 			delete(host_buf);
 #endif
 			continue;
@@ -679,7 +681,7 @@ again:;
 		printf("%-*.*s %-*.*s %*.*s", addrwidth, addrwidth, host_buf,
 		    llwidth, llwidth, ether_str(sdl), ifwidth, ifwidth, ifname);
 
-		/* Print neighbor discovery specific informations */
+		/* Print neighbor discovery specific information */
 		nbi = getnbrinfo(&sin->sin6_addr, sdl->sdl_index, 1);
 		if (nbi) {
 			if (nbi->expire > now.tv_sec) {

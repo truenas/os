@@ -71,6 +71,14 @@ __FBSDID("$FreeBSD$");
 #include <netinet/tcp_debug.h>
 #endif
 
+int    tcp_persmin;
+SYSCTL_PROC(_net_inet_tcp, OID_AUTO, persmin, CTLTYPE_INT|CTLFLAG_RW,
+    &tcp_persmin, 0, sysctl_msec_to_ticks, "I", "minimum persistence interval");
+
+int    tcp_persmax;
+SYSCTL_PROC(_net_inet_tcp, OID_AUTO, persmax, CTLTYPE_INT|CTLFLAG_RW,
+    &tcp_persmax, 0, sysctl_msec_to_ticks, "I", "maximum persistence interval");
+
 int	tcp_keepinit;
 SYSCTL_PROC(_net_inet_tcp, TCPCTL_KEEPINIT, keepinit, CTLTYPE_INT|CTLFLAG_RW,
     &tcp_keepinit, 0, sysctl_msec_to_ticks, "I", "time to establish connection");
@@ -596,7 +604,8 @@ tcp_timer_rexmt(void * xtp)
 	} else
 		tp->t_flags &= ~TF_PREVVALID;
 	TCPSTAT_INC(tcps_rexmttimeo);
-	if (tp->t_state == TCPS_SYN_SENT)
+	if ((tp->t_state == TCPS_SYN_SENT) ||
+	    (tp->t_state == TCPS_SYN_RECEIVED))
 		rexmt = TCPTV_RTOBASE * tcp_syn_backoff[tp->t_rxtshift];
 	else
 		rexmt = TCP_REXMTVAL(tp) * tcp_backoff[tp->t_rxtshift];

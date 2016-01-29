@@ -192,12 +192,6 @@ thread_create(struct thread *td, struct rtprio *rtp,
 
 	p = td->td_proc;
 
-	/* Have race condition but it is cheap. */
-	if (p->p_numthreads >= max_threads_per_proc) {
-		++max_threads_hits;
-		return (EPROCLIM);
-	}
-
 	if (rtp != NULL) {
 		switch(rtp->type) {
 		case RTP_PRIO_REALTIME:
@@ -225,11 +219,9 @@ thread_create(struct thread *td, struct rtprio *rtp,
 #endif
 
 	/* Initialize our td */
-	newtd = thread_alloc(0);
-	if (newtd == NULL) {
-		error = ENOMEM;
+	error = kern_thr_alloc(p, 0, &newtd);
+	if (error)
 		goto fail;
-	}
 
 	cpu_set_upcall(newtd, td);
 
@@ -305,9 +297,6 @@ int
 sys_thr_exit(struct thread *td, struct thr_exit_args *uap)
     /* long *state */
 {
-	struct proc *p;
-
-	p = td->td_proc;
 
 	/* Signal userland that it can free the stack. */
 	if ((void *)uap->state != NULL) {
@@ -315,8 +304,17 @@ sys_thr_exit(struct thread *td, struct thr_exit_args *uap)
 		kern_umtx_wake(td, uap->state, INT_MAX, 0);
 	}
 
-	rw_wlock(&tidhash_lock);
+	return (kern_thr_exit(td));
+}
 
+int
+kern_thr_exit(struct thread *td)
+{
+	struct proc *p;
+
+	p = td->td_proc;
+
+	rw_wlock(&tidhash_lock);
 	PROC_LOCK(p);
 
 	if (p->p_numthreads != 1) {
@@ -557,4 +555,21 @@ sys_thr_set_name(struct thread *td, struct thr_set_name_args *uap)
 #endif
 	PROC_UNLOCK(p);
 	return (error);
+}
+
+int
+kern_thr_alloc(struct proc *p, int pages, struct thread **ntd)
+{
+
+	/* Have race condition but it is cheap. */
+	if (p->p_numthreads >= max_threads_per_proc) {
+		++max_threads_hits;
+		return (EPROCLIM);
+	}
+
+	*ntd = thread_alloc(pages);
+	if (*ntd == NULL)
+		return (ENOMEM);
+
+	return (0);
 }

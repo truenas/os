@@ -266,7 +266,9 @@ main(int argc, char **argv)
 
 	gssd_syscall(_PATH_GSSDSOCK);
 	svc_run();
+	gssd_syscall("");
 	pidfile_remove(pfh);
+
 	return (0);
 }
 
@@ -1297,6 +1299,7 @@ void gssd_terminate(int sig __unused)
 	if (hostbased_initiator_cred != 0)
 		unlink(GSSD_CREDENTIAL_CACHE_FILE);
 #endif
+	gssd_syscall("");
 	pidfile_remove(pfh);
 	exit(0);
 }

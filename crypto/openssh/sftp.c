@@ -1,5 +1,4 @@
 /* $OpenBSD: sftp.c,v 1.158 2013/11/20 20:54:10 deraadt Exp $ */
-/* $FreeBSD$ */
 /*
  * Copyright (c) 2001-2004 Damien Miller <djm@openbsd.org>
  *
@@ -69,7 +68,7 @@ typedef void EditLine;
 #include "sftp-client.h"
 
 #define DEFAULT_COPY_BUFLEN	32768	/* Size of buffer for up/download */
-#define DEFAULT_NUM_REQUESTS	256	/* # concurrent outstanding requests */
+#define DEFAULT_NUM_REQUESTS	64	/* # concurrent outstanding requests */
 
 /* File to read commands from */
 FILE* infile;
