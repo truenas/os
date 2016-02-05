@@ -2606,7 +2606,7 @@ usb_notify_addq(const char *type, struct usb_device *udev)
 	};
 #endif
 
-	devctl_notify_params("USB", "DEVICE", type, params, nparams, 0);
+	devctl_notify_params("USB", "DEVICE", type, params, nparams, M_WAITOK);
 
 	/* announce each interface */
 	for (i = 0; i < USB_IFACE_MAX; i++) {
@@ -2699,7 +2699,7 @@ usb_notify_addq(const char *type, struct usb_device *udev)
 		};
 
 		devctl_notify_params("USB", "INTERFACE", type, params,
-		    nparams, 0);
+		    nparams, M_WAITOK);
 	}
 }
 #endif
