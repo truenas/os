@@ -702,7 +702,8 @@ devctl_notify_params(const char *system, const char *subsystem,
 			break;
 
 		case DT_BOOL:
-			sbuf_printf(&sb, "%s", params[i].dp_bool ? "true" : "false");
+			sbuf_printf(&sb, "%s",
+			    params[i].dp_bool ? "true" : "false");
 			break;
 
 		default:
@@ -715,7 +716,7 @@ devctl_notify_params(const char *system, const char *subsystem,
 	sbuf_printf(&sb, "</notify>\n");
 	sbuf_finish(&sb);
 	
-	msg = malloc(sbuf_len(&sb), M_BUS, flags);
+	msg = malloc(sbuf_len(&sb) + 1, M_BUS, flags);
 	strncpy(msg, sbuf_data(&sb), sbuf_len(&sb) + 1);
 	devctl_queue_data_f(msg, flags);
 }
