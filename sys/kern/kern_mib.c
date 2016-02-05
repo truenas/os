@@ -342,7 +342,7 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 		param[1].dp_int = req->td->td_ucred->cr_prison->pr_id;
 		
 		devctl_notify_params("SYSTEM", "HOSTNAME", "CHANGE", param,
-		    2, 0);
+		    2, M_WAITOK);
 	}
 	return (error);
 }

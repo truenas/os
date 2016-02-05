@@ -3759,7 +3759,8 @@ acpi_UserNotify(const char *subsystem, ACPI_HANDLE h, uint8_t notify)
     param.dp_type = DT_UINT;
     param.dp_key = "notify";
     param.dp_uint = notify;
-    devctl_notify_params("ACPI", subsystem, handle_buf.Pointer, &param, 1, 0);
+    devctl_notify_params("ACPI", subsystem, handle_buf.Pointer, &param, 1,
+	M_WAITOK);
     AcpiOsFree(handle_buf.Pointer);
 }
 

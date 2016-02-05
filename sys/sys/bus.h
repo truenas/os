@@ -137,6 +137,7 @@ struct devreq {
 
 #include <sys/eventhandler.h>
 #include <sys/kobj.h>
+#include <sys/malloc.h>
 
 /**
  * devctl hooks.  Typically one should use the devctl_notify
