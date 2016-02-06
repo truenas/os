@@ -998,7 +998,7 @@ enum i40e_status_code i40e_clean_arq_element(struct i40e_hw *hw,
 	/* set next_to_use to head */
 	if (!i40e_is_vf(hw))
 		ntu = (rd32(hw, hw->aq.arq.head) & I40E_PF_ARQH_ARQH_MASK);
-	if (i40e_is_vf(hw))
+	else
 		ntu = (rd32(hw, hw->aq.arq.head) & I40E_VF_ARQH1_ARQH_MASK);
 	if (ntu == ntc) {
 		/* nothing to do - shouldn't need to update ring's values */
