@@ -1469,7 +1469,7 @@ get_scatter_segment(struct adapter *sc, struct sge_fl *fl, int total, int flags)
 		/* copy data to mbuf */
 		bcopy(payload, mtod(m, caddr_t), len);
 
-	} else if (sd->nimbuf * MSIZE < cll->region1) {
+	} else if (sd->nmbuf * MSIZE < cll->region1) {
 
 		/*
 		 * There's spare room in the cluster for an mbuf.  Create one
@@ -1477,14 +1477,14 @@ get_scatter_segment(struct adapter *sc, struct sge_fl *fl, int total, int flags)
 		 */
 
 		MPASS(clm != NULL);
-		m = (struct mbuf *)(sd->cl + sd->nimbuf * MSIZE);
+		m = (struct mbuf *)(sd->cl + sd->nmbuf * MSIZE);
 		/* No bzero required */
 		if (m_init(m, NULL, 0, M_NOWAIT, MT_DATA, flags | M_NOFREE))
 			return (NULL);
 		fl->mbuf_inlined++;
 		m_extaddref(m, payload, padded_len, &clm->refcount, rxb_free,
 		    swz->zone, sd->cl);
-		sd->nimbuf++;
+		sd->nmbuf++;
 
 	} else {
 
@@ -1501,7 +1501,7 @@ get_scatter_segment(struct adapter *sc, struct sge_fl *fl, int total, int flags)
 		if (clm != NULL) {
 			m_extaddref(m, payload, padded_len, &clm->refcount,
 			    rxb_free, swz->zone, sd->cl);
-			sd->nembuf++;
+			sd->nmbuf++;
 		} else {
 			m_cljset(m, sd->cl, swz->type);
 			sd->cl = NULL;	/* consumed, not a recycle candidate */
@@ -1678,7 +1678,7 @@ t4_wrq_tx_locked(struct adapter *sc, struct sge_wrq *wrq, struct wrqe *wr)
 
 	can_reclaim = reclaimable(eq);
 	if (__predict_false(eq->flags & EQ_STALLED)) {
-		if (can_reclaim < tx_resume_threshold(eq))
+		if (eq->avail + can_reclaim < tx_resume_threshold(eq))
 			return;
 		eq->flags &= ~EQ_STALLED;
 		eq->unstalled++;
@@ -1799,7 +1799,7 @@ t4_eth_tx(struct ifnet *ifp, struct sge_txq *txq, struct mbuf *m)
 
 	can_reclaim = reclaimable(eq);
 	if (__predict_false(eq->flags & EQ_STALLED)) {
-		if (can_reclaim < tx_resume_threshold(eq)) {
+		if (eq->avail + can_reclaim < tx_resume_threshold(eq)) {
 			txq->m = m;
 			return (0);
 		}
@@ -1973,7 +1973,8 @@ t4_update_fl_bufsize(struct ifnet *ifp)
 int
 can_resume_tx(struct sge_eq *eq)
 {
-	return (reclaimable(eq) >= tx_resume_threshold(eq));
+
+	return (eq->avail + reclaimable(eq) >= tx_resume_threshold(eq));
 }
 
 static inline void
@@ -2710,7 +2711,7 @@ alloc_eq(struct adapter *sc, struct port_info *pi, struct sge_eq *eq)
 	}
 	if (rc != 0) {
 		device_printf(sc->dev,
-		    "failed to allocate egress queue(%d): %d",
+		    "failed to allocate egress queue(%d): %d\n",
 		    eq->flags & EQ_TYPEMASK, rc);
 	}
 
@@ -3024,7 +3025,7 @@ refill_fl(struct adapter *sc, struct sge_fl *fl, int nbufs)
 
 		if (sd->cl != NULL) {
 
-			if (sd->nimbuf + sd->nembuf == 0) {
+			if (sd->nmbuf == 0) {
 				/*
 				 * Fast recycle without involving any atomics on
 				 * the cluster's metadata (if the cluster has
@@ -3083,8 +3084,7 @@ recycled:
 #endif
 			clm->refcount = 1;
 		}
-		sd->nimbuf = 0;
-		sd->nembuf = 0;
+		sd->nmbuf = 0;
 recycled_fast:
 		fl->pending++;
 		fl->needed--;
@@ -3153,7 +3153,7 @@ free_fl_sdesc(struct adapter *sc, struct sge_fl *fl)
 
 		cll = &sd->cll;
 		clm = cl_metadata(sc, fl, cll, sd->cl);
-		if (sd->nimbuf + sd->nembuf == 0 ||
+		if (sd->nmbuf == 0 ||
 		    (clm && atomic_fetchadd_int(&clm->refcount, -1) == 1)) {
 			uma_zfree(sc->sge.sw_zone_info[cll->zidx].zone, sd->cl);
 		}

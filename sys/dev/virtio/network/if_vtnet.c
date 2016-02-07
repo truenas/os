@@ -966,8 +966,13 @@ vtnet_setup_interface(struct vtnet_softc *sc)
 			ifp->if_capabilities |= IFCAP_VLAN_HWTSO;
 	}
 
-	if (virtio_with_feature(dev, VIRTIO_NET_F_GUEST_CSUM))
+	if (virtio_with_feature(dev, VIRTIO_NET_F_GUEST_CSUM)) {
 		ifp->if_capabilities |= IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6;
+
+		if (virtio_with_feature(dev, VIRTIO_NET_F_GUEST_TSO4) ||
+		    virtio_with_feature(dev, VIRTIO_NET_F_GUEST_TSO6))
+			ifp->if_capabilities |= IFCAP_LRO;
+	}
 
 	if (ifp->if_capabilities & IFCAP_HWCSUM) {
 		/*
@@ -985,12 +990,6 @@ vtnet_setup_interface(struct vtnet_softc *sc)
 	/*
 	 * Capabilities after here are not enabled by default.
 	 */
-
-	if (ifp->if_capabilities & IFCAP_RXCSUM) {
-		if (virtio_with_feature(dev, VIRTIO_NET_F_GUEST_TSO4) ||
-		    virtio_with_feature(dev, VIRTIO_NET_F_GUEST_TSO6))
-			ifp->if_capabilities |= IFCAP_LRO;
-	}
 
 	if (sc->vtnet_flags & VTNET_FLAG_VLAN_FILTER) {
 		ifp->if_capabilities |= IFCAP_VLAN_HWFILTER;
@@ -2262,7 +2261,6 @@ vtnet_txq_mq_start_locked(struct vtnet_txq *txq, struct mbuf *m)
 	while ((m = drbr_peek(ifp, br)) != NULL) {
 		if (virtqueue_full(vq)) {
 			drbr_putback(ifp, br, m);
-			error = ENOBUFS;
 			break;
 		}
 
@@ -2285,7 +2283,7 @@ vtnet_txq_mq_start_locked(struct vtnet_txq *txq, struct mbuf *m)
 		txq->vtntx_watchdog = VTNET_TX_TIMEOUT;
 	}
 
-	return (error);
+	return (0);
 }
 
 static int
