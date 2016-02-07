@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2001-2013, Intel Corporation 
+  Copyright (c) 2001-2015, Intel Corporation 
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -300,7 +300,6 @@ struct tx_ring {
 	volatile u16		tx_avail;
 	u16			next_avail_desc;
 	u16			next_to_clean;
-	u16			process_limit;
 	u16			num_desc;
 	enum {
 	    IGB_QUEUE_IDLE = 1,
@@ -336,7 +335,6 @@ struct rx_ring {
 	struct lro_ctrl		lro;
 	bool			lro_enabled;
 	bool			hdr_split;
-	bool			discard;
 	struct mtx		rx_mtx;
 	char			mtx_name[16];
 	u32			next_to_refresh;
@@ -459,20 +457,19 @@ struct adapter {
 	u8			*mta;
 
 	/* Misc stats maintained by the driver */
-	unsigned long   	dropped_pkts;
-	unsigned long   	mbuf_defrag_failed;
-	unsigned long   	mbuf_header_failed;
-	unsigned long   	mbuf_packet_failed;
-	unsigned long		no_tx_dma_setup;
-	unsigned long   	watchdog_events;
-	unsigned long		link_irq;
-	unsigned long		rx_overruns;
 	unsigned long		device_control;
-	unsigned long		rx_control;
-	unsigned long		int_mask;
+	unsigned long   	dropped_pkts;
 	unsigned long		eint_mask;
+	unsigned long		int_mask;
+	unsigned long		link_irq;
+	unsigned long   	mbuf_defrag_failed;
+	unsigned long		no_tx_dma_setup;
 	unsigned long		packet_buf_alloc_rx;
 	unsigned long		packet_buf_alloc_tx;
+	unsigned long		rx_control;
+	unsigned long		rx_overruns;
+	unsigned long   	watchdog_events;
+
 	/* Used in pf and vf */
 	void			*stats;
 
@@ -480,6 +477,7 @@ struct adapter {
 	int			has_manage;
 	int			wol;
 	int			rx_process_limit;
+	int			tx_process_limit;
 	u16			vf_ifp;  /* a VF interface */
 	bool			in_detach; /* Used only in igb_ioctl */
 

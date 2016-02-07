@@ -914,3 +914,5 @@ RCTL		opt_global.h
 # defined, this option will suffice in overriding what Redboot says.
 AR71XX_REALMEM    opt_global.h
 
+# Intel em(4) driver
+EM_MULTIQUEUE	opt_em.h

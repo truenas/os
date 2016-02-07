@@ -469,6 +469,7 @@ struct {
 	{0x5411,  "Chelsio T520-LL-CR"},	/* 2 x 10G */
 	{0x5412,  "Chelsio T560-CR"},		/* 1 x 40G, 2 x 10G */
 	{0x5414,  "Chelsio T580-LP-SO-CR"},	/* 2 x 40G, nomem */
+	{0x5415,  "Chelsio T502-BT"},		/* 2 x 1G */
 #ifdef notyet
 	{0x5404,  "Chelsio T520-BCH"},
 	{0x5405,  "Chelsio T540-BCH"},
@@ -568,6 +569,8 @@ t4_attach(device_t dev)
 		v = pci_read_config(dev, i + PCIER_DEVICE_CTL, 2);
 		v |= PCIEM_CTL_RELAXED_ORD_ENABLE;
 		pci_write_config(dev, i + PCIER_DEVICE_CTL, v, 2);
+
+		sc->params.pci.mps = 128 << ((v & PCIEM_CTL_MAX_PAYLOAD) >> 5);
 	}
 
 	snprintf(sc->lockname, sizeof(sc->lockname), "%s",
@@ -2619,9 +2622,6 @@ build_medialist(struct port_info *pi)
 
 	switch(pi->port_type) {
 	case FW_PORT_TYPE_BT_XFI:
-		ifmedia_add(media, m | IFM_10G_T, data, NULL);
-		break;
-
 	case FW_PORT_TYPE_BT_XAUI:
 		ifmedia_add(media, m | IFM_10G_T, data, NULL);
 		/* fall through */
@@ -5361,6 +5361,7 @@ const char *devlog_level_strings[] = {
 
 const char *devlog_facility_strings[] = {
 	[FW_DEVLOG_FACILITY_CORE]	= "CORE",
+	[FW_DEVLOG_FACILITY_CF]		= "CF",
 	[FW_DEVLOG_FACILITY_SCHED]	= "SCHED",
 	[FW_DEVLOG_FACILITY_TIMER]	= "TIMER",
 	[FW_DEVLOG_FACILITY_RES]	= "RES",
@@ -7350,16 +7351,14 @@ read_i2c(struct adapter *sc, struct t4_i2c_data *i2cd)
 	if (i2cd->len == 0 || i2cd->port_id >= sc->params.nports)
 		return (EINVAL);
 
-	if (i2cd->len > 1) {
-		/* XXX: need fw support for longer reads in one go */
-		return (ENOTSUP);
-	}
+	if (i2cd->len > sizeof(i2cd->data))
+		return (EFBIG);
 
 	rc = begin_synchronized_op(sc, NULL, SLEEP_OK | INTR_OK, "t4i2crd");
 	if (rc)
 		return (rc);
 	rc = -t4_i2c_rd(sc, sc->mbox, i2cd->port_id, i2cd->dev_addr,
-	    i2cd->offset, &i2cd->data[0]);
+	    i2cd->offset, i2cd->len, &i2cd->data[0]);
 	end_synchronized_op(sc, 0);
 
 	return (rc);
