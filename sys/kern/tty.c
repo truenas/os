@@ -266,10 +266,10 @@ ttydev_open(struct cdev *dev, int oflags, int devtype __unused,
 
 	/*
 	 * Make sure the "tty" and "cua" device cannot be opened at the
-	 * same time.
+	 * same time.  The console is a "tty" device.
 	 */
 	if (TTY_CALLOUT(tp, dev)) {
-		if (tp->t_flags & TF_OPENED_IN) {
+		if (tp->t_flags & (TF_OPENED_CONS | TF_OPENED_IN)) {
 			error = EBUSY;
 			goto done;
 		}
@@ -322,6 +322,8 @@ ttydev_open(struct cdev *dev, int oflags, int devtype __unused,
 		tp->t_flags |= TF_OPENED_OUT;
 	else
 		tp->t_flags |= TF_OPENED_IN;
+	MPASS((tp->t_flags & (TF_OPENED_CONS | TF_OPENED_IN)) == 0 ||
+	    (tp->t_flags & TF_OPENED_OUT) == 0);
 
 done:	tp->t_flags &= ~TF_OPENCLOSE;
 	cv_broadcast(&tp->t_dcdwait);
@@ -342,7 +344,8 @@ ttydev_close(struct cdev *dev, int fflag, int devtype __unused,
 	 * Don't actually close the device if it is being used as the
 	 * console.
 	 */
-	MPASS((tp->t_flags & TF_OPENED) != TF_OPENED);
+	MPASS((tp->t_flags & (TF_OPENED_CONS | TF_OPENED_IN)) == 0 ||
+	    (tp->t_flags & TF_OPENED_OUT) == 0);
 	if (dev == dev_console)
 		tp->t_flags &= ~TF_OPENED_CONS;
 	else
@@ -2150,9 +2153,11 @@ static const struct {
 };
 
 #define	TTY_FLAG_BITS \
-	"\20\1NOPREFIX\2INITLOCK\3CALLOUT\4OPENED_IN\5OPENED_OUT\6GONE" \
-	"\7OPENCLOSE\10ASYNC\11LITERAL\12HIWAT_IN\13HIWAT_OUT\14STOPPED" \
-	"\15EXCLUDE\16BYPASS\17ZOMBIE\20HOOK"
+	"\20\1NOPREFIX\2INITLOCK\3CALLOUT\4OPENED_IN" \
+	"\5OPENED_OUT\6OPENED_CONS\7GONE\10OPENCLOSE" \
+	"\11ASYNC\12LITERAL\13HIWAT_IN\14HIWAT_OUT" \
+	"\15STOPPED\16EXCLUDE\17BYPASS\20ZOMBIE" \
+	"\21HOOK\22BUSY_IN\23BUSY_OUT"
 
 #define DB_PRINTSYM(name, addr) \
 	db_printf("%s  " #name ": ", sep); \
@@ -2218,9 +2223,9 @@ DB_SHOW_COMMAND(tty, db_show_tty)
 	}
 	tp = (struct tty *)addr;
 
-	db_printf("0x%p: %s\n", tp, tty_devname(tp));
+	db_printf("%p: %s\n", tp, tty_devname(tp));
 	db_printf("\tmtx: %p\n", tp->t_mtx);
-	db_printf("\tflags: %b\n", tp->t_flags, TTY_FLAG_BITS);
+	db_printf("\tflags: 0x%b\n", tp->t_flags, TTY_FLAG_BITS);
 	db_printf("\trevokecnt: %u\n", tp->t_revokecnt);
 
 	/* Buffering mechanisms. */
