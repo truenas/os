@@ -2,6 +2,10 @@
 # $FreeBSD$
 #
 
+# Temporary include path hack - to be removed once I clean lib9p.h up
+CFLAGS+=-I${.CURDIR}/../../contrib/lib9p
+.PATH:  ${.CURDIR}/../../contrib/lib9p
+
 PROG=	bhyve
 
 DEBUG_FLAGS= -g -O0 
@@ -28,6 +32,7 @@ SRCS=	\
 	pci_irq.c		\
 	pci_lpc.c		\
 	pci_passthru.c		\
+	pci_virtio_9p.c		\
 	pci_virtio_block.c	\
 	pci_virtio_net.c	\
 	pci_virtio_rnd.c	\
@@ -45,8 +50,8 @@ SRCS=	\
 .PATH:	${.CURDIR}/../../sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
-DPADD=	${LIBVMMAPI} ${LIBMD} ${LIBUTIL} ${LIBPTHREAD}
-LDADD=	-lvmmapi -lmd -lutil -lpthread
+DPADD=	${LIBVMMAPI} ${LIBMD} ${LIBUTIL} ${LIBPTHREAD} ${LIB9P} ${LIBSBUF}
+LDADD=	-lvmmapi -lmd -lutil -lpthread -l9p -lsbuf
 
 WARNS?=	2
 
