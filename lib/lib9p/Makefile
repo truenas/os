@@ -15,6 +15,7 @@ SRCS=		pack.c \
 
 INCS=		lib9p.h
 
-LIBADD=		sbuf
+DPADD=		${LIBSBUF}
+LDADD=		sbuf
 
 .include <bsd.lib.mk>

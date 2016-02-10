@@ -50,8 +50,8 @@ SRCS=	\
 .PATH:	${.CURDIR}/../../sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
-DPADD=	${LIBVMMAPI} ${LIBMD} ${LIBUTIL} ${LIBPTHREAD} ${LIB9P} ${LIBSBUF}
-LDADD=	-lvmmapi -lmd -lutil -lpthread -l9p -lsbuf
+DPADD=	${LIBVMMAPI} ${LIBMD} ${LIBUTIL} ${LIBPTHREAD} ${LIB9P}
+LDADD=	-lvmmapi -lmd -lutil -lpthread -l9p
 
 WARNS?=	2
 
