@@ -200,6 +200,7 @@ extern struct	pr_usrreqs rip_usrreqs;
 #define	V_drop_redirect		VNET(drop_redirect)
 
 void	inp_freemoptions(struct ip_moptions *);
+void	inp_freemopt_wait(void);
 int	inp_getmoptions(struct inpcb *, struct sockopt *);
 int	inp_setmoptions(struct inpcb *, struct sockopt *);
 

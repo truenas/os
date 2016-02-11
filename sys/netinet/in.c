@@ -1003,6 +1003,8 @@ in_purgemaddrs(struct ifnet *ifp)
 	struct in_multi		*inm, *tinm;
 	struct ifmultiaddr	*ifma;
 
+	inp_freemopt_wait();	/* XXX kludge */
+
 	LIST_INIT(&purgeinms);
 	IN_MULTI_LOCK();
 
@@ -1033,6 +1035,8 @@ in_purgemaddrs(struct ifnet *ifp)
 	igmp_ifdetach(ifp);
 
 	IN_MULTI_UNLOCK();
+
+	inp_freemopt_wait();	/* XXX kludge */
 }
 
 struct in_llentry {
