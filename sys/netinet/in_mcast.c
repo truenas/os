@@ -1585,6 +1585,17 @@ inp_freemoptions(struct ip_moptions *imo)
 	taskqueue_enqueue(taskqueue_thread, &imo_gc_task);
 }
 
+/*
+ * Wait for inp_freemoptions() to complete any current work.
+ * Used because inp_freemoptions is no longer synchronous.
+ */
+void
+inp_freemopt_wait(void)
+{
+
+	taskqueue_drain(taskqueue_thread, &imo_gc_task);
+}
+
 static void
 inp_freemoptions_internal(struct ip_moptions *imo)
 {
