@@ -59,6 +59,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysent.h>
 #include <sys/systm.h>
 #include <sys/vnode.h>
+#include <sys/bus.h>
 #include <vm/uma.h>
 
 #include <geom/geom.h>
@@ -1037,6 +1038,7 @@ vfs_domount(
 	struct vfsconf *vfsp;
 	struct nameidata nd;
 	struct vnode *vp;
+	struct devctl_param params[2];
 	char *pathbuf;
 	int error;
 
@@ -1111,6 +1113,19 @@ vfs_domount(
 	} else
 		error = vfs_domount_update(td, vp, fsflags, optlist);
 
+	if (error == 0) {
+		params[0].dp_type = DT_STRING;
+		params[0].dp_key = "path";
+		params[0].dp_string = fspath;
+
+		params[1].dp_type = DT_STRING;
+		params[1].dp_key = "fstype";
+		params[1].dp_string = fstype;
+
+		devctl_notify_params("SYSTEM", "VFS", "MOUNT", params, 2,
+		    M_WAITOK);
+	}
+
 	return (error);
 }
 
@@ -1132,6 +1147,7 @@ sys_unmount(struct thread *td, struct unmount_args *uap)
 {
 	struct nameidata nd;
 	struct mount *mp;
+	struct devctl_param param;
 	char *pathbuf;
 	int error, id0, id1;
 
@@ -1187,7 +1203,7 @@ sys_unmount(struct thread *td, struct unmount_args *uap)
 		}
 		mtx_unlock(&mountlist_mtx);
 	}
-	free(pathbuf, M_TEMP);
+
 	if (mp == NULL) {
 		/*
 		 * Previously we returned ENOENT for a nonexistent path and
@@ -1195,6 +1211,7 @@ sys_unmount(struct thread *td, struct unmount_args *uap)
 		 * now, so in the !MNT_BYFSID case return the more likely
 		 * EINVAL for compatibility.
 		 */
+		free(pathbuf, M_TEMP);
 		return ((uap->flags & MNT_BYFSID) ? ENOENT : EINVAL);
 	}
 
@@ -1203,9 +1220,20 @@ sys_unmount(struct thread *td, struct unmount_args *uap)
 	 */
 	if (mp->mnt_flag & MNT_ROOTFS) {
 		vfs_rel(mp);
+		free(pathbuf, M_TEMP);
 		return (EINVAL);
 	}
 	error = dounmount(mp, uap->flags, td);
+
+	if (error == 0) {
+		param.dp_type = DT_STRING;
+		param.dp_key = "path";
+		param.dp_string = pathbuf;
+		devctl_notify_params("SYSTEM", "VFS", "UNMOUNT", &param, 1,
+		    M_WAITOK);
+	}
+
+	free(pathbuf, M_TEMP);
 	return (error);
 }
 
@@ -1428,6 +1456,7 @@ dounmount(struct mount *mp, int flags, struct thread *td)
 		vput(coveredvp);
 	}
 	vfs_event_signal(NULL, VQ_UNMOUNT, 0);
+
 	if (mp == rootdevmp)
 		rootdevmp = NULL;
 	vfs_mount_destroy(mp);
