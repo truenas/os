@@ -1077,6 +1077,7 @@ event_loop(void)
 	int fd;
 	char kern_buf[DEVCTL_MAXBUF];
 	char flat_buf[DEVCTL_MAXBUF];
+	int xml_len;
 	int flat_len;
 	int once = 0;
 	int stream_fd_xml, stream_fd_compat;
@@ -1179,35 +1180,33 @@ event_loop(void)
 					    "buffer space\n");
 				}
 				/*
-				 * NUL-terminating kern_buf should not
-				 * be necessary (they end with \n\0)
-				 * but let's put in a little paranoia,
-				 * and delete the newline while we're
-				 * at it, just because it's annoying
-				 * in logs.
-				 *
-				 * (The -1 on the read left room for us
-				 * to jam in a '\0' if needed.)
+				 * kern_buf should end with "\n\0";
+				 * make sure it does at least end
+				 * with '\0'.  The sizeof...-1 above
+				 * left room to guarantee it.
+				 * However, XML parser can't abide \0
+				 * and we want to syslog without the \n
+				 * in case of error below, so back
+				 * them off in the build_compat arg.
 				 */
+				xml_len = rv;
 				if (kern_buf[rv - 1] == '\0') {
-					rv--;
-					if (rv > 0 &&
-					    kern_buf[rv - 1] == '\n') {
-						kern_buf[--rv] = '\0';
-					}
+					xml_len = rv - 1;
+					if (xml_len > 0 &&
+					    kern_buf[xml_len - 1] == '\n')
+						xml_len--;
 				} else {
-					if (kern_buf[rv - 1] == '\n')
-						rv--;
 					kern_buf[rv] = '\0';
 				}
-				if (build_compat(kern_buf, rv,
+				if (build_compat(kern_buf, xml_len,
 				    flat_buf, sizeof(flat_buf),
 				    flat_len)) {
 					devdlog(LOG_ERR, "Error: "
-					    "incoming event '%s' could not "
+					    "incoming event '%.*s' could not "
 					    "be parsed as XML\n",
-					    kern_buf);
+					    xml_len, kern_buf);
 				} else {
+					// NB: XML clients get \n\0 too
 					notify_clients(kern_buf, rv,
 					    flat_buf, flat_len);
 					process_event(kern_buf);
