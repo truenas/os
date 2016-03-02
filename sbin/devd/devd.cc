@@ -101,8 +101,10 @@ __FBSDID("$FreeBSD$");
 #include "devd.h"		/* C compatible definitions */
 #include "devd.hh"		/* C++ class definitions */
 
-#define STREAMPIPE "/var/run/devd.pipe"
-#define SEQPACKETPIPE "/var/run/devd.seqpacket.pipe"
+#define STREAMPIPE_XML		"/var/run/devd.xml.pipe"
+#define STREAMPIPE_COMPAT	"/var/run/devd.pipe"
+#define SEQPACKETPIPE_XML	"/var/run/devd.xml.seqpacket.pipe"
+#define SEQPACKETPIPE_COMPAT	"/var/run/devd.seqpacket.pipe"
 #define CF "/etc/devd.conf"
 #define SYSCTL "hw.bus.devctl_queue"
 
@@ -135,6 +137,7 @@ using namespace std;
 typedef struct client {
 	int fd;
 	int socktype;
+	bool is_xml;
 } client_t;
 
 extern FILE *yyin;
@@ -855,7 +858,7 @@ unsigned int num_clients;
 list<client_t> clients;
 
 void
-notify_clients(const char *data, int len)
+notify_clients(const char *xml, int xmllen, const char *compat, int compatlen)
 {
 	list<client_t>::iterator i;
 
@@ -868,11 +871,21 @@ notify_clients(const char *data, int len)
 	 */
 	for (i = clients.begin(); i != clients.end(); ) {
 		int flags;
+		const char *data;
+		int len;
+
 		if (i->socktype == SOCK_SEQPACKET)
 			flags = MSG_EOR;
 		else
 			flags = 0;
 
+		if (i->is_xml) {
+			data = xml;
+			len = xmllen;
+		} else {
+			data = compat;
+			len = compatlen;
+		}
 		if (send(i->fd, data, len, flags) != len) {
 			--num_clients;
 			close(i->fd);
@@ -915,7 +928,7 @@ check_clients(void)
 }
 
 void
-new_client(int fd, int socktype)
+new_client(int fd, bool is_xml, int socktype)
 {
 	client_t s;
 	int sndbuf_size;
@@ -927,6 +940,7 @@ new_client(int fd, int socktype)
 	 */
 	check_clients();
 	s.socktype = socktype;
+	s.is_xml = is_xml;
 	s.fd = accept(fd, NULL, NULL);
 	if (s.fd != -1) {
 		sndbuf_size = CLIENT_BUFSIZE;
@@ -940,14 +954,134 @@ new_client(int fd, int socktype)
 		err(1, "accept");
 }
 
+/*
+ * The compat (i.e., original) format, which external programs
+ * may still use, generally looks like:
+ *     "!system=%s subsystem=%s type=%s ...\n"
+ * i.e., a !-prefixed, \n-terminated set of name=value pairs.
+ *
+ * The new XML format is:
+ *     "<notify><system>%s</system><subsystem>%s</subsystem>"
+ * usually followed by:
+ *     "<type>%s</type><data>%s</data>" etc
+ * and then:
+ *     "</notify>"
+ * So, we simply convert each XML tag except for the first
+ * to <tag>=%s, with spaces before each one.  Adding a newline and
+ * replacing the first space with '!' gives us the compat format.
+ *
+ * De-XML-ing should never result in overrun of the given buffer
+ * since the XML form is considerably bulkier, but I've included
+ * truncation-detection code that could be turned on if desired.
+ */
+class flatten {
+public:
+	char   *fl_buf;
+	int	fl_len;
+	int	fl_size;
+	bool	fl_first;
+	bool	fl_trunc;
+
+	flatten(char *buf, int bufsize) {
+		fl_first = true;
+		fl_buf = buf;
+		fl_len = 0;
+		fl_size = bufsize;
+		fl_trunc = false;
+	}
+
+	void add(const char *text, int textlen) {
+		int space = fl_size - fl_len;
+
+		if (textlen > space) {
+			fl_trunc = true;
+			if (space <= 0)
+				return;
+			textlen = space;
+		}
+		memcpy(fl_buf + fl_len, text, textlen);
+		fl_len += textlen;
+	}
+
+	// handle XML element name, skipping first tag
+	void element(const char *name) {
+
+		if (fl_first) {
+			fl_first = false;
+			return;
+		}
+		add(" ", 1);
+		add(name, strlen(name));
+		add("=", 1);
+	}
+};
+
+static void
+fl_element(void *priv, const char *name, const char **attrs)
+{
+	flatten *fl = (flatten *)priv;
+
+	fl->element(name);
+}
+
+static void
+fl_data(void *priv, const char *data, int length)
+{
+	flatten *fl = (flatten *)priv;
+
+	fl->add(data, length);
+}
+
+static bool
+build_compat(const char *xml, int xmllen, char *buf, int bufsize, int &flatlen)
+{
+	flatten fl = flatten(buf, bufsize - 1); // -1 to guarantee '\0' space
+	XML_Parser parser = XML_ParserCreate(NULL);
+	int rv;
+
+	/*
+	 * We simply parse the XML in order to flatten it.
+	 * This does mean we have to parse it twice (once here
+	 * for flattening, and again later for handling the
+	 * event) but the XML parser runs reasonably fast.
+	 *
+	 * Note that if the parser returns with an error, we
+	 * may have a partial result, e.g., if the initial <event>
+	 * tag is improperly closed at the end we have a full and
+	 * probably correct compat string.  However, we can't tell
+	 * where things went wrong, so it's probably best just to
+	 * have the caller log the issue and move on.
+	 */
+	flatlen = 0;
+	XML_SetElementHandler(parser, fl_element, NULL);
+	XML_SetCharacterDataHandler(parser, fl_data);
+	XML_SetUserData(parser, &fl);
+	rv = XML_Parse(parser, xml, xmllen, XML_TRUE);
+	if (rv == XML_STATUS_ERROR)
+		return true;
+	if (fl.fl_len == 0)	// i.e., <event></event>
+		return true;
+	fl.add("\n", 1);
+	// if (fl.fl_trunc)	// probably can't happen
+	//	return true;
+	buf[0] = '!';
+	flatlen = fl.fl_len;
+	buf[flatlen] = '\0';
+	return false;
+}
+
 static void
 event_loop(void)
 {
 	int rv;
 	int fd;
-	char buffer[DEVCTL_MAXBUF];
+	char kern_buf[DEVCTL_MAXBUF];
+	char flat_buf[DEVCTL_MAXBUF];
+	int flat_len;
 	int once = 0;
-	int stream_fd, seqpacket_fd, max_fd;
+	int stream_fd_xml, stream_fd_compat;
+	int seqpacket_fd_xml, seqpacket_fd_compat;
+	int max_fd;
 	int accepting;
 	timeval tv;
 	fd_set fds;
@@ -955,10 +1089,21 @@ event_loop(void)
 	fd = open(PATH_DEVCTL, O_RDONLY | O_CLOEXEC);
 	if (fd == -1)
 		err(1, "Can't open devctl device %s", PATH_DEVCTL);
-	stream_fd = create_socket(STREAMPIPE, SOCK_STREAM);
-	seqpacket_fd = create_socket(SEQPACKETPIPE, SOCK_SEQPACKET);
+	stream_fd_xml = create_socket(STREAMPIPE_XML, SOCK_STREAM);
+	stream_fd_compat = create_socket(STREAMPIPE_COMPAT, SOCK_STREAM);
+	seqpacket_fd_xml = create_socket(SEQPACKETPIPE_XML, SOCK_SEQPACKET);
+	seqpacket_fd_compat = create_socket(SEQPACKETPIPE_COMPAT,
+	    SOCK_SEQPACKET);
 	accepting = 1;
-	max_fd = max(fd, max(stream_fd, seqpacket_fd)) + 1;
+	{
+		// We could do a series of max(...) ops but this
+		// seems a bit nicer.
+		const int arr[] = {
+			fd, stream_fd_xml, stream_fd_compat,
+			seqpacket_fd_xml, seqpacket_fd_compat,
+		};
+		max_fd = (*max_element(begin(arr), end(arr))) + 1;
+	}
 	while (!romeo_must_die) {
 		if (!once && !no_daemon && !daemonize_quick) {
 			// Check to see if we have any events pending.
@@ -989,18 +1134,24 @@ event_loop(void)
 		FD_SET(fd, &fds);
 		if (num_clients < max_clients) {
 			if (!accepting) {
-				listen(stream_fd, max_clients);
-				listen(seqpacket_fd, max_clients);
+				listen(stream_fd_xml, max_clients);
+				listen(stream_fd_compat, max_clients);
+				listen(seqpacket_fd_xml, max_clients);
+				listen(seqpacket_fd_compat, max_clients);
 				accepting = 1;
 			}
-			FD_SET(stream_fd, &fds);
-			FD_SET(seqpacket_fd, &fds);
+			FD_SET(stream_fd_xml, &fds);
+			FD_SET(stream_fd_compat, &fds);
+			FD_SET(seqpacket_fd_xml, &fds);
+			FD_SET(seqpacket_fd_compat, &fds);
 			tv.tv_sec = 60;
 			tv.tv_usec = 0;
 		} else {
 			if (accepting) {
-				listen(stream_fd, 0);
-				listen(seqpacket_fd, 0);
+				listen(stream_fd_xml, 0);
+				listen(stream_fd_compat, 0);
+				listen(seqpacket_fd_xml, 0);
+				listen(seqpacket_fd_compat, 0);
 				accepting = 0;
 			}
 			tv.tv_sec = 2;
@@ -1019,17 +1170,48 @@ event_loop(void)
 		} else if (rv == 0)
 			check_clients();
 		if (FD_ISSET(fd, &fds)) {
-			rv = read(fd, buffer, sizeof(buffer) - 1);
+			rv = read(fd, kern_buf, sizeof(kern_buf) - 1);
 			if (rv > 0) {
 				total_events++;
-				if (rv == sizeof(buffer) - 1) {
+				if (rv == sizeof(kern_buf) - 1) {
 					devdlog(LOG_WARNING, "Warning: "
 					    "available event data exceeded "
 					    "buffer space\n");
 				}
-				notify_clients(buffer, rv);
-				buffer[rv] = '\0';
-				process_event(buffer);
+				/*
+				 * NUL-terminating kern_buf should not
+				 * be necessary (they end with \n\0)
+				 * but let's put in a little paranoia,
+				 * and delete the newline while we're
+				 * at it, just because it's annoying
+				 * in logs.
+				 *
+				 * (The -1 on the read left room for us
+				 * to jam in a '\0' if needed.)
+				 */
+				if (kern_buf[rv - 1] == '\0') {
+					rv--;
+					if (rv > 0 &&
+					    kern_buf[rv - 1] == '\n') {
+						kern_buf[--rv] = '\0';
+					}
+				} else {
+					if (kern_buf[rv - 1] == '\n')
+						rv--;
+					kern_buf[rv] = '\0';
+				}
+				if (build_compat(kern_buf, rv,
+				    flat_buf, sizeof(flat_buf),
+				    flat_len)) {
+					devdlog(LOG_ERR, "Error: "
+					    "incoming event '%s' could not "
+					    "be parsed as XML\n",
+					    kern_buf);
+				} else {
+					notify_clients(kern_buf, rv,
+					    flat_buf, flat_len);
+					process_event(kern_buf);
+				}
 			} else if (rv < 0) {
 				if (errno != EINTR)
 					break;
@@ -1038,14 +1220,18 @@ event_loop(void)
 				break;
 			}
 		}
-		if (FD_ISSET(stream_fd, &fds))
-			new_client(stream_fd, SOCK_STREAM);
+		if (FD_ISSET(stream_fd_xml, &fds))
+			new_client(stream_fd_xml, true, SOCK_STREAM);
+		if (FD_ISSET(stream_fd_compat, &fds))
+			new_client(stream_fd_compat, false, SOCK_STREAM);
 		/*
 		 * Aside from the socket type, both sockets use the same
 		 * protocol, so we can process clients the same way.
 		 */
-		if (FD_ISSET(seqpacket_fd, &fds))
-			new_client(seqpacket_fd, SOCK_SEQPACKET);
+		if (FD_ISSET(seqpacket_fd_xml, &fds))
+			new_client(seqpacket_fd_xml, true, SOCK_SEQPACKET);
+		if (FD_ISSET(seqpacket_fd_compat, &fds))
+			new_client(seqpacket_fd_compat, false, SOCK_SEQPACKET);
 	}
 	close(fd);
 }
