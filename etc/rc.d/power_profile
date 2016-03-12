@@ -65,11 +65,11 @@ load_rc_config $name
 # Find the next state (performance or economy).
 state=$1
 case ${state} in
-0x01 | '')
+0x01 | 1 | '')
 	${LOGGER} "changed to 'performance'"
 	profile="performance"
 	;;
-0x00)
+0x00 | 0)
 	${LOGGER} "changed to 'economy'"
 	profile="economy"
 	;;
