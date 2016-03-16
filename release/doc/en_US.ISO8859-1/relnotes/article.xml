@@ -11,7 +11,8 @@
 <!ENTITY errata SYSTEM "../../share/xml/errata.xml">
 ]>
 <article xmlns="http://docbook.org/ns/docbook"
-  xmlns:xlink="http://www.w3.org/1999/xlink" version="5.0">
+  xmlns:xlink="http://www.w3.org/1999/xlink" version="5.0"
+  xml:id="top">
 
   <info>
     <title>&os; &release.current; Release Notes</title>
@@ -26,7 +27,7 @@
     <!-- Last rev: 284813 -->
 
     <copyright>
-      <year>2015</year>
+      <year>2016</year>
       <holder role="mailto:doc@FreeBSD.org">The &os; Documentation
 	Project</holder>
     </copyright>
@@ -191,6 +192,27 @@
       <para revision="288710" contrib="sponsor" sponsor="&gandi;">A
 	new utility, &man.sesutil.8;, has been added, which is used
 	to manage &man.ses.4; devices.</para>
+
+      <para revision="291774">The &man.cp.1; utility has been updated
+	to include a new flag, <literal>-s</literal>, which creates
+	a symbolic link to the specified source.</para>
+
+      <para revision="292231">Support for the
+	<literal>-manage-gids</literal> has been added to
+	&man.nfsd.8;.  This option can be enabled at boot time by
+	adding <literal>nfs_server_managegids="YES"</literal> to
+	&man.rc.conf.5;.</para>
+
+      <para revision="292462" contrib="sponsor"
+	sponsor="&dellinc;">The resolver library has been updated to
+	reload <filename>/etc/resolv.conf</filename> if the
+	modification time has changed.</para>
+
+      <para revision="293744" contrib="sponsor" sponsor="&ff;">The
+	initial implementation of <quote>reroot</quote> support has
+	been added to the &man.reboot.8; utility, allowing the root
+	filesystem to be mounted from a temporary source filesystem
+	without requiring a full system reboot.</para>
     </sect2>
 
     <sect2 xml:id="userland-contrib">
@@ -202,19 +224,56 @@
 
       <para revision="286751">Timezone data files have been updated to
 	version 2015f.</para>
+
+      <para revision="290152">The &man.file.1; utility has been
+	updated to version 5.25.</para>
+
+      <para revision="292588">The &man.xz.1; utility has been updated
+	to version 5.2.2, which provides support for multi-threaded
+	compression.</para>
+
+      <para revision="293650">The &man.ntpd.8; utility has been
+	updated to version 4.2.8p5.</para>
+
+      <para revision="294190">The &man.unbound.8; utility has been
+	updated to version 1.5.7.</para>
+
+      <para revision="294286">The &man.less.1; utility has been
+	updated to version v481.</para>
+
+      <para revision="295690">The
+	<literal>unbound-control-setup</literal> script has been
+	removed from the base system.</para>
+
+      <para revision="295691">The &man.unbound.8; utility has been
+	updated to enable the <literal>insecure-lan-zones</literal>
+	option in preference of listing each <acronym>AS112</acronym>
+	zone individually.</para>
+
+      <para revision="296317">The <application>OpenSSL</application>
+	suite has been updated to version 1.0.1s.</para>
+
+      <para revision="296853">The <application>OpenSSH</application>
+	suite has been updated to version 7.2p2.</para>
     </sect2>
 
     <sect2 xml:id="userland-installer">
       <title>Installation and Configuration Tools</title>
 
-      <para>&nbsp;</para>
+      <para revision="295264" contrib="sponsor"
+	sponsor="&scaleengine;">The &man.bsdinstall.8; utility has
+	been updated to support <acronym>ZFS</acronym> installation
+	on <acronym>EFI</acronym>-based systems.</para>
     </sect2>
 
     <sect2 xml:id="userland-rc">
       <title><filename class="directory">/etc/rc.d</filename>
 	Scripts</title>
 
-      <para>&nbsp;</para>
+      <para revision="294680">The <literal>netwait</literal>
+	&man.rc.8; script has been updated to wait for network
+	interfaces that attach late in the boot process, such as some
+	<acronym>USB</acronym> network cards.</para>
     </sect2>
 
     <sect2 xml:id="userland-periodic">
@@ -295,7 +354,9 @@
     <sect2 xml:id="drivers-network">
       <title>Network Drivers</title>
 
-      <para>&nbsp;</para>
+      <para revision="295524" contrib="sponsor"
+	sponsor="&limelight;, &intelcorp;">The &man.ixgbe.4; driver
+	has been updated to version 3.1.13-k.</para>
     </sect2>
   </sect1>
 
@@ -310,7 +371,9 @@
     <sect2 xml:id="hardware-support">
       <title>Hardware Support</title>
 
-      <para>&nbsp;</para>
+      <para revision="293675">The &man.ismt.4; driver has been added,
+	providing support for recent &intel; SMBus 2.0
+	controllers.</para>
     </sect2>
 
     <sect2 xml:id="hardware-virtualization">
@@ -372,13 +435,28 @@
     <sect2 xml:id="boot-loader">
       <title>Boot Loader Changes</title>
 
-      <para>&nbsp;</para>
+      <para revision="294445">Initial terminal emulation support has
+	been added to <filename>loader.efi</filename> for
+	<acronym>UEFI</acronym>-based systems.</para>
+
+      <para revision="294999" contrib="sponsor"
+	sponsor="&multiplay;">Initial <acronym>ZFS</acronym> boot
+	support has been added to the <acronym>EFI</acronym>
+	implementation.</para>
+
+      <para revision="295475" contrib="sponsor"
+	sponsor="&scaleengine;">The <acronym>UEFI</acronym> loader has
+	been updated to support multiple <acronym>ZFS</acronym> boot
+	environments, such as those provided by <filename
+	  role="package">sysutils/beadm</filename>.</para>
     </sect2>
 
     <sect2 xml:id="boot-menu">
       <title>Boot Menu Changes</title>
 
-      <para>&nbsp;</para>
+      <para revision="294446">The <acronym>UEFI</acronym> boot menu
+	has been updated to enable the <quote>Beastie</quote> menu,
+	similiar to the traditional &man.sc.4; boot menu.</para>
     </sect2>
   </sect1>
 
