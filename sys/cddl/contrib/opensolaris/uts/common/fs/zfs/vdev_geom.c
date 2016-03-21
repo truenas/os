@@ -814,7 +814,7 @@ vdev_geom_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	if (vdev_larger_ashift_minimal && pp->stripesize < 4096) {
 		*physical_ashift = highbit(4096) - 1;
 	} else if (pp->stripesize > (1 << *logical_ashift) && ISP2(pp->stripesize) &&
-	    pp->stripeoffset == 0)
+	    pp->stripesize <= (1 << SPA_MAXASHIFT) && pp->stripeoffset == 0)
 		*physical_ashift = highbit(pp->stripesize) - 1;
 
 	/*
