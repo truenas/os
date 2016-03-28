@@ -2843,7 +2843,7 @@ zvol_create_snapshots(objset_t *os, const char *name)
 		}
 
 		error = zvol_create_minor(sname);
-		if (error != 0 && error != EEXIST) {
+		if (error != 0 && error != EEXIST && error != ENAMETOOLONG) {
 			printf("ZFS WARNING: Unable to create ZVOL %s (error=%d).\n",
 			    sname, error);
 			break;
@@ -2874,7 +2874,7 @@ zvol_create_minors(const char *name)
 		dsl_dataset_long_hold(os->os_dsl_dataset, FTAG);
 		dsl_pool_rele(dmu_objset_pool(os), FTAG);
 		error = zvol_create_minor(name);
-		if (error == 0 || error == EEXIST) {
+		if (error == 0 || error == EEXIST || error == ENAMETOOLONG) {
 			error = zvol_create_snapshots(os, name);
 		} else {
 			printf("ZFS WARNING: Unable to create ZVOL %s (error=%d).\n",
