@@ -4666,6 +4666,11 @@ upgrade_cb(zpool_handle_t *zhp, void *arg)
 		/* Allow iteration to continue. */
 		return (0);
 	}
+#if !defined(NO_6312_HACK)
+	/* FreeNAS #6312: for now disable upgrade of the root pool.*/
+	if (is_root_pool(zhp))
+		return (0);
+#endif
 
 	config = zpool_get_config(zhp, NULL);
 	verify(nvlist_lookup_uint64(config, ZPOOL_CONFIG_VERSION,
@@ -4762,6 +4767,11 @@ upgrade_list_older_cb(zpool_handle_t *zhp, void *arg)
 		cbp->cb_unavail = B_TRUE;
 		return (0);
 	}
+#if !defined(NO_6312_HACK)
+	/* FreeNAS #6312: for now disable upgrade of the root pool.*/
+	if (is_root_pool(zhp))
+		return (0);
+#endif
 
 	config = zpool_get_config(zhp, NULL);
 	verify(nvlist_lookup_uint64(config, ZPOOL_CONFIG_VERSION,
@@ -4804,6 +4814,11 @@ upgrade_list_disabled_cb(zpool_handle_t *zhp, void *arg)
 		cbp->cb_unavail = B_TRUE;
 		return (0);
 	}
+#if !defined(NO_6312_HACK)
+	/* FreeNAS #6312: for now disable upgrade of the root pool.*/
+	if (is_root_pool(zhp))
+		return (0);
+#endif
 
 	config = zpool_get_config(zhp, NULL);
 	verify(nvlist_lookup_uint64(config, ZPOOL_CONFIG_VERSION,
@@ -4864,6 +4879,15 @@ upgrade_one(zpool_handle_t *zhp, void *data)
 		cbp->cb_unavail = B_TRUE;
 		return (1);
 	}
+#if !defined(NO_6312_HACK)
+	/* FreeNAS #6312: for now disable upgrade of the root pool.*/
+	if (is_root_pool(zhp)) {
+		(void) printf(gettext("Pool '%s' is the root pool, "
+		    "upgrade is not supported.\n\n"), zpool_get_name(zhp));
+
+		return (0);
+	}
+#endif
 
 	if (strcmp("log", zpool_get_name(zhp)) == 0) {
 		(void) printf(gettext("'log' is now a reserved word\n"
