@@ -789,7 +789,7 @@ devaddq(const char *type, const char *what, device_t dev)
 
 	/* String it all together. */
 	snprintf(data, 1024, "<%s><device-name>%s</device-name>"
-	    "<location>%s</location><pnp>%s</pnp><parent>%s</parent></%s>\n",
+	    "<location>%s</location><pnp>%s</pnp><bus>%s</bus></%s>\n",
 	    type, what, loc, pnp, parstr, type);
 
 	free(loc, M_BUS);
