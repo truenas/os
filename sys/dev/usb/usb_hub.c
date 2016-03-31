@@ -1694,7 +1694,7 @@ uhub_child_location_string(device_t parent, device_t child,
 		}
 		goto done;
 	}
-	snprintf(buf, buflen, "bus=%u hubaddr=%u port=%u devaddr=%u"
+	snprintf(buf, buflen, "busno=%u hubaddr=%u port=%u devaddr=%u"
 	    " interface=%u"
 #if USB_HAVE_UGEN
 	    " ugen=%s"
