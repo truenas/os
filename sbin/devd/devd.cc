@@ -739,6 +739,27 @@ config::set_vars(const event_t &event)
 {
 	for (auto const &it: event.params) {
 		cfg.set_variable(it.first, it.second);
+
+		/*
+		 * "location" and "pnp" params are obtained from newbus
+		 * methods and are in form of space-separated key-value
+		 * pair strings. We need to parse them in the way old
+		 * devd did until newbus code gets switched to use
+		 * structured parameters.
+		 */
+		if (it.first.compare("location") == 0 ||
+		    it.first.compare("pnp") == 0) {
+			char *buffer = strdup(it.second.c_str());
+			char *lhs, *rhs;
+
+			while (1) {
+				if (!chop_var(buffer, lhs, rhs))
+					break;
+				cfg.set_variable(lhs, rhs);
+			}
+
+			free(buffer);
+		}
 	}
 }
 
