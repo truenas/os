@@ -788,9 +788,9 @@ devaddq(const char *type, const char *what, device_t dev)
 		parstr = device_get_nameunit(device_get_parent(dev));
 
 	/* String it all together. */
-	snprintf(data, 1024, "<%s><name>%s</name><location>%s</location>"
-	    "<pnp>%s</pnp><parent>%s</parent></%s>\n", type, what, loc, pnp,
-	    parstr, type);
+	snprintf(data, 1024, "<%s><device-name>%s</device-name>"
+	    "<location>%s</location><pnp>%s</pnp><parent>%s</parent></%s>\n",
+	    type, what, loc, pnp, parstr, type);
 
 	free(loc, M_BUS);
 	free(pnp, M_BUS);
