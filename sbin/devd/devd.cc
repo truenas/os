@@ -980,8 +980,9 @@ new_client(int fd, bool is_xml, int socktype)
  * may still use, generally looks like:
  *     "!system=%s subsystem=%s type=%s ...\n"
  * i.e., a !-prefixed, \n-terminated set of name=value pairs.
+ * The '!' is sometimes '+', '-', or '?' instead (see below).
  *
- * The new XML format is:
+ * The new XML format is generally:
  *     "<notify><system>%s</system><subsystem>%s</subsystem>"
  * usually followed by:
  *     "<type>%s</type><data>%s</data>" etc
@@ -990,6 +991,22 @@ new_client(int fd, bool is_xml, int socktype)
  * So, we simply convert each XML tag except for the first
  * to <tag>=%s, with spaces before each one.  Adding a newline and
  * replacing the first space with '!' gives us the compat format.
+ *
+ * For attach and detach events, however, we get:
+ *     "<%s><device-name>%s</device-name>"
+ * The first %s is a literal "attach", "detach", or "nomatch"
+ * and the second is the device name, such as "axe0".  This is
+ * immediately followed by:
+ *     "<location>%s</location><pnp>%s</pnp><bus>%s</bus></%s>
+ * (note that these do not begin with <notify>).
+ *
+ * These must convert differently.  Their compat format is:
+ *     "%c%s at %s %s on %s\n"
+ * The initial %c character is '+' if the first tag is <attach>,
+ * '-' for <detach>, and '?' for <nomatch>.  Meanwhile the %s
+ * strings are the device-name, location, pnp, and bus arguments
+ * from the XML.  For simplicity here we require rigid ordering
+ * of the incoming tags.
  *
  * De-XML-ing should never result in overrun of the given buffer
  * since the XML form is considerably bulkier, but I've included
@@ -1000,14 +1017,16 @@ public:
 	char   *fl_buf;
 	int	fl_len;
 	int	fl_size;
-	bool	fl_first;
+	int	fl_sequencer;
+	bool	fl_seqerror;
 	bool	fl_trunc;
 
 	flatten(char *buf, int bufsize) {
-		fl_first = true;
 		fl_buf = buf;
 		fl_len = 0;
 		fl_size = bufsize;
+		fl_sequencer = 0;
+		fl_seqerror = false;
 		fl_trunc = false;
 	}
 
@@ -1024,16 +1043,81 @@ public:
 		fl_len += textlen;
 	}
 
-	// handle XML element name, skipping first tag
+	// Handle XML element name.
 	void element(const char *name) {
+		char prefix;
 
-		if (fl_first) {
-			fl_first = false;
+		switch (fl_sequencer) {
+		case -1:
+			// Notify: just pass through as " tag=..."
+			// (the "..." part comes from the data).
+			// We'll replace the initial " " with "!"
+			// later.
+			add(" ", 1);
+			add(name, strlen(name));
+			add("=", 1);
+			return;
+		case 0:
+			if (strcmp(name, "attach") == 0) {
+				prefix = '+';
+			} else if (strcmp(name, "detach") == 0) {
+				prefix = '-';
+			} else if (strcmp(name, "nomatch") == 0) {
+				prefix = '?';
+			} else {
+				// assume <notify>, pass remainder through
+				fl_sequencer = -1;
+				return;
+			}
+			add(&prefix, 1);
+			break;
+		case 1:	// Expecting "<device-name>%s</device-name>.
+			// For compatibility with slightly old kernel
+			// let's accept <name>%s</name> too.
+			if (strcmp(name, "device-name") != 0 &&
+			    strcmp(name, "name") != 0)
+				fl_seqerror = true;
+			// device name comes from fl_data
+			break;
+
+		case 2:	// Expecting <location>.
+			if (strcmp(name, "location") == 0)
+				add(" at ", 4);
+			else
+				fl_seqerror = true;
+			// rest of location comes from fl_data
+			break;
+
+		case 3:	// Expecting <pnp>.
+			if (strcmp(name, "pnp") == 0)
+				add(" ", 1);
+			else
+				fl_seqerror = true;
+			break;
+
+		case 4:	// Expecting <bus>.
+			// Accept <parent> as well (see device-name).
+			if (strcmp(name, "bus") == 0 ||
+			    strcmp(name, "parent") == 0)
+				add(" on ", 4);
+			else
+				fl_seqerror = true;
+			break;
+
+		default:
+			// should not happen
+			fl_seqerror = true;
 			return;
 		}
-		add(" ", 1);
-		add(name, strlen(name));
-		add("=", 1);
+		++fl_sequencer;
+	}
+
+	void finalize() {
+		// replace initial ' ' with '!' for <notify> events
+		if (fl_sequencer < 0)
+			fl_buf[0] = '!';
+		// add terminating newline
+		add("\n", 1);
 	}
 };
 
@@ -1050,7 +1134,23 @@ fl_data(void *priv, const char *data, int length)
 {
 	flatten *fl = (flatten *)priv;
 
-	fl->add(data, length);
+	// Annoying special case: the kernel now provides USB
+	// <location> data as "busno=%d hubaddr=%d ..."
+	// when it used to read "bus=%d hubaddr=%d ...".  To
+	// maintain 100% compatibility, we must replace
+	// the "busno" string with "bus".
+	//
+	// (It also adds ugen=ugen1.2, which was not present
+	// before, but I think we can ignore that.)
+	//
+	// (The sequencer magic value of 3 here is ugly, see
+	// flatten::element for where it came from.)
+	if (fl->fl_sequencer == 3 && memcmp(data, "busno=", 6) == 0) {
+		fl->add("bus", 3);
+		fl->add(data + 5, length - 5);
+	} else {
+		fl->add(data, length);
+	}
 }
 
 static bool
@@ -1061,7 +1161,7 @@ build_compat(const char *xml, int xmllen, char *buf, int bufsize, int &flatlen)
 	int rv;
 
 	/*
-	 * We simply parse the XML in order to flatten it.
+	 * We parse the XML in order to flatten it.
 	 * This does mean we have to parse it twice (once here
 	 * for flattening, and again later for handling the
 	 * event) but the XML parser runs reasonably fast.
@@ -1082,10 +1182,9 @@ build_compat(const char *xml, int xmllen, char *buf, int bufsize, int &flatlen)
 		return true;
 	if (fl.fl_len == 0)	// i.e., <event></event>
 		return true;
-	fl.add("\n", 1);
+	fl.finalize();
 	// if (fl.fl_trunc)	// probably can't happen
 	//	return true;
-	buf[0] = '!';
 	flatlen = fl.fl_len;
 	buf[flatlen] = '\0';
 	return false;
