@@ -791,33 +791,47 @@ uipc_finalizecontrol(struct socket *so, int flags, struct mbuf **pcontrol,
 {
 	struct unpcb *unp, *unp2;
 	int error = 0;
+	bool wantcred, oneshot;
 
 	unp = sotounpcb(so);
 	KASSERT(unp != NULL, ("uipc_finalizecontrol: unp == NULL"));
 
-	unp2 = unp->unp_conn;
-
 	if (*pcontrol != NULL && (error = unp_internalize(pcontrol, td)))
 		return (error);
 
-	/* Lockless read, ignore when not connected. */
-	if (unp2 && unp2->unp_flags & UNP_WANTCRED) {
-		switch (so->so_type) {
-		case SOCK_SEQPACKET:
-		case SOCK_STREAM:
-			/* Credentials are passed only once on streams */
-			UNP_PCB_LOCK(unp2);
-			if (unp2->unp_flags & UNP_WANTCRED) {
-				unp2->unp_flags &= ~UNP_WANTCRED;
-				error = unp_addsockcred(pcontrol, td);
-			}
-			UNP_PCB_UNLOCK(unp2);
-			break;
-		case SOCK_DGRAM:
-			error = unp_addsockcred(pcontrol, td);
-			break;
-		}
+	UNP_LINK_RLOCK();
+	unp2 = unp->unp_conn;
+	UNP_LINK_RUNLOCK();
+
+	/*
+	 * If not connected, we're done now (might be auto-connect
+	 * on send, leave everything to caller).  Otherwise, handle
+	 * one-shot credentials on stream and seqpacket sockets here.
+	 *
+	 * XXX If the send fails, we never get another chance.
+	 * We could restore UNP_WANTCRED if the unp_addsockcred()
+	 * call fails here but we can't handle the more likely
+	 * entire-send-fails case.  Deferring clearing the flag
+	 * is not a great solution either.  Perhaps best would be
+	 * to have an additional UNP_CREDS_SENT_SUCCESSFULLY flag
+	 * and check that here.  For now, just leave it this way.
+	 */
+	if (unp2 == NULL)
+		return (0);
+
+	oneshot = so->so_type == SOCK_SEQPACKET ||
+	    so->so_type == SOCK_STREAM;
+	if (oneshot) {
+		UNP_PCB_LOCK(unp2);
+		wantcred = (unp2->unp_flags & UNP_WANTCRED) != 0;
+		unp2->unp_flags &= ~UNP_WANTCRED;
+		UNP_PCB_UNLOCK(unp2);
+	} else {
+		wantcred = true;
 	}
+
+	if (wantcred)
+		error = unp_addsockcred(pcontrol, td);
 
 	return (error);
 }
