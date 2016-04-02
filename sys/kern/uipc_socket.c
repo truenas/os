@@ -1061,6 +1061,11 @@ sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	KASSERT(so->so_proto->pr_flags & PR_ATOMIC,
 	    ("sosend_dgram: !PR_ATOMIC"));
 
+	if (so->so_proto->pr_usrreqs->pru_finalizecontrol &&
+	    (error = (*so->so_proto->pr_usrreqs->pru_finalizecontrol)(so,
+	        flags, &control, td)))
+		goto out;
+
 	if (uio != NULL)
 		resid = uio->uio_resid;
 	else
@@ -1125,10 +1130,14 @@ sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	 * problem and need fixing.
 	 */
 	space = sbspace(&so->so_snd);
+	SOCKBUF_UNLOCK(&so->so_snd);
 	if (flags & MSG_OOB)
 		space += 1024;
+	if (clen > space) {
+		error = EMSGSIZE;
+		goto out;
+	}
 	space -= clen;
-	SOCKBUF_UNLOCK(&so->so_snd);
 	if (resid > space) {
 		error = EMSGSIZE;
 		goto out;
@@ -1222,6 +1231,11 @@ sosend_generic(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	int clen = 0, error, dontroute;
 	int atomic = sosendallatonce(so) || top;
 
+	if (so->so_proto->pr_usrreqs->pru_finalizecontrol &&
+	    (error = (*so->so_proto->pr_usrreqs->pru_finalizecontrol)(so,
+	        flags, &control, td)))
+		goto out;
+
 	if (uio != NULL)
 		resid = uio->uio_resid;
 	else
@@ -1314,6 +1328,10 @@ restart:
 			goto restart;
 		}
 		SOCKBUF_UNLOCK(&so->so_snd);
+		if (clen > space) {
+			error = EMSGSIZE;
+			goto release;
+		}
 		space -= clen;
 		do {
 			if (uio == NULL) {
