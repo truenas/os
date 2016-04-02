@@ -2598,7 +2598,7 @@ usb_notify_addq(const char *type, struct usb_device *udev)
 
 #if USB_HAVE_UGEN
 	params[nparams++] = (struct devctl_param) {
-		.dp_type = DT_UINT,
+		.dp_type = DT_STRING,
 		.dp_key = "parent",
 		.dp_string = udev->parent_hub != NULL ?
 		    udev->parent_hub->ugen_name :
