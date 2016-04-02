@@ -201,6 +201,8 @@ struct pr_usrreqs {
 	int	(*pru_listen)(struct socket *so, int backlog,
 		    struct thread *td);
 	int	(*pru_peeraddr)(struct socket *so, struct sockaddr **nam);
+	int	(*pru_finalizecontrol)(struct socket *so, int flags, struct mbuf **pcontrol,
+		    struct thread *td);
 	int	(*pru_rcvd)(struct socket *so, int flags);
 	int	(*pru_rcvoob)(struct socket *so, struct mbuf *m, int flags);
 	int	(*pru_send)(struct socket *so, int flags, struct mbuf *m,

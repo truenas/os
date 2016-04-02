@@ -289,7 +289,7 @@ static int	unp_internalize(struct mbuf **, struct thread *);
 static void	unp_internalize_fp(struct file *);
 static int	unp_externalize(struct mbuf *, struct mbuf **, int);
 static int	unp_externalize_fp(struct file *);
-static struct mbuf	*unp_addsockcred(struct thread *, struct mbuf *);
+static int	unp_addsockcred(struct mbuf **, struct thread *);
 static void	unp_process_defers(void * __unused, int);
 
 /*
@@ -786,6 +786,43 @@ uipc_peeraddr(struct socket *so, struct sockaddr **nam)
 }
 
 static int
+uipc_finalizecontrol(struct socket *so, int flags, struct mbuf **pcontrol,
+    struct thread *td)
+{
+	struct unpcb *unp, *unp2;
+	int error = 0;
+
+	unp = sotounpcb(so);
+	KASSERT(unp != NULL, ("uipc_finalizecontrol: unp == NULL"));
+
+	unp2 = unp->unp_conn;
+
+	if (*pcontrol != NULL && (error = unp_internalize(pcontrol, td)))
+		return (error);
+
+	/* Lockless read, ignore when not connected. */
+	if (unp2 && unp2->unp_flags & UNP_WANTCRED) {
+		switch (so->so_type) {
+		case SOCK_SEQPACKET:
+		case SOCK_STREAM:
+			/* Credentials are passed only once on streams */
+			UNP_PCB_LOCK(unp2);
+			if (unp2->unp_flags & UNP_WANTCRED) {
+				unp2->unp_flags &= ~UNP_WANTCRED;
+				error = unp_addsockcred(pcontrol, td);
+			}
+			UNP_PCB_UNLOCK(unp2);
+			break;
+		case SOCK_DGRAM:
+			error = unp_addsockcred(pcontrol, td);
+			break;
+		}
+	}
+
+	return (error);
+}
+
+static int
 uipc_rcvd(struct socket *so, int flags)
 {
 	struct unpcb *unp, *unp2;
@@ -852,8 +889,6 @@ uipc_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 		error = EOPNOTSUPP;
 		goto release;
 	}
-	if (control != NULL && (error = unp_internalize(&control, td)))
-		goto release;
 	if ((nam != NULL) || (flags & PRUS_EOF))
 		UNP_LINK_WLOCK();
 	else
@@ -887,9 +922,6 @@ uipc_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 			error = ENOTCONN;
 			break;
 		}
-		/* Lockless read. */
-		if (unp2->unp_flags & UNP_WANTCRED)
-			control = unp_addsockcred(td, control);
 		UNP_PCB_LOCK(unp);
 		if (unp->unp_addr != NULL)
 			from = (struct sockaddr *)unp->unp_addr;
@@ -957,14 +989,6 @@ uipc_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 		so2 = unp2->unp_socket;
 		UNP_PCB_LOCK(unp2);
 		SOCKBUF_LOCK(&so2->so_rcv);
-		if (unp2->unp_flags & UNP_WANTCRED) {
-			/*
-			 * Credentials are passed only once on SOCK_STREAM
-			 * and SOCK_SEQPACKET.
-			 */
-			unp2->unp_flags &= ~UNP_WANTCRED;
-			control = unp_addsockcred(td, control);
-		}
 		/*
 		 * Send to paired receive port, and then reduce send buffer
 		 * hiwater marks to maintain backpressure.  Wake up readers.
@@ -972,9 +996,9 @@ uipc_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 		switch (so->so_type) {
 		case SOCK_STREAM:
 			if (control != NULL) {
-				if (sbappendcontrol_locked(&so2->so_rcv, m,
-				    control))
-					control = NULL;
+				sbappendcontrol_locked(&so2->so_rcv, m,
+				    control);
+				control = NULL;
 			} else
 				sbappend_locked(&so2->so_rcv, m);
 			break;
@@ -995,6 +1019,7 @@ uipc_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 			break;
 			}
 		}
+		m = NULL;
 
 		mbcnt = so2->so_rcv.sb_mbcnt;
 		sbcc = so2->so_rcv.sb_cc;
@@ -1012,7 +1037,6 @@ uipc_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 			so->so_snd.sb_flags |= SB_STOP;
 		SOCKBUF_UNLOCK(&so->so_snd);
 		UNP_PCB_UNLOCK(unp2);
-		m = NULL;
 		break;
 
 	default:
@@ -1113,6 +1137,7 @@ static struct pr_usrreqs uipc_usrreqs_dgram = {
 	.pru_disconnect =	uipc_disconnect,
 	.pru_listen =		uipc_listen,
 	.pru_peeraddr =		uipc_peeraddr,
+	.pru_finalizecontrol =	uipc_finalizecontrol,
 	.pru_rcvd =		uipc_rcvd,
 	.pru_send =		uipc_send,
 	.pru_sense =		uipc_sense,
@@ -1135,6 +1160,7 @@ static struct pr_usrreqs uipc_usrreqs_seqpacket = {
 	.pru_disconnect =	uipc_disconnect,
 	.pru_listen =		uipc_listen,
 	.pru_peeraddr =		uipc_peeraddr,
+	.pru_finalizecontrol =	uipc_finalizecontrol,
 	.pru_rcvd =		uipc_rcvd,
 	.pru_send =		uipc_send,
 	.pru_sense =		uipc_sense,
@@ -1157,6 +1183,7 @@ static struct pr_usrreqs uipc_usrreqs_stream = {
 	.pru_disconnect =	uipc_disconnect,
 	.pru_listen =		uipc_listen,
 	.pru_peeraddr =		uipc_peeraddr,
+	.pru_finalizecontrol =	uipc_finalizecontrol,
 	.pru_rcvd =		uipc_rcvd,
 	.pru_send =		uipc_send,
 	.pru_sense =		uipc_sense,
@@ -1750,7 +1777,7 @@ unp_externalize(struct mbuf *control, struct mbuf **controlp, int flags)
 			    SCM_RIGHTS, SOL_SOCKET);
 			if (*controlp == NULL) {
 				FILEDESC_XUNLOCK(fdesc);
-				error = E2BIG;
+				error = ENOBUFS;
 				unp_freerights(fdep, newfds);
 				goto next;
 			}
@@ -1930,7 +1957,7 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 			    SCM_RIGHTS, SOL_SOCKET);
 			if (*controlp == NULL) {
 				FILEDESC_SUNLOCK(fdesc);
-				error = E2BIG;
+				error = ENOBUFS;
 				goto out;
 			}
 			fdp = data;
@@ -1994,9 +2021,10 @@ out:
 	return (error);
 }
 
-static struct mbuf *
-unp_addsockcred(struct thread *td, struct mbuf *control)
+static int
+unp_addsockcred(struct mbuf **pcontrol, struct thread *td)
 {
+	struct mbuf *control = *pcontrol;
 	struct mbuf *m, *n, *n_prev;
 	struct sockcred *sc;
 	const struct cmsghdr *cm;
@@ -2006,7 +2034,7 @@ unp_addsockcred(struct thread *td, struct mbuf *control)
 	ngroups = MIN(td->td_ucred->cr_ngroups, CMGROUP_MAX);
 	m = sbcreatecontrol(NULL, SOCKCREDSIZE(ngroups), SCM_CREDS, SOL_SOCKET);
 	if (m == NULL)
-		return (control);
+		return (ENOBUFS);
 
 	sc = (struct sockcred *) CMSG_DATA(mtod(m, struct cmsghdr *));
 	sc->sc_uid = td->td_ucred->cr_ruid;
@@ -2040,7 +2068,8 @@ unp_addsockcred(struct thread *td, struct mbuf *control)
 
 	/* Prepend it to the head. */
 	m->m_next = control;
-	return (m);
+	*pcontrol = m;
+	return (0);
 }
 
 static struct unpcb *
