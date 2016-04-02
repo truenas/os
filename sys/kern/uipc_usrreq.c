@@ -1868,6 +1868,16 @@ unp_init(void)
 	UNP_DEFERRED_LOCK_INIT();
 }
 
+/*
+ * Convert incoming control message from user-supplied format
+ * to internal form.
+ *
+ * Note that when we're called, *controlp is a single mbuf
+ * whose m_len is the length of the cmsg data structures
+ * that have not yet been internalized.  On return, *controlp
+ * is an mbuf chain whose individual mbufs are internalized;
+ * this chain may have a different length.
+ */
 static int
 unp_internalize(struct mbuf **controlp, struct thread *td)
 {

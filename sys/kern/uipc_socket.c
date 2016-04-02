@@ -976,6 +976,23 @@ sodisconnect(struct socket *so)
 
 #define	SBLOCKWAIT(f)	(((f) & MSG_DONTWAIT) ? 0 : SBL_WAIT)
 
+/*
+ * Like sbspace(&so->so_snd), but allow extra room for  MSG_OOB.
+ *
+ * It's not clear whether the magic 1024 number is sensible, but
+ * at least it's now in only one place.
+ */
+static inline int
+sosend_space(struct socket *so, int flags)
+{
+	long space;
+
+	space = sbspace(&so->so_snd);
+	if (flags & MSG_OOB)
+		space += 1024;
+	return (space);
+}
+
 int
 sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
@@ -1013,8 +1030,17 @@ sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	    (flags & MSG_DONTROUTE) && (so->so_options & SO_DONTROUTE) == 0;
 	if (td != NULL)
 		td->td_ru.ru_msgsnd++;
+	/*
+	 * NB: Original user supplied control message may have
+	 * fit and we may have made it too big when we finalized
+	 * it, which will have us return EMSGSIZE below.  This
+	 * seems rude, but it is at least functional: the user
+	 * can try sending smaller control values (mainly, fewer
+	 * fd's at a time, as those are the ones that expand to
+	 * twice their size on I32LP64 systems).
+	 */
 	if (control != NULL)
-		clen = control->m_len;
+		clen = m_length(control, NULL);
 
 	SOCKBUF_LOCK(&so->so_snd);
 	if (so->so_snd.sb_state & SBS_CANTSENDMORE) {
@@ -1052,14 +1078,8 @@ sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 		}
 	}
 
-	/*
-	 * Do we need MSG_OOB support in SOCK_DGRAM?  Signs here may be a
-	 * problem and need fixing.
-	 */
-	space = sbspace(&so->so_snd);
+	space = sosend_space(so, flags);
 	SOCKBUF_UNLOCK(&so->so_snd);
-	if (flags & MSG_OOB)
-		space += 1024;
 	if (clen > space) {
 		error = EMSGSIZE;
 		goto out;
@@ -1188,7 +1208,7 @@ sosend_generic(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	if (td != NULL)
 		td->td_ru.ru_msgsnd++;
 	if (control != NULL)
-		clen = control->m_len;
+		clen = m_length(control, NULL);
 
 	error = sblock(&so->so_snd, SBLOCKWAIT(flags));
 	if (error)
@@ -1232,9 +1252,8 @@ restart:
 				goto release;
 			}
 		}
-		space = sbspace(&so->so_snd);
-		if (flags & MSG_OOB)
-			space += 1024;
+		space = sosend_space(so, flags);
+		/* NB: control msg is implicitly atomic */
 		if ((atomic && resid > so->so_snd.sb_hiwat) ||
 		    clen > so->so_snd.sb_hiwat) {
 			SOCKBUF_UNLOCK(&so->so_snd);
