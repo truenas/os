@@ -1883,6 +1883,40 @@ unp_init(void)
 }
 
 /*
+ * Arguments passed to internalizer/transformer (ix = internal xform).
+ * The transformation function may fill in a new ix_mbuf.
+ */
+struct internalize_transform_data {
+	socklen_t	ix_odatalen;	/* original data length in bytes */
+	socklen_t	ix_ndatalen;	/* new data length, or 0 */
+	void		*ix_odata;	/* original data */
+	void 		*ix_ndata;	/* new data area, or NULL */
+	struct mbuf	*ix_mbuf;	/* mbuf for new data */
+	struct thread	*ix_td;		/* calling thread */
+};
+
+/*
+ * Internalizers.  If you provide a nonzero size, we pre-allocate
+ * the ix_mbuf and you get a nonzero ndatasize and non-NULL ndata.
+ */
+struct unp_scm_internalize_op {
+	socklen_t size;		/* predefined output size, or 0 */
+	int	(*func)(struct internalize_transform_data *);
+};
+
+static int unp_internalize_creds(struct internalize_transform_data *);
+static int unp_internalize_fds(struct internalize_transform_data *);
+static int unp_internalize_timestamp(struct internalize_transform_data *);
+static int unp_internalize_bintime(struct internalize_transform_data *);
+
+static struct unp_scm_internalize_op unp_internalize_ops[] = {
+	[SCM_CREDS] = { sizeof(struct cmsgcred), unp_internalize_creds },
+	[SCM_RIGHTS] = { 0, unp_internalize_fds },
+	[SCM_TIMESTAMP] = { sizeof(struct timeval), unp_internalize_timestamp },
+	[SCM_BINTIME] = { sizeof(struct bintime), unp_internalize_bintime },
+};
+
+/*
  * Convert incoming control message from user-supplied format
  * to internal form.
  *
@@ -1891,158 +1925,210 @@ unp_init(void)
  * that have not yet been internalized.  On return, *controlp
  * is an mbuf chain whose individual mbufs are internalized;
  * this chain may have a different length.
+ *
+ * Caller will always m_freem(*controlp), even if we return error.
  */
 static int
 unp_internalize(struct mbuf **controlp, struct thread *td)
 {
-	struct mbuf *control = *controlp;
-	struct proc *p = td->td_proc;
-	struct filedesc *fdesc = p->p_fd;
-	struct bintime *bt;
-	struct cmsghdr *cm = mtod(control, struct cmsghdr *);
-	struct cmsgcred *cmcred;
-	struct filedescent *fde, **fdep, *fdev;
-	struct file *fp;
-	struct timeval *tv;
-	int i, *fdp;
-	void *data;
-	socklen_t clen = control->m_len, datalen;
-	int error, oldfds;
-	u_int newlen;
+	struct unp_scm_internalize_op *op;
+	struct internalize_transform_data ix;
+	struct cmsghdr *cm;
+	struct mbuf *control, *m;
+	void *odata;
+	int cmtype, error;
+	socklen_t clen, size, odatalen;
 
 	UNP_LINK_UNLOCK_ASSERT();
 
+	ix.ix_td = td;		/* never changes, just passed through */
+
 	error = 0;
+	control = *controlp;
 	*controlp = NULL;
-	while (cm != NULL) {
-		if (sizeof(*cm) > clen || cm->cmsg_level != SOL_SOCKET
-		    || cm->cmsg_len > clen || cm->cmsg_len < sizeof(*cm)) {
-			error = EINVAL;
-			goto out;
-		}
-		data = CMSG_DATA(cm);
-		datalen = (caddr_t)cm + cm->cmsg_len - (caddr_t)data;
+	clen = control->m_len;
+	cm = mtod(control, struct cmsghdr *);
 
-		switch (cm->cmsg_type) {
+	while (error == 0) {
 		/*
-		 * Fill in credential information.
+		 * Verify current control message, and set up type
+		 * and old data pointer and size values.
 		 */
-		case SCM_CREDS:
-			*controlp = sbcreatecontrol(NULL, sizeof(*cmcred),
-			    SCM_CREDS, SOL_SOCKET);
-			if (*controlp == NULL) {
-				error = ENOBUFS;
-				goto out;
-			}
-			cmcred = (struct cmsgcred *)
-			    CMSG_DATA(mtod(*controlp, struct cmsghdr *));
-			cmcred->cmcred_pid = p->p_pid;
-			cmcred->cmcred_uid = td->td_ucred->cr_ruid;
-			cmcred->cmcred_gid = td->td_ucred->cr_rgid;
-			cmcred->cmcred_euid = td->td_ucred->cr_uid;
-			cmcred->cmcred_ngroups = MIN(td->td_ucred->cr_ngroups,
-			    CMGROUP_MAX);
-			for (i = 0; i < cmcred->cmcred_ngroups; i++)
-				cmcred->cmcred_groups[i] =
-				    td->td_ucred->cr_groups[i];
-			break;
-
-		case SCM_RIGHTS:
-			oldfds = datalen / sizeof (int);
-			if (oldfds == 0)
-				break;
-			/*
-			 * Check that all the FDs passed in refer to legal
-			 * files.  If not, reject the entire operation.
-			 */
-			fdp = data;
-			FILEDESC_SLOCK(fdesc);
-			for (i = 0; i < oldfds; i++, fdp++) {
-				fp = fget_locked(fdesc, *fdp);
-				if (fp == NULL) {
-					FILEDESC_SUNLOCK(fdesc);
-					error = EBADF;
-					goto out;
-				}
-				if (!(fp->f_ops->fo_flags & DFLAG_PASSABLE)) {
-					FILEDESC_SUNLOCK(fdesc);
-					error = EOPNOTSUPP;
-					goto out;
-				}
-
-			}
-
-			/*
-			 * Now replace the integer FDs with pointers to the
-			 * file structure and capability rights.
-			 */
-			newlen = oldfds * sizeof(fdep[0]);
-			*controlp = sbcreatecontrol(NULL, newlen,
-			    SCM_RIGHTS, SOL_SOCKET);
-			if (*controlp == NULL) {
-				FILEDESC_SUNLOCK(fdesc);
-				error = ENOBUFS;
-				goto out;
-			}
-			fdp = data;
-			fdep = (struct filedescent **)
-			    CMSG_DATA(mtod(*controlp, struct cmsghdr *));
-			fdev = malloc(sizeof(*fdev) * oldfds, M_FILECAPS,
-			    M_WAITOK);
-			for (i = 0; i < oldfds; i++, fdev++, fdp++) {
-				fde = &fdesc->fd_ofiles[*fdp];
-				fdep[i] = fdev;
-				fdep[i]->fde_file = fde->fde_file;
-				filecaps_copy(&fde->fde_caps,
-				    &fdep[i]->fde_caps);
-				unp_internalize_fp(fdep[i]->fde_file);
-			}
-			FILEDESC_SUNLOCK(fdesc);
-			break;
-
-		case SCM_TIMESTAMP:
-			*controlp = sbcreatecontrol(NULL, sizeof(*tv),
-			    SCM_TIMESTAMP, SOL_SOCKET);
-			if (*controlp == NULL) {
-				error = ENOBUFS;
-				goto out;
-			}
-			tv = (struct timeval *)
-			    CMSG_DATA(mtod(*controlp, struct cmsghdr *));
-			microtime(tv);
-			break;
-
-		case SCM_BINTIME:
-			*controlp = sbcreatecontrol(NULL, sizeof(*bt),
-			    SCM_BINTIME, SOL_SOCKET);
-			if (*controlp == NULL) {
-				error = ENOBUFS;
-				goto out;
-			}
-			bt = (struct bintime *)
-			    CMSG_DATA(mtod(*controlp, struct cmsghdr *));
-			bintime(bt);
-			break;
-
-		default:
+		if (clen < sizeof(*cm) || cm->cmsg_level != SOL_SOCKET ||
+		    cm->cmsg_len > clen || cm->cmsg_len < sizeof(*cm)) {
 			error = EINVAL;
-			goto out;
+			break;
 		}
 
-		controlp = &(*controlp)->m_next;
-		if (CMSG_SPACE(datalen) < clen) {
-			clen -= CMSG_SPACE(datalen);
-			cm = (struct cmsghdr *)
-			    ((caddr_t)cm + CMSG_SPACE(datalen));
-		} else {
-			clen = 0;
-			cm = NULL;
+		cmtype = cm->cmsg_type;
+		if (cmtype < 0 || cmtype >= nitems(unp_internalize_ops)) {
+			error = EINVAL;
+			break;
 		}
+		op = &unp_internalize_ops[cmtype];
+		if (op->func == NULL) {
+			error = EINVAL;
+			break;
+		}
+
+		odata = CMSG_DATA(cm);
+		odatalen = (caddr_t)cm + cm->cmsg_len - (caddr_t)odata;
+
+		ix.ix_odata = odata;
+		ix.ix_odatalen = odatalen;
+
+		/*
+		 * If transform function gives us a fixed data
+		 * size, allocate new mbuf here, else leave it
+		 * to the function.
+		 */
+		if ((size = op->size) != 0) {
+			m = sbcreatecontrol(NULL, size, cmtype, SOL_SOCKET);
+			if (m == NULL) {
+				error = ENOBUFS;
+				break;
+			}
+			ix.ix_mbuf = m;
+			ix.ix_ndata = CMSG_DATA(mtod(m, struct cmsghdr *));
+			ix.ix_ndatalen = size;
+		} else {
+			ix.ix_mbuf = NULL;
+			ix.ix_ndata = NULL;
+			ix.ix_ndatalen = 0;
+		}
+
+		/*
+		 * Apply transform and append new mbuf (if any) to
+		 * new control chain, even on error, so that it
+		 * will get freed.
+		 */
+		error = (*op->func)(&ix);
+		if ((m = ix.ix_mbuf) != NULL) {
+			*controlp = m;
+			controlp = &m->m_next;
+		}
+
+		/* Advance to next message. */
+		size = CMSG_SPACE(odatalen);
+		if (size >= clen)
+			break;
+		cm = (struct cmsghdr *)((caddr_t)cm + size);
+		clen -= size;
 	}
 
-out:
 	m_freem(control);
 	return (error);
+}
+
+/*
+ * Internalize file descriptors ("rights").
+ */
+static int
+unp_internalize_fds(struct internalize_transform_data *ix)
+{
+	struct proc *p = ix->ix_td->td_proc;
+	struct filedesc *fdesc = p->p_fd;
+	struct filedescent *fde, **fdep, *fdev;
+	struct file *fp;
+	struct mbuf *m;
+	int i, *fdp;
+	int oldfds;
+	u_int newlen;
+
+	KASSERT(ix->ix_ndatalen == 0, ("%s: datalen", __func__));
+
+	/* Round down: this is forgiving, if slightly wrong. */
+	oldfds = ix->ix_odatalen / sizeof (int);
+	if (oldfds == 0)
+		return (0);
+
+	/*
+	 * Check that all the FDs passed in refer to legal
+	 * files.  If not, reject the entire operation.
+	 */
+	fdp = ix->ix_odata;
+	FILEDESC_SLOCK(fdesc);
+	for (i = 0; i < oldfds; i++, fdp++) {
+		fp = fget_locked(fdesc, *fdp);
+		if (fp == NULL) {
+			FILEDESC_SUNLOCK(fdesc);
+			return (EBADF);
+		}
+		if (!(fp->f_ops->fo_flags & DFLAG_PASSABLE)) {
+			FILEDESC_SUNLOCK(fdesc);
+			return (EOPNOTSUPP);
+		}
+
+	}
+
+	/*
+	 * Now replace the integer FDs with pointers to the
+	 * file structure and capability rights.
+	 */
+	newlen = oldfds * sizeof(fdep[0]);
+	m = sbcreatecontrol(NULL, newlen, SCM_RIGHTS, SOL_SOCKET);
+	if (m == NULL) {
+		FILEDESC_SUNLOCK(fdesc);
+		return (ENOBUFS);
+	}
+
+	fdp = ix->ix_odata;
+	fdep = (struct filedescent **)CMSG_DATA(mtod(m, struct cmsghdr *));
+	fdev = malloc(sizeof(*fdev) * oldfds, M_FILECAPS, M_WAITOK);
+	for (i = 0; i < oldfds; i++, fdev++, fdp++) {
+		fde = &fdesc->fd_ofiles[*fdp];
+		fdep[i] = fdev;
+		fdep[i]->fde_file = fde->fde_file;
+		filecaps_copy(&fde->fde_caps, &fdep[i]->fde_caps);
+		unp_internalize_fp(fdep[i]->fde_file);
+	}
+	FILEDESC_SUNLOCK(fdesc);
+
+	ix->ix_mbuf = m;
+	return (0);
+}
+
+static int
+unp_internalize_creds(struct internalize_transform_data *ix)
+{
+	struct cmsgcred *cmcred;
+	int i, ngroups;
+	struct thread *td = ix->ix_td;
+	struct ucred *cr = td->td_ucred;
+
+	KASSERT(ix->ix_ndatalen == sizeof(*cmcred), ("%s: datalen", __func__));
+	cmcred = ix->ix_ndata;
+	cmcred->cmcred_pid = td->td_proc->p_pid;
+	cmcred->cmcred_uid = cr->cr_ruid;
+	cmcred->cmcred_gid = cr->cr_rgid;
+	cmcred->cmcred_euid = cr->cr_uid;
+	ngroups = MIN(cr->cr_ngroups, CMGROUP_MAX);
+	cmcred->cmcred_ngroups = ngroups;
+	for (i = 0; i < ngroups; i++)
+		cmcred->cmcred_groups[i] = cr->cr_groups[i];
+	return (0);
+}
+
+static int
+unp_internalize_timestamp(struct internalize_transform_data *ix)
+{
+	struct timeval *tv;
+
+	KASSERT(ix->ix_ndatalen == sizeof(*tv), ("%s: datalen", __func__));
+	tv = ix->ix_ndata;
+	microtime(tv);
+	return (0);
+}
+
+static int
+unp_internalize_bintime(struct internalize_transform_data *ix)
+{
+	struct bintime *bt;
+
+	KASSERT(ix->ix_ndatalen == sizeof(*bt), ("%s: datalen", __func__));
+	bt = ix->ix_ndata;
+	bintime(bt);
+	return (0);
 }
 
 static int
