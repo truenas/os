@@ -44,6 +44,7 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin
 export HOME PATH
 
 if [ -f /data/license ]; then
+	/bin/pkill -9 -f fenced
 	/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down
 	if [ -f /tmp/failover.json ]; then
 		sleep 1
