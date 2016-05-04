@@ -52,9 +52,6 @@ if [ -f /data/license ]; then
 	fi
 fi
 
-/sbin/ifconfig -l | /usr/bin/xargs -n 1 -J % /sbin/ifconfig % down
-sleep 5
-
 . /etc/rc.subr
 
 load_rc_config
