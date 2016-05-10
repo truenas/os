@@ -373,11 +373,9 @@ mpssas_remove_volume(struct mps_softc *sc, struct mps_command *tm)
 	}
 
 	if (reply->IOCStatus != MPI2_IOCSTATUS_SUCCESS) {
-		mps_dprint(sc, MPS_FAULT,
+		mps_dprint(sc, MPS_ERROR,
 		   "IOCStatus = 0x%x while resetting device 0x%x\n",
 		   reply->IOCStatus, handle);
-		mpssas_free_tm(sc, tm);
-		return;
 	}
 
 	mps_dprint(sc, MPS_XINFO,
@@ -567,8 +565,6 @@ mpssas_remove_device(struct mps_softc *sc, struct mps_command *tm)
 		    "%s: cm_flags = %#x for remove of handle %#04x! "
 		    "This should not happen!\n", __func__, tm->cm_flags,
 		    handle);
-		mpssas_free_tm(sc, tm);
-		return;
 	}
 
 	if (reply == NULL) {
@@ -580,11 +576,9 @@ mpssas_remove_device(struct mps_softc *sc, struct mps_command *tm)
 	}
 
 	if (le16toh(reply->IOCStatus) != MPI2_IOCSTATUS_SUCCESS) {
-		mps_dprint(sc, MPS_FAULT,
+		mps_dprint(sc, MPS_ERROR,
 		   "IOCStatus = 0x%x while resetting device 0x%x\n",
 		   le16toh(reply->IOCStatus), handle);
-		mpssas_free_tm(sc, tm);
-		return;
 	}
 
 	mps_dprint(sc, MPS_XINFO, "Reset aborted %u commands\n",
