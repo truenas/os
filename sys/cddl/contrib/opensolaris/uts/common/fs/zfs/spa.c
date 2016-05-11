@@ -5723,6 +5723,8 @@ spa_vdev_remove(spa_t *spa, uint64_t guid, boolean_t unspare)
 		error = SET_ERROR(ENOENT);
 	}
 
+	spa_event_notify(spa, vd, ESC_ZFS_VDEV_REMOVE);
+
 	if (!locked)
 		return (spa_vdev_exit(spa, NULL, txg, error));
 
