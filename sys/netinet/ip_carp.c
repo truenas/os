@@ -573,6 +573,37 @@ carp6_input(struct mbuf **mp, int *offp, int proto)
 }
 #endif /* INET6 */
 
+/*
+ * This routine should not be necessary at all, but some switches
+ * (VMWare ESX vswitches) can echo our own packets back at us,
+ * and we must ignore them or they will cause us to drop out of
+ * MASTER mode.
+ */
+static int
+carp_source_is_self(struct mbuf *m, struct ifaddr *ifa, sa_family_t af)
+{
+	struct ip *ip4;
+	struct in_addr in4;
+	struct ip6_hdr *ip6;
+	struct in6_addr in6;
+
+	switch (af) {
+	case AF_INET:
+		ip4 = mtod(m, struct ip *);
+		in4 = ifatoia(ifa)->ia_addr.sin_addr;
+		return (in4.s_addr == ip4->ip_src.s_addr);
+
+	case AF_INET6:
+		ip6 = mtod(m, struct ip6_hdr *);
+		in6 = ifatoia6(ifa)->ia_addr.sin6_addr;
+		return (memcmp(&in6, &ip6->ip6_src, sizeof(in6)) == 0);
+
+	default:		/* how did this happen? */
+		break;
+	}
+	return (0);
+}
+
 static void
 carp_input_c(struct mbuf *m, struct carp_header *ch, sa_family_t af)
 {
@@ -581,19 +612,39 @@ carp_input_c(struct mbuf *m, struct carp_header *ch, sa_family_t af)
 	struct carp_softc *sc;
 	uint64_t tmp_counter;
 	struct timeval sc_tv, ch_tv;
+	int error;
 
 	/* verify that the VHID is valid on the receiving interface */
 	IF_ADDR_RLOCK(ifp);
-	IFNET_FOREACH_IFA(ifp, ifa)
+	error = ENOENT;
+	IFNET_FOREACH_IFA(ifp, ifa) {
 		if (ifa->ifa_addr->sa_family == af &&
 		    ifa->ifa_carp->sc_vhid == ch->carp_vhid) {
-			ifa_ref(ifa);
+			/*
+			 * We should do this in the inet4 and inet6
+			 * input paths (above) but then we would
+			 * have to lock the interface address list
+			 * there and also here.
+			 */
+			if (carp_source_is_self(m, ifa, af)) {
+				error = ELOOP;	/* sort of */
+			} else {
+				error = 0;
+				ifa_ref(ifa);
+			}
 			break;
 		}
+	}
 	IF_ADDR_RUNLOCK(ifp);
 
-	if (ifa == NULL) {
-		CARPSTATS_INC(carps_badvhid);
+	if (error) {
+		if (error == ELOOP) {
+			CARP_DEBUG("dropping looped packet on interface %s\n",
+			    ifp->if_xname);
+			CARPSTATS_INC(carps_badif);	/* ??? */
+		} else {
+			CARPSTATS_INC(carps_badvhid);
+		}
 		m_freem(m);
 		return;
 	}
