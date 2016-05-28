@@ -25,6 +25,7 @@
  *
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -38,6 +39,9 @@
 #endif
 #include "lib9p.h"
 #include "fcall.h"
+#include "linux_errno.h"
+
+#define N(ary)          (sizeof(ary) / sizeof(*ary))
 
 static void l9p_describe_fid(const char *, uint32_t, struct sbuf *);
 static void l9p_describe_mode(const char *, uint32_t, struct sbuf *);
@@ -51,6 +55,7 @@ static void l9p_describe_time(struct sbuf *, const char *, uint64_t, uint64_t);
 static void l9p_describe_readdir(struct sbuf *, struct l9p_f_io *);
 static void l9p_describe_size(const char *, uint64_t, struct sbuf *);
 static void l9p_describe_ugid(const char *, uint32_t, struct sbuf *);
+static char *lookup_linux_errno(uint32_t);
 
 /*
  * Using indexed initializers, we can have these occur in any order.
@@ -70,6 +75,7 @@ static const char *ftype_names[] = {
 	X(AUTH,		"auth"),
 	X(ATTACH,	"attach"),
 	X(ERROR,	"error"),
+	X(LERROR,	"lerror"),
 	X(FLUSH,	"flush"),
 	X(WALK,		"walk"),
 	X(OPEN,		"open"),
@@ -184,16 +190,25 @@ l9p_describe_mode(const char *str, uint32_t mode, struct sbuf *sb)
 
 /*
  * Show file name or other similar, potentially-very-long string.
+ * Actual strings get quotes, a NULL name (if it occurs) gets
+ * <null> (no quotes), so you can tell the difference.
  */
 static void
 l9p_describe_name(const char *str, char *name, struct sbuf *sb)
 {
-	int len = strlen(name);
+	size_t len;
+
+	if (name == NULL) {
+		sbuf_printf(sb, "%s<null>", str);
+		return;
+	}
+
+	len = strlen(name);
 
 	if (len > 32)
 		sbuf_printf(sb, "%s\"%.*s...\"", str, 32 - 3, name);
 	else
-		sbuf_printf(sb, "%s\"%.*s\"", str, len, name);
+		sbuf_printf(sb, "%s\"%.*s\"", str, (int)len, name);
 }
 
 /*
@@ -318,17 +333,141 @@ l9p_describe_readdir(struct sbuf *sb, struct l9p_f_io *io)
 #endif
 }
 
+static char *
+lookup_linux_errno(uint32_t linux_errno)
+{
+	static char unknown[50];
+
+	/*
+	 * Error numbers in the "base" range (1..ERANGE) are common
+	 * across BSD, MacOS, Linux, and Plan 9.
+	 *
+	 * Error numbers outside that range require translation.
+	 */
+	char *const table[] = {
+#define X0(name) [name] = name ## _STR
+#define	X(name) [name] = name ## _STR
+		X(LINUX_EAGAIN),
+		X(LINUX_EDEADLK),
+		X(LINUX_ENAMETOOLONG),
+		X(LINUX_ENOLCK),
+		X(LINUX_ENOSYS),
+		X(LINUX_ENOTEMPTY),
+		X(LINUX_ELOOP),
+		X(LINUX_ENOMSG),
+		X(LINUX_EIDRM),
+		X(LINUX_ECHRNG),
+		X(LINUX_EL2NSYNC),
+		X(LINUX_EL3HLT),
+		X(LINUX_EL3RST),
+		X(LINUX_ELNRNG),
+		X(LINUX_EUNATCH),
+		X(LINUX_ENOCSI),
+		X(LINUX_EL2HLT),
+		X(LINUX_EBADE),
+		X(LINUX_EBADR),
+		X(LINUX_EXFULL),
+		X(LINUX_ENOANO),
+		X(LINUX_EBADRQC),
+		X(LINUX_EBADSLT),
+		X(LINUX_EBFONT),
+		X(LINUX_ENOSTR),
+		X(LINUX_ENODATA),
+		X(LINUX_ETIME),
+		X(LINUX_ENOSR),
+		X(LINUX_ENONET),
+		X(LINUX_ENOPKG),
+		X(LINUX_EREMOTE),
+		X(LINUX_ENOLINK),
+		X(LINUX_EADV),
+		X(LINUX_ESRMNT),
+		X(LINUX_ECOMM),
+		X(LINUX_EPROTO),
+		X(LINUX_EMULTIHOP),
+		X(LINUX_EDOTDOT),
+		X(LINUX_EBADMSG),
+		X(LINUX_EOVERFLOW),
+		X(LINUX_ENOTUNIQ),
+		X(LINUX_EBADFD),
+		X(LINUX_EREMCHG),
+		X(LINUX_ELIBACC),
+		X(LINUX_ELIBBAD),
+		X(LINUX_ELIBSCN),
+		X(LINUX_ELIBMAX),
+		X(LINUX_ELIBEXEC),
+		X(LINUX_EILSEQ),
+		X(LINUX_ERESTART),
+		X(LINUX_ESTRPIPE),
+		X(LINUX_EUSERS),
+		X(LINUX_ENOTSOCK),
+		X(LINUX_EDESTADDRREQ),
+		X(LINUX_EMSGSIZE),
+		X(LINUX_EPROTOTYPE),
+		X(LINUX_ENOPROTOOPT),
+		X(LINUX_EPROTONOSUPPORT),
+		X(LINUX_ESOCKTNOSUPPORT),
+		X(LINUX_EOPNOTSUPP),
+		X(LINUX_EPFNOSUPPORT),
+		X(LINUX_EAFNOSUPPORT),
+		X(LINUX_EADDRINUSE),
+		X(LINUX_EADDRNOTAVAIL),
+		X(LINUX_ENETDOWN),
+		X(LINUX_ENETUNREACH),
+		X(LINUX_ENETRESET),
+		X(LINUX_ECONNABORTED),
+		X(LINUX_ECONNRESET),
+		X(LINUX_ENOBUFS),
+		X(LINUX_EISCONN),
+		X(LINUX_ENOTCONN),
+		X(LINUX_ESHUTDOWN),
+		X(LINUX_ETOOMANYREFS),
+		X(LINUX_ETIMEDOUT),
+		X(LINUX_ECONNREFUSED),
+		X(LINUX_EHOSTDOWN),
+		X(LINUX_EHOSTUNREACH),
+		X(LINUX_EALREADY),
+		X(LINUX_EINPROGRESS),
+		X(LINUX_ESTALE),
+		X(LINUX_EUCLEAN),
+		X(LINUX_ENOTNAM),
+		X(LINUX_ENAVAIL),
+		X(LINUX_EISNAM),
+		X(LINUX_EREMOTEIO),
+		X(LINUX_EDQUOT),
+		X(LINUX_ENOMEDIUM),
+		X(LINUX_EMEDIUMTYPE),
+		X(LINUX_ECANCELED),
+		X(LINUX_ENOKEY),
+		X(LINUX_EKEYEXPIRED),
+		X(LINUX_EKEYREVOKED),
+		X(LINUX_EKEYREJECTED),
+		X(LINUX_EOWNERDEAD),
+		X(LINUX_ENOTRECOVERABLE),
+		X(LINUX_ERFKILL),
+		X(LINUX_EHWPOISON),
+#undef X0
+#undef X
+	};
+	if ((size_t)linux_errno < N(table) && table[linux_errno] != NULL)
+		return (table[linux_errno]);
+	if (linux_errno <= ERANGE)
+		return (strerror((int)linux_errno));
+	(void) snprintf(unknown, sizeof(unknown),
+	    "Unknown error %d", linux_errno);
+	return (unknown);
+}
+
 void
 l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
     struct sbuf *sb)
 {
-	uint32_t mask;
+	uint64_t mask;
 	uint8_t type;
 	int i;
 
 	assert(fcall != NULL);
 	assert(sb != NULL);
-	assert(version <= L9P_2000L && version >= L9P_2000);
+	assert(version <= L9P_2000L && version >= L9P_INVALID_VERSION);
 
 	type = fcall->hdr.type;
 
@@ -336,14 +475,12 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 	    ftype_names[type - L9P__FIRST] == NULL) {
 		sbuf_printf(sb, "<unknown request %d> tag=%d", type,
 		    fcall->hdr.tag);
-		return;
+	} else {
+		sbuf_printf(sb, "%s tag=%d", ftype_names[type - L9P__FIRST],
+		    fcall->hdr.tag);
 	}
 
-	sbuf_printf(sb, "%s tag=%d", ftype_names[type - L9P__FIRST],
-	    fcall->hdr.tag);
-
 	switch (type) {
-
 	case L9P_TVERSION:
 	case L9P_RVERSION:
 		sbuf_printf(sb, " version=\"%s\" msize=%d", fcall->version.version,
@@ -371,7 +508,8 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 		return;
 
 	case L9P_RLERROR:
-		sbuf_printf(sb, " errnum=%d", fcall->error.errnum);
+		sbuf_printf(sb, " errnum=%d (%s)", fcall->error.errnum,
+		    lookup_linux_errno(fcall->error.errnum));
 		return;
 
 	case L9P_TFLUSH:
@@ -548,13 +686,13 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 	case L9P_TGETATTR:
 		l9p_describe_fid(" fid=", fcall->hdr.fid, sb);
 		mask = fcall->tgetattr.request_mask;
-		sbuf_printf(sb, " request_mask=0x%08x", mask);
+		sbuf_printf(sb, " request_mask=0x%016" PRIx64, mask);
 		/* XXX decode request_mask later */
 		return;
 
 	case L9P_RGETATTR:
 		mask = fcall->rgetattr.valid;
-		sbuf_printf(sb, " valid=0x%08x", mask);
+		sbuf_printf(sb, " valid=0x%016" PRIx64, mask);
 		l9p_describe_qid(" qid=", &fcall->rgetattr.qid, sb);
 		if (mask & L9PL_GETATTR_MODE)
 			sbuf_printf(sb, " mode=0x%08x", fcall->rgetattr.mode);
@@ -599,7 +737,8 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 	case L9P_TSETATTR:
 		l9p_describe_fid(" fid=", fcall->hdr.fid, sb);
 		mask = fcall->tsetattr.valid;
-		sbuf_printf(sb, " valid=0x%08x", mask);
+		/* NB: tsetattr valid mask is only 32 bits, hence %08x */
+		sbuf_printf(sb, " valid=0x%08" PRIx64, mask);
 		if (mask & L9PL_SETATTR_MODE)
 			sbuf_printf(sb, " mode=0x%08x", fcall->tsetattr.mode);
 		if (mask & L9PL_SETATTR_UID)

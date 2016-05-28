@@ -1,12 +1,33 @@
-CFLAGS := \
-	-Weverything \
-	-Wno-reserved-id-macro \
-	-Wno-padded \
-	-Wno-gnu-zero-variadic-macro-arguments \
-	-Wno-format-nonliteral \
-	-Werror \
+CC_VERSION := $(shell $(CC) --version | \
+    sed -n -e '/clang-/s/.*clang-\([0-9][0-9]*\).*/\1/p')
+ifeq ($(CC_VERSION),)
+# probably not clang
+CC_VERSION := 0
+endif
+
+WFLAGS :=
+
+# Warnings are version-dependent, unfortunately,
+# so test for version before adding a -W flag.
+# Note: gnu make requires $(shell test ...) for "a > b" type tests.
+ifeq ($(shell test $(CC_VERSION) -gt 0; echo $$?),0)
+WFLAGS += -Weverything
+WFLAGS += -Wno-padded
+WFLAGS += -Wno-gnu-zero-variadic-macro-arguments
+WFLAGS += -Wno-format-nonliteral
+WFLAGS += -Wno-unused-macros
+WFLAGS += -Wno-disabled-macro-expansion
+WFLAGS += -Werror
+endif
+
+ifeq ($(shell test $(CC_VERSION) -gt 600; echo $$?),0)
+WFLAGS += -Wno-reserved-id-macro
+endif
+
+CFLAGS := $(WFLAGS) \
 	-g \
-	-O0
+	-O0 \
+	-DL9P_DEBUG=L9P_DEBUG
 # Note: to turn on debug, use -DL9P_DEBUG=L9P_DEBUG
 
 LIB_SRCS := \

@@ -59,6 +59,22 @@
   #endif
 #endif
 
+#if defined(__FreeBSD__)
+  #define	HAVE_BIRTHTIME
+#endif
+
+#if defined(__FreeBSD__)
+  /* should probably check version but fstatat has been in for ages */
+  #define HAVE_FSTATAT
+#endif
+
+#if defined(__APPLE__)
+  #include "Availability.h"
+  #if __MAC_OS_X_VERSION_MIN_REQUIRED > 1090
+    #define HAVE_FSTATAT
+  #endif
+#endif
+
 static struct openfile *open_fid(const char *);
 static void dostat(struct l9p_stat *, char *, struct stat *, bool dotu);
 static void dostatfs(struct l9p_statfs *, struct statfs *, long);
@@ -220,8 +236,8 @@ static void dostatfs(struct l9p_statfs *out, struct statfs *in, long namelen)
 	out->bavail = in->f_bavail;
 	out->files = in->f_files;
 	out->ffree = in->f_ffree;
-	out->fsid = ((uint64_t)in->f_fsid.val[0] << 32) | in->f_fsid.val[1];
-	out->namelen = namelen;
+	out->fsid = ((uint64_t)in->f_fsid.val[0] << 32) | (uint64_t)in->f_fsid.val[1];
+	out->namelen = (uint32_t)namelen;
 }
 
 static void
@@ -640,9 +656,13 @@ fs_open(void *softc __unused, struct l9p_request *req)
 		return;
 	}
 
-	if (S_ISDIR(st.st_mode))
+	if (S_ISDIR(st.st_mode)) {
 		file->dir = opendir(file->name);
-	else {
+		if (file->dir == NULL) {
+			l9p_respond(req, EPERM);	/* ??? */
+			return;
+		}
+	} else {
 		file->fd = open(file->name, req->lr_req.topen.mode);
 		if (file->fd < 0) {
 			l9p_respond(req, EPERM);
@@ -665,13 +685,13 @@ fs_open(void *softc __unused, struct l9p_request *req)
 static inline int
 fs_lstatat(struct openfile *file, char *name, struct stat *st)
 {
-#if defined(__FreeBSD__)
+#ifdef HAVE_FSTATAT
 	return (fstatat(dirfd(file->dir), name, st, AT_SYMLINK_NOFOLLOW));
 #else
 	char buf[MAXPATHLEN];
 
-	if (strlcpy(buf, file->name) >= sizeof(name) ||
-	    strlcat(buf, name) >= sizeof(name))
+	if (strlcpy(buf, file->name, sizeof(buf)) >= sizeof(buf) ||
+	    strlcat(buf, name, sizeof(buf)) >= sizeof(buf))
 		return (-1);
 	return (lstat(name, st));
 #endif
@@ -1014,15 +1034,19 @@ fs_statfs(void *softc __unused, struct l9p_request *req)
  * It's not at all clear which flags Linux systems actually pass;
  * for now, we will just reject most.
  */
-#define	L_O_CREAT	000000100
-#define	L_O_EXCL	000000200
-#define	L_O_TRUNC	000001000
-#define	L_O_APPEND	000002000	/* ??? should we get this? */
-#define	L_O_DIRECTORY	000200000
-#define	L_O_NOFOLLOW	000400000
-#define	L_O_TMPFILE	020000000	/* ??? should we get this? */
+#define	L_O_CREAT	000000100U
+#define	L_O_EXCL	000000200U
+#define	L_O_TRUNC	000001000U
+#define	L_O_APPEND	000002000U	/* ??? should we get this? */
+#define	L_O_NONBLOCK	000004000U
+#define	L_O_LARGEFILE	000100000U
+#define	L_O_DIRECTORY	000200000U
+#define	L_O_NOFOLLOW	000400000U
+#define	L_O_TMPFILE	020000000U	/* ??? should we get this? */
 
-#define	LO_LC_FORBID	(0xfffffffc & ~(L_O_EXCL | L_O_TRUNC))
+#define	LO_LC_FORBID	(0xfffffffc & ~(L_O_CREAT | L_O_EXCL | L_O_TRUNC | \
+					L_O_DIRECTORY | L_O_LARGEFILE | \
+					L_O_NONBLOCK))
 
 /*
  * Common code for LOPEN and LCREATE requests.
@@ -1038,6 +1062,7 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 {
 	struct openfile *file = req->lr_fid->lo_aux;
 	int oflags, oacc;
+	int resultfd;
 
 	assert(file != NULL);
 
@@ -1059,10 +1084,8 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 	if (sc->fs_readonly && (newname || oacc != L9P_OREAD))
 		return (EROFS);
 
-	if (lflags & LO_LC_FORBID) {
-		/* NB: currently includes L_O_CREAT */
+	if (lflags & LO_LC_FORBID)
 		return (ENOTSUP);
-	}
 
 	if (newname == NULL) {
 		/* open: require access, including write if O_TRUNC */
@@ -1072,29 +1095,43 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 			oacc = L9P_ORDWR;
 		if (!check_access(stp, file->uid, oacc))
 			return (EPERM);
-		/* ignore O_EXCL, we are not creating */
+		/*
+		 * Ignore O_EXCL, we are not creating.
+		 * What if anything should we do with O_NONBLOCK?
+		 * (Currently we ignore it.)
+		 */
 
-		/* ?? not sure if this S_ISDIR test is needed */
-		if (S_ISDIR(stp->st_mode))
+		if (S_ISDIR(stp->st_mode)) {
+			/* should we refuse if not L_O_DIRECTORY? */
 			file->dir = opendir(file->name);
-		else {
+			if (file->dir == NULL)
+				return (errno);
+			resultfd = dirfd(file->dir);
+		} else {
 			oflags = lflags & O_ACCMODE;
 			if (lflags & L_O_TRUNC)
 				oflags |= O_TRUNC;
+			if (lflags & L_O_DIRECTORY)
+				oflags |= O_DIRECTORY;
 			/* convert L_O_APPEND to O_APPEND? */
 			file->fd = open(file->name, oflags);
 			if (file->fd < 0)
 				return (errno);
+			resultfd = file->fd;
 		}
 	} else {
 		/*
 		 * XXX racy, see fs_create.
+		 * Note, file->name is testing the containing dir,
+		 * not the file itself (so L_O_CREAT is still OK).
 		 */
 		if (lstat(file->name, stp) != 0)
 			return (errno);
 		if (!check_access(stp, file->uid, L9P_OWRITE))
 			return (EPERM);
 		oflags = lflags & O_ACCMODE;
+		if (lflags & L_O_CREAT)
+			oflags |= O_CREAT;
 		if (lflags & L_O_TRUNC)
 			oflags |= O_TRUNC;
 		if (lflags & L_O_EXCL)
@@ -1104,9 +1141,10 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 			return (errno);
 		if (fchown(file->fd, file->uid, gid) != 0)
 			return (errno);
+		resultfd = file->fd;
 	}
 
-	if (fstat(file->fd, stp) != 0)
+	if (fstat(resultfd, stp) != 0)
 		return (errno);
 
 	return (0);
@@ -1252,7 +1290,7 @@ fs_mknod(void *softc, struct l9p_request *req)
 		goto out;
 	}
 	mode = (mode & S_IFMT) | (mode & 0777);	/* ??? */
-	if (mknod(newname, mode, makedev(major, minor)) != 0) {
+	if (mknod(newname, (mode_t)mode, makedev(major, minor)) != 0) {
 		error = errno;
 		goto out;
 	}
@@ -1405,38 +1443,43 @@ fs_getattr(void *softc __unused, struct l9p_request *req)
 	}
 	if (mask & L9PL_GETATTR_RDEV) {
 		/* It is not clear if we need any translations. */
-		req->lr_resp.rgetattr.rdev = st.st_rdev;
+		req->lr_resp.rgetattr.rdev = (uint64_t)st.st_rdev;
 		valid |= L9PL_GETATTR_RDEV;
 	}
 	if (mask & L9PL_GETATTR_ATIME) {
-		req->lr_resp.rgetattr.atime_sec = st.st_atimespec.tv_sec;
-		req->lr_resp.rgetattr.atime_nsec = st.st_atimespec.tv_nsec;
+		req->lr_resp.rgetattr.atime_sec = (uint64_t)st.st_atimespec.tv_sec;
+		req->lr_resp.rgetattr.atime_nsec = (uint64_t)st.st_atimespec.tv_nsec;
 		valid |= L9PL_GETATTR_ATIME;
 	}
 	if (mask & L9PL_GETATTR_MTIME) {
-		req->lr_resp.rgetattr.mtime_sec = st.st_mtimespec.tv_sec;
-		req->lr_resp.rgetattr.mtime_nsec = st.st_mtimespec.tv_nsec;
+		req->lr_resp.rgetattr.mtime_sec = (uint64_t)st.st_mtimespec.tv_sec;
+		req->lr_resp.rgetattr.mtime_nsec = (uint64_t)st.st_mtimespec.tv_nsec;
 		valid |= L9PL_GETATTR_MTIME;
 	}
 	if (mask & L9PL_GETATTR_CTIME) {
-		req->lr_resp.rgetattr.ctime_sec = st.st_ctimespec.tv_sec;
-		req->lr_resp.rgetattr.ctime_nsec = st.st_ctimespec.tv_nsec;
+		req->lr_resp.rgetattr.ctime_sec = (uint64_t)st.st_ctimespec.tv_sec;
+		req->lr_resp.rgetattr.ctime_nsec = (uint64_t)st.st_ctimespec.tv_nsec;
 		valid |= L9PL_GETATTR_CTIME;
 	}
 	if (mask & L9PL_GETATTR_BTIME) {
-		req->lr_resp.rgetattr.btime_sec = st.st_birthtim.tv_sec;
-		req->lr_resp.rgetattr.btime_nsec = st.st_birthtim.tv_nsec;
+#if defined(HAVE_BIRTHTIME)
+		req->lr_resp.rgetattr.btime_sec = (uint64_t)st.st_birthtim.tv_sec;
+		req->lr_resp.rgetattr.btime_nsec = (uint64_t)st.st_birthtim.tv_nsec;
+#else
+		req->lr_resp.rgetattr.btime_sec = 0;
+		req->lr_resp.rgetattr.btime_nsec = 0;
+#endif
 		valid |= L9PL_GETATTR_BTIME;
 	}
 	if (mask & L9PL_GETATTR_INO)
 		valid |= L9PL_GETATTR_INO;
 	if (mask & L9PL_GETATTR_SIZE) {
-		req->lr_resp.rgetattr.size = st.st_size;
+		req->lr_resp.rgetattr.size = (uint64_t)st.st_size;
 		valid |= L9PL_GETATTR_SIZE;
 	}
 	if (mask & L9PL_GETATTR_BLOCKS) {
-		req->lr_resp.rgetattr.blksize = st.st_blksize;
-		req->lr_resp.rgetattr.blocks = st.st_blocks;
+		req->lr_resp.rgetattr.blksize = (uint64_t)st.st_blksize;
+		req->lr_resp.rgetattr.blocks = (uint64_t)st.st_blocks;
 		valid |= L9PL_GETATTR_BLOCKS;
 	}
 	if (mask & L9PL_GETATTR_GEN) {
@@ -1496,8 +1539,8 @@ fs_setattr(void *softc, struct l9p_request *req)
 	}
 
 	if (mask & (L9PL_SETATTR_UID | L9PL_SETATTR_GID)) {
-		uid = mask & L9PL_SETATTR_UID ? req->lr_req.tsetattr.uid : -1;
-		gid = mask & L9PL_SETATTR_GID ? req->lr_req.tsetattr.gid : -1;
+		uid = mask & L9PL_SETATTR_UID ? req->lr_req.tsetattr.uid : (uid_t)-1;
+		gid = mask & L9PL_SETATTR_GID ? req->lr_req.tsetattr.gid : (gid_t)-1;
 		if (lchown(file->name, uid, gid)) {
 			error = errno;
 			goto out;
@@ -1506,7 +1549,7 @@ fs_setattr(void *softc, struct l9p_request *req)
 
 	if (mask & L9PL_SETATTR_SIZE) {
 		/* Truncate follows symlinks, is this OK? */
-		if (truncate(file->name, req->lr_req.tsetattr.size)) {
+		if (truncate(file->name, (off_t)req->lr_req.tsetattr.size)) {
 			error = errno;
 			goto out;
 		}
@@ -1514,15 +1557,15 @@ fs_setattr(void *softc, struct l9p_request *req)
 
 	if (mask & (L9PL_SETATTR_ATIME | L9PL_SETATTR_CTIME)) {
 		tv[0].tv_sec = st.st_atimespec.tv_sec;
-		tv[0].tv_usec = st.st_atimespec.tv_nsec / 1000;
+		tv[0].tv_usec = (int)st.st_atimespec.tv_nsec / 1000;
 		tv[1].tv_sec = st.st_mtimespec.tv_sec;
-		tv[1].tv_usec = st.st_mtimespec.tv_nsec / 1000;
+		tv[1].tv_usec = (int)st.st_mtimespec.tv_nsec / 1000;
 
 		if (mask & L9PL_SETATTR_ATIME) {
 			if (mask & L9PL_SETATTR_ATIME_SET) {
-				tv[0].tv_sec = req->lr_req.tsetattr.atime_sec;
+				tv[0].tv_sec = (long)req->lr_req.tsetattr.atime_sec;
 				tv[0].tv_usec =
-				    req->lr_req.tsetattr.atime_nsec / 1000;
+				    (int)req->lr_req.tsetattr.atime_nsec / 1000;
 			} else {
 				if (gettimeofday(&tv[0], NULL)) {
 					error = errno;
@@ -1532,9 +1575,9 @@ fs_setattr(void *softc, struct l9p_request *req)
 		}
 		if (mask & L9PL_SETATTR_MTIME) {
 			if (mask & L9PL_SETATTR_MTIME_SET) {
-				tv[1].tv_sec = req->lr_req.tsetattr.mtime_sec;
+				tv[1].tv_sec = (long)req->lr_req.tsetattr.mtime_sec;
 				tv[1].tv_usec =
-				    req->lr_req.tsetattr.mtime_nsec / 1000;
+				    (int)req->lr_req.tsetattr.mtime_nsec / 1000;
 			} else {
 				if (gettimeofday(&tv[1], NULL)) {
 					error = errno;
@@ -1595,7 +1638,7 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	if (req->lr_req.io.offset == 0)
 		rewinddir(file->dir);
 	else
-		seekdir(file->dir, req->lr_req.io.offset);
+		seekdir(file->dir, (long)req->lr_req.io.offset);
 
 	l9p_init_msg(&msg, req, L9P_PACK);
 	while ((dp = readdir(file->dir)) != NULL) {
@@ -1616,13 +1659,15 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 
 		de.qid.type = 0;
 		generate_qid(&st, &de.qid);
-		de.offset = telldir(file->dir);
+		de.offset = (uint64_t)telldir(file->dir);
 		de.type = de.qid.type; /* or dp->d_type? */
 		de.name = dp->d_name;
 
 		if (l9p_pudirent(&msg, &de) < 0)
 			break;
 	}
+
+	req->lr_resp.io.count = (uint32_t)msg.lm_size;
 out:
 	l9p_respond(req, error);
 }
@@ -1728,7 +1773,7 @@ fs_mkdir(void *softc, struct l9p_request *req)
 		goto out;
 	}
 
-	error = internal_mkdir(newname, req->lr_req.tmkdir.mode, &st);
+	error = internal_mkdir(newname, (mode_t)req->lr_req.tmkdir.mode, &st);
 	if (error)
 		goto out;
 

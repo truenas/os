@@ -41,6 +41,7 @@
 #include "fcall.h"
 #include "hashtable.h"
 #include "log.h"
+#include "linux_errno.h"
 
 #define N(x)    (sizeof(x) / sizeof(x[0]))
 
@@ -196,6 +197,93 @@ l9p_dispatch_request(struct l9p_request *req)
 	l9p_respond(req, ENOSYS);
 }
 
+/*
+ * Translate BSD errno to Linux errno.
+ */
+static inline int
+to_linux(int errnum)
+{
+	static int const table[] = {
+		[EDEADLK] = LINUX_EDEADLK,
+		[EAGAIN] = LINUX_EAGAIN,
+		[EINPROGRESS] = LINUX_EINPROGRESS,
+		[EALREADY] = LINUX_EALREADY,
+		[ENOTSOCK] = LINUX_ENOTSOCK,
+		[EDESTADDRREQ] = LINUX_EDESTADDRREQ,
+		[EMSGSIZE] = LINUX_EMSGSIZE,
+		[EPROTOTYPE] = LINUX_EPROTOTYPE,
+		[ENOPROTOOPT] = LINUX_ENOPROTOOPT,
+		[EPROTONOSUPPORT] = LINUX_EPROTONOSUPPORT,
+		[ESOCKTNOSUPPORT] = LINUX_ESOCKTNOSUPPORT,
+		[EOPNOTSUPP] = LINUX_EOPNOTSUPP,
+		[EPFNOSUPPORT] = LINUX_EPFNOSUPPORT,
+		[EAFNOSUPPORT] = LINUX_EAFNOSUPPORT,
+		[EADDRINUSE] = LINUX_EADDRINUSE,
+		[EADDRNOTAVAIL] = LINUX_EADDRNOTAVAIL,
+		[ENETDOWN] = LINUX_ENETDOWN,
+		[ENETUNREACH] = LINUX_ENETUNREACH,
+		[ENETRESET] = LINUX_ENETRESET,
+		[ECONNABORTED] = LINUX_ECONNABORTED,
+		[ECONNRESET] = LINUX_ECONNRESET,
+		[ENOBUFS] = LINUX_ENOBUFS,
+		[EISCONN] = LINUX_EISCONN,
+		[ENOTCONN] = LINUX_ENOTCONN,
+		[ESHUTDOWN] = LINUX_ESHUTDOWN,
+		[ETOOMANYREFS] = LINUX_ETOOMANYREFS,
+		[ETIMEDOUT] = LINUX_ETIMEDOUT,
+		[ECONNREFUSED] = LINUX_ECONNREFUSED,
+		[ELOOP] = LINUX_ELOOP,
+		[ENAMETOOLONG] = LINUX_ENAMETOOLONG,
+		[EHOSTDOWN] = LINUX_EHOSTDOWN,
+		[EHOSTUNREACH] = LINUX_EHOSTUNREACH,
+		[ENOTEMPTY] = LINUX_ENOTEMPTY,
+		[EPROCLIM] = LINUX_EAGAIN,
+		[EUSERS] = LINUX_EUSERS,
+		[EDQUOT] = LINUX_EDQUOT,
+		[ESTALE] = LINUX_ESTALE,
+		[EREMOTE] = LINUX_EREMOTE,
+		/* EBADRPC = unmappable? */
+		/* ERPCMISMATCH = unmappable? */
+		/* EPROGUNAVAIL = unmappable? */
+		/* EPROGMISMATCH = unmappable? */
+		/* EPROCUNAVAIL = unmappable? */
+		[ENOLCK] = LINUX_ENOLCK,
+		[ENOSYS] = LINUX_ENOSYS,
+		/* EFTYPE = unmappable? */
+		/* EAUTH = unmappable? */
+		/* ENEEDAUTH = unmappable? */
+		[EIDRM] = LINUX_EIDRM,
+		[ENOMSG] = LINUX_ENOMSG,
+		[EOVERFLOW] = LINUX_EOVERFLOW,
+		[ECANCELED] = LINUX_ECANCELED,
+		[EILSEQ] = LINUX_EILSEQ,
+		/* EDOOFUS = unmappable? */
+		[EBADMSG] = LINUX_EBADMSG,
+		[EMULTIHOP] = LINUX_EMULTIHOP,
+		[ENOLINK] = LINUX_ENOLINK,
+		[EPROTO] = LINUX_EPROTO,
+		/* ENOTCAPABLE = unmappable? */
+		/* ECAPMODE = unmappable? */
+		[ENOTRECOVERABLE] = LINUX_ENOTRECOVERABLE,
+		[EOWNERDEAD] = LINUX_EOWNERDEAD,
+	};
+
+	/*
+	 * In case we want to return a raw Linux errno, allow negative
+	 * values a la Linux kernel internals.
+	 *
+	 * Values up to ERANGE are shared across systems (see
+	 * linux_errno.h), except for EAGAIN.
+	 */
+	if (errnum < 0)
+		return (-errnum);
+	if ((size_t)errnum < N(table))
+		return (table[errnum]);
+	if (errnum <= ERANGE)
+		return (errnum);
+	return (LINUX_ENOTRECOVERABLE);	/* ??? */
+}
+
 void
 l9p_respond(struct l9p_request *req, int errnum)
 {
@@ -234,7 +322,7 @@ l9p_respond(struct l9p_request *req, int errnum)
 	else {
 		if (conn->lc_version == L9P_2000L) {
 			req->lr_resp.hdr.type = L9P_RLERROR;
-			req->lr_resp.error.errnum = (uint32_t)errnum;
+			req->lr_resp.error.errnum = (uint32_t)to_linux(errnum);
 		} else {
 			req->lr_resp.hdr.type = L9P_RERROR;
 			req->lr_resp.error.ename = strerror(errnum);
@@ -291,6 +379,8 @@ l9p_init_msg(struct l9p_message *msg, struct l9p_request *req,
 
 	msg->lm_size = 0;
 	msg->lm_mode = mode;
+	msg->lm_cursor_iov = 0;
+	msg->lm_cursor_offset = 0;
 	msg->lm_niov = req->lr_data_niov;
 	memcpy(msg->lm_iov, req->lr_data_iov,
 	    sizeof (struct iovec) * req->lr_data_niov);

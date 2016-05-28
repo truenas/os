@@ -68,10 +68,10 @@ enum l9p_integer_type {
 };
 
 enum l9p_version {
-	L9P_2000 = 0,
-	L9P_2000U = 1,
-	L9P_2000L = 2,
-	L9P_INVALID_VERSION = 3
+	L9P_INVALID_VERSION = 0,
+	L9P_2000 = 1,
+	L9P_2000U = 2,
+	L9P_2000L = 3
 };
 
 struct l9p_message {

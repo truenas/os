@@ -264,13 +264,13 @@ l9p_pustrings(struct l9p_message *msg, uint16_t *num, char **strings,
 		lim = *num;
 		if (lim > max)
 			lim = max;
-		adjusted = lim;
+		adjusted = (uint16_t)lim;
 		r = l9p_pu16(msg, &adjusted);
 	} else {
 		r = l9p_pu16(msg, num);
 		lim = *num;
 		if (lim > max)
-			*num = lim = max;
+			*num = (uint16_t)(lim = max);
 	}
 	if (r < 0)
 		return (-1);
@@ -294,7 +294,7 @@ l9p_pustrings(struct l9p_message *msg, uint16_t *num, char **strings,
 static ssize_t
 l9p_puqid(struct l9p_message *msg, struct l9p_qid *qid)
 {
-	int r;
+	ssize_t r;
 	uint8_t type;
 
 	if (msg->lm_mode == L9P_PACK) {

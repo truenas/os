@@ -205,6 +205,7 @@ l9p_socket_readmsg(struct l9p_socket_softc *sc, void **buf, size_t *size)
 {
 	uint32_t msize;
 	size_t toread;
+	ssize_t ret;
 	void *buffer;
 	int fd = sc->ls_fd;
 
@@ -212,8 +213,15 @@ l9p_socket_readmsg(struct l9p_socket_softc *sc, void **buf, size_t *size)
 
 	buffer = l9p_malloc(sizeof(uint32_t));
 
-	if (xread(fd, buffer, sizeof(uint32_t)) != sizeof(uint32_t)) {
-		L9P_LOG(L9P_ERROR, "short read: %s", strerror(errno));
+	ret = xread(fd, buffer, sizeof(uint32_t));
+	if (ret < 0) {
+		L9P_LOG(L9P_ERROR, "read(): %s", strerror(errno));
+		return (-1);
+	}
+
+	if (ret != sizeof(uint32_t)) {
+		L9P_LOG(L9P_ERROR, "short read: %zd bytes of %zd expected",
+		    ret, sizeof(uint32_t));
 		return (-1);
 	}
 
@@ -221,8 +229,15 @@ l9p_socket_readmsg(struct l9p_socket_softc *sc, void **buf, size_t *size)
 	toread = msize - sizeof(uint32_t);
 	buffer = realloc(buffer, msize);
 
-	if (xread(fd, (char *)buffer + sizeof(uint32_t), toread) != (ssize_t)toread) {
-		L9P_LOG(L9P_ERROR, "short read: %s", strerror(errno));
+	ret = xread(fd, (char *)buffer + sizeof(uint32_t), toread);
+	if (ret < 0) {
+		L9P_LOG(L9P_ERROR, "read(): %s", strerror(errno));
+		return (-1);
+	}
+
+	if (ret != (ssize_t)toread) {
+		L9P_LOG(L9P_ERROR, "short read: %zd bytes of %zd expected",
+		    ret, toread);
 		return (-1);
 	}
 

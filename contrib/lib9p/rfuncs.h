@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Jakub Klama <jceel@FreeBSD.org>
+ * Copyright 2016 Chris Torek <chris.torek@gmail.com>
  * All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,30 +25,41 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <err.h>
-#include "../lib9p.h"
-#include "../transport/socket.h"
+#include <grp.h>
+#include <pwd.h>
+#include <string.h>
 
-int
-main(int argc, const char *argv[])
-{
-	struct l9p_backend *fs_backend;
-	struct l9p_server *server;
+/*
+ * Reentrant, optionally-malloc-ing versions of
+ * basename() and dirname().
+ */
+char	*r_basename(const char *, char *, size_t);
+char	*r_dirname(const char *, char *, size_t);
 
-	if (argc < 2)
-		errx(1, "Usage: server <path>");
+/*
+ * Yuck: getpwuid, getgrgid are not thread-safe, and the
+ * POSIX replacements (getpwuid_r, getgrgid_r) are horrible.
+ * This is to allow us to loop over the get.*_r calls with ever
+ * increasing buffers until they succeed or get unreasonable
+ * (same idea as the libc code for the non-reentrant versions,
+ * although prettier).
+ *
+ * The getpwuid/getgrgid functions auto-init one of these,
+ * but the caller must call r_pgfree() when done with the
+ * return values.
+ *
+ * If we need more later, we may have to expose the init function.
+ */
+struct r_pgdata {
+	char	*r_pgbuf;
+	size_t	r_pgbufsize;
+	union {
+		struct passwd un_pw;
+		struct group un_gr;
+	} r_pgun;
+};
 
-	if (l9p_backend_fs_init(&fs_backend, argv[1]) != 0)
-		err(1, "cannot init backend");
-
-	if (l9p_server_init(&server, fs_backend) != 0)
-		err(1, "cannot create server");
-
-	server->ls_max_version = L9P_2000L;
-	if (l9p_start_server(server, "0.0.0.0", "564"))
-		err(1, "l9p_start_server() failed");
-	/* XXX - we never get here, l9p_start_server does not return */
-	exit(0);
-}
+/* void r_pginit(struct r_pgdata *); */
+void r_pgfree(struct r_pgdata *);
+struct passwd *r_getpwuid(uid_t, struct r_pgdata *);
+struct group *r_getgrgid(gid_t, struct r_pgdata *);
