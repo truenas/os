@@ -55,7 +55,7 @@ static void l9p_describe_time(struct sbuf *, const char *, uint64_t, uint64_t);
 static void l9p_describe_readdir(struct sbuf *, struct l9p_f_io *);
 static void l9p_describe_size(const char *, uint64_t, struct sbuf *);
 static void l9p_describe_ugid(const char *, uint32_t, struct sbuf *);
-static char *lookup_linux_errno(uint32_t);
+static const char *lookup_linux_errno(uint32_t);
 
 /*
  * Using indexed initializers, we can have these occur in any order.
@@ -333,7 +333,7 @@ l9p_describe_readdir(struct sbuf *sb, struct l9p_f_io *io)
 #endif
 }
 
-static char *
+static const char *
 lookup_linux_errno(uint32_t linux_errno)
 {
 	static char unknown[50];
@@ -344,7 +344,7 @@ lookup_linux_errno(uint32_t linux_errno)
 	 *
 	 * Error numbers outside that range require translation.
 	 */
-	char *const table[] = {
+	const char *const table[] = {
 #define X0(name) [name] = name ## _STR
 #define	X(name) [name] = name ## _STR
 		X(LINUX_EAGAIN),
