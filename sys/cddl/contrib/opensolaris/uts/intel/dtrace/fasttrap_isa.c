@@ -1009,6 +1009,7 @@ fasttrap_pid_probe(struct reg *rp)
 {
 	proc_t *p = curproc;
 	struct rm_priotracker tracker;
+#ifndef illumos
 	proc_t *pp;
 #endif
 	uintptr_t pc = rp->r_rip - 1;
