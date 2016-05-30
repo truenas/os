@@ -47,6 +47,10 @@ pccarddevs.h			standard				   \
 	compile-with	"${AWK} -f $S/tools/pccarddevs2h.awk $S/dev/pccard/pccarddevs" \
 	no-obj no-implicit-rule before-depend				   \
 	clean		"pccarddevs.h"
+kbdmuxmap.h			optional	kbdmux_dflt_keymap 	   \
+	compile-with	"kbdcontrol -P ${S:S/sys$/share/}/vt/keymaps -P ${S:S/sys$/share/}/syscons/keymaps -L ${KBDMUX_DFLT_KEYMAP} | sed -e 's/^static keymap_t.* = /static keymap_t key_map = /' -e 's/^static accentmap_t.* = /static accentmap_t accent_map = /' > kbdmuxmap.h" \
+	no-obj no-implicit-rule before-depend				\
+	clean		"kbdmuxmap.h"
 teken_state.h		optional sc | vt				   \
 	dependency	"$S/teken/gensequences $S/teken/sequences" \
 	compile-with	"${AWK} -f $S/teken/gensequences $S/teken/sequences > teken_state.h" \
@@ -252,6 +256,8 @@ compat/freebsd32/freebsd32_syscalls.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_sysent.c	optional compat_freebsd32
 contrib/altq/altq/altq_cbq.c		optional altq
 contrib/altq/altq/altq_cdnr.c		optional altq
+contrib/altq/altq/altq_codel.c		optional altq
+contrib/altq/altq/altq_fairq.c		optional altq
 contrib/altq/altq/altq_hfsc.c		optional altq
 contrib/altq/altq/altq_priq.c		optional altq
 contrib/altq/altq/altq_red.c		optional altq
@@ -2946,6 +2952,8 @@ fs/ext2fs/ext2_bmap.c		optional ext2fs
 fs/ext2fs/ext2_extents.c	optional ext2fs
 fs/ext2fs/ext2_inode.c		optional ext2fs
 fs/ext2fs/ext2_inode_cnv.c	optional ext2fs
+fs/ext2fs/ext2_hash.c		optional ext2fs
+fs/ext2fs/ext2_htree.c		optional ext2fs
 fs/ext2fs/ext2_lookup.c		optional ext2fs
 fs/ext2fs/ext2_subr.c		optional ext2fs
 fs/ext2fs/ext2_vfsops.c		optional ext2fs

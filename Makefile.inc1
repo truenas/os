@@ -1110,7 +1110,7 @@ reinstallkernel reinstallkernel.debug: _installcheck_kernel
 	    ${CROSSENV} PATH=${TMPPATH} \
 	    ${MAKE} ${IMAKE_INSTALL} KERNEL=${INSTKERNNAME} ${.TARGET:S/kernel//}
 .endif
-.if ${BUILDKERNELS:[#]} > 1 && !defined(NO_INSTALLEXTRAKERNELS)
+.if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 	@echo "--------------------------------------------------------------"
 	@echo ">>> Installing kernel ${_kernel}"
@@ -1141,7 +1141,7 @@ distributekernel distributekernel.debug:
 	    ${DESTDIR}/${DISTDIR}/kernel.meta
 .endif
 .endif
-.if ${BUILDKERNELS:[#]} > 1 && !defined(NO_INSTALLEXTRAKERNELS)
+.if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 .if defined(NO_ROOT)
 	echo "#${MTREE_MAGIC}" > ${DESTDIR}/${DISTDIR}/kernel.${_kernel}.premeta
@@ -1167,7 +1167,7 @@ packagekernel:
 	    tar cvf - @${DESTDIR}/${DISTDIR}/kernel.meta | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/kernel.txz
 .endif
-.if ${BUILDKERNELS:[#]} > 1 && !defined(NO_INSTALLEXTRAKERNELS)
+.if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 	cd ${DESTDIR}/${DISTDIR}/kernel.${_kernel}; \
 	    tar cvf - @${DESTDIR}/${DISTDIR}/kernel.${_kernel}.meta | \
@@ -1180,7 +1180,7 @@ packagekernel:
 	    tar cvf - . | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/kernel.txz
 .endif
-.if ${BUILDKERNELS:[#]} > 1 && !defined(NO_INSTALLEXTRAKERNELS)
+.if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 	cd ${DESTDIR}/${DISTDIR}/kernel.${_kernel}; \
 	    tar cvf - . | \
@@ -1321,6 +1321,12 @@ _cat=		bin/cat
 _awk=		usr.bin/awk
 .endif
 
+# r296926 -P keymap search path, MFC to stable/10 in r298297
+.if ${BOOTSTRAPPING} < 1003501 || \
+	(${BOOTSTRAPPING} >= 1100000 && ${BOOTSTRAPPING} < 1100103)
+_kbdcontrol=	usr.sbin/kbdcontrol
+.endif
+
 .if ${MK_BSNMP} != "no"
 _gensnmptree=	usr.sbin/bsnmpd/gensnmptree
 .endif
@@ -1391,6 +1397,7 @@ bootstrap-tools: .PHONY
     ${_dtc} \
     ${_awk} \
     ${_cat} \
+    ${_kbdcontrol} \
     usr.bin/lorder \
     usr.bin/makewhatis \
     ${_mklocale} \

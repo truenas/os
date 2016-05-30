@@ -53,7 +53,7 @@
 
 #include "ef.h"
 
-#define	MAXRECSIZE	1024
+#define	MAXRECSIZE	8192
 #define check(val)	if ((error = (val)) != 0) break
 
 static int dflag;	/* do not create a hint file, only write on stdout */
@@ -172,6 +172,10 @@ parse_entry(struct mod_metadata *md, const char *cval,
 			record_string(kldname);
 		}
 		break;
+	case MDT_PNP_INFO:
+		if (dflag) {
+			printf("  pnp info for bus %s\n", cval);
+		}
 	default:
 		warnx("unknown metadata record %d in file %s", md->md_type, kldname);
 	}
@@ -356,8 +360,11 @@ main(int argc, char *argv[])
 			fwrite(&ival, sizeof(ival), 1, fxref);
 			reccnt = 0;
 		}
-		/* skip non-files or .symbols entries */
+		/* skip non-files and separate debug files */
 		if (p->fts_info != FTS_F)
+			continue;
+		if (p->fts_namelen >= 6 &&
+		    strcmp(p->fts_name + p->fts_namelen - 6, ".debug") == 0)
 			continue;
 		if (p->fts_namelen >= 8 &&
 		    strcmp(p->fts_name + p->fts_namelen - 8, ".symbols") == 0)

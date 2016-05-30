@@ -918,7 +918,7 @@ ctl_isc_announce_mode(struct ctl_lun *lun, uint32_t initidx,
 {
 	struct ctl_softc *softc = lun->ctl_softc;
 	union ctl_ha_msg msg;
-	int i;
+	u_int i;
 
 	if (softc->ha_link != CTL_HA_LINK_ONLINE)
 		return;
@@ -1286,7 +1286,7 @@ static void
 ctl_isc_mode_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 {
 	struct ctl_lun *lun;
-	int i;
+	u_int i;
 	uint32_t initidx, targ_lun;
 
 	targ_lun = msg->hdr.nexus.targ_mapped_lun;
@@ -2447,6 +2447,7 @@ ctl_copyin_args(int num_args, struct ctl_be_arg *uargs,
 			 && (tmpptr[args[i].vallen - 1] != '\0')) {
 				snprintf(error_str, error_str_len, "Argument "
 				    "%d value is not NUL-terminated", i);
+				free(tmpptr, M_CTL);
 				goto bailout;
 			}
 			args[i].kvalue = tmpptr;
@@ -6406,7 +6407,7 @@ ctl_mode_sense(struct ctl_scsiio *ctsio)
 	 */
 	switch (page_code) {
 	case SMS_ALL_PAGES_PAGE: {
-		int i;
+		u_int i;
 
 		page_len = 0;
 
@@ -6458,7 +6459,7 @@ ctl_mode_sense(struct ctl_scsiio *ctsio)
 		break;
 	}
 	default: {
-		int i;
+		u_int i;
 
 		page_len = 0;
 
@@ -12776,7 +12777,7 @@ static void
 ctl_datamove_remote_write_cb(struct ctl_ha_dt_req *rq)
 {
 	union ctl_io *io;
-	int i;
+	uint32_t i;
 
 	io = rq->context;
 
@@ -12854,7 +12855,7 @@ ctl_datamove_remote_dm_read_cb(union ctl_io *io)
 	char path_str[64];
 	struct sbuf sb;
 #endif
-	int i;
+	uint32_t i;
 
 	for (i = 0; i < io->scsiio.kern_sg_entries; i++)
 		free(io->io_hdr.local_sglist[i].addr, M_CTL);
@@ -13095,7 +13096,7 @@ static void
 ctl_datamove_remote_read(union ctl_io *io)
 {
 	int retval;
-	int i;
+	uint32_t i;
 
 	/*
 	 * This will send an error to the other controller in the case of a

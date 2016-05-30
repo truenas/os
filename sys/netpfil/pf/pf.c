@@ -440,6 +440,20 @@ pf_hashsrc(struct pf_addr *addr, sa_family_t af)
 	return (h & pf_srchashmask);
 }
 
+#ifdef ALTQ
+static int
+pf_state_hash(struct pf_state *s)
+{
+	u_int32_t hv = (intptr_t)s / sizeof(*s);
+
+	hv ^= crc32(&s->src, sizeof(s->src));
+	hv ^= crc32(&s->dst, sizeof(s->dst));
+	if (hv == 0)
+		hv = 1;
+	return (hv);
+}
+#endif
+
 #ifdef INET6
 void
 pf_addrcpy(struct pf_addr *dst, struct pf_addr *src, sa_family_t af)
@@ -4793,8 +4807,7 @@ pf_test_state_icmp(struct pf_state **state, int direction, struct pfi_kif *kif,
 				    &nk->addr[pd2.didx], pd2.af) ||
 				    nk->port[pd2.didx] != th.th_dport)
 					pf_change_icmp(pd2.dst, &th.th_dport,
-					    NULL, /* XXX Inbound NAT? */
-					    &nk->addr[pd2.didx],
+					    saddr, &nk->addr[pd2.didx],
 					    nk->port[pd2.didx], NULL,
 					    pd2.ip_sum, icmpsum,
 					    pd->ip_sum, 0, pd2.af);
@@ -4866,8 +4879,7 @@ pf_test_state_icmp(struct pf_state **state, int direction, struct pfi_kif *kif,
 				    &nk->addr[pd2.didx], pd2.af) ||
 				    nk->port[pd2.didx] != uh.uh_dport)
 					pf_change_icmp(pd2.dst, &uh.uh_dport,
-					    NULL, /* XXX Inbound NAT? */
-					    &nk->addr[pd2.didx],
+					    saddr, &nk->addr[pd2.didx],
 					    nk->port[pd2.didx], &uh.uh_sum,
 					    pd2.ip_sum, icmpsum,
 					    pd->ip_sum, 1, pd2.af);
@@ -4934,8 +4946,7 @@ pf_test_state_icmp(struct pf_state **state, int direction, struct pfi_kif *kif,
 				    &nk->addr[pd2.didx], pd2.af) ||
 				    nk->port[pd2.didx] != iih.icmp_id)
 					pf_change_icmp(pd2.dst, &iih.icmp_id,
-					    NULL, /* XXX Inbound NAT? */
-					    &nk->addr[pd2.didx],
+					    saddr, &nk->addr[pd2.didx],
 					    nk->port[pd2.didx], NULL,
 					    pd2.ip_sum, icmpsum,
 					    pd->ip_sum, 0, AF_INET);
@@ -4987,8 +4998,7 @@ pf_test_state_icmp(struct pf_state **state, int direction, struct pfi_kif *kif,
 				    &nk->addr[pd2.didx], pd2.af) ||
 				    nk->port[pd2.didx] != iih.icmp6_id)
 					pf_change_icmp(pd2.dst, &iih.icmp6_id,
-					    NULL, /* XXX Inbound NAT? */
-					    &nk->addr[pd2.didx],
+					    saddr, &nk->addr[pd2.didx],
 					    nk->port[pd2.didx], NULL,
 					    pd2.ip_sum, icmpsum,
 					    pd->ip_sum, 0, AF_INET6);
@@ -5027,8 +5037,7 @@ pf_test_state_icmp(struct pf_state **state, int direction, struct pfi_kif *kif,
 
 				if (PF_ANEQ(pd2.dst,
 				    &nk->addr[pd2.didx], pd2.af))
-					pf_change_icmp(pd2.src, NULL,
-					    NULL, /* XXX Inbound NAT? */
+					pf_change_icmp(pd2.dst, NULL, saddr,
 					    &nk->addr[pd2.didx], 0, NULL,
 					    pd2.ip_sum, icmpsum,
 					    pd->ip_sum, 0, pd2.af);
@@ -5970,6 +5979,8 @@ done:
 			action = PF_DROP;
 			REASON_SET(&reason, PFRES_MEMORY);
 		} else {
+			if (s != NULL)
+				pd.pf_mtag->qid_hash = pf_state_hash(s);
 			if (pqid || (pd.tos & IPTOS_LOWDELAY))
 				pd.pf_mtag->qid = r->pqid;
 			else
@@ -6145,11 +6156,13 @@ pf_test6(int dir, struct ifnet *ifp, struct mbuf **m0, struct inpcb *inp)
 	 * We do need to be careful about bridges. If the
 	 * net.link.bridge.pfil_bridge sysctl is set we can be filtering on a
 	 * bridge, so if the input interface is a bridge member and the output
-	 * interface is its bridge we're not actually forwarding but bridging.
+	 * interface is its bridge or a member of the same bridge we're not
+	 * actually forwarding but bridging.
 	 */
-	if (dir == PF_OUT && m->m_pkthdr.rcvif && ifp != m->m_pkthdr.rcvif
-	    && (m->m_pkthdr.rcvif->if_bridge == NULL
-	        || m->m_pkthdr.rcvif->if_bridge != ifp->if_softc))
+	if (dir == PF_OUT && m->m_pkthdr.rcvif && ifp != m->m_pkthdr.rcvif &&
+	    (m->m_pkthdr.rcvif->if_bridge == NULL ||
+	    (m->m_pkthdr.rcvif->if_bridge != ifp->if_softc &&
+	    m->m_pkthdr.rcvif->if_bridge != ifp->if_bridge)))
 		fwdir = PF_FWD;
 
 	if (!V_pf_status.running)
@@ -6412,6 +6425,8 @@ done:
 			action = PF_DROP;
 			REASON_SET(&reason, PFRES_MEMORY);
 		} else {
+			if (s != NULL)
+				pd.pf_mtag->qid_hash = pf_state_hash(s);
 			if (pd.tos & IPTOS_LOWDELAY)
 				pd.pf_mtag->qid = r->pqid;
 			else

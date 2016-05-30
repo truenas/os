@@ -704,7 +704,6 @@ extern struct pthread_cond_attr _pthread_condattr_default __hidden;
 
 extern struct pthread_prio _thr_priorities[] __hidden;
 
-extern pid_t	_thr_pid __hidden;
 extern int	_thr_is_smp __hidden;
 
 extern size_t	_thr_guard_default __hidden;
@@ -927,6 +926,8 @@ int __thr_sigtimedwait(const sigset_t *set, siginfo_t *info,
 int __thr_sigwait(const sigset_t *set, int *sig);
 int __thr_sigwaitinfo(const sigset_t *set, siginfo_t *info);
 int __thr_swapcontext(ucontext_t *oucp, const ucontext_t *ucp);
+
+void __thr_map_stacks_exec(void);
 
 struct _spinlock;
 void __thr_spinunlock(struct _spinlock *lck);

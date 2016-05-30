@@ -332,7 +332,7 @@ SYSCTL_INT(_hw_ix, OID_AUTO, enable_msix, CTLFLAG_RDTUN, &ixgbe_enable_msix, 0,
 static int ixgbe_num_queues = 0;
 TUNABLE_INT("hw.ix.num_queues", &ixgbe_num_queues);
 SYSCTL_INT(_hw_ix, OID_AUTO, num_queues, CTLFLAG_RDTUN, &ixgbe_num_queues, 0,
-    "Number of queues to configure up to a mximum of 8,"
+    "Number of queues to configure up to a maximum of 8,"
     "0 indicates autoconfigure");
 
 /*
@@ -4756,10 +4756,6 @@ ixgbe_sysctl_advertise(SYSCTL_HANDLER_ARGS)
 	if ((error) || (req->newptr == NULL))
 		return (error);
 
-	/* Checks to validate new value */
-	if (adapter->advertise == advertise) /* no change */
-		return (0);
-
 	return ixgbe_set_advertise(adapter, advertise);
 }
 
@@ -4769,6 +4765,10 @@ ixgbe_set_advertise(struct adapter *adapter, int advertise)
 	device_t		dev;
 	struct ixgbe_hw		*hw;
 	ixgbe_link_speed	speed;
+
+	/* Checks to validate new value */
+	if (adapter->advertise == advertise) /* no change */
+		return (0);
 
 	hw = &adapter->hw;
 	dev = adapter->dev;

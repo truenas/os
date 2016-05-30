@@ -42,6 +42,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/namei.h>
 #include <sys/priv.h>
 #include <sys/proc.h>
+#include <sys/taskqueue.h>
 #include <sys/kernel.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
@@ -511,7 +512,7 @@ ffs_mount(struct mount *mp)
 		 * We need the name for the mount point (also used for
 		 * "last mounted on") copied in. If an error occurs,
 		 * the mount point is discarded by the upper level code.
-		 * Note that vfs_mount() populates f_mntonname for us.
+		 * Note that vfs_mount_alloc() populates f_mntonname for us.
 		 */
 		if ((error = ffs_mountfs(devvp, mp, td)) != 0) {
 			vrele(devvp);
@@ -779,6 +780,8 @@ ffs_mountfs(devvp, mp, td)
 		mp->mnt_iosize_max = MAXPHYS;
 
 	devvp->v_bufobj.bo_ops = &ffs_ops;
+	if (devvp->v_type == VCHR)
+		devvp->v_rdev->si_mountpt = mp;
 
 	fs = NULL;
 	sblockloc = 0;
@@ -1005,6 +1008,12 @@ ffs_mountfs(devvp, mp, td)
 			    mp->mnt_stat.f_mntonname);
 			ump->um_candelete = 0;
 		}
+		if (ump->um_candelete) {
+			ump->um_trim_tq = taskqueue_create("trim", M_WAITOK,
+			    taskqueue_thread_enqueue, &ump->um_trim_tq);
+			taskqueue_start_threads(&ump->um_trim_tq, 1, PVFS,
+			    "%s trim", mp->mnt_stat.f_mntonname);
+		}
 	}
 
 	ump->um_mountp = mp;
@@ -1042,8 +1051,6 @@ ffs_mountfs(devvp, mp, td)
 			ffs_flushfiles(mp, FORCECLOSE, td);
 			goto out;
 		}
-		if (devvp->v_type == VCHR && devvp->v_rdev != NULL)
-			devvp->v_rdev->si_mountpt = mp;
 		if (fs->fs_snapinum[0] != 0)
 			ffs_snapshot_mount(mp);
 		fs->fs_fmod = 1;
@@ -1051,7 +1058,7 @@ ffs_mountfs(devvp, mp, td)
 		(void) ffs_sbupdate(ump, MNT_WAIT, 0);
 	}
 	/*
-	 * Initialize filesystem stat information in mount struct.
+	 * Initialize filesystem state information in mount struct.
 	 */
 	MNT_ILOCK(mp);
 	mp->mnt_kern_flag |= MNTK_LOOKUP_SHARED | MNTK_EXTENDED_SHARED |
@@ -1076,6 +1083,8 @@ ffs_mountfs(devvp, mp, td)
 out:
 	if (bp)
 		brelse(bp);
+	if (devvp->v_type == VCHR && devvp->v_rdev != NULL)
+		devvp->v_rdev->si_mountpt = NULL;
 	if (cp != NULL) {
 		DROP_GIANT();
 		g_topology_lock();
@@ -1260,6 +1269,12 @@ ffs_unmount(mp, mntflags)
 	}
 	if (susp)
 		vfs_write_resume(mp, VR_START_WRITE);
+	if (ump->um_trim_tq != NULL) {
+		while (ump->um_trim_inflight != 0)
+			pause("ufsutr", hz);
+		taskqueue_drain_all(ump->um_trim_tq);
+		taskqueue_free(ump->um_trim_tq);
+	}
 	DROP_GIANT();
 	g_topology_lock();
 	if (ump->um_fsckpid > 0) {
