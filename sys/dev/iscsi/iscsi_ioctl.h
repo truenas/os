@@ -65,7 +65,8 @@ struct iscsi_session_conf {
 	int		isc_header_digest;
 	int		isc_data_digest;
 	int		isc_iser;
-	int		isc_spare[4];
+	int		isc_enable;
+	int		isc_spare[3];
 };
 
 /*
