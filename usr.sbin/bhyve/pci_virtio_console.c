@@ -85,6 +85,7 @@ struct pci_vtcon_port {
 	int                      vsp_id;
         const char *             vsp_name;
 	bool                     vsp_enabled;
+	bool                     vsp_console;
 	bool                     vsp_rx_ready;
 	int                      vsp_rxq;
 	int                      vsp_txq;
@@ -101,7 +102,6 @@ struct pci_vtcon_sock
         int                      vss_server_fd;
         int                      vss_conn_fd;
 	bool                     vss_open;
-	bool                     vss_console;
 };
 
 struct pci_vtcon_softc {
@@ -242,10 +242,11 @@ pci_vtcon_port_add(struct pci_vtcon_softc *sc, const char *name,
 	port->vsp_cb = cb;
 	port->vsp_arg = arg;
 
-	if (sc->vsc_nports == 1) {
+	if (port->vsp_id == 0) {
 		/* port0 */
 		port->vsp_txq = 0;
 		port->vsp_rxq = 1;
+		port->vsp_console = true;
 	} else {
 		port->vsp_txq = sc->vsc_nports * 2;
 		port->vsp_rxq = port->vsp_txq + 1;
@@ -431,7 +432,7 @@ pci_vtcon_control_tx(struct pci_vtcon_port *port, void *arg, struct iovec *iov,
 {
 	struct pci_vtcon_softc *sc;
 	struct pci_vtcon_port *tmp;
-	struct pci_vtcon_control *ctrl;
+	struct pci_vtcon_control resp, *ctrl;
 	int i;
 
 	assert(niov == 1);
@@ -448,6 +449,22 @@ pci_vtcon_control_tx(struct pci_vtcon_port *port, void *arg, struct iovec *iov,
 				pci_vtcon_announce_port(tmp);
 		}
 		break;
+
+	case VTCON_PORT_READY:
+		if (ctrl->id >= sc->vsc_nports) {
+			WPRINTF(("VTCON_PORT_READY event for unknown port %d\n",
+			    ctrl->id));
+			return;
+		}
+
+		tmp = &sc->vsc_ports[ctrl->id];
+		if (tmp->vsp_console) {
+			resp.event = VTCON_CONSOLE_PORT;
+			resp.id = ctrl->id;
+			resp.value = 1;
+			pci_vtcon_control_send(sc, &resp, NULL, 0);
+		}
+		break;
 	}
 }
 
@@ -458,11 +475,9 @@ pci_vtcon_announce_port(struct pci_vtcon_port *port)
 
 	event.id = port->vsp_id;
 	event.event = VTCON_DEVICE_ADD;
-	event.value = 1;
 	pci_vtcon_control_send(port->vsp_sc, &event, NULL, 0);
 
 	event.event = VTCON_PORT_NAME;
-	event.value = 1;
 	pci_vtcon_control_send(port->vsp_sc, &event, port->vsp_name,
 	    strlen(port->vsp_name));
 }
