@@ -10,6 +10,8 @@ PROG=	bhyve
 
 MAN=	bhyve.8
 
+CFLAGS+= -O0
+
 SRCS=	\
 	atkbdc.c		\
 	acpi.c			\
@@ -32,6 +34,7 @@ SRCS=	\
 	pci_passthru.c		\
 	pci_virtio_9p.c		\
 	pci_virtio_block.c	\
+	pci_virtio_console.c	\
 	pci_virtio_net.c	\
 	pci_virtio_rnd.c	\
 	pci_uart.c		\
