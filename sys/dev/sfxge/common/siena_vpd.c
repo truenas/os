@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009-2015 Solarflare Communications Inc.
+ * Copyright (c) 2009-2016 Solarflare Communications Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -436,8 +436,12 @@ siena_vpd_get(
 
 	/* And then from the provided data buffer */
 	if ((rc = efx_vpd_hunk_get(data, size, evvp->evv_tag,
-	    evvp->evv_keyword, &offset, &length)) != 0)
+	    evvp->evv_keyword, &offset, &length)) != 0) {
+		if (rc == ENOENT)
+			return (rc);
+
 		goto fail2;
+	}
 
 	evvp->evv_length = length;
 	memcpy(evvp->evv_value, data + offset, length);

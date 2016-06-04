@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2012-2015 Solarflare Communications Inc.
+ * Copyright (c) 2012-2016 Solarflare Communications Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ __FBSDID("$FreeBSD$");
 #include "efx_impl.h"
 
 
-#if EFSYS_OPT_HUNTINGTON
+#if EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD
 
 	__checkReturn	efx_rc_t
 ef10_mac_poll(
@@ -199,6 +199,53 @@ fail1:
 	return (rc);
 }
 
+static	__checkReturn		efx_rc_t
+efx_mcdi_mtu_get(
+	__in		efx_nic_t *enp,
+	__out		size_t *mtu)
+{
+	efx_mcdi_req_t req;
+	uint8_t payload[MAX(MC_CMD_SET_MAC_EXT_IN_LEN,
+			    MC_CMD_SET_MAC_V2_OUT_LEN)];
+	efx_rc_t rc;
+
+	(void) memset(payload, 0, sizeof (payload));
+	req.emr_cmd = MC_CMD_SET_MAC;
+	req.emr_in_buf = payload;
+	req.emr_in_length = MC_CMD_SET_MAC_EXT_IN_LEN;
+	req.emr_out_buf = payload;
+	req.emr_out_length = MC_CMD_SET_MAC_V2_OUT_LEN;
+
+	/*
+	 * With MC_CMD_SET_MAC_EXT_IN_CONTROL set to 0, this just queries the
+	 * MTU.  This should always be supported on Medford, but it is not
+	 * supported on older Huntington firmware.
+	 */
+	MCDI_IN_SET_DWORD(req, SET_MAC_EXT_IN_CONTROL, 0);
+
+	efx_mcdi_execute(enp, &req);
+
+	if (req.emr_rc != 0) {
+		rc = req.emr_rc;
+		goto fail1;
+	}
+	if (req.emr_out_length_used < MC_CMD_SET_MAC_V2_OUT_MTU_OFST + 4) {
+		rc = EMSGSIZE;
+		goto fail2;
+	}
+
+	*mtu = MCDI_OUT_DWORD(req, SET_MAC_V2_OUT_MTU);
+
+	return (0);
+
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
 	__checkReturn	efx_rc_t
 ef10_mac_pdu_set(
 	__in		efx_nic_t *enp)
@@ -224,6 +271,24 @@ ef10_mac_pdu_set(
 
 fail2:
 	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+	__checkReturn		efx_rc_t
+ef10_mac_pdu_get(
+	__in		efx_nic_t *enp,
+	__out		size_t *pdu)
+{
+	efx_rc_t rc;
+
+	if ((rc = efx_mcdi_mtu_get(enp, pdu)) != 0)
+		goto fail1;
+
+	return (0);
+
 fail1:
 	EFSYS_PROBE1(fail1, efx_rc_t, rc);
 
@@ -314,7 +379,7 @@ ef10_mac_multicast_list_set(
 	__in				efx_nic_t *enp)
 {
 	efx_port_t *epp = &(enp->en_port);
-	efx_mac_ops_t *emop = epp->ep_emop;
+	const efx_mac_ops_t *emop = epp->ep_emop;
 	efx_rc_t rc;
 
 	EFSYS_ASSERT(enp->en_family == EFX_FAMILY_HUNTINGTON ||
@@ -390,7 +455,7 @@ ef10_mac_loopback_set(
 	__in		efx_loopback_type_t loopback_type)
 {
 	efx_port_t *epp = &(enp->en_port);
-	efx_phy_ops_t *epop = epp->ep_epop;
+	const efx_phy_ops_t *epop = epp->ep_epop;
 	efx_loopback_type_t old_loopback_type;
 	efx_link_mode_t old_loopback_link_mode;
 	efx_rc_t rc;
@@ -749,4 +814,4 @@ ef10_mac_stats_update(
 
 #endif	/* EFSYS_OPT_MAC_STATS */
 
-#endif	/* EFSYS_OPT_HUNTINGTON */
+#endif	/* EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD */

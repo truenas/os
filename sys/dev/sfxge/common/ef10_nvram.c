@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2012-2015 Solarflare Communications Inc.
+ * Copyright (c) 2012-2016 Solarflare Communications Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@ __FBSDID("$FreeBSD$");
 #include "efx.h"
 #include "efx_impl.h"
 
-#if EFSYS_OPT_HUNTINGTON
+#if EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD
 
 #if EFSYS_OPT_VPD || EFSYS_OPT_NVRAM
 
@@ -48,14 +48,34 @@ typedef struct tlv_cursor_s {
 	uint32_t	*limit;			/* Last dword of data block */
 } tlv_cursor_t;
 
+typedef struct nvram_partition_s {
+	uint16_t type;
+	uint8_t chip_select;
+	uint8_t flags;
+	/*
+	 * The full length of the NVRAM partition.
+	 * This is different from tlv_partition_header.total_length,
+	 *  which can be smaller.
+	 */
+	uint32_t length;
+	uint32_t erase_size;
+	uint32_t *data;
+	tlv_cursor_t tlv_cursor;
+} nvram_partition_t;
+
+
 static	__checkReturn		efx_rc_t
 tlv_validate_state(
-	__in			tlv_cursor_t *cursor);
+	__inout			tlv_cursor_t *cursor);
 
 
-/*
- * Operations on TLV formatted partition data.
- */
+static				void
+tlv_init_block(
+	__out	uint32_t	*block)
+{
+	*block = __CPU_TO_LE_32(TLV_TAG_END);
+}
+
 static				uint32_t
 tlv_tag(
 	__in	tlv_cursor_t	*cursor)
@@ -122,9 +142,9 @@ tlv_next_item_ptr(
 	return (cursor->current + TLV_DWORD_COUNT(length));
 }
 
-static				efx_rc_t
+static	__checkReturn		efx_rc_t
 tlv_advance(
-	__in	tlv_cursor_t	*cursor)
+	__inout	tlv_cursor_t	*cursor)
 {
 	efx_rc_t rc;
 
@@ -177,7 +197,7 @@ fail1:
 
 static				efx_rc_t
 tlv_find(
-	__in	tlv_cursor_t	*cursor,
+	__inout	tlv_cursor_t	*cursor,
 	__in	uint32_t	tag)
 {
 	efx_rc_t rc;
@@ -194,7 +214,7 @@ tlv_find(
 
 static	__checkReturn		efx_rc_t
 tlv_validate_state(
-	__in	tlv_cursor_t	*cursor)
+	__inout	tlv_cursor_t	*cursor)
 {
 	efx_rc_t rc;
 
@@ -242,31 +262,49 @@ static				efx_rc_t
 tlv_init_cursor(
 	__out	tlv_cursor_t	*cursor,
 	__in	uint32_t	*block,
-	__in	uint32_t	*limit)
+	__in	uint32_t	*limit,
+	__in	uint32_t	*current)
 {
 	cursor->block	= block;
 	cursor->limit	= limit;
 
-	cursor->current	= cursor->block;
+	cursor->current	= current;
 	cursor->end	= NULL;
 
 	return (tlv_validate_state(cursor));
 }
 
-static				efx_rc_t
+static	__checkReturn		efx_rc_t
 tlv_init_cursor_from_size(
 	__out	tlv_cursor_t	*cursor,
-	__in	uint8_t	*block,
+	__in_bcount(size)
+		uint8_t		*block,
 	__in	size_t		size)
 {
 	uint32_t *limit;
 	limit = (uint32_t *)(block + size - sizeof (uint32_t));
-	return (tlv_init_cursor(cursor, (uint32_t *)block, limit));
+	return (tlv_init_cursor(cursor, (uint32_t *)block,
+		limit, (uint32_t *)block));
 }
 
-static				efx_rc_t
+static	__checkReturn		efx_rc_t
+tlv_init_cursor_at_offset(
+	__out	tlv_cursor_t	*cursor,
+	__in_bcount(size)
+		uint8_t		*block,
+	__in	size_t		size,
+	__in	size_t		offset)
+{
+	uint32_t *limit;
+	uint32_t *current;
+	limit = (uint32_t *)(block + size - sizeof (uint32_t));
+	current = (uint32_t *)(block + offset);
+	return (tlv_init_cursor(cursor, (uint32_t *)block, limit, current));
+}
+
+static	__checkReturn		efx_rc_t
 tlv_require_end(
-	__in	tlv_cursor_t	*cursor)
+	__inout	tlv_cursor_t	*cursor)
 {
 	uint32_t *pos;
 	efx_rc_t rc;
@@ -290,7 +328,7 @@ fail1:
 
 static				size_t
 tlv_block_length_used(
-	__in	tlv_cursor_t	*cursor)
+	__inout	tlv_cursor_t	*cursor)
 {
 	efx_rc_t rc;
 
@@ -311,8 +349,34 @@ fail1:
 	return (0);
 }
 
+static		uint32_t *
+tlv_last_segment_end(
+	__in	tlv_cursor_t *cursor)
+{
+	tlv_cursor_t segment_cursor;
+	uint32_t *last_segment_end = cursor->block;
+	uint32_t *segment_start = cursor->block;
 
-static	__checkReturn		uint32_t *
+	/*
+	 * Go through each segment and check that it has an end tag. If there
+	 * is no end tag then the previous segment was the last valid one,
+	 * so return the pointer to its end tag.
+	 */
+	for (;;) {
+		if (tlv_init_cursor(&segment_cursor, segment_start,
+		    cursor->limit, segment_start) != 0)
+			break;
+		if (tlv_require_end(&segment_cursor) != 0)
+			break;
+		last_segment_end = segment_cursor.end;
+		segment_start = segment_cursor.end + 1;
+	}
+
+	return (last_segment_end);
+}
+
+
+static				uint32_t *
 tlv_write(
 	__in			tlv_cursor_t *cursor,
 	__in			uint32_t tag,
@@ -338,12 +402,14 @@ tlv_write(
 
 static	__checkReturn		efx_rc_t
 tlv_insert(
-	__in	tlv_cursor_t	*cursor,
+	__inout	tlv_cursor_t	*cursor,
 	__in	uint32_t	tag,
-	__in	uint8_t		*data,
+	__in_bcount(size)
+		uint8_t		*data,
 	__in	size_t		size)
 {
 	unsigned int delta;
+	uint32_t *last_segment_end;
 	efx_rc_t rc;
 
 	if ((rc = tlv_validate_state(cursor)) != 0)
@@ -357,15 +423,17 @@ tlv_insert(
 		goto fail3;
 	}
 
+	last_segment_end = tlv_last_segment_end(cursor);
+
 	delta = TLV_DWORD_COUNT(size);
-	if (cursor->end + 1 + delta > cursor->limit) {
+	if (last_segment_end + 1 + delta > cursor->limit) {
 		rc = ENOSPC;
 		goto fail4;
 	}
 
 	/* Move data up: new space at cursor->current */
 	memmove(cursor->current + delta, cursor->current,
-	    (cursor->end + 1 - cursor->current) * sizeof (uint32_t));
+	    (last_segment_end + 1 - cursor->current) * sizeof (uint32_t));
 
 	/* Adjust the end pointer */
 	cursor->end += delta;
@@ -388,16 +456,61 @@ fail1:
 }
 
 static	__checkReturn		efx_rc_t
+tlv_delete(
+	__inout	tlv_cursor_t	*cursor)
+{
+	unsigned int delta;
+	uint32_t *last_segment_end;
+	efx_rc_t rc;
+
+	if ((rc = tlv_validate_state(cursor)) != 0)
+		goto fail1;
+
+	if (tlv_tag(cursor) == TLV_TAG_END) {
+		rc = EINVAL;
+		goto fail2;
+	}
+
+	delta = TLV_DWORD_COUNT(tlv_length(cursor));
+
+	if ((rc = tlv_require_end(cursor)) != 0)
+		goto fail3;
+
+	last_segment_end = tlv_last_segment_end(cursor);
+
+	/* Shuffle things down, destroying the item at cursor->current */
+	memmove(cursor->current, cursor->current + delta,
+	    (last_segment_end + 1 - cursor->current) * sizeof (uint32_t));
+	/* Zero the new space at the end of the TLV chain */
+	memset(last_segment_end + 1 - delta, 0, delta * sizeof (uint32_t));
+	/* Adjust the end pointer */
+	cursor->end -= delta;
+
+	return (0);
+
+fail3:
+	EFSYS_PROBE(fail3);
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+static	__checkReturn		efx_rc_t
 tlv_modify(
-	__in	tlv_cursor_t	*cursor,
+	__inout	tlv_cursor_t	*cursor,
 	__in	uint32_t	tag,
-	__in	uint8_t		*data,
+	__in_bcount(size)
+		uint8_t		*data,
 	__in	size_t		size)
 {
 	uint32_t *pos;
 	unsigned int old_ndwords;
 	unsigned int new_ndwords;
 	unsigned int delta;
+	uint32_t *last_segment_end;
 	efx_rc_t rc;
 
 	if ((rc = tlv_validate_state(cursor)) != 0)
@@ -418,19 +531,21 @@ tlv_modify(
 	if ((rc = tlv_require_end(cursor)) != 0)
 		goto fail4;
 
+	last_segment_end = tlv_last_segment_end(cursor);
+
 	if (new_ndwords > old_ndwords) {
 		/* Expand space used for TLV item */
 		delta = new_ndwords - old_ndwords;
 		pos = cursor->current + old_ndwords;
 
-		if (cursor->end + 1 + delta > cursor->limit) {
+		if (last_segment_end + 1 + delta > cursor->limit) {
 			rc = ENOSPC;
 			goto fail5;
 		}
 
 		/* Move up: new space at (cursor->current + old_ndwords) */
 		memmove(pos + delta, pos,
-		    (cursor->end + 1 - pos) * sizeof (uint32_t));
+		    (last_segment_end + 1 - pos) * sizeof (uint32_t));
 
 		/* Adjust the end pointer */
 		cursor->end += delta;
@@ -442,10 +557,11 @@ tlv_modify(
 
 		/* Move down: remove words at (cursor->current + new_ndwords) */
 		memmove(pos, pos + delta,
-		    (cursor->end + 1 - pos) * sizeof (uint32_t));
+		    (last_segment_end + 1 - pos) * sizeof (uint32_t));
 
 		/* Zero the new space at the end of the TLV chain */
-		memset(cursor->end + 1 - delta, 0, delta * sizeof (uint32_t));
+		memset(last_segment_end + 1 - delta, 0,
+		    delta * sizeof (uint32_t));
 
 		/* Adjust the end pointer */
 		cursor->end -= delta;
@@ -470,9 +586,82 @@ fail1:
 	return (rc);
 }
 
-/* Validate TLV formatted partition contents (before writing to flash) */
+static uint32_t checksum_tlv_partition(
+	__in	nvram_partition_t *partition)
+{
+	tlv_cursor_t *cursor;
+	uint32_t *ptr;
+	uint32_t *end;
+	uint32_t csum;
+	size_t len;
+
+	cursor = &partition->tlv_cursor;
+	len = tlv_block_length_used(cursor);
+	EFSYS_ASSERT3U((len & 3), ==, 0);
+
+	csum = 0;
+	ptr = partition->data;
+	end = &ptr[len >> 2];
+
+	while (ptr < end)
+		csum += __LE_TO_CPU_32(*ptr++);
+
+	return (csum);
+}
+
+static	__checkReturn		efx_rc_t
+tlv_update_partition_len_and_cks(
+	__in	tlv_cursor_t *cursor)
+{
+	efx_rc_t rc;
+	nvram_partition_t partition;
+	struct tlv_partition_header *header;
+	struct tlv_partition_trailer *trailer;
+	size_t new_len;
+
+	/*
+	 * We just modified the partition, so the total length may not be
+	 * valid. Don't use tlv_find(), which performs some sanity checks
+	 * that may fail here.
+	 */
+	partition.data = cursor->block;
+	memcpy(&partition.tlv_cursor, cursor, sizeof (*cursor));
+	header = (struct tlv_partition_header *)partition.data;
+	/* Sanity check. */
+	if (__LE_TO_CPU_32(header->tag) != TLV_TAG_PARTITION_HEADER) {
+		rc = EFAULT;
+		goto fail1;
+	}
+	new_len =  tlv_block_length_used(&partition.tlv_cursor);
+	if (new_len == 0) {
+		rc = EFAULT;
+		goto fail2;
+	}
+	header->total_length = __CPU_TO_LE_32(new_len);
+	/* Ensure the modified partition always has a new generation count. */
+	header->generation = __CPU_TO_LE_32(
+	    __LE_TO_CPU_32(header->generation) + 1);
+
+	trailer = (struct tlv_partition_trailer *)((uint8_t *)header +
+	    new_len - sizeof (*trailer) - sizeof (uint32_t));
+	trailer->generation = header->generation;
+	trailer->checksum = __CPU_TO_LE_32(
+	    __LE_TO_CPU_32(trailer->checksum) -
+	    checksum_tlv_partition(&partition));
+
+	return (0);
+
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+/* Validate buffer contents (before writing to flash) */
 	__checkReturn		efx_rc_t
-efx_nvram_tlv_validate(
+ef10_nvram_buffer_validate(
 	__in			efx_nic_t *enp,
 	__in			uint32_t partn,
 	__in_bcount(partn_size)	caddr_t partn_data,
@@ -567,6 +756,384 @@ fail1:
 
 	return (rc);
 }
+
+
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_create(
+	__in			efx_nic_t *enp,
+	__in			uint16_t partn_type,
+	__in_bcount(partn_size)	caddr_t partn_data,
+	__in			size_t partn_size)
+{
+	uint32_t *buf = (uint32_t *)partn_data;
+	efx_rc_t rc;
+	tlv_cursor_t cursor;
+	struct tlv_partition_header header;
+	struct tlv_partition_trailer trailer;
+
+	unsigned min_buf_size = sizeof (struct tlv_partition_header) +
+	    sizeof (struct tlv_partition_trailer);
+	if (partn_size < min_buf_size) {
+		rc = EINVAL;
+		goto fail1;
+	}
+
+	memset(buf, 0xff, partn_size);
+
+	tlv_init_block(buf);
+	if ((rc = tlv_init_cursor(&cursor, buf,
+	    (uint32_t *)((uint8_t *)buf + partn_size),
+	    buf)) != 0) {
+		goto fail2;
+	}
+
+	header.tag = __CPU_TO_LE_32(TLV_TAG_PARTITION_HEADER);
+	header.length = __CPU_TO_LE_32(sizeof (header) - 8);
+	header.type_id = __CPU_TO_LE_16(partn_type);
+	header.preset = 0;
+	header.generation = __CPU_TO_LE_32(1);
+	header.total_length = 0;  /* This will be fixed below. */
+	if ((rc = tlv_insert(
+	    &cursor, TLV_TAG_PARTITION_HEADER,
+	    (uint8_t *)&header.type_id, sizeof (header) - 8)) != 0)
+		goto fail3;
+	if ((rc = tlv_advance(&cursor)) != 0)
+		goto fail4;
+
+	trailer.tag = __CPU_TO_LE_32(TLV_TAG_PARTITION_TRAILER);
+	trailer.length = __CPU_TO_LE_32(sizeof (trailer) - 8);
+	trailer.generation = header.generation;
+	trailer.checksum = 0;  /* This will be fixed below. */
+	if ((rc = tlv_insert(&cursor, TLV_TAG_PARTITION_TRAILER,
+	    (uint8_t *)&trailer.generation, sizeof (trailer) - 8)) != 0)
+		goto fail5;
+
+	if ((rc = tlv_update_partition_len_and_cks(&cursor)) != 0)
+		goto fail6;
+
+	/* Check that the partition is valid. */
+	if ((rc = ef10_nvram_buffer_validate(enp, partn_type,
+	    partn_data, partn_size)) != 0)
+		goto fail7;
+
+	return (0);
+
+fail7:
+	EFSYS_PROBE(fail7);
+fail6:
+	EFSYS_PROBE(fail6);
+fail5:
+	EFSYS_PROBE(fail5);
+fail4:
+	EFSYS_PROBE(fail4);
+fail3:
+	EFSYS_PROBE(fail3);
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+static			uint32_t
+byte_offset(
+	__in		uint32_t *position,
+	__in		uint32_t *base)
+{
+	return (uint32_t)((uint8_t *)position - (uint8_t *)base);
+}
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_find_item_start(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size,
+	__out			uint32_t *startp)
+{
+	// Read past partition header to find start address of the first key
+	tlv_cursor_t cursor;
+	efx_rc_t rc;
+
+	/* A PARTITION_HEADER tag must be the first item (at offset zero) */
+	if ((rc = tlv_init_cursor_from_size(&cursor, (uint8_t *)bufferp,
+			buffer_size)) != 0) {
+		rc = EFAULT;
+		goto fail1;
+	}
+	if (tlv_tag(&cursor) != TLV_TAG_PARTITION_HEADER) {
+		rc = EINVAL;
+		goto fail2;
+	}
+
+	if ((rc = tlv_advance(&cursor)) != 0) {
+		rc = EINVAL;
+		goto fail3;
+	}
+	*startp = byte_offset(cursor.current, cursor.block);
+
+	if ((rc = tlv_require_end(&cursor)) != 0)
+		goto fail4;
+
+	return (0);
+
+fail4:
+	EFSYS_PROBE(fail4);
+fail3:
+	EFSYS_PROBE(fail3);
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_find_end(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size,
+	__in			uint32_t offset,
+	__out			uint32_t *endp)
+{
+	// Read to end of partition
+	tlv_cursor_t cursor;
+	efx_rc_t rc;
+	uint32_t *segment_used;
+
+	_NOTE(ARGUNUSED(offset))
+
+	if ((rc = tlv_init_cursor_from_size(&cursor, (uint8_t *)bufferp,
+			buffer_size)) != 0) {
+		rc = EFAULT;
+		goto fail1;
+	}
+
+	segment_used = cursor.block;
+
+	/*
+	 * Go through each segment and check that it has an end tag. If there
+	 * is no end tag then the previous segment was the last valid one,
+	 * so return the used space including that end tag.
+	 */
+	while (tlv_tag(&cursor) == TLV_TAG_PARTITION_HEADER) {
+		if (tlv_require_end(&cursor) != 0) {
+			if (segment_used == cursor.block) {
+				/*
+				 * First segment is corrupt, so there is
+				 * no valid data in partition.
+				 */
+				rc = EINVAL;
+				goto fail2;
+			}
+			break;
+		}
+		segment_used = cursor.end + 1;
+
+		cursor.current = segment_used;
+	}
+	/* Return space used (including the END tag) */
+	*endp = (segment_used - cursor.block) * sizeof (uint32_t);
+
+	return (0);
+
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+	__checkReturn	__success(return != B_FALSE)	boolean_t
+ef10_nvram_buffer_find_item(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size,
+	__in			uint32_t offset,
+	__out			uint32_t *startp,
+	__out			uint32_t *lengthp)
+{
+	// Find TLV at offset and return key start and length
+	tlv_cursor_t cursor;
+	uint8_t *key;
+	uint32_t tag;
+
+	if (tlv_init_cursor_at_offset(&cursor, (uint8_t *)bufferp,
+			buffer_size, offset) != 0) {
+		return (B_FALSE);
+	}
+
+	while ((key = tlv_item(&cursor)) != NULL) {
+		tag = tlv_tag(&cursor);
+		if (tag == TLV_TAG_PARTITION_HEADER ||
+		    tag == TLV_TAG_PARTITION_TRAILER) {
+			if (tlv_advance(&cursor) != 0) {
+				break;
+			}
+			continue;
+		}
+		*startp = byte_offset(cursor.current, cursor.block);
+		*lengthp = byte_offset(tlv_next_item_ptr(&cursor),
+		    cursor.current);
+		return (B_TRUE);
+	}
+
+	return (B_FALSE);
+}
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_get_item(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size,
+	__in			uint32_t offset,
+	__in			uint32_t length,
+	__out_bcount_part(item_max_size, *lengthp)
+				caddr_t itemp,
+	__in			size_t item_max_size,
+	__out			uint32_t *lengthp)
+{
+	efx_rc_t rc;
+	tlv_cursor_t cursor;
+	uint32_t item_length;
+
+	if (item_max_size < length) {
+		rc = ENOSPC;
+		goto fail1;
+	}
+
+	if ((rc = tlv_init_cursor_at_offset(&cursor, (uint8_t *)bufferp,
+			buffer_size, offset)) != 0) {
+		goto fail2;
+	}
+
+	item_length = tlv_length(&cursor);
+	if (length < item_length) {
+		rc = ENOSPC;
+		goto fail3;
+	}
+	memcpy(itemp, tlv_value(&cursor), item_length);
+
+	*lengthp = item_length;
+
+	return (0);
+
+fail3:
+	EFSYS_PROBE(fail3);
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_insert_item(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size,
+	__in			uint32_t offset,
+	__in_bcount(length)	caddr_t keyp,
+	__in			uint32_t length,
+	__out			uint32_t *lengthp)
+{
+	efx_rc_t rc;
+	tlv_cursor_t cursor;
+
+	if ((rc = tlv_init_cursor_at_offset(&cursor, (uint8_t *)bufferp,
+			buffer_size, offset)) != 0) {
+		goto fail1;
+	}
+
+	rc = tlv_insert(&cursor, TLV_TAG_LICENSE, (uint8_t *)keyp, length);
+
+	if (rc != 0) {
+		goto fail2;
+	}
+
+	*lengthp = byte_offset(tlv_next_item_ptr(&cursor),
+		    cursor.current);
+
+	return (0);
+
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_delete_item(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size,
+	__in			uint32_t offset,
+	__in			uint32_t length,
+	__in			uint32_t end)
+{
+	efx_rc_t rc;
+	tlv_cursor_t cursor;
+
+	_NOTE(ARGUNUSED(length, end))
+
+	if ((rc = tlv_init_cursor_at_offset(&cursor, (uint8_t *)bufferp,
+			buffer_size, offset)) != 0) {
+		goto fail1;
+	}
+
+	if ((rc = tlv_delete(&cursor)) != 0)
+		goto fail2;
+
+	return (0);
+
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+	__checkReturn		efx_rc_t
+ef10_nvram_buffer_finish(
+	__in_bcount(buffer_size)
+				caddr_t bufferp,
+	__in			size_t buffer_size)
+{
+	efx_rc_t rc;
+	tlv_cursor_t cursor;
+
+	if ((rc = tlv_init_cursor_from_size(&cursor, (uint8_t *)bufferp,
+			buffer_size)) != 0) {
+		rc = EFAULT;
+		goto fail1;
+	}
+
+	if ((rc = tlv_require_end(&cursor)) != 0)
+		goto fail2;
+
+	if ((rc = tlv_update_partition_len_and_cks(&cursor)) != 0)
+		goto fail3;
+
+	return (0);
+
+fail3:
+	EFSYS_PROBE(fail3);
+fail2:
+	EFSYS_PROBE(fail2);
+fail1:
+	EFSYS_PROBE1(fail1, efx_rc_t, rc);
+
+	return (rc);
+}
+
+
 
 /*
  * Read and validate a segment from a partition. A segment is a complete
@@ -1113,7 +1680,7 @@ ef10_nvram_segment_write_tlv(
 	 * Read the segment from NVRAM into the segment_data buffer and validate
 	 * it, returning if it does not validate. This is not a failure unless
 	 * this is the first segment in a partition. In this case the caller
-	 * must propogate the error.
+	 * must propagate the error.
 	 */
 	status = ef10_nvram_read_tlv_segment(enp, partn, *partn_offsetp,
 	    *seg_datap, *src_remain_lenp);
@@ -1789,4 +2356,4 @@ ef10_nvram_partn_rw_finish(
 
 #endif	/* EFSYS_OPT_NVRAM */
 
-#endif	/* EFSYS_OPT_HUNTINGTON */
+#endif	/* EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD */
