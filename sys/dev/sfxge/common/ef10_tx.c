@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2012-2015 Solarflare Communications Inc.
+ * Copyright (c) 2012-2016 Solarflare Communications Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ __FBSDID("$FreeBSD$");
 #include "efx_impl.h"
 
 
-#if EFSYS_OPT_HUNTINGTON
+#if EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD
 
 #if EFSYS_OPT_QSTATS
 #define	EFX_TX_QSTAT_INCR(_etp, _stat)					\
@@ -149,7 +149,7 @@ efx_mcdi_fini_txq(
 
 	MCDI_IN_SET_DWORD(req, FINI_TXQ_IN_INSTANCE, instance);
 
-	efx_mcdi_execute(enp, &req);
+	efx_mcdi_execute_quiet(enp, &req);
 
 	if ((req.emr_rc != 0) && (req.emr_rc != MC_CMD_ERR_EALREADY)) {
 		rc = req.emr_rc;
@@ -195,6 +195,7 @@ ef10_tx_qcreate(
 	efx_qword_t desc;
 	efx_rc_t rc;
 
+	_NOTE(ARGUNUSED(id))
 
 	if ((rc = efx_mcdi_init_txq(enp, n, eep->ee_index, label, index, flags,
 	    esmp)) != 0)
@@ -569,7 +570,7 @@ ef10_tx_qdesc_dma_create(
 }
 
 	void
-hunt_tx_qdesc_tso_create(
+ef10_tx_qdesc_tso_create(
 	__in	efx_txq_t *etp,
 	__in	uint16_t ipv4_id,
 	__in	uint32_t tcp_seq,
@@ -648,6 +649,7 @@ ef10_tx_qpace(
 
 	/* FIXME */
 	_NOTE(ARGUNUSED(etp, ns))
+	_NOTE(CONSTANTCONDITION)
 	if (B_FALSE) {
 		rc = ENOTSUP;
 		goto fail1;
@@ -707,4 +709,4 @@ ef10_tx_qstats_update(
 
 #endif /* EFSYS_OPT_QSTATS */
 
-#endif /* EFSYS_OPT_HUNTINGTON */
+#endif /* EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD */

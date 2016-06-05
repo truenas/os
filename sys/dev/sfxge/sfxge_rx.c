@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2010-2015 Solarflare Communications Inc.
+ * Copyright (c) 2010-2016 Solarflare Communications Inc.
  * All rights reserved.
  *
  * This software was developed in part by Philip Paeps under contract for
@@ -179,8 +179,7 @@ sfxge_rx_post_refill(void *arg)
 	sc = rxq->sc;
 	index = rxq->index;
 	evq = sc->evq[index];
-
-	magic = SFXGE_MAGIC_RX_QREFILL | index;
+	magic = sfxge_sw_ev_rxq_magic(SFXGE_SW_EV_RX_QREFILL, rxq);
 
 	/* This is guaranteed due to the start/stop order of rx and ev */
 	KASSERT(evq->init_state == SFXGE_EVQ_STARTED,
@@ -843,7 +842,7 @@ sfxge_rx_qcomplete(struct sfxge_rxq *rxq, boolean_t eop)
 		if (rx_desc->flags & EFX_PKT_PREFIX_LEN) {
 			uint16_t tmp_size;
 			int rc;
-			rc = efx_psuedo_hdr_pkt_length_get(sc->enp, 
+			rc = efx_psuedo_hdr_pkt_length_get(sc->enp,
 							   mtod(m, uint8_t *),
 							   &tmp_size);
 			KASSERT(rc == 0, ("cannot get packet length: %d", rc));
@@ -1110,7 +1109,7 @@ sfxge_rx_start(struct sfxge_softc *sc)
 	EFSYS_ASSERT(ISP2(align));
 	sc->rx_buffer_size = P2ROUNDUP(sc->rx_buffer_size, align);
 
-	/* 
+	/*
 	 * Standard mbuf zones only guarantee pointer-size alignment;
 	 * we need extra space to align to the cache line
 	 */
