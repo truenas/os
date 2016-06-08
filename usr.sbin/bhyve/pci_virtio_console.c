@@ -475,6 +475,7 @@ pci_vtcon_announce_port(struct pci_vtcon_port *port)
 
 	event.id = port->vsp_id;
 	event.event = VTCON_DEVICE_ADD;
+	event.value = 1;
 	pci_vtcon_control_send(port->vsp_sc, &event, NULL, 0);
 
 	event.event = VTCON_PORT_NAME;
@@ -503,6 +504,10 @@ pci_vtcon_control_send(struct pci_vtcon_softc *sc,
 	int n;
 
 	vq = pci_vtcon_port_to_vq(&sc->vsc_control_port, true);
+
+	if (!vq_has_descs(vq))
+		return;
+
 	n = vq_getchain(vq, &idx, &iov, 1, NULL);
 
 	assert(n == 1);
@@ -537,7 +542,7 @@ pci_vtcon_notify_tx(void *vsc, struct vqueue_info *vq)
 		/*
 		 * Release this chain and handle more
 		 */
-		vq_relchain(vq, idx, n);
+		vq_relchain(vq, idx, 0);
 	}
 	vq_endchains(vq, 1);	/* Generate interrupt if appropriate. */
 }
