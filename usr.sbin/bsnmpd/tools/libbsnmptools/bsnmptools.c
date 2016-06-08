@@ -252,12 +252,12 @@ add_filename(struct snmp_toolinfo *snmptoolctx, const char *filename,
 	}
 
 	if ((fstring = strdup(filename)) == NULL) {
-		warnx("malloc() failed - %s", strerror(errno));
+		warnx("strdup() failed - %s", strerror(errno));
 		return (-1);
 	}
 
 	if ((entry = calloc(1, sizeof(struct fname))) == NULL) {
-		warnx("malloc() failed - %s", strerror(errno));
+		warnx("calloc() failed - %s", strerror(errno));
 		free(fstring);
 		return (-1);
 	}
@@ -615,8 +615,8 @@ parse_context(struct snmp_toolinfo *snmptoolctx __unused, char *opt_arg)
 				warnx("Suboption 'context-engine' - no argument");
 				return (-1);
 			}
-			if ((snmp_client.clen = parse_ascii(val,
-			    snmp_client.cengine, SNMP_ENGINE_ID_SIZ)) < 0) {
+			if ((int32_t)(snmp_client.clen = parse_ascii(val,
+			    snmp_client.cengine, SNMP_ENGINE_ID_SIZ)) == -1) {
 				warnx("Bad EngineID - %s", val);
 				return (-1);
 			}
@@ -654,7 +654,7 @@ parse_user_security(struct snmp_toolinfo *snmptoolctx __unused, char *opt_arg)
 			}
 			snmp_client.engine.engine_len = parse_ascii(val, 
 			    snmp_client.engine.engine_id, SNMP_ENGINE_ID_SIZ);
-			if (snmp_client.engine.engine_len < 0) {
+			if ((int32_t)snmp_client.engine.engine_len == -1) {
 				warnx("Bad EngineID - %s", val);
 				return (-1);
 			}
