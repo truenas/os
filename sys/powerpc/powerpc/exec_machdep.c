@@ -224,10 +224,10 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	 */
 	if ((td->td_pflags & TDP_ALTSTACK) != 0 && !oonstack &&
 	    SIGISMEMBER(psp->ps_sigonstack, sig)) {
-		usfp = (void *)(td->td_sigstk.ss_sp +
-		   td->td_sigstk.ss_size - rndfsize);
+		usfp = (void *)(((uintptr_t)td->td_sigstk.ss_sp +
+		   td->td_sigstk.ss_size - rndfsize) & ~0xFul);
 	} else {
-		usfp = (void *)(tf->fixreg[1] - rndfsize);
+		usfp = (void *)((tf->fixreg[1] - rndfsize) & ~0xFul);
 	}
 
 	/*
@@ -901,11 +901,7 @@ cpu_set_syscall_retval(struct thread *td, int error)
 		tf->srr0 -= 4;
 		break;
 	default:
-		if (p->p_sysent->sv_errsize) {
-			error = (error < p->p_sysent->sv_errsize) ?
-			    p->p_sysent->sv_errtbl[error] : -1;
-		}
-		tf->fixreg[FIRSTARG] = error;
+		tf->fixreg[FIRSTARG] = SV_ABI_ERRNO(p, error);
 		tf->cr |= 0x10000000;		/* Set summary overflow */
 		break;
 	}

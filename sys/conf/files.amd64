@@ -50,12 +50,12 @@ font.h				optional	sc_dflt_font		\
 	clean		"font.h ${SC_DFLT_FONT}-8x14 ${SC_DFLT_FONT}-8x16 ${SC_DFLT_FONT}-8x8"
 #
 atkbdmap.h			optional	atkbd_dflt_keymap	\
-	compile-with	"/usr/sbin/kbdcontrol -L ${ATKBD_DFLT_KEYMAP} | sed -e 's/^static keymap_t.* = /static keymap_t key_map = /' -e 's/^static accentmap_t.* = /static accentmap_t accent_map = /' > atkbdmap.h"			\
+	compile-with	"kbdcontrol -P ${S:S/sys$/share/}/vt/keymaps -P ${S:S/sys$/share/}/syscons/keymaps -L ${ATKBD_DFLT_KEYMAP} | sed -e 's/^static keymap_t.* = /static keymap_t key_map = /' -e 's/^static accentmap_t.* = /static accentmap_t accent_map = /' > atkbdmap.h"			\
 	no-obj no-implicit-rule before-depend				\
 	clean		"atkbdmap.h"
 #
 ukbdmap.h			optional	ukbd_dflt_keymap	\
-	compile-with	"/usr/sbin/kbdcontrol -L ${UKBD_DFLT_KEYMAP} | sed -e 's/^static keymap_t.* = /static keymap_t key_map = /' -e 's/^static accentmap_t.* = /static accentmap_t accent_map = /' > ukbdmap.h"			\
+	compile-with	"kbdcontrol -P ${S:S/sys$/share/}/vt/keymaps -P ${S:S/sys$/share/}/syscons/keymaps -L ${UKBD_DFLT_KEYMAP} | sed -e 's/^static keymap_t.* = /static keymap_t key_map = /' -e 's/^static accentmap_t.* = /static accentmap_t accent_map = /' > ukbdmap.h"			\
 	no-obj no-implicit-rule before-depend				\
 	clean		"ukbdmap.h"
 #
@@ -203,6 +203,8 @@ dev/if_ndis/if_ndis_pccard.c	optional	ndis pccard
 dev/if_ndis/if_ndis_pci.c	optional	ndis cardbus | ndis pci
 dev/if_ndis/if_ndis_usb.c	optional	ndis usb
 dev/io/iodev.c			optional	io
+dev/ioat/ioat.c			optional	ioat pci
+dev/ioat/ioat_test.c		optional	ioat pci
 dev/ipmi/ipmi.c			optional	ipmi
 dev/ipmi/ipmi_acpi.c		optional	ipmi acpi
 dev/ipmi/ipmi_isa.c		optional	ipmi isa
@@ -312,6 +314,17 @@ dev/qlxgbe/ql_isr.c		optional	qlxgbe pci
 dev/qlxgbe/ql_misc.c		optional	qlxgbe pci
 dev/qlxgbe/ql_os.c		optional	qlxgbe pci
 dev/qlxgbe/ql_reset.c		optional	qlxgbe pci
+dev/sfxge/common/ef10_ev.c	optional	sfxge pci
+dev/sfxge/common/ef10_filter.c	optional	sfxge pci
+dev/sfxge/common/ef10_intr.c	optional	sfxge pci
+dev/sfxge/common/ef10_mac.c	optional	sfxge pci
+dev/sfxge/common/ef10_mcdi.c	optional	sfxge pci
+dev/sfxge/common/ef10_nic.c	optional	sfxge pci
+dev/sfxge/common/ef10_nvram.c	optional	sfxge pci
+dev/sfxge/common/ef10_phy.c	optional	sfxge pci
+dev/sfxge/common/ef10_rx.c	optional	sfxge pci
+dev/sfxge/common/ef10_tx.c	optional	sfxge pci
+dev/sfxge/common/ef10_vpd.c	optional	sfxge pci
 dev/sfxge/common/efx_bootcfg.c	optional	sfxge pci
 dev/sfxge/common/efx_crc32.c	optional	sfxge pci
 dev/sfxge/common/efx_ev.c	optional	sfxge pci
@@ -331,18 +344,9 @@ dev/sfxge/common/efx_sram.c	optional	sfxge pci
 dev/sfxge/common/efx_tx.c	optional	sfxge pci
 dev/sfxge/common/efx_vpd.c	optional	sfxge pci
 dev/sfxge/common/efx_wol.c	optional	sfxge pci
-dev/sfxge/common/hunt_ev.c	optional	sfxge pci
-dev/sfxge/common/hunt_filter.c	optional	sfxge pci
-dev/sfxge/common/hunt_intr.c	optional	sfxge pci
-dev/sfxge/common/hunt_mac.c	optional	sfxge pci
-dev/sfxge/common/hunt_mcdi.c	optional	sfxge pci
 dev/sfxge/common/hunt_nic.c	optional	sfxge pci
-dev/sfxge/common/hunt_nvram.c	optional	sfxge pci
 dev/sfxge/common/hunt_phy.c	optional	sfxge pci
-dev/sfxge/common/hunt_rx.c	optional	sfxge pci
-dev/sfxge/common/hunt_sram.c	optional	sfxge pci
-dev/sfxge/common/hunt_tx.c	optional	sfxge pci
-dev/sfxge/common/hunt_vpd.c	optional	sfxge pci
+dev/sfxge/common/mcdi_mon.c	optional	sfxge pci
 dev/sfxge/common/medford_nic.c	optional	sfxge pci
 dev/sfxge/common/siena_mac.c	optional	sfxge pci
 dev/sfxge/common/siena_mcdi.c	optional	sfxge pci

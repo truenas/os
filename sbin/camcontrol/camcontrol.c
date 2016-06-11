@@ -814,9 +814,6 @@ scsidoinquiry(struct cam_device *device, int argc, char **argv,
 	if (arglist & CAM_ARG_GET_SERIAL)
 		scsiserial(device, retry_count, timeout);
 
-	if (error != 0)
-		return(error);
-
 	if (arglist & CAM_ARG_GET_XFERRATE)
 		error = camxferrate(device);
 
@@ -4995,6 +4992,7 @@ dev_has_vpd_page(struct cam_device *dev, uint8_t page_id, int retry_count,
 
 	if (cam_send_ccb(dev, ccb) < 0) {
 		cam_freeccb(ccb);
+		ccb = NULL;
 		retval = -1;
 		goto bailout;
 	}

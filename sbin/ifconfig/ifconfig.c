@@ -93,6 +93,7 @@ int	clearaddr;
 int	newaddr = 1;
 int	verbose;
 int	noload;
+int	printifname = 0;
 
 int	supmedia = 0;
 int	printkeys = 0;		/* Print keying material for interfaces. */
@@ -107,6 +108,8 @@ static	void usage(void);
 static struct afswtch *af_getbyname(const char *name);
 static struct afswtch *af_getbyfamily(int af);
 static void af_other_status(int);
+
+void printifnamemaybe(void);
 
 static struct option *opts = NULL;
 
@@ -141,6 +144,12 @@ usage(void)
 	exit(1);
 }
 
+void printifnamemaybe()
+{
+	if (printifname)
+		printf("%s\n", name);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -156,6 +165,12 @@ main(int argc, char *argv[])
 	size_t iflen;
 
 	all = downonly = uponly = namesonly = noload = verbose = 0;
+	
+	/*
+	 * Ensure we print interface name when expected to,
+	 * even if we terminate early due to error.
+	 */
+	atexit(printifnamemaybe);
 
 	/* Parse leading line options */
 	strlcpy(options, "adklmnuv", sizeof(options));
@@ -289,7 +304,7 @@ main(int argc, char *argv[])
 	ifindex = 0;
 	for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
 		memset(&paifr, 0, sizeof(paifr));
-		strncpy(paifr.ifr_name, ifa->ifa_name, sizeof(paifr.ifr_name));
+		strlcpy(paifr.ifr_name, ifa->ifa_name, sizeof(paifr.ifr_name));
 		if (sizeof(paifr.ifr_addr) >= ifa->ifa_addr->sa_len) {
 			memcpy(&paifr.ifr_addr, ifa->ifa_addr,
 			    ifa->ifa_addr->sa_len);
@@ -487,7 +502,7 @@ ifconfig(int argc, char *const *argv, int iscreate, const struct afswtch *uafp)
 	struct callback *cb;
 	int s;
 
-	strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+	strlcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
 	afp = NULL;
 	if (uafp != NULL)
 		afp = uafp;
@@ -608,7 +623,8 @@ top:
 	}
 	if (clearaddr) {
 		int ret;
-		strncpy(afp->af_ridreq, name, sizeof ifr.ifr_name);
+		strlcpy(((struct ifreq *)afp->af_ridreq)->ifr_name, name,
+			sizeof ifr.ifr_name);
 		ret = ioctl(s, afp->af_difaddr, afp->af_ridreq);
 		if (ret < 0) {
 			if (errno == EADDRNOTAVAIL && (doalias >= 0)) {
@@ -625,7 +641,8 @@ top:
 		}
 	}
 	if (newaddr && (setaddr || setmask)) {
-		strncpy(afp->af_addreq, name, sizeof ifr.ifr_name);
+		strlcpy(((struct ifreq *)afp->af_addreq)->ifr_name, name,
+			sizeof ifr.ifr_name);
 		if (ioctl(s, afp->af_aifaddr, afp->af_addreq) < 0)
 			Perror("ioctl (SIOCAIFADDR)");
 	}
@@ -835,7 +852,7 @@ static void
 setifmetric(const char *val, int dummy __unused, int s, 
     const struct afswtch *afp)
 {
-	strncpy(ifr.ifr_name, name, sizeof (ifr.ifr_name));
+	strlcpy(ifr.ifr_name, name, sizeof (ifr.ifr_name));
 	ifr.ifr_metric = atoi(val);
 	if (ioctl(s, SIOCSIFMETRIC, (caddr_t)&ifr) < 0)
 		err(1, "ioctl SIOCSIFMETRIC (set metric)");
@@ -845,7 +862,7 @@ static void
 setifmtu(const char *val, int dummy __unused, int s, 
     const struct afswtch *afp)
 {
-	strncpy(ifr.ifr_name, name, sizeof (ifr.ifr_name));
+	strlcpy(ifr.ifr_name, name, sizeof (ifr.ifr_name));
 	ifr.ifr_mtu = atoi(val);
 	if (ioctl(s, SIOCSIFMTU, (caddr_t)&ifr) < 0)
 		err(1, "ioctl SIOCSIFMTU (set mtu)");
@@ -856,6 +873,8 @@ setifname(const char *val, int dummy __unused, int s,
     const struct afswtch *afp)
 {
 	char *newname;
+	
+	strlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
 	newname = strdup(val);
 	if (newname == NULL)
@@ -865,6 +884,7 @@ setifname(const char *val, int dummy __unused, int s,
 		free(newname);
 		err(1, "ioctl SIOCSIFNAME (set name)");
 	}
+	printifname = 1;
 	strlcpy(name, newname, sizeof(name));
 	free(newname);
 }
@@ -876,6 +896,8 @@ setifdescr(const char *val, int dummy __unused, int s,
 {
 	char *newdescr;
 
+	strlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
+	
 	ifr.ifr_buffer.length = strlen(val) + 1;
 	if (ifr.ifr_buffer.length == 1) {
 		ifr.ifr_buffer.buffer = newdescr = NULL;
@@ -934,7 +956,7 @@ status(const struct afswtch *afp, const struct sockaddr_dl *sdl,
 		ifr.ifr_addr.sa_family =
 		    afp->af_af == AF_LINK ? AF_LOCAL : afp->af_af;
 	}
-	strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
+	strlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
 	s = socket(ifr.ifr_addr.sa_family, SOCK_DGRAM, 0);
 	if (s < 0)
@@ -1016,7 +1038,7 @@ status(const struct afswtch *afp, const struct sockaddr_dl *sdl,
 	else if (afp->af_other_status != NULL)
 		afp->af_other_status(s);
 
-	strncpy(ifs.ifs_name, name, sizeof ifs.ifs_name);
+	strlcpy(ifs.ifs_name, name, sizeof ifs.ifs_name);
 	if (ioctl(s, SIOCGIFSTATUS, &ifs) == 0) 
 		printf("%s", ifs.ascii);
 

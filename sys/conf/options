@@ -384,7 +384,9 @@ ACCEPT_FILTER_HTTP
 ALTQ			opt_global.h
 ALTQ_CBQ		opt_altq.h
 ALTQ_CDNR		opt_altq.h
+ALTQ_CODEL		opt_altq.h
 ALTQ_DEBUG		opt_altq.h
+ALTQ_FAIRQ		opt_altq.h
 ALTQ_HFSC		opt_altq.h
 ALTQ_NOPCC		opt_altq.h
 ALTQ_PRIQ		opt_altq.h
@@ -793,6 +795,8 @@ KBD_MAXRETRY		opt_kbd.h
 KBD_MAXWAIT		opt_kbd.h
 KBD_RESETDELAY		opt_kbd.h
 KBDIO_DEBUG		opt_kbd.h
+
+KBDMUX_DFLT_KEYMAP	opt_kbdmux.h
 
 # options for the Atheros driver
 ATH_DEBUG		opt_ath.h

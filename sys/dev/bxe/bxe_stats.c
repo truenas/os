@@ -178,7 +178,7 @@ bxe_storm_stats_post(struct bxe_softc *sc)
 static void
 bxe_hw_stats_post(struct bxe_softc *sc)
 {
-    struct dmae_command *dmae = &sc->stats_dmae;
+    struct dmae_cmd *dmae = &sc->stats_dmae;
     uint32_t *stats_comp = BXE_SP(sc, stats_comp);
     int loader_idx;
     uint32_t opcode;
@@ -201,15 +201,15 @@ bxe_hw_stats_post(struct bxe_softc *sc)
                                   TRUE, DMAE_COMP_GRC);
         opcode = bxe_dmae_opcode_clr_src_reset(opcode);
 
-        memset(dmae, 0, sizeof(struct dmae_command));
+        memset(dmae, 0, sizeof(struct dmae_cmd));
         dmae->opcode = opcode;
         dmae->src_addr_lo = U64_LO(BXE_SP_MAPPING(sc, dmae[0]));
         dmae->src_addr_hi = U64_HI(BXE_SP_MAPPING(sc, dmae[0]));
         dmae->dst_addr_lo = ((DMAE_REG_CMD_MEM +
-                              sizeof(struct dmae_command) *
+                              sizeof(struct dmae_cmd) *
                               (loader_idx + 1)) >> 2);
         dmae->dst_addr_hi = 0;
-        dmae->len = sizeof(struct dmae_command) >> 2;
+        dmae->len = sizeof(struct dmae_cmd) >> 2;
         if (CHIP_IS_E1(sc)) {
             dmae->len--;
         }
@@ -234,6 +234,10 @@ bxe_stats_comp(struct bxe_softc *sc)
     while (*stats_comp != DMAE_COMP_VAL) {
         if (!cnt) {
             BLOGE(sc, "Timeout waiting for stats finished\n");
+            if(sc->trigger_grcdump) {
+                /* taking grcdump */
+                bxe_grc_dump(sc);
+            }
             break;
         }
 
@@ -251,7 +255,7 @@ bxe_stats_comp(struct bxe_softc *sc)
 static void
 bxe_stats_pmf_update(struct bxe_softc *sc)
 {
-    struct dmae_command *dmae;
+    struct dmae_cmd *dmae;
     uint32_t opcode;
     int loader_idx = PMF_DMAE_C(sc);
     uint32_t *stats_comp = BXE_SP(sc, stats_comp);
@@ -310,7 +314,7 @@ bxe_stats_pmf_update(struct bxe_softc *sc)
 static void
 bxe_port_stats_init(struct bxe_softc *sc)
 {
-    struct dmae_command *dmae;
+    struct dmae_cmd *dmae;
     int port = SC_PORT(sc);
     uint32_t opcode;
     int loader_idx = PMF_DMAE_C(sc);
@@ -538,7 +542,7 @@ bxe_port_stats_init(struct bxe_softc *sc)
 static void
 bxe_func_stats_init(struct bxe_softc *sc)
 {
-    struct dmae_command *dmae = &sc->stats_dmae;
+    struct dmae_cmd *dmae = &sc->stats_dmae;
     uint32_t *stats_comp = BXE_SP(sc, stats_comp);
 
     /* sanity */
@@ -548,7 +552,7 @@ bxe_func_stats_init(struct bxe_softc *sc)
     }
 
     sc->executer_idx = 0;
-    memset(dmae, 0, sizeof(struct dmae_command));
+    memset(dmae, 0, sizeof(struct dmae_cmd));
 
     dmae->opcode = bxe_dmae_opcode(sc, DMAE_SRC_PCI, DMAE_DST_GRC,
                                    TRUE, DMAE_COMP_PCI);
@@ -1310,8 +1314,12 @@ bxe_stats_update(struct bxe_softc *sc)
         if (bxe_storm_stats_update(sc)) {
             if (sc->stats_pending++ == 3) {
 		if (sc->ifnet->if_drv_flags & IFF_DRV_RUNNING) {
-			atomic_store_rel_long(&sc->chip_tq_flags, CHIP_TQ_REINIT);
-			taskqueue_enqueue(sc->chip_tq, &sc->chip_tq_task);
+                    if(sc->trigger_grcdump) {
+                        /* taking grcdump */
+                        bxe_grc_dump(sc);
+                    }
+                    atomic_store_rel_long(&sc->chip_tq_flags, CHIP_TQ_REINIT);
+                    taskqueue_enqueue(sc->chip_tq, &sc->chip_tq_task);
 		}
             }
             return;
@@ -1339,7 +1347,7 @@ bxe_stats_update(struct bxe_softc *sc)
 static void
 bxe_port_stats_stop(struct bxe_softc *sc)
 {
-    struct dmae_command *dmae;
+    struct dmae_cmd *dmae;
     uint32_t opcode;
     int loader_idx = PMF_DMAE_C(sc);
     uint32_t *stats_comp = BXE_SP(sc, stats_comp);
@@ -1466,7 +1474,7 @@ void bxe_stats_handle(struct bxe_softc     *sc,
 static void
 bxe_port_stats_base_init(struct bxe_softc *sc)
 {
-    struct dmae_command *dmae;
+    struct dmae_cmd *dmae;
     uint32_t *stats_comp = BXE_SP(sc, stats_comp);
 
     /* sanity */

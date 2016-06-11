@@ -1131,9 +1131,9 @@ ufs_direnter(dvp, tvp, dirp, cnp, newdirbp, isrename)
 		if (tvp != NULL)
 			VOP_UNLOCK(tvp, 0);
 		error = UFS_TRUNCATE(dvp, (off_t)dp->i_endoff,
-		    IO_NORMAL | IO_SYNC, cr);
+		    IO_NORMAL | (DOINGASYNC(dvp) ? 0 : IO_SYNC), cr);
 		if (error != 0)
-			vprint("ufs_direnter: failted to truncate", dvp);
+			vprint("ufs_direnter: failed to truncate", dvp);
 #ifdef UFS_DIRHASH
 		if (error == 0 && dp->i_dirhash != NULL)
 			ufsdirhash_dirtrunc(dp, dp->i_endoff);
@@ -1256,7 +1256,8 @@ out:
 	 * drop its snapshot reference so that it will be reclaimed
 	 * when last open reference goes away.
 	 */
-	if (ip != 0 && (ip->i_flags & SF_SNAPSHOT) != 0 && ip->i_effnlink == 0)
+	if (ip != NULL && (ip->i_flags & SF_SNAPSHOT) != 0 &&
+	    ip->i_effnlink == 0)
 		UFS_SNAPGONE(ip);
 	return (error);
 }

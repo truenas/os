@@ -123,6 +123,8 @@ TGTS+=	${BITGTS}
 .ORDER: buildworld installworld
 .ORDER: buildworld distributeworld
 .ORDER: buildworld buildkernel
+.ORDER: installworld distribution
+.ORDER: installworld installkernel
 .ORDER: buildkernel installkernel
 .ORDER: buildkernel installkernel.debug
 .ORDER: buildkernel reinstallkernel
@@ -153,9 +155,13 @@ HAVE_MAKE=	bmake
 .else
 HAVE_MAKE=	fmake
 .endif
+.if ${HAVE_MAKE} != ${WANT_MAKE} || \
+    (defined(WANT_MAKE_VERSION) && ${MAKE_VERSION} < ${WANT_MAKE_VERSION})
+NEED_MAKE_UPGRADE= t
+.endif
 .if exists(${MYMAKE})
 SUB_MAKE:= ${MYMAKE} -m ${.CURDIR}/share/mk
-.elif ${WANT_MAKE} != ${HAVE_MAKE} || ${WANT_MAKE} != "bmake"
+.elif defined(NEED_MAKE_UPGRADE) || ${WANT_MAKE} != "bmake"
 # It may not exist yet but we may cause it to.
 # In the case of fmake, upgrade_checks may cause a newer version to be built.
 SUB_MAKE= `test -x ${MYMAKE} && echo ${MYMAKE} || echo ${MAKE}` \
@@ -331,12 +337,9 @@ kernel: buildkernel installkernel
 # Perform a few tests to determine if the installed tools are adequate
 # for building the world.
 #
-# Note: if we ever need to care about the version of bmake, simply testing
-# MAKE_VERSION against a required version should suffice.
-#
 upgrade_checks:
-.if ${HAVE_MAKE} != ${WANT_MAKE}
-	@(cd ${.CURDIR} && ${MAKE} ${WANT_MAKE:S,^f,,})
+.if defined(NEED_MAKE_UPGRADE)
+	@${_+_}(cd ${.CURDIR} && ${MAKE} ${WANT_MAKE:S,^f,,})
 .elif ${WANT_MAKE} == "fmake"
 	@if ! (cd ${.CURDIR}/tools/build/make_check && \
 	    PATH=${PATH} ${BINMAKE} obj >/dev/null 2>&1 && \

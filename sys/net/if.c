@@ -113,6 +113,14 @@ SYSCTL_INT(_net_link, OID_AUTO, log_link_state_change, CTLFLAG_RW,
 	&log_link_state_change, 0,
 	"log interface link state change events");
 
+/* Log promiscuous mode change events */
+static int log_promisc_mode_change = 1;
+
+TUNABLE_INT("net.link.log_promisc_mode_change", &log_promisc_mode_change);
+SYSCTL_INT(_net_link, OID_AUTO, log_promisc_mode_change, CTLFLAG_RDTUN,
+	&log_promisc_mode_change, 1,
+	"log promiscuous mode change events");
+
 /* Interface description */
 static unsigned int ifdescr_maxlen = 1024;
 SYSCTL_UINT(_net, OID_AUTO, ifdescr_maxlen, CTLFLAG_RW,
@@ -339,11 +347,12 @@ ifnet_setbyindex(u_short idx, struct ifnet *ifp)
 struct ifaddr *
 ifaddr_byindex(u_short idx)
 {
-	struct ifaddr *ifa;
+	struct ifnet *ifp;
+	struct ifaddr *ifa = NULL;
 
 	IFNET_RLOCK_NOSLEEP();
-	ifa = ifnet_byindex_locked(idx)->if_addr;
-	if (ifa != NULL)
+	ifp = ifnet_byindex_locked(idx);
+	if (ifp != NULL && (ifa = ifp->if_addr) != NULL)
 		ifa_ref(ifa);
 	IFNET_RUNLOCK_NOSLEEP();
 	return (ifa);
@@ -2393,9 +2402,11 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 				ifp->if_flags |= IFF_PROMISC;
 			else if (ifp->if_pcount == 0)
 				ifp->if_flags &= ~IFF_PROMISC;
-			log(LOG_INFO, "%s: permanently promiscuous mode %s\n",
-			    ifp->if_xname,
-			    (new_flags & IFF_PPROMISC) ? "enabled" : "disabled");
+			if (log_promisc_mode_change)
+                                log(LOG_INFO, "%s: permanently promiscuous mode %s\n",
+                                    ifp->if_xname,
+                                    ((new_flags & IFF_PPROMISC) ?
+                                     "enabled" : "disabled"));
 		}
 		ifp->if_flags = (ifp->if_flags & IFF_CANTCHANGE) |
 			(new_flags &~ IFF_CANTCHANGE);
@@ -2433,6 +2444,11 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 			return (error);
 		if (new_name[0] == '\0')
 			return (EINVAL);
+		if (new_name[IFNAMSIZ-1] != '\0') {
+			new_name[IFNAMSIZ-1] = '\0';
+			if (strlen(new_name) == IFNAMSIZ-1)
+				return (EINVAL);
+		}
 		if (ifunit(new_name) != NULL)
 			return (EEXIST);
 
@@ -2945,7 +2961,8 @@ ifpromisc(struct ifnet *ifp, int pswitch)
 	error = if_setflag(ifp, IFF_PROMISC, IFF_PPROMISC,
 			   &ifp->if_pcount, pswitch);
 	/* If promiscuous mode status has changed, log a message */
-	if (error == 0 && ((ifp->if_flags ^ oldflags) & IFF_PROMISC))
+	if (error == 0 && ((ifp->if_flags ^ oldflags) & IFF_PROMISC) &&
+            log_promisc_mode_change)
 		log(LOG_INFO, "%s: promiscuous mode %s\n",
 		    ifp->if_xname,
 		    (ifp->if_flags & IFF_PROMISC) ? "enabled" : "disabled");

@@ -273,7 +273,7 @@ do_move(const char *from, const char *to)
 static int
 fastcopy(const char *from, const char *to, struct stat *sbp)
 {
-	struct timeval tval[2];
+	struct timespec ts[2];
 	static u_int blen = MAXPHYS;
 	static char *bp = NULL;
 	mode_t oldmode;
@@ -285,6 +285,7 @@ fastcopy(const char *from, const char *to, struct stat *sbp)
 	}
 	if (bp == NULL && (bp = malloc((size_t)blen)) == NULL) {
 		warnx("malloc(%u) failed", blen);
+		(void)close(from_fd);
 		return (1);
 	}
 	while ((to_fd =
@@ -341,10 +342,9 @@ err:		if (unlink(to))
 		if (errno != EOPNOTSUPP || sbp->st_flags != 0)
 			warn("%s: set flags (was: 0%07o)", to, sbp->st_flags);
 
-	tval[0].tv_sec = sbp->st_atime;
-	tval[1].tv_sec = sbp->st_mtime;
-	tval[0].tv_usec = tval[1].tv_usec = 0;
-	if (utimes(to, tval))
+	ts[0] = sbp->st_atim;
+	ts[1] = sbp->st_mtim;
+	if (utimensat(AT_FDCWD, to, ts, 0))
 		warn("%s: set times", to);
 
 	if (close(to_fd)) {

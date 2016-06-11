@@ -4351,6 +4351,15 @@ vop_mknod_post(void *ap, int rc)
 }
 
 void
+vop_reclaim_post(void *ap, int rc)
+{
+	struct vop_reclaim_args *a = ap;
+
+	if (!rc)
+		VFS_KNOTE_LOCKED(a->a_vp, NOTE_REVOKE);
+}
+
+void
 vop_remove_post(void *ap, int rc)
 {
 	struct vop_remove_args *a = ap;
@@ -4365,10 +4374,27 @@ void
 vop_rename_post(void *ap, int rc)
 {
 	struct vop_rename_args *a = ap;
+	long hint;
 
 	if (!rc) {
-		VFS_KNOTE_UNLOCKED(a->a_fdvp, NOTE_WRITE);
-		VFS_KNOTE_UNLOCKED(a->a_tdvp, NOTE_WRITE);
+		hint = NOTE_WRITE;
+		if (a->a_fdvp == a->a_tdvp) {
+			if (a->a_tvp != NULL && a->a_tvp->v_type == VDIR)
+				hint |= NOTE_LINK;
+			VFS_KNOTE_UNLOCKED(a->a_fdvp, hint);
+			VFS_KNOTE_UNLOCKED(a->a_tdvp, hint);
+		} else {
+			hint |= NOTE_EXTEND;
+			if (a->a_fvp->v_type == VDIR)
+				hint |= NOTE_LINK;
+			VFS_KNOTE_UNLOCKED(a->a_fdvp, hint);
+
+			if (a->a_fvp->v_type == VDIR && a->a_tvp != NULL &&
+			    a->a_tvp->v_type == VDIR)
+				hint &= ~NOTE_LINK;
+			VFS_KNOTE_UNLOCKED(a->a_tdvp, hint);
+		}
+
 		VFS_KNOTE_UNLOCKED(a->a_fvp, NOTE_RENAME);
 		if (a->a_tvp)
 			VFS_KNOTE_UNLOCKED(a->a_tvp, NOTE_DELETE);
@@ -4418,6 +4444,45 @@ vop_symlink_post(void *ap, int rc)
 
 	if (!rc)
 		VFS_KNOTE_LOCKED(a->a_dvp, NOTE_WRITE);
+}
+
+void
+vop_open_post(void *ap, int rc)
+{
+	struct vop_open_args *a = ap;
+
+	if (!rc)
+		VFS_KNOTE_LOCKED(a->a_vp, NOTE_OPEN);
+}
+
+void
+vop_close_post(void *ap, int rc)
+{
+	struct vop_close_args *a = ap;
+
+	if (!rc && (a->a_cred != NOCRED || /* filter out revokes */
+	    (a->a_vp->v_iflag & VI_DOOMED) == 0)) {
+		VFS_KNOTE_LOCKED(a->a_vp, (a->a_fflag & FWRITE) != 0 ?
+		    NOTE_CLOSE_WRITE : NOTE_CLOSE);
+	}
+}
+
+void
+vop_read_post(void *ap, int rc)
+{
+	struct vop_read_args *a = ap;
+
+	if (!rc)
+		VFS_KNOTE_LOCKED(a->a_vp, NOTE_READ);
+}
+
+void
+vop_readdir_post(void *ap, int rc)
+{
+	struct vop_readdir_args *a = ap;
+
+	if (!rc)
+		VFS_KNOTE_LOCKED(a->a_vp, NOTE_READ);
 }
 
 static struct knlist fs_knlist;
@@ -4630,7 +4695,7 @@ filt_vfsread(struct knote *kn, long hint)
 	 * filesystem is gone, so set the EOF flag and schedule
 	 * the knote for deletion.
 	 */
-	if (hint == NOTE_REVOKE) {
+	if (hint == NOTE_REVOKE || (hint == 0 && vp->v_type == VBAD)) {
 		VI_LOCK(vp);
 		kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 		VI_UNLOCK(vp);
@@ -4659,7 +4724,7 @@ filt_vfswrite(struct knote *kn, long hint)
 	 * filesystem is gone, so set the EOF flag and schedule
 	 * the knote for deletion.
 	 */
-	if (hint == NOTE_REVOKE)
+	if (hint == NOTE_REVOKE || (hint == 0 && vp->v_type == VBAD))
 		kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 
 	kn->kn_data = 0;
@@ -4676,7 +4741,7 @@ filt_vfsvnode(struct knote *kn, long hint)
 	VI_LOCK(vp);
 	if (kn->kn_sfflags & hint)
 		kn->kn_fflags |= hint;
-	if (hint == NOTE_REVOKE) {
+	if (hint == NOTE_REVOKE || (hint == 0 && vp->v_type == VBAD)) {
 		kn->kn_flags |= EV_EOF;
 		VI_UNLOCK(vp);
 		return (1);
@@ -4712,6 +4777,7 @@ vfs_read_dirent(struct vop_readdir_args *ap, struct dirent *dp, off_t off)
 	*ap->a_cookies = realloc(*ap->a_cookies,
 	    (*ap->a_ncookies + 1) * sizeof(u_long), M_TEMP, M_WAITOK | M_ZERO);
 	(*ap->a_cookies)[*ap->a_ncookies] = off;
+	*ap->a_ncookies += 1;
 	return (0);
 }
 
