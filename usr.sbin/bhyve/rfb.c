@@ -28,11 +28,13 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <sys/select.h>
+#include <sys/event.h>
 #include <sys/param.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 
 #include <assert.h>
@@ -713,43 +715,47 @@ static void *
 rfb_wr_thr(void *arg)
 {
 	struct rfb_softc *rc;
-	fd_set rfds;
-	struct timeval tv;
-	struct timeval prev_tv;
-	int64_t tdiff;
-	int cfd;
-	int err;
+	struct kevent kev[2];
+	struct kevent ret[2];
+	int cfd, kq, err, i;
+	int val = 1;
 
 	rc = arg;
+	kq = kqueue();
 	cfd = rc->cfd;
 
-	prev_tv.tv_sec = 0;
-	prev_tv.tv_usec = 0;
+	EV_SET(&kev[0], cfd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+	EV_SET(&kev[1], 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 40, NULL);
+
+	setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
+
+	err = kevent(kq, kev, 2, NULL, 0, NULL);
+	if (err < 0)
+		goto out;
+
 	while (rc->cfd >= 0) {
-		FD_ZERO(&rfds);
-		FD_SET(cfd, &rfds);
-		tv.tv_sec = 0;
-		tv.tv_usec = 10000;
-
-		err = select(cfd+1, &rfds, NULL, NULL, &tv);
+		err = kevent(kq, NULL, 0, ret, 2, NULL);
                 if (err < 0)
-			return (NULL);
+			goto out;
 
-		/* Determine if its time to push screen; ~24hz */
-		gettimeofday(&tv, NULL);
-		tdiff = timeval_delta(&prev_tv, &tv);
-		if (tdiff > 40000) {
-			prev_tv.tv_sec = tv.tv_sec;
-			prev_tv.tv_usec = tv.tv_usec;
-			if (rfb_send_screen(rc, cfd, 0) <= 0) {
-				return (NULL);
+		for (i = 0; i < err; i++) {
+			if (ret[i].filter == EVFILT_READ &&
+			    ret[i].flags & EV_EOF)
+				goto out;
+
+			if (ret[i].filter == EVFILT_READ &&
+			    ret[i].flags & EV_ERROR)
+				goto out;
+
+			if (ret[i].filter == EVFILT_TIMER) {
+				if (rfb_send_screen(rc, cfd, 0) <= 0)
+					goto out;
 			}
-		} else {
-			/* sleep */
-			usleep(40000 - tdiff);
 		}
 	}
 
+out:
+	close(kq);
 	return (NULL);
 }
 
