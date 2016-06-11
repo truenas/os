@@ -7,17 +7,22 @@ CFLAGS+=-I${.CURDIR}/../../contrib/lib9p
 .PATH:  ${.CURDIR}/../../contrib/lib9p
 
 PROG=	bhyve
+PACKAGE=	bhyve
+
+DEBUG_FLAGS= -g -O0
 
 MAN=	bhyve.8
 
-CFLAGS+= -O0
+BHYVE_SYSDIR?=${SRCTOP}
 
 SRCS=	\
 	atkbdc.c		\
 	acpi.c			\
+	bhyvegc.c		\
 	bhyverun.c		\
 	block_if.c		\
 	bootrom.c		\
+	console.c		\
 	consport.c		\
 	dbgport.c		\
 	fwctl.c			\
@@ -28,6 +33,7 @@ SRCS=	\
 	mptbl.c			\
 	pci_ahci.c		\
 	pci_emul.c		\
+	pci_fbuf.c		\
 	pci_hostbridge.c	\
 	pci_irq.c		\
 	pci_lpc.c		\
@@ -38,21 +44,31 @@ SRCS=	\
 	pci_virtio_net.c	\
 	pci_virtio_rnd.c	\
 	pci_uart.c		\
+	pci_xhci.c		\
 	pm.c			\
 	post.c			\
+	ps2kbd.c		\
+	ps2mouse.c		\
+	rfb.c			\
 	rtc.c			\
 	smbiostbl.c		\
+	sockstream.c		\
 	task_switch.c		\
 	uart_emul.c		\
+	usb_emul.c		\
+	usb_mouse.c		\
 	virtio.c		\
+	vga.c			\
 	xmsr.c			\
 	spinup_ap.c
 
-.PATH:	${.CURDIR}/../../sys/amd64/vmm
+.PATH:  ${BHYVE_SYSDIR}/sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
-DPADD=	${LIBVMMAPI} ${LIBMD} ${LIBUTIL} ${LIBPTHREAD} ${LIB9P} ${LIBSBUF}
-LDADD=	-lvmmapi -lmd -lutil -lpthread -l9p -lsbuf
+LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf
+#LIBADD=	vmmapi md pthread z
+
+CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/usb/controller
 
 WARNS?=	2
 
