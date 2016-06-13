@@ -755,6 +755,8 @@ typedef struct hv_vmbus_channel {
 
 	struct mtx			inbound_lock;
 
+	struct taskqueue *		rxq;
+	struct task			channel_task;
 	hv_vmbus_pfn_channel_callback	on_channel_callback;
 	void*				channel_callback_context;
 
@@ -906,30 +908,6 @@ int		hv_vmbus_channel_teardown_gpdal(
 
 struct hv_vmbus_channel* vmbus_select_outgoing_channel(struct hv_vmbus_channel *promary);
 
-/*
- * Work abstraction defines
- */
-typedef struct hv_work_queue {
-	struct taskqueue*	queue;
-	struct proc*		proc;
-	struct sema*		work_sema;
-} hv_work_queue;
-
-typedef struct hv_work_item {
-	struct task	work;
-	void		(*callback)(void *);
-	void*		context;
-	hv_work_queue*	wq;
-} hv_work_item;
-
-struct hv_work_queue*	hv_work_queue_create(char* name);
-
-void			hv_work_queue_close(struct hv_work_queue* wq);
-
-int			hv_queue_work_item(
-				hv_work_queue*	wq,
-				void		(*callback)(void *),
-				void*		context);
 /**
  * @brief Get physical address from virtual
  */
@@ -941,35 +919,5 @@ hv_get_phys_addr(void *virt)
 	return (ret);
 }
 
-
-/**
- * KVP related structures
- * 
- */
-typedef struct hv_vmbus_service {
-        hv_guid       guid;             /* Hyper-V GUID */
-        char          *name;            /* name of service */
-        boolean_t     enabled;          /* service enabled */
-        hv_work_queue *work_queue;      /* background work queue */
-
-        /*
-         * function to initialize service
-         */
-        int (*init)(struct hv_vmbus_service *);
-
-        /*
-         * function to process Hyper-V messages
-         */
-        void (*callback)(void *);
-} hv_vmbus_service;
-
-extern uint8_t* receive_buffer[];
-extern hv_vmbus_service service_table[];
 extern uint32_t hv_vmbus_protocal_version;
-
-void hv_kvp_callback(void *context);
-int hv_kvp_init(hv_vmbus_service *serv);
-void hv_kvp_deinit(void);
-
 #endif  /* __HYPERV_H__ */
-
