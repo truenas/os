@@ -70,6 +70,7 @@ typedef uint16_t hv_vmbus_status;
  *    You did not supply enough message buffers to send a message.
  */
 
+#define HV_STATUS_SUCCESS                ((uint16_t)0)
 #define HV_STATUS_INSUFFICIENT_BUFFERS   ((uint16_t)0x0013)
 
 typedef void (*hv_vmbus_channel_callback)(void *context);
@@ -202,9 +203,8 @@ typedef struct {
 	 * Each cpu has its own software interrupt handler for channel
 	 * event and msg handling.
 	 */
-	struct intr_event		*hv_event_intr_event[MAXCPU];
+	struct taskqueue		*hv_event_queue[MAXCPU];
 	struct intr_event		*hv_msg_intr_event[MAXCPU];
-	void				*event_swintr[MAXCPU];
 	void				*msg_swintr[MAXCPU];
 	/*
 	 * Host use this vector to intrrupt guest for vmbus channel
@@ -351,7 +351,8 @@ typedef struct {
 	 * notification and 2nd is child->parent
 	 * notification
 	 */
-	void					*monitor_pages;
+	void					*monitor_page_1;
+	void					*monitor_page_2;
 	TAILQ_HEAD(, hv_vmbus_channel_msg_info)	channel_msg_anchor;
 	struct mtx				channel_msg_lock;
 	/**
@@ -363,10 +364,8 @@ typedef struct {
 
 	/**
 	 * channel table for fast lookup through id.
-	 */
+	*/
 	hv_vmbus_channel                        **channels;
-	hv_vmbus_handle				work_queue;
-	struct sema				control_sema;
 } hv_vmbus_connection;
 
 typedef union {
@@ -633,7 +632,6 @@ typedef void (*vmbus_msg_handler)(hv_vmbus_channel_msg_header *msg);
 typedef struct hv_vmbus_channel_msg_table_entry {
 	hv_vmbus_channel_msg_type    messageType;
 
-	bool   handler_no_sleep; /* true: the handler doesn't sleep */
 	vmbus_msg_handler   messageHandler;
 } hv_vmbus_channel_msg_table_entry;
 
@@ -642,6 +640,14 @@ extern hv_vmbus_channel_msg_table_entry	g_channel_message_table[];
 /*
  * Private, VM Bus functions
  */
+struct sysctl_ctx_list;
+struct sysctl_oid_list;
+
+void			hv_ring_buffer_stat(
+				struct sysctl_ctx_list		*ctx,
+				struct sysctl_oid_list		*tree_node,
+				hv_vmbus_ring_buffer_info	*rbi,
+				const char			*desc);
 
 int			hv_vmbus_ring_buffer_init(
 				hv_vmbus_ring_buffer_info	*ring_info,
@@ -683,7 +689,6 @@ uint32_t		hv_ring_buffer_read_end(
 
 hv_vmbus_channel*	hv_vmbus_allocate_channel(void);
 void			hv_vmbus_free_vmbus_channel(hv_vmbus_channel *channel);
-void			hv_vmbus_on_channel_message(void *context);
 int			hv_vmbus_request_channel_offers(void);
 void			hv_vmbus_release_unattached_channels(void);
 int			hv_vmbus_init(void);
@@ -717,7 +722,7 @@ int			hv_vmbus_connect(void);
 int			hv_vmbus_disconnect(void);
 int			hv_vmbus_post_message(void *buffer, size_t buf_size);
 int			hv_vmbus_set_event(hv_vmbus_channel *channel);
-void			hv_vmbus_on_events(void *);
+void			hv_vmbus_on_events(int cpu);
 
 /**
  * Event Timer interfaces

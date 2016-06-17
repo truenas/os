@@ -83,8 +83,6 @@ vmbus_msg_swintr(void *arg)
 	hv_vmbus_channel_msg_table_entry *entry;
 	hv_vmbus_channel_msg_type msg_type;
 	hv_vmbus_message*	msg;
-	hv_vmbus_message*	copied;
-	static bool warned	= false;
 
 	cpu = (int)(long)arg;
 	KASSERT(cpu <= mp_maxid, ("VMBUS: vmbus_msg_swintr: "
@@ -100,31 +98,15 @@ vmbus_msg_swintr(void *arg)
 		hdr = (hv_vmbus_channel_msg_header *)msg->u.payload;
 		msg_type = hdr->message_type;
 
-		if (msg_type >= HV_CHANNEL_MESSAGE_COUNT && !warned) {
-			warned = true;
+		if (msg_type >= HV_CHANNEL_MESSAGE_COUNT) {
 			printf("VMBUS: unknown message type = %d\n", msg_type);
 			goto handled;
 		}
 
 		entry = &g_channel_message_table[msg_type];
 
-		if (entry->handler_no_sleep)
+		if (entry->messageHandler)
 			entry->messageHandler(hdr);
-		else {
-
-			copied = malloc(sizeof(hv_vmbus_message),
-					M_DEVBUF, M_NOWAIT);
-			KASSERT(copied != NULL,
-				("Error VMBUS: malloc failed to allocate"
-					" hv_vmbus_message!"));
-			if (copied == NULL)
-				continue;
-
-			memcpy(copied, msg, sizeof(hv_vmbus_message));
-			hv_queue_work_item(hv_vmbus_g_connection.work_queue,
-					   hv_vmbus_on_channel_message,
-					   copied);
-		}
 handled:
 	    msg->header.message_type = HV_MESSAGE_TYPE_NONE;
 
@@ -134,8 +116,12 @@ handled:
 	     * message_pending and EOMing. Otherwise, the EOMing will
 	     * not deliver any more messages
 	     * since there is no empty slot
+	     *
+	     * NOTE:
+	     * mb() is used here, since atomic_thread_fence_seq_cst()
+	     * will become compler fence on UP kernel.
 	     */
-	    wmb();
+	    mb();
 
 	    if (msg->header.message_flags.u.message_pending) {
 			/*
@@ -177,7 +163,7 @@ hv_vmbus_isr(struct trapframe *frame)
 	    (hv_vmbus_protocal_version == HV_VMBUS_VERSION_WIN7)) {
 		/* Since we are a child, we only need to check bit 0 */
 		if (synch_test_and_clear_bit(0, &event->flags32[0])) {
-			swi_sched(hv_vmbus_g_context.event_swintr[cpu], 0);
+			hv_vmbus_on_events(cpu);
 		}
 	} else {
 		/*
@@ -187,7 +173,7 @@ hv_vmbus_isr(struct trapframe *frame)
 		 * Directly schedule the event software interrupt on
 		 * current cpu.
 		 */
-		swi_sched(hv_vmbus_g_context.event_swintr[cpu], 0);
+		hv_vmbus_on_events(cpu);
 	}
 
 	/* Check if there are actual msgs to be process */
@@ -204,8 +190,12 @@ hv_vmbus_isr(struct trapframe *frame)
 		 * message_pending and EOMing. Otherwise, the EOMing will
 		 * not deliver any more messages
 		 * since there is no empty slot
+		 *
+		 * NOTE:
+		 * mb() is used here, since atomic_thread_fence_seq_cst()
+		 * will become compler fence on UP kernel.
 		 */
-		wmb();
+		mb();
 
 		if (msg->header.message_flags.u.message_pending) {
 			/*
@@ -225,7 +215,6 @@ hv_vmbus_isr(struct trapframe *frame)
 	return (FILTER_HANDLED);
 }
 
-uint32_t hv_vmbus_swintr_event_cpu[MAXCPU];
 u_long *hv_vmbus_intr_cpu[MAXCPU];
 
 void
@@ -310,12 +299,7 @@ hv_vmbus_child_device_create(
 	 * Allocate the new child device
 	 */
 	child_dev = malloc(sizeof(hv_device), M_DEVBUF,
-			M_NOWAIT |  M_ZERO);
-	KASSERT(child_dev != NULL,
-	    ("Error VMBUS: malloc failed to allocate hv_device!"));
-
-	if (child_dev == NULL)
-		return (NULL);
+			M_WAITOK |  M_ZERO);
 
 	child_dev->channel = channel;
 	memcpy(&child_dev->class_id, &type, sizeof(hv_guid));
@@ -455,6 +439,19 @@ vmbus_vector_free(int vector)
 
 #endif /* HYPERV */
 
+static void
+vmbus_cpuset_setthread_task(void *xmask, int pending __unused)
+{
+	cpuset_t *mask = xmask;
+	int error;
+
+	error = cpuset_setthread(curthread->td_tid, mask);
+	if (error) {
+		panic("curthread=%ju: can't pin; error=%d",
+		    (uintmax_t)curthread->td_tid, error);
+	}
+}
+
 /**
  * @brief Main vmbus driver initialization routine.
  *
@@ -472,6 +469,7 @@ vmbus_bus_init(void)
 {
 	int i, j, n, ret;
 	char buf[MAXCOMLEN + 1];
+	cpuset_t cpu_mask;
 
 	if (vmbus_inited)
 		return (0);
@@ -508,10 +506,7 @@ vmbus_bus_init(void)
 	setup_args.vector = hv_vmbus_g_context.hv_cb_vector;
 
 	CPU_FOREACH(j) {
-		hv_vmbus_swintr_event_cpu[j] = 0;
-		hv_vmbus_g_context.hv_event_intr_event[j] = NULL;
 		hv_vmbus_g_context.hv_msg_intr_event[j] = NULL;
-		hv_vmbus_g_context.event_swintr[j] = NULL;
 		hv_vmbus_g_context.msg_swintr[j] = NULL;
 
 		snprintf(buf, sizeof(buf), "cpu%d:hyperv", j);
@@ -525,6 +520,26 @@ vmbus_bus_init(void)
 	 * Per cpu setup.
 	 */
 	CPU_FOREACH(j) {
+		struct task cpuset_task;
+
+		/*
+		 * Setup taskqueue to handle events
+		 */
+		hv_vmbus_g_context.hv_event_queue[j] = taskqueue_create_fast("hyperv event", M_WAITOK,
+			taskqueue_thread_enqueue, &hv_vmbus_g_context.hv_event_queue[j]);
+		if (hv_vmbus_g_context.hv_event_queue[j] == NULL) {
+			if (bootverbose)
+				printf("VMBUS: failed to setup taskqueue\n");
+			goto cleanup1;
+		}
+		taskqueue_start_threads(&hv_vmbus_g_context.hv_event_queue[j], 1, PI_NET,
+			"hvevent%d", j);
+
+		CPU_SETOF(j, &cpu_mask);
+		TASK_INIT(&cpuset_task, 0, vmbus_cpuset_setthread_task, &cpu_mask);
+		taskqueue_enqueue(hv_vmbus_g_context.hv_event_queue[j], &cpuset_task);
+		taskqueue_drain(hv_vmbus_g_context.hv_event_queue[j], &cpuset_task);
+
 		/*
 		 * Setup software interrupt thread and handler for msg handling.
 		 */
@@ -543,24 +558,10 @@ vmbus_bus_init(void)
 		 */
 		ret = intr_event_bind(hv_vmbus_g_context.hv_msg_intr_event[j],
 		    j);
-	 	if (ret) {
+		if (ret) {
 			if(bootverbose)
 				printf("VMBUS: failed to bind msg swi thread "
 				    "to cpu %d\n", j);
-			goto cleanup1;
-		}
-
-		/*
-		 * Setup software interrupt thread and handler for
-		 * event handling.
-		 */
-		ret = swi_add(&hv_vmbus_g_context.hv_event_intr_event[j],
-		    "hv_event", hv_vmbus_on_events, (void *)(long)j,
-		    SWI_CLOCK, 0, &hv_vmbus_g_context.event_swintr[j]);
-		if (ret) {
-			if(bootverbose)
-				printf("VMBUS: failed to setup event swi for "
-				    "cpu %d\n", j);
 			goto cleanup1;
 		}
 
@@ -569,12 +570,7 @@ vmbus_bus_init(void)
 		 */
 		for(i = 0; i < 2; i++) {
 			setup_args.page_buffers[2 * j + i] =
-				malloc(PAGE_SIZE, M_DEVBUF, M_NOWAIT | M_ZERO);
-			if (setup_args.page_buffers[2 * j + i] == NULL) {
-				KASSERT(setup_args.page_buffers[2 * j + i] != NULL,
-					("Error VMBUS: malloc failed!"));
-				goto cleanup1;
-			}
+				malloc(PAGE_SIZE, M_DEVBUF, M_WAITOK | M_ZERO);
 		}
 	}
 
@@ -607,12 +603,11 @@ vmbus_bus_init(void)
 	 * remove swi and vmbus callback vector;
 	 */
 	CPU_FOREACH(j) {
+		if (hv_vmbus_g_context.hv_event_queue[j] != NULL)
+			taskqueue_free(hv_vmbus_g_context.hv_event_queue[j]);
 		if (hv_vmbus_g_context.msg_swintr[j] != NULL)
 			swi_remove(hv_vmbus_g_context.msg_swintr[j]);
-		if (hv_vmbus_g_context.event_swintr[j] != NULL)
-			swi_remove(hv_vmbus_g_context.event_swintr[j]);
 		hv_vmbus_g_context.hv_msg_intr_event[j] = NULL;	
-		hv_vmbus_g_context.hv_event_intr_event[j] = NULL;	
 	}
 
 	vmbus_vector_free(hv_vmbus_g_context.hv_cb_vector);
@@ -677,12 +672,11 @@ vmbus_bus_exit(void)
 
 	/* remove swi */
 	CPU_FOREACH(i) {
+		if (hv_vmbus_g_context.hv_event_queue[i] != NULL)
+			taskqueue_free(hv_vmbus_g_context.hv_event_queue[i]);
 		if (hv_vmbus_g_context.msg_swintr[i] != NULL)
 			swi_remove(hv_vmbus_g_context.msg_swintr[i]);
-		if (hv_vmbus_g_context.event_swintr[i] != NULL)
-			swi_remove(hv_vmbus_g_context.event_swintr[i]);
 		hv_vmbus_g_context.hv_msg_intr_event[i] = NULL;	
-		hv_vmbus_g_context.hv_event_intr_event[i] = NULL;	
 	}
 
 	vmbus_vector_free(hv_vmbus_g_context.hv_cb_vector);
