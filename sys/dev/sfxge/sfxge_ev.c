@@ -123,8 +123,7 @@ sfxge_ev_rx(void *arg, uint32_t label, uint32_t id, uint32_t size,
 	rxq->pending += delta;
 
 	if (delta != 1) {
-		if ((!efx_nic_cfg_get(sc->enp)->enc_rx_batching_enabled) ||
-		    (delta <= 0) ||
+		if ((delta <= 0) ||
 		    (delta > efx_nic_cfg_get(sc->enp)->enc_rx_batch_max)) {
 			evq->exception = B_TRUE;
 
@@ -699,13 +698,10 @@ sfxge_ev_qstart(struct sfxge_softc *sc, unsigned int index)
 
 	/* Create the common code event queue. */
 	if ((rc = efx_ev_qcreate(sc->enp, index, esmp, evq->entries,
-	    evq->buf_base_id, &evq->common)) != 0)
+	    evq->buf_base_id, sc->ev_moderation, &evq->common)) != 0)
 		goto fail;
 
 	SFXGE_EVQ_LOCK(evq);
-
-	/* Set the default moderation */
-	(void)efx_ev_qmoderate(evq->common, sc->ev_moderation);
 
 	/* Prime the event queue for interrupts */
 	if ((rc = efx_ev_qprime(evq->common, evq->read_ptr)) != 0)
