@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 
 #include "bhyverun.h"
 #include "acpi.h"
+#include "atkbdc.h"
 #include "inout.h"
 #include "dbgport.h"
 #include "fwctl.h"
@@ -626,7 +627,7 @@ vm_loop(struct vmctx *ctx, int vcpu, uint64_t startrip)
 			exit(1);
 		}
 
-                rc = (*handler[exitcode])(ctx, &vmexit[vcpu], &vcpu);
+		rc = (*handler[exitcode])(ctx, &vmexit[vcpu], &vcpu);
 
 		switch (rc) {
 		case VMEXIT_CONTINUE:
@@ -901,6 +902,7 @@ main(int argc, char *argv[])
 
 	init_mem();
 	init_inout();
+	atkbdc_init(ctx);
 	pci_irq_init(ctx);
 	ioapic_init(ctx);
 

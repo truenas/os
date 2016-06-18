@@ -9,6 +9,7 @@ SRCS=		pack.c \
 		connection.c \
 		request.c log.c \
 		hashtable.c \
+		rfuncs.c \
 		utils.c \
 		transport/socket.c \
 		backend/fs.c
