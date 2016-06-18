@@ -43,7 +43,7 @@ extern "C"
 #include <string.h>
 #include <rfb/rfbproto.h>
 
-#if defined(ANDROID) || defined(LIBVNCSERVER_HAVE_ANDROID)
+#if defined(ANDROID) || defined(LIBVNCSERVER_HAVE_ANDROID) || defined(__FreeBSD__)
 #include <arpa/inet.h>
 #include <sys/select.h>
 #endif

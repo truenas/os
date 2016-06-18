@@ -1085,7 +1085,6 @@ void rfbShutdownServer(rfbScreenInfoPtr screen,rfbBool disconnectClients) {
 
 #ifndef LIBVNCSERVER_HAVE_GETTIMEOFDAY
 #include <fcntl.h>
-#include <conio.h>
 #include <sys/timeb.h>
 
 void gettimeofday(struct timeval* tv,char* dummy)
