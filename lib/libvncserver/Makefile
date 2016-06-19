@@ -3,8 +3,11 @@
 .PATH: ${.CURDIR}/../../contrib/libvncserver/libvncserver
 .PATH: ${.CURDIR}/../../contrib/libvncserver/common
 .PATH: ${.CURDIR}/../../contrib/libvncserver/rfb
-CFLAGS+=-I${.CURDIR}/../../contrib/libvncserver -I${.CURDIR}/../../contrib/libvncserver/common -I${.CURDIR}
+
+CFLAGS+=-I${.CURDIR}/../../contrib/libvncserver
+CFLAGS+=-I${.CURDIR}/../../contrib/libvncserver/common
 CFLAGS+=-I${.CURDIR}/../../contrib/libvncserver/libvncserver
+CFLAGS+=-I${.CURDIR}
 
 LIB=		vncserver
 SHLIB_MAJOR=	1
@@ -38,7 +41,8 @@ SRCS=		main.c \
 		zrlepalettehelper.c \
 		zywrletemplate.c
 
-INCS=		rfb.h
+INCSDIR=	${INCLUDEDIR}/rfb
+INCS=		rfb.h rfbproto.h rfb/rfbconfig.h
 
 DPADD=		${LIBSBUF}
 LDADD=		-lsbuf
