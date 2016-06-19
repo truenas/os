@@ -44,7 +44,4 @@ SRCS=		main.c \
 INCSDIR=	${INCLUDEDIR}/rfb
 INCS=		rfb.h rfbproto.h rfb/rfbconfig.h
 
-DPADD=		${LIBSBUF}
-LDADD=		-lsbuf
-
 .include <bsd.lib.mk>
