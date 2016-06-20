@@ -37,6 +37,10 @@ SRCS=		main.c \
 		scale.c \
 		zlib.c \
 		zrle.c \
+		md5.c \
+		sha1.c \
+		rfbssl_none.c \
+		rfbcrypto_included.c \
 		zrleoutstream.c \
 		zrlepalettehelper.c \
 		zywrletemplate.c
