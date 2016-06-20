@@ -56,13 +56,14 @@ SRCS=	\
 	usb_mouse.c		\
 	virtio.c		\
 	vga.c			\
+	vncserver.c		\
 	xmsr.c			\
 	spinup_ap.c
 
 .PATH:  ${BHYVE_SYSDIR}/sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
-LIBADD=	vmmapi md pthread z
+LIBADD=	vmmapi md pthread z util sbuf vncserver
 
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/e1000
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/mii

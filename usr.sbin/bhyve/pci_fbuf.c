@@ -97,6 +97,7 @@ struct pci_fbuf_softc {
 	int       rfb_wait;
 	int       vga_enabled;
 	int	  vga_full;
+	int       use_vncserver;
 
 	uint32_t  fbaddr;
 	char      *fb_base;
@@ -232,6 +233,11 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 	     xopts = strtok(NULL, ",")) {
 		if (strcmp(xopts, "wait") == 0) {
 			sc->rfb_wait = 1;
+			continue;
+		}
+
+		if (strcmp(xopts, "vncserver") == 0) {
+			sc->use_vncserver = 1;
 			continue;
 		}
 
@@ -407,7 +413,10 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 	memset((void *)sc->fb_base, 0, FB_SIZE);
 
-	error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait);
+	if (sc->use_vncserver)
+		error = vncserver_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait);
+	else
+		error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait);
 done:
 	if (error)
 		free(sc);
