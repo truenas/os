@@ -838,12 +838,41 @@ carp_send_ad_error(struct carp_softc *sc, int error)
 	}
 }
 
+/*
+ * Pick the best ifaddr on the given ifp for sending CARP
+ * advertisements.
+ *
+ * "Best" here is defined by ifa_preferred().  This function is much
+ * much like ifaof_ifpforaddr() except that we just use ifa_preferred().
+ *
+ * (This could be simplified to return the actual address, except that
+ * it has a different format in AF_INET and AF_INET6.)
+ */
+static struct ifaddr *
+carp_best_ifa(int af, struct ifnet *ifp)
+{
+	struct ifaddr *ifa, *best;
+
+	if (af >= AF_MAX)
+		return (NULL);
+	best = NULL;
+	IF_ADDR_RLOCK(ifp);
+	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+		if (ifa->ifa_addr->sa_family == af &&
+		    (best == NULL || ifa_preferred(best, ifa)))
+			best = ifa;
+	}
+	IF_ADDR_RUNLOCK(ifp);
+	if (best != NULL)
+		ifa_ref(best);
+	return (best);
+}
+
 static void
 carp_send_ad_locked(struct carp_softc *sc)
 {
 	struct carp_header ch;
 	struct timeval tv;
-	struct sockaddr sa;
 	struct ifaddr *ifa;
 	struct carp_header *ch_ptr;
 	struct mbuf *m;
@@ -892,9 +921,7 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip->ip_sum = 0;
 		ip_fillid(ip);
 
-		bzero(&sa, sizeof(sa));
-		sa.sa_family = AF_INET;
-		ifa = ifaof_ifpforaddr(&sa, sc->sc_carpdev);
+		ifa = carp_best_ifa(AF_INET, sc->sc_carpdev);
 		if (ifa != NULL) {
 			ip->ip_src.s_addr =
 			    ifatoia(ifa)->ia_addr.sin_addr.s_addr;
@@ -938,11 +965,9 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip6->ip6_vfc |= IPV6_VERSION;
 		ip6->ip6_hlim = CARP_DFLTTL;
 		ip6->ip6_nxt = IPPROTO_CARP;
-		bzero(&sa, sizeof(sa));
 
 		/* set the source address */
-		sa.sa_family = AF_INET6;
-		ifa = ifaof_ifpforaddr(&sa, sc->sc_carpdev);
+		ifa = carp_best_ifa(AF_INET6, sc->sc_carpdev);
 		if (ifa != NULL) {
 			bcopy(IFA_IN6(ifa), &ip6->ip6_src,
 			    sizeof(struct in6_addr));
