@@ -313,6 +313,8 @@
     ..
     readline
     ..
+    rfb
+    ..
     rpc
     ..
     rpcsvc

@@ -105,6 +105,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libusb} \
 	libutil \
 	${_libvgl} \
+	libvncserver \
 	${_libvmmapi} \
 	libwrap \
 	liby \

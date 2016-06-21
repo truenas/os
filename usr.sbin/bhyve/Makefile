@@ -59,13 +59,14 @@ SRCS=	\
 	usb_mouse.c		\
 	virtio.c		\
 	vga.c			\
+	vncserver.c		\
 	xmsr.c			\
 	spinup_ap.c
 
 .PATH:  ${BHYVE_SYSDIR}/sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
-LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf
+LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf -lvncserver
 #LIBADD=	vmmapi md pthread z
 
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/usb/controller
