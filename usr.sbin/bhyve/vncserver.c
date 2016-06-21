@@ -400,7 +400,8 @@ vncserver_init(char *hostname, int port, int wait)
 	sc->vs_height = sc->vs_gc->height;
 	sc->vs_width = sc->vs_gc->width;
 	sc->vs_screen = rfbGetScreen(NULL, NULL, sc->vs_width, sc->vs_height, 8, 3, 4);
-	//sc->vs_screen->inetdSock = sc->vs_sfd;
+
+	sc->vs_screen->port = port;
 	sc->vs_screen->desktopName = "bhyve";
 	sc->vs_screen->alwaysShared = true;
 	sc->vs_screen->serverFormat.redShift = 16;
