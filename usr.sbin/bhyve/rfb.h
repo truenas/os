@@ -31,7 +31,7 @@
 
 #define	RFB_PORT	5900
 
-int	rfb_init(char *hostname, int port, int wait);
-int	vncserver_init(char *path, int port, int wait);
+int	rfb_init(struct sockaddr *sa, size_t sa_len, int wait);
+int	vncserver_init(struct sockaddr *sa, size_t sa_len, int wait);
 
 #endif /* _RFB_H_ */

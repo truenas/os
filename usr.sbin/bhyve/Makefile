@@ -31,6 +31,7 @@ SRCS=	\
 	mem.c			\
 	mevent.c		\
 	mptbl.c			\
+	ne2000.c		\
 	pci_ahci.c		\
 	pci_emul.c		\
 	pci_fbuf.c		\

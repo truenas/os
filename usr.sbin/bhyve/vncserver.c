@@ -58,7 +58,6 @@ static int vncserver_debug = 0;
 #define	WPRINTF(params) printf params
 
 struct vncserver_softc {
-	int			vs_sfd;
 	struct bhyvegc_image *	vs_gc;
 	pthread_t		vs_tid;
 	rfbScreenInfoPtr	vs_screen;
@@ -343,13 +342,9 @@ sse42_supported()
 }
 
 int
-vncserver_init(char *hostname, int port, int wait)
+vncserver_init(struct sockaddr *sa, size_t sa_len, int wait)
 {
 	struct vncserver_softc *sc;
-#if 0
-	struct sockaddr_in sin;
-	int on = 1;
-#endif
 
 	sc = calloc(1, sizeof(struct vncserver_softc));
 
@@ -359,34 +354,6 @@ vncserver_init(char *hostname, int port, int wait)
 	                     sizeof(uint32_t));
 	sc->vs_crc_width = RFB_MAX_WIDTH;
 	sc->vs_crc_height = RFB_MAX_HEIGHT;
-
-#if 0
-	sc->vs_sfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sc->vs_sfd < 0) {
-		perror("socket");
-		return (-1);
-	}
-
-	setsockopt(sc->vs_sfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-
-	sin.sin_len = sizeof(sin);
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons(port);
-	if (hostname && strlen(hostname) > 0)
-		inet_pton(AF_INET, hostname, &(sin.sin_addr));
-	else
-		sin.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	if (bind(sc->vs_sfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-		perror("bind");
-		return (-1);
-	}
-
-	if (listen(sc->vs_sfd, 1) < 0) {
-		perror("listen");
-		return (-1);
-	}
-#endif
 
 	sc->vs_hw_crc = sse42_supported();
 
@@ -400,8 +367,6 @@ vncserver_init(char *hostname, int port, int wait)
 	sc->vs_height = sc->vs_gc->height;
 	sc->vs_width = sc->vs_gc->width;
 	sc->vs_screen = rfbGetScreen(NULL, NULL, sc->vs_width, sc->vs_height, 8, 3, 4);
-
-	sc->vs_screen->port = port;
 	sc->vs_screen->desktopName = "bhyve";
 	sc->vs_screen->alwaysShared = true;
 	sc->vs_screen->serverFormat.redShift = 16;
@@ -412,6 +377,16 @@ vncserver_init(char *hostname, int port, int wait)
 	sc->vs_screen->kbdAddEvent = vncserver_handle_key;
 	sc->vs_screen->newClientHook = vncserver_handle_client;
 	sc->vs_screen->screenData = sc;
+
+	if (sa->sa_family == AF_INET) {
+		struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+		sc->vs_screen->port = ntohs(sin->sin_port);
+	}
+
+	if (sa->sa_family == AF_UNIX) {
+		struct sockaddr_un *sun = (struct sockaddr_un *)sa;
+		sc->vs_screen->unixSockPath = sun->sun_path;
+	}
 
 	rfbInitServer(sc->vs_screen);
 	rfbRunEventLoop(sc->vs_screen, 40000, true);
