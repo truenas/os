@@ -76,6 +76,17 @@ static struct lpc_uart_softc {
 
 static const char *lpc_uart_names[LPC_UART_NUM] = { "COM1", "COM2" };
 
+#define LPC_NE2000_NUM	2
+static struct lpc_ne2000_config {
+	const char *opts;
+	uint8_t enabled;
+} lpc_ne2000[LPC_NE2000_NUM] = {{NULL, 0}, {NULL, 0}};
+
+static const char *lpc_ne2000_names[LPC_NE2000_NUM] = {"ne2k0", "ne2k1"};
+
+extern int
+lpc_ne2000_init(struct vmctx *lpc_ctx, uint8_t unit, const char *opts);
+
 /*
  * LPC device configuration is in the following form:
  * <lpc_device_name>[,<options>]
@@ -96,9 +107,19 @@ lpc_device_parse(const char *opts)
 			error = 0;
 			goto done;
 		}
+
 		for (unit = 0; unit < LPC_UART_NUM; unit++) {
 			if (strcasecmp(lpcdev, lpc_uart_names[unit]) == 0) {
 				lpc_uart_softc[unit].opts = str;
+				error = 0;
+				goto done;
+			}
+		}
+
+		for (unit = 0; unit < LPC_NE2000_NUM; unit++) {
+			if (strcasecmp(lpcdev, lpc_ne2000_names[unit]) == 0) {
+				lpc_ne2000[unit].enabled = 1;
+				lpc_ne2000[unit].opts = str;
 				error = 0;
 				goto done;
 			}
@@ -216,6 +237,18 @@ lpc_init(struct vmctx *ctx)
 		error = register_inout(&iop);
 		assert(error == 0);
 		sc->enabled = 1;
+	}
+
+	/* ne2k0 and ne2k1 */
+	for (unit = 0; unit < LPC_NE2000_NUM; unit++) {
+		if (lpc_ne2000[unit].enabled) {
+			error = lpc_ne2000_init(lpc_bridge->pi_vmctx, unit,
+					lpc_ne2000[unit].opts);
+			if (error) {
+				fprintf(stderr, "Unable to initialize the "
+						"LPC ne2k%d device\n", unit);
+			}
+		}
 	}
 
 	return (0);
