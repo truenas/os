@@ -863,10 +863,9 @@ sse42_supported(void)
 }
 
 int
-rfb_init(char *hostname, int port, int wait)
+rfb_init(struct sockaddr *sa, size_t sa_len, int wait)
 {
 	struct rfb_softc *rc;
-	struct sockaddr_in sin;
 	int on = 1;
 
 	rc = calloc(1, sizeof(struct rfb_softc));
@@ -878,23 +877,16 @@ rfb_init(char *hostname, int port, int wait)
 	rc->crc_width = RFB_MAX_WIDTH;
 	rc->crc_height = RFB_MAX_HEIGHT;
 
-	rc->sfd = socket(AF_INET, SOCK_STREAM, 0);
+	rc->sfd = socket(sa->sa_family, SOCK_STREAM, 0);
 	if (rc->sfd < 0) {
 		perror("socket");
 		return (-1);
 	}
 
-	setsockopt(rc->sfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+	if (sa->sa_family == AF_INET)
+		setsockopt(rc->sfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-	sin.sin_len = sizeof(sin);
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons(port);
-	if (hostname && strlen(hostname) > 0)
-		inet_pton(AF_INET, hostname, &(sin.sin_addr));
-	else
-		sin.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	if (bind(rc->sfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+	if (bind(rc->sfd, sa, sa_len) < 0) {
 		perror("bind");
 		return (-1);
 	}

@@ -30,7 +30,12 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/mman.h>
+
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <machine/vmm.h>
 #include <vmmapi.h>
@@ -92,6 +97,8 @@ struct pci_fbuf_softc {
 	} __packed memregs;
 
 	/* rfb server */
+	int       rfb_proto;
+	char      *rfb_path;
 	char      *rfb_host;
 	int       rfb_port;
 	int       rfb_wait;
@@ -254,7 +261,8 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 
 		if (!strcmp(xopts, "tcp") || !strcmp(xopts, "rfb")) {
 			/* parse host-ip:port */
-		        tmpstr = strsep(&config, ":");
+			tmpstr = strsep(&config, ":");
+			sc->rfb_proto = AF_INET;
 			if (!config)
 				sc->rfb_port = atoi(tmpstr);
 			else {
@@ -275,8 +283,11 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 				ret = -1;
 				goto done;
 			}
-	        } else if (!strcmp(xopts, "w")) {
-		        sc->memregs.width = atoi(config);
+		} else if (!strcmp(xopts, "unix")) {
+			sc->rfb_proto = AF_UNIX;
+			sc->rfb_path = config;
+		} else if (!strcmp(xopts, "w")) {
+			sc->memregs.width = atoi(config);
 			if (sc->memregs.width > COLS_MAX) {
 				pci_fbuf_usage(xopts);
 				ret = -1;
@@ -291,7 +302,6 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 				goto done;
 			} else if (sc->memregs.height == 0)
 				sc->memregs.height = 1080;
-
 		} else {
 			pci_fbuf_usage(xopts);
 			ret = -1;
@@ -335,6 +345,9 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 {
 	int error, prot;
 	struct pci_fbuf_softc *sc;
+	struct sockaddr_in sin;
+	struct sockaddr_un sun;
+	struct sockaddr *sa;
 	
 	if (fbuf_sc != NULL) {
 		fprintf(stderr, "Only one frame buffer device is allowed.\n");
@@ -413,10 +426,28 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 	memset((void *)sc->fb_base, 0, FB_SIZE);
 
+	if (sc->rfb_proto == AF_UNIX) {
+		sun.sun_family = AF_UNIX;
+		sun.sun_len = sizeof(sun);
+		strncpy(sun.sun_path, sc->rfb_path, sizeof(sun.sun_path));
+		sa = (struct sockaddr *)&sun;
+	}
+
+	if (sc->rfb_proto == AF_INET) {
+		sin.sin_family = AF_INET;
+		sin.sin_len = sizeof(sin);
+		sin.sin_port = htons(sc->rfb_port);
+		sin.sin_addr.s_addr = htonl(INADDR_ANY);
+		if (sc->rfb_host)
+			inet_pton(AF_INET, sc->rfb_host, &(sin.sin_addr));
+
+		sa = (struct sockaddr *)&sin;
+	}			
+
 	if (sc->use_vncserver)
-		error = vncserver_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait);
+		error = vncserver_init(sa, sa->sa_len, sc->rfb_wait);
 	else
-		error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait);
+		error = rfb_init(sa, sa->sa_len, sc->rfb_wait);
 done:
 	if (error)
 		free(sc);
