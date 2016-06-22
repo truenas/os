@@ -21,6 +21,7 @@ rfbUsage(void)
 {
     rfbProtocolExtension* extension;
 
+    fprintf(stderr, "-unix path             Path for the unix socket file to be created\n");
     fprintf(stderr, "-rfbport port          TCP port for RFB protocol\n");
 #ifdef LIBVNCSERVER_IPv6
     fprintf(stderr, "-rfbportv6 port        TCP6 port for RFB protocol\n");
@@ -91,7 +92,13 @@ rfbProcessArguments(rfbScreenInfoPtr rfbScreen,int* argc, char *argv[])
 	    }
 	    rfbScreen->port = atoi(argv[++i]);
 #ifdef LIBVNCSERVER_IPv6
-	} else if (strcmp(argv[i], "-rfbportv6") == 0) { /* -rfbportv6 port */
+	} else if (strcmp(argv[i], "-unix") == 0) { /* -unix port */
+				if (i + 1 >= *argc) {
+		rfbUsage();
+		return FALSE;
+		 }
+		 rfbScreen->unixSockPath = argv[++i];
+	}else if (strcmp(argv[i], "-rfbportv6") == 0) { /* -rfbportv6 port */
             if (i + 1 >= *argc) {
 		rfbUsage();
 		return FALSE;

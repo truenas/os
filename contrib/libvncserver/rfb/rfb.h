@@ -265,6 +265,8 @@ typedef struct _rfbScreenInfo
     rfbBool autoPort;
     int port;
     SOCKET listenSock;
+	 SOCKET unixSock;
+    const char* unixSockPath;
     int maxSock;
     int maxFd;
 #ifdef WIN32
