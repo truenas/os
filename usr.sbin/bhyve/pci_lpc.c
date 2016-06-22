@@ -242,7 +242,7 @@ lpc_init(struct vmctx *ctx)
 	/* ne2k0 and ne2k1 */
 	for (unit = 0; unit < LPC_NE2000_NUM; unit++) {
 		if (lpc_ne2000[unit].enabled) {
-			error = lpc_ne2000_init(lpc_bridge->pi_vmctx, unit,
+			error = lpc_ne2000_init(ctx, unit,
 					lpc_ne2000[unit].opts);
 			if (error) {
 				fprintf(stderr, "Unable to initialize the "
