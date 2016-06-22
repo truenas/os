@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009-2012 Microsoft Corp.
+ * Copyright (c) 2009-2012,2016 Microsoft Corp.
  * Copyright (c) 2012 NetApp Inc.
  * Copyright (c) 2012 Citrix Inc.
  * All rights reserved.
@@ -750,6 +750,9 @@ void			hv_vmbus_on_events(int cpu);
  */
 void			hv_et_init(void);
 void			hv_et_intr(struct trapframe*);
+
+/* Wait for device creation */
+void			vmbus_scan(void);
 
 /*
  * The guest OS needs to register the guest ID with the hypervisor.

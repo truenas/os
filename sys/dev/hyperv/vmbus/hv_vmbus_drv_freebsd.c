@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2009-2012 Microsoft Corp.
+ * Copyright (c) 2009-2012,2016 Microsoft Corp.
  * Copyright (c) 2012 NetApp Inc.
  * Copyright (c) 2012 Citrix Inc.
  * All rights reserved.
@@ -277,6 +277,9 @@ vmbus_child_pnpinfo_str(device_t dev, device_t child, char *buf, size_t buflen)
 	char guidbuf[40];
 	struct hv_device *dev_ctx = device_get_ivars(child);
 
+	if (dev_ctx == NULL)
+		return (0);
+
 	strlcat(buf, "classid=", buflen);
 	snprintf_hv_guid(guidbuf, sizeof(guidbuf), &dev_ctx->class_id);
 	strlcat(buf, guidbuf, buflen);
@@ -326,7 +329,6 @@ int
 hv_vmbus_child_device_register(struct hv_device *child_dev)
 {
 	device_t child;
-	int ret = 0;
 
 	if (bootverbose) {
 		char name[40];
@@ -337,10 +339,6 @@ hv_vmbus_child_device_register(struct hv_device *child_dev)
 	child = device_add_child(vmbus_devp, NULL, -1);
 	child_dev->device = child;
 	device_set_ivars(child, child_dev);
-
-	mtx_lock(&Giant);
-	ret = device_probe_and_attach(child);
-	mtx_unlock(&Giant);
 
 	return (0);
 }
@@ -370,7 +368,6 @@ vmbus_probe(device_t dev) {
 	return (BUS_PROBE_DEFAULT);
 }
 
-#ifdef HYPERV
 extern inthand_t IDTVEC(rsvd), IDTVEC(hv_vmbus_callback);
 
 /**
@@ -429,21 +426,6 @@ vmbus_vector_free(int vector)
 
         setidt(vector, IDTVEC(rsvd), SDT_SYSIGT, SEL_KPL, 0);
 }
-
-#else /* HYPERV */
-
-static int
-vmbus_vector_alloc(void)
-{
-	return(0);
-}
-
-static void
-vmbus_vector_free(int vector)
-{
-}
-
-#endif /* HYPERV */
 
 static void
 vmbus_cpuset_setthread_task(void *xmask, int pending __unused)
@@ -578,6 +560,11 @@ vmbus_bus_init(void)
 		goto cleanup1;
 
 	hv_vmbus_request_channel_offers();
+
+	vmbus_scan();
+	bus_generic_attach(vmbus_devp);
+	device_printf(vmbus_devp, "device scan, probe and attach done\n");
+
 	return (ret);
 
 	cleanup1:
@@ -622,6 +609,7 @@ vmbus_attach(device_t dev)
 	if (!cold)
 		vmbus_bus_init();
 
+	bus_generic_probe(dev);
 	return (0);
 }
 

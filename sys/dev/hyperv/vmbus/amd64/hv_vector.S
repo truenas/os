@@ -1,7 +1,5 @@
 /*-
- * Copyright (c) 2009-2012,2016 Microsoft Corp.
- * Copyright (c) 2012 NetApp Inc.
- * Copyright (c) 2012 Citrix Inc.
+ * Copyright (c) 2016 Microsoft Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,28 +26,21 @@
  * $FreeBSD$
  */
 
-#ifndef _HVUTIL_H_
-#define _HVUTIL_H_
+#include <machine/asmacros.h>
+#include <machine/specialreg.h>
 
-/**
- * hv_util related structures
- *
+#include "assym.s"
+
+/*
+ * This is the Hyper-V vmbus channel direct callback interrupt.
+ * Only used when it is running on Hyper-V.
  */
-typedef struct hv_util_sc {
-	/*
-	 * function to process Hyper-V messages
-	 */
-	void (*callback)(void *);
-
-	struct hv_device*	hv_dev;
-	uint8_t			*receive_buffer;
-} hv_util_sc;
-
-void hv_negotiate_version(
-	struct hv_vmbus_icmsg_hdr*		icmsghdrp,
-	struct hv_vmbus_icmsg_negotiate*	negop,
-	uint8_t*				buf);
-
-int hv_util_attach(device_t dev);
-int hv_util_detach(device_t dev);
-#endif
+	.text
+	SUPERALIGN_TEXT
+IDTVEC(hv_vmbus_callback)
+	PUSH_FRAME
+	FAKE_MCOUNT(TF_RIP(%rsp))
+	movq	%rsp, %rdi
+	call	hv_vector_handler
+	MEXITCOUNT
+	jmp	doreti
