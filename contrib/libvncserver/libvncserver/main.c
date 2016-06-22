@@ -591,6 +591,8 @@ listenerRun(void *data)
 	  FD_SET(screen->listenSock, &listen_fds);
 	if(screen->listen6Sock >= 0) 
 	  FD_SET(screen->listen6Sock, &listen_fds);
+	if(screen->unixSock >= 0)
+	  FD_SET(screen->unixSock, &listen_fds);
 
         if (select(screen->maxFd+1, &listen_fds, NULL, NULL, NULL) == -1) {
             rfbLogPerror("listenerRun: error in select");
@@ -599,10 +601,12 @@ listenerRun(void *data)
 	
 	/* there is something on the listening sockets, handle new connections */
 	len = sizeof (peer);
-	if (FD_ISSET(screen->listenSock, &listen_fds)) 
+	if (screen->listenSock >= 0 && FD_ISSET(screen->listenSock, &listen_fds))
 	    client_fd = accept(screen->listenSock, (struct sockaddr*)&peer, &len);
-	else if (FD_ISSET(screen->listen6Sock, &listen_fds))
+	else if (screen->listen6Sock >= 0 && FD_ISSET(screen->listen6Sock, &listen_fds))
 	    client_fd = accept(screen->listen6Sock, (struct sockaddr*)&peer, &len);
+	else if (screen->unixSock >= 0 && FD_ISSET(screen->unixSock, &listen_fds))
+	    client_fd = accept(screen->unixSock, (struct sockaddr*)&peer, &len);
 
 	if(client_fd >= 0)
 	  cl = rfbNewClient(screen,client_fd);
