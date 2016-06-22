@@ -166,9 +166,9 @@ rfbInitSockets(rfbScreenInfoPtr rfbScreen)
 			return;
 		}
 		saun.sun_family = AF_UNIX;
-		strcpy(saun.sun_path, rfbScreen->unixSockPath);
-		len = sizeof(saun.sun_family) + strlen(saun.sun_path);
-		if (bind(rfbScreen->unixSock, (struct sockaddr *)&saun, len) < 0) {
+		saun.sun_len = sizeof(saun);
+		strncpy(saun.sun_path, rfbScreen->unixSockPath, sizeof(saun.sun_path));
+		if (bind(rfbScreen->unixSock, (struct sockaddr *)&saun, saun.sun_len) < 0) {
 			rfbLogPerror("listen_unix: bind");
 			close(rfbScreen->unixSock);
 			return;
