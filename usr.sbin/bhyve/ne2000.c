@@ -1174,6 +1174,7 @@ pci_ne2000_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	/* probe a RTL8029 PCI card as a generic NE2000 device */
 	pci_set_cfgdata16(pi, PCIR_DEVICE, 0x8029);
 	pci_set_cfgdata16(pi, PCIR_VENDOR, 0x10ec);
+	pci_set_cfgdata8(pi, PCIR_CLASS, PCIC_NETWORK);
 
 	/* allocate one BAR register for both NIC and ASIC I/O bus address offsets */
 	pci_emul_alloc_bar(pi, 0, PCIBAR_IO, ED_NOVELL_IO_PORTS);
