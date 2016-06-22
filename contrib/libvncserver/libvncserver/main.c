@@ -836,6 +836,9 @@ rfbScreenInfoPtr rfbGetScreen(int* argc,char** argv,
    screen->ipv6port=5900;
    screen->socketState=RFB_SOCKET_INIT;
 
+   screen->unixSock = -1;
+   screen->unixSockPath = NULL;
+
    screen->inetdInitDone = FALSE;
    screen->inetdSock=-1;
 

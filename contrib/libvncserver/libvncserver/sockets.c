@@ -62,6 +62,7 @@
 #endif
 #ifdef LIBVNCSERVER_HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#include <sys/un.h>
 #endif
 #ifdef LIBVNCSERVER_HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -154,7 +155,38 @@ rfbInitSockets(rfbScreenInfoPtr rfbScreen)
     	rfbScreen->maxFd = rfbScreen->inetdSock;
 	return;
     }
+	if (rfbScreen->unixSockPath != NULL) {
+		FD_ZERO(&(rfbScreen->allFds));
+		
+		int len;
+		struct sockaddr_un saun;
+		rfbScreen->unixSock = socket(AF_UNIX, SOCK_STREAM, 0);
+		if (rfbScreen->unixSock < 0) {
+			rfbLogPerror("listen_unix: socket");
+			return;
+		}
+		saun.sun_family = AF_UNIX;
+		strcpy(saun.sun_path, rfbScreen->unixSockPath);
+		len = sizeof(saun.sun_family) + strlen(saun.sun_path);
+		if (bind(rfbScreen->unixSock, (struct sockaddr *)&saun, len) < 0) {
+			rfbLogPerror("listen_unix: bind");
+			close(rfbScreen->unixSock);
+			return;
+		}
 
+		if (listen(rfbScreen->unixSock, 32) < 0) {
+		        rfbLogPerror("listen_unix: listen");
+		        close(rfbScreen->unixSock);
+			return;
+		}
+
+		rfbLog("Listening on Unix Socket: %s fd=%d\n", rfbScreen->unixSockPath, rfbScreen->unixSock);
+
+    	FD_SET(rfbScreen->unixSock, &(rfbScreen->allFds));
+    	rfbScreen->maxFd = rfbScreen->unixSock;
+		
+		return;
+	}
     if(rfbScreen->autoPort) {
         int i;
         FD_ZERO(&(rfbScreen->allFds));
@@ -258,6 +290,15 @@ void rfbShutdownSockets(rfbScreenInfoPtr rfbScreen)
 	rfbScreen->listenSock=-1;
     }
 
+    if(rfbScreen->unixSock>-1) {
+	closesocket(rfbScreen->unixSock);
+	int result = unlink(rfbScreen->unixSockPath);
+	if (result)
+		rfbLogPerror("ListenOnTCPPort");
+	FD_CLR(rfbScreen->unixSock,&rfbScreen->allFds);
+	rfbScreen->unixSock=-1;
+    }
+
     if(rfbScreen->listen6Sock>-1) {
 	closesocket(rfbScreen->listen6Sock);
 	FD_CLR(rfbScreen->listen6Sock,&rfbScreen->allFds);
@@ -324,7 +365,15 @@ rfbCheckFds(rfbScreenInfoPtr rfbScreen,long usec)
 	}
 
 	result += nfds;
+	
+	if (rfbScreen->unixSock != -1 && FD_ISSET(rfbScreen->unixSock, &fds)) {
+	    if (!rfbProcessNewConnection(rfbScreen))
+                return -1;
 
+	    FD_CLR(rfbScreen->unixSock, &fds);
+	    if (--nfds == 0)
+		return result;
+	}
 	if (rfbScreen->listenSock != -1 && FD_ISSET(rfbScreen->listenSock, &fds)) {
 
 	    if (!rfbProcessNewConnection(rfbScreen))
@@ -426,6 +475,8 @@ rfbProcessNewConnection(rfbScreenInfoPtr rfbScreen)
        has an incoming connection pending. We know that at least 
        one of them has, so this should not block for too long! */
     FD_ZERO(&listen_fds);  
+	 if(rfbScreen->unixSock >= 0)
+		FD_SET(rfbScreen->unixSock, &listen_fds);
     if(rfbScreen->listenSock >= 0) 
       FD_SET(rfbScreen->listenSock, &listen_fds);
     if(rfbScreen->listen6Sock >= 0) 
@@ -438,6 +489,8 @@ rfbProcessNewConnection(rfbScreenInfoPtr rfbScreen)
       chosen_listen_sock = rfbScreen->listenSock;
     if (rfbScreen->listen6Sock >= 0 && FD_ISSET(rfbScreen->listen6Sock, &listen_fds))
       chosen_listen_sock = rfbScreen->listen6Sock;
+	 if (FD_ISSET(rfbScreen->unixSock, &listen_fds))
+		chosen_listen_sock = rfbScreen->unixSock;
 
     if ((sock = accept(chosen_listen_sock,
 		       (struct sockaddr *)&addr, &addrlen)) < 0) {
@@ -450,7 +503,7 @@ rfbProcessNewConnection(rfbScreenInfoPtr rfbScreen)
       return FALSE;
     }
 
-    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+    if (chosen_listen_sock != rfbScreen->unixSock && setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
 		   (char *)&one, sizeof(one)) < 0) {
       rfbLogPerror("rfbCheckFds: setsockopt failed: can't set TCP_NODELAY flag, non TCP socket?");
     }
