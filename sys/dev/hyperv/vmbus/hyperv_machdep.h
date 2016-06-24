@@ -26,21 +26,12 @@
  * $FreeBSD$
  */
 
-#include <machine/asmacros.h>
-#include <machine/specialreg.h>
+#ifndef _HYPERV_MACHDEP_H_
+#define _HYPERV_MACHDEP_H_
 
-#include "assym.s"
+#include <sys/param.h>
 
-/*
- * This is the Hyper-V vmbus channel direct callback interrupt.
- * Only used when it is running on Hyper-V.
- */
-	.text
-	SUPERALIGN_TEXT
-IDTVEC(hv_vmbus_callback)
-	PUSH_FRAME
-	FAKE_MCOUNT(TF_RIP(%rsp))
-	movq	%rsp, %rdi
-	call	hv_vector_handler
-	MEXITCOUNT
-	jmp	doreti
+uint64_t	hypercall_md(volatile void *hc_addr, uint64_t in_val,
+		    uint64_t in_paddr, uint64_t out_paddr);
+
+#endif	/* !_HYPERV_MACHDEP_H_ */
