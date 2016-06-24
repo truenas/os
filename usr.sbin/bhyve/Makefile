@@ -4,6 +4,7 @@
 
 # Temporary include path hack - to be removed once I clean lib9p.h up
 CFLAGS+=-I${.CURDIR}/../../contrib/lib9p
+CFLAGS+=-I${SYSDIR}/../../sys/dev/mii -I${SYSDIR}/../../sys/dev/e1000
 .PATH:  ${.CURDIR}/../../contrib/lib9p
 
 PROG=	bhyve
@@ -33,6 +34,7 @@ SRCS=	\
 	mptbl.c			\
 	ne2000.c		\
 	pci_ahci.c		\
+	pci_e82545.c		\
 	pci_emul.c		\
 	pci_fbuf.c		\
 	pci_hostbridge.c	\
