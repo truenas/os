@@ -49,7 +49,6 @@ struct vmbus_message {
 CTASSERT(sizeof(struct vmbus_message) == VMBUS_MSG_SIZE);
 
 #define VMBUS_MSGTYPE_NONE		0
-#define VMBUS_MSGTYPE_CHANNEL		1
 #define VMBUS_MSGTYPE_TIMER_EXPIRED	0x80000010
 
 #define VMBUS_MSGFLAG_PENDING		0x01
@@ -66,7 +65,6 @@ CTASSERT(sizeof(struct vmbus_message) == VMBUS_MSG_SIZE);
 #define VMBUS_EVTFLAG_SHIFT	5
 #endif
 #define VMBUS_EVTFLAG_LEN	(1 << VMBUS_EVTFLAG_SHIFT)
-#define VMBUS_EVTFLAG_MASK	(VMBUS_EVTFLAG_LEN - 1)
 #define VMBUS_EVTFLAGS_SIZE	256
 
 struct vmbus_evtflags {
