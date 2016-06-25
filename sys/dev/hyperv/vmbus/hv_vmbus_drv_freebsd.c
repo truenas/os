@@ -72,7 +72,7 @@ struct vmbus_softc	*vmbus_sc;
 
 static char *vmbus_ids[] = { "VMBUS", NULL };
 
-extern inthand_t IDTVEC(rsvd), IDTVEC(vmbus_isr);
+extern inthand_t IDTVEC(rsvd), IDTVEC(hv_vmbus_callback);
 
 static void
 vmbus_msg_task(void *xsc, int pending __unused)
@@ -124,8 +124,8 @@ handled:
 	}
 }
 
-static __inline int
-vmbus_handle_intr1(struct vmbus_softc *sc, struct trapframe *frame, int cpu)
+static inline int
+hv_vmbus_isr(struct vmbus_softc *sc, struct trapframe *frame, int cpu)
 {
 	hv_vmbus_message *msg, *msg_base;
 
@@ -186,7 +186,7 @@ vmbus_handle_intr1(struct vmbus_softc *sc, struct trapframe *frame, int cpu)
 }
 
 void
-vmbus_handle_intr(struct trapframe *trap_frame)
+hv_vector_handler(struct trapframe *trap_frame)
 {
 	struct vmbus_softc *sc = vmbus_get_softc();
 	int cpu = curcpu;
@@ -201,7 +201,7 @@ vmbus_handle_intr(struct trapframe *trap_frame)
 	 */
 	(*VMBUS_PCPU_GET(sc, intr_cnt, cpu))++;
 
-	vmbus_handle_intr1(sc, trap_frame, cpu);
+	hv_vmbus_isr(sc, trap_frame, cpu);
 
 	/*
 	 * Enable preemption.
@@ -389,10 +389,10 @@ vmbus_vector_alloc(void)
 		func = ((long)ip->gd_hioffset << 16 | ip->gd_looffset);
 		if (func == (uintptr_t)&IDTVEC(rsvd)) {
 #ifdef __i386__
-			setidt(vector , IDTVEC(vmbus_isr), SDT_SYS386IGT,
+			setidt(vector , IDTVEC(hv_vmbus_callback), SDT_SYS386IGT,
 			    SEL_KPL, GSEL(GCODE_SEL, SEL_KPL));
 #else
-			setidt(vector , IDTVEC(vmbus_isr), SDT_SYSIGT,
+			setidt(vector , IDTVEC(hv_vmbus_callback), SDT_SYSIGT,
 			    SEL_KPL, 0);
 #endif
 
