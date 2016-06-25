@@ -36,7 +36,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 
 #include <dev/hyperv/vmbus/hv_vmbus_priv.h>
-#include <dev/hyperv/vmbus/vmbus_reg.h>
 #include <dev/hyperv/vmbus/vmbus_var.h>
 
 /*
@@ -721,8 +720,8 @@ hv_vmbus_release_unattached_channels(void)
 	    }
 	    hv_vmbus_free_vmbus_channel(channel);
 	}
-	bzero(hv_vmbus_g_connection.channels,
-	    sizeof(hv_vmbus_channel*) * VMBUS_CHAN_MAX);
+	bzero(hv_vmbus_g_connection.channels, 
+		sizeof(hv_vmbus_channel*) * HV_CHANNEL_MAX_COUNT);
 	mtx_unlock(&hv_vmbus_g_connection.channel_lock);
 }
 
