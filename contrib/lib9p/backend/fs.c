@@ -110,23 +110,20 @@ static void fs_renameat(void *softc, struct l9p_request *req);
 static void fs_unlinkat(void *softc, struct l9p_request *req);
 static void fs_freefid(void *softc, struct l9p_openfile *f);
 
-struct fs_softc
-{
+struct fs_softc {
 	const char *fs_rootpath;
 	bool fs_readonly;
 	TAILQ_HEAD(, fs_tree) fs_auxtrees;
 };
 
-struct fs_tree
-{
+struct fs_tree {
 	const char *fst_name;
 	const char *fst_path;
 	bool fst_readonly;
 	TAILQ_ENTRY(fs_tree) fst_link;
 };
 
-struct openfile
-{
+struct openfile {
 	DIR *dir;
 	int fd;
 	char *name;
@@ -421,10 +418,10 @@ internal_mkfifo(char *newname, mode_t mode)
 	return (0);
 }
 
+
 static inline int
-internal_mksocket(struct openfile *file __unused,
-		  struct l9p_request *req __unused,
-		  char *newname)
+internal_mksocket(struct openfile *file __unused, char *newname,
+    char *reqname __unused)
 {
 	struct sockaddr_un sun;
 	char *path;
@@ -442,7 +439,7 @@ internal_mksocket(struct openfile *file __unused,
 	if (strlen(path) >= sizeof(sun.sun_path)) {
 		fd = open(file->name, O_RDONLY);
 		if (fd >= 0)
-			path = req->lr_req.tcreate.name;
+			path = reqname;
 	}
 #endif
 
@@ -591,7 +588,8 @@ fs_create(void *softc, struct l9p_request *req)
 	else if (req->lr_req.tcreate.perm & L9P_DMNAMEDPIPE)
 		error = internal_mkfifo(newname, mode);
 	else if (req->lr_req.tcreate.perm & L9P_DMSOCKET)
-		error = internal_mksocket(file, req, newname);
+		error = internal_mksocket(file, newname,
+		    req->lr_req.tcreate.name);
 	else if (req->lr_req.tcreate.perm & L9P_DMDEVICE)
 		error = internal_mknod(req, newname, mode);
 	else {
@@ -832,33 +830,164 @@ fs_stat(void *softc __unused, struct l9p_request *req)
 }
 
 static void
-fs_walk(void *softc __unused, struct l9p_request *req)
+fs_walk(void *softc, struct l9p_request *req)
 {
-	uint16_t i;
-	struct stat buf;
+	struct fs_softc *sc = softc;
+	struct stat st;
 	struct openfile *file = req->lr_fid->lo_aux;
 	struct openfile *newfile;
-	char name[MAXPATHLEN];
+	size_t clen, namelen, need;
+	char *comp, *succ, *next, *swtmp;
+	bool dotdot;
+	int i, nwname;
+	int error = 0;
+	char namebufs[2][MAXPATHLEN];
 
-	strcpy(name, file->name);
-
-	for (i = 0; i < req->lr_req.twalk.nwname; i++) {
-		strcat(name, "/");
-		strcat(name, req->lr_req.twalk.wname[i]);
-		if (lstat(name, &buf) < 0){
-			l9p_respond(req, ENOENT);
-			return;
+	/*
+	 * https://swtch.com/plan9port/man/man9/walk.html:
+	 *
+	 *    It is legal for nwname to be zero, in which case newfid
+	 *    will represent the same file as fid and the walk will
+	 *    usually succeed; this is equivalent to walking to dot.
+	 * [Aside: it's not clear if we should test S_ISDIR here.]
+	 *    ...
+	 *    The name ".." ... represents the parent directory.
+	 *    The name "." ... is not used in the protocol.
+	 *    ... A walk of the name ".." in the root directory
+	 *    of the server is equivalent to a walk with no name
+	 *    elements.
+	 *
+	 * Note that req.twalk.nwname never exceeds L9P_MAX_WELEM,
+	 * so it is safe to convert to plain int.
+	 *
+	 * We are to return an error only if the first walk fails,
+	 * else stop at the end of the names or on the first error.
+	 * The final fid is based on the last name successfully
+	 * walked.
+	 *
+	 * Set up "successful name" buffer pointer with base fid name,
+	 * initially.  We'll swap each new success into it as we go.
+	 */
+	succ = namebufs[0];
+	next = namebufs[1];
+	namelen = strlcpy(succ, file->name, MAXPATHLEN);
+	if (namelen >= MAXPATHLEN) {
+		error = ENAMETOOLONG;
+		goto out;
+	}
+	if (lstat(succ, &st) < 0){
+		error = errno;
+		goto out;
+	}
+	nwname = (int)req->lr_req.twalk.nwname;
+	/*
+	 * Must have execute permission to search a directory.
+	 * Then, look up each component in the directory.
+	 * Check for ".." along the way, handlng specially
+	 * as needed.  Forbid "/" in name components.
+	 *
+	 * Note that we *do* get Twalk requests with
+	 * nwname==0 on files.
+	 */
+	if (nwname > 0) {
+		if (!S_ISDIR(st.st_mode)) {
+			error = ENOTDIR;
+			goto out;
 		}
-
-		generate_qid(&buf, &req->lr_resp.rwalk.wqid[i]);
+		if (!check_access(&st, file->uid, L9P_OEXEC)) {
+			L9P_LOG(L9P_DEBUG,
+			    "Twalk: denying dir-walk on \"%s\" for uid %u",
+			    succ, (unsigned)file->uid);
+			error = EPERM;
+			goto out;
+		}
+	}
+	for (i = 0; i < nwname; i++) {
+		comp = req->lr_req.twalk.wname[i];
+		if (strchr(comp, '/') != NULL) {
+			error = EINVAL;
+			break;
+		}
+		clen = strlen(comp);
+		dotdot = false;
+		if (comp[0] == '.') {
+			if (clen == 1) {
+				error = EINVAL;
+				break;
+			}
+			if (comp[1] == '.' && clen == 2) {
+				dotdot = true;
+				/*
+				 * It's not clear how ".." at
+				 * root should be handled if i > 0.
+				 * Obeying the man page exactly, we
+				 * reset i to 0 and stop, declaring
+				 * terminal success.
+				 */
+				if (strcmp(file->name, sc->fs_rootpath) == 0) {
+					succ = file->name;
+					i = 0;
+					break;
+				}
+			}
+		}
+		/*
+		 * Build next pathname (into "next").  If dotdot,
+		 * just strip one name component off file->name.
+		 * Since we know file->name fits, the stripped down
+		 * version also fits.  Otherwise, the name is the
+		 * base name plus '/' plus the component name
+		 * plus terminating '\0'; this may or may not
+		 * fit.
+		 */
+		if (dotdot) {
+			(void) r_dirname(file->name, next, MAXPATHLEN);
+		} else {
+			need = namelen + 1 + clen + 1;
+			if (need > MAXPATHLEN) {
+				error = ENAMETOOLONG;
+				break;
+			}
+			memcpy(next, file->name, namelen);
+			next[namelen] = '/';
+			memcpy(&next[namelen + 1], comp, clen + 1);
+		}
+		if (lstat(next, &st) < 0){
+			error = ENOENT;
+			break;
+		}
+		/*
+		 * Success: generate qid and swap this
+		 * successful name into place.
+		 */
+		generate_qid(&st, &req->lr_resp.rwalk.wqid[i]);
+		swtmp = succ;
+		succ = next;
+		next = swtmp;
 	}
 
-	newfile = open_fid(name);
+	/*
+	 * Fail only if we failed on the first name.
+	 * Otherwise we succeeded on something, and "succ"
+	 * points to the last successful name in namebufs[].
+	 */
+	if (error) {
+		if (i == 0)
+			goto out;
+		error = 0;
+	}
+
+	newfile = open_fid(succ);
+	if (newfile == NULL) {
+		error = ENOMEM;
+		goto out;
+	}
 	newfile->uid = file->uid;
 	newfile->gid = file->gid;
 	req->lr_newfid->lo_aux = newfile;
-	req->lr_resp.rwalk.nwqid = i;
-	l9p_respond(req, 0);
+	req->lr_resp.rwalk.nwqid = (uint16_t)i;
+out:
+	l9p_respond(req, error);
 }
 
 static void
@@ -1008,25 +1137,39 @@ static void
 fs_statfs(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
+	struct stat st;
 	struct statfs f;
 	long name_max;
+	int error = 0;
 
 	file = req->lr_fid->lo_aux;
 	assert(file);
 
-	if (fstatfs(file->fd, &f)) {
-		l9p_respond(req, errno);
-		return;
+	if (lstat(file->name, &st) != 0) {
+		error = errno;
+		goto out;
 	}
-	name_max = fpathconf(file->fd, _PC_NAME_MAX);
+
+	if (!check_access(&st, file->uid, L9P_OREAD)) {
+		error = EPERM;
+		goto out;
+	}
+
+	if (statfs(file->name, &f) != 0) {
+		error = errno;
+		goto out;
+	}
+
+	name_max = pathconf(file->name, _PC_NAME_MAX);
 	if (name_max == -1) {
-		l9p_respond(req, errno);
-		return;
+		error = errno;
+		goto out;
 	}
 
 	dostatfs(&req->lr_resp.rstatfs.statfs, &f, name_max);
 
-	l9p_respond(req, 0);
+out:
+	l9p_respond(req, error);
 }
 
 /*
@@ -1037,7 +1180,7 @@ fs_statfs(void *softc __unused, struct l9p_request *req)
 #define	L_O_CREAT	000000100U
 #define	L_O_EXCL	000000200U
 #define	L_O_TRUNC	000001000U
-#define	L_O_APPEND	000002000U	/* ??? should we get this? */
+#define	L_O_APPEND	000002000U
 #define	L_O_NONBLOCK	000004000U
 #define	L_O_LARGEFILE	000100000U
 #define	L_O_DIRECTORY	000200000U
@@ -1045,6 +1188,7 @@ fs_statfs(void *softc __unused, struct l9p_request *req)
 #define	L_O_TMPFILE	020000000U	/* ??? should we get this? */
 
 #define	LO_LC_FORBID	(0xfffffffc & ~(L_O_CREAT | L_O_EXCL | L_O_TRUNC | \
+					L_O_APPEND | L_O_NOFOLLOW | \
 					L_O_DIRECTORY | L_O_LARGEFILE | \
 					L_O_NONBLOCK))
 
@@ -1087,6 +1231,24 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 	if (lflags & LO_LC_FORBID)
 		return (ENOTSUP);
 
+	/*
+	 * What if anything should we do with O_NONBLOCK?
+	 * (Currently we ignore it.)
+	 */
+	oflags = lflags & O_ACCMODE;
+	if (lflags & L_O_CREAT)
+		oflags |= O_CREAT;
+	if (lflags & L_O_EXCL)
+		oflags |= O_EXCL;
+	if (lflags & L_O_TRUNC)
+		oflags |= O_TRUNC;
+	if (lflags & L_O_DIRECTORY)
+		oflags |= O_DIRECTORY;
+	if (lflags & L_O_APPEND)
+		oflags |= O_APPEND;
+	if (lflags & L_O_NOFOLLOW)
+		oflags |= O_NOFOLLOW;
+
 	if (newname == NULL) {
 		/* open: require access, including write if O_TRUNC */
 		if (lstat(file->name, stp) != 0)
@@ -1095,25 +1257,15 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 			oacc = L9P_ORDWR;
 		if (!check_access(stp, file->uid, oacc))
 			return (EPERM);
-		/*
-		 * Ignore O_EXCL, we are not creating.
-		 * What if anything should we do with O_NONBLOCK?
-		 * (Currently we ignore it.)
-		 */
-
+		/* Cancel O_CREAT|O_EXCL since we are not creating. */
+		oflags &= ~(O_CREAT | O_EXCL);
 		if (S_ISDIR(stp->st_mode)) {
-			/* should we refuse if not L_O_DIRECTORY? */
+			/* Should we refuse if not O_DIRECTORY? */
 			file->dir = opendir(file->name);
 			if (file->dir == NULL)
 				return (errno);
 			resultfd = dirfd(file->dir);
 		} else {
-			oflags = lflags & O_ACCMODE;
-			if (lflags & L_O_TRUNC)
-				oflags |= O_TRUNC;
-			if (lflags & L_O_DIRECTORY)
-				oflags |= O_DIRECTORY;
-			/* convert L_O_APPEND to O_APPEND? */
 			file->fd = open(file->name, oflags);
 			if (file->fd < 0)
 				return (errno);
@@ -1123,19 +1275,12 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 		/*
 		 * XXX racy, see fs_create.
 		 * Note, file->name is testing the containing dir,
-		 * not the file itself (so L_O_CREAT is still OK).
+		 * not the file itself (so O_CREAT is still OK).
 		 */
 		if (lstat(file->name, stp) != 0)
 			return (errno);
 		if (!check_access(stp, file->uid, L9P_OWRITE))
 			return (EPERM);
-		oflags = lflags & O_ACCMODE;
-		if (lflags & L_O_CREAT)
-			oflags |= O_CREAT;
-		if (lflags & L_O_TRUNC)
-			oflags |= O_TRUNC;
-		if (lflags & L_O_EXCL)
-			oflags |= O_EXCL;
 		file->fd = open(newname, oflags, mode);
 		if (file->fd < 0)
 			return (errno);
@@ -1284,14 +1429,20 @@ fs_mknod(void *softc, struct l9p_request *req)
 	switch (mode & S_IFMT) {
 	case S_IFBLK:
 	case S_IFCHR:
+		mode = (mode & S_IFMT) | (mode & 0777);	/* ??? */
+		if (mknod(newname, (mode_t)mode, makedev(major, minor)) != 0) {
+			error = errno;
+			goto out;
+		}
+		break;
+	case S_IFSOCK:
+		error = internal_mksocket(file, newname,
+		    req->lr_req.tmknod.name);
+		if (error != 0)
+			goto out;
 		break;
 	default:
 		error = EINVAL;
-		goto out;
-	}
-	mode = (mode & S_IFMT) | (mode & 0777);	/* ??? */
-	if (mknod(newname, (mode_t)mode, makedev(major, minor)) != 0) {
-		error = errno;
 		goto out;
 	}
 	if (lchown(newname, file->uid, req->lr_req.tsymlink.gid) != 0) {
@@ -1447,24 +1598,32 @@ fs_getattr(void *softc __unused, struct l9p_request *req)
 		valid |= L9PL_GETATTR_RDEV;
 	}
 	if (mask & L9PL_GETATTR_ATIME) {
-		req->lr_resp.rgetattr.atime_sec = (uint64_t)st.st_atimespec.tv_sec;
-		req->lr_resp.rgetattr.atime_nsec = (uint64_t)st.st_atimespec.tv_nsec;
+		req->lr_resp.rgetattr.atime_sec =
+		    (uint64_t)st.st_atimespec.tv_sec;
+		req->lr_resp.rgetattr.atime_nsec =
+		    (uint64_t)st.st_atimespec.tv_nsec;
 		valid |= L9PL_GETATTR_ATIME;
 	}
 	if (mask & L9PL_GETATTR_MTIME) {
-		req->lr_resp.rgetattr.mtime_sec = (uint64_t)st.st_mtimespec.tv_sec;
-		req->lr_resp.rgetattr.mtime_nsec = (uint64_t)st.st_mtimespec.tv_nsec;
+		req->lr_resp.rgetattr.mtime_sec =
+		    (uint64_t)st.st_mtimespec.tv_sec;
+		req->lr_resp.rgetattr.mtime_nsec =
+		    (uint64_t)st.st_mtimespec.tv_nsec;
 		valid |= L9PL_GETATTR_MTIME;
 	}
 	if (mask & L9PL_GETATTR_CTIME) {
-		req->lr_resp.rgetattr.ctime_sec = (uint64_t)st.st_ctimespec.tv_sec;
-		req->lr_resp.rgetattr.ctime_nsec = (uint64_t)st.st_ctimespec.tv_nsec;
+		req->lr_resp.rgetattr.ctime_sec =
+		    (uint64_t)st.st_ctimespec.tv_sec;
+		req->lr_resp.rgetattr.ctime_nsec =
+		    (uint64_t)st.st_ctimespec.tv_nsec;
 		valid |= L9PL_GETATTR_CTIME;
 	}
 	if (mask & L9PL_GETATTR_BTIME) {
 #if defined(HAVE_BIRTHTIME)
-		req->lr_resp.rgetattr.btime_sec = (uint64_t)st.st_birthtim.tv_sec;
-		req->lr_resp.rgetattr.btime_nsec = (uint64_t)st.st_birthtim.tv_nsec;
+		req->lr_resp.rgetattr.btime_sec =
+		    (uint64_t)st.st_birthtim.tv_sec;
+		req->lr_resp.rgetattr.btime_nsec =
+		    (uint64_t)st.st_birthtim.tv_nsec;
 #else
 		req->lr_resp.rgetattr.btime_sec = 0;
 		req->lr_resp.rgetattr.btime_nsec = 0;
@@ -1490,7 +1649,7 @@ fs_getattr(void *softc __unused, struct l9p_request *req)
 
 	generate_qid(&st, &req->lr_resp.rgetattr.qid);
 out:
-	req->lr_req.rgetattr.valid = valid;
+	req->lr_resp.rgetattr.valid = valid;
 	l9p_respond(req, error);
 }
 
@@ -1539,8 +1698,10 @@ fs_setattr(void *softc, struct l9p_request *req)
 	}
 
 	if (mask & (L9PL_SETATTR_UID | L9PL_SETATTR_GID)) {
-		uid = mask & L9PL_SETATTR_UID ? req->lr_req.tsetattr.uid : (uid_t)-1;
-		gid = mask & L9PL_SETATTR_GID ? req->lr_req.tsetattr.gid : (gid_t)-1;
+		uid = mask & L9PL_SETATTR_UID ? req->lr_req.tsetattr.uid :
+		    (uid_t)-1;
+		gid = mask & L9PL_SETATTR_GID ? req->lr_req.tsetattr.gid :
+		    (gid_t)-1;
 		if (lchown(file->name, uid, gid)) {
 			error = errno;
 			goto out;
@@ -1563,7 +1724,8 @@ fs_setattr(void *softc, struct l9p_request *req)
 
 		if (mask & L9PL_SETATTR_ATIME) {
 			if (mask & L9PL_SETATTR_ATIME_SET) {
-				tv[0].tv_sec = (long)req->lr_req.tsetattr.atime_sec;
+				tv[0].tv_sec =
+				    (long)req->lr_req.tsetattr.atime_sec;
 				tv[0].tv_usec =
 				    (int)req->lr_req.tsetattr.atime_nsec / 1000;
 			} else {
@@ -1575,7 +1737,8 @@ fs_setattr(void *softc, struct l9p_request *req)
 		}
 		if (mask & L9PL_SETATTR_MTIME) {
 			if (mask & L9PL_SETATTR_MTIME_SET) {
-				tv[1].tv_sec = (long)req->lr_req.tsetattr.mtime_sec;
+				tv[1].tv_sec =
+				    (long)req->lr_req.tsetattr.mtime_sec;
 				tv[1].tv_usec =
 				    (int)req->lr_req.tsetattr.mtime_nsec / 1000;
 			} else {

@@ -41,7 +41,7 @@ l9p_server_init(struct l9p_server **serverp, struct l9p_backend *backend)
 	struct l9p_server *server;
 
 	server = l9p_calloc(1, sizeof (*server));
-	server->ls_max_version = L9P_2000U;
+	server->ls_max_version = L9P_2000L;
 	server->ls_backend = backend;
 	LIST_INIT(&server->ls_conns);
 

@@ -502,6 +502,10 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 			sbuf_printf(sb, " n_uname=%d", fcall->tattach.n_uname);
 		return;
 
+	case L9P_RATTACH:
+		l9p_describe_qid(" ", &fcall->rattach.qid, sb);
+		return;
+
 	case L9P_RERROR:
 		sbuf_printf(sb, " ename=\"%s\" errnum=%d", fcall->error.ename,
 		    fcall->error.errnum);

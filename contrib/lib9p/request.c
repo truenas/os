@@ -264,8 +264,12 @@ to_linux(int errnum)
 		[EPROTO] = LINUX_EPROTO,
 		/* ENOTCAPABLE = unmappable? */
 		/* ECAPMODE = unmappable? */
+#ifdef ENOTRECOVERABLE
 		[ENOTRECOVERABLE] = LINUX_ENOTRECOVERABLE,
+#endif
+#ifdef EOWNERDEAD
 		[EOWNERDEAD] = LINUX_EOWNERDEAD,
+#endif
 	};
 
 	/*
@@ -277,7 +281,7 @@ to_linux(int errnum)
 	 */
 	if (errnum < 0)
 		return (-errnum);
-	if ((size_t)errnum < N(table))
+	if ((size_t)errnum < N(table) && table[errnum] != 0)
 		return (table[errnum]);
 	if (errnum <= ERANGE)
 		return (errnum);
@@ -400,7 +404,7 @@ static inline void l9p_fid_dispatch(struct l9p_request *req,
 
 	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.hdr.fid);
 	if (req->lr_fid == NULL) {
-		l9p_respond(req, EBADF);
+		l9p_respond(req, EIO);
 		return;
 	}
 
