@@ -90,8 +90,7 @@ dtrace_fork_func_t	dtrace_fasttrap_fork;
 #endif
 
 SDT_PROVIDER_DECLARE(proc);
-SDT_PROBE_DEFINE3(proc, kernel, , create, "struct proc *",
-    "struct proc *", "int");
+SDT_PROBE_DEFINE3(proc, , , create, "struct proc *", "struct proc *", "int");
 
 #ifndef _SYS_SYSPROTO_H_
 struct fork_args {
@@ -413,7 +412,8 @@ do_fork(struct thread *td, int flags, struct proc *p2, struct thread *td2,
 	p2->p_treeflag = 0;
 	p2->p_filemon = NULL;
 
-	p2->p_ucred = crhold(td->td_ucred);
+	crhold(td->td_ucred);
+	proc_set_cred(p2, td->td_ucred);
 
 	/* Tell the prison that we exist. */
 	prison_proc_hold(p2->p_ucred->cr_prison);
@@ -754,7 +754,7 @@ do_fork(struct thread *td, int flags, struct proc *p2, struct thread *td2,
 	 * Tell any interested parties about the new process.
 	 */
 	knote_fork(&p1->p_klist, p2->p_pid);
-	SDT_PROBE3(proc, kernel, , create, p2, p1, flags);
+	SDT_PROBE3(proc, , , create, p2, p1, flags);
 
 	/*
 	 * Wait until debugger is attached to child.
@@ -899,7 +899,7 @@ fork1(struct thread *td, int flags, int pages, struct proc **procp,
 			/*
 			 * The swap reservation failed. The accounting
 			 * from the entries of the copied vm2 will be
-			 * substracted in vmspace_free(), so force the
+			 * subtracted in vmspace_free(), so force the
 			 * reservation there.
 			 */
 			swap_reserve_force(mem_charged);
@@ -913,7 +913,7 @@ fork1(struct thread *td, int flags, int pages, struct proc **procp,
 	 * XXX: This is ugly; when we copy resource usage, we need to bump
 	 *      per-cred resource counters.
 	 */
-	newproc->p_ucred = p1->p_ucred;
+	proc_set_cred(newproc, p1->p_ucred);
 
 	/*
 	 * Initialize resource accounting for the child process.
