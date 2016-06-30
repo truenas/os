@@ -826,12 +826,16 @@ handle_data(void *priv, const char *data, int length)
 static bool
 parse_event(char *buffer, event_t &event)
 {
+	int ret;
+
 	XML_Parser parser = XML_ParserCreate(NULL);
 	XML_SetElementHandler(parser, handle_start_element, handle_end_element);
 	XML_SetCharacterDataHandler(parser, handle_data);
 	XML_SetUserData(parser, &event);
+	ret = XML_Parse(parser, buffer, strlen(buffer), XML_TRUE);
+	XML_ParserFree(parser);
 
-	return (XML_Parse(parser, buffer, strlen(buffer), XML_TRUE) == XML_STATUS_ERROR);
+	return (ret == XML_STATUS_ERROR);
 }
 
 
@@ -1178,6 +1182,7 @@ build_compat(const char *xml, int xmllen, char *buf, int bufsize, int &flatlen)
 	XML_SetCharacterDataHandler(parser, fl_data);
 	XML_SetUserData(parser, &fl);
 	rv = XML_Parse(parser, xml, xmllen, XML_TRUE);
+	XML_ParserFree(parser);
 	if (rv == XML_STATUS_ERROR)
 		return true;
 	if (fl.fl_len == 0)	// i.e., <event></event>
