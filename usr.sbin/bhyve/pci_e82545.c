@@ -525,7 +525,7 @@ e82545_icr_assert(struct e82545_softc *sc, uint32_t bits)
 {
 	uint32_t new;
 
-	DPRINTF("icr assert: 0x%x\n", bits);
+	DPRINTF("icr assert: 0x%x\r\n", bits);
 	
 	/*
 	 * An interrupt is only generated if bits are set that
@@ -536,12 +536,12 @@ e82545_icr_assert(struct e82545_softc *sc, uint32_t bits)
 	sc->esc_ICR |= bits;
 
 	if (new && !sc->esc_irq_asserted) {
-		DPRINTF("icr assert: lintr assert %x\n\r", new);
+		DPRINTF("icr assert: lintr assert %x\r\n", new);
 		sc->esc_irq_asserted = 1;
 		pci_generate_msi(sc->esc_pi, 0);
 		pci_lintr_assert(sc->esc_pi);
 	} else {
-		DPRINTF("icr assert: masked %x, ims %x\n\r", new, sc->esc_IMS);
+		DPRINTF("icr assert: masked %x, ims %x\r\n", new, sc->esc_IMS);
 	}
 }
 
@@ -569,7 +569,7 @@ static void
 e82545_icr_deassert(struct e82545_softc *sc, uint32_t bits)
 {
 
-	DPRINTF("icr deassert: 0x%x\n", bits);
+	DPRINTF("icr deassert: 0x%x\r\n", bits);
 	sc->esc_ICR &= ~bits;
 
 	/*
@@ -577,7 +577,7 @@ e82545_icr_deassert(struct e82545_softc *sc, uint32_t bits)
 	 * was an asserted interrupt, clear it
 	 */
 	if (sc->esc_irq_asserted && !(sc->esc_ICR & sc->esc_IMS)) {
-		DPRINTF("icr deassert: lintr deassert %x\n\r", bits);
+		DPRINTF("icr deassert: lintr deassert %x\r\n", bits);
 		pci_lintr_deassert(sc->esc_pi);
 		sc->esc_irq_asserted = 0;
 	}
@@ -993,7 +993,8 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 				return (1);
 				break;
 			case E1000_TXD_TYP_L:
-				DPRINTF("tx legacy desc, idx %d\n\r", idx);
+				DPRINTF("tx legacy desc, idx %d %08x%08x\r\n",
+				    idx, dsc->td.upper.data, dsc->td.lower.data);
 				/*
 				 * legacy cksum start valid in first descriptor
 				 */
@@ -1001,7 +1002,8 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 				ckinfo[0].ck_start = dsc->td.upper.fields.css;
 				break;
 			case E1000_TXD_TYP_D:
-				DPRINTF("tx data desc, idx %d\n\r", idx);
+				DPRINTF("tx data desc, idx %d %08x%08x\r\n",
+				    idx, dsc->td.upper.data, dsc->td.lower.data);
 				ntype = dtype;
 				break;
 			default:
@@ -1010,6 +1012,8 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 		} else {
 			/* Descriptor type must be consistent */
 			assert(dtype == ntype);
+			DPRINTF("tx next desc, idx %d %08x%08x\r\n",
+			    idx, dsc->td.upper.data, dsc->td.lower.data);
 		}
 
 		len = (dtype == E1000_TXD_TYP_L) ? dsc->td.lower.flags.length :
@@ -1119,7 +1123,7 @@ e82545_start_tx(struct e82545_softc *sc, uint16_t value)
 	tdwb = 0;
 	ndesc = ondesc = (size + tail - head) % size;
 
-	DPRINTF("start_tx  ndesc %d, head %x, tail %x\n", ndesc, head, tail);
+	DPRINTF("start_tx  ndesc %d, head %x, tail %x\r\n", ndesc, head, tail);
 
 	if (ndesc == 0)
 		return;
@@ -1136,7 +1140,7 @@ e82545_start_tx(struct e82545_softc *sc, uint16_t value)
 	/* Update the head pointer */
 	sc->esc_TDH = (sc->esc_TDH + ondesc) % size;
 
-	DPRINTF("start_tx done: head %x, tail %x\n",
+	DPRINTF("start_tx done: head %x, tail %x\r\n",
 		sc->esc_TDH, sc->esc_TDT);
 	
 	/*
