@@ -538,7 +538,6 @@ e82545_icr_assert(struct e82545_softc *sc, uint32_t bits)
 	if (new && !sc->esc_irq_asserted) {
 		DPRINTF("icr assert: lintr assert %x\r\n", new);
 		sc->esc_irq_asserted = 1;
-		pci_generate_msi(sc->esc_pi, 0);
 		pci_lintr_assert(sc->esc_pi);
 	} else {
 		DPRINTF("icr assert: masked %x, ims %x\r\n", new, sc->esc_IMS);
@@ -560,7 +559,6 @@ e82545_ims_change(struct e82545_softc *sc, uint32_t bits)
 	if (new && !sc->esc_irq_asserted) {
 		DPRINTF("ims change: lintr assert %x\n\r", new);
 		sc->esc_irq_asserted = 1;
-		pci_generate_msi(sc->esc_pi, 0);
 		pci_lintr_assert(sc->esc_pi);
 	}
 }
@@ -1936,8 +1934,8 @@ e82545_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	pci_set_cfgdata8(pi,  PCIR_HDRTYPE, PCIM_HDRTYPE_NORMAL);
 	pci_set_cfgdata8(pi,  PCIR_INTPIN, 0x1);
 	
-	pci_emul_add_msicap(pi, 1);
-
+	/* TODO: this card also supports msi, but the freebsd driver for it
+	 * does not, so I have not implemented it. */
 	pci_lintr_request(pi);
 
 	pci_emul_alloc_bar(pi, E82545_BAR_REGISTER, PCIBAR_MEM32,
