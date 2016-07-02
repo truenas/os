@@ -1074,36 +1074,38 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 		}
 	}
 
+	/* We have incomplete packet.  Leave it for later. */
+	if (i == maxdesc)
+		return (-1);
+
+	if (ckinfo[0].ck_valid || ckinfo[1].ck_valid) {
+		DPRINTF("checksum found %d\r\n", 1);
+		if (e82545_transmit_checksum(sc, iov, segs, tlen, tbuf,
+		    ckinfo)) {
+			/* Switch to new single iovec */
+			iovcks[2].iov_base = tbuf;
+			iovcks[2].iov_len = tlen;
+			iov = &iovcks[2];
+			segs = 1;
+		}
+	}
+
+	/* XXX insert VLAN if required ?? tlen += 4, iov insert */
+	e82545_transmit_backend(sc, iov, segs, tlen);
+	e82545_transmit_done(sc, txwb, nwb);
+
 	/* Record if tx descs were written back */
 	if (nwb)
 		*tdwb = 1;
 
-        if (i != maxdesc) {
-		if (ckinfo[0].ck_valid || ckinfo[1].ck_valid) {
-			DPRINTF("checksum found %d\n", 1);
-			if (e82545_transmit_checksum(sc, iov, segs, tlen, tbuf,
-			    ckinfo)) {
-				/* Switch to new single iovec */
-				iovcks[2].iov_base = tbuf;
-				iovcks[2].iov_len = tlen;
-				iov = &iovcks[2];
-				segs = 1;
-			}
-		}
-	
-		/* XXX insert VLAN if required ?? tlen += 4, iov insert */
-		e82545_transmit_backend(sc, iov, segs, tlen);
-		e82545_transmit_done(sc, txwb, nwb);
-	}
-
-	return (i == maxdesc ? -1 : i + 1);
+	return (i + 1);
 }
 
 static void
 e82545_start_tx(struct e82545_softc *sc, uint16_t value)
 {
 	uint32_t cause;
-	uint16_t head, tail, ndesc, ondesc, size, start;
+	uint16_t head, tail, ndesc, size;
 	int descs, tdwb;
 
 	/*
@@ -1119,24 +1121,22 @@ e82545_start_tx(struct e82545_softc *sc, uint16_t value)
 	tail = sc->esc_TDT = value;
 	
 	tdwb = 0;
-	ndesc = ondesc = (size + tail - head) % size;
+	ndesc = (size + tail - head) % size;
 
 	DPRINTF("start_tx  ndesc %d, head %x, tail %x\r\n", ndesc, head, tail);
 
 	if (ndesc == 0)
 		return;
 
-	for (start = head; ndesc > 0; ndesc -= descs) {
-		descs = e82545_transmit(sc, size, start, ndesc, &tdwb);
+	for (; ndesc > 0; ndesc -= descs) {
+		descs = e82545_transmit(sc, size, head, ndesc, &tdwb);
 		if (descs < 0)
 			break;
-		start = (start + descs) % size;
+		head = (head + descs) % size;
 	}
-	assert(descs > 0);
-	assert(ndesc == 0);
 
 	/* Update the head pointer */
-	sc->esc_TDH = (sc->esc_TDH + ondesc) % size;
+	sc->esc_TDH = head;
 
 	DPRINTF("start_tx done: head %x, tail %x\r\n",
 		sc->esc_TDH, sc->esc_TDT);
