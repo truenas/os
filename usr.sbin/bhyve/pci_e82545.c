@@ -907,13 +907,13 @@ e82545_transmit_checksum(struct e82545_softc *sc, struct iovec *iov,
 
 		/*
 		 * Determine how many bytes need to be checksummed.
-		 * Note that ck_len is a 0-based index, so subtract another
-		 * 1 to get the number of bytes. For the case where ck_len
+		 * Note that ck_len is a 0-based index, so add another 1
+		 * to get the number of bytes. For the case where ck_len
 		 * is 0, use the existing byte count.
 		 */
 		DPRINTF("tx cksum: idx %d, s/off/len %d/%d/%d\n\r",
 			i, ck[i].ck_start, ck[i].ck_off, ck[i].ck_len);
-		cklen = ck[i].ck_len ? ck[i].ck_len - ck[i].ck_start - 1 :
+		cklen = ck[i].ck_len ? ck[i].ck_len - ck[i].ck_start + 1 :
 			len - ck[i].ck_start;
 		cksum = e82545_net_checksum(&tbuf[ck[i].ck_start], cklen);
 		
