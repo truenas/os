@@ -729,7 +729,6 @@ e82545_rx_ctl(struct e82545_softc *sc, uint32_t val)
 			//assert(val & E1000_RCTL_SECRC);
 			//assert(!(val & E1000_RCTL_LBM_TCVR));
 
-			//xassert(!(val & E1000_RCTL_VFE));  /* XXX no VFE yet */
 			if (sc->esc_RCTL & E1000_RCTL_LBM_TCVR) {
 				sc->esc_rx_loopback = 1;
 			} else {
