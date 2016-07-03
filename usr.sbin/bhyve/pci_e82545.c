@@ -101,6 +101,8 @@ __FBSDID("$FreeBSD$");
 
 #define	E82545_NVM_EEPROM_SIZE	64 /* 64 * 16-bit values == 128K */
 
+#define E1000_ICR_SRPD		0x00010000
+
 /* Standard packet buffer size */
 #define PBUFSZ		2048
 
@@ -231,6 +233,7 @@ struct e82545_softc {
 	struct pci_devinst *esc_pi;
 	struct vmctx	*esc_ctx;
 	struct mevent   *esc_mevp;
+	struct mevent   *esc_mevpitr;
 	pthread_mutex_t	esc_mtx;
 	struct ether_addr esc_mac;
 	int		esc_tapfd;
@@ -291,6 +294,7 @@ struct e82545_softc {
 	uint32_t	esc_RDTR;	/* x2820 intr delay */
 	uint32_t	esc_RXDCTL;	/* x2828 desc control */
 	uint32_t	esc_RADV;	/* x282C intr absolute delay */
+	uint32_t	esc_RSRPD;	/* x2C00 recv small packet detect */
 	uint32_t	esc_RXCSUM;     /* x5000 receive cksum ctl */
 	
 	/* IO Port register access */
@@ -521,6 +525,25 @@ e82545_eecd_strobe(struct e82545_softc *sc)
 }
 
 static void
+e82545_itr_callback(int fd, enum ev_type type, void *param)
+{
+	uint32_t new;
+	struct e82545_softc *sc = param;
+
+	pthread_mutex_lock(&sc->esc_mtx);
+	new = sc->esc_ICR & sc->esc_IMS;
+	if (new && !sc->esc_irq_asserted) {
+		DPRINTF("itr callback: lintr assert %x\r\n", new);
+		sc->esc_irq_asserted = 1;
+		pci_lintr_assert(sc->esc_pi);
+	} else {
+		mevent_delete(sc->esc_mevpitr);
+		sc->esc_mevpitr = NULL;
+	}
+	pthread_mutex_unlock(&sc->esc_mtx);
+}
+
+static void
 e82545_icr_assert(struct e82545_softc *sc, uint32_t bits)
 {
 	uint32_t new;
@@ -535,12 +558,19 @@ e82545_icr_assert(struct e82545_softc *sc, uint32_t bits)
 	new = bits & ~sc->esc_ICR & sc->esc_IMS;
 	sc->esc_ICR |= bits;
 
-	if (new && !sc->esc_irq_asserted) {
+	if (new == 0) {
+		DPRINTF("icr assert: masked %x, ims %x\r\n", new, sc->esc_IMS);
+	} else if (sc->esc_mevpitr != NULL) {
+		DPRINTF("icr assert: throttled %x, ims %x\r\n", new, sc->esc_IMS);
+	} else if (!sc->esc_irq_asserted) {
 		DPRINTF("icr assert: lintr assert %x\r\n", new);
 		sc->esc_irq_asserted = 1;
 		pci_lintr_assert(sc->esc_pi);
-	} else {
-		DPRINTF("icr assert: masked %x, ims %x\r\n", new, sc->esc_IMS);
+		if (sc->esc_ITR != 0) {
+			sc->esc_mevpitr = mevent_add(
+			    (sc->esc_ITR + 3905) / 3906,  /* 256ns -> 1ms */
+			    EVF_TIMER, e82545_itr_callback, sc);
+		}
 	}
 }
 
@@ -555,11 +585,20 @@ e82545_ims_change(struct e82545_softc *sc, uint32_t bits)
 	 */
 	new = bits & sc->esc_ICR & ~sc->esc_IMS;
 	sc->esc_IMS |= bits;
-	
-	if (new && !sc->esc_irq_asserted) {
+
+	if (new == 0) {
+		DPRINTF("ims change: masked %x, ims %x\r\n", new, sc->esc_IMS);
+	} else if (sc->esc_mevpitr != NULL) {
+		DPRINTF("ims change: throttled %x, ims %x\r\n", new, sc->esc_IMS);
+	} else if (!sc->esc_irq_asserted) {
 		DPRINTF("ims change: lintr assert %x\n\r", new);
 		sc->esc_irq_asserted = 1;
 		pci_lintr_assert(sc->esc_pi);
+		if (sc->esc_ITR != 0) {
+			sc->esc_mevpitr = mevent_add(
+			    (sc->esc_ITR + 3905) / 3906,  /* 256ns -> 1ms */
+			    EVF_TIMER, e82545_itr_callback, sc);
+		}
 	}
 }
 
@@ -769,6 +808,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 	struct e1000_rx_desc *rxd;
 	void *rxbuf;
 	int crcsz, len, minpktsz;
+	uint32_t cause;
 	
 	sc = param;
 
@@ -802,15 +842,24 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 				crcsz = ETHER_CRC_LEN;
 			minpktsz = ETHER_MIN_LEN - ETHER_CRC_LEN + crcsz;
 
-			rxd->length = len + crcsz;
-			if (rxd->length < minpktsz)
-				rxd->length = minpktsz;
+			rxd->length = (len + crcsz > minpktsz) ?
+			    (len + crcsz) : minpktsz;
+			rxd->csum = 0;
+			rxd->errors = 0;
+			rxd->special = 0;
 
 			/* XXX signal no checksum for now */
-			rxd->status = E1000_RXD_STAT_IXSM |
+			rxd->status = E1000_RXD_STAT_PIF | E1000_RXD_STAT_IXSM |
 			    E1000_RXD_STAT_EOP | E1000_RXD_STAT_DD;
-			/* Not correct, but signals rx immediately */
-			e82545_icr_assert(sc, E1000_ICR_RXT0);
+
+			cause = 0;
+			if (len + crcsz <= sc->esc_RSRPD) {
+				cause |= E1000_ICR_SRPD | E1000_ICR_RXT0;
+			} else {
+				/* XXX: RDRT and RADV timers should be here. */
+				cause |= E1000_ICR_RXT0;
+			}
+			e82545_icr_assert(sc, cause);
 
 			/* Update head pointer */
 			sc->esc_RDH = (sc->esc_RDH + 1) % (sc->esc_RDLEN / 16);
@@ -1296,6 +1345,9 @@ e82545_write_register(struct e82545_softc *sc, uint32_t offset, uint32_t value)
 	case E1000_RADV:
 		sc->esc_RADV = value & ~0xFFFF0000;
 		break;
+	case E1000_RSRPD:
+		sc->esc_RSRPD = value & ~0xFFFFF000;
+		break;
 	case E1000_RXCSUM:
 		sc->esc_RXCSUM = value & ~0xFFFFF800;
 		break;
@@ -1499,6 +1551,9 @@ e82545_read_register(struct e82545_softc *sc, uint32_t offset)
 		break;
 	case E1000_RADV:
 		retval = sc->esc_RADV;
+		break;
+	case E1000_RSRPD:
+		retval = sc->esc_RSRPD;
 		break;
 	case E1000_RXCSUM:	       
 		retval = sc->esc_RXCSUM;
@@ -1818,7 +1873,7 @@ e82545_reset(struct e82545_softc *sc, int drvr)
 
 	/* interrupt */
 	sc->esc_ICR = 0;
-	sc->esc_ITR = 0;
+	sc->esc_ITR = 250;
 	sc->esc_ICS = 0;
 	sc->esc_IMS = 0;
 	sc->esc_IMC = 0;
