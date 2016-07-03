@@ -263,6 +263,7 @@ struct e82545_softc {
 	uint32_t	esc_TXCW;	/* x0178 transmit config */
 	uint32_t	esc_TCTL;	/* x0400 transmit ctl */
 	uint32_t	esc_TIPG;	/* x0410 inter-packet gap */
+	uint16_t	esc_AIT;	/* x0458 Adaptive Interframe Throttle */
 	uint64_t	esc_tdba;      	/* verified 64-bit desc table addr */
 	uint32_t	esc_TDBAL;	/* x3800 desc table addr, low bits */
 	uint32_t	esc_TDBAH;	/* x3804 desc table addr, hi 32-bits */
@@ -1360,6 +1361,9 @@ e82545_write_register(struct e82545_softc *sc, uint32_t offset, uint32_t value)
 	case E1000_TIPG:
 		sc->esc_TIPG = value;
 		break;
+	case E1000_AIT:
+		sc->esc_AIT = value;
+		break;
 	case E1000_TDBAL(0):
 		sc->esc_TDBAL = value & ~0xF;
 		if (sc->esc_tx_enabled) {
@@ -1566,6 +1570,9 @@ e82545_read_register(struct e82545_softc *sc, uint32_t offset)
 		break;
 	case E1000_TIPG:
 		retval = sc->esc_TIPG;
+		break;
+	case E1000_AIT:
+		retval = sc->esc_AIT;
 		break;
 	case E1000_TDBAL(0):
 		retval = sc->esc_TDBAL;
@@ -1916,6 +1923,7 @@ e82545_reset(struct e82545_softc *sc, int drvr)
 		sc->esc_TDBAL = 0;
 		sc->esc_TDBAH = 0;
 		sc->esc_TIPG = 0;
+		sc->esc_AIT = 0;
 		sc->esc_TIDV = 0;
 		sc->esc_TADV = 0;
 	}
