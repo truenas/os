@@ -806,7 +806,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 	struct e82545_softc *sc = param;
 	struct e1000_rx_desc *rxd;
 	struct iovec vec[64];
-	int len, maxpktsz, bufsz, n, i, size;
+	int left, len, maxpktsz, bufsz, n, i, size;
 	uint32_t cause;
 	uint16_t *tp, tag;
 
@@ -816,8 +816,8 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 	n = (maxpktsz + bufsz - 1) / bufsz;
 	size = sc->esc_RDLEN / 16;
 
-	if (!sc->esc_rx_enabled || sc->esc_rx_loopback ||
-	    ((size + sc->esc_RDT - sc->esc_RDH) % size < n)) {
+	left = (size + sc->esc_RDT - sc->esc_RDH) % size;
+	if (!sc->esc_rx_enabled || sc->esc_rx_loopback || (left < n)) {
 		/* Drop the packet */
 		DPRINTF("packet dropped, disabled %d\r\n", sc->esc_rx_enabled);
 		(void) read(sc->esc_tapfd, dummybuf, sizeof(dummybuf));
@@ -879,6 +879,11 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 			rxd->status = E1000_RXD_STAT_PIF | E1000_RXD_STAT_IXSM |
 			    E1000_RXD_STAT_EOP | E1000_RXD_STAT_DD;
 
+			/* Update head pointer */
+			sc->esc_RDH = (sc->esc_RDH + n) % size;
+			left -= n;
+
+			/* Generate receive interrupts. */
 			cause = 0;
 			if (len <= sc->esc_RSRPD) {
 				cause |= E1000_ICR_SRPD | E1000_ICR_RXT0;
@@ -886,10 +891,10 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 				/* XXX: RDRT and RADV timers should be here. */
 				cause |= E1000_ICR_RXT0;
 			}
+			/* E1000_RCTL_RDMTS */
+			if (left < (size >> (((sc->esc_RCTL >> 8) & 3) + 1)))
+				cause |= E1000_ICR_RXDMT0;
 			e82545_icr_assert(sc, cause);
-
-			/* Update head pointer */
-			sc->esc_RDH = (sc->esc_RDH + n) % size;
 		} else {
 			DPRINTF("tap: bad len returned %d\n", len);
 		}
