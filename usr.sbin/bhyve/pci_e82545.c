@@ -810,6 +810,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 	struct iovec vec[64];
 	int len, maxpktsz, bufsz, n, i, size;
 	uint32_t cause;
+	uint16_t *tp, tag;
 
 	pthread_mutex_lock(&sc->esc_mtx);
 	bufsz = e82545_bufsz(sc->esc_RCTL);
@@ -851,6 +852,18 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 		DPRINTF("packet read %d bytes, %d segs, head %d\r\n",
 		    len, n, sc->esc_RDH);
 		if (len > 0) {
+			tp = (uint16_t *)vec[0].iov_base + 6;
+			if ((sc->esc_RCTL & E1000_RCTL_VFE) &&
+			    (ntohs(tp[0]) == sc->esc_VET)) {
+				tag = ntohs(tp[1]) & 0x0fff;
+				if ((sc->esc_fvlan[tag >> 5] &
+				    (1 << (tag & 0x1f))) != 0) {
+					DPRINTF("known VLAN %d\r\n", tag);
+				} else {
+					DPRINTF("unknown VLAN %d\r\n", tag);
+					goto done;
+				}
+			}
 			for (i = 0; i < n - 1; i++) {
 				rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
 				rxd->length = bufsz;
@@ -885,6 +898,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 		}
 	}
 
+done:
 	pthread_mutex_unlock(&sc->esc_mtx);
 }
 
