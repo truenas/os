@@ -991,8 +991,7 @@ e82545_transmit_checksum(struct e82545_softc *sc, struct iovec *iov,
 }
 
 static void
-e82545_transmit_backend(struct e82545_softc *sc, struct iovec *iov, int iovcnt,
-    int len)
+e82545_transmit_backend(struct e82545_softc *sc, struct iovec *iov, int iovcnt)
 {
 
 	if (sc->esc_tapfd == -1)
@@ -1027,6 +1026,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 	union  e1000_tx_udesc *dsc;
 	uint16_t idx;
 	int dtype, i, len, ntype, nwb, segs, tlen;
+	uint8_t vlanhdr[ETHER_VLAN_ENCAP_LEN];
 
 	ckinfo[0].ck_valid = ckinfo[1].ck_valid = 0;
 	segs = 0;
@@ -1084,6 +1084,10 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 		    dsc->dd.lower.data & 0xFFFFF;
 
 		if (len > 0) {
+			/* Strip checksum supplied by guest. */
+			if ((dsc->td.lower.data & E1000_TXD_CMD_EOP) != 0 &&
+			    (dsc->td.lower.data & E1000_TXD_CMD_IFCS) == 0)
+				len -= 2;
 			tlen += len;
 			iov[segs].iov_base = paddr_guest2host(sc->esc_ctx,
 			    dsc->td.buffer_addr, len);
@@ -1130,12 +1134,6 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 					    cd->upper_setup.tcp_fields.tucse;
 				}
 			}
-
-			/* XXX not yet implemented */
-			assert(!(dsc->td.lower.data & E1000_TXD_CMD_VLE));
-			/* FCS insertion mandatory */
-			assert(dsc->td.lower.data & E1000_TXD_CMD_IFCS);
-
 			break;
 		}
 	}
@@ -1157,8 +1155,23 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 		}
 	}
 
-	/* XXX insert VLAN if required ?? tlen += 4, iov insert */
-	e82545_transmit_backend(sc, iov, segs, tlen);
+	if ((sc->esc_CTRL & E1000_CTRL_VME) &&
+	    (dsc->td.lower.data & E1000_TXD_CMD_VLE)) {
+		vlanhdr[0] = sc->esc_VET >> 8;
+		vlanhdr[1] = sc->esc_VET & 0xff;
+		vlanhdr[2] = dsc->td.upper.fields.special >> 8;
+		vlanhdr[3] = dsc->td.upper.fields.special & 0xff;
+		iov -= 2;
+		segs += 2;
+		iov[0].iov_base = iov[2].iov_base;
+		iov[0].iov_len = ETHER_ADDR_LEN*2;
+		iov[1].iov_base = &vlanhdr;
+		iov[1].iov_len = ETHER_VLAN_ENCAP_LEN;
+		iov[2].iov_base += ETHER_ADDR_LEN*2;
+		iov[2].iov_len -= ETHER_ADDR_LEN*2;
+	}
+
+	e82545_transmit_backend(sc, iov, segs);
 	e82545_transmit_done(sc, txwb, nwb);
 
 	/* Record if tx descs were written back */
