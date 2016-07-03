@@ -103,9 +103,6 @@ __FBSDID("$FreeBSD$");
 
 #define E1000_ICR_SRPD		0x00010000
 
-/* Standard packet buffer size */
-#define PBUFSZ		2048
-
 /*
  * XXX does this actually have a limit on the 82545 ?
  * There is a limit on the max number of bytes, but perhaps not
@@ -733,23 +730,10 @@ e82545_rx_ctl(struct e82545_softc *sc, uint32_t val)
 			//assert(!(val & E1000_RCTL_LBM_TCVR));
 
 			//xassert(!(val & E1000_RCTL_VFE));  /* XXX no VFE yet */
-			/*
-			 * If loopback is enabled, relax the size
-			 * checks. This helps with diagnostic tests.
-			 */
 			if (sc->esc_RCTL & E1000_RCTL_LBM_TCVR) {
 				sc->esc_rx_loopback = 1;
 			} else {
 				sc->esc_rx_loopback = 0;
-				/*
-				 * Verify that the rx buffer is large enough
-				 * for a single ethernet frame. This is
-				 * always true if the buffer-size extension
-				 * has been enabled, or if the size bits are
-				 * b00 (2048 bytes).
-				 */
-				assert((sc->esc_RCTL & E1000_RCTL_BSEX) ||
-				    !(sc->esc_RCTL & E1000_RCTL_SZ_256));
 			}
 
 			e82545_rx_update_rdba(sc);			
@@ -799,36 +783,55 @@ e82545_tx_ctl(struct e82545_softc *sc, uint32_t val)
 	sc->esc_TCTL = val & ~0xFE800005;
 }
 
-static uint8_t dummybuf[PBUFSZ];
+int
+e82545_bufsz(uint32_t rctl)
+{
+
+	switch (rctl & (E1000_RCTL_BSEX | E1000_RCTL_SZ_256)) {
+	case (E1000_RCTL_SZ_2048): return (2048);
+	case (E1000_RCTL_SZ_1024): return (1024);
+	case (E1000_RCTL_SZ_512): return (512);
+	case (E1000_RCTL_SZ_256): return (256);
+	case (E1000_RCTL_BSEX|E1000_RCTL_SZ_16384): return (16384);
+	case (E1000_RCTL_BSEX|E1000_RCTL_SZ_8192): return (8192);
+	case (E1000_RCTL_BSEX|E1000_RCTL_SZ_4096): return (4096);
+	}
+	return (256);	/* Forbidden value. */
+}
+
+static uint8_t dummybuf[2048];
 
 /* XXX one packet at a time until this is debugged */
 static void
 e82545_tap_callback(int fd, enum ev_type type, void *param)
 {
-	struct e82545_softc *sc;
+	struct e82545_softc *sc = param;
 	struct e1000_rx_desc *rxd;
-	void *rxbuf;
-	int crcsz, len, minpktsz;
+	struct iovec vec[64];
+	int len, maxpktsz, bufsz, n, i, size;
 	uint32_t cause;
-	
-	sc = param;
 
 	pthread_mutex_lock(&sc->esc_mtx);
-	
+	bufsz = e82545_bufsz(sc->esc_RCTL);
+	maxpktsz = (sc->esc_RCTL & E1000_RCTL_LPE) ? MAX_JUMBO_FRAME_SIZE :
+	    ETHER_MAX_LEN;
+	n = (maxpktsz + bufsz - 1) / bufsz;
+	size = sc->esc_RDLEN / 16;
+
 	if (!sc->esc_rx_enabled || sc->esc_rx_loopback ||
-	    (sc->esc_RDT == sc->esc_RDH)) {
+	    ((size + sc->esc_RDT - sc->esc_RDH) % size < n)) {
 		/* Drop the packet */
-		DPRINTF("packet dropped, disabled %d\n", sc->esc_rx_enabled);
+		DPRINTF("packet dropped, disabled %d\r\n", sc->esc_rx_enabled);
 		(void) read(sc->esc_tapfd, dummybuf, sizeof(dummybuf));
 	} else {
 		/* Grab rx descriptor pointed to by the head pointer */
-		rxd = &sc->esc_rxdesc[sc->esc_RDH];
-		rxbuf = paddr_guest2host(sc->esc_ctx, rxd->buffer_addr,
-		    PBUFSZ);
-		
-		len = read(sc->esc_tapfd, rxbuf, PBUFSZ);
-
-		DPRINTF("packet read %d bytes, head %d\r\n", len, sc->esc_RDH);
+		for (i = 0; i < n; i++) {
+			rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
+			vec[i].iov_base = paddr_guest2host(sc->esc_ctx,
+			    rxd->buffer_addr, bufsz);
+			vec[i].iov_len = bufsz;
+		}
+		len = readv(sc->esc_tapfd, vec, n);
 		if (len > 0) {
 			/*
 			 * Adjust the packet length based on whether the
@@ -838,23 +841,36 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 			 * additional padding bytes for frames smaller
 			 * than the minimum size
 			 */
-			crcsz = 0;
+			if (len < ETHER_MIN_LEN - ETHER_CRC_LEN)
+				len = ETHER_MIN_LEN - ETHER_CRC_LEN;
 			if (!(sc->esc_RCTL & E1000_RCTL_SECRC))
-				crcsz = ETHER_CRC_LEN;
-			minpktsz = ETHER_MIN_LEN - ETHER_CRC_LEN + crcsz;
+				len += ETHER_CRC_LEN;
+		}
+		n = (len + bufsz - 1) / bufsz;
 
-			rxd->length = (len + crcsz > minpktsz) ?
-			    (len + crcsz) : minpktsz;
+		DPRINTF("packet read %d bytes, %d segs, head %d\r\n",
+		    len, n, sc->esc_RDH);
+		if (len > 0) {
+			for (i = 0; i < n - 1; i++) {
+				rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
+				rxd->length = bufsz;
+				rxd->csum = 0;
+				rxd->errors = 0;
+				rxd->special = 0;
+				rxd->status = E1000_RXD_STAT_DD;
+			}
+
+			rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
+			rxd->length = len % bufsz;
 			rxd->csum = 0;
 			rxd->errors = 0;
 			rxd->special = 0;
-
 			/* XXX signal no checksum for now */
 			rxd->status = E1000_RXD_STAT_PIF | E1000_RXD_STAT_IXSM |
 			    E1000_RXD_STAT_EOP | E1000_RXD_STAT_DD;
 
 			cause = 0;
-			if (len + crcsz <= sc->esc_RSRPD) {
+			if (len <= sc->esc_RSRPD) {
 				cause |= E1000_ICR_SRPD | E1000_ICR_RXT0;
 			} else {
 				/* XXX: RDRT and RADV timers should be here. */
@@ -863,7 +879,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 			e82545_icr_assert(sc, cause);
 
 			/* Update head pointer */
-			sc->esc_RDH = (sc->esc_RDH + 1) % (sc->esc_RDLEN / 16);
+			sc->esc_RDH = (sc->esc_RDH + n) % size;
 		} else {
 			DPRINTF("tap: bad len returned %d\n", len);
 		}
@@ -1001,7 +1017,7 @@ static int
 e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
     uint16_t maxdesc, int *tdwb)
 {
-	uint8_t tbuf[PBUFSZ];
+	uint8_t *tbuf;
         struct iovec iovb[I82545_MAX_TXSEGS + 2];
 	struct iovec iovcks[3];
 	union e1000_tx_udesc *txwb[I82545_MAX_TXSEGS];
@@ -1130,6 +1146,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 
 	if (ckinfo[0].ck_valid || ckinfo[1].ck_valid) {
 		DPRINTF("checksum found %d\r\n", 1);
+		tbuf = __builtin_alloca(tlen);
 		if (e82545_transmit_checksum(sc, iov, segs, tlen, tbuf,
 		    ckinfo)) {
 			/* Switch to new single iovec */
