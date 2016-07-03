@@ -812,8 +812,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 
 	pthread_mutex_lock(&sc->esc_mtx);
 	bufsz = e82545_bufsz(sc->esc_RCTL);
-	maxpktsz = (sc->esc_RCTL & E1000_RCTL_LPE) ? MAX_JUMBO_FRAME_SIZE :
-	    ETHER_MAX_LEN;
+	maxpktsz = (sc->esc_RCTL & E1000_RCTL_LPE) ? 16384 : 1522;
 	n = (maxpktsz + bufsz - 1) / bufsz;
 	size = sc->esc_RDLEN / 16;
 
