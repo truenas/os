@@ -726,7 +726,6 @@ e82545_rx_ctl(struct e82545_softc *sc, uint32_t val)
 	if (on != sc->esc_rx_enabled) {
 		if (on) {
 			/* Catch disallowed/unimplemented settings */
-			//assert(val & E1000_RCTL_SECRC);
 			//assert(!(val & E1000_RCTL_LBM_TCVR));
 
 			if (sc->esc_RCTL & E1000_RCTL_LBM_TCVR) {
