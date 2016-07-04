@@ -904,35 +904,30 @@ done:
 	pthread_mutex_unlock(&sc->esc_mtx);
 }
 
-static uint32_t
-e82545_net_checksum(unsigned char *buf, unsigned nbytes)
+static uint16_t
+e82545_net_checksum(uint8_t *buf, int len)
 {
-	uint32_t sum;
 	int i;
+	uint32_t sum = 0;
 
-	sum = 0;
-	
 	/* Checksum all the pairs of bytes first... */
-	for (i = 0; i < (nbytes & ~1U); i += 2) {
-		sum += (u_int16_t)ntohs(*((u_int16_t *)(buf + i)));
-		if (sum > 0xFFFF)
-			sum -= 0xFFFF;
-	}
+	for (i = 0; i < (len & ~1U); i += 2)
+		sum += *((u_int16_t *)(buf + i));
 
 	/*
-         * If there's a single byte left over, checksum it, too.
-         * Network byte order is big-endian, so the remaining byte is
-         * the high byte.
-         */
-	if (i < nbytes) {
+	 * If there's a single byte left over, checksum it, too.
+	 * Network byte order is big-endian, so the remaining byte is
+	 * the high byte.
+	 */
+	if (i < len)
 		sum += buf[i] << 8;
-		if (sum > 0xFFFF)
-			sum -= 0xFFFF;
-	}
 
-	sum = ~sum & 0xFFFF;	
-	
-	return (htons(sum));
+	/* Add all accumulated carry bits. */
+	sum = (sum & 0xFFFF) + (sum >> 16);
+	if (sum > 0xFFFF)
+		sum -= 0xFFFF;
+
+	return (~sum & 0xFFFF);
 }
 
 /*
