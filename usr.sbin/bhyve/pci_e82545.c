@@ -30,6 +30,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
+#include <sys/limits.h>
 #include <sys/uio.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
@@ -217,6 +218,9 @@ struct ck_info {
 static int e82545_debug = 1;
 #define DPRINTF(msg,params...) if (e82545_debug) fprintf(stderr, "e82545: " msg, params)
 #define WPRINTF(msg,params...) fprintf(stderr, "e82545: " msg, params)
+
+#define	MIN(a,b) (((a)<(b))?(a):(b))
+#define	MAX(a,b) (((a)>(b))?(a):(b))
 
 /* s/w representation of the RAL/RAH regs */
 struct  eth_uni {
@@ -905,7 +909,17 @@ done:
 }
 
 static uint16_t
-e82545_net_checksum(uint8_t *buf, int len)
+e82545_carry(uint32_t sum)
+{
+
+	sum = (sum & 0xFFFF) + (sum >> 16);
+	if (sum > 0xFFFF)
+		sum -= 0xFFFF;
+	return (sum);
+}
+
+static uint16_t
+e82545_buf_checksum(uint8_t *buf, int len)
 {
 	int i;
 	uint32_t sum = 0;
@@ -922,12 +936,36 @@ e82545_net_checksum(uint8_t *buf, int len)
 	if (i < len)
 		sum += buf[i] << 8;
 
-	/* Add all accumulated carry bits. */
-	sum = (sum & 0xFFFF) + (sum >> 16);
-	if (sum > 0xFFFF)
-		sum -= 0xFFFF;
+	return (e82545_carry(sum));
+}
 
-	return (~sum & 0xFFFF);
+static uint16_t
+e82545_iov_checksum(struct iovec *iov, int iovcnt, int off, int len)
+{
+	int now, odd;
+	uint32_t sum = 0, s;
+
+	/* Skip completely unneeded vectors. */
+	while (iovcnt > 0 && iov->iov_len <= off && off > 0) {
+		off -= iov->iov_len;
+		iov++;
+		iovcnt--;
+	}
+
+	/* Calculate checksum of requested range. */
+	odd = 0;
+	while (len > 0 && iovcnt > 0) {
+		now = MIN(len, iov->iov_len - off);
+		s = e82545_buf_checksum(iov->iov_base + off, now);
+		sum += odd ? (s << 8) : s;
+		odd ^= (now & 1);
+		len -= now;
+		off = 0;
+		iov++;
+		iovcnt--;
+	}
+
+	return (e82545_carry(sum));
 }
 
 /*
@@ -946,59 +984,17 @@ e82545_txdesc_type(uint32_t lower)
 	return (type);
 }
 
-/*
- * Since the checksum has to be written into the packet, copy the
- * packet from guest memory into a buffer and update the checksum
- * in-place.
- *
- * A more optimized version would be able to calculate the checksum
- * from the iovec, and then insert an additional iovec that would
- * contain the 2 bytes of checksum data. This is a lot of work for
- * perhaps little gain so will be deferred.
- */
-static int
-e82545_transmit_checksum(struct e82545_softc *sc, struct iovec *iov,
-    int iovcnt, int len, uint8_t *tbuf, struct ck_info *ck)
+static void
+e82545_transmit_checksum(struct iovec *iov, int iovcnt, struct ck_info *ck)
 {
 	uint16_t cksum;
-	int i, cklen, tlen;
+	int cklen;
 
-	/* Copy iovec into linear tbuf */
-	for (i = 0, tlen = 0; i < iovcnt; i++) {
-		memcpy(&tbuf[tlen], iov[i].iov_base, iov[i].iov_len);
-		tlen += iov[i].iov_len;
-	}
-	assert(tlen == len);
-
-	/* Walk through ck_info array XXX assume [2] */
-	for (i = 0; i < 2; i++) {
-#if 0
-		/* Sanity check cksum offset/location */
-		if (cso > (len - 1) || (css > (len - 1)))
-			return (0);
-#endif
-		if (ck[i].ck_valid == 0) {
-			DPRINTF("tx cksum: idx %d not valid\n\r", i);
-			continue;
-		}
-
-		/*
-		 * Determine how many bytes need to be checksummed.
-		 * Note that ck_len is a 0-based index, so add another 1
-		 * to get the number of bytes. For the case where ck_len
-		 * is 0, use the existing byte count.
-		 */
-		DPRINTF("tx cksum: idx %d, s/off/len %d/%d/%d\n\r",
-			i, ck[i].ck_start, ck[i].ck_off, ck[i].ck_len);
-		cklen = ck[i].ck_len ? ck[i].ck_len - ck[i].ck_start + 1 :
-			len - ck[i].ck_start;
-		cksum = e82545_net_checksum(&tbuf[ck[i].ck_start], cklen);
-		
-		/* Insert checksum back into buffer */
-		*(uint16_t *)&tbuf[ck[i].ck_off] = cksum;
-	}
-
-	return (1);
+	DPRINTF("tx cksum: iovcnt/s/off/len %d/%d/%d/%d\r\n",
+	    iovcnt, ck->ck_start, ck->ck_off, ck->ck_len);
+	cklen = ck->ck_len ? ck->ck_len - ck->ck_start + 1 : INT_MAX;
+	cksum = e82545_iov_checksum(iov, iovcnt, ck->ck_start, cklen);
+	*(uint16_t *)((uint8_t *)iov[0].iov_base + ck->ck_off) = ~cksum;
 }
 
 static void
@@ -1024,35 +1020,26 @@ e82545_transmit_done(struct e82545_softc *sc, union e1000_tx_udesc **txwb,
 }
 
 static int
-e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
+e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
     uint16_t maxdesc, int *tdwb)
 {
-	uint8_t *tbuf;
-        struct iovec iovb[I82545_MAX_TXSEGS + 2];
-	struct iovec iovcks[3];
+	uint8_t *hdr, *hdrp;
+	struct iovec iovb[I82545_MAX_TXSEGS + 1];
 	union e1000_tx_udesc *txwb[I82545_MAX_TXSEGS];
 	struct e1000_context_desc *cd;
 	struct ck_info ckinfo[2];
-        struct iovec *iov;
+	struct iovec *iov;
 	union  e1000_tx_udesc *dsc;
-	uint16_t idx;
-	int dtype, i, len, ntype, nwb, segs, tlen;
-	uint8_t vlanhdr[ETHER_VLAN_ENCAP_LEN];
+	int dtype, i, len, ntype, nwb, segs, tlen, hdrlen, vlen, left, now;
 
 	ckinfo[0].ck_valid = ckinfo[1].ck_valid = 0;
 	segs = 0;
 	tlen = 0;
 	nwb = 0;
-	idx = start;
 	ntype = 0;
 
-	/*
-         * iovb[0/1] will be used for the optional VLAN tag insertion. If
-	 * that is requested, iov will be backed up one and the VLAN inserted
-	 * after the ethernet header. This may require splitting an existing
-	 * segment in 2, hence the 2 additional iovec elements.
-         */
-	iov = &iovb[2];
+	/* iovb[0] may be used for writable copy of headers. */
+	iov = &iovb[1];
 	
 	for (i = 0; i < maxdesc; i++, idx = (idx + 1) % dsize) {
 		dsc = &sc->esc_txdesc[idx];
@@ -1153,39 +1140,66 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t start,
 	if (i == maxdesc)
 		return (-1);
 
-	if (ckinfo[0].ck_valid || ckinfo[1].ck_valid) {
-		DPRINTF("checksum found %d\r\n", 1);
-		tbuf = __builtin_alloca(tlen);
-		if (e82545_transmit_checksum(sc, iov, segs, tlen, tbuf,
-		    ckinfo)) {
-			/* Switch to new single iovec */
-			iovcks[2].iov_base = tbuf;
-			iovcks[2].iov_len = tlen;
-			iov = &iovcks[2];
-			segs = 1;
-		}
-	}
-
+	hdrlen = vlen = 0;
+	/* Estimate writable space for VLAN header insertion. */
 	if ((sc->esc_CTRL & E1000_CTRL_VME) &&
 	    (dsc->td.lower.data & E1000_TXD_CMD_VLE)) {
-		vlanhdr[0] = sc->esc_VET >> 8;
-		vlanhdr[1] = sc->esc_VET & 0xff;
-		vlanhdr[2] = dsc->td.upper.fields.special >> 8;
-		vlanhdr[3] = dsc->td.upper.fields.special & 0xff;
-		iov -= 2;
-		segs += 2;
-		iov[0].iov_base = iov[2].iov_base;
-		iov[0].iov_len = ETHER_ADDR_LEN*2;
-		iov[1].iov_base = &vlanhdr;
-		iov[1].iov_len = ETHER_VLAN_ENCAP_LEN;
-		iov[2].iov_base += ETHER_ADDR_LEN*2;
-		iov[2].iov_len -= ETHER_ADDR_LEN*2;
+		hdrlen = ETHER_ADDR_LEN*2;
+		vlen = ETHER_VLAN_ENCAP_LEN;
+	}
+	/* Estimate writable space for checksums. */
+	if (ckinfo[0].ck_valid)
+		hdrlen = MAX(hdrlen, ckinfo[0].ck_off + 2);
+	if (ckinfo[1].ck_valid)
+		hdrlen = MAX(hdrlen, ckinfo[1].ck_off + 2);
+	/* Round up writable space to the first vector. */
+	if (hdrlen != 0 && iov[0].iov_len > hdrlen &&
+	    iov[0].iov_len < hdrlen + 100)
+		hdrlen = iov[0].iov_len;
+
+	/* Allocate, fill and prepend writable header vector. */
+	if (hdrlen != 0) {
+		hdr = __builtin_alloca(hdrlen + vlen);
+		hdr += vlen;
+		for (left = hdrlen, hdrp = hdr; left > 0;
+		    left -= now, hdrp += now) {
+			now = MIN(left, iov->iov_len);
+			memcpy(hdrp, iov->iov_base, now);
+			iov->iov_base += now;
+			iov->iov_len -= now;
+			if (iov->iov_len == 0) {
+				iov++;
+				segs--;
+			}
+		}
+		iov--;
+		segs++;
+		iov->iov_base = hdr;
+		iov->iov_len = hdrlen;
+	}
+
+	/* Calculate checksums. */
+	if (ckinfo[0].ck_valid)
+		e82545_transmit_checksum(iov, segs, &ckinfo[0]);
+	if (ckinfo[1].ck_valid)
+		e82545_transmit_checksum(iov, segs, &ckinfo[1]);
+
+	/* Insert VLAN tag. */
+	if (vlen != 0) {
+		hdr -= ETHER_VLAN_ENCAP_LEN;
+		memmove(hdr, hdr + ETHER_VLAN_ENCAP_LEN, ETHER_ADDR_LEN*2);
+		hdr[ETHER_ADDR_LEN*2 + 0] = sc->esc_VET >> 8;
+		hdr[ETHER_ADDR_LEN*2 + 1] = sc->esc_VET & 0xff;
+		hdr[ETHER_ADDR_LEN*2 + 2] = dsc->td.upper.fields.special >> 8;
+		hdr[ETHER_ADDR_LEN*2 + 3] = dsc->td.upper.fields.special & 0xff;
+		iov->iov_base = hdr;
+		iov->iov_len += ETHER_VLAN_ENCAP_LEN;;
 	}
 
 	e82545_transmit_backend(sc, iov, segs);
-	e82545_transmit_done(sc, txwb, nwb);
 
 	/* Record if tx descs were written back */
+	e82545_transmit_done(sc, txwb, nwb);
 	if (nwb)
 		*tdwb = 1;
 
