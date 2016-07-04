@@ -816,8 +816,8 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 	n = (maxpktsz + bufsz - 1) / bufsz;
 	size = sc->esc_RDLEN / 16;
 
-	left = (size + sc->esc_RDT - sc->esc_RDH) % size;
-	if (!sc->esc_rx_enabled || sc->esc_rx_loopback || (left < n)) {
+	if (!sc->esc_rx_enabled || sc->esc_rx_loopback ||
+	    ((left = (size + sc->esc_RDT - sc->esc_RDH) % size) < n)) {
 		/* Drop the packet */
 		DPRINTF("packet dropped, disabled %d\r\n", sc->esc_rx_enabled);
 		(void) read(sc->esc_tapfd, dummybuf, sizeof(dummybuf));
