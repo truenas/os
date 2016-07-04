@@ -934,7 +934,7 @@ e82545_buf_checksum(uint8_t *buf, int len)
 	 * the high byte.
 	 */
 	if (i < len)
-		sum += buf[i] << 8;
+		sum += htons(buf[i] << 8);
 
 	return (e82545_carry(sum));
 }
