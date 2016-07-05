@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <pthread_np.h>
 
 #include "e1000_regs.h"
 #include "e1000_defines.h"
@@ -216,7 +217,7 @@ struct ck_info {
 /*
  * Debug printf
  */
-static int e82545_debug = 1;
+static int e82545_debug = 0;
 #define DPRINTF(msg,params...) if (e82545_debug) fprintf(stderr, "e82545: " msg, params)
 #define WPRINTF(msg,params...) fprintf(stderr, "e82545: " msg, params)
 
@@ -261,7 +262,10 @@ struct e82545_softc {
 	/* Transmit */
 	union e1000_tx_udesc *esc_txdesc;
 	struct e1000_context_desc esc_txctx;
+	pthread_t	tx_tid;
+	pthread_cond_t	tx_cond;
 	int		esc_tx_enabled;
+	int		esc_tx_active;
 	uint32_t	esc_TXCW;	/* x0178 transmit config */
 	uint32_t	esc_TCTL;	/* x0400 transmit ctl */
 	uint32_t	esc_TIPG;	/* x0410 inter-packet gap */
@@ -271,6 +275,7 @@ struct e82545_softc {
 	uint32_t	esc_TDBAH;	/* x3804 desc table addr, hi 32-bits */
 	uint32_t	esc_TDLEN;	/* x3808 # descriptors in bytes */
 	uint16_t	esc_TDH;	/* x3810 desc table head idx */
+	uint16_t	esc_TDHr;	/* internal read version of TDH */
 	uint16_t	esc_TDT;	/* x3818 desc table tail idx */
 	uint32_t	esc_TIDV;	/* x3820 intr delay */
 	uint32_t	esc_TXDCTL;	/* x3828 desc control */
@@ -337,7 +342,10 @@ struct e82545_softc {
 
 static void e82545_reset(struct e82545_softc *sc, int dev);
 static void e82545_tap_callback(int fd, enum ev_type type, void *param);
-	
+static void e82545_tx_start(struct e82545_softc *sc);
+static void e82545_tx_enable(struct e82545_softc *sc);
+static void e82545_tx_disable(struct e82545_softc *sc);
+
 static inline int
 e82545_size_stat_index(uint32_t size)
 {
@@ -774,10 +782,10 @@ e82545_tx_ctl(struct e82545_softc *sc, uint32_t val)
 		return;
 
 	if (on) {
-		sc->esc_tx_enabled = 1;
 		e82545_tx_update_tdba(sc);
+		e82545_tx_enable(sc);
 	} else {
-		sc->esc_tx_enabled = 0;
+		e82545_tx_disable(sc);
 		sc->esc_tdba = 0;
 		sc->esc_txdesc = NULL;
 	}
@@ -1021,8 +1029,8 @@ e82545_transmit_done(struct e82545_softc *sc, union e1000_tx_udesc **txwb,
 }
 
 static int
-e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
-    uint16_t maxdesc, int *tdwb)
+e82545_transmit(struct e82545_softc *sc, uint16_t head, uint16_t tail,
+    uint16_t dsize, uint16_t *rhead, int *tdwb)
 {
 	uint8_t *hdr, *hdrp;
 	struct iovec iovb[I82545_MAX_TXSEGS + 2];
@@ -1046,9 +1054,13 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 
 	/* iovb[0/1] may be used for writable copy of headers. */
 	iov = &iovb[2];
-	
-	for (desc = 0; desc < maxdesc; desc++, idx = (idx + 1) % dsize) {
-		dsc = &sc->esc_txdesc[idx];
+
+	for (desc = 0; ; desc++, head = (head + 1) % dsize) {
+		if (head == tail) {
+			*rhead = head;
+			return (0);
+		}
+		dsc = &sc->esc_txdesc[head];
 		dtype = e82545_txdesc_type(dsc->td.lower.data);
 
 		if (desc == 0) {
@@ -1056,16 +1068,17 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 			case E1000_TXD_TYP_C:
 				DPRINTF("tx ctxt desc idx %d: %016jx "
 				    "%08x%08x\r\n",
-				    idx, dsc->td.buffer_addr,
+				    head, dsc->td.buffer_addr,
 				    dsc->td.upper.data, dsc->td.lower.data);
 				/* Save context and return */
 				/* XXX ignore DD processing here */
 				sc->esc_txctx = dsc->cd;
+				*rhead = (head + 1) % dsize;
 				return (1);
 				break;
 			case E1000_TXD_TYP_L:
 				DPRINTF("tx legacy desc idx %d: %08x%08x\r\n",
-				    idx, dsc->td.upper.data, dsc->td.lower.data);
+				    head, dsc->td.upper.data, dsc->td.lower.data);
 				/*
 				 * legacy cksum start valid in first descriptor
 				 */
@@ -1074,7 +1087,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 				break;
 			case E1000_TXD_TYP_D:
 				DPRINTF("tx data desc idx %d: %08x%08x\r\n",
-				    idx, dsc->td.upper.data, dsc->td.lower.data);
+				    head, dsc->td.upper.data, dsc->td.lower.data);
 				ntype = dtype;
 				break;
 			default:
@@ -1084,7 +1097,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 			/* Descriptor type must be consistent */
 			assert(dtype == ntype);
 			DPRINTF("tx next desc idx %d: %08x%08x\r\n",
-			    idx, dsc->td.upper.data, dsc->td.lower.data);
+			    head, dsc->td.upper.data, dsc->td.lower.data);
 		}
 
 		len = (dtype == E1000_TXD_TYP_L) ? dsc->td.lower.flags.length :
@@ -1150,10 +1163,6 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 			break;
 		}
 	}
-
-	/* We have incomplete packet.  Leave it for later. */
-	if (desc == maxdesc)
-		return (-1);
 
 	hdrlen = vlen = 0;
 	/* Estimate writable space for VLAN header insertion. */
@@ -1319,62 +1328,94 @@ done:
 	if (nwb)
 		*tdwb = 1;
 
+	*rhead = (head + 1) % dsize;
 	return (desc + 1);
 }
 
 static void
-e82545_start_tx(struct e82545_softc *sc, uint16_t value)
+e82545_tx_run(struct e82545_softc *sc)
 {
 	uint32_t cause;
-	uint16_t head, tail, ndesc, size;
-	int descs, tdwb;
+	uint16_t head, rhead, tail, size;
+	int lim, tdwb, sent;
 
-	/*
-         * Get ring size in units of descriptors. Note that this
-         * is not a pow-2, but a multiple of 8 descs.
-         */
+	head = sc->esc_TDH;
+	tail = sc->esc_TDT;
 	size = sc->esc_TDLEN / 16;
+	DPRINTF("tx_run: head %x, rhead %x, tail %x\r\n",
+	    sc->esc_TDH, sc->esc_TDHr, sc->esc_TDT);
 
-	/* Range check the tail ptr: 0-based */
-	assert(value < size);
-
-        head = sc->esc_TDH;
-	tail = sc->esc_TDT = value;
-	
+	pthread_mutex_unlock(&sc->esc_mtx);
+	rhead = head;
 	tdwb = 0;
-	ndesc = (size + tail - head) % size;
-
-	DPRINTF("start_tx  ndesc %d, head %x, tail %x\r\n", ndesc, head, tail);
-
-	if (ndesc == 0)
-		return;
-
-	for (; ndesc > 0; ndesc -= descs) {
-		descs = e82545_transmit(sc, size, head, ndesc, &tdwb);
-		if (descs < 0)
+	for (lim = size / 4; sc->esc_tx_enabled && lim > 0; lim -= sent) {
+		sent = e82545_transmit(sc, head, tail, size, &rhead, &tdwb);
+		if (sent == 0)
 			break;
-		head = (head + descs) % size;
+		head = rhead;
 	}
+	pthread_mutex_lock(&sc->esc_mtx);
 
-	/* Update the head pointer */
 	sc->esc_TDH = head;
-
-	DPRINTF("start_tx done: head %x, tail %x\r\n",
-		sc->esc_TDH, sc->esc_TDT);
-	
-	/*
-	 * Generate an interrupt if any tx descs were written back,
-	 * and/or if the ring was completely processed.
-	 */
+	sc->esc_TDHr = rhead;
 	cause = 0;
 	if (tdwb)
 		cause |= E1000_ICR_TXDW;
-	if (sc->esc_TDH == sc->esc_TDT)
+	if (lim != size / 4 && sc->esc_TDH == sc->esc_TDT)
 		cause |= E1000_ICR_TXQE;
-
 	if (cause)
 		e82545_icr_assert(sc, cause);
+
+	DPRINTF("tx_run done: head %x, rhead %x, tail %x\r\n",
+	    sc->esc_TDH, sc->esc_TDHr, sc->esc_TDT);
 }
+
+static void *
+e82545_tx_thread(void *param)
+{
+	struct e82545_softc *sc = param;
+
+	pthread_mutex_lock(&sc->esc_mtx);
+	for (;;) {
+		while (!sc->esc_tx_enabled || sc->esc_TDHr == sc->esc_TDT) {
+			if (sc->esc_tx_enabled && sc->esc_TDHr != sc->esc_TDT)
+				break;
+			sc->esc_tx_active = 0;
+			if (sc->esc_tx_enabled == 0)
+				pthread_cond_signal(&sc->tx_cond);
+			pthread_cond_wait(&sc->tx_cond, &sc->esc_mtx);
+		}
+		sc->esc_tx_active = 1;
+
+		/* Process some tx descriptors.  Lock dropped inside. */
+		e82545_tx_run(sc);
+	}
+}
+
+static void
+e82545_tx_start(struct e82545_softc *sc)
+{
+
+	if (sc->esc_tx_active == 0)
+		pthread_cond_signal(&sc->tx_cond);
+}
+
+static void
+e82545_tx_enable(struct e82545_softc *sc)
+{
+
+	sc->esc_tx_enabled = 1;
+}
+
+static void
+e82545_tx_disable(struct e82545_softc *sc)
+{
+
+	sc->esc_tx_enabled = 0;
+	while (sc->esc_tx_active)
+		pthread_cond_wait(&sc->tx_cond, &sc->esc_mtx);
+}
+
 
 static void
 e82545_write_ra(struct e82545_softc *sc, int reg, uint32_t wval)
@@ -1553,14 +1594,13 @@ e82545_write_register(struct e82545_softc *sc, uint32_t offset, uint32_t value)
 	case E1000_TDH(0):
 		//assert(!sc->esc_tx_enabled);
 		/* XXX should only ever be zero ? Range check ? */
-		sc->esc_TDH = value;
+		sc->esc_TDHr = sc->esc_TDH = value;
 		break;
 	case E1000_TDT(0):
 		/* XXX range check ? */
+		sc->esc_TDT = value;
 		if (sc->esc_tx_enabled)
-			e82545_start_tx(sc, (uint16_t)value);
-		else
-			sc->esc_TDT = value;
+			e82545_tx_start(sc);
 		break;
 	case E1000_TIDV:
 		sc->esc_TIDV = value & ~0xFFFF0000;
@@ -2026,7 +2066,9 @@ static void
 e82545_reset(struct e82545_softc *sc, int drvr)
 {
 	int i;
-	
+
+	e82545_tx_disable(sc);
+
 	/* clear outstanding interrupts */
 	if (sc->esc_irq_asserted)
 		pci_lintr_deassert(sc->esc_pi);
@@ -2098,14 +2140,13 @@ e82545_reset(struct e82545_softc *sc, int drvr)
 		sc->esc_TIDV = 0;
 		sc->esc_TADV = 0;
 	}
-	sc->esc_tx_enabled = 0;
 	sc->esc_tdba = 0;
 	sc->esc_txdesc = NULL;
 	sc->esc_TXCW = 0;
 	sc->esc_TCTL = 0;
 	sc->esc_TDLEN = 0;
 	sc->esc_TDT = 0;
-	sc->esc_TDH = 0;
+	sc->esc_TDHr = sc->esc_TDH = 0;
 	sc->esc_TXDCTL = 0;
 }
 
@@ -2180,6 +2221,11 @@ e82545_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	sc->esc_ctx = ctx;
 
 	pthread_mutex_init(&sc->esc_mtx, NULL);
+	pthread_cond_init(&sc->tx_cond, NULL);
+	pthread_create(&sc->tx_tid, NULL, e82545_tx_thread, sc);
+	snprintf(nstr, sizeof(nstr), "e82545-%d:%d tx", pi->pi_slot,
+	    pi->pi_func);
+        pthread_set_name_np(sc->tx_tid, nstr);
 
 	pci_set_cfgdata16(pi, PCIR_DEVICE, E82545_DEV_ID_82545EM_COPPER);
 	pci_set_cfgdata16(pi, PCIR_VENDOR, E82545_VENDOR_ID_INTEL);
