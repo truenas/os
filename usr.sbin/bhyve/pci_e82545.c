@@ -217,7 +217,7 @@ struct ck_info {
 /*
  * Debug printf
  */
-static int e82545_debug = 1;
+static int e82545_debug = 0;
 #define DPRINTF(msg,params...) if (e82545_debug) fprintf(stderr, "e82545: " msg, params)
 #define WPRINTF(msg,params...) fprintf(stderr, "e82545: " msg, params)
 
