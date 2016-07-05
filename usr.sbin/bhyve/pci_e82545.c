@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 
 #include <fcntl.h>
 #include <md5.h>
@@ -1024,38 +1025,46 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
     uint16_t maxdesc, int *tdwb)
 {
 	uint8_t *hdr, *hdrp;
-	struct iovec iovb[I82545_MAX_TXSEGS + 1];
+	struct iovec iovb[I82545_MAX_TXSEGS + 2];
+	struct iovec tiov[I82545_MAX_TXSEGS + 2];
 	union e1000_tx_udesc *txwb[I82545_MAX_TXSEGS];
 	struct e1000_context_desc *cd;
 	struct ck_info ckinfo[2];
 	struct iovec *iov;
 	union  e1000_tx_udesc *dsc;
-	int dtype, i, len, ntype, nwb, segs, tlen, hdrlen, vlen, left, now;
+	int desc, dtype, len, ntype, nwb, iovcnt, tlen, hdrlen, vlen, tcp, tso;
+	int mss, paylen, seg, tiovcnt, left, now, nleft, nnow, pv, pvoff;
+	uint32_t tcpsum, tcpseq;
+	uint16_t ipcs, tcpcs, ipid;
 
 	ckinfo[0].ck_valid = ckinfo[1].ck_valid = 0;
-	segs = 0;
+	iovcnt = 0;
 	tlen = 0;
 	nwb = 0;
 	ntype = 0;
+	tso = 0;
 
-	/* iovb[0] may be used for writable copy of headers. */
-	iov = &iovb[1];
+	/* iovb[0/1] may be used for writable copy of headers. */
+	iov = &iovb[2];
 	
-	for (i = 0; i < maxdesc; i++, idx = (idx + 1) % dsize) {
+	for (desc = 0; desc < maxdesc; desc++, idx = (idx + 1) % dsize) {
 		dsc = &sc->esc_txdesc[idx];
 		dtype = e82545_txdesc_type(dsc->td.lower.data);
 
-		if (i == 0) {
+		if (desc == 0) {
 			switch (dtype) {
 			case E1000_TXD_TYP_C:
-				DPRINTF("tx ctxt desc, idx %d\n\r", idx);
+				DPRINTF("tx ctxt desc idx %d: %016jx "
+				    "%08x%08x\r\n",
+				    idx, dsc->td.buffer_addr,
+				    dsc->td.upper.data, dsc->td.lower.data);
 				/* Save context and return */
 				/* XXX ignore DD processing here */
 				sc->esc_txctx = dsc->cd;
 				return (1);
 				break;
 			case E1000_TXD_TYP_L:
-				DPRINTF("tx legacy desc, idx %d %08x%08x\r\n",
+				DPRINTF("tx legacy desc idx %d: %08x%08x\r\n",
 				    idx, dsc->td.upper.data, dsc->td.lower.data);
 				/*
 				 * legacy cksum start valid in first descriptor
@@ -1064,7 +1073,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 				ckinfo[0].ck_start = dsc->td.upper.fields.css;
 				break;
 			case E1000_TXD_TYP_D:
-				DPRINTF("tx data desc, idx %d %08x%08x\r\n",
+				DPRINTF("tx data desc idx %d: %08x%08x\r\n",
 				    idx, dsc->td.upper.data, dsc->td.lower.data);
 				ntype = dtype;
 				break;
@@ -1074,7 +1083,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 		} else {
 			/* Descriptor type must be consistent */
 			assert(dtype == ntype);
-			DPRINTF("tx next desc, idx %d %08x%08x\r\n",
+			DPRINTF("tx next desc idx %d: %08x%08x\r\n",
 			    idx, dsc->td.upper.data, dsc->td.lower.data);
 		}
 
@@ -1087,10 +1096,10 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 			    (dsc->td.lower.data & E1000_TXD_CMD_IFCS) == 0)
 				len -= 2;
 			tlen += len;
-			iov[segs].iov_base = paddr_guest2host(sc->esc_ctx,
+			iov[iovcnt].iov_base = paddr_guest2host(sc->esc_ctx,
 			    dsc->td.buffer_addr, len);
-			iov[segs].iov_len = len;
-			segs++;
+			iov[iovcnt].iov_len = len;
+			iovcnt++;
 		}
 
 		/* Record the descriptor addres if write-back requested */
@@ -1111,9 +1120,13 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 				}
 			} else {
 				cd = &sc->esc_txctx;
+				if (dsc->dd.lower.data & E1000_TXD_CMD_TSE)
+					tso = 1;
 				if (dsc->dd.upper.fields.popts &
-				    E1000_TXD_POPTS_IXSM) {
+				    E1000_TXD_POPTS_IXSM)
 					ckinfo[0].ck_valid = 1;
+				if (dsc->dd.upper.fields.popts &
+				    E1000_TXD_POPTS_IXSM || tso) {
 					ckinfo[0].ck_start =
 					    cd->lower_setup.ip_fields.ipcss;
 					ckinfo[0].ck_off =
@@ -1122,8 +1135,10 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 					    cd->lower_setup.ip_fields.ipcse;
 				}
 				if (dsc->dd.upper.fields.popts &
-				    E1000_TXD_POPTS_TXSM) {
+				    E1000_TXD_POPTS_TXSM)
 					ckinfo[1].ck_valid = 1;
+				if (dsc->dd.upper.fields.popts &
+				    E1000_TXD_POPTS_TXSM || tso) {
 					ckinfo[1].ck_start =
 					    cd->upper_setup.tcp_fields.tucss;
 					ckinfo[1].ck_off =
@@ -1137,7 +1152,7 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 	}
 
 	/* We have incomplete packet.  Leave it for later. */
-	if (i == maxdesc)
+	if (desc == maxdesc)
 		return (-1);
 
 	hdrlen = vlen = 0;
@@ -1147,15 +1162,20 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 		hdrlen = ETHER_ADDR_LEN*2;
 		vlen = ETHER_VLAN_ENCAP_LEN;
 	}
-	/* Estimate writable space for checksums. */
-	if (ckinfo[0].ck_valid)
-		hdrlen = MAX(hdrlen, ckinfo[0].ck_off + 2);
-	if (ckinfo[1].ck_valid)
-		hdrlen = MAX(hdrlen, ckinfo[1].ck_off + 2);
-	/* Round up writable space to the first vector. */
-	if (hdrlen != 0 && iov[0].iov_len > hdrlen &&
-	    iov[0].iov_len < hdrlen + 100)
-		hdrlen = iov[0].iov_len;
+	if (!tso) {
+		/* Estimate required writable space for checksums. */
+		if (ckinfo[0].ck_valid)
+			hdrlen = MAX(hdrlen, ckinfo[0].ck_off + 2);
+		if (ckinfo[1].ck_valid)
+			hdrlen = MAX(hdrlen, ckinfo[1].ck_off + 2);
+		/* Round up writable space to the first vector. */
+		if (hdrlen != 0 && iov[0].iov_len > hdrlen &&
+		    iov[0].iov_len < hdrlen + 100)
+			hdrlen = iov[0].iov_len;
+	} else {
+		/* In case of TSO header length provided by software. */
+		hdrlen = sc->esc_txctx.tcp_seg_setup.fields.hdr_len;
+	}
 
 	/* Allocate, fill and prepend writable header vector. */
 	if (hdrlen != 0) {
@@ -1169,41 +1189,137 @@ e82545_transmit(struct e82545_softc *sc, uint16_t dsize, uint16_t idx,
 			iov->iov_len -= now;
 			if (iov->iov_len == 0) {
 				iov++;
-				segs--;
+				iovcnt--;
 			}
 		}
 		iov--;
-		segs++;
+		iovcnt++;
 		iov->iov_base = hdr;
 		iov->iov_len = hdrlen;
 	}
-
-	/* Calculate checksums. */
-	if (ckinfo[0].ck_valid)
-		e82545_transmit_checksum(iov, segs, &ckinfo[0]);
-	if (ckinfo[1].ck_valid)
-		e82545_transmit_checksum(iov, segs, &ckinfo[1]);
 
 	/* Insert VLAN tag. */
 	if (vlen != 0) {
 		hdr -= ETHER_VLAN_ENCAP_LEN;
 		memmove(hdr, hdr + ETHER_VLAN_ENCAP_LEN, ETHER_ADDR_LEN*2);
+		hdrlen += ETHER_VLAN_ENCAP_LEN;
 		hdr[ETHER_ADDR_LEN*2 + 0] = sc->esc_VET >> 8;
 		hdr[ETHER_ADDR_LEN*2 + 1] = sc->esc_VET & 0xff;
 		hdr[ETHER_ADDR_LEN*2 + 2] = dsc->td.upper.fields.special >> 8;
 		hdr[ETHER_ADDR_LEN*2 + 3] = dsc->td.upper.fields.special & 0xff;
 		iov->iov_base = hdr;
-		iov->iov_len += ETHER_VLAN_ENCAP_LEN;;
+		iov->iov_len += ETHER_VLAN_ENCAP_LEN;
+		/* Correct checksum offsets after VLAN tag insertion. */
+		ckinfo[0].ck_start += ETHER_VLAN_ENCAP_LEN;
+		ckinfo[0].ck_off += ETHER_VLAN_ENCAP_LEN;
+		if (ckinfo[0].ck_len != 0)
+			ckinfo[0].ck_len += ETHER_VLAN_ENCAP_LEN;
+		ckinfo[1].ck_start += ETHER_VLAN_ENCAP_LEN;
+		ckinfo[1].ck_off += ETHER_VLAN_ENCAP_LEN;
+		if (ckinfo[1].ck_len != 0)
+			ckinfo[1].ck_len += ETHER_VLAN_ENCAP_LEN;
 	}
 
-	e82545_transmit_backend(sc, iov, segs);
+	/* Simple non-TSO case. */
+	if (!tso) {
+		/* Calculate checksums and transmit. */
+		if (ckinfo[0].ck_valid)
+			e82545_transmit_checksum(iov, iovcnt, &ckinfo[0]);
+		if (ckinfo[1].ck_valid)
+			e82545_transmit_checksum(iov, iovcnt, &ckinfo[1]);
+		e82545_transmit_backend(sc, iov, iovcnt);
+		goto done;
+	}
 
+	/* Doing TSO. */
+	tcp = (sc->esc_txctx.cmd_and_length & E1000_TXD_CMD_TCP) != 0;
+	mss = sc->esc_txctx.tcp_seg_setup.fields.mss;
+	paylen = (sc->esc_txctx.cmd_and_length & 0x000fffff);
+	DPRINTF("tx %s segmentation offload %d+%d/%d bytes %d iovs\r\n",
+	    tcp ? "TCP" : "UDP", hdrlen, paylen, mss, iovcnt);
+	ipid = ntohs(*(uint16_t *)&hdr[ckinfo[0].ck_start + 4]);
+	tcpseq = ntohl(*(uint32_t *)&hdr[ckinfo[1].ck_start + 4]);
+	ipcs = *(uint16_t *)&hdr[ckinfo[0].ck_off];
+	tcpcs = 0;
+	if (ckinfo[1].ck_valid)	/* Save partial pseudo-header checksum. */
+		tcpcs = *(uint16_t *)&hdr[ckinfo[1].ck_off];
+	pv = 1;
+	pvoff = 0;
+	for (seg = 0, left = paylen; left > 0; seg++, left -= now) {
+		now = MIN(left, mss);
+
+		/* Construct IOVs for the segment. */
+		/* Include whole original header. */
+		tiov[0].iov_base = hdr;
+		tiov[0].iov_len = hdrlen;
+		tiovcnt = 1;
+		/* Include respective part of payload IOV. */
+		for (nleft = now; pv < iovcnt && nleft > 0; nleft -= nnow) {
+			nnow = MIN(nleft, iov[pv].iov_len - pvoff);
+			tiov[tiovcnt].iov_base = iov[pv].iov_base + pvoff;
+			tiov[tiovcnt++].iov_len = nnow;
+			if (pvoff + nnow == iov[pv].iov_len) {
+				pv++;
+				pvoff = 0;
+			} else
+				pvoff += nnow;
+		}
+		DPRINTF("tx segment %d %d+%d bytes %d iovs\r\n",
+		    seg, hdrlen, now, tiovcnt);
+
+		/* Update IP header. */
+		if (sc->esc_txctx.cmd_and_length & E1000_TXD_CMD_IP) {
+			/* IPv4 -- set length and ID */
+			*(uint16_t *)&hdr[ckinfo[0].ck_start + 2] =
+			    htons(hdrlen - ckinfo[0].ck_start + now);
+			*(uint16_t *)&hdr[ckinfo[0].ck_start + 4] =
+			    htons(ipid + seg);
+		} else {
+			/* IPv6 -- set length */
+			*(uint16_t *)&hdr[ckinfo[0].ck_start + 4] =
+			    htons(hdrlen - ckinfo[0].ck_start - 40 +
+				  now);
+		}
+
+		/* Update pseudo-header checksum. */
+		tcpsum = tcpcs;
+		tcpsum += htons(hdrlen - ckinfo[1].ck_start + now);
+
+		/* Update TCP/UDP headers. */
+		if (tcp) {
+			/* Update sequence number and FIN/PUSH flags. */
+			*(uint32_t *)&hdr[ckinfo[1].ck_start + 4] =
+			    htonl(tcpseq + paylen - left);
+			if (now < left) {
+				hdr[ckinfo[1].ck_start + 13] &=
+				    ~(TH_FIN | TH_PUSH);
+			}
+		} else {
+			/* Update payload length. */
+			*(uint32_t *)&hdr[ckinfo[1].ck_start + 4] =
+			    hdrlen - ckinfo[1].ck_start + now;
+		}
+
+		/* Calculate checksums and transmit. */
+		if (ckinfo[0].ck_valid) {
+			*(uint16_t *)&hdr[ckinfo[0].ck_off] = ipcs;
+			e82545_transmit_checksum(tiov, tiovcnt, &ckinfo[0]);
+		}
+		if (ckinfo[1].ck_valid) {
+			*(uint16_t *)&hdr[ckinfo[1].ck_off] =
+			    e82545_carry(tcpsum);
+			e82545_transmit_checksum(tiov, tiovcnt, &ckinfo[1]);
+		}
+		e82545_transmit_backend(sc, tiov, tiovcnt);
+	}
+
+done:
 	/* Record if tx descs were written back */
 	e82545_transmit_done(sc, txwb, nwb);
 	if (nwb)
 		*tdwb = 1;
 
-	return (i + 1);
+	return (desc + 1);
 }
 
 static void
