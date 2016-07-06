@@ -230,6 +230,8 @@ typedef enum {
 				/* Notify Host Target driver of event */
 	XPT_NOTIFY_ACKNOWLEDGE	= 0x37 | XPT_FC_QUEUED | XPT_FC_USER_CCB,
 				/* Acknowledgement of event */
+	XPT_REPROBE_LUN		= 0x38 | XPT_FC_QUEUED | XPT_FC_USER_CCB,
+				/* Query device capacity and notify GEOM */
 
 /* Vendor Unique codes: 0x80->0x8F */
 	XPT_VUNIQUE		= 0x80
@@ -1224,6 +1226,10 @@ union ccb {
 	struct	ccb_dev_advinfo		cdai;
 	struct	ccb_async		casync;
 };
+
+#define CCB_CLEAR_ALL_EXCEPT_HDR(ccbp)			\
+	bzero((char *)(ccbp) + sizeof((ccbp)->ccb_h),	\
+	    sizeof(*(ccbp)) - sizeof((ccbp)->ccb_h))
 
 __BEGIN_DECLS
 static __inline void
