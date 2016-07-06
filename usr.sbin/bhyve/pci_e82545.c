@@ -31,11 +31,13 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/limits.h>
+#include <sys/ioctl.h>
 #include <sys/uio.h>
 #include <net/ethernet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <md5.h>
 #include <stdio.h>
@@ -819,101 +821,123 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 	struct e82545_softc *sc = param;
 	struct e1000_rx_desc *rxd;
 	struct iovec vec[64];
-	int left, len, maxpktsz, bufsz, n, i, size;
-	uint32_t cause;
-	uint16_t *tp, tag;
+	int left, len, lim, maxpktsz, maxpktdesc, bufsz, i, n, size;
+	uint32_t cause = 0;
+	uint16_t *tp, tag, head;
 
 	pthread_mutex_lock(&sc->esc_mtx);
+	DPRINTF("rx_run: head %x, tail %x\r\n", sc->esc_RDH, sc->esc_RDT);
+
+	if (!sc->esc_rx_enabled || sc->esc_rx_loopback) {
+		DPRINTF("rx disabled (!%d || %d) -- packet(s) dropped\r\n",
+		    sc->esc_rx_enabled, sc->esc_rx_loopback);
+		while (read(sc->esc_tapfd, dummybuf, sizeof(dummybuf)) > 0) {
+		}
+		goto done1;
+	}
 	bufsz = e82545_bufsz(sc->esc_RCTL);
 	maxpktsz = (sc->esc_RCTL & E1000_RCTL_LPE) ? 16384 : 1522;
-	n = (maxpktsz + bufsz - 1) / bufsz;
+	maxpktdesc = (maxpktsz + bufsz - 1) / bufsz;
 	size = sc->esc_RDLEN / 16;
+	head = sc->esc_RDH;
+	left = (size + sc->esc_RDT - head) % size;
+	if (left < maxpktdesc) {
+		DPRINTF("rx overflow (%d < %d) -- packet(s) dropped\r\n",
+		    left, maxpktdesc);
+		while (read(sc->esc_tapfd, dummybuf, sizeof(dummybuf)) > 0) {
+		}
+		goto done1;
+	}
 
-	if (!sc->esc_rx_enabled || sc->esc_rx_loopback ||
-	    ((left = (size + sc->esc_RDT - sc->esc_RDH) % size) < n)) {
-		/* Drop the packet */
-		DPRINTF("packet dropped, disabled %d\r\n", sc->esc_rx_enabled);
-		(void) read(sc->esc_tapfd, dummybuf, sizeof(dummybuf));
-	} else {
+	pthread_mutex_unlock(&sc->esc_mtx);
+
+	for (lim = size / 4; lim > 0 && left >= maxpktdesc; lim -= n) {
+
 		/* Grab rx descriptor pointed to by the head pointer */
-		for (i = 0; i < n; i++) {
-			rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
+		for (i = 0; i < maxpktdesc; i++) {
+			rxd = &sc->esc_rxdesc[(head + i) % size];
 			vec[i].iov_base = paddr_guest2host(sc->esc_ctx,
 			    rxd->buffer_addr, bufsz);
 			vec[i].iov_len = bufsz;
 		}
-		len = readv(sc->esc_tapfd, vec, n);
-		if (len > 0) {
-			/*
-			 * Adjust the packet length based on whether the
-			 * CRC needs to be stripped or if the packet is
-			 * less than the minimum eth packet size.
-			 * Note that no CRC bytes are copied out, nor
-			 * additional padding bytes for frames smaller
-			 * than the minimum size
-			 */
-			if (len < ETHER_MIN_LEN - ETHER_CRC_LEN)
-				len = ETHER_MIN_LEN - ETHER_CRC_LEN;
-			if (!(sc->esc_RCTL & E1000_RCTL_SECRC))
-				len += ETHER_CRC_LEN;
+		len = readv(sc->esc_tapfd, vec, maxpktdesc);
+		if (len <= 0) {
+			DPRINTF("tap: readv() returned %d\n", len);
+			goto done;
 		}
+
+		/*
+		 * Adjust the packet length based on whether the CRC needs
+		 * to be stripped or if the packet is less than the minimum
+		 * eth packet size.
+		 */
+		if (len < ETHER_MIN_LEN - ETHER_CRC_LEN)
+			len = ETHER_MIN_LEN - ETHER_CRC_LEN;
+		if (!(sc->esc_RCTL & E1000_RCTL_SECRC))
+			len += ETHER_CRC_LEN;
 		n = (len + bufsz - 1) / bufsz;
 
 		DPRINTF("packet read %d bytes, %d segs, head %d\r\n",
-		    len, n, sc->esc_RDH);
-		if (len > 0) {
-			tp = (uint16_t *)vec[0].iov_base + 6;
-			if ((sc->esc_RCTL & E1000_RCTL_VFE) &&
-			    (ntohs(tp[0]) == sc->esc_VET)) {
-				tag = ntohs(tp[1]) & 0x0fff;
-				if ((sc->esc_fvlan[tag >> 5] &
-				    (1 << (tag & 0x1f))) != 0) {
-					DPRINTF("known VLAN %d\r\n", tag);
-				} else {
-					DPRINTF("unknown VLAN %d\r\n", tag);
-					goto done;
-				}
-			}
-			for (i = 0; i < n - 1; i++) {
-				rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
-				rxd->length = bufsz;
-				rxd->csum = 0;
-				rxd->errors = 0;
-				rxd->special = 0;
-				rxd->status = E1000_RXD_STAT_DD;
-			}
+		    len, n, head);
 
-			rxd = &sc->esc_rxdesc[sc->esc_RDH + i % size];
-			rxd->length = len % bufsz;
+		/* Apply VLAN filter. */
+		tp = (uint16_t *)vec[0].iov_base + 6;
+		if ((sc->esc_RCTL & E1000_RCTL_VFE) &&
+		    (ntohs(tp[0]) == sc->esc_VET)) {
+			tag = ntohs(tp[1]) & 0x0fff;
+			if ((sc->esc_fvlan[tag >> 5] &
+			    (1 << (tag & 0x1f))) != 0) {
+				DPRINTF("known VLAN %d\r\n", tag);
+			} else {
+				DPRINTF("unknown VLAN %d\r\n", tag);
+				n = 0;
+				continue;
+			}
+		}
+
+		/* Update all consumed descriptors. */
+		for (i = 0; i < n - 1; i++) {
+			rxd = &sc->esc_rxdesc[(head + i) % size];
+			rxd->length = bufsz;
 			rxd->csum = 0;
 			rxd->errors = 0;
 			rxd->special = 0;
-			/* XXX signal no checksum for now */
-			rxd->status = E1000_RXD_STAT_PIF | E1000_RXD_STAT_IXSM |
-			    E1000_RXD_STAT_EOP | E1000_RXD_STAT_DD;
-
-			/* Update head pointer */
-			sc->esc_RDH = (sc->esc_RDH + n) % size;
-			left -= n;
-
-			/* Generate receive interrupts. */
-			cause = 0;
-			if (len <= sc->esc_RSRPD) {
-				cause |= E1000_ICR_SRPD | E1000_ICR_RXT0;
-			} else {
-				/* XXX: RDRT and RADV timers should be here. */
-				cause |= E1000_ICR_RXT0;
-			}
-			/* E1000_RCTL_RDMTS */
-			if (left < (size >> (((sc->esc_RCTL >> 8) & 3) + 1)))
-				cause |= E1000_ICR_RXDMT0;
-			e82545_icr_assert(sc, cause);
-		} else {
-			DPRINTF("tap: bad len returned %d\n", len);
+			rxd->status = E1000_RXD_STAT_DD;
 		}
+		rxd = &sc->esc_rxdesc[(head + i) % size];
+		rxd->length = len % bufsz;
+		rxd->csum = 0;
+		rxd->errors = 0;
+		rxd->special = 0;
+		/* XXX signal no checksum for now */
+		rxd->status = E1000_RXD_STAT_PIF | E1000_RXD_STAT_IXSM |
+		    E1000_RXD_STAT_EOP | E1000_RXD_STAT_DD;
+
+		/* Schedule receive interrupts. */
+		if (len <= sc->esc_RSRPD) {
+			cause |= E1000_ICR_SRPD | E1000_ICR_RXT0;
+		} else {
+			/* XXX: RDRT and RADV timers should be here. */
+			cause |= E1000_ICR_RXT0;
+		}
+
+		head = (head + n) % size;
+		left -= n;
 	}
 
 done:
+	pthread_mutex_lock(&sc->esc_mtx);
+
+	sc->esc_RDH = head;
+	/* Respect E1000_RCTL_RDMTS */
+	left = (size + sc->esc_RDT - head) % size;
+	if (left < (size >> (((sc->esc_RCTL >> 8) & 3) + 1)))
+		cause |= E1000_ICR_RXDMT0;
+	/* Assert all accumulated interrupts. */
+	if (cause != 0)
+		e82545_icr_assert(sc, cause);
+done1:
+	DPRINTF("rx_run done: head %x, tail %x\r\n", sc->esc_RDH, sc->esc_RDT);
 	pthread_mutex_unlock(&sc->esc_mtx);
 }
 
@@ -2167,16 +2191,27 @@ e82545_open_tap(struct e82545_softc *sc, char *opts)
 	if (sc->esc_tapfd == -1) {
 		DPRINTF("unable to open tap device %s\n", opts);
 		exit(1);
-	} else {
-		sc->esc_mevp = mevent_add(sc->esc_tapfd,
-					  EVF_READ,
-					  e82545_tap_callback,
-					  sc);
-		if (sc->esc_mevp == NULL) {
-			DPRINTF("Could not register mevent %d\n", EVF_READ);
-			close(sc->esc_tapfd);
-			sc->esc_tapfd = -1;
-		}
+	}
+
+	/*
+	 * Set non-blocking and register for read
+	 * notifications with the event loop
+	 */
+	int opt = 1;
+	if (ioctl(sc->esc_tapfd, FIONBIO, &opt) < 0) {
+		WPRINTF("tap device O_NONBLOCK failed: %d\n", errno);
+		close(sc->esc_tapfd);
+		sc->esc_tapfd = -1;
+	}
+
+	sc->esc_mevp = mevent_add(sc->esc_tapfd,
+				  EVF_READ,
+				  e82545_tap_callback,
+				  sc);
+	if (sc->esc_mevp == NULL) {
+		DPRINTF("Could not register mevent %d\n", EVF_READ);
+		close(sc->esc_tapfd);
+		sc->esc_tapfd = -1;
 	}
 }
 
