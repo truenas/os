@@ -235,7 +235,7 @@ ahci_generate_intr(struct pci_ahci_softc *sc, uint32_t mask)
 		if (p->is & p->ie)
 			sc->is |= (1 << i);
 	}
-	DPRINTF("%s %08x\n", __func__, sc->is);
+	DPRINTF("%s(%08x) %08x\n", __func__, mask, sc->is);
 
 	/* If there is nothing enabled -- clear legacy interrupt and exit. */
 	if (sc->is == 0 || (sc->ghc & AHCI_GHC_IE) == 0) {
@@ -248,9 +248,11 @@ ahci_generate_intr(struct pci_ahci_softc *sc, uint32_t mask)
 
 	/* If there is anything and no MSI -- assert legacy interrupt. */
 	nmsg = pci_msi_maxmsgnum(pi);
-	if (nmsg == 0 && !sc->lintr) {
-		sc->lintr = 1;
-		pci_lintr_assert(pi);
+	if (nmsg == 0) {
+		if (!sc->lintr) {
+			sc->lintr = 1;
+			pci_lintr_assert(pi);
+		}
 		return;
 	}
 
@@ -259,7 +261,7 @@ ahci_generate_intr(struct pci_ahci_softc *sc, uint32_t mask)
 		if (sc->ports <= nmsg || i < nmsg - 1)
 			mmask = 1 << i;
 		else
-			mmask = 0xffffffff << (i - 1);
+			mmask = 0xffffffff << i;
 		if (sc->is & mask && mmask & mask)
 			pci_generate_msi(pi, i);
 	}
@@ -275,7 +277,8 @@ ahci_port_intr(struct ahci_port *p)
 	struct pci_devinst *pi = sc->asc_pi;
 	int nmsg;
 
-	DPRINTF("%s(%d) %08x/%08x\n", __func__, p->port, p->is, p->ie);
+	DPRINTF("%s(%d) %08x/%08x %08x\n", __func__,
+	    p->port, p->is, p->ie, sc->is);
 
 	/* If there is nothing enabled -- we are done. */
 	if ((p->is & p->ie) == 0)
@@ -1779,6 +1782,7 @@ ahci_handle_slot(struct ahci_port *p, int slot)
 	prdt = (struct ahci_prdt_entry *)(cfis + 0x80);
 
 #ifdef AHCI_DEBUG
+	int i;
 	DPRINTF("\ncfis:");
 	for (i = 0; i < cfl; i++) {
 		if (i % 10 == 0)
