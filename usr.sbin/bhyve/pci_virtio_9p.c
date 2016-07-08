@@ -45,7 +45,8 @@ __FBSDID("$FreeBSD$");
 #include <assert.h>
 #include <pthread.h>
 
-#include <lib9p.h>
+#include <lib9p/lib9p.h>
+#include <lib9p/fs.h>
 
 #include "bhyverun.h"
 #include "pci_emul.h"
