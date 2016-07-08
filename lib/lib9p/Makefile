@@ -7,14 +7,16 @@ LIB=		9p
 SHLIB_MAJOR=	1
 SRCS=		pack.c \
 		connection.c \
-		request.c log.c \
+		request.c \
+		log.c \
 		hashtable.c \
 		rfuncs.c \
 		utils.c \
 		transport/socket.c \
 		backend/fs.c
 
-INCS=		lib9p.h
+INCSDIR=	${INCLUDEDIR}/lib9p
+INCS=		lib9p.h fid.h backend/fs.h
 
 DPADD=		${LIBSBUF}
 LDADD=		-lsbuf

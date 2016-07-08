@@ -49,8 +49,11 @@
 #include <libgen.h>
 #include "../lib9p.h"
 #include "../lib9p_impl.h"
+#include "../fid.h"
 #include "../log.h"
 #include "../rfuncs.h"
+#include "backend.h"
+#include "fs.h"
 
 #if defined(__FreeBSD__)
   #include <sys/param.h>
@@ -75,52 +78,9 @@
   #endif
 #endif
 
-static struct openfile *open_fid(const char *);
-static void dostat(struct l9p_stat *, char *, struct stat *, bool dotu);
-static void dostatfs(struct l9p_statfs *, struct statfs *, long);
-static void generate_qid(struct stat *, struct l9p_qid *);
-static void fs_attach(void *, struct l9p_request *);
-static void fs_clunk(void *, struct l9p_request *);
-static void fs_create(void *, struct l9p_request *);
-static void fs_flush(void *, struct l9p_request *);
-static void fs_open(void *, struct l9p_request *);
-static void fs_read(void *, struct l9p_request *);
-static void fs_remove(void *, struct l9p_request *);
-static void fs_stat(void *, struct l9p_request *);
-static void fs_walk(void *, struct l9p_request *);
-static void fs_write(void *, struct l9p_request *);
-static void fs_wstat(void *, struct l9p_request *);
-static void fs_statfs(void *, struct l9p_request *);
-static void fs_lopen(void *, struct l9p_request *);
-static void fs_lcreate(void *, struct l9p_request *);
-static void fs_symlink(void *, struct l9p_request *);
-static void fs_mknod(void *, struct l9p_request *);
-static void fs_rename(void *, struct l9p_request *);
-static void fs_readlink(void *, struct l9p_request *);
-static void fs_getattr(void *, struct l9p_request *);
-static void fs_setattr(void *, struct l9p_request *);
-static void fs_xattrwalk(void *, struct l9p_request *);
-static void fs_xattrcreate(void *, struct l9p_request *);
-static void fs_readdir(void *, struct l9p_request *);
-static void fs_fsync(void *, struct l9p_request *);
-static void fs_lock(void *, struct l9p_request *);
-static void fs_getlock(void *, struct l9p_request *);
-static void fs_link(void *, struct l9p_request *);
-static void fs_renameat(void *softc, struct l9p_request *req);
-static void fs_unlinkat(void *softc, struct l9p_request *req);
-static void fs_freefid(void *softc, struct l9p_openfile *f);
-
 struct fs_softc {
 	const char *fs_rootpath;
 	bool fs_readonly;
-	TAILQ_HEAD(, fs_tree) fs_auxtrees;
-};
-
-struct fs_tree {
-	const char *fst_name;
-	const char *fst_path;
-	bool fst_readonly;
-	TAILQ_ENTRY(fs_tree) fst_link;
 };
 
 struct openfile {
@@ -131,6 +91,72 @@ struct openfile {
 	gid_t gid;
 };
 
+/*
+ * Internal functions (except inline functions).
+ */
+static int fs_buildname(struct l9p_fid *, char *, char *, size_t);
+static struct openfile *open_fid(const char *);
+static void dostat(struct l9p_stat *, char *, struct stat *, bool dotu);
+static void dostatfs(struct l9p_statfs *, struct statfs *, long);
+static void generate_qid(struct stat *, struct l9p_qid *);
+
+/*
+ * Internal functions implementing backend.
+ */
+static int fs_attach(void *, struct l9p_request *);
+static int fs_clunk(void *, struct l9p_request *);
+static int fs_create(void *, struct l9p_request *);
+static int fs_flush(void *, struct l9p_request *);
+static int fs_open(void *, struct l9p_request *);
+static int fs_read(void *, struct l9p_request *);
+static int fs_remove(void *, struct l9p_request *);
+static int fs_stat(void *, struct l9p_request *);
+static int fs_walk(void *, struct l9p_request *);
+static int fs_write(void *, struct l9p_request *);
+static int fs_wstat(void *, struct l9p_request *);
+static int fs_statfs(void *, struct l9p_request *);
+static int fs_lopen(void *, struct l9p_request *);
+static int fs_lcreate(void *, struct l9p_request *);
+static int fs_symlink(void *, struct l9p_request *);
+static int fs_mknod(void *, struct l9p_request *);
+static int fs_rename(void *, struct l9p_request *);
+static int fs_readlink(void *, struct l9p_request *);
+static int fs_getattr(void *, struct l9p_request *);
+static int fs_setattr(void *, struct l9p_request *);
+static int fs_xattrwalk(void *, struct l9p_request *);
+static int fs_xattrcreate(void *, struct l9p_request *);
+static int fs_readdir(void *, struct l9p_request *);
+static int fs_fsync(void *, struct l9p_request *);
+static int fs_lock(void *, struct l9p_request *);
+static int fs_getlock(void *, struct l9p_request *);
+static int fs_link(void *, struct l9p_request *);
+static int fs_renameat(void *softc, struct l9p_request *req);
+static int fs_unlinkat(void *softc, struct l9p_request *req);
+static void fs_freefid(void *softc, struct l9p_fid *f);
+
+/*
+ * Build full name of file by appending given name to directory name.
+ */
+static int
+fs_buildname(struct l9p_fid *dir, char *name, char *buf, size_t size)
+{
+	struct openfile *dirf = dir->lo_aux;
+	size_t dlen, nlen1;
+
+	assert(dirf != NULL);
+	dlen = strlen(dirf->name);
+	nlen1 = strlen(name) + 1;	/* +1 for '\0' */
+	if (dlen + 1 + nlen1 > size)
+		return (ENAMETOOLONG);
+	memcpy(buf, dirf->name, dlen);
+	buf[dlen] = '/';
+	memcpy(buf + dlen + 1, name, nlen1);
+	return (0);
+}
+
+/*
+ * Allocate new open-file data structure to attach to a fid.
+ */
 static struct openfile *
 open_fid(const char *path)
 {
@@ -139,6 +165,10 @@ open_fid(const char *path)
 	ret = l9p_calloc(1, sizeof(*ret));
 	ret->fd = -1;
 	ret->name = strdup(path);
+	if (ret->name == NULL) {
+		free(ret);
+		return (NULL);
+	}
 	return (ret);
 }
 
@@ -324,39 +354,65 @@ check_access(struct stat *st, uid_t uid, int amode)
 	return (false);
 }
 
-static void
+static int
 fs_attach(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = (struct fs_softc *)softc;
 	struct openfile *file;
 	struct passwd *pwd;
+	struct stat st;
 	uid_t uid;
+	int error;
 
 	assert(req->lr_fid != NULL);
 
-	file = open_fid(sc->fs_rootpath);
-	req->lr_fid->lo_qid.type = L9P_QTDIR;
-	req->lr_fid->lo_qid.path = (uintptr_t)req->lr_fid;
-	req->lr_fid->lo_aux = file;
-	req->lr_resp.rattach.qid = req->lr_fid->lo_qid;
-
 	uid = req->lr_req.tattach.n_uname;
-	if (req->lr_conn->lc_version >= L9P_2000U && uid != (uid_t)-1)
+	if (req->lr_conn->lc_version >= L9P_2000U && uid != (uid_t)-1) {
 		pwd = getpwuid(uid);
-	else
+		if (pwd == NULL)
+			L9P_LOG(L9P_DEBUG,
+			    "Tattach: uid %lu: no such user",
+			    (u_long)uid);
+	} else {
 		pwd = getpwnam(req->lr_req.tattach.uname);
-
-	if (pwd == NULL) {
-		l9p_respond(req, EPERM);
-		return;
+		if (pwd == NULL)
+			L9P_LOG(L9P_DEBUG,
+			    "Tattach: %s: no such user",
+			    req->lr_req.tattach.uname);
 	}
+
+	if (pwd == NULL)
+		return (EPERM);
+
+	error = 0;
+	if (lstat(sc->fs_rootpath, &st) != 0)
+		error = errno;
+	else if (!S_ISDIR(st.st_mode))
+		error = ENOTDIR;
+	if (error) {
+		L9P_LOG(L9P_DEBUG,
+		    "Tattach: denying access to \"%s\": %s",
+		    sc->fs_rootpath, strerror(error));
+		/*
+		 * Pass ENOENT and ENOTDIR through for diagnosis;
+		 * others become EPERM.  This should not leak too
+		 * much security.
+		 */
+		return (error == ENOENT || error == ENOTDIR ? error : EPERM);
+	}
+
+	file = open_fid(sc->fs_rootpath);
+	if (file == NULL)
+		return (ENOMEM);
 
 	file->uid = pwd->pw_uid;
 	file->gid = pwd->pw_gid;
-	l9p_respond(req, 0);
+	req->lr_fid->lo_aux = file;
+	generate_qid(&st, &req->lr_resp.rattach.qid);
+	return (0);
 }
 
-static void
+static int
 fs_clunk(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
@@ -372,7 +428,7 @@ fs_clunk(void *softc __unused, struct l9p_request *req)
 		file->fd = -1;
 	}
 
-	l9p_respond(req, 0);
+	return (0);
 }
 
 /*
@@ -530,35 +586,27 @@ internal_mknod(struct l9p_request *req, char *newname, mode_t mode)
  *
  * Some ops (regular open) set file->fd, most do not.
  */
-static void
+static int
 fs_create(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
-	struct openfile *file = req->lr_fid->lo_aux;
+	struct openfile *file;
+	struct l9p_fid *dir;
 	struct stat st;
-	char *newname = NULL;
-	mode_t mode = req->lr_req.tcreate.perm & 0777;
-	int error = 0;
+	mode_t mode;
+	char *name;
+	char newname[MAXPATHLEN];
+	int error;
 
-	assert(file != NULL);
+	if (sc->fs_readonly)
+		return (EROFS);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	dir = req->lr_fid;
+	name = req->lr_req.tcreate.name;
 
-	/*
-	 * Build the full path.  We may not use it in some cases
-	 * (e.g., when we can use the *at() calls), and perhaps
-	 * should defer building it, but this suffices for now,
-	 * and gives us a place to put a max on path name length
-	 * (perhaps we should check even if asprintf() succeeds?).
-	 */
-	if (asprintf(&newname, "%s/%s",
-	    file->name, req->lr_req.tcreate.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
 
 	/*
 	 * Containing directory must exist and allow access.
@@ -570,15 +618,13 @@ fs_create(void *softc, struct l9p_request *req)
 	 * lstat data, but we leave that to future optimization
 	 * (after profiling).
 	 */
-	if (lstat(file->name, &st) != 0) {
-		error = errno;
-		goto out;
-	}
+	file = dir->lo_aux;
+	if (lstat(file->name, &st) != 0)
+		return (errno);
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
 
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
+	mode = req->lr_req.tcreate.perm & 0777;
 
 	if (req->lr_req.tcreate.perm & L9P_DMDIR)
 		error = internal_mkdir(newname, mode, &st);
@@ -609,33 +655,25 @@ fs_create(void *softc, struct l9p_request *req)
 	}
 
 	if (error)
-		goto out;
+		return (error);
 
-	if (lchown(newname, file->uid, file->gid) != 0) {
-		error = errno;
-		goto out;
-	}
-
-	if (lstat(newname, &st) != 0) {
-		error = errno;
-		goto out;
-	}
+	if (lchown(newname, file->uid, file->gid) != 0 ||
+	    lstat(newname, &st) != 0)
+		return (errno);
 
 	generate_qid(&st, &req->lr_resp.rcreate.qid);
-out:
-	free(newname);
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
-fs_flush(void *softc __unused, struct l9p_request *req)
+static int
+fs_flush(void *softc __unused, struct l9p_request *req __unused)
 {
 
 	/* XXX: not used because this transport is synchronous */
-	l9p_respond(req, 0);
+	return (0);
 }
 
-static void
+static int
 fs_open(void *softc __unused, struct l9p_request *req)
 {
 	struct l9p_connection *conn = req->lr_conn;
@@ -644,34 +682,34 @@ fs_open(void *softc __unused, struct l9p_request *req)
 
 	assert(file != NULL);
 
-	if (stat(file->name, &st) != 0) {
-		l9p_respond(req, errno);
-		return;
-	}
+	/*
+	 * Caller should never be opening a symlink, as it
+	 * should have been resolved by this point.  (For the
+	 * 9P2000 protocol, we probably should deny -- at
+	 * the higher level -- that symlinks even exist.)
+	 */
+	if (lstat(file->name, &st) != 0)
+		return (errno);
+	if (S_ISLNK(st.st_mode))
+		return (EPERM);
 
-	if (!check_access(&st, file->uid, req->lr_req.topen.mode)) {
-		l9p_respond(req, EPERM);
-		return;
-	}
+	if (!check_access(&st, file->uid, req->lr_req.topen.mode))
+		return (EPERM);
 
 	if (S_ISDIR(st.st_mode)) {
 		file->dir = opendir(file->name);
-		if (file->dir == NULL) {
-			l9p_respond(req, EPERM);	/* ??? */
-			return;
-		}
+		if (file->dir == NULL)
+			return (EPERM);	/* ??? */
 	} else {
 		file->fd = open(file->name, req->lr_req.topen.mode);
-		if (file->fd < 0) {
-			l9p_respond(req, EPERM);
-			return;
-		}
+		if (file->fd < 0)
+			return (EPERM);
 	}
 
 	generate_qid(&st, &req->lr_resp.ropen.qid);
 
 	req->lr_resp.ropen.iounit = conn->lc_max_io_size;
-	l9p_respond(req, 0);
+	return (0);
 }
 
 /*
@@ -695,7 +733,7 @@ fs_lstatat(struct openfile *file, char *name, struct stat *st)
 #endif
 }
 
-static void
+static int
 fs_read(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
@@ -754,26 +792,21 @@ fs_read(void *softc __unused, struct l9p_request *req)
 #else
 		/* XXX: not thread safe, should really use aio_listio. */
 		if (lseek(file->fd, (off_t)req->lr_req.io.offset, SEEK_SET) < 0)
-		{
-			l9p_respond(req, errno);
-			return;
-		}
+			return (errno);
 
 		ret = (uint32_t)readv(file->fd, req->lr_data_iov, (int)niov);
 #endif
 
-		if (ret < 0) {
-			l9p_respond(req, errno);
-			return;
-		}
+		if (ret < 0)
+			return (errno);
 
 		req->lr_resp.io.count = (uint32_t)ret;
 	}
 
-	l9p_respond(req, 0);
+	return (0);
 }
 
-static void
+static int
 fs_remove(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
@@ -783,37 +816,27 @@ fs_remove(void *softc, struct l9p_request *req)
 	file = req->lr_fid->lo_aux;
 	assert(file);
 
-	if (sc->fs_readonly) {
-		l9p_respond(req, EROFS);
-		return;
-	}
+	if (sc->fs_readonly)
+		return (EROFS);
 
-	if (lstat(file->name, &st) != 0) {
-		l9p_respond(req, errno);
-		return;
-	}
+	if (lstat(file->name, &st) != 0)
+		return (errno);
 
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		l9p_respond(req, EPERM);
-		return;
-	}
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
 
 	if (S_ISDIR(st.st_mode)) {
-		if (rmdir(file->name) != 0) {
-			l9p_respond(req, errno);
-			return;
-		}
+		if (rmdir(file->name) != 0)
+			return (errno);
 	} else {
-		if (unlink(file->name) != 0) {
-			l9p_respond(req, errno);
-			return;
-		}
+		if (unlink(file->name) != 0)
+			return (errno);
 	}
 
-	l9p_respond(req, 0);
+	return (0);
 }
 
-static void
+static int
 fs_stat(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
@@ -826,10 +849,10 @@ fs_stat(void *softc __unused, struct l9p_request *req)
 	lstat(file->name, &st);
 	dostat(&req->lr_resp.rstat.stat, file->name, &st, dotu);
 
-	l9p_respond(req, 0);
+	return (0);
 }
 
-static void
+static int
 fs_walk(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
@@ -838,6 +861,7 @@ fs_walk(void *softc, struct l9p_request *req)
 	struct openfile *newfile;
 	size_t clen, namelen, need;
 	char *comp, *succ, *next, *swtmp;
+	bool atroot;
 	bool dotdot;
 	int i, nwname;
 	int error = 0;
@@ -865,31 +889,33 @@ fs_walk(void *softc, struct l9p_request *req)
 	 * The final fid is based on the last name successfully
 	 * walked.
 	 *
+	 * Note that we *do* get Twalk requests with nwname==0 on files.
+	 *
 	 * Set up "successful name" buffer pointer with base fid name,
 	 * initially.  We'll swap each new success into it as we go.
+	 *
+	 * Invariant: atroot and stat data correspond to current
+	 * (succ) path.
 	 */
 	succ = namebufs[0];
 	next = namebufs[1];
 	namelen = strlcpy(succ, file->name, MAXPATHLEN);
-	if (namelen >= MAXPATHLEN) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
-	if (lstat(succ, &st) < 0){
-		error = errno;
-		goto out;
-	}
+	if (namelen >= MAXPATHLEN)
+		return (ENAMETOOLONG);
+	if (lstat(succ, &st) < 0)
+		return (errno);
+	atroot = strcmp(succ, sc->fs_rootpath) == 0;
+
 	nwname = (int)req->lr_req.twalk.nwname;
-	/*
-	 * Must have execute permission to search a directory.
-	 * Then, look up each component in the directory.
-	 * Check for ".." along the way, handlng specially
-	 * as needed.  Forbid "/" in name components.
-	 *
-	 * Note that we *do* get Twalk requests with
-	 * nwname==0 on files.
-	 */
-	if (nwname > 0) {
+
+	for (i = 0; i < nwname; i++) {
+		/*
+		 * Must have execute permission to search a directory.
+		 * Then, look up each component in its directory-so-far.
+		 * Check for ".." along the way, handlng specially
+		 * as needed.  Forbid "/" in name components.
+		 *
+		 */
 		if (!S_ISDIR(st.st_mode)) {
 			error = ENOTDIR;
 			goto out;
@@ -901,47 +927,49 @@ fs_walk(void *softc, struct l9p_request *req)
 			error = EPERM;
 			goto out;
 		}
-	}
-	for (i = 0; i < nwname; i++) {
 		comp = req->lr_req.twalk.wname[i];
 		if (strchr(comp, '/') != NULL) {
 			error = EINVAL;
 			break;
 		}
+
 		clen = strlen(comp);
 		dotdot = false;
+
+		/*
+		 * Build next pathname (into "next").  If "..",
+		 * just strip one name component off the success
+		 * name so far.  Since we know this name fits, the
+		 * stripped down version also fits.  Otherwise,
+		 * the name is the base name plus '/' plus the
+		 * component name plus terminating '\0'; this may
+		 * or may not fit.
+		 */
 		if (comp[0] == '.') {
 			if (clen == 1) {
 				error = EINVAL;
 				break;
 			}
-			if (comp[1] == '.' && clen == 2) {
+			if (comp[1] == '.' && clen == 2)
 				dotdot = true;
-				/*
-				 * It's not clear how ".." at
-				 * root should be handled if i > 0.
-				 * Obeying the man page exactly, we
-				 * reset i to 0 and stop, declaring
-				 * terminal success.
-				 */
-				if (strcmp(file->name, sc->fs_rootpath) == 0) {
-					succ = file->name;
-					i = 0;
-					break;
-				}
-			}
 		}
-		/*
-		 * Build next pathname (into "next").  If dotdot,
-		 * just strip one name component off file->name.
-		 * Since we know file->name fits, the stripped down
-		 * version also fits.  Otherwise, the name is the
-		 * base name plus '/' plus the component name
-		 * plus terminating '\0'; this may or may not
-		 * fit.
-		 */
 		if (dotdot) {
-			(void) r_dirname(file->name, next, MAXPATHLEN);
+			/*
+			 * It's not clear how ".." at root should
+			 * be handled when i > 0.  Obeying the man
+			 * page exactly, we reset i to 0 and stop,
+			 * declaring terminal success.
+			 *
+			 * Otherwise, we just climbed up one level
+			 * so adjust "atroot".
+			 */
+			if (atroot) {
+				i = 0;
+				break;
+			}
+			(void) r_dirname(succ, next, MAXPATHLEN);
+			namelen = strlen(next);
+			atroot = strcmp(next, sc->fs_rootpath) == 0;
 		} else {
 			need = namelen + 1 + clen + 1;
 			if (need > MAXPATHLEN) {
@@ -949,13 +977,21 @@ fs_walk(void *softc, struct l9p_request *req)
 				break;
 			}
 			memcpy(next, file->name, namelen);
-			next[namelen] = '/';
-			memcpy(&next[namelen + 1], comp, clen + 1);
+			next[namelen++] = '/';
+			memcpy(&next[namelen], comp, clen + 1);
+			namelen += clen;
+			/*
+			 * Since name is never ".", we are necessarily
+			 * descending below the root now.
+			 */
+			atroot = false;
 		}
-		if (lstat(next, &st) < 0){
+
+		if (lstat(next, &st) < 0) {
 			error = ENOENT;
 			break;
 		}
+
 		/*
 		 * Success: generate qid and swap this
 		 * successful name into place.
@@ -987,10 +1023,10 @@ fs_walk(void *softc, struct l9p_request *req)
 	req->lr_newfid->lo_aux = newfile;
 	req->lr_resp.rwalk.nwqid = (uint16_t)i;
 out:
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_write(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
@@ -1000,10 +1036,8 @@ fs_write(void *softc, struct l9p_request *req)
 	file = req->lr_fid->lo_aux;
 	assert(file != NULL);
 
-	if (sc->fs_readonly) {
-		l9p_respond(req, EROFS);
-		return;
-	}
+	if (sc->fs_readonly)
+		return (EROFS);
 
 	size_t niov = l9p_truncate_iov(req->lr_data_iov,
             req->lr_data_niov, req->lr_req.io.count);
@@ -1013,25 +1047,21 @@ fs_write(void *softc, struct l9p_request *req)
 	    req->lr_req.io.offset);
 #else
 	/* XXX: not thread safe, should really use aio_listio. */
-	if (lseek(file->fd, (off_t)req->lr_req.io.offset, SEEK_SET) < 0) {
-		l9p_respond(req, errno);
-		return;
-	}
+	if (lseek(file->fd, (off_t)req->lr_req.io.offset, SEEK_SET) < 0)
+		return (errno);
 
 	ret = writev(file->fd, req->lr_data_iov,
 	    (int)niov);
 #endif
 
-	if (ret < 0) {
-		l9p_respond(req, errno);
-		return;
-	}
+	if (ret < 0)
+		return (errno);
 
 	req->lr_resp.io.count = (uint32_t)ret;
-	l9p_respond(req, 0);
+	return (0);
 }
 
-static void
+static int
 fs_wstat(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
@@ -1054,10 +1084,8 @@ fs_wstat(void *softc, struct l9p_request *req)
 	 * Atomicity is clearly missing in current implementation.
 	 */
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	if (sc->fs_readonly)
+		return (EROFS);
 
 	if (l9stat->atime != (uint32_t)~0) {
 		/* XXX: not implemented, ignore */
@@ -1130,67 +1158,46 @@ fs_wstat(void *softc, struct l9p_request *req)
 		free(dir);
 	}
 out:
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_statfs(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
 	struct stat st;
 	struct statfs f;
 	long name_max;
-	int error = 0;
 
 	file = req->lr_fid->lo_aux;
 	assert(file);
 
-	if (lstat(file->name, &st) != 0) {
-		error = errno;
-		goto out;
-	}
+	if (lstat(file->name, &st) != 0)
+		return (errno);
 
-	if (!check_access(&st, file->uid, L9P_OREAD)) {
-		error = EPERM;
-		goto out;
-	}
+	if (!check_access(&st, file->uid, L9P_OREAD))
+		return (EPERM);
 
-	if (statfs(file->name, &f) != 0) {
-		error = errno;
-		goto out;
-	}
+	if (statfs(file->name, &f) != 0)
+		return (errno);
 
 	name_max = pathconf(file->name, _PC_NAME_MAX);
-	if (name_max == -1) {
-		error = errno;
-		goto out;
-	}
+	if (name_max == -1)
+		return (errno);
 
 	dostatfs(&req->lr_resp.rstatfs.statfs, &f, name_max);
 
-out:
-	l9p_respond(req, error);
+	return (0);
 }
 
-/*
- * Linux O_* flag values do not match BSD ones.
- * It's not at all clear which flags Linux systems actually pass;
- * for now, we will just reject most.
- */
-#define	L_O_CREAT	000000100U
-#define	L_O_EXCL	000000200U
-#define	L_O_TRUNC	000001000U
-#define	L_O_APPEND	000002000U
-#define	L_O_NONBLOCK	000004000U
-#define	L_O_LARGEFILE	000100000U
-#define	L_O_DIRECTORY	000200000U
-#define	L_O_NOFOLLOW	000400000U
-#define	L_O_TMPFILE	020000000U	/* ??? should we get this? */
-
-#define	LO_LC_FORBID	(0xfffffffc & ~(L_O_CREAT | L_O_EXCL | L_O_TRUNC | \
-					L_O_APPEND | L_O_NOFOLLOW | \
-					L_O_DIRECTORY | L_O_LARGEFILE | \
-					L_O_NONBLOCK))
+/* XXX - this will be improved in a later change */
+#define	LO_LC_FORBID	((uint32_t)0xfffffffc & ~(uint32_t)(L9P_L_O_CREAT | \
+					L9P_L_O_EXCL | \
+					L9P_L_O_TRUNC | \
+					L9P_L_O_APPEND | L9P_L_O_NOFOLLOW | \
+					L9P_L_O_DIRECTORY | \
+					L9P_L_O_LARGEFILE | \
+					L9P_L_O_NONBLOCK))
 
 /*
  * Common code for LOPEN and LCREATE requests.
@@ -1236,24 +1243,24 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 	 * (Currently we ignore it.)
 	 */
 	oflags = lflags & O_ACCMODE;
-	if (lflags & L_O_CREAT)
+	if (lflags & L9P_L_O_CREAT)
 		oflags |= O_CREAT;
-	if (lflags & L_O_EXCL)
+	if (lflags & L9P_L_O_EXCL)
 		oflags |= O_EXCL;
-	if (lflags & L_O_TRUNC)
+	if (lflags & L9P_L_O_TRUNC)
 		oflags |= O_TRUNC;
-	if (lflags & L_O_DIRECTORY)
+	if (lflags & L9P_L_O_DIRECTORY)
 		oflags |= O_DIRECTORY;
-	if (lflags & L_O_APPEND)
+	if (lflags & L9P_L_O_APPEND)
 		oflags |= O_APPEND;
-	if (lflags & L_O_NOFOLLOW)
+	if (lflags & L9P_L_O_NOFOLLOW)
 		oflags |= O_NOFOLLOW;
 
 	if (newname == NULL) {
 		/* open: require access, including write if O_TRUNC */
 		if (lstat(file->name, stp) != 0)
 			return (errno);
-		if ((lflags & L_O_TRUNC) && oacc == L9P_OREAD)
+		if ((lflags & L9P_L_O_TRUNC) && oacc == L9P_OREAD)
 			oacc = L9P_ORDWR;
 		if (!check_access(stp, file->uid, oacc))
 			return (EPERM);
@@ -1295,7 +1302,7 @@ fs_lo_lc(struct fs_softc *sc, struct l9p_request *req,
 	return (0);
 }
 
-static void
+static int
 fs_lopen(void *softc, struct l9p_request *req)
 {
 	struct stat st;
@@ -1306,117 +1313,106 @@ fs_lopen(void *softc, struct l9p_request *req)
 		generate_qid(&st, &req->lr_resp.rlopen.qid);
 		req->lr_resp.rlopen.iounit = req->lr_conn->lc_max_io_size;
 	}
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_lcreate(void *softc, struct l9p_request *req)
 {
-	struct openfile *file = req->lr_fid->lo_aux;
+	struct l9p_fid *dir;
 	struct stat st;
-	char *newname;
+	char *name;
+	char newname[MAXPATHLEN];
 	int error;
 
-	if (asprintf(&newname, "%s/%s",
-	    file->name, req->lr_req.tlcreate.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
+	dir = req->lr_fid;
+	name = req->lr_req.tlcreate.name;
+
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
 	error = fs_lo_lc(softc, req, newname,
 	    req->lr_req.tlcreate.flags, req->lr_req.tlcreate.mode,
 	    req->lr_req.tlcreate.gid, &st);
 	if (error == 0) {
 		generate_qid(&st, &req->lr_resp.rlcreate.qid);
-		req->lr_resp.rcreate.iounit = req->lr_conn->lc_max_io_size;
+		req->lr_resp.rlcreate.iounit = req->lr_conn->lc_max_io_size;
 	}
-	free(newname);
-out:
-	l9p_respond(req, error);
+	return (error);
 }
 
 /*
  * Could use a bit more work to reduce code duplication with fs_create.
  */
-static void
+static int
 fs_symlink(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
 	struct openfile *file;
+	struct l9p_fid *dir;
 	struct stat st;
-	char *newname = NULL;
+	char *name;
+	char newname[MAXPATHLEN];
 	int error;
 
-	file = req->lr_fid->lo_aux;
-	assert(file);
+	if (sc->fs_readonly)
+		return (EROFS);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
-	if (lstat(file->name, &st) != 0) {
-		error = errno;
-		goto out;
-	}
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
-	if (asprintf(&newname, "%s/%s",
-	    file->name, req->lr_req.tsymlink.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
+	dir = req->lr_fid;
+	name = req->lr_req.tsymlink.name;
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
+
+	file = dir->lo_aux;
+
+	if (lstat(file->name, &st) != 0)
+		return (errno);
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
+
 	error = internal_symlink(req->lr_req.tsymlink.symtgt, newname);
 	if (error)
-		goto out;
-	if (lchown(newname, file->uid, req->lr_req.tsymlink.gid) != 0) {
-		error = errno;
-		goto out;
-	}
-	if (lstat(newname, &st) != 0) {
-		error = errno;
-		goto out;
-	}
+		return (error);
+
+	if (lchown(newname, file->uid, req->lr_req.tsymlink.gid) != 0 ||
+	    lstat(newname, &st) != 0)
+		return (errno);
 
 	generate_qid(&st, &req->lr_resp.rsymlink.qid);
-out:
-	free(newname);
-	l9p_respond(req, error);
+	return (0);
 }
 
 /*
  * Could use a bit more work to reduce code duplication.
  */
-static void
+static int
 fs_mknod(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
 	struct openfile *file;
+	struct l9p_fid *dir;
 	struct stat st;
 	uint32_t mode, major, minor;
-	char *newname = NULL;
+	char *name;
+	char newname[MAXPATHLEN];
 	int error;
 
-	file = req->lr_fid->lo_aux;
-	assert(file);
+	if (sc->fs_readonly)
+		return (EROFS);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
-	if (lstat(file->name, &st) != 0) {
-		error = errno;
-		goto out;
-	}
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
-	if (asprintf(&newname, "%s/%s",
-	    file->name, req->lr_req.tmknod.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
+	dir = req->lr_fid;
+	name = req->lr_req.tmknod.name;
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
+
+	file = dir->lo_aux;
+
+	if (lstat(file->name, &st) != 0)
+		return (errno);
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
 
 	mode = req->lr_req.tmknod.mode;
 	major = req->lr_req.tmknod.major;
@@ -1430,38 +1426,26 @@ fs_mknod(void *softc, struct l9p_request *req)
 	case S_IFBLK:
 	case S_IFCHR:
 		mode = (mode & S_IFMT) | (mode & 0777);	/* ??? */
-		if (mknod(newname, (mode_t)mode, makedev(major, minor)) != 0) {
-			error = errno;
-			goto out;
-		}
+		if (mknod(newname, (mode_t)mode, makedev(major, minor)) != 0)
+			return (errno);
 		break;
 	case S_IFSOCK:
-		error = internal_mksocket(file, newname,
-		    req->lr_req.tmknod.name);
+		error = internal_mksocket(file, newname, name);
 		if (error != 0)
-			goto out;
+			return (error);
 		break;
 	default:
-		error = EINVAL;
-		goto out;
+		return (EINVAL);
 	}
-	if (lchown(newname, file->uid, req->lr_req.tsymlink.gid) != 0) {
-		error = errno;
-		goto out;
-	}
-	if (lstat(newname, &st) != 0) {
-		error = errno;
-		goto out;
-	}
-	error = 0;
+	if (lchown(newname, file->uid, req->lr_req.tmknod.gid) != 0 ||
+	    lstat(newname, &st) != 0)
+		return (errno);
 
 	generate_qid(&st, &req->lr_resp.rmknod.qid);
-out:
-	free(newname);
-	l9p_respond(req, error);
+	return (0);
 }
 
-static void
+static int
 fs_rename(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
@@ -1480,10 +1464,9 @@ fs_rename(void *softc, struct l9p_request *req)
 	f2 = req->lr_fid2->lo_aux;
 	assert(file && f2);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	if (sc->fs_readonly)
+		return (EROFS);
+
 	/* Client probably should not attempt to rename root. */
 	if (strcmp(file->name, sc->fs_rootpath) == 0) {
 		error = EINVAL;
@@ -1531,15 +1514,15 @@ fs_rename(void *softc, struct l9p_request *req)
 out:
 	free(newname);
 	free(olddirname);
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_readlink(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
 	ssize_t linklen;
-	char buf[MAXPATHLEN + 1];
+	char buf[MAXPATHLEN];
 	int error = 0;
 
 	file = req->lr_fid->lo_aux;
@@ -1548,14 +1531,15 @@ fs_readlink(void *softc __unused, struct l9p_request *req)
 	linklen = readlink(file->name, buf, sizeof(buf));
 	if (linklen < 0)
 		error = errno;
-	else if (linklen > MAXPATHLEN)
+	else if ((size_t)linklen >= sizeof(buf))
 		error = ENOMEM; /* todo: allocate dynamically */
-	else if ((req->lr_resp.rreadlink.target = strdup(buf)) == NULL)
+	else if ((req->lr_resp.rreadlink.target = strndup(buf,
+	    (size_t)linklen)) == NULL)
 		error = ENOMEM;
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_getattr(void *softc __unused, struct l9p_request *req)
 {
 	uint64_t mask, valid;
@@ -1650,13 +1634,13 @@ fs_getattr(void *softc __unused, struct l9p_request *req)
 	generate_qid(&st, &req->lr_resp.rgetattr.qid);
 out:
 	req->lr_resp.rgetattr.valid = valid;
-	l9p_respond(req, error);
+	return (error);
 }
 
 /*
  * Should combine some of this with wstat code.
  */
-static void
+static int
 fs_setattr(void *softc, struct l9p_request *req)
 {
 	uint64_t mask;
@@ -1670,10 +1654,8 @@ fs_setattr(void *softc, struct l9p_request *req)
 	file = req->lr_fid->lo_aux;
 	assert(file);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	if (sc->fs_readonly)
+		return (EROFS);
 
 	/*
 	 * As with WSTAT we have atomicity issues.
@@ -1754,22 +1736,22 @@ fs_setattr(void *softc, struct l9p_request *req)
 		}
 	}
 out:
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
-fs_xattrwalk(void *softc __unused, struct l9p_request *req)
+static int
+fs_xattrwalk(void *softc __unused, struct l9p_request *req __unused)
 {
-	l9p_respond(req, ENOTSUP);
+	return (ENOTSUP);
 }
 
-static void
-fs_xattrcreate(void *softc __unused, struct l9p_request *req)
+static int
+fs_xattrcreate(void *softc __unused, struct l9p_request *req __unused)
 {
-	l9p_respond(req, ENOTSUP);
+	return (ENOTSUP);
 }
 
-static void
+static int
 fs_readdir(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
@@ -1782,10 +1764,8 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	file = req->lr_fid->lo_aux;
 	assert(file);
 
-	if (file->dir == NULL) {
-		error = ENOTDIR;
-		goto out;
-	}
+	if (file->dir == NULL)
+		return (ENOTDIR);
 
 	/*
 	 * There is no getdirentries variant that accepts an
@@ -1806,11 +1786,17 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	l9p_init_msg(&msg, req, L9P_PACK);
 	while ((dp = readdir(file->dir)) != NULL) {
 		/*
-		 * Should we skip "." and ".."?  I think so...
+		 * Although "." is forbidden in naming and ".." is
+		 * special cased, testing shows that we must transmit
+		 * them through readdir.  (For ".." at root, we
+		 * should perhaps alter the inode number, but not
+		 * yet.)
 		 */
+#ifdef wrong
 		if (dp->d_name[0] == '.' &&
 		    (dp->d_namlen == 1 || strcmp(dp->d_name, "..") == 0))
 			continue;
+#endif
 
 		/*
 		 * TODO: we do a full lstat here; could use dp->d_*
@@ -1831,11 +1817,10 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	}
 
 	req->lr_resp.io.count = (uint32_t)msg.lm_size;
-out:
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_fsync(void *softc __unused, struct l9p_request *req)
 {
 	struct openfile *file;
@@ -1845,118 +1830,102 @@ fs_fsync(void *softc __unused, struct l9p_request *req)
 	assert(file);
 	if (fsync(file->fd))
 		error = errno;
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
-fs_lock(void *softc __unused, struct l9p_request *req)
+static int
+fs_lock(void *softc __unused, struct l9p_request *req __unused)
 {
 
-	l9p_respond(req, ENOTSUP);
+	return (ENOTSUP);
 }
 
-static void
-fs_getlock(void *softc __unused, struct l9p_request *req)
+static int
+fs_getlock(void *softc __unused, struct l9p_request *req __unused)
 {
 
-	l9p_respond(req, ENOTSUP);
+	return (ENOTSUP);
 }
 
-static void
+static int
 fs_link(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
 	struct openfile *file;
 	struct openfile *dirf;
+	struct l9p_fid *dir;
 	struct stat st;
-	char *newname;
-	int error = 0;
+	char *name;
+	char newname[MAXPATHLEN];
+	int error;
+
+	if (sc->fs_readonly)
+		return (EROFS);
+
+	/* N.B.: lr_fid is the file to link, lr_fid2 is the target dir */
+	dir = req->lr_fid2;
+	name = req->lr_req.tlink.name;
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
+
+	dirf = dir->lo_aux;
 
 	file = req->lr_fid->lo_aux;
-	dirf = req->lr_fid2->lo_aux;
-	assert(file && dirf);
-
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	assert(file != NULL);
 
 	/* Require write access to target directory. */
-	if (lstat(dirf->name, &st)) {
-		error = errno;
-		goto out;
-	}
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
+	if (lstat(dirf->name, &st))
+		return (errno);
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
 
-	if (asprintf(&newname, "%s/%s",
-	    dirf->name, req->lr_req.tlink.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
 	if (link(file->name, newname) != 0)
 		error = errno;
-	free(newname);
-out:
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_mkdir(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
 	struct openfile *file;
+	struct l9p_fid *dir;
 	struct stat st;
-	char *newname = NULL;
-	int error = 0;
+	char *name;
+	char newname[MAXPATHLEN];
+	int error;
 
-	file = req->lr_fid->lo_aux;
-	assert(file);
+	if (sc->fs_readonly)
+		return (EROFS);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	dir = req->lr_fid;
+	name = req->lr_req.tmkdir.name;
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
+
+	file = dir->lo_aux;
 
 	/* Require write access to target directory. */
-	if (lstat(file->name, &st)) {
-		error = errno;
-		goto out;
-	}
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
-
-	if (asprintf(&newname, "%s/%s",
-	    file->name, req->lr_req.tmkdir.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
-	}
+	if (lstat(file->name, &st))
+		return (errno);
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
 
 	error = internal_mkdir(newname, (mode_t)req->lr_req.tmkdir.mode, &st);
 	if (error)
-		goto out;
+		return (error);
 
-	if (lchown(newname, file->uid, req->lr_req.tmkdir.gid) != 0) {
-		error = errno;
-		goto out;
-	}
-
-	if (lstat(newname, &st) != 0) {
-		error = errno;
-		goto out;
-	}
+	if (lchown(newname, file->uid, req->lr_req.tmkdir.gid) != 0 ||
+	    lstat(newname, &st) != 0)
+		return (errno);
 
 	generate_qid(&st, &req->lr_resp.rmkdir.qid);
-out:
-	free(newname);
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+static int
 fs_renameat(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
@@ -1969,88 +1938,78 @@ fs_renameat(void *softc, struct l9p_request *req)
 	newdir = req->lr_fid2->lo_aux;
 	assert(olddir && newdir);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	if (sc->fs_readonly)
+		return (EROFS);
 
 	/* Require write access to both source and target directory. */
-	if (lstat(olddir->name, &st)) {
-		error = errno;
-		goto out;
-	}
-	if (!check_access(&st, olddir->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
+	if (lstat(olddir->name, &st))
+		return (errno);
+	if (!check_access(&st, olddir->uid, L9P_OWRITE))
+		return (EPERM);
+
 	if (olddir != newdir) {
-		if (lstat(newdir->name, &st)) {
-			error = errno;
-			goto out;
-		}
-		if (!check_access(&st, newdir->uid, L9P_OWRITE)) {
-			error = EPERM;
-			goto out;
-		}
+		if (lstat(newdir->name, &st))
+			return (errno);
+		if (!check_access(&st, newdir->uid, L9P_OWRITE))
+			return (EPERM);
 	}
 
 	if (asprintf(&oldname, "%s/%s",
 		    olddir->name, req->lr_req.trenameat.oldname) < 0 ||
 	    asprintf(&newname, "%s/%s",
-		    newdir->name, req->lr_req.trenameat.newname) < 0) {
+		    newdir->name, req->lr_req.trenameat.newname) < 0)
 		error = ENAMETOOLONG;
-		goto out;
-	}
-
-	error = rename(oldname, newname);
-
-out:
+	else
+		error = rename(oldname, newname);
 	free(newname);
 	free(oldname);
-	l9p_respond(req, error);
+	return (error);
 }
 
-static void
+/*
+ * Unlink file in given directory, or remove directory in given
+ * directory, based on flags.
+ */
+static int
 fs_unlinkat(void *softc, struct l9p_request *req)
 {
 	struct fs_softc *sc = softc;
 	struct openfile *file;
+	struct l9p_fid *dir;
 	struct stat st;
 	char *name;
+	char newname[MAXPATHLEN];
 	int error;
 
-	file = req->lr_fid->lo_aux;
-	assert(file);
+	if (sc->fs_readonly)
+		return (EROFS);
 
-	if (sc->fs_readonly) {
-		error = EROFS;
-		goto out;
-	}
+	dir = req->lr_fid;
+	name = req->lr_req.tunlinkat.name;
+	error = fs_buildname(dir, name, newname, sizeof(newname));
+	if (error)
+		return (error);
+
+	file = dir->lo_aux;
 
 	/* Require write access to directory. */
-	if (lstat(file->name, &st)) {
-		error = errno;
-		goto out;
-	}
-	if (!check_access(&st, file->uid, L9P_OWRITE)) {
-		error = EPERM;
-		goto out;
-	}
+	if (lstat(file->name, &st))
+		return (errno);
+	if (!check_access(&st, file->uid, L9P_OWRITE))
+		return (EPERM);
 
-	if (asprintf(&name, "%s/%s",
-		    file->name, req->lr_req.tunlinkat.name) < 0) {
-		error = ENAMETOOLONG;
-		goto out;
+	if (req->lr_req.tunlinkat.flags & L9PL_AT_REMOVEDIR) {
+		if (rmdir(newname) != 0)
+			error = errno;
+	} else {
+		if (unlink(newname) != 0)
+			error = errno;
 	}
-
-	error = unlink(name);
-	free(name);
-out:
-	l9p_respond(req, error);
+	return (error);
 }
 
 static void
-fs_freefid(void *softc __unused, struct l9p_openfile *fid)
+fs_freefid(void *softc __unused, struct l9p_fid *fid)
 {
 	struct openfile *f = fid->lo_aux;
 

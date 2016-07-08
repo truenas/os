@@ -25,31 +25,20 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <err.h>
-#include "../lib9p.h"
-#include "../backend/fs.h"
-#include "../transport/socket.h"
+#ifndef LIB9P_FID_H
+#define LIB9P_FID_H
 
-int
-main(int argc, const char *argv[])
-{
-	struct l9p_backend *fs_backend;
-	struct l9p_server *server;
+/*
+ * Data structure for a fid.  All active fids in one session
+ * are stored in a hash table; the hash table provides the
+ * iterator to process them.  (See also l9p_connection, below.)
+ *
+ * The back-end code has additional data per fid, found via
+ * lo_aux.  Currently this is allocated with a separate calloc().
+ */
+struct l9p_fid {
+	void *lo_aux;
+	uint32_t lo_fid;
+};
 
-	if (argc < 2)
-		errx(1, "Usage: server <path>");
-
-	if (l9p_backend_fs_init(&fs_backend, argv[1]) != 0)
-		err(1, "cannot init backend");
-
-	if (l9p_server_init(&server, fs_backend) != 0)
-		err(1, "cannot create server");
-
-	server->ls_max_version = L9P_2000L;
-	if (l9p_start_server(server, "0.0.0.0", "564"))
-		err(1, "l9p_start_server() failed");
-	/* XXX - we never get here, l9p_start_server does not return */
-	exit(0);
-}
+#endif  /* LIB9P_FID_H */
