@@ -105,7 +105,7 @@ l9p_iov_io(struct l9p_message *msg, void *buffer, size_t len)
 			msg->lm_cursor_iov++;
 			msg->lm_cursor_offset = 0;
 
-			if (msg->lm_cursor_iov > msg->lm_niov)
+			if (msg->lm_cursor_iov >= msg->lm_niov)
 				return (-1);
 		}
 

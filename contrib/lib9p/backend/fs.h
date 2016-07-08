@@ -1,5 +1,6 @@
+
 /*
- * Copyright 2016 Jakub Klama <jceel@FreeBSD.org>
+ * Copyright 2016 Chris Torek <torek@ixsystems.com>
  * All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,31 +26,9 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <err.h>
-#include "../lib9p.h"
-#include "../backend/fs.h"
-#include "../transport/socket.h"
+#ifndef LIB9P_BACKEND_FS_H
+#define LIB9P_BACKEND_FS_H
 
-int
-main(int argc, const char *argv[])
-{
-	struct l9p_backend *fs_backend;
-	struct l9p_server *server;
+int l9p_backend_fs_init(struct l9p_backend **backendp, const char *root);
 
-	if (argc < 2)
-		errx(1, "Usage: server <path>");
-
-	if (l9p_backend_fs_init(&fs_backend, argv[1]) != 0)
-		err(1, "cannot init backend");
-
-	if (l9p_server_init(&server, fs_backend) != 0)
-		err(1, "cannot create server");
-
-	server->ls_max_version = L9P_2000L;
-	if (l9p_start_server(server, "0.0.0.0", "564"))
-		err(1, "l9p_start_server() failed");
-	/* XXX - we never get here, l9p_start_server does not return */
-	exit(0);
-}
+#endif  /* LIB9P_BACKEND_FS_H */

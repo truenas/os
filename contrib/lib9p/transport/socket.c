@@ -221,8 +221,12 @@ l9p_socket_readmsg(struct l9p_socket_softc *sc, void **buf, size_t *size)
 	}
 
 	if (ret != sizeof(uint32_t)) {
-		L9P_LOG(L9P_ERROR, "short read: %zd bytes of %zd expected",
-		    ret, sizeof(uint32_t));
+		if (ret == 0)
+			L9P_LOG(L9P_DEBUG, "%p: EOF", (void *)sc->ls_conn);
+		else
+			L9P_LOG(L9P_ERROR,
+			    "short read: %zd bytes of %zd expected",
+			    ret, sizeof(uint32_t));
 		return (-1);
 	}
 
@@ -245,7 +249,7 @@ l9p_socket_readmsg(struct l9p_socket_softc *sc, void **buf, size_t *size)
 	*size = msize;
 	*buf = buffer;
 	L9P_LOG(L9P_INFO, "%p: read complete message, buf=%p size=%d",
-	    sc->ls_conn, buffer, msize);
+	    (void *)sc->ls_conn, buffer, msize);
 
 	return (0);
 }

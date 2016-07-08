@@ -249,6 +249,8 @@
     ..
     krb5
     ..
+    lib9p
+    ..
     libmilter
     ..
     lzma
