@@ -264,8 +264,8 @@ struct e82545_softc {
 	/* Transmit */
 	union e1000_tx_udesc *esc_txdesc;
 	struct e1000_context_desc esc_txctx;
-	pthread_t	tx_tid;
-	pthread_cond_t	tx_cond;
+	pthread_t	esc_tx_tid;
+	pthread_cond_t	esc_tx_cond;
 	int		esc_tx_enabled;
 	int		esc_tx_active;
 	uint32_t	esc_TXCW;	/* x0178 transmit config */
@@ -290,7 +290,9 @@ struct e82545_softc {
 	
 	/* Receive */
 	struct e1000_rx_desc *esc_rxdesc;
+	pthread_cond_t	esc_rx_cond;
 	int		esc_rx_enabled;
+	int		esc_rx_active;
 	int		esc_rx_loopback;
 	uint32_t	esc_RCTL;	/* x0100 receive ctl */
 	uint32_t	esc_FCRTL;	/* x2160 flow cntl thresh, low */
@@ -343,6 +345,8 @@ struct e82545_softc {
 };
 
 static void e82545_reset(struct e82545_softc *sc, int dev);
+static void e82545_rx_enable(struct e82545_softc *sc);
+static void e82545_rx_disable(struct e82545_softc *sc);
 static void e82545_tap_callback(int fd, enum ev_type type, void *param);
 static void e82545_tx_start(struct e82545_softc *sc);
 static void e82545_tx_enable(struct e82545_softc *sc);
@@ -749,10 +753,10 @@ e82545_rx_ctl(struct e82545_softc *sc, uint32_t val)
 				sc->esc_rx_loopback = 0;
 			}
 
-			e82545_rx_update_rdba(sc);			
-			sc->esc_rx_enabled = 1;
+			e82545_rx_update_rdba(sc);
+			e82545_rx_enable(sc);
 		} else {
-			sc->esc_rx_enabled = 0;
+			e82545_rx_disable(sc);
 			sc->esc_rx_loopback = 0;
 			sc->esc_rdba = 0;
 			sc->esc_rxdesc = NULL;
@@ -849,6 +853,7 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 		goto done1;
 	}
 
+	sc->esc_rx_active = 1;
 	pthread_mutex_unlock(&sc->esc_mtx);
 
 	for (lim = size / 4; lim > 0 && left >= maxpktdesc; lim -= n) {
@@ -927,6 +932,9 @@ e82545_tap_callback(int fd, enum ev_type type, void *param)
 
 done:
 	pthread_mutex_lock(&sc->esc_mtx);
+	sc->esc_rx_active = 0;
+	if (sc->esc_rx_enabled == 0)
+		pthread_cond_signal(&sc->esc_rx_cond);
 
 	sc->esc_RDH = head;
 	/* Respect E1000_RCTL_RDMTS */
@@ -1406,8 +1414,8 @@ e82545_tx_thread(void *param)
 				break;
 			sc->esc_tx_active = 0;
 			if (sc->esc_tx_enabled == 0)
-				pthread_cond_signal(&sc->tx_cond);
-			pthread_cond_wait(&sc->tx_cond, &sc->esc_mtx);
+				pthread_cond_signal(&sc->esc_tx_cond);
+			pthread_cond_wait(&sc->esc_tx_cond, &sc->esc_mtx);
 		}
 		sc->esc_tx_active = 1;
 
@@ -1421,7 +1429,7 @@ e82545_tx_start(struct e82545_softc *sc)
 {
 
 	if (sc->esc_tx_active == 0)
-		pthread_cond_signal(&sc->tx_cond);
+		pthread_cond_signal(&sc->esc_tx_cond);
 }
 
 static void
@@ -1437,9 +1445,24 @@ e82545_tx_disable(struct e82545_softc *sc)
 
 	sc->esc_tx_enabled = 0;
 	while (sc->esc_tx_active)
-		pthread_cond_wait(&sc->tx_cond, &sc->esc_mtx);
+		pthread_cond_wait(&sc->esc_tx_cond, &sc->esc_mtx);
 }
 
+static void
+e82545_rx_enable(struct e82545_softc *sc)
+{
+
+	sc->esc_rx_enabled = 1;
+}
+
+static void
+e82545_rx_disable(struct e82545_softc *sc)
+{
+
+	sc->esc_rx_enabled = 0;
+	while (sc->esc_rx_active)
+		pthread_cond_wait(&sc->esc_rx_cond, &sc->esc_mtx);
+}
 
 static void
 e82545_write_ra(struct e82545_softc *sc, int reg, uint32_t wval)
@@ -2091,6 +2114,7 @@ e82545_reset(struct e82545_softc *sc, int drvr)
 {
 	int i;
 
+	e82545_rx_disable(sc);
 	e82545_tx_disable(sc);
 
 	/* clear outstanding interrupts */
@@ -2143,7 +2167,6 @@ e82545_reset(struct e82545_softc *sc, int drvr)
 		sc->esc_RDBAL = 0;
 		sc->esc_RDBAH = 0;
 	}
-	sc->esc_rx_enabled = 0;
 	sc->esc_RCTL = 0;
 	sc->esc_FCRTL = 0;
 	sc->esc_FCRTH = 0;
@@ -2256,11 +2279,12 @@ e82545_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	sc->esc_ctx = ctx;
 
 	pthread_mutex_init(&sc->esc_mtx, NULL);
-	pthread_cond_init(&sc->tx_cond, NULL);
-	pthread_create(&sc->tx_tid, NULL, e82545_tx_thread, sc);
+	pthread_cond_init(&sc->esc_rx_cond, NULL);
+	pthread_cond_init(&sc->esc_tx_cond, NULL);
+	pthread_create(&sc->esc_tx_tid, NULL, e82545_tx_thread, sc);
 	snprintf(nstr, sizeof(nstr), "e82545-%d:%d tx", pi->pi_slot,
 	    pi->pi_func);
-        pthread_set_name_np(sc->tx_tid, nstr);
+        pthread_set_name_np(sc->esc_tx_tid, nstr);
 
 	pci_set_cfgdata16(pi, PCIR_DEVICE, E82545_DEV_ID_82545EM_COPPER);
 	pci_set_cfgdata16(pi, PCIR_VENDOR, E82545_VENDOR_ID_INTEL);
