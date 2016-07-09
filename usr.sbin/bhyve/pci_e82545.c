@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2015 Nahanni Systems Inc.
- * Copyright (c) 2013 Jeremiah Lott
+ * Copyright (c) 2016 Alexander Motin <mav@FreeBSD.org>
+ * Copyright (c) 2015 Peter Grehan <grehan@freebsd.org>
+ * Copyright (c) 2013 Jeremiah Lott, Avere Systems
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
