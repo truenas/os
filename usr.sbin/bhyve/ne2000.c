@@ -121,20 +121,20 @@ ne2000_init(ne2000_intr_func_t intr_assert, ne2000_intr_func_t intr_deassert,
 static void
 ne2000_update_intr(struct ne2000_softc *sc);
 
-static uint16_t
+static uint32_t
 ne2000_read(struct ne2000_softc *sc, uint8_t offset, int size);
 static int
-ne2000_write(struct ne2000_softc *sc, uint8_t offset, uint16_t value, int size);
+ne2000_write(struct ne2000_softc *sc, uint8_t offset, uint32_t value, int size);
 
 static uint8_t
 ne2000_read_nic_locked(struct ne2000_softc *sc, uint8_t offset);
-static uint16_t
-ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset);
+static uint32_t
+ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset, int size);
 
 static int
 ne2000_write_nic_locked(struct ne2000_softc *sc, uint8_t offset, uint8_t value);
 static int
-ne2000_write_asic_locked(struct ne2000_softc *sc, uint8_t offset, uint16_t value);
+ne2000_write_asic_locked(struct ne2000_softc *sc, uint8_t offset, uint32_t value, int size);
 
 static int
 ne2000_emul_reg_cr(struct ne2000_softc *sc, uint8_t value);
@@ -640,7 +640,8 @@ ne2000_write_nic_locked(struct ne2000_softc *sc, uint8_t offset, uint8_t value)
 }
 
 static int
-ne2000_write_asic_locked(struct ne2000_softc *sc, uint8_t offset, uint16_t value)
+ne2000_write_asic_locked(struct ne2000_softc *sc, uint8_t offset,
+    uint32_t value, int size)
 {
 	uint8_t dcr = 0;
 	uint8_t rbcr0 = 0;
@@ -656,6 +657,7 @@ ne2000_write_asic_locked(struct ne2000_softc *sc, uint8_t offset, uint16_t value
 
 	switch (offset) {
 	case ED_NOVELL_RESET:
+		ne2000_software_reset(sc);
 		sc->reset = value;
 		break;
 	case ED_NOVELL_DATA:
@@ -693,9 +695,13 @@ ne2000_write_asic_locked(struct ne2000_softc *sc, uint8_t offset, uint16_t value
 		/* copy the value in LOW - HIGH order */
 		sc->ram[rsar]     = value;
 		sc->ram[rsar + 1] = value >> 8;
+		if (size == 4 && rbcr >= 4) {
+			sc->ram[rsar + 2] = value >> 16;
+			sc->ram[rsar + 3] = value >> 24;
+		}
 
-		rsar += 2;
-		rbcr -= 2;
+		rsar += MIN(size, rbcr);
+		rbcr -= MIN(size, rbcr);
 
 		if (rbcr == 0) {
 			sc->remote_write = 0;
@@ -763,8 +769,10 @@ ne2000_emul_reg_cr(struct ne2000_softc *sc, uint8_t value)
 					ED_ISR_RST, 0);
 		}
 	}
+
 	if (value & ED_CR_RD2)
 		assert(!(sc->remote_read || sc->remote_write));
+
 	if (value & (ED_CR_RD0 | ED_CR_RD1)) {
 		assert(value & ED_CR_STA);
 
@@ -974,11 +982,11 @@ ne2000_update_intr(struct ne2000_softc *sc)
 	}
 }
 
-static uint16_t
+static uint32_t
 ne2000_read(struct ne2000_softc *sc, uint8_t offset, int size)
 {
 	int err;
-	uint16_t value = 0;
+	uint32_t value = 0;
 
 	assert(offset < ED_NOVELL_IO_PORTS);
 
@@ -988,20 +996,18 @@ ne2000_read(struct ne2000_softc *sc, uint8_t offset, int size)
 	if (offset < ED_NOVELL_ASIC_OFFSET) {
 		assert(size == 1);
 		value = ne2000_read_nic_locked(sc, offset);
-	}
-	else {
-		assert(size <= 2);
-		value = ne2000_read_asic_locked(sc, offset - ED_NOVELL_ASIC_OFFSET);
-	}
+	} else
+		value = ne2000_read_asic_locked(sc,
+		    offset - ED_NOVELL_ASIC_OFFSET, size);
 
 	err = pthread_mutex_unlock(&sc->mtx);
 	assert(err == 0);
 
-	return value;
+	return (value);
 }
 
 static int
-ne2000_write(struct ne2000_softc *sc, uint8_t offset, uint16_t value, int size)
+ne2000_write(struct ne2000_softc *sc, uint8_t offset, uint32_t value, int size)
 {
 	int err;
 
@@ -1013,11 +1019,9 @@ ne2000_write(struct ne2000_softc *sc, uint8_t offset, uint16_t value, int size)
 	if (offset < ED_NOVELL_ASIC_OFFSET) {
 		assert(size == 1);
 		err = ne2000_write_nic_locked(sc, offset, value);
-	}
-	else {
-		assert(size <= 2);
-		err = ne2000_write_asic_locked(sc, offset - ED_NOVELL_ASIC_OFFSET, value);
-	}
+	} else
+		err = ne2000_write_asic_locked(sc,
+		    offset - ED_NOVELL_ASIC_OFFSET, value, size);
 
 	assert(err == 0);
 
@@ -1087,8 +1091,8 @@ ne2000_read_nic_locked(struct ne2000_softc *sc, uint8_t offset)
 	return value;
 }
 
-static uint16_t
-ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset)
+static uint32_t
+ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset, int size)
 {
 	int err;
 	uint8_t dcr = 0;
@@ -1099,7 +1103,7 @@ ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset)
 
 	uint16_t rbcr = 0;
 	uint16_t rsar = 0;
-	uint16_t read_value = 0;
+	uint32_t read_value = 0;
 
 	switch (offset) {
 	case ED_NOVELL_RESET:
@@ -1119,7 +1123,6 @@ ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset)
 		}
 
 		assert(sc->remote_read);
-
 		rbcr0 = ne2000_get_reg_by_offset(sc, NE2000_P0, ED_P0_RBCR0);
 		rbcr1 = ne2000_get_reg_by_offset(sc, NE2000_P0, ED_P0_RBCR1);
 		rbcr = rbcr0 | (rbcr1 << 8);
@@ -1132,9 +1135,13 @@ ne2000_read_asic_locked(struct ne2000_softc *sc, uint8_t offset)
 
 		/* copy the value in LOW - HIGH order */
 		read_value = sc->ram[rsar] | (sc->ram[rsar + 1] << 8);
+		if (size == 4) {
+			read_value |= (sc->ram[rsar + 2] << 16);
+			read_value |= (sc->ram[rsar + 3] << 24);
+		}
 
-		rsar += 2;
-		rbcr -= 2;
+		rsar += size;
+		rbcr -= size;
 
 		if (rbcr == 0)
 			sc->remote_read = 0;
@@ -1175,6 +1182,7 @@ pci_ne2000_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	pci_set_cfgdata16(pi, PCIR_DEVICE, 0x8029);
 	pci_set_cfgdata16(pi, PCIR_VENDOR, 0x10ec);
 	pci_set_cfgdata8(pi, PCIR_CLASS, PCIC_NETWORK);
+	pci_set_cfgdata8(pi, PCIR_SUBCLASS, PCIS_NETWORK_ETHERNET);
 
 	/* allocate one BAR register for both NIC and ASIC I/O bus address offsets */
 	pci_emul_alloc_bar(pi, 0, PCIBAR_IO, ED_NOVELL_IO_PORTS);
