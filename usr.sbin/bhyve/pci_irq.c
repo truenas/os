@@ -193,25 +193,16 @@ pci_irq_deassert(struct pci_devinst *pi)
 }
 
 int
-pirq_alloc_pin(struct vmctx *ctx)
+pirq_alloc_pin(struct vmctx *ctx, int pin)
 {
-	int best_count, best_irq, best_pin, irq, pin;
+	int best_count, best_irq, irq;
 
 	pirq_cold = 0;
 
-	/* First, find the least-used PIRQ pin. */
-	best_pin = 0;
-	best_count = pirqs[0].use_count;
-	for (pin = 1; pin < nitems(pirqs); pin++) {
-		if (pirqs[pin].use_count < best_count) {
-			best_pin = pin;
-			best_count = pirqs[pin].use_count;
-		}
-	}
-	pirqs[best_pin].use_count++;
+	pirqs[pin].use_count++;
 
 	/* Second, route this pin to an IRQ. */
-	if (pirqs[best_pin].reg == PIRQ_DIS) {
+	if (pirqs[pin].reg == PIRQ_DIS) {
 		best_irq = -1;
 		best_count = 0;
 		for (irq = 0; irq < nitems(irq_counts); irq++) {
@@ -224,11 +215,11 @@ pirq_alloc_pin(struct vmctx *ctx)
 		}
 		assert(best_irq >= 0);
 		irq_counts[best_irq]++;
-		pirqs[best_pin].reg = best_irq;
+		pirqs[pin].reg = best_irq;
 		vm_isa_set_irq_trigger(ctx, best_irq, LEVEL_TRIGGER);
 	}
 
-	return (best_pin + 1);
+	return (pin + 1);
 }
 
 int
