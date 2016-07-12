@@ -1500,19 +1500,19 @@ pci_lintr_route(struct pci_devinst *pi)
 	ii = &bi->slotinfo[pi->pi_slot].si_intpins[pi->pi_lintr.pin - 1];
 
 	/*
-	 * Attempt to allocate an I/O APIC pin for this intpin if one
-	 * is not yet assigned.
+	 * Allocate an I/O APIC pin for this intpin.
 	 */
-	if (ii->ii_ioapic_irq == 0)
-		ii->ii_ioapic_irq = ioapic_pci_alloc_irq();
-	assert(ii->ii_ioapic_irq > 0);
+	assert(ioapic_pci_pins() >= 4);
+	ii->ii_ioapic_irq = 16 + (pi->pi_slot + pi->pi_lintr.pin) % 4;
 
 	/*
 	 * Attempt to allocate a PIRQ pin for this intpin if one is
 	 * not yet assigned.
 	 */
-	if (ii->ii_pirq_pin == 0)
-		ii->ii_pirq_pin = pirq_alloc_pin(pi->pi_vmctx);
+	if (ii->ii_pirq_pin == 0) {
+		ii->ii_pirq_pin = pirq_alloc_pin(pi->pi_vmctx,
+		    (pi->pi_slot + pi->pi_lintr.pin) % 4);
+	}
 	assert(ii->ii_pirq_pin > 0);
 
 	pi->pi_lintr.ioapic_irq = ii->ii_ioapic_irq;
