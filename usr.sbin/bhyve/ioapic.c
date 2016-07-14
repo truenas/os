@@ -64,8 +64,11 @@ ioapic_init(struct vmctx *ctx)
 }
 
 int
-ioapic_pci_pins(void)
+ioapic_pci_alloc_irq(void)
 {
+	static int last_pin;
 
-	return (pci_pins);
+	if (pci_pins == 0)
+		return (-1);
+	return (16 + (last_pin++ % pci_pins));
 }
