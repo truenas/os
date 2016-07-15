@@ -4,7 +4,6 @@
 
 # Temporary include path hack - to be removed once I clean lib9p.h up
 CFLAGS+=-I${.CURDIR}/../../contrib/lib9p
-CFLAGS+=-I${SYSDIR}/../../sys/dev/mii -I${SYSDIR}/../../sys/dev/e1000
 .PATH:  ${.CURDIR}/../../contrib/lib9p
 
 PROG=	bhyve
@@ -72,6 +71,8 @@ SRCS+=	vmm_instruction_emul.c
 LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf -lvncserver
 #LIBADD=	vmmapi md pthread z
 
+CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/e1000
+CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/mii
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/usb/controller
 
 WARNS?=	2
