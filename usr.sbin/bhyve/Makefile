@@ -34,7 +34,6 @@ SRCS=	\
 	ne2000.c		\
 	pci_ahci.c		\
 	pci_e82545.c		\
-	pci_e82580.c		\
 	pci_emul.c		\
 	pci_fbuf.c		\
 	pci_hostbridge.c	\
