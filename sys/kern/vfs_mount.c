@@ -1147,7 +1147,7 @@ sys_unmount(struct thread *td, struct unmount_args *uap)
 {
 	struct nameidata nd;
 	struct mount *mp;
-	struct devctl_param param;
+	struct devctl_param param[3];
 	char *pathbuf;
 	int error, id0, id1;
 
@@ -1226,10 +1226,19 @@ sys_unmount(struct thread *td, struct unmount_args *uap)
 	error = dounmount(mp, uap->flags, td);
 
 	if (error == 0) {
-		param.dp_type = DT_STRING;
-		param.dp_key = "path";
-		param.dp_string = pathbuf;
-		devctl_notify_params("SYSTEM", "VFS", "UNMOUNT", &param, 1,
+		param[0].dp_type = DT_STRING;
+		param[0].dp_key = "path";
+		param[0].dp_string = pathbuf;
+
+		param[1].dp_type = DT_STRING;
+		param[1].dp_key = "fstype";
+		param[1].dp_string = mp->mnt_stat.f_fstypename;
+
+		param[2].dp_type = DT_STRING;
+		param[2].dp_key = "source";
+		param[2].dp_string = mp->mnt_stat.f_mntfromname;
+
+		devctl_notify_params("SYSTEM", "VFS", "UNMOUNT", param, 3,
 		    M_WAITOK);
 	}
 
