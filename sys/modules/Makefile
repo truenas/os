@@ -266,6 +266,7 @@ SUBDIR=	\
 	nullfs \
 	${_ntb} \
 	${_nvd} \
+	${_nvdimm} \
 	${_nve} \
 	${_nvme} \
 	${_nvram} \
@@ -770,6 +771,7 @@ _ndis=		ndis
 _nfe=		nfe
 _ntb=		ntb
 _nvd=		nvd
+_nvdimm=	nvdimm
 .if ${MK_SOURCELESS_HOST} != "no"
 _nve=		nve
 .endif
