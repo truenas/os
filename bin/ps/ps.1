@@ -29,7 +29,7 @@
 .\"     @(#)ps.1	8.3 (Berkeley) 4/18/94
 .\" $FreeBSD$
 .\"
-.Dd December 9, 2014
+.Dd August 12, 2016
 .Dt PS 1
 .Os
 .Sh NAME
@@ -310,7 +310,6 @@ the include file
 .It Dv "P_ADVLOCK" Ta No "0x00001" Ta "Process may hold a POSIX advisory lock"
 .It Dv "P_CONTROLT" Ta No "0x00002" Ta "Has a controlling terminal"
 .It Dv "P_KTHREAD" Ta No "0x00004" Ta "Kernel thread"
-.It Dv "P_FOLLOWFORK" Ta No "0x00008" Ta "Attach debugger to new children"
 .It Dv "P_PPWAIT" Ta No "0x00010" Ta "Parent is waiting for child to exec/exit"
 .It Dv "P_PROFIL" Ta No "0x00020" Ta "Has started profiling"
 .It Dv "P_STOPPROF" Ta No "0x00040" Ta "Has thread in requesting to stop prof"
@@ -348,6 +347,7 @@ the include file
 .In sys/proc.h :
 .Bl -column P2_INHERIT_PROTECTED 0x00000001
 .It Dv "P2_INHERIT_PROTECTED" Ta No "0x00000001" Ta "New children get P_PROTECTED"
+.It Dv "P2_PTRACE_FSTP" Ta No "0x00000010" Ta "SIGSTOP from PT_ATTACH not yet handled"
 .El
 .It Cm label
 The MAC label of the process.
