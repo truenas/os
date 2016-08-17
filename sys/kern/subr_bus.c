@@ -60,6 +60,9 @@ __FBSDID("$FreeBSD$");
 
 #include <net/vnet.h>
 
+#include <geom/geom.h>		/* XXX for g_conf_printf_escaped */
+#include <geom/geom_int.h>	/* XXX for g_conf_printf_escaped */
+
 #include <machine/cpu.h>
 #include <machine/stdarg.h>
 
@@ -700,7 +703,8 @@ devctl_notify_params(const char *system, const char *subsystem,
 
 		switch (params[i].dp_type) {
 		case DT_STRING:
-			sbuf_printf(&sb, "%s", params[i].dp_string);
+			/* XXX g_conf_printf_escaped should be renamed */
+			g_conf_printf_escaped(&sb, "%s", params[i].dp_string);
 			break;
 
 		case DT_INT:
