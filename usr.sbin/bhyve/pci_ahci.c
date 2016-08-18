@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2013  Zhixiang Yu <zcore@freebsd.org>
+ * Copyright (c) 2015-2016 Alexander Motin <mav@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1783,7 +1784,7 @@ ahci_handle_slot(struct ahci_port *p, int slot)
 	struct pci_ahci_softc *sc;
 	uint8_t *cfis;
 #ifdef AHCI_DEBUG
-	int cfl;
+	int cfl, i;
 #endif
 
 	sc = p->pr_sc;
