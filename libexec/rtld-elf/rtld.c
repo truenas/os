@@ -1872,6 +1872,7 @@ static void
 init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 {
     Obj_Entry objtmp;	/* Temporary rtld object */
+    const Elf_Ehdr *ehdr;
     const Elf_Dyn *dyn_rpath;
     const Elf_Dyn *dyn_soname;
     const Elf_Dyn *dyn_runpath;
@@ -1910,6 +1911,9 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 
 	relocate_objects(&objtmp, true, &objtmp, 0, NULL);
     }
+    ehdr = (Elf_Ehdr *)mapbase;
+    objtmp.phdr = (Elf_Phdr *)((char *)mapbase + ehdr->e_phoff);
+    objtmp.phsize = ehdr->e_phnum * sizeof(objtmp.phdr[0]);
 
     /* Initialize the object list. */
     TAILQ_INIT(&obj_list);
@@ -2120,8 +2124,7 @@ load_needed_objects(Obj_Entry *first, int flags)
 {
     Obj_Entry *obj;
 
-    obj = first;
-    TAILQ_FOREACH_FROM(obj, &obj_list, next) {
+    for (obj = first; obj != NULL; obj = TAILQ_NEXT(obj, next)) {
 	if (obj->marker)
 	    continue;
 	if (process_needed(obj, obj->needed, flags) == -1)
@@ -2720,9 +2723,8 @@ relocate_objects(Obj_Entry *first, bool bind_now, Obj_Entry *rtldobj,
 	Obj_Entry *obj;
 	int error;
 
-	error = 0;
-	obj = first;
-	TAILQ_FOREACH_FROM(obj, &obj_list, next) {
+	for (error = 0, obj = first;  obj != NULL;
+	    obj = TAILQ_NEXT(obj, next)) {
 		if (obj->marker)
 			continue;
 		error = relocate_object(obj, bind_now, rtldobj, flags,
@@ -2762,8 +2764,7 @@ resolve_objects_ifunc(Obj_Entry *first, bool bind_now, int flags,
 {
 	Obj_Entry *obj;
 
-	obj = first;
-	TAILQ_FOREACH_FROM(obj, &obj_list, next) {
+	for (obj = first; obj != NULL; obj = TAILQ_NEXT(obj, next)) {
 		if (obj->marker)
 			continue;
 		if (resolve_object_ifunc(obj, bind_now, flags, lockstate) == -1)
@@ -4213,7 +4214,7 @@ trace_loaded_objects(Obj_Entry *obj)
 
     list_containers = getenv(LD_ "TRACE_LOADED_OBJECTS_ALL");
 
-    TAILQ_FOREACH_FROM(obj, &obj_list, next) {
+    for (; obj != NULL; obj = TAILQ_NEXT(obj, next)) {
 	Needed_Entry		*needed;
 	char			*name, *path;
 	bool			is_lib;
@@ -4557,8 +4558,7 @@ allocate_tls(Obj_Entry *objs, void *oldtls, size_t tcbsize, size_t tcbalign)
 	 */
 	free_tls(oldtls, 2*sizeof(Elf_Addr), sizeof(Elf_Addr));
     } else {
-	obj = objs;
-	TAILQ_FOREACH_FROM(obj, &obj_list, next) {
+	for (obj = objs; obj != NULL; obj = TAILQ_NEXT(obj, next)) {
 		if (obj->marker || obj->tlsoffset == 0)
 			continue;
 		addr = segbase - obj->tlsoffset;
