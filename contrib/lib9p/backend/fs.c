@@ -2515,6 +2515,12 @@ fs_renameat(void *softc, struct l9p_request *req)
 	newdir = req->lr_fid2;
 	assert(olddir != NULL && newdir != NULL);
 
+	/*
+	 * We don't support path rewriting in open fids yet, so let's just
+	 * fail here for now.
+	 */
+	return (EOPNOTSUPP);
+
 	error = fs_rde(softc, olddir, &st);
 	if (error)
 		return (error);
