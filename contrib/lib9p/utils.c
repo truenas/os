@@ -28,7 +28,9 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <sys/param.h>
@@ -42,6 +44,10 @@
 #include "lib9p.h"
 #include "fcall.h"
 #include "linux_errno.h"
+
+#ifdef __APPLE__
+  #define GETGROUPS_GROUP_TYPE_IS_INT
+#endif
 
 #define N(ary)          (sizeof(ary) / sizeof(*ary))
 
@@ -110,6 +116,7 @@ static const char *ftype_names[] = {
 	X(RENAME,	"rename"),
 	X(READLINK,	"readlink"),
 	X(GETATTR,	"getattr"),
+	X(SETATTR,	"setattr"),
 	X(XATTRWALK,	"xattrwalk"),
 	X(XATTRCREATE,	"xattrcreate"),
 	X(READDIR,	"readdir"),
@@ -169,6 +176,47 @@ l9p_truncate_iov(struct iovec *iov, size_t niov, size_t length)
 	}
 
 	return (niov);
+}
+
+/*
+ * This wrapper for getgrouplist() that malloc'ed memory, and
+ * papers over FreeBSD vs Mac differences in the getgrouplist()
+ * argument types.
+ */
+gid_t *
+l9p_getgrlist(const char *name, gid_t basegid, int *angroups)
+{
+#ifdef GETGROUPS_GROUP_TYPE_IS_INT
+	int i, *int_groups;
+#endif
+	gid_t *groups;
+	int ngroups;
+
+	/*
+	 * Todo, perhaps: while getgrouplist() returns -1, expand.
+	 * For now just use NGROUPS_MAX.
+	 */
+	ngroups = NGROUPS_MAX;
+	groups = malloc((size_t)ngroups * sizeof(*groups));
+#ifdef GETGROUPS_GROUP_TYPE_IS_INT
+	int_groups = groups ? malloc((size_t)ngroups * sizeof(*int_groups)) :
+	    NULL;
+	if (int_groups == NULL) {
+		free(groups);
+		groups = NULL;
+	}
+#endif
+	if (groups == NULL)
+		return (NULL);
+#ifdef GETGROUPS_GROUP_TYPE_IS_INT
+	(void) getgrouplist(name, (int)basegid, int_groups, &ngroups);
+	for (i = 0; i < ngroups; i++)
+		groups[i] = (gid_t)int_groups[i];
+#else
+	(void) getgrouplist(name, basegid, groups, &ngroups);
+#endif
+	*angroups = ngroups;
+	return (groups);
 }
 
 /*
@@ -280,12 +328,8 @@ l9p_describe_mode(const char *str, uint32_t mode, struct sbuf *sb)
 		{ L9P_OACCMODE,	L9P_ORDWR,	"ORDWR" },
 		{ L9P_OACCMODE,	L9P_OEXEC,	"OEXEC" },
 
-		{ L9P_OAPPEND,	L9P_OAPPEND,	"OAPPEND" },
 		{ L9P_OCEXEC,	L9P_OCEXEC,	"OCEXEC" },
 		{ L9P_ODIRECT,	L9P_ODIRECT,	"ODIRECT" },
-		{ L9P_OEXCL,	L9P_OEXCL,	"OEXCL" },
-		{ L9P_OLOCK,	L9P_OLOCK,	"OLOCK" },
-		{ L9P_ONONBLOCK, L9P_ONONBLOCK,	"ONONBLOCK" },
 		{ L9P_ORCLOSE,	L9P_ORCLOSE,	"ORCLOSE" },
 		{ L9P_OTRUNC,	L9P_OTRUNC,	"OTRUNC" },
 		{ 0, 0, NULL }
@@ -319,6 +363,7 @@ l9p_describe_lflags(const char *str, uint32_t flags, struct sbuf *sb)
 	    { L9P_L_O_NOCTTY,	L9P_L_O_NOCTTY,		"O_NOCTTY" },
 	    { L9P_L_O_NOFOLLOW,	L9P_L_O_NOFOLLOW,	"O_NOFOLLOW" },
 	    { L9P_L_O_NONBLOCK,	L9P_L_O_NONBLOCK,	"O_NONBLOCK" },
+	    { L9P_L_O_PATH,	L9P_L_O_PATH,		"O_PATH" },
 	    { L9P_L_O_SYNC,	L9P_L_O_SYNC,		"O_SYNC" },
 	    { L9P_L_O_TMPFILE,	L9P_L_O_TMPFILE,	"O_TMPFILE" },
 	    { L9P_L_O_TMPFILE,	L9P_L_O_TMPFILE,	"O_TMPFILE" },
@@ -790,7 +835,16 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 
 	if (type < L9P__FIRST || type >= L9P__LAST_PLUS_1 ||
 	    ftype_names[type - L9P__FIRST] == NULL) {
-		sbuf_printf(sb, "<unknown request %d> tag=%d", type,
+		char *rr;
+
+		/*
+		 * Can't say for sure that this distinction --
+		 * an even number is a request, an odd one is
+		 * a response -- will be maintained forever,
+		 * but it's good enough for now.
+		 */
+		rr = (type & 1) != 0 ? "response" : "request";
+		sbuf_printf(sb, "<unknown %s %d> tag=%d", rr, type,
 		    fcall->hdr.tag);
 	} else {
 		sbuf_printf(sb, "%s tag=%d", ftype_names[type - L9P__FIRST],
@@ -1023,7 +1077,7 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 		sbuf_printf(sb, " valid=0x%016" PRIx64, mask);
 		l9p_describe_qid(" qid=", &fcall->rgetattr.qid, sb);
 		if (mask & L9PL_GETATTR_MODE)
-			sbuf_printf(sb, " mode=0x%08x", fcall->rgetattr.mode);
+			l9p_describe_lperm(" mode=", fcall->rgetattr.mode, sb);
 		if (mask & L9PL_GETATTR_UID)
 			l9p_describe_ugid(" uid=", fcall->rgetattr.uid, sb);
 		if (mask & L9PL_GETATTR_GID)
@@ -1069,7 +1123,7 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 		/* NB: tsetattr valid mask is only 32 bits, hence %08x */
 		sbuf_printf(sb, " valid=0x%08" PRIx64, mask);
 		if (mask & L9PL_SETATTR_MODE)
-			sbuf_printf(sb, " mode=0x%08x", fcall->tsetattr.mode);
+			l9p_describe_lperm(" mode=", fcall->tsetattr.mode, sb);
 		if (mask & L9PL_SETATTR_UID)
 			l9p_describe_ugid(" uid=", fcall->tsetattr.uid, sb);
 		if (mask & L9PL_SETATTR_GID)
@@ -1082,7 +1136,7 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 				    fcall->tsetattr.atime_sec,
 				    fcall->tsetattr.atime_nsec);
 			else
-				sbuf_printf(sb, " atime=now");
+				sbuf_cat(sb, " atime=now");
 		}
 		if (mask & L9PL_SETATTR_MTIME) {
 			if (mask & L9PL_SETATTR_MTIME_SET)
@@ -1090,8 +1144,10 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 				    fcall->tsetattr.mtime_sec,
 				    fcall->tsetattr.mtime_nsec);
 			else
-				sbuf_printf(sb, " mtime=now");
+				sbuf_cat(sb, " mtime=now");
 		}
+		if (mask & L9PL_SETATTR_CTIME)
+			sbuf_cat(sb, " ctime=now");
 		return;
 
 	case L9P_RSETATTR:

@@ -126,7 +126,7 @@ l9p_start_server(struct l9p_server *server, const char *host, const char *port)
 
 		for (i = 0; i < evs; i++) {
 			struct sockaddr client_addr;
-			socklen_t client_addr_len;
+			socklen_t client_addr_len = sizeof(client_addr);
 			int news = accept((int)event[i].ident, &client_addr,
 			    &client_addr_len);
 

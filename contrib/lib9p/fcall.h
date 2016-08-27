@@ -193,6 +193,7 @@ enum {
 /*
  * Open/create mode bits in 9P2000 and 9P2000.u operations
  * (not Linux lopen and lcreate flags, which are different).
+ * Note that the mode field is only one byte wide.
  */
 enum l9p_omode {
 	L9P_OREAD = 0,	/* open for read */
@@ -204,10 +205,6 @@ enum l9p_omode {
 	L9P_OCEXEC = 32,	/* or'ed in, close on exec */
 	L9P_ORCLOSE = 64,	/* or'ed in, remove on close */
 	L9P_ODIRECT = 128,	/* or'ed in, direct access */
-	L9P_ONONBLOCK = 256,	/* or'ed in, non-blocking call */
-	L9P_OEXCL = 0x1000,	/* or'ed in, exclusive use (create only) */
-	L9P_OLOCK = 0x2000,	/* or'ed in, lock after opening */
-	L9P_OAPPEND = 0x4000	/* or'ed in, append only */
 };
 
 /*
@@ -243,6 +240,7 @@ enum l9p_l_o_flags {
 	L9P_L_O_NOATIME =	001000000U,
 	L9P_L_O_CLOEXEC =	002000000U,
 	L9P_L_O_SYNC =		004000000U,
+	L9P_L_O_PATH =		010000000U,
 	L9P_L_O_TMPFILE =	020000000U,
 };
 
@@ -271,10 +269,12 @@ struct l9p_stat {
 	char *gid;
 	char *muid;
 	char *extension;
-	uid_t n_uid;
-	gid_t n_gid;
-	uid_t n_muid;
+	uint32_t n_uid;
+	uint32_t n_gid;
+	uint32_t n_muid;
 };
+
+#define	L9P_FSTYPE	 0x01021997
 
 struct l9p_statfs {
 	uint32_t type;		/* file system type */
@@ -321,8 +321,10 @@ struct l9p_f_attach {
 	uint32_t afid;
 	char *uname;
 	char *aname;
-	uid_t n_uname;
+	uint32_t n_uname;
 };
+#define	L9P_NOFID ((uint32_t)-1)	/* in Tattach, no auth fid */
+#define	L9P_NONUNAME ((uint32_t)-1)	/* in Tattach, no n_uname */
 
 struct l9p_f_tcreate {
 	struct l9p_hdr hdr;
@@ -349,7 +351,6 @@ struct l9p_f_io {
 	struct l9p_hdr hdr;
 	uint64_t offset; /* Tread, Twrite, Treaddir */
 	uint32_t count; /* Tread, Twrite, Rread, Treaddir, Rreaddir */
-	char *data; /* Twrite, Rread, Rreaddir */
 };
 
 struct l9p_f_rstat {

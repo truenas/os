@@ -47,6 +47,12 @@
 #define L9P_DEFAULT_MSIZE   8192
 #define L9P_MAX_IOV         8
 
+/*
+ * Pseudo-errno to denote that backend function doesn't return a value,
+ * but calls l9p_respond() on it's own instead.
+ */
+#define EJUSTRETURN         (ELAST + 1)
+
 struct l9p_request;
 
 typedef int (l9p_get_response_buffer_t) (struct l9p_request *,
@@ -191,5 +197,7 @@ void l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
     struct sbuf *sb);
 void l9p_freefcall(union l9p_fcall *fcall);
 void l9p_freestat(struct l9p_stat *stat);
+
+gid_t *l9p_getgrlist(const char *, gid_t, int *);
 
 #endif  /* LIB9P_LIB9P_H */

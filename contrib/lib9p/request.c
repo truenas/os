@@ -39,6 +39,7 @@
 #include "lib9p.h"
 #include "lib9p_impl.h"
 #include "fcall.h"
+#include "fid.h"
 #include "hashtable.h"
 #include "log.h"
 #include "linux_errno.h"
@@ -191,7 +192,9 @@ l9p_dispatch_request(struct l9p_request *req)
 	for (i = 0; i < n; i++) {
 		if (req->lr_req.hdr.type == handlers[i].type) {
 			error = handlers[i].handler(req);
-			l9p_respond(req, error);
+			if (error != EJUSTRETURN)
+				l9p_respond(req, error);
+
 			return;
 		}
 	}
@@ -307,6 +310,8 @@ e2linux(int errnum)
 		return (table[errnum]);
 	if (errnum <= ERANGE)
 		return (errnum);
+
+	L9P_LOG(L9P_WARNING, "cannot map errno %d to anything reasonable", errnum);
 	return (LINUX_ENOTRECOVERABLE);	/* ??? */
 }
 
@@ -318,34 +323,6 @@ l9p_respond(struct l9p_request *req, int errnum)
 #if defined(L9P_DEBUG)
 	struct sbuf *sb;
 #endif
-
-	switch (req->lr_req.hdr.type) {
-
-	case L9P_TATTACH:
-		/*
-		 * XXX logically this should use lr_newfid,
-		 * since the fid is always actually new, but
-		 * for now stick with minimal code changes.
-		 * This code will go away soon anyway!
-		 */
-		if (errnum != 0 && req->lr_fid != NULL)
-			l9p_connection_remove_fid(conn, req->lr_fid);
-
-		break;
-
-	case L9P_TCLUNK:
-	case L9P_TREMOVE:
-		if (req->lr_fid != NULL)
-			l9p_connection_remove_fid(conn, req->lr_fid);
-		break;
-
-	case L9P_TWALK:
-	case L9P_TXATTRWALK:
-		if (errnum != 0 && req->lr_newfid != NULL &&
-		    req->lr_newfid != req->lr_fid)
-			l9p_connection_remove_fid(conn, req->lr_newfid);
-		break;
-	}
 
 	req->lr_resp.hdr.tag = req->lr_req.hdr.tag;
 
@@ -418,76 +395,75 @@ l9p_init_msg(struct l9p_message *msg, struct l9p_request *req,
 	    sizeof (struct iovec) * req->lr_data_niov);
 }
 
+enum fid_lookup_flags {
+	F_REQUIRE_OPEN = 0x01,	/* require that the file be marked OPEN */
+	F_REQUIRE_DIR = 0x02,	/* require that the file be marked ISDIR */
+	F_REQUIRE_XATTR = 0x04,	/* require that the file be marked XATTR */
+	F_REQUIRE_AUTH = 0x08,	/* requre that the fid be marked AUTH */
+	F_FORBID_OPEN = 0x10,	/* forbid that the file be marked OPEN */
+	F_FORBID_DIR = 0x20,	/* forbid that the file be marked ISDIR */
+	F_FORBID_XATTR = 0x40,	/* forbid that the file be marked XATTR */
+	F_ALLOW_AUTH = 0x80,	/* allow that the fid be marked AUTH */
+};
+
 /*
- * Generic handler for operations that require valid fid.
+ * Look up a fid.  It must correspond to a valid file, else we return
+ * the given errno (some "not a valid fid" calls must return EIO and
+ * some must return EINVAL and qemu returns ENOENT in other cases and
+ * so on, so we just provide a general "return this error number").
  *
- * Decodes header fid to file, then calls backend function
- * (*be)(softc, req).  Returns EBADF or ENOSYS if the fid is
- * invalid or the backend function is not there.
- */
-static inline int l9p_fid_dispatch(struct l9p_request *req,
-    int (*be)(void *, struct l9p_request *))
-{
-	struct l9p_connection *conn = req->lr_conn;
-
-	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.hdr.fid);
-	if (req->lr_fid == NULL)
-		return (EIO);
-
-	if (be == NULL)
-		return (ENOSYS);
-
-	return ((*be)(conn->lc_server->ls_backend->softc, req));
-}
-
-/*
- * Generic handler for operations that need two fid's.
- * Note that the 2nd fid must be supplied by the caller; the
- * corresponding openfile goes into req->lr_f2.
- */
-static inline int l9p_2fid_dispatch(struct l9p_request *req, uint32_t fid2,
-    int (*be)(void *, struct l9p_request *))
-{
-	struct l9p_connection *conn = req->lr_conn;
-
-	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.hdr.fid);
-	if (req->lr_fid == NULL)
-		return (EBADF);
-
-	req->lr_fid2 = ht_find(&conn->lc_files, fid2);
-	if (req->lr_fid2 == NULL)
-		return (EBADF);
-
-	if (be == NULL)
-		return (ENOSYS);
-
-	return ((*be)(conn->lc_server->ls_backend->softc, req));
-}
-
-/*
- * Generic handler for read-like operations (read and readdir).
+ * Callers may also set constraints: fid must be (or not be) open,
+ * must be (or not be) a directory, must be (or not be) an xattr.
  *
- * Backend function must exist.
+ * Only one op has a fid that *must* be an auth fid.  Most ops forbid
+ * auth fids  So instead of FORBID we have ALLOW here and the default
+ * is FORBID.
  */
-static inline int l9p_read_dispatch(struct l9p_request *req,
-    int (*be)(void *, struct l9p_request *))
+static inline int
+fid_lookup(struct l9p_connection *conn, uint32_t fid, int err, int flags,
+    struct l9p_fid **afile)
 {
-	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_fid *file;
 
-	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.hdr.fid);
-	if (!req->lr_fid)
-		return (EBADF);
+	file = ht_find(&conn->lc_files, fid);
+	if (file == NULL)
+		return (err);
 
 	/*
-	 * Adjust so that writing messages (packing data) starts
-	 * right after the count field in the response.
+	 * As soon as we go multithreaded / async, this
+	 * assert has to become "return EINVAL" or "return err".
 	 *
-	 * size[4] + Rread(dir)[1] + tag[2] + count[4] = 11
+	 * We may also need a way to mark a fid as
+	 * "in async op" (valid for some purposes, but cannot be
+	 * used elsewhere until async op is completed or aborted).
+	 *
+	 * For now, this serves for bug-detecting.
 	 */
-	l9p_seek_iov(req->lr_resp_msg.lm_iov, req->lr_resp_msg.lm_niov,
-	    req->lr_data_iov, &req->lr_data_niov, 11);
+	assert(l9p_fid_isvalid(file));
 
-	return ((*be)(conn->lc_server->ls_backend->softc, req));
+	/*
+	 * Note that we're inline expanded and flags is constant,
+	 * so unnecessary tests just drop out entirely.
+	 */
+	if ((flags & F_REQUIRE_OPEN) && !l9p_fid_isopen(file))
+		return (EINVAL);
+	if ((flags & F_FORBID_OPEN) && l9p_fid_isopen(file))
+		return (EINVAL);
+	if ((flags & F_REQUIRE_DIR) && !l9p_fid_isdir(file))
+		return (ENOTDIR);
+	if ((flags & F_FORBID_DIR) && l9p_fid_isdir(file))
+		return (EISDIR);
+	if ((flags & F_REQUIRE_XATTR) && !l9p_fid_isxattr(file))
+		return (EINVAL);
+	if ((flags & F_FORBID_XATTR) && l9p_fid_isxattr(file))
+		return (EINVAL);
+	if (l9p_fid_isauth(file)) {
+		if ((flags & (F_REQUIRE_AUTH | F_ALLOW_AUTH)) == 0)
+			return (EINVAL);
+	} else if (flags & F_REQUIRE_AUTH)
+		return (EINVAL);
+	*afile = file;
+	return (0);
 }
 
 /*
@@ -560,280 +536,863 @@ static int
 l9p_dispatch_tattach(struct l9p_request *req)
 {
 	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	req->lr_fid = l9p_connection_alloc_fid(conn, req->lr_req.hdr.fid);
-	if (req->lr_fid == NULL)
+	/*
+	 * We still don't have Tauth yet, but let's code this part
+	 * anyway.
+	 *
+	 * Look up the auth fid first since if it fails we can just
+	 * return immediately.
+	 */
+	if (req->lr_req.tattach.afid != L9P_NOFID) {
+		error = fid_lookup(conn, req->lr_req.tattach.afid, EINVAL,
+		    F_REQUIRE_AUTH, &req->lr_fid2);
+		if (error)
+			return (error);
+	} else
+		req->lr_fid2 = NULL;
+
+	fid = l9p_connection_alloc_fid(conn, req->lr_req.hdr.fid);
+	if (fid == NULL)
 		return (EINVAL);
 
-	return (conn->lc_server->ls_backend->attach(conn->lc_server->ls_backend->softc, req));
+	be = conn->lc_server->ls_backend;
+
+	req->lr_fid = fid;
+
+	/* For backend convenience, set NONUNAME on 9P2000. */
+	if (conn->lc_version == L9P_2000)
+		req->lr_req.tattach.n_uname = L9P_NONUNAME;
+	error = be->attach(be->softc, req);
+
+	/*
+	 * On success, fid becomes valid; on failure, disconnect.
+	 * It certainly *should* be a directory here...
+	 */
+	if (error == 0) {
+		l9p_fid_setvalid(fid);
+		if (req->lr_resp.rattach.qid.type & L9P_QTDIR)
+			l9p_fid_setdir(fid);
+	} else
+		l9p_connection_remove_fid(conn, fid);
+	return (error);
 }
 
 static int
 l9p_dispatch_tclunk(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	/* clunk is not optional but we can still use the generic dispatch */
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->clunk));
+	/* Note that clunk is the only way to dispose of an auth fid. */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_ALLOW_AUTH, &fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+	l9p_fid_unsetvalid(fid);
+
+	/*
+	 * If it's an xattr fid there must, by definition, be an
+	 * xattrclunk.  The xattrclunk function can only be NULL if
+	 * xattrwalk and xattrcreate are NULL or always return error.
+	 *
+	 * Q: do we want to allow async xattrclunk in case of very
+	 * large xattr create?  This will make things difficult,
+	 * so probably not.
+	 */
+	if (l9p_fid_isxattr(fid))
+		error = be->xattrclunk(be->softc, fid);
+	else
+		error = be->clunk(be->softc, fid);
+
+	/* fid is now gone regardless of any error return */
+	l9p_connection_remove_fid(conn, fid);
+	return (error);
 }
 
 static int
-l9p_dispatch_tflush(struct l9p_request *req)
+l9p_dispatch_tflush(struct l9p_request *req __unused)
 {
-	struct l9p_connection *conn = req->lr_conn;
 
-	if (!conn->lc_server->ls_backend->flush)
-		return (ENOSYS);
-
-	return (conn->lc_server->ls_backend->flush(conn->lc_server->ls_backend->softc, req));
+	/*
+	 * Tflush needs to coordinate with the backend:
+	 * when we spin off an asynchronous operation
+	 * (as a thread, or using AIO), the backend will
+	 * return a special "error" value indicating that
+	 * the request is still pending, and we will put
+	 * it on a queue.
+	 *
+	 * When we get a flush we'll look up the pending
+	 * request and attempt to cancel it.
+	 *
+	 * When the backend completes a spun-off operation
+	 * it will do an upcall to really finish the request.
+	 *
+	 * (Details, including any locking, are still TBD.)
+	 *
+	 * For now, the code is completely synchronous so
+	 * this is a no-op.
+	 */
+	return (0);
 }
 
 static int
 l9p_dispatch_tcreate(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	uint32_t dmperm;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->create));
+	/* Incoming fid must represent a directory that has not been opened. */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+	dmperm = req->lr_req.tcreate.perm;
+#define MKDIR_OR_SIMILAR \
+    (L9P_DMDIR | L9P_DMSYMLINK | L9P_DMNAMEDPIPE | L9P_DMSOCKET | L9P_DMDEVICE)
+
+	/*
+	 * TODO:
+	 *  - check new file name
+	 *  - break out different kinds of create (file vs mkdir etc)
+	 *  - add async file-create (leaves req->lr_fid in limbo)
+	 *
+	 * A successful file-create changes the fid into an open file.
+	 */
+	error = be->create(be->softc, req);
+	if (error == 0 && (dmperm & MKDIR_OR_SIMILAR) == 0) {
+		l9p_fid_unsetdir(req->lr_fid);
+		l9p_fid_setopen(req->lr_fid);
+	}
+
+	return (error);
 }
 
 static int
 l9p_dispatch_topen(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->open));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_OPEN | F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO:
+	 *  - add async open (leaves req->lr_fid in limbo)
+	 */
+	error = be->open(be->softc, req);
+	if (error == 0)
+		l9p_fid_setopen(req->lr_fid);
+	return (error);
 }
 
 static int
 l9p_dispatch_tread(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	return (l9p_read_dispatch(req, req->lr_conn->lc_server->ls_backend->read));
+	/* Xattr fids are not open, so we need our own tests. */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL, 0, &req->lr_fid);
+	if (error)
+		return (error);
+
+	/*
+	 * Adjust so that writing messages (packing data) starts
+	 * right after the count field in the response.
+	 *
+	 * size[4] + Rread[1] + tag[2] + count[4] = 11
+	 */
+	l9p_seek_iov(req->lr_resp_msg.lm_iov, req->lr_resp_msg.lm_niov,
+	    req->lr_data_iov, &req->lr_data_niov, 11);
+
+	/*
+	 * If it's an xattr fid there must, by definition, be an
+	 * xattrread.  The xattrread function can only be NULL if
+	 * xattrwalk and xattrcreate are NULL or always return error.
+	 *
+	 * TODO:
+	 *   separate out directory-read
+	 *   allow async read
+	 */
+	be = conn->lc_server->ls_backend;
+	fid = req->lr_fid;
+	if (l9p_fid_isxattr(fid)) {
+		error = be->xattrread(be->softc, req);
+	} else if (l9p_fid_isopen(fid)) {
+		error = be->read(be->softc, req);
+	} else {
+		error = EINVAL;
+	}
+
+	return (error);
 }
 
 static int
 l9p_dispatch_tremove(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->remove));
+	/*
+	 * ?? Should we allow Tremove on auth fids? If so, do
+	 * we pretend it is just a Tclunk?
+	 */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL, 0, &fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+	l9p_fid_unsetvalid(fid);
+
+	error = be->remove(be->softc, fid);
+	/* fid is now gone regardless of any error return */
+	l9p_connection_remove_fid(conn, fid);
+	return (error);
 }
 
 static int
 l9p_dispatch_tstat(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->stat));
+	/* Allow Tstat on auth fid?  Seems harmless enough... */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_ALLOW_AUTH, &fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+	req->lr_fid = fid;
+	error = be->stat(be->softc, req);
+
+	if (error == 0) {
+		if (l9p_fid_isauth(fid))
+			req->lr_resp.rstat.stat.qid.type |= L9P_QTAUTH;
+
+		/* should we check req->lr_resp.rstat.qid.type L9P_QTDIR bit? */
+		if (req->lr_resp.rstat.stat.qid.type &= L9P_QTDIR)
+			l9p_fid_setdir(fid);
+		else
+			l9p_fid_unsetdir(fid);
+	}
+
+	return (error);
 }
 
 static int
 l9p_dispatch_twalk(struct l9p_request *req)
 {
 	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid, *newfid;
+	uint16_t n;
+	int error;
 
-	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.hdr.fid);
-	if (req->lr_fid == NULL)
-		return (EBADF);
+	/* Can forbid XATTR, but cannot require DIR. */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_XATTR, &fid);
+	if (error)
+		return (error);
 
 	if (req->lr_req.twalk.hdr.fid != req->lr_req.twalk.newfid) {
-		req->lr_newfid = l9p_connection_alloc_fid(conn,
+		newfid = l9p_connection_alloc_fid(conn,
 		    req->lr_req.twalk.newfid);
-		if (req->lr_newfid == NULL)
-			return (EBADF);
+		if (newfid == NULL)
+			return (EINVAL);
+	} else
+		newfid = fid;
+
+	be = conn->lc_server->ls_backend;
+	req->lr_fid = fid;
+	req->lr_newfid = newfid;
+	error = be->walk(be->softc, req);
+
+	/*
+	 * If newfid == fid, then fid itself has (potentially) changed,
+	 * but is still valid.  Otherwise set newfid valid on
+	 * success, and destroy it on error.
+	 */
+	if (newfid != fid) {
+		if (error == 0)
+			l9p_fid_setvalid(newfid);
+		else
+			l9p_connection_remove_fid(conn, newfid);
 	}
 
-	if (!conn->lc_server->ls_backend->walk)
-		return (ENOSYS);
-
-	return (conn->lc_server->ls_backend->walk(conn->lc_server->ls_backend->softc, req));
+	/*
+	 * If we walked any name elements, the last (n-1'th) qid
+	 * has the type (dir vs file) for the new fid.  Otherwise
+	 * the type of newfid is the same as fid.  Of course, if
+	 * n==0 and fid==newfid, fid is already set up correctly
+	 * as the whole thing was a big no-op, but it's safe to
+	 * copy its dir bit to itself.
+	 */
+	if (error == 0) {
+		n = req->lr_resp.rwalk.nwqid;
+		if (n > 0) {
+			if (req->lr_resp.rwalk.wqid[n - 1].type & L9P_QTDIR)
+				l9p_fid_setdir(newfid);
+		} else {
+			if (l9p_fid_isdir(fid))
+				l9p_fid_setdir(newfid);
+		}
+	}
+	return (error);
 }
 
 static int
 l9p_dispatch_twrite(struct l9p_request *req)
 {
 	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.twalk.hdr.fid);
-	if (req->lr_fid == NULL)
-		return (EBADF);
-
-	if (!conn->lc_server->ls_backend->write)
-		return (ENOSYS);
+	/* Cannot require open due to xattr write, but can forbid dir. */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL,
+	    F_FORBID_DIR, &req->lr_fid);
+	if (error)
+		return (error);
 
 	/*
 	 * Adjust to point to the data to be written (a la
-	 * l9p_read_dispatch, but we're pointing into the request
+	 * l9p_dispatch_tread, but we're pointing into the request
 	 * buffer rather than the response):
 	 *
-	 * size[4] + Twrite[1] + tag[2] + fid[4] + offset[8] count[4] = 23
+	 * size[4] + Twrite[1] + tag[2] + fid[4] + offset[8] + count[4] = 23
 	 */
 	l9p_seek_iov(req->lr_req_msg.lm_iov, req->lr_req_msg.lm_niov,
 	    req->lr_data_iov, &req->lr_data_niov, 23);
 
-	return (conn->lc_server->ls_backend->write(conn->lc_server->ls_backend->softc, req));
+	/*
+	 * Unlike read, write and xattrwrite are optional (for R/O fs).
+	 *
+	 * TODO:
+	 *   allow async write
+	 */
+	be = conn->lc_server->ls_backend;
+	fid = req->lr_fid;
+	if (l9p_fid_isxattr(fid)) {
+		error = be->xattrwrite != NULL ?
+		    be->xattrwrite(be->softc, req) : ENOSYS;
+	} else if (l9p_fid_isopen(fid)) {
+		error = be->write != NULL ?
+		    be->write(be->softc, req) : ENOSYS;
+	} else {
+		error = EINVAL;
+	}
+
+	return (error);
 }
 
 static int
 l9p_dispatch_twstat(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->wstat));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL,
+	    F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+	error = be->wstat != NULL ? be->wstat(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tstatfs(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->statfs));
+	/* Should we allow statfs on auth fids? */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL, 0, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+	error = be->statfs(be->softc, req);
+	return (error);
 }
 
 static int
 l9p_dispatch_tlopen(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->lopen));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_OPEN | F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO:
+	 *  - add async open (leaves req->lr_fid in limbo)
+	 */
+	error = be->lopen != NULL ? be->lopen(be->softc, req) : ENOSYS;
+	if (error == 0)
+		l9p_fid_setopen(req->lr_fid);
+	return (error);
 }
 
 static int
 l9p_dispatch_tlcreate(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->lcreate));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO:
+	 *  - check new file name
+	 *  - add async create (leaves req->lr_fid in limbo)
+	 */
+	error = be->lcreate != NULL ? be->lcreate(be->softc, req) : ENOSYS;
+	if (error == 0) {
+		l9p_fid_unsetdir(req->lr_fid);
+		l9p_fid_setopen(req->lr_fid);
+	}
+	return (error);
 }
 
 static int
 l9p_dispatch_tsymlink(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->symlink));
+	/* This doesn't affect the containing dir; maybe allow OPEN? */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO:
+	 *  - check new file name
+	 */
+	error = be->symlink != NULL ? be->symlink(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tmknod(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->mknod));
+	/* This doesn't affect the containing dir; maybe allow OPEN? */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO:
+	 *  - check new file name
+	 */
+	error = be->mknod != NULL ? be->mknod(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_trename(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_2fid_dispatch(req, req->lr_req.trename.dfid,
-	    req->lr_conn->lc_server->ls_backend->mknod));
+	/* Rename directory or file (including symlink etc). */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	/* Doesn't affect new dir fid; maybe allow OPEN? */
+	error = fid_lookup(conn, req->lr_req.trename.dfid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid2);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO:
+	 *  - check new file name (trename.name)
+	 */
+	error = be->rename != NULL ? be->rename(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_treadlink(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->readlink));
+	/*
+	 * The underlying readlink will fail unless it's a symlink,
+	 * and the back end has to check, but we might as well forbid
+	 * directories and open files here since it's cheap.
+	 */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	error = be->readlink != NULL ? be->readlink(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tgetattr(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->getattr));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	error = be->getattr != NULL ? be->getattr(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tsetattr(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->setattr));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	error = be->setattr != NULL ? be->setattr(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_txattrwalk(struct l9p_request *req)
 {
 	struct l9p_connection *conn = req->lr_conn;
-
-	req->lr_fid = ht_find(&conn->lc_files, req->lr_req.hdr.fid);
-	if (req->lr_fid == NULL)
-		return (EBADF);
+	struct l9p_backend *be;
+	struct l9p_fid *fid, *newfid;
+	int error;
 
 	/*
-	 * XXX
-	 *
-	 * We need a way to mark a fid as used-for-xattr.  (Or
-	 * maybe these xattr fids should be completely separate
-	 * from file/directory fids?)
-	 *
-	 * For now, this relies on the backend always failing the
-	 * operation.
+	 * Not sure if we care if file-or-dir is open or not.
+	 * However, the fid argument should always be a file or
+	 * dir and the newfid argument must be supplied, must
+	 * be different, and always becomes a new xattr,
+	 * so this is not very much like Twalk.
 	 */
-	if (req->lr_req.twalk.hdr.fid != req->lr_req.twalk.newfid) {
-		req->lr_newfid = l9p_connection_alloc_fid(conn,
-		    req->lr_req.twalk.newfid);
-		if (req->lr_newfid == NULL)
-			return (EBADF);
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_XATTR, &fid);
+	if (error)
+		return (error);
+
+	newfid = l9p_connection_alloc_fid(conn, req->lr_req.txattrwalk.newfid);
+	if (newfid == NULL)
+		return (EINVAL);
+
+	be = conn->lc_server->ls_backend;
+
+	req->lr_fid = fid;
+	req->lr_newfid = newfid;
+	error = be->xattrwalk != NULL ? be->xattrwalk(be->softc, req) : ENOSYS;
+
+	/*
+	 * Success/fail is similar to Twalk, except that we need
+	 * to set the xattr type bit in the new fid.  It's also
+	 * much simpler since newfid is always a new fid.
+	 */
+	if (error == 0) {
+		l9p_fid_setvalid(newfid);
+		l9p_fid_setxattr(newfid);
+	} else {
+		l9p_connection_remove_fid(conn, newfid);
 	}
-
-	if (!conn->lc_server->ls_backend->xattrwalk)
-		return (ENOSYS);
-
-	return (conn->lc_server->ls_backend->xattrwalk(
-	    conn->lc_server->ls_backend->softc, req));
+	return (error);
 }
 
 static int
 l9p_dispatch_txattrcreate(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	struct l9p_fid *fid;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->xattrcreate));
+	/*
+	 * Forbid incoming open fid since it's going to become an
+	 * xattr fid instead.  If it turns out we need to allow
+	 * it, fs code will need to handle this.
+	 *
+	 * Curiously, qemu 9pfs uses ENOENT for a bad txattrwalk
+	 * fid, but EINVAL for txattrcreate (so we do too).
+	 */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, EINVAL,
+	    F_FORBID_XATTR | F_FORBID_OPEN, &fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	req->lr_fid = fid;
+	error = be->xattrcreate != NULL ? be->xattrcreate(be->softc, req) :
+	    ENOSYS;
+
+	/*
+	 * On success, fid has changed from a regular (file or dir)
+	 * fid to an xattr fid.
+	 */
+	if (error == 0) {
+		l9p_fid_unsetdir(fid);
+		l9p_fid_setxattr(fid);
+	}
+	return (error);
 }
 
 static int
 l9p_dispatch_treaddir(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_read_dispatch(req, req->lr_conn->lc_server->ls_backend->readdir));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_REQUIRE_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	/*
+	 * Adjust so that writing messages (packing data) starts
+	 * right after the count field in the response.
+	 *
+	 * size[4] + Rreaddir[1] + tag[2] + count[4] = 11
+	 */
+	l9p_seek_iov(req->lr_resp_msg.lm_iov, req->lr_resp_msg.lm_niov,
+	    req->lr_data_iov, &req->lr_data_niov, 11);
+
+	be = conn->lc_server->ls_backend;
+
+	error = be->readdir != NULL ? be->readdir(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tfsync(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->fsync));
+	/*
+	 * Forbid dir?  Not clear what it means to fsync them.
+	 * Current backend code assumes open file (not dir),
+	 * so we'll forbid directories here for now.
+	 */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_OPEN | F_FORBID_DIR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO: async fsync, maybe.
+	 */
+	error = be->fsync != NULL ? be->fsync(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tlock(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->lock));
+	/* Forbid directories? */
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO: multiple client handling; perhaps async locking.
+	 */
+	error = be->lock != NULL ? be->lock(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tgetlock(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->getlock));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/*
+	 * TODO: multiple client handling; perhaps async locking.
+	 */
+	error = be->getlock != NULL ? be->getlock(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tlink(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_2fid_dispatch(req, req->lr_req.tlink.dfid,
-	    req->lr_conn->lc_server->ls_backend->link));
+	/*
+	 * Note, dfid goes into fid2 in current scheme.
+	 *
+	 * Allow open dir?  Target dir fid is not modified...
+	 */
+	error = fid_lookup(conn, req->lr_req.tlink.dfid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid2);
+	if (error)
+		return (error);
+
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_FORBID_DIR | F_FORBID_XATTR, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	error = be->link != NULL ? be->link(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tmkdir(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->mkdir));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/* TODO: check new directory name */
+	error = be->mkdir != NULL ? be->mkdir(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_trenameat(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_2fid_dispatch(req, req->lr_req.trenameat.newdirfid,
-	    req->lr_conn->lc_server->ls_backend->renameat));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	error = fid_lookup(conn, req->lr_req.trenameat.newdirfid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid2);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/* TODO: check old and new names */
+	error = be->renameat != NULL ? be->renameat(be->softc, req) : ENOSYS;
+	return (error);
 }
 
 static int
 l9p_dispatch_tunlinkat(struct l9p_request *req)
 {
+	struct l9p_connection *conn = req->lr_conn;
+	struct l9p_backend *be;
+	int error;
 
-	return (l9p_fid_dispatch(req, req->lr_conn->lc_server->ls_backend->unlinkat));
+	error = fid_lookup(conn, req->lr_req.hdr.fid, ENOENT,
+	    F_REQUIRE_DIR | F_FORBID_OPEN, &req->lr_fid);
+	if (error)
+		return (error);
+
+	be = conn->lc_server->ls_backend;
+
+	/* TODO: check dir-or-file name */
+	error = be->unlinkat != NULL ? be->unlinkat(be->softc, req) : ENOSYS;
+	return (error);
 }

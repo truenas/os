@@ -28,27 +28,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <err.h>
+#include <unistd.h>
 #include "../lib9p.h"
 #include "../backend/fs.h"
 #include "../transport/socket.h"
 
 int
-main(int argc, const char *argv[])
+main(int argc, char **argv)
 {
 	struct l9p_backend *fs_backend;
 	struct l9p_server *server;
+	char *host = "0.0.0.0";
+	char *port = "564";
+	char *path;
+	int opt;
 
-	if (argc < 2)
+	while ((opt = getopt(argc, argv, "h:p:")) != -1) {
+		switch (opt) {
+		case 'h':
+			host = optarg;
+			break;
+		case 'p':
+			port = optarg;
+			break;
+		case '?':
+		default:
+			goto usage;
+		}
+	}
+	if (optind >= argc) {
+usage:
 		errx(1, "Usage: server <path>");
+	}
+	path = argv[optind];
 
-	if (l9p_backend_fs_init(&fs_backend, argv[1]) != 0)
+	if (l9p_backend_fs_init(&fs_backend, path) != 0)
 		err(1, "cannot init backend");
 
 	if (l9p_server_init(&server, fs_backend) != 0)
 		err(1, "cannot create server");
 
 	server->ls_max_version = L9P_2000L;
-	if (l9p_start_server(server, "0.0.0.0", "564"))
+	if (l9p_start_server(server, host, port))
 		err(1, "l9p_start_server() failed");
 	/* XXX - we never get here, l9p_start_server does not return */
 	exit(0);

@@ -160,6 +160,12 @@ l9p_connection_alloc_fid(struct l9p_connection *conn, uint32_t fid)
 
 	file = l9p_calloc(1, sizeof (struct l9p_fid));
 	file->lo_fid = fid;
+	/*
+	 * Note that the new fid is not marked valid yet.
+	 * The insert here will fail if the fid number is
+	 * in use, otherwise we have an invalid fid in the
+	 * table (as desired).
+	 */
 	if (ht_add(&conn->lc_files, fid, file) != 0) {
 		free(file);
 		return (NULL);
@@ -171,9 +177,13 @@ l9p_connection_alloc_fid(struct l9p_connection *conn, uint32_t fid)
 void
 l9p_connection_remove_fid(struct l9p_connection *conn, struct l9p_fid *fid)
 {
+	struct l9p_backend *be;
 
-	conn->lc_server->ls_backend->freefid(conn->lc_server->ls_backend->softc,
-	    fid);
+	/* fid should be marked invalid by this point */
+	assert(!l9p_fid_isvalid(fid));
+
+	be = conn->lc_server->ls_backend;
+	be->freefid(be->softc, fid);
 
 	ht_remove(&conn->lc_files, fid->lo_fid);
 }
