@@ -835,7 +835,7 @@ l9p_describe_fcall(union l9p_fcall *fcall, enum l9p_version version,
 
 	if (type < L9P__FIRST || type >= L9P__LAST_PLUS_1 ||
 	    ftype_names[type - L9P__FIRST] == NULL) {
-		char *rr;
+		const char *rr;
 
 		/*
 		 * Can't say for sure that this distinction --
