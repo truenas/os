@@ -2035,7 +2035,7 @@ fs_rename(void *softc, struct l9p_request *req)
 	struct fs_fid *file, *f2ff;
 	struct stat st;
 	char *tmp;
-	char newname[MAXPATHLEN];
+	char olddir[MAXPATHLEN], newname[MAXPATHLEN];
 	int error;
 
 	/*
@@ -2049,7 +2049,7 @@ fs_rename(void *softc, struct l9p_request *req)
 	f2ff = f2->lo_aux;
 	assert(f2ff != NULL);
 
-	error = fs_rdf(softc, fid, newname, sizeof(newname), &st);
+	error = fs_rdf(softc, fid, olddir, sizeof(olddir), &st);
 	if (error)
 		return (error);
 
@@ -2057,13 +2057,19 @@ fs_rename(void *softc, struct l9p_request *req)
 	 * Only need to check f2 if it's not the same path as the
 	 * directory we already discovered.
 	 */
-	if (strcmp(newname, f2ff->ff_name) != 0) {
+	if (strcmp(olddir, f2ff->ff_name) != 0) {
 		error = fs_rde(softc, f2, &st);
 		if (error)
 			return (error);
 	}
 
-	/* Directories OK, file systems not R/O, etc; build final name. */
+	/*
+	 * Directories OK, file systems not R/O, etc; build final name.
+	 * f2ff->ff_name cannot exceed MAXPATHLEN, but out of general
+	 * paranoia, let's double check anyway.
+	 */
+	if (strlcpy(newname, f2ff->ff_name, sizeof(newname) >= sizeof(newname)))
+		return (ENAMETOOLONG);
 	error = fs_dpf(newname, req->lr_req.trename.name, sizeof(newname));
 	if (error)
 		return (error);
