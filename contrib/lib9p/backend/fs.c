@@ -2068,7 +2068,7 @@ fs_rename(void *softc, struct l9p_request *req)
 	 * f2ff->ff_name cannot exceed MAXPATHLEN, but out of general
 	 * paranoia, let's double check anyway.
 	 */
-	if (strlcpy(newname, f2ff->ff_name, sizeof(newname) >= sizeof(newname)))
+	if (strlcpy(newname, f2ff->ff_name, sizeof(newname)) >= sizeof(newname))
 		return (ENAMETOOLONG);
 	error = fs_dpf(newname, req->lr_req.trename.name, sizeof(newname));
 	if (error)
