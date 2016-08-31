@@ -2375,7 +2375,7 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 		de.qid.type = 0;
 		generate_qid(&st, &de.qid);
 		de.offset = (uint64_t)telldir(file->ff_dir);
-		de.type = de.qid.type; /* or dp->d_type? */
+		de.type = dp->d_type;
 		de.name = dp->d_name;
 
 		if (l9p_pudirent(&msg, &de) < 0)
