@@ -134,76 +134,36 @@ nvdimm_close(struct disk *dp)
 	struct nvdimm_disk *sc = dp->d_drv1;
 
 	sc->label->opened = 0;
-	pmap_invalidate_cache();
 	return (0);
 }
+
+void ntb_copy1(void *dst, void *srv, size_t len);
+void ntb_copy2(void *dst1, void *dst2, void *srv, size_t len);
 
 static void
 nvdimm_strategy(struct bio *bp)
 {
 	struct nvdimm_disk *sc = bp->bio_disk->d_drv1;
-	struct iovec iov[1];
-	struct uio uio;
 	uint8_t *nvaddr;
 
-	if (bp->bio_cmd == BIO_FLUSH) {
-		pmap_invalidate_cache();
-		biodone(bp);
-		return;
-	}
-
-	if (bp->bio_cmd != BIO_READ && bp->bio_cmd != BIO_WRITE) {
-		bp->bio_flags |= BIO_ERROR;
-		bp->bio_error = EOPNOTSUPP;
-		biodone(bp);
-		return;
-	}
-
-	if (bp->bio_flags & BIO_UNMAPPED) {
-		iov[0].iov_base = sc->vaddr + bp->bio_offset;
-		iov[0].iov_len = bp->bio_length;
-		uio.uio_iov = iov;
-		uio.uio_iovcnt = 1;
-		uio.uio_offset = bp->bio_offset;
-		uio.uio_resid = bp->bio_length;
-		uio.uio_segflg = UIO_SYSSPACE;
-		uio.uio_rw = (bp->bio_cmd == BIO_READ) ? UIO_WRITE : UIO_READ;
-		uiomove_fromphys(bp->bio_ma, bp->bio_ma_offset, bp->bio_length,
-		    &uio);
-		if (bp->bio_cmd == BIO_WRITE) {
-			sc->label->empty = 0;
-			if ((nvaddr = sc->rvaddr) != NULL) {
-				iov[0].iov_base = nvaddr + bp->bio_offset;
-				iov[0].iov_len = bp->bio_length;
-				uio.uio_iov = iov;
-				uio.uio_iovcnt = 1;
-				uio.uio_offset = bp->bio_offset;
-				uio.uio_resid = bp->bio_length;
-				uio.uio_segflg = UIO_SYSSPACE;
-				uio.uio_rw = UIO_READ;
-				uiomove_fromphys(bp->bio_ma, bp->bio_ma_offset,
-				    bp->bio_length, &uio);
-			} else {
-				sc->label->dirty = 1;
-			}
+	if (bp->bio_cmd == BIO_READ) {
+		memcpy(bp->bio_data, sc->vaddr + bp->bio_offset,
+		    bp->bio_length);
+	} else if (bp->bio_cmd == BIO_WRITE) {
+		sc->label->empty = 0;
+		if ((nvaddr = sc->rvaddr) != NULL) {
+			ntb_copy2(sc->vaddr + bp->bio_offset,
+			    nvaddr + bp->bio_offset,
+			    bp->bio_data, bp->bio_length);
+		} else {
+			ntb_copy1(sc->vaddr + bp->bio_offset,
+			    bp->bio_data, bp->bio_length);
+			sc->label->dirty = 1;
 		}
 	} else {
-		if (bp->bio_cmd == BIO_READ) {
-			memcpy(bp->bio_data, sc->vaddr + bp->bio_offset,
-			    bp->bio_length);
-		} else {
-			sc->label->empty = 0;
-			memcpy(sc->vaddr + bp->bio_offset, bp->bio_data,
-			    bp->bio_length);
-			if ((nvaddr = sc->rvaddr) != NULL) {
-				memcpy(nvaddr + bp->bio_offset,
-				    bp->bio_data, bp->bio_length);
-			} else {
-				sc->label->dirty = 1;
-			}
-		}
+		bp->bio_flags |= BIO_ERROR;
+		bp->bio_error = EOPNOTSUPP;
 	}
-
 	biodone(bp);
 }
 
@@ -234,14 +194,6 @@ nvdimm_identify(driver_t *driver, device_t parent)
 	for (smap = smapbase; smap < smapend; smap++) {
 		if (smap->type != 12 || smap->length == 0)
 			continue;
-#if defined(__i386__) && ((__FreeBSD_version < 1100103) || !defined(PAE))
-		/*
-		 * Resources use long's to track resources, so
-		 * we can't include memory regions above 4GB.
-		 */
-		if (smap->base > ~0ul)
-			continue;
-#endif
 
 		if (device_find_child(parent, "nvdimm", n) != NULL)
 			continue;
@@ -309,8 +261,6 @@ nvdimm_attach(device_t dev)
 	disk->d_sectorsize = DEV_BSIZE;
 	disk->d_mediasize = sc->size - PAGE_SIZE;
 	disk->d_flags = DISKFLAG_DIRECT_COMPLETION;
-	disk->d_flags |= DISKFLAG_CANFLUSHCACHE;
-	disk->d_flags |= DISKFLAG_UNMAPPED_BIO;
 	disk_create(disk, DISK_VERSION);
 	return (0);
 }
@@ -557,7 +507,7 @@ ntb_nvdimm_attach(device_t dev)
 	if (scd->label->state >= STATE_IDLE) {
 		device_printf(dev, "NVDIMM saw NTB, delaying root mount.\n");
 		callout_reset(&sc->ntb_start, ntb_nvdimm_start_timeout * hz,
-		    ntb_nvdimm_start, sc);
+		    ntb_nvdimm_start, dev);
 		sc->ntb_rootmount = root_mount_hold("ntb_nvdimm");
 	}
 

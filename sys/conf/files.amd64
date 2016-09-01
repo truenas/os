@@ -291,6 +291,7 @@ dev/ntb/ntb_if.m		optional	if_ntb | ntb_hw | nvdimm
 dev/ntb/ntb_hw/ntb_hw.c		optional	ntb_hw
 dev/nvd/nvd.c			optional	nvd nvme
 dev/nvdimm/nvdimm.c		optional	nvdimm
+dev/nvdimm/nvdimm_copy.S	optional	nvdimm
 dev/nve/if_nve.c		optional	nve pci
 dev/nvme/nvme.c			optional	nvme
 dev/nvme/nvme_ctrlr.c		optional	nvme
