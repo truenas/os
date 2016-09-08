@@ -280,6 +280,10 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	pr = req->td->td_ucred->cr_prison;
 	if (!(pr->pr_allow & PR_ALLOW_SET_HOSTNAME) && req->newptr)
 		return (EPERM);
+
+	if (req->td->td_ucred->cr_rgid != (gid_t)0)
+		return (EPERM);
+
 	/*
 	 * Make a local copy of hostname to get/set so we don't have to hold
 	 * the jail mutex during the sysctl copyin/copyout activities.
@@ -341,8 +345,8 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	return (error);
 }
 
-SYSCTL_PROC(_kern, KERN_HOSTNAME, hostname,
-    CTLTYPE_STRING | CTLFLAG_RW | CTLFLAG_PRISON | CTLFLAG_MPSAFE,
+SYSCTL_PROC(_kern, KERN_HOSTNAME, hostname, CTLTYPE_STRING |
+    CTLFLAG_RW | CTLFLAG_PRISON | CTLFLAG_MPSAFE | CTLFLAG_ANYBODY,
     (void *)(offsetof(struct prison, pr_hostname)), MAXHOSTNAMELEN,
     sysctl_hostname, "A", "Hostname");
 SYSCTL_PROC(_kern, KERN_NISDOMAINNAME, domainname,
