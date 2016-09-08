@@ -281,7 +281,7 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	if (!(pr->pr_allow & PR_ALLOW_SET_HOSTNAME) && req->newptr)
 		return (EPERM);
 
-	if (req->td->td_ucred->cr_rgid != (gid_t)0)
+	if (req->td->td_ucred->cr_rgid != (gid_t)0 && req->newptr)
 		return (EPERM);
 
 	/*
