@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2007 Pawel Jakub Dawidek <pjd@FreeBSD.org>
+ * Copyright (c) 2016 Spectra Logic Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,12 +26,20 @@
  * $FreeBSD$
  */
 
-#ifndef _OPENSOLARIS_SYS_RANDOM_H_
-#define	_OPENSOLARIS_SYS_RANDOM_H_
+#include <err.h>
+#include <stdio.h>
+#include <unistd.h>
 
-#include_next <sys/random.h>
+int main(int argc, char** argv)
+{
+	char *salt, *pass, *hash;
 
-#define	random_get_bytes(p, s)		read_random((p), (int)(s))
-#define	random_get_pseudo_bytes(p, s)	arc4rand((p), (int)(s), 0)
+	if (argc < 3)
+		errx(1, "Usage: crypt <salt> <password>");
+	salt = argv[1];
+	pass = argv[2];
 
-#endif	/* !_OPENSOLARIS_SYS_RANDOM_H_ */
+	hash = crypt(pass, salt);
+	printf("%s", hash);
+	return (hash == NULL ? 1 : 0);
+}
