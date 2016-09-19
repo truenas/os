@@ -618,8 +618,8 @@ vdev_geom_attach_by_guids(vdev_t *vd)
 					continue;
 				cp = vdev_geom_attach(pp, vd);
 				if (cp == NULL) {
-					//printf("ZFS WARNING: Unable to "
-					//    "attach to %s.\n", pp->name);
+					printf("ZFS WARNING: Unable to "
+					    "attach to %s.\n", pp->name);
 					continue;
 				}
 				break;
