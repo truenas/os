@@ -1029,7 +1029,17 @@ vlan_transmit(struct ifnet *ifp, struct mbuf *m)
 	int error, len, mcast;
 
 	ifv = ifp->if_softc;
-	p = PARENT(ifv);
+	if (ifv == NULL || TRUNK(ifv) == NULL) {
+		/*
+		 * This has occurred when a vlan and/or lagg
+		 * interface are being torn down and destroyed.
+		 * That may be a bug elsewhere, but for now, avoid
+		 * crashing by treating this as equivalent to
+		 * parent-down.
+		 */
+		p = NULL;
+	} else
+		p = PARENT(ifv);
 	len = m->m_pkthdr.len;
 	mcast = (m->m_flags & (M_MCAST | M_BCAST)) ? 1 : 0;
 
@@ -1039,7 +1049,7 @@ vlan_transmit(struct ifnet *ifp, struct mbuf *m)
 	 * Do not run parent's if_transmit() if the parent is not up,
 	 * or parent's driver will cause a system crash.
 	 */
-	if (!UP_AND_RUNNING(p)) {
+	if (p == NULL || !UP_AND_RUNNING(p)) {
 		m_freem(m);
 		ifp->if_oerrors++;
 		return (ENETDOWN);
