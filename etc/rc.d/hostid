@@ -102,7 +102,7 @@ valid_hostid()
 
 hostid_hardware()
 {
-	uuid=`/usr/local/sbin/dmidecode | awk '$1 ~ /UUID/ {print $2}'`
+	uuid=`/usr/local/sbin/dmidecode -s system-uuid | tr A-Z a-z`
 
 	if valid_hostid $uuid; then
 		echo "${uuid}"
