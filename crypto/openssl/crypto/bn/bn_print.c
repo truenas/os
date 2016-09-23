@@ -148,6 +148,8 @@ char *BN_bn2dec(const BIGNUM *a)
             if (*lp == (BN_ULONG)-1)
                 goto err;
             lp++;
+            if (lp - bn_data >= bn_data_num)
+                goto err;
         }
         lp--;
         /*
