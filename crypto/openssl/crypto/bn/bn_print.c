@@ -144,8 +144,6 @@ char *BN_bn2dec(const BIGNUM *a)
         while (!BN_is_zero(t)) {
             *lp = BN_div_word(t, BN_DEC_CONV);
             lp++;
-            if (lp - bn_data >= bn_data_num)
-                goto err;
         }
         lp--;
         /*
