@@ -98,6 +98,7 @@ __FBSDID("$FreeBSD$");
 #include <list>
 #include <vector>
 
+#include "bwrite.h"		/* buffered writer code */
 #include "devd.h"		/* C compatible definitions */
 #include "devd.hh"		/* C++ class definitions */
 
@@ -109,9 +110,11 @@ __FBSDID("$FreeBSD$");
 #define SYSCTL "hw.bus.devctl_queue"
 
 /*
- * Since the client socket is nonblocking, we must increase its send buffer to
- * handle brief event storms.  On FreeBSD, AF_UNIX sockets don't have a receive
- * buffer, so the client can't increase the buffersize by itself.
+ * We used to try to do nonblocking sends to each client, with very
+ * large kernel-side send buffer limits, but this does not work well
+ * on all sockets.  Instead, we now use a POSIX	thread per client.
+ * The overall strategy remains the same: we need enough buffer to
+ * handle brief event storms.
  *
  * For example, when creating a ZFS pool, devd emits one 165 character
  * resource.fs.zfs.statechange message for each vdev in the pool.  The kernel
@@ -122,15 +125,18 @@ __FBSDID("$FreeBSD$");
  * 450 drives * 165 bytes / drive = 74250B of data in the sockbuf
  * 450 drives * 4608B / drive = 2073600B of mbufs in the sockbuf
  *
- * We can't directly set the sockbuf's mbuf limit, but we can do it indirectly.
- * The kernel sets it to the minimum of a hard-coded maximum value and sbcc *
- * kern.ipc.sockbuf_waste_factor, where sbcc is the socket buffer size set by
- * the user.  The default value of kern.ipc.sockbuf_waste_factor is 8.  If we
- * set the bufsize to 256k and use the kern.ipc.sockbuf_waste_factor, then the
- * kernel will set the mbuf limit to 2MB, which is just large enough for 450
- * drives.  It also happens to be the same as the hardcoded maximum value.
+ * [this calculation with mbufs is now irrelevant but left in for
+ * historical context]
+ *
+ * We raise this by another factor of about 3, just to match the
+ * historical kernel-side socket buffer.
+ *
+ * The bwrite code needs one record-length indicator per record, as
+ * well.  We'll assume records average about 128 bytes for this
+ * purpose, giving 2048 records.
  */
 #define CLIENT_BUFSIZE 262144
+#define	CLIENT_MAXRECS (CLIENT_BUFSIZE / 128)
 
 using namespace std;
 
@@ -138,6 +144,9 @@ typedef struct client {
 	int fd;
 	int socktype;
 	bool is_xml;
+	struct bwrite *bwritep;
+	char *data;
+	size_t *records;	/* if socktype==SOCK_SEQPACKET */
 } client_t;
 
 extern FILE *yyin;
@@ -883,26 +892,36 @@ unsigned int num_clients;
 list<client_t> clients;
 
 void
+ditch_client(struct client &cli)
+{
+
+	bw_fini(cli.bwritep);
+	delete[] cli.records;
+	delete[] cli.data;
+	delete cli.bwritep;
+	close(cli.fd);
+	--num_clients;
+}
+
+void
 notify_clients(const char *xml, int xmllen, const char *compat, int compatlen)
 {
 	list<client_t>::iterator i;
 
 	/*
-	 * Deliver the data to all clients.  Throw clients overboard at the
-	 * first sign of trouble.  This reaps clients who've died or closed
+	 * Queue the data to all clients.  Throw clients overboard if
+	 * queue-put fails.  This reaps clients who've died or closed
 	 * their sockets, and also clients who are alive but failing to keep up
-	 * (or who are maliciously not reading, to consume buffer space in
-	 * kernel memory or tie up the limited number of available connections).
+	 * (or who are maliciously not reading, to consume buffer space
+	 * or tie up the limited number of available connections).
+	 *
+	 * (Note that when a write fails asynchronously, it causes
+	 * the *next* queue-put to fail.)
 	 */
 	for (i = clients.begin(); i != clients.end(); ) {
-		int flags;
 		const char *data;
 		int len;
-
-		if (i->socktype == SOCK_SEQPACKET)
-			flags = MSG_EOR;
-		else
-			flags = 0;
+		enum bw_put_result rv;
 
 		if (i->is_xml) {
 			data = xml;
@@ -911,11 +930,11 @@ notify_clients(const char *xml, int xmllen, const char *compat, int compatlen)
 			data = compat;
 			len = compatlen;
 		}
-		if (send(i->fd, data, len, flags) != len) {
-			--num_clients;
-			close(i->fd);
+		rv = bw_put(i->bwritep, (void *)data, len);
+		if (rv != BW_PUT_OK) {
+			ditch_client(*i);
 			i = clients.erase(i);
-			devdlog(LOG_WARNING, "notify_clients: send() failed; "
+			devdlog(LOG_WARNING, "notify_clients: "
 			    "dropping unresponsive client\n");
 		} else
 			++i;
@@ -925,8 +944,6 @@ notify_clients(const char *xml, int xmllen, const char *compat, int compatlen)
 void
 check_clients(void)
 {
-	int s;
-	struct pollfd pfd;
 	list<client_t>::iterator i;
 
 	/*
@@ -935,15 +952,17 @@ check_clients(void)
 	 * event.  This check eliminates the problem of an ever-growing list of
 	 * zombie clients because we're never writing to them on a system
 	 * without frequent device-change activity.
+	 *
+	 * (It also now catches de-queued sends that failed in a thread,
+	 * which, again, we'd notice on a later put.)
 	 */
-	pfd.events = 0;
 	for (i = clients.begin(); i != clients.end(); ) {
-		pfd.fd = i->fd;
-		s = poll(&pfd, 1, 0);
-		if ((s < 0 && s != EINTR ) ||
-		    (s > 0 && (pfd.revents & POLLHUP))) {
-			--num_clients;
-			close(i->fd);
+		enum bw_state state;
+
+		state = bw_check(i->bwritep, BW_CHECK_HUP);
+		/* NB: blocked state is OK, just means we're queuing data */
+		if (state != BW_OPEN && state != BW_BLOCKED) {
+			ditch_client(*i);
 			i = clients.erase(i);
 			devdlog(LOG_NOTICE, "check_clients:  "
 			    "dropping disconnected client\n");
@@ -956,7 +975,8 @@ void
 new_client(int fd, bool is_xml, int socktype)
 {
 	client_t s;
-	int sndbuf_size;
+	size_t datasize, nrec;
+	int bwflags, error;
 
 	/*
 	 * First go reap any zombie clients, then accept the connection, and
@@ -967,16 +987,46 @@ new_client(int fd, bool is_xml, int socktype)
 	s.socktype = socktype;
 	s.is_xml = is_xml;
 	s.fd = accept(fd, NULL, NULL);
-	if (s.fd != -1) {
-		sndbuf_size = CLIENT_BUFSIZE;
-		if (setsockopt(s.fd, SOL_SOCKET, SO_SNDBUF, &sndbuf_size,
-		    sizeof(sndbuf_size)))
-			err(1, "setsockopt");
-		shutdown(s.fd, SHUT_RD);
-		clients.push_back(s);
-		++num_clients;
-	} else
+	if (s.fd == -1)
 		err(1, "accept");
+
+	/*
+	 * These sizes should be tunable; this is where you would
+	 * tune them.
+	 */
+	datasize = CLIENT_BUFSIZE;
+	nrec = CLIENT_MAXRECS;
+	s.bwritep = NULL;
+	s.data = NULL;
+	s.records = NULL;
+	bwflags = BW_STREAMING;
+	error = 0;
+	try {
+		s.bwritep = new bwrite;
+		s.data = new char[datasize];
+		if (socktype == SOCK_STREAM)
+			nrec = 0;	/* no records needed */
+		else {
+			s.records = new size_t[nrec];
+			bwflags = BW_RECORDS;
+		}
+		error = bw_init(s.bwritep, s.fd, s.data, datasize,
+		    s.records, nrec, bwflags);
+	} catch (std::bad_alloc) {
+		/* one or more of the several new operators above failed */
+		error = 1;
+	}
+	if (error) {
+		devdlog(LOG_ERR, "error setting up new client: %m\n");
+		delete[] s.records;
+		delete[] s.data;
+		delete[] s.bwritep;
+		close(s.fd);
+		return;
+	}
+	shutdown(s.fd, SHUT_RD);
+	clients.push_back(s);
+	++num_clients;
 }
 
 /*
