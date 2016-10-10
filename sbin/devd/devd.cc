@@ -116,26 +116,14 @@ __FBSDID("$FreeBSD$");
  * The overall strategy remains the same: we need enough buffer to
  * handle brief event storms.
  *
- * For example, when creating a ZFS pool, devd emits one 165 character
- * resource.fs.zfs.statechange message for each vdev in the pool.  The kernel
- * allocates a 4608B mbuf for each message.  Modern technology places a limit of
- * roughly 450 drives/rack, and it's unlikely that a zpool will ever be larger
- * than that.
- *
- * 450 drives * 165 bytes / drive = 74250B of data in the sockbuf
- * 450 drives * 4608B / drive = 2073600B of mbufs in the sockbuf
- *
- * [this calculation with mbufs is now irrelevant but left in for
- * historical context]
- *
- * We raise this by another factor of about 3, just to match the
- * historical kernel-side socket buffer.
+ * Experimentally, with some recent zfs changes, 256K per client
+ * is not enough.  For the moment, let's make this 1MB per client.
  *
  * The bwrite code needs one record-length indicator per record, as
  * well.  We'll assume records average about 128 bytes for this
- * purpose, giving 2048 records.
+ * purpose.
  */
-#define CLIENT_BUFSIZE 262144
+#define CLIENT_BUFSIZE (1 * 1024 * 1024)
 #define	CLIENT_MAXRECS (CLIENT_BUFSIZE / 128)
 
 using namespace std;
