@@ -29,6 +29,8 @@
 #ifndef _HYPERV_VAR_H_
 #define _HYPERV_VAR_H_
 
+#include <machine/bus.h>
+
 #ifndef NANOSEC
 #define NANOSEC			1000000000ULL
 #endif
@@ -37,5 +39,8 @@
 
 extern u_int	hyperv_features;
 extern u_int	hyperv_recommends;
+
+uint64_t	hypercall_post_message(bus_addr_t msg_paddr);
+uint64_t	hypercall_signal_event(bus_addr_t monprm_paddr);
 
 #endif	/* !_HYPERV_VAR_H_ */

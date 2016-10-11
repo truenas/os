@@ -1975,6 +1975,19 @@ spa_load_verify_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	return (0);
 }
 
+/* ARGSUSED */
+int
+verify_dataset_name_len(dsl_pool_t *dp, dsl_dataset_t *ds, void *arg)
+{
+	char namebuf[MAXPATHLEN];
+	dsl_dataset_name(ds, namebuf);
+	if (strlen(namebuf) > MAXNAMELEN) {
+		return (SET_ERROR(ENAMETOOLONG));
+	}
+
+	return (0);
+}
+
 static int
 spa_load_verify(spa_t *spa)
 {
@@ -1988,6 +2001,14 @@ spa_load_verify(spa_t *spa)
 
 	if (policy.zrp_request & ZPOOL_NEVER_REWIND)
 		return (0);
+
+	dsl_pool_config_enter(spa->spa_dsl_pool, FTAG);
+	error = dmu_objset_find_dp(spa->spa_dsl_pool,
+	    spa->spa_dsl_pool->dp_root_dir_obj, verify_dataset_name_len, NULL,
+	    DS_FIND_CHILDREN);
+	dsl_pool_config_exit(spa->spa_dsl_pool, FTAG);
+	if (error != 0)
+		return (error);
 
 	rio = zio_root(spa, NULL, &sle,
 	    ZIO_FLAG_CANFAIL | ZIO_FLAG_SPECULATIVE);
@@ -5662,6 +5683,7 @@ spa_vdev_remove(spa_t *spa, uint64_t guid, boolean_t unspare)
 		} else {
 			error = SET_ERROR(EBUSY);
 		}
+		spa_event_notify(spa, vd, ESC_ZFS_VDEV_REMOVE_AUX);
 	} else if (spa->spa_l2cache.sav_vdevs != NULL &&
 	    nvlist_lookup_nvlist_array(spa->spa_l2cache.sav_config,
 	    ZPOOL_CONFIG_L2CACHE, &l2cache, &nl2cache) == 0 &&
@@ -5673,6 +5695,7 @@ spa_vdev_remove(spa_t *spa, uint64_t guid, boolean_t unspare)
 		    ZPOOL_CONFIG_L2CACHE, l2cache, nl2cache, nv);
 		spa_load_l2cache(spa);
 		spa->spa_l2cache.sav_sync = B_TRUE;
+		spa_event_notify(spa, vd, ESC_ZFS_VDEV_REMOVE_AUX);
 	} else if (vd != NULL && vd->vdev_islog) {
 		ASSERT(!locked);
 		ASSERT(vd == vd->vdev_top);
@@ -5711,6 +5734,7 @@ spa_vdev_remove(spa_t *spa, uint64_t guid, boolean_t unspare)
 		 */
 		spa_vdev_remove_from_namespace(spa, vd);
 
+		spa_event_notify(spa, vd, ESC_ZFS_VDEV_REMOVE_DEV);
 	} else if (vd != NULL) {
 		/*
 		 * Normal vdevs cannot be removed (yet).
@@ -5726,7 +5750,7 @@ spa_vdev_remove(spa_t *spa, uint64_t guid, boolean_t unspare)
 	spa_event_notify(spa, vd, ESC_ZFS_VDEV_REMOVE);
 
 	if (!locked)
-		return (spa_vdev_exit(spa, NULL, txg, error));
+		error = spa_vdev_exit(spa, NULL, txg, error);
 
 	return (error);
 }

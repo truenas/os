@@ -89,7 +89,7 @@ static int  hv_rf_close_device(rndis_device *device);
 static void hv_rf_on_send_request_completion(struct hv_vmbus_channel *, void *context);
 static void hv_rf_on_send_request_halt_completion(struct hv_vmbus_channel *, void *context);
 int
-hv_rf_send_offload_request(struct hv_device *device,
+hv_rf_send_offload_request(struct hn_softc *sc,
     rndis_offload_params *offloads);
 /*
  * Set the Per-Packet-Info with the specified type
@@ -249,26 +249,23 @@ hv_rf_send_request(rndis_device *device, rndis_request *request,
 	
 	packet->is_data_pkt = FALSE;
 	packet->tot_data_buf_len = request->request_msg.msg_len;
-	packet->page_buf_count = 1;
+	packet->gpa_cnt = 1;
 
-	packet->page_buffers[0].pfn =
+	packet->gpa[0].gpa_page =
 	    hv_get_phys_addr(&request->request_msg) >> PAGE_SHIFT;
-	packet->page_buffers[0].length = request->request_msg.msg_len;
-	packet->page_buffers[0].offset =
+	packet->gpa[0].gpa_len = request->request_msg.msg_len;
+	packet->gpa[0].gpa_ofs =
 	    (unsigned long)&request->request_msg & (PAGE_SIZE - 1);
 
-	if (packet->page_buffers[0].offset +
-		packet->page_buffers[0].length > PAGE_SIZE) {
-		packet->page_buf_count = 2;
-		packet->page_buffers[0].length =
-		        PAGE_SIZE - packet->page_buffers[0].offset;
-		packet->page_buffers[1].pfn =
+	if (packet->gpa[0].gpa_ofs + packet->gpa[0].gpa_len > PAGE_SIZE) {
+		packet->gpa_cnt = 2;
+		packet->gpa[0].gpa_len = PAGE_SIZE - packet->gpa[0].gpa_ofs;
+		packet->gpa[1].gpa_page =
 		        hv_get_phys_addr((char*)&request->request_msg +
-                		packet->page_buffers[0].length) >> PAGE_SHIFT;
-		packet->page_buffers[1].offset = 0;
-		packet->page_buffers[1].length =
-		        request->request_msg.msg_len -
-			        packet->page_buffers[0].length;
+                		packet->gpa[0].gpa_len) >> PAGE_SHIFT;
+		packet->gpa[1].gpa_ofs = 0;
+		packet->gpa[1].gpa_len = request->request_msg.msg_len -
+		    packet->gpa[0].gpa_len;
 	}
 
 	packet->compl.send.send_completion_context = request; /* packet */
@@ -290,7 +287,7 @@ hv_rf_send_request(rndis_device *device, rndis_request *request,
 			memcpy(dest, &request->request_msg, request->request_msg.msg_len);
 			packet->send_buf_section_idx = send_buf_section_idx;
 			packet->send_buf_section_size = packet->tot_data_buf_len;
-			packet->page_buf_count = 0;
+			packet->gpa_cnt = 0;
 			goto sendit;
 		}
 		/* Failed to allocate chimney send buffer; move on */
@@ -299,7 +296,7 @@ hv_rf_send_request(rndis_device *device, rndis_request *request,
 	packet->send_buf_section_size = 0;
 
 sendit:
-	ret = hv_nv_on_send(device->net_dev->dev->channel, packet);
+	ret = hv_nv_on_send(device->net_dev->sc->hn_prichan, packet);
 
 	return (ret);
 }
@@ -351,7 +348,7 @@ hv_rf_receive_response(rndis_device *device, rndis_msg *response)
 }
 
 int
-hv_rf_send_offload_request(struct hv_device *device,
+hv_rf_send_offload_request(struct hn_softc *sc,
     rndis_offload_params *offloads)
 {
 	rndis_request *request;
@@ -359,8 +356,7 @@ hv_rf_send_offload_request(struct hv_device *device,
 	rndis_offload_params *offload_req;
 	rndis_set_complete *set_complete;	
 	rndis_device *rndis_dev;
-	hn_softc_t *sc = device_get_softc(device->device);
-	device_t dev = device->device;
+	device_t dev = sc->hn_dev;
 	netvsc_dev *net_dev = sc->net_dev;
 	uint32_t vsp_version = net_dev->nvsp_version;
 	uint32_t extlen = sizeof(rndis_offload_params);
@@ -437,14 +433,14 @@ hv_rf_receive_indicate_status(rndis_device *device, rndis_msg *response)
 		
 	switch(indicate->status) {
 	case RNDIS_STATUS_MEDIA_CONNECT:
-		netvsc_linkstatus_callback(device->net_dev->dev, 1);
+		netvsc_linkstatus_callback(device->net_dev->sc, 1);
 		break;
 	case RNDIS_STATUS_MEDIA_DISCONNECT:
-		netvsc_linkstatus_callback(device->net_dev->dev, 0);
+		netvsc_linkstatus_callback(device->net_dev->sc, 0);
 		break;
 	default:
 		/* TODO: */
-		device_printf(device->net_dev->dev->device,
+		device_printf(device->net_dev->sc->hn_dev,
 		    "unknown status %d received\n", indicate->status);
 		break;
 	}
@@ -537,7 +533,7 @@ hv_rf_receive_data(rndis_device *device, rndis_msg *message,
 {
 	rndis_packet *rndis_pkt;
 	uint32_t data_offset;
-	device_t dev = device->net_dev->dev->device;
+	device_t dev = device->net_dev->sc->hn_dev;
 	struct hv_rf_recvinfo info;
 
 	rndis_pkt = &message->msg.packet;
@@ -580,7 +576,7 @@ hv_rf_receive_data(rndis_device *device, rndis_msg *message,
  * RNDIS filter on receive
  */
 int
-hv_rf_on_receive(netvsc_dev *net_dev, struct hv_device *device,
+hv_rf_on_receive(netvsc_dev *net_dev,
     struct hv_vmbus_channel *chan, netvsc_packet *pkt)
 {
 	rndis_device *rndis_dev;
@@ -1062,7 +1058,7 @@ hv_rf_close_device(rndis_device *device)
  * RNDIS filter on device add
  */
 int
-hv_rf_on_device_add(struct hv_device *device, void *additl_info,
+hv_rf_on_device_add(struct hn_softc *sc, void *additl_info,
     int nchan)
 {
 	int ret;
@@ -1073,7 +1069,7 @@ hv_rf_on_device_add(struct hv_device *device, void *additl_info,
 	struct rndis_recv_scale_cap rsscaps;
 	uint32_t rsscaps_size = sizeof(struct rndis_recv_scale_cap);
 	netvsc_device_info *dev_info = (netvsc_device_info *)additl_info;
-	device_t dev = device->device;
+	device_t dev = sc->hn_dev;
 
 	rndis_dev = hv_get_rndis_device();
 	if (rndis_dev == NULL) {
@@ -1086,7 +1082,7 @@ hv_rf_on_device_add(struct hv_device *device, void *additl_info,
 	 * (hv_rf_on_receive()) before this call is completed.
 	 * Note:  Earlier code used a function pointer here.
 	 */
-	net_dev = hv_nv_on_device_add(device, additl_info);
+	net_dev = hv_nv_on_device_add(sc, additl_info);
 	if (!net_dev) {
 		hv_put_rndis_device(rndis_dev);
 
@@ -1124,7 +1120,7 @@ hv_rf_on_device_add(struct hv_device *device, void *additl_info,
 	offloads.udp_ipv6_csum = RNDIS_OFFLOAD_PARAMETERS_TX_RX_ENABLED;
 	offloads.lso_v2_ipv4 = RNDIS_OFFLOAD_PARAMETERS_LSOV2_ENABLED;
 
-	ret = hv_rf_send_offload_request(device, &offloads);
+	ret = hv_rf_send_offload_request(sc, &offloads);
 	if (ret != 0) {
 		/* TODO: shut down rndis device and the channel */
 		device_printf(dev,
@@ -1171,10 +1167,9 @@ hv_rf_on_device_add(struct hv_device *device, void *additl_info,
 	init_pkt->msgs.vers_5_msgs.subchannel_request.num_subchannels =
 	    net_dev->num_channel - 1;
 
-	ret = hv_vmbus_channel_send_packet(device->channel, init_pkt,
+	ret = hv_vmbus_channel_send_packet(sc->hn_prichan, init_pkt,
 	    sizeof(nvsp_msg), (uint64_t)(uintptr_t)init_pkt,
-	    HV_VMBUS_PACKET_TYPE_DATA_IN_BAND,
-	    HV_VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED);
+	    VMBUS_CHANPKT_TYPE_INBAND, VMBUS_CHANPKT_FLAG_RC);
 	if (ret != 0) {
 		device_printf(dev, "Fail to allocate subchannel\n");
 		goto out;
@@ -1205,9 +1200,8 @@ out:
  * RNDIS filter on device remove
  */
 int
-hv_rf_on_device_remove(struct hv_device *device, boolean_t destroy_channel)
+hv_rf_on_device_remove(struct hn_softc *sc, boolean_t destroy_channel)
 {
-	hn_softc_t *sc = device_get_softc(device->device);
 	netvsc_dev *net_dev = sc->net_dev;
 	rndis_device *rndis_dev = (rndis_device *)net_dev->extension;
 	int ret;
@@ -1219,7 +1213,7 @@ hv_rf_on_device_remove(struct hv_device *device, boolean_t destroy_channel)
 	net_dev->extension = NULL;
 
 	/* Pass control to inner driver to remove the device */
-	ret |= hv_nv_on_device_remove(device, destroy_channel);
+	ret |= hv_nv_on_device_remove(sc, destroy_channel);
 
 	return (ret);
 }
@@ -1228,9 +1222,8 @@ hv_rf_on_device_remove(struct hv_device *device, boolean_t destroy_channel)
  * RNDIS filter on open
  */
 int
-hv_rf_on_open(struct hv_device *device)
+hv_rf_on_open(struct hn_softc *sc)
 {
-	hn_softc_t *sc = device_get_softc(device->device);	
 	netvsc_dev *net_dev = sc->net_dev;
 
 	return (hv_rf_open_device((rndis_device *)net_dev->extension));
@@ -1240,9 +1233,8 @@ hv_rf_on_open(struct hv_device *device)
  * RNDIS filter on close
  */
 int 
-hv_rf_on_close(struct hv_device *device)
+hv_rf_on_close(struct hn_softc *sc)
 {
-	hn_softc_t *sc = device_get_softc(device->device);	
 	netvsc_dev *net_dev = sc->net_dev;
 
 	return (hv_rf_close_device((rndis_device *)net_dev->extension));
