@@ -378,6 +378,8 @@ struct sge_idma_monitor_state {
 	unsigned int idma_warn[2];	/* time to warning in HZ */
 };
 
+#define CHELSIO_T5_MAXMTU	9600
+
 struct trace_params {
 	u32 data[TRACE_LEN / 4];
 	u32 mask[TRACE_LEN / 4];

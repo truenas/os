@@ -85,6 +85,173 @@ SYSCTL_INT(_hw_cxgbe, OID_AUTO, nm_holdoff_tmr_idx, CTLFLAG_RWTUN,
 static int nm_cong_drop = 1;
 TUNABLE_INT("hw.cxgbe.nm_cong_drop", &nm_cong_drop);
 
+/* netmap ifnet routines */
+static void cxgbe_nm_init(void *);
+static int cxgbe_nm_ioctl(struct ifnet *, unsigned long, caddr_t);
+static int cxgbe_nm_transmit(struct ifnet *, struct mbuf *);
+static void cxgbe_nm_qflush(struct ifnet *);
+
+static int cxgbe_nm_init_synchronized(struct port_info *);
+static int cxgbe_nm_uninit_synchronized(struct port_info *);
+
+static void
+cxgbe_nm_init(void *arg)
+{
+	struct port_info *pi = arg;
+	struct adapter *sc = pi->adapter;
+
+	if (begin_synchronized_op(sc, pi, SLEEP_OK | INTR_OK, "t4nminit") != 0)
+		return;
+	cxgbe_nm_init_synchronized(pi);
+	end_synchronized_op(sc, 0);
+
+	return;
+}
+
+static int
+cxgbe_nm_init_synchronized(struct port_info *pi)
+{
+	struct adapter *sc = pi->adapter;
+	struct ifnet *ifp = pi->nm_ifp;
+	int rc = 0;
+
+	ASSERT_SYNCHRONIZED_OP(sc);
+
+	if (ifp->if_drv_flags & IFF_DRV_RUNNING)
+		return (0);	/* already running */
+
+	if (!(sc->flags & FULL_INIT_DONE) &&
+	    ((rc = adapter_full_init(sc)) != 0))
+		return (rc);	/* error message displayed already */
+
+	if (!(pi->flags & PORT_INIT_DONE) &&
+	    ((rc = port_full_init(pi)) != 0))
+		return (rc);	/* error message displayed already */
+
+	rc = update_mac_settings(ifp, XGMAC_ALL);
+	if (rc)
+		return (rc);	/* error message displayed already */
+
+	ifp->if_drv_flags |= IFF_DRV_RUNNING;
+
+	return (rc);
+}
+
+static int
+cxgbe_nm_uninit_synchronized(struct port_info *pi)
+{
+#ifdef INVARIANTS
+	struct adapter *sc = pi->adapter;
+#endif
+	struct ifnet *ifp = pi->nm_ifp;
+
+	ASSERT_SYNCHRONIZED_OP(sc);
+
+	ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
+
+	return (0);
+}
+
+static int
+cxgbe_nm_ioctl(struct ifnet *ifp, unsigned long cmd, caddr_t data)
+{
+	int rc = 0, mtu, flags;
+	struct port_info *pi = ifp->if_softc;
+	struct adapter *sc = pi->adapter;
+	struct ifreq *ifr = (struct ifreq *)data;
+	uint32_t mask;
+
+	MPASS(pi->nm_ifp == ifp);
+
+	switch (cmd) {
+	case SIOCSIFMTU:
+		mtu = ifr->ifr_mtu;
+		if ((mtu < ETHERMIN) || (mtu > CHELSIO_T5_MAXMTU))
+			return (EINVAL);
+
+		rc = begin_synchronized_op(sc, pi, SLEEP_OK | INTR_OK, "t4nmtu");
+		if (rc)
+			return (rc);
+		ifp->if_mtu = mtu;
+		if (ifp->if_drv_flags & IFF_DRV_RUNNING)
+			rc = update_mac_settings(ifp, XGMAC_MTU);
+		end_synchronized_op(sc, 0);
+		break;
+
+	case SIOCSIFFLAGS:
+		rc = begin_synchronized_op(sc, pi, SLEEP_OK | INTR_OK, "t4nflg");
+		if (rc)
+			return (rc);
+
+		if (ifp->if_flags & IFF_UP) {
+			if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
+				flags = pi->nmif_flags;
+				if ((ifp->if_flags ^ flags) &
+				    (IFF_PROMISC | IFF_ALLMULTI)) {
+					rc = update_mac_settings(ifp,
+					    XGMAC_PROMISC | XGMAC_ALLMULTI);
+				}
+			} else
+				rc = cxgbe_nm_init_synchronized(pi);
+			pi->nmif_flags = ifp->if_flags;
+		} else if (ifp->if_drv_flags & IFF_DRV_RUNNING)
+			rc = cxgbe_nm_uninit_synchronized(pi);
+		end_synchronized_op(sc, 0);
+		break;
+
+	case SIOCADDMULTI:
+	case SIOCDELMULTI: /* these two are called with a mutex held :-( */
+		rc = begin_synchronized_op(sc, pi, HOLD_LOCK, "t4nmulti");
+		if (rc)
+			return (rc);
+		if (ifp->if_drv_flags & IFF_DRV_RUNNING)
+			rc = update_mac_settings(ifp, XGMAC_MCADDRS);
+		end_synchronized_op(sc, LOCK_HELD);
+		break;
+
+	case SIOCSIFCAP:
+		mask = ifr->ifr_reqcap ^ ifp->if_capenable;
+		if (mask & IFCAP_TXCSUM) {
+			ifp->if_capenable ^= IFCAP_TXCSUM;
+			ifp->if_hwassist ^= (CSUM_TCP | CSUM_UDP | CSUM_IP);
+		}
+		if (mask & IFCAP_TXCSUM_IPV6) {
+			ifp->if_capenable ^= IFCAP_TXCSUM_IPV6;
+			ifp->if_hwassist ^= (CSUM_UDP_IPV6 | CSUM_TCP_IPV6);
+		}
+		if (mask & IFCAP_RXCSUM)
+			ifp->if_capenable ^= IFCAP_RXCSUM;
+		if (mask & IFCAP_RXCSUM_IPV6)
+			ifp->if_capenable ^= IFCAP_RXCSUM_IPV6;
+		break;
+
+	case SIOCSIFMEDIA:
+	case SIOCGIFMEDIA:
+		ifmedia_ioctl(ifp, ifr, &pi->nm_media, cmd);
+		break;
+
+	default:
+		rc = ether_ioctl(ifp, cmd, data);
+	}
+
+	return (rc);
+}
+
+static int
+cxgbe_nm_transmit(struct ifnet *ifp, struct mbuf *m)
+{
+
+	m_freem(m);
+	return (0);
+}
+
+static void
+cxgbe_nm_qflush(struct ifnet *ifp)
+{
+
+	return;
+}
+
 static int
 alloc_nm_rxq_hwq(struct vi_info *vi, struct sge_nm_rxq *nm_rxq, int cong)
 {
