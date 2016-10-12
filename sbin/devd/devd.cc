@@ -1572,6 +1572,8 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (!no_daemon)
+		openlog("devd", 0, LOG_DAEMON);
 	cfg.parse();
 	if (!no_daemon && daemonize_quick) {
 		cfg.open_pidfile();
