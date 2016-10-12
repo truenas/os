@@ -77,7 +77,6 @@ struct bwrite {
 	int	bw_flags;	/* record vs stream */
 	int	bw_iflags;	/* internal flags */
 	size_t	bw_bufsize;	/* total buffer size (>= 1) */
-	size_t	bw_bufavail;	/* room remaining in buffer */
 	size_t	bw_maxrec;	/* max number of records (>= 1) */
 	size_t	bw_dput;	/* data "put" index */
 	size_t	bw_dget;	/* data "get" index */
@@ -116,6 +115,20 @@ int	bw_init(struct bwrite *bw, int fd,
 enum bw_state bw_check(struct bwrite *bw, int flags);
 #define	BW_CHECK_READ	0x01	/* check for read ready */
 #define	BW_CHECK_HUP	0x02	/* check for "hangup" (socket closed) */
+
+/*
+ * Inspect queue depth.  Meant for checking on buffer fill/drain
+ * rates.
+ *
+ * For stream-oriented output the record depth will always be
+ * zero.  The dsize and nrecs outputs are the ones the caller
+ * supplied at init time.
+ *
+ * Returns 0 on success (should always succeed) or -1 on failure
+ * (internal error, *rdepth and *nrecs are 0).
+ */
+int	bw_get_qdepth(struct bwrite *bw, size_t *ddepth, size_t *dsize,
+		size_t *rdepth, size_t *nrecs);
 
 #ifdef notyet
 /*

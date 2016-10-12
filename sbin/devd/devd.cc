@@ -126,6 +126,10 @@ __FBSDID("$FreeBSD$");
 #define CLIENT_BUFSIZE (1 * 1024 * 1024)
 #define	CLIENT_MAXRECS (CLIENT_BUFSIZE / 128)
 
+static size_t client_bufsize = CLIENT_BUFSIZE;
+static size_t client_maxrecs = CLIENT_MAXRECS;
+static int client_debug = -1;
+
 using namespace std;
 
 typedef struct client {
@@ -880,9 +884,15 @@ unsigned int num_clients;
 list<client_t> clients;
 
 void
-ditch_client(struct client &cli)
+ditch_client(struct client &cli, const char *caller, const char *reason)
 {
 
+	if (client_debug >= 0)
+		devdlog(client_debug, "%s: dropping %s client fd=%d\n",
+		    caller, reason, cli.fd);
+	else
+		devdlog(LOG_WARNING, "%s: dropping %s client\n",
+		    caller, reason);
 	bw_fini(cli.bwritep);
 	delete[] cli.records;
 	delete[] cli.data;
@@ -920,10 +930,8 @@ notify_clients(const char *xml, int xmllen, const char *compat, int compatlen)
 		}
 		rv = bw_put(i->bwritep, (void *)data, len);
 		if (rv != BW_PUT_OK) {
-			ditch_client(*i);
+			ditch_client(*i, __func__, "unresponsive");
 			i = clients.erase(i);
-			devdlog(LOG_WARNING, "notify_clients: "
-			    "dropping unresponsive client\n");
 		} else
 			++i;
 	}
@@ -950,12 +958,35 @@ check_clients(void)
 		state = bw_check(i->bwritep, BW_CHECK_HUP);
 		/* NB: blocked state is OK, just means we're queuing data */
 		if (state != BW_OPEN && state != BW_BLOCKED) {
-			ditch_client(*i);
+			ditch_client(*i, __func__, "disconnected");
 			i = clients.erase(i);
-			devdlog(LOG_NOTICE, "check_clients:  "
-			    "dropping disconnected client\n");
-		} else
+		} else {
+			if (client_debug >= 0) {
+				size_t ddepth, dmax, rdepth, rmax;
+				double dpct, rpct;
+
+				bw_get_qdepth(i->bwritep,
+				    &ddepth, &dmax, &rdepth, &rmax);
+				dpct = 100.0 * ddepth / dmax;
+				if (i->socktype == SOCK_SEQPACKET) {
+					rpct = 100.0 * rdepth / rmax;
+					devdlog(client_debug,
+					    "record client on fd %d: ddepth "
+					    "%zu/%zu (%.2f%%), rdepth "
+					    "%zu (%.2f%%)\n",
+					    i->fd,
+					    ddepth, dmax, dpct,
+					    rdepth, rpct);
+				} else {
+					devdlog(client_debug,
+					    "stream client on fd %d: ddepth "
+					    "%zu/%zu (%.2f%%)\n",
+					    i->fd,
+					    ddepth, dmax, dpct);
+				}
+			}
 			++i;
+		}
 	}
 }
 
@@ -971,6 +1002,11 @@ new_client(int fd, bool is_xml, int socktype)
 	 * shut down the read side to stop clients from consuming kernel memory
 	 * by sending large buffers full of data we'll never read.
 	 */
+	if (client_debug >= 0)
+		devdlog(client_debug,
+		    "new_client: fd %d, is%s xml, type %s\n",
+		    fd, is_xml ? "" : " not",
+		    socktype == SOCK_SEQPACKET ? "record" : "stream");
 	check_clients();
 	s.socktype = socktype;
 	s.is_xml = is_xml;
@@ -982,8 +1018,8 @@ new_client(int fd, bool is_xml, int socktype)
 	 * These sizes should be tunable; this is where you would
 	 * tune them.
 	 */
-	datasize = CLIENT_BUFSIZE;
-	nrec = CLIENT_MAXRECS;
+	datasize = client_bufsize;
+	nrec = client_maxrecs;
 	s.bwritep = NULL;
 	s.data = NULL;
 	s.records = NULL;
@@ -1015,6 +1051,8 @@ new_client(int fd, bool is_xml, int socktype)
 	shutdown(s.fd, SHUT_RD);
 	clients.push_back(s);
 	++num_clients;
+	if (client_debug >= 0)
+		devdlog(client_debug, "now have %d clients\n", num_clients);
 }
 
 /*
@@ -1372,6 +1410,11 @@ event_loop(void)
 					// NB: XML clients get \n\0 too
 					notify_clients(kern_buf, rv,
 					    flat_buf, flat_len);
+					// If we're debugging, use an
+					// extra check_clients to scan
+					// the relative queue depths.
+					if (client_debug >= 0)
+						check_clients();
 					process_event(kern_buf);
 				}
 			} else if (rv < 0) {
@@ -1520,7 +1563,8 @@ devdlog(int priority, const char* fmt, ...)
 static void
 usage()
 {
-	fprintf(stderr, "usage: %s [-dnq] [-l connlimit] [-f file]\n",
+	fprintf(stderr, "usage: %s [-dnq] [-l connlimit] [-f file] "
+	    " [-B size[,nrec]] [-D level]\n",
 	    getprogname());
 	exit(1);
 }
@@ -1541,6 +1585,84 @@ check_devd_enabled()
 	}
 }
 
+static void
+get_client_buffer_size(const char *arg)
+{
+	const char *commap;
+	size_t size, nrec;
+
+	size = strtoul(arg, NULL, 0);
+	commap = strchr(arg, ',');
+	if (commap != NULL) {
+		nrec = strtoul(commap + 1, NULL, 0);
+	} else {
+		/*
+		 * Maintain the default ratio.
+		 */
+		nrec = size / (client_bufsize / client_maxrecs);
+		nrec = MAX(nrec, 1);
+	}
+	if (size == 0 || nrec == 0) {
+		fprintf(stderr, "invalid -B argument %s: "
+		    "size and nrec must be > 0\n", arg);
+		usage();
+	}
+	client_bufsize = size;
+	client_maxrecs = nrec;
+}
+
+static int
+get_debug_level(const char *arg)
+{
+#ifdef notdef // requires c++11 (and #include <unordered_map>)
+	static std::unordered_map<std::string,int> loglevels = {
+		{ "DEBUG", LOG_DEBUG },
+		{ "INFO", LOG_INFO },
+		{ "WARNING", LOG_WARNING },
+		{ "NOTICE", LOG_NOTICE },
+		{ "ERR", LOG_ERR },
+	};
+	int level = 0;
+
+	try {
+		level = loglevels.at(arg);
+	} catch (std::out_of_range) {
+		fprintf(stderr, "%s: invalid debug level\n", arg);
+		fprintf(stderr, "valid levels are:\n");
+		for (auto& x: loglevels)
+			fprintf(stderr, "   %s = %d\n",
+			    x.first.c_str(), x.second);
+		usage();
+	}
+	return level;
+#else
+	static struct loglevel {
+		const char *name;
+		int level;
+	} loglevels[] = {
+		{ "DEBUG", LOG_DEBUG },
+		{ "INFO", LOG_INFO },
+		{ "WARNING", LOG_WARNING },
+		{ "NOTICE", LOG_NOTICE },
+		{ "ERR", LOG_ERR },
+		{ NULL, 0 }
+	};
+	struct loglevel *p;
+
+	for (p = loglevels; p->name != NULL; p++)
+		if (strcasecmp(arg, p->name) == 0)
+			break;
+	if (p->name == NULL) {
+		fprintf(stderr, "%s: invalid debug level\n", arg);
+		fprintf(stderr, "valid levels are:\n");
+		for (p = loglevels; p->name != NULL; p++)
+			fprintf(stderr, "   %s = %d\n", p->name, p->level);
+		usage();
+	}
+	return p->level;
+#endif
+}
+
 /*
  * main
  */
@@ -1550,8 +1672,14 @@ main(int argc, char **argv)
 	int ch;
 
 	check_devd_enabled();
-	while ((ch = getopt(argc, argv, "df:l:nq")) != -1) {
+	while ((ch = getopt(argc, argv, "B:D:df:l:nq")) != -1) {
 		switch (ch) {
+		case 'B':
+			get_client_buffer_size(optarg);
+			break;
+		case 'D':
+			client_debug = get_debug_level(optarg);
+			break;
 		case 'd':
 			no_daemon = 1;
 			break;
@@ -1572,6 +1700,8 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (!no_daemon)
+		openlog("devd", 0, LOG_DAEMON);
 	cfg.parse();
 	if (!no_daemon && daemonize_quick) {
 		cfg.open_pidfile();

@@ -36,6 +36,8 @@
 .Op Fl dnq
 .Op Fl f Ar file
 .Op Fl l Ar num
+.Op Fl B Ar size,nrec
+.Op Fl D Ar syslog-level
 .Sh DESCRIPTION
 The
 .Nm
@@ -43,7 +45,7 @@ daemon provides a way to have userland programs run when certain
 kernel events happen.
 .Pp
 The following options are accepted.
-.Bl -tag -width ".Fl f Ar file"
+.Bl -tag -width ".Fl D Ar syslog-level"
 .It Fl d
 Run in the foreground instead of becoming a daemon and log additional information for debugging.
 .It Fl f Ar file
@@ -63,6 +65,41 @@ Do not process all pending events before becoming a daemon.
 Instead, call daemon right away.
 .It Fl q
 Quiet mode.  Only log messages at priority LOG_WARNING or above.
+.It Fl B Ar size,nrec
+Set the per-client buffer size to
+.Ar size ,
+and the number of records to
+.Ar nrec .
+The default buffer size, if none is specified,
+is 1 MB per client.
+The number of records applies only to record-oriented
+(seqpacket) clients, and may be omitted entirely
+to keep the default ratio of one record per 128 bytes
+of buffer space.
+.It Fl D Ar syslog-level
+Set client-debug level.
+When the
+.Fl D
+option is specified,
+the
+.Nm
+utility logs each client that connects.
+It also prints,
+upon each new kernel event that is queued,
+information per client
+regarding the client's activity (or lack thereof)
+in reading its event queue.
+For stream-oriented clients,
+only the data depth on the data queue is logged,
+e.g.,
+.Dq "stream client on fd 10: ddepth 197 (0.02%)" .
+For record-oriented clients,
+but the data depth and the number of records is logged:
+like the above but with the word
+.Dq record ,
+at the beginning, and
+.Dq "rdepth 5 (0.06%)"
+appended.
 .El
 .Sh IMPLEMENTATION NOTES
 The
