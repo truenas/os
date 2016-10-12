@@ -77,7 +77,6 @@ struct bwrite {
 	int	bw_flags;	/* record vs stream */
 	int	bw_iflags;	/* internal flags */
 	size_t	bw_bufsize;	/* total buffer size (>= 1) */
-	size_t	bw_bufavail;	/* room remaining in buffer */
 	size_t	bw_maxrec;	/* max number of records (>= 1) */
 	size_t	bw_dput;	/* data "put" index */
 	size_t	bw_dget;	/* data "get" index */
