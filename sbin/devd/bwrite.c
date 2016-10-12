@@ -632,6 +632,30 @@ bw_check(struct bwrite *bw, int flags)
 	return (retval);
 }
 
+int
+bw_get_qdepth(struct bwrite *bw, size_t *ddepth, size_t *dsize,
+    size_t *rdepth, size_t *nrecs)
+{
+	int error, threaded;
+
+	*dsize = bw->bw_bufsize;
+	*nrecs = bw->bw_maxrec;
+	threaded = bw->bw_iflags & BI_THREAD;
+	if (threaded) {
+		error = pthread_mutex_lock(&bw->bw_lock);
+		if (error) {
+			errno = error;
+			*ddepth = *rdepth = 0;
+			return -1;
+		}
+	}
+	*ddepth = bw->bw_bufsize - _bw_data_spaceavail(bw);
+	*rdepth = bw->bw_maxrec - _bw_recs_spaceavail(bw);
+	if (threaded)
+		(void) pthread_mutex_unlock(&bw->bw_lock);
+	return 0;
+}
+
 enum bw_put_result
 bw_put(struct bwrite *bw, void *data, size_t dsize)
 {

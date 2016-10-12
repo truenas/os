@@ -116,6 +116,20 @@ enum bw_state bw_check(struct bwrite *bw, int flags);
 #define	BW_CHECK_READ	0x01	/* check for read ready */
 #define	BW_CHECK_HUP	0x02	/* check for "hangup" (socket closed) */
 
+/*
+ * Inspect queue depth.  Meant for checking on buffer fill/drain
+ * rates.
+ *
+ * For stream-oriented output the record depth will always be
+ * zero.  The dsize and nrecs outputs are the ones the caller
+ * supplied at init time.
+ *
+ * Returns 0 on success (should always succeed) or -1 on failure
+ * (internal error, *rdepth and *nrecs are 0).
+ */
+int	bw_get_qdepth(struct bwrite *bw, size_t *ddepth, size_t *dsize,
+		size_t *rdepth, size_t *nrecs);
+
 #ifdef notyet
 /*
  * Test the state of many (n) writers.  If they're in polling mode,
