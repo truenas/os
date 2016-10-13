@@ -52,6 +52,7 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <libutil.h>
 #include <rpc/rpc.h>
 #include <rpc/xdr.h>
 #include <net/if.h>
@@ -72,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #ifndef YPBINDLOCK
 #define YPBINDLOCK "/var/run/ypbind.lock"
 #endif
+static struct pidfh *pidfile;
 
 struct _dom_binding {
 	struct _dom_binding *dom_pnext;
@@ -375,8 +377,7 @@ terminate(int sig)
 			ypdb->dom_domain, ypdb->dom_vers);
 		unlink(path);
 	}
-	close(yplockfd);
-	unlink(YPBINDLOCK);
+	pidfile_remove(pidfile);
 	pmap_unset(YPBINDPROG, YPBINDVERS);
 	exit(0);
 }
@@ -389,14 +390,12 @@ main(int argc, char *argv[])
 	DIR *dird;
 	struct dirent *dirp;
 	struct _dom_binding *ypdb, *next;
-
-	/* Check that another ypbind isn't already running. */
-	if ((yplockfd = (open(YPBINDLOCK, O_RDONLY|O_CREAT, 0444))) == -1)
-		err(1, "%s", YPBINDLOCK);
-
-	if (flock(yplockfd, LOCK_EX|LOCK_NB) == -1 && errno == EWOULDBLOCK)
-		errx(1, "another ypbind is already running. Aborting");
-
+	pid_t other_pid = -1;
+	
+	/* NULL means to use /var/run/argv[0].pid */
+	if ((pidfile = pidfile_open(NULL, 0444, &other_pid)) == NULL)
+		err(1, "Cannot create lock file %s -- another ypbind is probably running", YPBINDLOCK);
+	
 	/* XXX domainname will be overridden if we use restricted mode */
 	yp_get_default_domain(&domain_name);
 	if (domain_name[0] == '\0')
@@ -437,7 +436,8 @@ main(int argc, char *argv[])
 	if (daemon(0,0))
 		err(1, "fork");
 #endif
-
+	pidfile_write(pidfile);
+	
 	pmap_unset(YPBINDPROG, YPBINDVERS);
 
 	udptransp = svcudp_create(RPC_ANYSOCK);
