@@ -676,35 +676,20 @@ dsl_dataset_name(dsl_dataset_t *ds, char *name)
 		dsl_dir_name(ds->ds_dir, name);
 		VERIFY0(dsl_dataset_get_snapname(ds));
 		if (ds->ds_snapname[0]) {
-			VERIFY3U(strlcat(name, "@", ZFS_MAX_DATASET_NAME_LEN),
-			    <, ZFS_MAX_DATASET_NAME_LEN);
+			(void) strcat(name, "@");
 			/*
 			 * We use a "recursive" mutex so that we
 			 * can call dprintf_ds() with ds_lock held.
 			 */
 			if (!MUTEX_HELD(&ds->ds_lock)) {
 				mutex_enter(&ds->ds_lock);
-				VERIFY3U(strlcat(name, ds->ds_snapname,
-				    ZFS_MAX_DATASET_NAME_LEN), <,
-				    ZFS_MAX_DATASET_NAME_LEN);
+				(void) strcat(name, ds->ds_snapname);
 				mutex_exit(&ds->ds_lock);
 			} else {
-				VERIFY3U(strlcat(name, ds->ds_snapname,
-				    ZFS_MAX_DATASET_NAME_LEN), <,
-				    ZFS_MAX_DATASET_NAME_LEN);
+				(void) strcat(name, ds->ds_snapname);
 			}
 		}
 	}
-}
-
-int
-dsl_dataset_namelen(dsl_dataset_t *ds)
-{
-	VERIFY0(dsl_dataset_get_snapname(ds));
-	mutex_enter(&ds->ds_lock);
-	int len = dsl_dir_namelen(ds->ds_dir) + 1 + strlen(ds->ds_snapname);
-	mutex_exit(&ds->ds_lock);
-	return (len);
 }
 
 void
@@ -1311,10 +1296,10 @@ dsl_dataset_snapshot_check(void *arg, dmu_tx_t *tx)
 		int error = 0;
 		dsl_dataset_t *ds;
 		char *name, *atp;
-		char dsname[ZFS_MAX_DATASET_NAME_LEN];
+		char dsname[MAXNAMELEN];
 
 		name = nvpair_name(pair);
-		if (strlen(name) >= ZFS_MAX_DATASET_NAME_LEN)
+		if (strlen(name) >= MAXNAMELEN)
 			error = SET_ERROR(ENAMETOOLONG);
 		if (error == 0) {
 			atp = strchr(name, '@');
@@ -1490,7 +1475,7 @@ dsl_dataset_snapshot_sync(void *arg, dmu_tx_t *tx)
 	    pair != NULL; pair = nvlist_next_nvpair(ddsa->ddsa_snaps, pair)) {
 		dsl_dataset_t *ds;
 		char *name, *atp;
-		char dsname[ZFS_MAX_DATASET_NAME_LEN];
+		char dsname[MAXNAMELEN];
 
 		name = nvpair_name(pair);
 		atp = strchr(name, '@');
@@ -1536,7 +1521,7 @@ dsl_dataset_snapshot(nvlist_t *snaps, nvlist_t *props, nvlist_t *errors)
 		suspended = fnvlist_alloc();
 		for (pair = nvlist_next_nvpair(snaps, NULL); pair != NULL;
 		    pair = nvlist_next_nvpair(snaps, pair)) {
-			char fsname[ZFS_MAX_DATASET_NAME_LEN];
+			char fsname[MAXNAMELEN];
 			char *snapname = nvpair_name(pair);
 			char *atp;
 			void *cookie;
@@ -1754,7 +1739,7 @@ get_clones_stat(dsl_dataset_t *ds, nvlist_t *nv)
 	    zap_cursor_retrieve(&zc, &za) == 0;
 	    zap_cursor_advance(&zc)) {
 		dsl_dataset_t *clone;
-		char buf[ZFS_MAX_DATASET_NAME_LEN];
+		char buf[ZFS_MAXNAMELEN];
 		VERIFY0(dsl_dataset_hold_obj(ds->ds_dir->dd_pool,
 		    za.za_first_integer, FTAG, &clone));
 		dsl_dir_name(clone->ds_dir, buf);
@@ -1862,7 +1847,7 @@ dsl_dataset_stats(dsl_dataset_t *ds, nvlist_t *nv)
 		get_clones_stat(ds, nv);
 	} else {
 		if (ds->ds_prev != NULL && ds->ds_prev != dp->dp_origin_snap) {
-			char buf[ZFS_MAX_DATASET_NAME_LEN];
+			char buf[MAXNAMELEN];
 			dsl_dataset_name(ds->ds_prev, buf);
 			dsl_prop_nvlist_add_string(nv, ZFS_PROP_PREV_SNAP, buf);
 		}
@@ -1923,15 +1908,12 @@ dsl_dataset_stats(dsl_dataset_t *ds, nvlist_t *nv)
 		 * stats set on our child named "%recv".  Check the child
 		 * for the prop.
 		 */
-		/* 6 extra bytes for /%recv */
-		char recvname[ZFS_MAX_DATASET_NAME_LEN + 6];
+		char recvname[ZFS_MAXNAMELEN];
 		dsl_dataset_t *recv_ds;
 		dsl_dataset_name(ds, recvname);
-		if (strlcat(recvname, "/", sizeof (recvname)) <
-		    sizeof (recvname) &&
-		    strlcat(recvname, recv_clone_name, sizeof (recvname)) <
-		    sizeof (recvname) &&
-		    dsl_dataset_hold(dp, recvname, FTAG, &recv_ds) == 0) {
+		(void) strcat(recvname, "/");
+		(void) strcat(recvname, recv_clone_name);
+		if (dsl_dataset_hold(dp, recvname, FTAG, &recv_ds) == 0) {
 			get_receive_resume_stats(recv_ds, nv);
 			dsl_dataset_rele(recv_ds, FTAG);
 		}
@@ -2058,7 +2040,7 @@ dsl_dataset_rename_snapshot_check_impl(dsl_pool_t *dp,
 
 	/* dataset name + 1 for the "@" + the new snapshot name must fit */
 	if (dsl_dir_namelen(hds->ds_dir) + 1 +
-	    strlen(ddrsa->ddrsa_newsnapname) >= ZFS_MAX_DATASET_NAME_LEN)
+	    strlen(ddrsa->ddrsa_newsnapname) >= MAXNAMELEN)
 		error = SET_ERROR(ENAMETOOLONG);
 
 	return (error);
@@ -2307,7 +2289,7 @@ dsl_dataset_rollback_sync(void *arg, dmu_tx_t *tx)
 	dsl_pool_t *dp = dmu_tx_pool(tx);
 	dsl_dataset_t *ds, *clone;
 	uint64_t cloneobj;
-	char namebuf[ZFS_MAX_DATASET_NAME_LEN];
+	char namebuf[ZFS_MAXNAMELEN];
 
 	VERIFY0(dsl_dataset_hold(dp, ddra->ddra_fsname, FTAG, &ds));
 
@@ -2883,7 +2865,7 @@ promote_rele(dsl_dataset_promote_arg_t *ddpa, void *tag)
  * Promote a clone.
  *
  * If it fails due to a conflicting snapshot name, "conflsnap" will be filled
- * in with the name.  (It must be at least ZFS_MAX_DATASET_NAME_LEN bytes long.)
+ * in with the name.  (It must be at least MAXNAMELEN bytes long.)
  */
 int
 dsl_dataset_promote(const char *name, char *conflsnap)

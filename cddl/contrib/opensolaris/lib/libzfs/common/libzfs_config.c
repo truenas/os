@@ -27,7 +27,6 @@
 /*
  * Copyright (c) 2012 by Delphix. All rights reserved.
  * Copyright (c) 2015 by Syneto S.R.L. All rights reserved.
- * Copyright 2016 Nexenta Systems, Inc.
  */
 
 /*
@@ -339,47 +338,33 @@ zpool_refresh_stats(zpool_handle_t *zhp, boolean_t *missing)
 }
 
 /*
- * The following environment variables are undocumented
- * and should be used for testing purposes only:
+ * If the __ZFS_POOL_RESTRICT environment variable is set we only iterate over
+ * pools it lists.
  *
- * __ZFS_POOL_EXCLUDE - don't iterate over the pools it lists
- * __ZFS_POOL_RESTRICT - iterate only over the pools it lists
+ * This is an undocumented feature for use during testing only.
  *
  * This function returns B_TRUE if the pool should be skipped
  * during iteration.
  */
-boolean_t
-zpool_skip_pool(const char *poolname)
+static boolean_t
+check_restricted(const char *poolname)
 {
 	static boolean_t initialized = B_FALSE;
-	static const char *exclude = NULL;
-	static const char *restricted = NULL;
+	static char *restricted = NULL;
 
 	const char *cur, *end;
-	int len;
-	int namelen = strlen(poolname);
+	int len, namelen;
 
 	if (!initialized) {
 		initialized = B_TRUE;
-		exclude = getenv("__ZFS_POOL_EXCLUDE");
 		restricted = getenv("__ZFS_POOL_RESTRICT");
-	}
-
-	if (exclude != NULL) {
-		cur = exclude;
-		do {
-			end = strchr(cur, ' ');
-			len = (NULL == end) ? strlen(cur) : (end - cur);
-			if (len == namelen && 0 == strncmp(cur, poolname, len))
-				return (B_TRUE);
-			cur += (len + 1);
-		} while (NULL != end);
 	}
 
 	if (NULL == restricted)
 		return (B_FALSE);
 
 	cur = restricted;
+	namelen = strlen(poolname);
 	do {
 		end = strchr(cur, ' ');
 		len = (NULL == end) ? strlen(cur) : (end - cur);
@@ -417,7 +402,7 @@ zpool_iter(libzfs_handle_t *hdl, zpool_iter_f func, void *data)
 	for (cn = uu_avl_first(hdl->libzfs_ns_avl); cn != NULL;
 	    cn = uu_avl_next(hdl->libzfs_ns_avl, cn)) {
 
-		if (zpool_skip_pool(cn->cn_name))
+		if (check_restricted(cn->cn_name))
 			continue;
 
 		if (zpool_open_silent(hdl, cn->cn_name, &zhp) != 0) {
@@ -455,7 +440,7 @@ zfs_iter_root(libzfs_handle_t *hdl, zfs_iter_f func, void *data)
 	for (cn = uu_avl_first(hdl->libzfs_ns_avl); cn != NULL;
 	    cn = uu_avl_next(hdl->libzfs_ns_avl, cn)) {
 
-		if (zpool_skip_pool(cn->cn_name))
+		if (check_restricted(cn->cn_name))
 			continue;
 
 		if ((zhp = make_dataset_handle(hdl, cn->cn_name)) == NULL)

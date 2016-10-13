@@ -30,7 +30,6 @@
 #define _HYPERV_REG_H_
 
 #include <sys/param.h>
-#include <sys/systm.h>
 
 /*
  * Hyper-V Synthetic MSRs

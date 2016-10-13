@@ -26,8 +26,8 @@
  * Copyright (c) 2012, Joyent, Inc. All rights reserved.
  * Copyright (c) 2012 Martin Matuska <mm@FreeBSD.org>. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
+ * Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
  * Copyright (c) 2014 Integros [integros.com]
- * Copyright 2016 Nexenta Systems, Inc.
  */
 
 #ifndef	_LIBZFS_H
@@ -51,6 +51,8 @@ extern "C" {
 /*
  * Miscellaneous ZFS constants
  */
+#define	ZFS_MAXNAMELEN		MAXNAMELEN
+#define	ZPOOL_MAXNAMELEN	MAXNAMELEN
 #define	ZFS_MAXPROPLEN		MAXPATHLEN
 #define	ZPOOL_MAXPROPLEN	MAXPATHLEN
 
@@ -219,7 +221,6 @@ extern void zpool_free_handles(libzfs_handle_t *);
  */
 typedef int (*zpool_iter_f)(zpool_handle_t *, void *);
 extern int zpool_iter(libzfs_handle_t *, zpool_iter_f, void *);
-extern boolean_t zpool_skip_pool(const char *);
 
 /*
  * Functions to create and destroy pools
@@ -410,7 +411,6 @@ extern void zfs_close(zfs_handle_t *);
 extern zfs_type_t zfs_get_type(const zfs_handle_t *);
 extern const char *zfs_get_name(const zfs_handle_t *);
 extern zpool_handle_t *zfs_get_pool_handle(const zfs_handle_t *);
-extern const char *zfs_get_pool_name(const zfs_handle_t *);
 
 /*
  * Property management functions.  Some functions are shared with the kernel,

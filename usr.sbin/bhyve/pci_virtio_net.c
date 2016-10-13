@@ -853,13 +853,8 @@ pci_vtnet_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 		if (strncmp(devname, "vale", 4) == 0)
 			pci_vtnet_netmap_setup(sc, devname);
-<<<<<<< HEAD
 		if (strncmp(devname, "tap", 3) == 0 ||
 		    strncmp(devname, "vmnet", 5) == 0)
-=======
-		if ((strncmp(devname, "tap", 3) == 0) ||
-		    (strncmp(devname, "vmnet", 5) == 0))
->>>>>>> freebsd/stable/10
 			pci_vtnet_tap_setup(sc, devname);
 
 		free(devname);

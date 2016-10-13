@@ -26,7 +26,7 @@
 #include <solaris.h>
 #include <inttypes.h>
 #include <unistd.h>
-#include <string.h>
+#include <strings.h>
 #include <libintl.h>
 #include <stdarg.h>
 #include "libnvpair.h"
@@ -1228,8 +1228,7 @@ nvpair_value_match_regex(nvpair_t *nvp, int ai,
 		break;
 	}
 	case DATA_TYPE_BOOLEAN_VALUE: {
-		int32_t val_arg;
-		boolean_t val;
+		boolean_t val, val_arg;
 
 		/* scanf boolean_t from value and check for match */
 		sr = sscanf(value, "%"SCNi32, &val_arg);
@@ -1240,8 +1239,7 @@ nvpair_value_match_regex(nvpair_t *nvp, int ai,
 		break;
 	}
 	case DATA_TYPE_BOOLEAN_ARRAY: {
-		boolean_t *val_array;
-		int32_t val_arg;
+		boolean_t *val_array, val_arg;
 
 		/* check indexed value of array for match */
 		sr = sscanf(value, "%"SCNi32, &val_arg);

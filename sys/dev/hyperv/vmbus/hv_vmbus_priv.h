@@ -28,28 +28,60 @@
  * $FreeBSD$
  */
 
-#ifndef _HVUTIL_H_
-#define _HVUTIL_H_
+#ifndef __HYPERV_PRIV_H__
+#define __HYPERV_PRIV_H__
 
-/**
- * hv_util related structures
- *
+#include <sys/param.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
+#include <sys/sema.h>
+#include <sys/_iovec.h>
+
+#include <dev/hyperv/include/hyperv.h>
+
+struct vmbus_softc;
+
+/*
+ * Private, VM Bus functions
  */
-typedef struct hv_util_sc {
-	/*
-	 * function to process Hyper-V messages
-	 */
-	void (*callback)(void *);
+struct sysctl_ctx_list;
+struct sysctl_oid_list;
 
-	struct hv_vmbus_channel	*channel;
-	uint8_t			*receive_buffer;
-} hv_util_sc;
+void			hv_ring_buffer_stat(
+				struct sysctl_ctx_list		*ctx,
+				struct sysctl_oid_list		*tree_node,
+				hv_vmbus_ring_buffer_info	*rbi,
+				const char			*desc);
 
-void hv_negotiate_version(
-	struct hv_vmbus_icmsg_hdr*		icmsghdrp,
-	struct hv_vmbus_icmsg_negotiate*	negop,
-	uint8_t*				buf);
+int			hv_vmbus_ring_buffer_init(
+				hv_vmbus_ring_buffer_info	*ring_info,
+				void				*buffer,
+				uint32_t			buffer_len);
 
-int hv_util_attach(device_t dev);
-int hv_util_detach(device_t dev);
-#endif
+void			hv_ring_buffer_cleanup(
+				hv_vmbus_ring_buffer_info	*ring_info);
+
+int			hv_ring_buffer_write(
+				hv_vmbus_ring_buffer_info	*ring_info,
+				const struct iovec		iov[],
+				uint32_t			iovlen,
+				boolean_t			*need_sig);
+
+int			hv_ring_buffer_peek(
+				hv_vmbus_ring_buffer_info	*ring_info,
+				void				*buffer,
+				uint32_t			buffer_len);
+
+int			hv_ring_buffer_read(
+				hv_vmbus_ring_buffer_info	*ring_info,
+				void				*buffer,
+				uint32_t			buffer_len,
+				uint32_t			offset);
+
+void			hv_ring_buffer_read_begin(
+				hv_vmbus_ring_buffer_info	*ring_info);
+
+uint32_t		hv_ring_buffer_read_end(
+				hv_vmbus_ring_buffer_info	*ring_info);
+
+#endif  /* __HYPERV_PRIV_H__ */

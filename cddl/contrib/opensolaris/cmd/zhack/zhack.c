@@ -48,6 +48,7 @@
 #include <sys/zio_compress.h>
 #include <sys/zfeature.h>
 #include <sys/dmu_tx.h>
+#undef ZFS_MAXNAMELEN
 #undef verify
 #include <libzfs.h>
 
