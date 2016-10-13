@@ -4,7 +4,7 @@
 PROG=	ypbind
 MAN=	ypbind.8
 SRCS=	ypbind.c yp_ping.c
-
+LDADD=	-lutil
 CFLAGS+= -DDAEMON
 
 WARNS?=	2
