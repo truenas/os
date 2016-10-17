@@ -473,7 +473,7 @@ bw_init(struct bwrite *bw, int fd,
 	if ((fdflags & O_NONBLOCK) != desired_nonblock) {
 		fdflags &= ~O_NONBLOCK;
 		fdflags |= desired_nonblock;
-		if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+		if (fcntl(fd, F_SETFL, fdflags) < 0)
 			return BW_ERROR;
 	}
 	if (iflags & BI_THREAD) {
