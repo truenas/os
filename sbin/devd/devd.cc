@@ -884,15 +884,26 @@ unsigned int num_clients;
 list<client_t> clients;
 
 void
-ditch_client(struct client &cli, const char *caller, const char *reason)
+ditch_client(struct client &cli, const char *caller, const char *reason,
+    bool log_errno)
 {
+	const char *fmt;
 
-	if (client_debug >= 0)
-		devdlog(client_debug, "%s: dropping %s client fd=%d\n",
-		    caller, reason, cli.fd);
-	else
-		devdlog(LOG_WARNING, "%s: dropping %s client\n",
-		    caller, reason);
+	if (client_debug >= 0) {
+		if (log_errno)
+			fmt = "%s: dropping %s client fd=%d: %s\n";
+		else
+			fmt = "%s: dropping %s client fd=%d\n";
+		devdlog(client_debug, fmt, caller, reason, cli.fd,
+		    strerror(errno));
+	} else {
+		if (log_errno)
+			fmt = "%s: dropping %s client: %s\n";
+		else
+			fmt = "%s: dropping %s client\n";
+		devdlog(LOG_WARNING, fmt, caller, reason,
+		    strerror(errno));
+	}
 	bw_fini(cli.bwritep);
 	delete[] cli.records;
 	delete[] cli.data;
@@ -930,7 +941,8 @@ notify_clients(const char *xml, int xmllen, const char *compat, int compatlen)
 		}
 		rv = bw_put(i->bwritep, (void *)data, len);
 		if (rv != BW_PUT_OK) {
-			ditch_client(*i, __func__, "unresponsive");
+			ditch_client(*i, __func__, "unresponsive",
+			   rv == BW_PUT_ERROR);
 			i = clients.erase(i);
 		} else
 			++i;
@@ -958,7 +970,7 @@ check_clients(void)
 		state = bw_check(i->bwritep, BW_CHECK_HUP);
 		/* NB: blocked state is OK, just means we're queuing data */
 		if (state != BW_OPEN && state != BW_BLOCKED) {
-			ditch_client(*i, __func__, "disconnected");
+			ditch_client(*i, __func__, "disconnected", false);
 			i = clients.erase(i);
 		} else {
 			if (client_debug >= 0) {
@@ -1041,7 +1053,8 @@ new_client(int fd, bool is_xml, int socktype)
 		error = 1;
 	}
 	if (error) {
-		devdlog(LOG_ERR, "error setting up new client: %m\n");
+		devdlog(LOG_ERR, "error setting up new client: %s\n",
+		    strerror(errno));
 		delete[] s.records;
 		delete[] s.data;
 		delete[] s.bwritep;
