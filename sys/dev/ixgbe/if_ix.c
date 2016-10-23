@@ -539,6 +539,9 @@ ixgbe_attach(device_t dev)
 		goto err_late;
 	}
 
+	if (allow_unsupported_sfp)
+		device_printf(dev, "WARNING: allow_unsupported_sfp is enabled\n");
+
 	/* Initialize the shared code */
 	hw->allow_unsupported_sfp = allow_unsupported_sfp;
 	error = ixgbe_init_shared_code(hw);
