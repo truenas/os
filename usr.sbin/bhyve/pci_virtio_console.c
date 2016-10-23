@@ -2,6 +2,9 @@
  * Copyright (c) 2016 iXsystems Inc.
  * All rights reserved.
  *
+ * This software was developed by Jakub Klama <jceel@FreeBSD.org>
+ * under sponsorship from iXsystems Inc.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -26,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+__FBSDID("$FreeBSD: head/usr.sbin/bhyve/pci_virtio_console.c 305898 2016-09-17 13:48:01Z jceel $");
 
 #include <sys/param.h>
 #include <sys/linker_set.h>
@@ -51,7 +54,7 @@ __FBSDID("$FreeBSD$");
 #include "virtio.h"
 #include "mevent.h"
 
-#define VTCON_RINGSZ	64
+#define	VTCON_RINGSZ	64
 #define	VTCON_MAXPORTS	16
 #define	VTCON_MAXQ	(VTCON_MAXPORTS * 2 + 2)
 
@@ -83,7 +86,7 @@ typedef void (pci_vtcon_cb_t)(struct pci_vtcon_port *, void *, struct iovec *,
 struct pci_vtcon_port {
 	struct pci_vtcon_softc * vsp_sc;
 	int                      vsp_id;
-        const char *             vsp_name;
+	const char *             vsp_name;
 	bool                     vsp_enabled;
 	bool                     vsp_console;
 	bool                     vsp_rx_ready;
@@ -98,9 +101,9 @@ struct pci_vtcon_sock
 	struct pci_vtcon_port *  vss_port;
 	const char *             vss_path;
 	struct mevent *          vss_server_evp;
-        struct mevent *          vss_conn_evp;
-        int                      vss_server_fd;
-        int                      vss_conn_fd;
+	struct mevent *          vss_conn_evp;
+	int                      vss_server_fd;
+	int                      vss_conn_fd;
 	bool                     vss_open;
 };
 
@@ -246,7 +249,6 @@ pci_vtcon_port_add(struct pci_vtcon_softc *sc, const char *name,
 		/* port0 */
 		port->vsp_txq = 0;
 		port->vsp_rxq = 1;
-		port->vsp_console = true;
 	} else {
 		port->vsp_txq = sc->vsc_nports * 2;
 		port->vsp_rxq = port->vsp_txq + 1;
@@ -264,7 +266,7 @@ pci_vtcon_sock_add(struct pci_vtcon_softc *sc, const char *name,
 	struct sockaddr_un sun;
 	int s = -1, fd = -1, error = 0;
 
-	sock = malloc(sizeof(struct pci_vtcon_sock));
+	sock = calloc(1, sizeof(struct pci_vtcon_sock));
 	if (sock == NULL) {
 		error = -1;
 		goto out;
@@ -284,9 +286,9 @@ pci_vtcon_sock_add(struct pci_vtcon_softc *sc, const char *name,
 
 	sun.sun_family = AF_UNIX;
 	sun.sun_len = sizeof(struct sockaddr_un);
-	strncpy(sun.sun_path, path, sizeof(sun.sun_path));
+	strncpy(sun.sun_path, basename((char *)path), sizeof(sun.sun_path));
 
-	if (bind(s, (struct sockaddr *)&sun, sun.sun_len) < 0) {
+	if (bindat(fd, s, (struct sockaddr *)&sun, sun.sun_len) < 0) {
 		error = -1;
 		goto out;
 	}
