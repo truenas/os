@@ -292,6 +292,8 @@ struct adapter_params {
 #define CHELSIO_T4		0x4
 #define CHELSIO_T5		0x5
 
+#define CHELSIO_T5_MAXMTU	9600
+
 struct trace_params {
 	u32 data[TRACE_LEN / 4];
 	u32 mask[TRACE_LEN / 4];
