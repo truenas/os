@@ -102,7 +102,7 @@ valid_hostid()
 
 hostid_hardware()
 {
-	uuid=`kenv -q smbios.system.uuid`
+	uuid=`/usr/local/sbin/dmidecode -s system-uuid | tr A-Z a-z`
 
 	if valid_hostid $uuid; then
 		echo "${uuid}"
