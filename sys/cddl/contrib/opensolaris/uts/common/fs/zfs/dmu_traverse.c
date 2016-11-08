@@ -40,6 +40,12 @@
 #include <sys/zfeature.h>
 
 int32_t zfs_pd_bytes_max = 50 * 1024 * 1024;	/* 50MB */
+boolean_t send_holes_without_birth_time = B_TRUE;
+
+SYSCTL_DECL(_vfs_zfs);
+TUNABLE_INT("vfs.zfs.send_holes_without_birth_time", &send_holes_without_birth_time);
+SYSCTL_UINT(_vfs_zfs, OID_AUTO, send_holes_without_birth_time, CTLFLAG_RWTUN,
+    &send_holes_without_birth_time, 0, "Send holes without birth time");
 
 typedef struct prefetch_data {
 	kmutex_t pd_mtx;
@@ -254,7 +260,8 @@ traverse_visitbp(traverse_data_t *td, const dnode_phys_t *dnp,
 		 *
 		 * Note that the meta-dnode cannot be reallocated.
 		 */
-		if ((!td->td_realloc_possible ||
+		if (!send_holes_without_birth_time &&
+		    (!td->td_realloc_possible ||
 		    zb->zb_object == DMU_META_DNODE_OBJECT) &&
 		    td->td_hole_birth_enabled_txg <= td->td_min_txg)
 			return (0);
