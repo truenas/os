@@ -60,6 +60,8 @@
 #include <fs/msdosfs/fat.h>
 #include <fs/msdosfs/msdosfsmount.h>
 
+#define	FULL_RUN	((u_int)0xffffffff)
+
 static int	chainalloc(struct msdosfsmount *pmp, u_long start,
 		    u_long count, u_long fillwith, u_long *retcluster,
 		    u_long *got);
@@ -399,6 +401,8 @@ usemap_alloc(pmp, cn)
 
 	MSDOSFS_ASSERT_MP_LOCKED(pmp);
 
+	KASSERT(cn <= pmp->pm_maxcluster, ("cn too large %lu %lu", cn,
+	    pmp->pm_maxcluster));
 	KASSERT((pmp->pm_flags & MSDOSFSMNT_RONLY) == 0,
 	    ("usemap_alloc on ro msdosfs mount"));
 	KASSERT((pmp->pm_inusemap[cn / N_INUSEBITS] & (1 << (cn % N_INUSEBITS)))
@@ -417,6 +421,9 @@ usemap_free(pmp, cn)
 {
 
 	MSDOSFS_ASSERT_MP_LOCKED(pmp);
+
+	KASSERT(cn <= pmp->pm_maxcluster, ("cn too large %lu %lu", cn,
+	    pmp->pm_maxcluster));
 	KASSERT((pmp->pm_flags & MSDOSFSMNT_RONLY) == 0,
 	    ("usemap_free on ro msdosfs mount"));
 	pmp->pm_freeclustercount++;
@@ -670,6 +677,8 @@ chainlength(pmp, start, count)
 
 	MSDOSFS_ASSERT_MP_LOCKED(pmp);
 
+	if (start > pmp->pm_maxcluster)
+		return (0);
 	max_idx = pmp->pm_maxcluster / N_INUSEBITS;
 	idx = start / N_INUSEBITS;
 	start %= N_INUSEBITS;
@@ -677,11 +686,18 @@ chainlength(pmp, start, count)
 	map &= ~((1 << start) - 1);
 	if (map) {
 		len = ffs(map) - 1 - start;
-		return (len > count ? count : len);
+		len = MIN(len, count);
+		if (start + len > pmp->pm_maxcluster)
+			len = pmp->pm_maxcluster - start + 1;
+		return (len);
 	}
 	len = N_INUSEBITS - start;
-	if (len >= count)
-		return (count);
+	if (len >= count) {
+		len = count;
+		if (start + len > pmp->pm_maxcluster)
+			len = pmp->pm_maxcluster - start + 1;
+		return (len);
+	}
 	while (++idx <= max_idx) {
 		if (len >= count)
 			break;
@@ -692,7 +708,10 @@ chainlength(pmp, start, count)
 		}
 		len += N_INUSEBITS;
 	}
-	return (len > count ? count : len);
+	len = MIN(len, count);
+	if (start + len > pmp->pm_maxcluster)
+		len = pmp->pm_maxcluster - start + 1;
+	return (len);
 }
 
 /*
@@ -729,8 +748,11 @@ chainalloc(pmp, start, count, fillwith, retcluster, got)
 		pmp->pm_nxtfree = CLUST_FIRST;
 	pmp->pm_flags |= MSDOSFS_FSIMOD;
 	error = fatchain(pmp, start, count, fillwith);
-	if (error != 0)
+	if (error != 0) {
+		for (cl = start, n = count; n-- > 0;)
+			usemap_free(pmp, cl++);
 		return (error);
+	}
 #ifdef MSDOSFS_DEBUG
 	printf("clusteralloc(): allocated cluster chain at %lu (%lu clusters)\n",
 	    start, count);
@@ -792,8 +814,8 @@ clusteralloc1(struct msdosfsmount *pmp, u_long start, u_long count,
 		idx = cn / N_INUSEBITS;
 		map = pmp->pm_inusemap[idx];
 		map |= (1 << (cn % N_INUSEBITS)) - 1;
-		if (map != (u_int)-1) {
-			cn = idx * N_INUSEBITS + ffs(map^(u_int)-1) - 1;
+		if (map != FULL_RUN) {
+			cn = idx * N_INUSEBITS + ffs(map ^ FULL_RUN) - 1;
 			if ((l = chainlength(pmp, cn, count)) >= count)
 				return (chainalloc(pmp, cn, count, fillwith, retcluster, got));
 			if (l > foundl) {
@@ -809,8 +831,8 @@ clusteralloc1(struct msdosfsmount *pmp, u_long start, u_long count,
 		idx = cn / N_INUSEBITS;
 		map = pmp->pm_inusemap[idx];
 		map |= (1 << (cn % N_INUSEBITS)) - 1;
-		if (map != (u_int)-1) {
-			cn = idx * N_INUSEBITS + ffs(map^(u_int)-1) - 1;
+		if (map != FULL_RUN) {
+			cn = idx * N_INUSEBITS + ffs(map ^ FULL_RUN) - 1;
 			if ((l = chainlength(pmp, cn, count)) >= count)
 				return (chainalloc(pmp, cn, count, fillwith, retcluster, got));
 			if (l > foundl) {
@@ -921,7 +943,7 @@ fillinusemap(pmp)
 	 * loop further down.
 	 */
 	for (cn = 0; cn < (pmp->pm_maxcluster + N_INUSEBITS) / N_INUSEBITS; cn++)
-		pmp->pm_inusemap[cn] = (u_int)-1;
+		pmp->pm_inusemap[cn] = FULL_RUN;
 
 	/*
 	 * Figure how many free clusters are in the filesystem by ripping
@@ -951,11 +973,16 @@ fillinusemap(pmp)
 			readcn >>= 4;
 		readcn &= pmp->pm_fatmask;
 
-		if (readcn == 0)
+		if (readcn == CLUST_FREE)
 			usemap_free(pmp, cn);
 	}
 	if (bp != NULL)
 		brelse(bp);
+
+	for (cn = pmp->pm_maxcluster + 1; cn < (pmp->pm_maxcluster +
+	    N_INUSEBITS) / N_INUSEBITS; cn++)
+		pmp->pm_inusemap[cn / N_INUSEBITS] |= 1 << (cn % N_INUSEBITS);
+
 	return (0);
 }
 
@@ -1019,12 +1046,14 @@ extendfile(dep, count, bpp, ncp, flags)
 	while (count > 0) {
 		/*
 		 * Allocate a new cluster chain and cat onto the end of the
-		 * file.  * If the file is empty we make de_StartCluster point
-		 * to the new block.  Note that de_StartCluster being 0 is
-		 * sufficient to be sure the file is empty since we exclude
-		 * attempts to extend the root directory above, and the root
-		 * dir is the only file with a startcluster of 0 that has
-		 * blocks allocated (sort of).
+		 * file.
+		 * If the file is empty we make de_StartCluster point
+		 * to the new block.  Note that de_StartCluster being
+		 * 0 is sufficient to be sure the file is empty since
+		 * we exclude attempts to extend the root directory
+		 * above, and the root dir is the only file with a
+		 * startcluster of 0 that has blocks allocated (sort
+		 * of).
 		 */
 		if (dep->de_StartCluster == 0)
 			cn = 0;

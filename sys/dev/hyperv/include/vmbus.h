@@ -119,6 +119,7 @@ struct vmbus_chan_br {
 struct vmbus_channel;
 struct hyperv_guid;
 struct task;
+struct taskqueue;
 
 typedef void	(*vmbus_chan_callback_t)(struct vmbus_channel *, void *);
 
@@ -146,8 +147,6 @@ int		vmbus_chan_gpadl_disconnect(struct vmbus_channel *chan,
 
 void		vmbus_chan_cpu_set(struct vmbus_channel *chan, int cpu);
 void		vmbus_chan_cpu_rr(struct vmbus_channel *chan);
-struct vmbus_channel *
-		vmbus_chan_cpu2chan(struct vmbus_channel *chan, int cpu);
 void		vmbus_chan_set_readbatch(struct vmbus_channel *chan, bool on);
 
 struct vmbus_channel **
@@ -180,5 +179,7 @@ int		vmbus_chan_prplist_nelem(int br_size, int prpcnt_max,
 		    int dlen_max);
 bool		vmbus_chan_rx_empty(const struct vmbus_channel *chan);
 bool		vmbus_chan_tx_empty(const struct vmbus_channel *chan);
+struct taskqueue *
+		vmbus_chan_mgmt_tq(const struct vmbus_channel *chan);
 
 #endif	/* !_VMBUS_H_ */

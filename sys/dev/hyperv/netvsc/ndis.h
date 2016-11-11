@@ -32,6 +32,10 @@
 #define	NDIS_MEDIA_STATE_CONNECTED	0
 #define	NDIS_MEDIA_STATE_DISCONNECTED	1
 
+#define	NDIS_NETCHANGE_TYPE_POSSIBLE	1
+#define	NDIS_NETCHANGE_TYPE_DEFINITE	2
+#define	NDIS_NETCHANGE_TYPE_FROMMEDIA	3
+
 #define	NDIS_OFFLOAD_SET_NOCHG		0
 #define	NDIS_OFFLOAD_SET_ON		1
 #define	NDIS_OFFLOAD_SET_OFF		2
@@ -52,6 +56,10 @@
 #define	NDIS_HASH_IPV6_EX		0x00000800
 #define	NDIS_HASH_TCP_IPV6		0x00001000
 #define	NDIS_HASH_TCP_IPV6_EX		0x00002000
+
+/* Hash description for use with printf(9) %b identifier. */
+#define	NDIS_HASH_BITS			\
+	"\20\1TOEPLITZ\11IP4\12TCP4\13IP6\14IP6EX\15TCP6\16TCP6EX"
 
 #define	NDIS_HASH_KEYSIZE_TOEPLITZ	40
 #define	NDIS_HASH_INDCNT		128
@@ -138,7 +146,7 @@ struct ndis_offload_params {
  */
 struct ndis_rss_caps {
 	struct ndis_object_hdr		ndis_hdr;
-	uint32_t			ndis_flags;	/* NDIS_RSS_CAP_ */
+	uint32_t			ndis_caps;	/* NDIS_RSS_CAP_ */
 	uint32_t			ndis_nmsi;	/* # of MSIs */
 	uint32_t			ndis_nrxr;	/* # of RX rings */
 	/* NDIS >= 6.30 */
@@ -161,7 +169,8 @@ struct ndis_rss_caps {
 #define	NDIS_RSS_CAP_IPV4		0x00000100
 #define	NDIS_RSS_CAP_IPV6		0x00000200
 #define	NDIS_RSS_CAP_IPV6_EX		0x00000400
-#define	NDIS_RSS_CAP_HASH_TOEPLITZ	0x00000001
+#define	NDIS_RSS_CAP_HASH_TOEPLITZ	NDIS_HASH_FUNCTION_TOEPLITZ
+#define	NDIS_RSS_CAP_HASHFUNC_MASK	NDIS_HASH_FUNCTION_MASK
 
 /*
  * OID_GEN_RECEIVE_SCALE_PARAMETERS
@@ -204,6 +213,9 @@ struct ndis_rssprm_toeplitz {
 	/* Indirect table */
 	uint32_t			rss_ind[NDIS_HASH_INDCNT];
 };
+
+#define	NDIS_RSSPRM_TOEPLITZ_SIZE(nind)	\
+	__offsetof(struct ndis_rssprm_toeplitz, rss_ind[nind])
 
 /*
  * OID_TCP_OFFLOAD_HARDWARE_CAPABILITIES
