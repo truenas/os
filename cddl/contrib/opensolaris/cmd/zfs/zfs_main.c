@@ -4132,7 +4132,6 @@ zfs_do_receive(int argc, char **argv)
 		    "You must redirect standard input.\n"));
 		return (1);
 	}
-	err = zfs_receive(g_zfs, argv[0], &flags, STDIN_FILENO, props, limitds, NULL);
 
 	/*
 	 * zfs_receive() can return 0, two different negative values
