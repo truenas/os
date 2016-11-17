@@ -2418,8 +2418,20 @@ fs_lock(void *softc, struct l9p_request *req)
 	file = req->lr_fid->lo_aux;
 	fl.l_start = (off_t)req->lr_req.tlock.start;
 	fl.l_len = (off_t)req->lr_req.tlock.length;
-	fl.l_pid = (pid_t)req->lr_req.tlock.proc_id;
-	fl.l_type = req->lr_req.tlock.type;
+	/* fl.l_pid = (pid_t)req->lr_req.tlock.proc_id; -- output only */
+	switch (req->lr_req.tlock.type) {
+	case L9PL_LOCK_TYPE_RDLOCK:
+		fl.l_type = F_RDLCK;
+		break;
+	case L9PL_LOCK_TYPE_WRLOCK:
+		fl.l_type = F_WRLCK;
+		break;
+	case L9PL_LOCK_TYPE_UNLOCK:
+		fl.l_type = F_UNLCK;
+		break;
+	default:
+		return (EINVAL);
+	}
 	fl.l_whence = SEEK_SET;
 
 	if (fcntl(file->ff_fd, F_SETLK, (void *)&fl) != 0) {
@@ -2450,7 +2462,18 @@ fs_getlock(void *softc __unused, struct l9p_request *req)
 	req->lr_resp.getlock.proc_id = (uint32_t)fl.l_pid;
 	req->lr_resp.getlock.start = (uint64_t)fl.l_start;
 	req->lr_resp.getlock.length = (uint64_t)fl.l_len;
-	req->lr_resp.getlock.type = (uint8_t)fl.l_type;
+	switch (fl.l_type) {
+	case F_RDLCK:
+		req->lr_resp.getlock.type = L9PL_LOCK_TYPE_RDLOCK;
+		break;
+	case F_WRLCK:
+		req->lr_resp.getlock.type = L9PL_LOCK_TYPE_WRLOCK;
+		break;
+	case F_UNLCK:
+	default:	/* ??? should never happen */
+		req->lr_resp.getlock.type = L9PL_LOCK_TYPE_UNLOCK;
+		break;
+	}
 	req->lr_resp.getlock.client_id = (char *)"";  /* XXX what should go here? */
 	return (0);
 }
