@@ -25,6 +25,9 @@
  *
  */
 
+#ifndef LIB9P_RFUNCS_H
+#define LIB9P_RFUNCS_H
+
 #include <grp.h>
 #include <pwd.h>
 #include <string.h>
@@ -63,3 +66,5 @@ struct r_pgdata {
 void r_pgfree(struct r_pgdata *);
 struct passwd *r_getpwuid(uid_t, struct r_pgdata *);
 struct group *r_getgrgid(gid_t, struct r_pgdata *);
+
+#endif	/* LIB9P_RFUNCS_H */
