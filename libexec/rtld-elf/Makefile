@@ -2,7 +2,7 @@
 
 # Use the following command to build local debug version of dynamic
 # linker:
-# make DEBUG_FLAGS=-g DEBUG=-DDEBUG MK_TESTS=no all
+# make DEBUG_FLAGS=-g DEBUG=-DDEBUG WITHOUT_TESTS=yes all
 
 .include <bsd.own.mk>
 MK_SSP=		no
@@ -45,7 +45,7 @@ CFLAGS+=	-DPIC $(DEBUG)
 .if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
 CFLAGS+=	-fvisibility=hidden
 .endif
-LDFLAGS+=	-shared -Wl,-Bsymbolic
+LDFLAGS+=	-shared -Wl,-Bsymbolic -Wl,-z,defs
 DPADD=		${LIBC_PIC}
 LDADD=		-lc_pic
 
