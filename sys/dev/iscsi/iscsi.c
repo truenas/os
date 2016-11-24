@@ -32,6 +32,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/bus.h>
 #include <sys/condvar.h>
 #include <sys/conf.h>
 #include <sys/endian.h>
@@ -168,6 +169,7 @@ static void	iscsi_pdu_handle_async_message(struct icl_pdu *response);
 static void	iscsi_pdu_handle_reject(struct icl_pdu *response);
 static void	iscsi_session_reconnect(struct iscsi_session *is);
 static void	iscsi_session_terminate(struct iscsi_session *is);
+static void	iscsi_session_notify(struct iscsi_session *is);
 static void	iscsi_action(struct cam_sim *sim, union ccb *ccb);
 static void	iscsi_poll(struct cam_sim *sim);
 static struct iscsi_outstanding	*iscsi_outstanding_find(struct iscsi_session *is,
@@ -417,6 +419,7 @@ iscsi_maintenance_thread_reconnect(struct iscsi_session *is)
 	//ISCSI_SESSION_DEBUG(is, "waking up iscsid(8)");
 	is->is_waiting_for_iscsid = true;
 	strlcpy(is->is_reason, "Waiting for iscsid(8)", sizeof(is->is_reason));
+	iscsi_session_notify(is);
 	is->is_timeout = 0;
 	ISCSI_SESSION_UNLOCK(is);
 	cv_signal(&is->is_softc->sc_cv);
@@ -534,6 +537,38 @@ iscsi_session_terminate(struct iscsi_session *is)
 	iscsi_session_logout(is);
 #endif
 	cv_signal(&is->is_maintenance_cv);
+}
+
+static void
+iscsi_session_notify(struct iscsi_session *is)
+{
+	struct devctl_param params[4];
+
+	params[0] = (struct devctl_param){
+		.dp_key = "target",
+		.dp_type = DT_STRING,
+		.dp_string = is->is_conf.isc_target
+	};
+
+	params[1] = (struct devctl_param){
+		.dp_key = "session_id",
+		.dp_type = DT_UINT,
+		.dp_int = is->is_id
+	};
+
+	params[2] = (struct devctl_param){
+		.dp_key = "connected",
+		.dp_type = DT_BOOL,
+		.dp_bool = is->is_connected
+	};
+
+	params[3] = (struct devctl_param){
+		.dp_key = "reason",
+		.dp_type = DT_STRING,
+		.dp_string = is->is_reason
+	};
+
+	devctl_notify_params("ISCSI", "SESSION", "UPDATE", params, 4, 0);
 }
 
 static void
@@ -1344,6 +1379,7 @@ iscsi_ioctl_daemon_wait(struct iscsi_softc *sc,
 		is->is_waiting_for_iscsid = false;
 		is->is_login_phase = true;
 		is->is_reason[0] = '\0';
+		iscsi_session_notify(is);
 		ISCSI_SESSION_UNLOCK(is);
 
 		request->idr_session_id = is->is_id;
@@ -1444,6 +1480,7 @@ iscsi_ioctl_daemon_handoff(struct iscsi_softc *sc,
 	is->is_timeout = 0;
 	is->is_connected = true;
 	is->is_reason[0] = '\0';
+	iscsi_session_notify(is);
 
 	ISCSI_SESSION_UNLOCK(is);
 
