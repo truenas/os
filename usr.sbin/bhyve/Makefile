@@ -3,8 +3,9 @@
 #
 
 # Temporary include path hack - to be removed once I clean lib9p.h up
-CFLAGS+=-I${.CURDIR}/../../contrib/lib9p
+CFLAGS+=-I${.CURDIR}/../../contrib/lib9p -I${.CURDIR}/../../sys
 .PATH:  ${.CURDIR}/../../contrib/lib9p
+.PATH:  ${.CURDIR}/../../sys/cam/ctl
 
 PROG=	bhyve
 PACKAGE=	bhyve
@@ -24,6 +25,8 @@ SRCS=	\
 	bootrom.c		\
 	console.c		\
 	consport.c		\
+	ctl_util.c		\
+	ctl_scsi_all.c		\
 	dbgport.c		\
 	fwctl.c			\
 	inout.c			\
@@ -45,6 +48,7 @@ SRCS=	\
 	pci_virtio_console.c	\
 	pci_virtio_net.c	\
 	pci_virtio_rnd.c	\
+	pci_virtio_scsi.c	\
 	pci_uart.c		\
 	pci_xhci.c		\
 	pm.c			\
@@ -63,12 +67,13 @@ SRCS=	\
 	vga.c			\
 	vncserver.c		\
 	xmsr.c			\
-	spinup_ap.c
+	spinup_ap.c		\
+	iov.c
 
 .PATH:  ${BHYVE_SYSDIR}/sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
-LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf -lvncserver
+LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf -lvncserver -lcam
 #LIBADD=	vmmapi md pthread z
 
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/e1000
