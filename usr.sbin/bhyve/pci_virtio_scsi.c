@@ -366,6 +366,7 @@ pci_vtscsi_tmf_handle(struct pci_vtscsi_softc *sc,
 		WPRINTF(("CTL_IO: err=%d (%s)\n", errno, strerror(errno)));
 
 	tmf->response = io->taskio.task_status;
+	ctl_scsi_free_io(io);
 	return (1);
 }
 
@@ -455,6 +456,9 @@ pci_vtscsi_request_handle(struct pci_vtscsi_queue *q, struct iovec *iov_in,
 	}
 
 	buf_to_iov(cmd_wr, VTSCSI_OUT_HEADER_LEN(sc), iov_out, niov_out, 0);
+	free(cmd_rd);
+	free(cmd_wr);
+	ctl_scsi_free_io(io);
 	return (VTSCSI_OUT_HEADER_LEN(sc) + io->scsiio.ext_data_filled);
 }
 
