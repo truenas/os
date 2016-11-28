@@ -75,6 +75,10 @@ __FBSDID("$FreeBSD$");
 #define VIRTIO_SCSI_MAX_TARGET  0
 #define VIRTIO_SCSI_MAX_LUN     16383
 
+#define	VIRTIO_SCSI_F_INOUT	(1 << 0)
+#define	VIRTIO_SCSI_F_HOTPLUG	(1 << 1)
+#define	VIRTIO_SCSI_F_CHANGE	(1 << 2)
+
 static int pci_vtscsi_debug = 1;
 #define DPRINTF(params) if (pci_vtscsi_debug) printf params
 #define WPRINTF(params) printf params
@@ -105,6 +109,7 @@ struct pci_vtscsi_softc {
 	struct vqueue_info		vss_vq[VTSCSI_MAXQ];
 	struct pci_vtscsi_queue		vss_queues[VTSCSI_REQUESTQ];
 	pthread_mutex_t			vss_mtx;
+	int				vss_iid;
 	int				vss_ctl_fd;
 	uint32_t			vss_features;
 	struct pci_vtscsi_config	vss_config;
@@ -293,11 +298,12 @@ pci_vtscsi_control_handle(struct pci_vtscsi_softc *sc, void *buf,
 
 	if (type == VIRTIO_SCSI_T_TMF) {
 		tmf = (struct pci_vtscsi_ctrl_tmf *)buf;
-		pci_vtscsi_tmf_handle(sc, tmf);
+		return (pci_vtscsi_tmf_handle(sc, tmf));
 	}
 
 	if (type == VIRTIO_SCSI_T_AN_QUERY) {
 		an = (struct pci_vtscsi_ctrl_an *)buf;
+		return (pci_vtscsi_an_handle(sc, an));
 	}
 
 	return (0);
@@ -310,7 +316,7 @@ pci_vtscsi_tmf_handle(struct pci_vtscsi_softc *sc,
 	union ctl_io *io;
 	int err;
 
-	io = ctl_scsi_alloc_io(7);
+	io = ctl_scsi_alloc_io(sc->vss_iid);
 	ctl_scsi_zero_io(io);
 
 	io->io_hdr.io_type = CTL_IO_TASK;
@@ -402,10 +408,9 @@ pci_vtscsi_request_handle(struct pci_vtscsi_queue *q, struct iovec *iov_in,
 	iov_to_buf(iov_in, niov_in, (void **)&cmd_rd);
 
 	cmd_wr = malloc(VTSCSI_OUT_HEADER_LEN(sc));
-	io = ctl_scsi_alloc_io(7);
+	io = ctl_scsi_alloc_io(sc->vss_iid);
 	ctl_scsi_zero_io(io);
 
-	io->io_hdr.nexus.initid = 7;
 	io->io_hdr.nexus.targ_port = cmd_rd->lun[1];
 	io->io_hdr.nexus.targ_lun = pci_vtscsi_get_lun(cmd_rd->lun);
 
@@ -550,6 +555,9 @@ static int
 pci_vtscsi_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 {
 	struct pci_vtscsi_softc *sc;
+	char *optname = NULL;
+	char *optvalue = NULL;
+	char *opt;
 	int i;
 
 	sc = calloc(1, sizeof(struct pci_vtscsi_softc));
@@ -558,6 +566,14 @@ pci_vtscsi_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	if (sc->vss_ctl_fd < 0) {
 		WPRINTF(("cannot open /dev/cam/ctl: %s\n", strerror(errno)));
 		return (1);
+	}
+
+	while ((opt = strsep(&opts, ",")) != NULL) {
+		optname = strsep(&opt, "=");
+		optvalue = strdup(opt);
+
+		if (strcmp(optname, "iid") == 0)
+			sc->vss_iid = strtoul(optvalue, NULL, 10);
 	}
 
 	vi_softc_linkup(&sc->vss_vs, &vtscsi_vi_consts, sc, pi, sc->vss_vq);
