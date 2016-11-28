@@ -442,13 +442,17 @@ vmexit_svm(struct vmctx *ctx, struct vm_exit *vmexit, int *pvcpu)
 {
 
 	fprintf(stderr, "vm exit[%d]\n", *pvcpu);
-	fprintf(stderr, "\treason\t\tSVM\n");
+	fprintf(stderr, "\treason\t\t
+		\n");
 	fprintf(stderr, "\trip\t\t0x%016lx\n", vmexit->rip);
 	fprintf(stderr, "\tinst_length\t%d\n", vmexit->inst_length);
 	fprintf(stderr, "\texitcode\t%#lx\n", vmexit->u.svm.exitcode);
 	fprintf(stderr, "\texitinfo1\t%#lx\n", vmexit->u.svm.exitinfo1);
 	fprintf(stderr, "\texitinfo2\t%#lx\n", vmexit->u.svm.exitinfo2);
-	return (VMEXIT_ABORT);
+		
+	/* Instead of aborting we'll just increment bogus exit counter */
+	stats.vmexit_bogus++;
+	return (VMEXIT_CONTINUE);
 }
 
 static int
