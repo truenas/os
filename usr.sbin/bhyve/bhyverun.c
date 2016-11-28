@@ -442,8 +442,7 @@ vmexit_svm(struct vmctx *ctx, struct vm_exit *vmexit, int *pvcpu)
 {
 
 	fprintf(stderr, "vm exit[%d]\n", *pvcpu);
-	fprintf(stderr, "\treason\t\t
-		\n");
+	fprintf(stderr, "\treason\t\tSVM\n");
 	fprintf(stderr, "\trip\t\t0x%016lx\n", vmexit->rip);
 	fprintf(stderr, "\tinst_length\t%d\n", vmexit->inst_length);
 	fprintf(stderr, "\texitcode\t%#lx\n", vmexit->u.svm.exitcode);
