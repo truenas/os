@@ -1257,6 +1257,8 @@ identify_hypervisor(void)
 				vm_guest = VM_GUEST_VMWARE;
 			else if (strcmp(hv_vendor, "Microsoft Hv") == 0)
 				vm_guest = VM_GUEST_HV;
+			else if (strcmp(hv_vendor, "bhyve bhyve ") == 0)
+				vm_guest = VM_GUEST_BHYVE;
 		}
 		return;
 	}
