@@ -28,11 +28,13 @@
 #ifndef LIB9P_HASHTABLE_H
 #define LIB9P_HASHTABLE_H
 
+#include <pthread.h>
 #include <sys/queue.h>
 
 struct ht {
-	struct ht_entry * ht_entries;
-	size_t ht_nentries;
+	struct ht_entry * 	ht_entries;
+	size_t 			ht_nentries;
+	pthread_rwlock_t	ht_rwlock;
 };
 
 struct ht_entry {

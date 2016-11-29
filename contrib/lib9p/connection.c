@@ -66,7 +66,6 @@ l9p_connection_init(struct l9p_server *server, struct l9p_connection **conn)
 	l9p_threadpool_init(&newconn->lc_tp, L9P_NUMTHREADS);
 	ht_init(&newconn->lc_files, 100);
 	ht_init(&newconn->lc_requests, 100);
-	pthread_mutex_init(&newconn->lc_mtx, NULL);
 	LIST_INSERT_HEAD(&server->ls_conns, newconn, lc_link);
 	*conn = newconn;
 
@@ -174,15 +173,12 @@ l9p_connection_alloc_fid(struct l9p_connection *conn, uint32_t fid)
 	 * in use, otherwise we have an invalid fid in the
 	 * table (as desired).
 	 */
-	pthread_mutex_lock(&conn->lc_mtx);
 
 	if (ht_add(&conn->lc_files, fid, file) != 0) {
 		free(file);
-		pthread_mutex_unlock(&conn->lc_mtx);
 		return (NULL);
 	}
 
-	pthread_mutex_unlock(&conn->lc_mtx);
 	return (file);
 }
 
@@ -194,10 +190,8 @@ l9p_connection_remove_fid(struct l9p_connection *conn, struct l9p_fid *fid)
 	/* fid should be marked invalid by this point */
 	assert(!l9p_fid_isvalid(fid));
 
-	pthread_mutex_lock(&conn->lc_mtx);
 	be = conn->lc_server->ls_backend;
 	be->freefid(be->softc, fid);
 
 	ht_remove(&conn->lc_files, fid->lo_fid);
-	pthread_mutex_unlock(&conn->lc_mtx);
 }

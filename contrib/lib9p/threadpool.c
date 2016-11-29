@@ -66,7 +66,9 @@ int
 l9p_threadpool_init(struct l9p_threadpool *tp, int size)
 {
 	struct l9p_worker *worker;
+#if defined(__FreeBSD__)
 	char threadname[16];
+#endif
 	int i;
 
 	pthread_mutex_init(&tp->ltp_mtx, NULL);
@@ -80,10 +82,8 @@ l9p_threadpool_init(struct l9p_threadpool *tp, int size)
 		pthread_create(&worker->ltw_thread, NULL, &l9p_worker,
 		    (void *)worker);
 
-		sprintf(threadname, "worker:%d", i);
-#if defined(__APPLE__)
-		pthread_setname_np(worker->ltw_thread, threadname);
-#elif defined(__FreeBSD__)
+#if defined(__FreeBSD__)
+		sprintf(threadname, "9p-worker:%d", i);
 		pthread_set_name_np(worker->ltw_thread, threadname);
 #endif
 

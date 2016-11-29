@@ -386,7 +386,7 @@ l9p_pustat(struct l9p_message *msg, struct l9p_stat *stat,
 	r += l9p_pustring(msg, &stat->gid);
 	r += l9p_pustring(msg, &stat->muid);
 
-	if (version == L9P_2000U) {
+	if (version >= L9P_2000U) {
 		r += l9p_pustring(msg, &stat->extension);
 		r += l9p_pu32(msg, &stat->n_uid);
 		r += l9p_pu32(msg, &stat->n_gid);
@@ -495,7 +495,7 @@ l9p_pufcall(struct l9p_message *msg, union l9p_fcall *fcall,
 		r = l9p_pustring(msg, &fcall->error.ename);
 		if (r < 0)
 			break;
-		if (version == L9P_2000U)
+		if (version >= L9P_2000U)
 			r = l9p_pu32(msg, &fcall->error.errnum);
 		break;
 
@@ -538,7 +538,7 @@ l9p_pufcall(struct l9p_message *msg, union l9p_fcall *fcall,
 			break;
 		l9p_pu32(msg, &fcall->tcreate.perm);
 		r = l9p_pu8(msg, &fcall->tcreate.mode);
-		if (version == L9P_2000U)
+		if (version >= L9P_2000U)
 			r = l9p_pustring(msg, &fcall->tcreate.extension);
 		break;
 
@@ -721,8 +721,8 @@ l9p_pufcall(struct l9p_message *msg, union l9p_fcall *fcall,
 		l9p_pu32(msg, &fcall->tsetattr.gid);
 		l9p_pu64(msg, &fcall->tsetattr.size);
 		l9p_pu64(msg, &fcall->tsetattr.atime_sec);
-		l9p_pu64(msg, &fcall->tsetattr.mtime_nsec);
-		l9p_pu64(msg, &fcall->tsetattr.atime_sec);
+		l9p_pu64(msg, &fcall->tsetattr.atime_nsec);
+		l9p_pu64(msg, &fcall->tsetattr.mtime_sec);
 		r = l9p_pu64(msg, &fcall->tsetattr.mtime_nsec);
 		break;
 
@@ -986,7 +986,7 @@ l9p_sizeof_stat(struct l9p_stat *stat, enum l9p_version version)
 	    + STRING_SIZE(stat->gid)
 	    + STRING_SIZE(stat->muid);
 
-	if (version == L9P_2000U) {
+	if (version >= L9P_2000U) {
 		size += STRING_SIZE(stat->extension)
 		    + 3 * L9P_DWORD;
 	}

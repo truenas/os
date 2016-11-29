@@ -89,7 +89,7 @@ struct fs_fid {
 	int	ff_fd;
 	char	*ff_name;
 	struct fs_authinfo *ff_ai;
-    	pthread_mutex_t ff_mtx;
+	pthread_mutex_t ff_mtx;
 };
 
 /*
@@ -1479,6 +1479,8 @@ fs_read(void *softc __unused, struct l9p_request *req)
 		struct l9p_message msg;
 		long o;
 
+		pthread_mutex_lock(&file->ff_mtx);
+
 		/*
 		 * Must use telldir before readdir since seekdir
 		 * takes cookie values.  Unfortunately this wastes
@@ -1511,6 +1513,8 @@ fs_read(void *softc __unused, struct l9p_request *req)
 			(void) readdir(file->ff_dir);
 #endif
 		}
+
+		pthread_mutex_unlock(&file->ff_mtx);
 	} else {
 		size_t niov = l9p_truncate_iov(req->lr_data_iov,
                     req->lr_data_niov, req->lr_req.io.count);
@@ -2273,7 +2277,7 @@ fs_setattr(void *softc, struct l9p_request *req)
 		}
 	}
 
-	if (mask & (L9PL_SETATTR_ATIME | L9PL_SETATTR_CTIME)) {
+	if (mask & (L9PL_SETATTR_ATIME | L9PL_SETATTR_MTIME)) {
 		tv[0].tv_sec = st.st_atimespec.tv_sec;
 		tv[0].tv_usec = (int)st.st_atimespec.tv_nsec / 1000;
 		tv[1].tv_sec = st.st_mtimespec.tv_sec;
@@ -2640,6 +2644,7 @@ fs_freefid(void *softc __unused, struct l9p_fid *fid)
 	if (f->ff_dir)
 		closedir(f->ff_dir);
 
+	pthread_mutex_destroy(&f->ff_mtx);
 	free(f->ff_name);
 	ai = f->ff_ai;
 	free(f);

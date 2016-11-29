@@ -116,7 +116,7 @@ struct l9p_request {
 	void *lr_aux;
 	struct iovec lr_data_iov[L9P_MAX_IOV];
 	size_t lr_data_niov;
-    	STAILQ_ENTRY(l9p_request) lr_link;
+	STAILQ_ENTRY(l9p_request) lr_link;
 };
 
 /* N.B.: these dirents are variable length and for .L only */
@@ -142,7 +142,7 @@ struct l9p_dirent {
  */
 struct l9p_connection {
 	struct l9p_server *lc_server;
-    	struct l9p_threadpool lc_tp;
+	struct l9p_threadpool lc_tp;
 	enum l9p_version lc_version;
 	uint32_t lc_msize;
 	uint32_t lc_max_io_size;
@@ -152,7 +152,6 @@ struct l9p_connection {
 	void *lc_send_response_aux;
 	struct ht lc_files;
 	struct ht lc_requests;
-    	pthread_mutex_t lc_mtx;
 	LIST_ENTRY(l9p_connection) lc_link;
 };
 
