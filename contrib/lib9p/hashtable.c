@@ -155,9 +155,13 @@ ht_next(struct ht_iter *iter)
 {
 	struct ht_item *item;
 
-	item = iter->htit_cursor;
-
 retry:
+	item = iter->htit_cursor;
+	if (item == NULL) {
+		iter->htit_slot++;
+		goto retry;
+	}
+
 	if ((iter->htit_cursor = TAILQ_NEXT(iter->htit_cursor, hti_link)) == NULL)
 	{
 		if (iter->htit_slot == iter->htit_parent->ht_nentries)
@@ -168,5 +172,5 @@ retry:
 
 	}
 
-	return (item);
+	return (item->hti_data);
 }

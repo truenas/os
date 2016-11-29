@@ -399,7 +399,7 @@ enum fid_lookup_flags {
 	F_REQUIRE_OPEN = 0x01,	/* require that the file be marked OPEN */
 	F_REQUIRE_DIR = 0x02,	/* require that the file be marked ISDIR */
 	F_REQUIRE_XATTR = 0x04,	/* require that the file be marked XATTR */
-	F_REQUIRE_AUTH = 0x08,	/* requre that the fid be marked AUTH */
+	F_REQUIRE_AUTH = 0x08,	/* require that the fid be marked AUTH */
 	F_FORBID_OPEN = 0x10,	/* forbid that the file be marked OPEN */
 	F_FORBID_DIR = 0x20,	/* forbid that the file be marked ISDIR */
 	F_FORBID_XATTR = 0x40,	/* forbid that the file be marked XATTR */

@@ -77,10 +77,12 @@ struct pci_vt9p_softc {
 };
 
 struct pci_vt9p_request {
+	struct pci_vt9p_softc *	vsr_sc;
 	struct iovec *		vsr_iov;
 	size_t			vsr_niov;
 	size_t			vsr_respidx;
 	size_t			vsr_iolen;
+	uint16_t		vsr_idx;
 };
 
 struct pci_vt9p_config {
@@ -154,8 +156,15 @@ pci_vt9p_send(struct l9p_request *req, const struct iovec *iov,
     const size_t niov, const size_t iolen, void *arg)
 {
 	struct pci_vt9p_request *preq = req->lr_aux;
+	struct pci_vt9p_softc *sc = preq->vsr_sc;
 
 	preq->vsr_iolen = iolen;
+
+	pthread_mutex_lock(&sc->vsc_mtx);
+	vq_relchain(&sc->vsc_vq, preq->vsr_idx, preq->vsr_iolen);
+	vq_endchains(&sc->vsc_vq, 1);
+	pthread_mutex_unlock(&sc->vsc_mtx);
+	free(preq);
 	return (0);
 }
 
@@ -164,7 +173,7 @@ pci_vt9p_notify(void *vsc, struct vqueue_info *vq)
 {
 	struct iovec iov[8];
 	struct pci_vt9p_softc *sc;
-	struct pci_vt9p_request preq;
+	struct pci_vt9p_request *preq;
 	uint16_t idx, n, i;
 	uint16_t flags[8];
 
@@ -172,16 +181,19 @@ pci_vt9p_notify(void *vsc, struct vqueue_info *vq)
 
 	while (vq_has_descs(vq)) {
 		n = vq_getchain(vq, &idx, iov, 8, flags);
-		preq.vsr_iov = iov;
-		preq.vsr_niov = n;
-		preq.vsr_respidx = 0;
+		preq = calloc(1, sizeof(struct pci_vt9p_request));
+		preq->vsr_sc = sc;
+		preq->vsr_idx = idx;
+		preq->vsr_iov = iov;
+		preq->vsr_niov = n;
+		preq->vsr_respidx = 0;
 
 		/* Count readable descriptors */
 		for (i = 0; i < n; i++) {
 			if (flags[i] & VRING_DESC_F_WRITE)
 				break;
 
-			preq.vsr_respidx++;
+			preq->vsr_respidx++;
 		}
 
 		for (int i = 0; i < n; i++) {
@@ -190,14 +202,8 @@ pci_vt9p_notify(void *vsc, struct vqueue_info *vq)
 			    iov[i].iov_len, flags[i]));
 		}
 
-		l9p_connection_recv(sc->vsc_conn, iov, preq.vsr_respidx, &preq);
-
-		/*
-		 * Release this chain and handle more
-		 */
-		vq_relchain(vq, idx, preq.vsr_iolen);
+		l9p_connection_recv(sc->vsc_conn, iov, preq->vsr_respidx, preq);
 	}
-	vq_endchains(vq, 1);	/* Generate interrupt if appropriate. */
 }
 
 
@@ -217,6 +223,8 @@ pci_vt9p_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	sc = calloc(1, sizeof(struct pci_vt9p_softc));
 	sc->vsc_config = calloc(1, sizeof(struct pci_vt9p_config) +
 	    VT9P_MAXTAGSZ);
+
+	pthread_mutex_init(&sc->vsc_mtx, NULL);
 
 	while ((opt = strsep(&opts, ",")) != NULL) {
 		if (sharename == NULL) {
@@ -253,7 +261,6 @@ pci_vt9p_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 	vi_softc_linkup(&sc->vsc_vs, &vt9p_vi_consts, sc, pi, &sc->vsc_vq);
 	sc->vsc_vs.vs_mtx = &sc->vsc_mtx;
-
 	sc->vsc_vq.vq_qsize = VT9P_RINGSZ;
 
 	/* initialize config space */
