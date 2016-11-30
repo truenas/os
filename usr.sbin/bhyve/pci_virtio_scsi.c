@@ -66,7 +66,7 @@ __FBSDID("$FreeBSD$");
 #define	VTSCSI_REQUESTQ		1
 #define	VTSCSI_THR_PER_Q	16
 #define	VTSCSI_MAXQ		(VTSCSI_REQUESTQ + 2)
-#define	VTSCSI_MAXSEG		16
+#define	VTSCSI_MAXSEG		64
 
 #define	VTSCSI_IN_HEADER_LEN(_sc)	\
 	(sizeof(struct pci_vtscsi_req_cmd_rd) + _sc->vss_config.cdb_size)
@@ -307,7 +307,7 @@ pci_vtscsi_reset(void *vsc)
 	/* initialize config structure */
 	sc->vss_config = (struct pci_vtscsi_config){
 		.num_queues = VTSCSI_REQUESTQ,
-		.seg_max = 16,
+		.seg_max = VTSCSI_MAXSEG,
 		.max_sectors = 1,
 		.cmd_per_lun = 1,
 		.event_info_size = sizeof(struct pci_vtscsi_event),
