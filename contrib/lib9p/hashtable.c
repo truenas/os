@@ -35,14 +35,16 @@
 #include "lib9p_impl.h"
 #include "hashtable.h"
 
+static struct ht_item *ht_iter_advance(struct ht_iter *, struct ht_item *);
+
 void
-ht_init(struct ht *h, size_t size)
+ht_init(struct ht *h, ssize_t size)
 {
-	size_t i;
+	ssize_t i;
 
 	memset(h, 0, sizeof(struct ht));
 	h->ht_nentries = size;
-	h->ht_entries = l9p_calloc(size, sizeof(struct ht_entry));
+	h->ht_entries = l9p_calloc((size_t)size, sizeof(struct ht_entry));
 	pthread_rwlock_init(&h->ht_rwlock, NULL);
 
 	for (i = 0; i < size; i++)
@@ -54,7 +56,7 @@ ht_destroy(struct ht *h)
 {
 	struct ht_entry *he;
 	struct ht_item *item, *tmp;
-	size_t i;
+	ssize_t i;
 
 	for (i = 0; i < h->ht_nentries; i++) {
 		he = &h->ht_entries[i];
@@ -120,7 +122,7 @@ ht_remove(struct ht *h, uint32_t hash)
 {
 	struct ht_entry *entry;
 	struct ht_item *item, *tmp;
-	size_t slot = hash % h->ht_nentries;
+	ssize_t slot = hash % h->ht_nentries;
 
 	pthread_rwlock_wrlock(&h->ht_rwlock);
 	entry = &h->ht_entries[slot];
@@ -152,12 +154,12 @@ ht_remove(struct ht *h, uint32_t hash)
  *
  * Caller must hold a lock on the table.
  */
-struct ht_item *
+static struct ht_item *
 ht_iter_advance(struct ht_iter *iter, struct ht_item *cur)
 {
 	struct ht_item *next;
 	struct ht *h;
-	size_t slot;
+	ssize_t slot;
 
 	h = iter->htit_parent;
 
@@ -188,7 +190,7 @@ ht_remove_at_iter(struct ht_iter *iter)
 {
 	struct ht_item *item;
 	struct ht *h;
-	size_t slot;
+	ssize_t slot;
 
 	assert(iter != NULL);
 

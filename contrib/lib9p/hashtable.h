@@ -33,7 +33,7 @@
 
 struct ht {
 	struct ht_entry * 	ht_entries;
-	size_t 			ht_nentries;
+	ssize_t 		ht_nentries;
 	pthread_rwlock_t	ht_rwlock;
 };
 
@@ -51,10 +51,10 @@ struct ht_iter {
 	struct ht *		htit_parent;
 	struct ht_item *	htit_curr;
 	struct ht_item *	htit_next;
-	size_t			htit_slot;
+	ssize_t			htit_slot;
 };
 
-void ht_init(struct ht *h, size_t size);
+void ht_init(struct ht *h, ssize_t size);
 void ht_destroy(struct ht *h);
 void *ht_find(struct ht *h, uint32_t hash);
 int ht_add(struct ht *h, uint32_t hash, void *value);
