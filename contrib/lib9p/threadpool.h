@@ -25,42 +25,34 @@
  *
  */
 
-#ifndef LIB9P_HASHTABLE_H
-#define LIB9P_HASHTABLE_H
+#ifndef	LIB9P_THREADPOOL_H
+#define	LIB9P_THREADPOOL_H
 
+#include <stdbool.h>
 #include <pthread.h>
 #include <sys/queue.h>
+#include "lib9p.h"
 
-struct ht {
-	struct ht_entry * 	ht_entries;
-	size_t 			ht_nentries;
-	pthread_rwlock_t	ht_rwlock;
+STAILQ_HEAD(l9p_request_queue, l9p_request);
+
+struct l9p_threadpool {
+    struct l9p_connection *	ltp_conn;
+    struct l9p_request_queue	ltp_queue;
+    int 			ltp_size;
+    pthread_mutex_t		ltp_mtx;
+    pthread_cond_t		ltp_cv;
+    LIST_HEAD(, l9p_worker)	ltp_workers;
 };
 
-struct ht_entry {
-	TAILQ_HEAD(, ht_item) hte_items;
+struct l9p_worker {
+    struct l9p_threadpool *	ltw_tp;
+    pthread_t			ltw_thread;
+    bool			ltw_exiting;
+    LIST_ENTRY(l9p_worker)	ltw_link;
 };
 
-struct ht_item {
-	uint32_t		hti_hash;
-	void *			hti_data;
-	TAILQ_ENTRY(ht_item)	hti_link;
-};
+int l9p_threadpool_init(struct l9p_threadpool *, int);
+int l9p_threadpool_enqueue(struct l9p_threadpool *, struct l9p_request *);
+int l9p_threadpool_shutdown(struct l9p_threadpool *);
 
-struct ht_iter {
-	struct ht *		htit_parent;
-	struct ht_item *	htit_curr;
-	struct ht_item *	htit_next;
-	size_t			htit_slot;
-};
-
-void ht_init(struct ht *h, size_t size);
-void ht_destroy(struct ht *h);
-void *ht_find(struct ht *h, uint32_t hash);
-int ht_add(struct ht *h, uint32_t hash, void *value);
-int ht_remove(struct ht *h, uint32_t hash);
-int ht_remove_at_iter(struct ht_iter *iter);
-void ht_iter(struct ht *h, struct ht_iter *iter);
-void *ht_next(struct ht_iter *iter);
-
-#endif  /* LIB9P_HASHTABLE_H */
+#endif	/* LIB9P_THREADPOOL_H  */

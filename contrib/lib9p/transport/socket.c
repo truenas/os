@@ -176,7 +176,14 @@ l9p_socket_accept(struct l9p_server *server, int conn_fd,
 	l9p_connection_on_get_response_buffer(conn,
 	    l9p_socket_get_response_buffer, sc);
 
-	pthread_create(&sc->ls_thread, NULL, l9p_socket_thread, sc);
+	err = pthread_create(&sc->ls_thread, NULL, l9p_socket_thread, sc);
+	if (err) {
+		L9P_LOG(L9P_ERROR,
+		    "pthread_create (for connection from %s:%s): error %s",
+		    host, serv, strerror(err));
+		l9p_connection_close(sc->ls_conn);
+		free(sc);
+	}
 }
 
 static void *
@@ -198,6 +205,8 @@ l9p_socket_thread(void *arg)
 	}
 
 	L9P_LOG(L9P_INFO, "connection closed");
+	l9p_connection_close(sc->ls_conn);
+	free(sc);
 	return (NULL);
 }
 

@@ -42,10 +42,12 @@
 #endif
 
 #include "fcall.h"
+#include "threadpool.h"
 #include "hashtable.h"
 
 #define L9P_DEFAULT_MSIZE   8192
 #define L9P_MAX_IOV         8
+#define	L9P_NUMTHREADS      8
 
 /*
  * Pseudo-errno to denote that backend function doesn't return a value,
@@ -111,10 +113,10 @@ struct l9p_request {
 	struct l9p_fid *lr_fid2;
 	struct l9p_fid *lr_newfid;
 	struct l9p_connection *lr_conn;
-	pthread_t lr_thread;
 	void *lr_aux;
 	struct iovec lr_data_iov[L9P_MAX_IOV];
 	size_t lr_data_niov;
+	STAILQ_ENTRY(l9p_request) lr_link;
 };
 
 /* N.B.: these dirents are variable length and for .L only */
@@ -140,6 +142,7 @@ struct l9p_dirent {
  */
 struct l9p_connection {
 	struct l9p_server *lc_server;
+	struct l9p_threadpool lc_tp;
 	enum l9p_version lc_version;
 	uint32_t lc_msize;
 	uint32_t lc_max_io_size;
@@ -187,6 +190,7 @@ void l9p_connection_remove_fid(struct l9p_connection *conn,
 
 void l9p_dispatch_request(struct l9p_request *req);
 void l9p_respond(struct l9p_request *req, int errnum);
+void l9p_connection_reqfree(struct l9p_request *req);
 
 void l9p_init_msg(struct l9p_message *msg, struct l9p_request *req,
     enum l9p_pack_mode mode);

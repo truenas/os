@@ -47,6 +47,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <libgen.h>
+#include <pthread.h>
 #include "../lib9p.h"
 #include "../lib9p_impl.h"
 #include "../fid.h"
@@ -88,6 +89,7 @@ struct fs_fid {
 	int	ff_fd;
 	char	*ff_name;
 	struct fs_authinfo *ff_ai;
+	pthread_mutex_t ff_mtx;
 };
 
 /*
@@ -546,11 +548,18 @@ static struct fs_fid *
 open_fid(const char *path, struct fs_authinfo *ai)
 {
 	struct fs_fid *ret;
+	int error;
 
 	ret = l9p_calloc(1, sizeof(*ret));
+	error = pthread_mutex_init(&ret->ff_mtx, NULL);
+	if (error) {
+		free(ret);
+		return (NULL);
+	}
 	ret->ff_fd = -1;
 	ret->ff_name = strdup(path);
 	if (ret->ff_name == NULL) {
+		pthread_mutex_destroy(&ret->ff_mtx);
 		free(ret);
 		return (NULL);
 	}
@@ -1464,7 +1473,7 @@ fs_read(void *softc __unused, struct l9p_request *req)
 {
 	struct l9p_stat l9stat;
 	struct fs_fid *file;
-	bool dotu = req->lr_conn->lc_version >= L9P_2000U;
+	bool dotu = req->lr_conn->lc_version == L9P_2000U;
 	ssize_t ret;
 
 	file = req->lr_fid->lo_aux;
@@ -1475,6 +1484,8 @@ fs_read(void *softc __unused, struct l9p_request *req)
 		struct stat st;
 		struct l9p_message msg;
 		long o;
+
+		pthread_mutex_lock(&file->ff_mtx);
 
 		/*
 		 * Must use telldir before readdir since seekdir
@@ -1508,6 +1519,8 @@ fs_read(void *softc __unused, struct l9p_request *req)
 			(void) readdir(file->ff_dir);
 #endif
 		}
+
+		pthread_mutex_unlock(&file->ff_mtx);
 	} else {
 		size_t niov = l9p_truncate_iov(req->lr_data_iov,
                     req->lr_data_niov, req->lr_req.io.count);
@@ -1545,13 +1558,9 @@ fs_remove(void *softc, struct l9p_fid *fid)
 		return (error);
 
 	file = fid->lo_aux;
-	if (S_ISDIR(st.st_mode)) {
-		if (rmdir(file->ff_name) != 0)
-			error = errno;
-	} else {
-		if (unlink(file->ff_name) != 0)
-			error = errno;
-	}
+	/* saved stat data in "st" is for parent dir, hence useless here */
+	if (remove(file->ff_name) != 0)
+		error = errno;
 
 	return (error);
 }
@@ -1561,7 +1570,7 @@ fs_stat(void *softc __unused, struct l9p_request *req)
 {
 	struct fs_fid *file;
 	struct stat st;
-	bool dotu = req->lr_conn->lc_version >= L9P_2000U;
+	bool dotu = req->lr_conn->lc_version == L9P_2000U;
 
 	file = req->lr_fid->lo_aux;
 	assert(file);
@@ -2270,7 +2279,7 @@ fs_setattr(void *softc, struct l9p_request *req)
 		}
 	}
 
-	if (mask & (L9PL_SETATTR_ATIME | L9PL_SETATTR_CTIME)) {
+	if (mask & (L9PL_SETATTR_ATIME | L9PL_SETATTR_MTIME)) {
 		tv[0].tv_sec = st.st_atimespec.tv_sec;
 		tv[0].tv_usec = (int)st.st_atimespec.tv_nsec / 1000;
 		tv[1].tv_sec = st.st_mtimespec.tv_sec;
@@ -2339,6 +2348,8 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	if (file->ff_dir == NULL)
 		return (ENOTDIR);
 
+	pthread_mutex_lock(&file->ff_mtx);
+
 	/*
 	 * There is no getdirentries variant that accepts an
 	 * offset, so once we are multithreaded, this will need
@@ -2388,6 +2399,7 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 			break;
 	}
 
+	pthread_mutex_unlock(&file->ff_mtx);
 	req->lr_resp.io.count = (uint32_t)msg.lm_size;
 	return (error);
 }
@@ -2544,12 +2556,6 @@ fs_renameat(void *softc, struct l9p_request *req)
 	newdir = req->lr_fid2;
 	assert(olddir != NULL && newdir != NULL);
 
-	/*
-	 * We don't support path rewriting in open fids yet, so let's just
-	 * fail here for now.
-	 */
-	return (EOPNOTSUPP);
-
 	error = fs_rde(softc, olddir, &st);
 	if (error)
 		return (error);
@@ -2640,6 +2646,7 @@ fs_freefid(void *softc __unused, struct l9p_fid *fid)
 	if (f->ff_dir)
 		closedir(f->ff_dir);
 
+	pthread_mutex_destroy(&f->ff_mtx);
 	free(f->ff_name);
 	ai = f->ff_ai;
 	free(f);
@@ -2657,6 +2664,7 @@ l9p_backend_fs_init(struct l9p_backend **backendp, const char *root)
 	rroot = realpath(root, NULL);
 	if (rroot == NULL)
 		return (-1);
+
 	backend = l9p_malloc(sizeof(*backend));
 	backend->attach = fs_attach;
 	backend->clunk = fs_clunk;

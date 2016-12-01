@@ -35,6 +35,7 @@
 #include "fid.h"
 #include "hashtable.h"
 #include "log.h"
+#include "threadpool.h"
 #include "backend/backend.h"
 
 int
@@ -59,9 +60,15 @@ l9p_connection_init(struct l9p_server *server, struct l9p_connection **conn)
 	assert(server != NULL);
 	assert(conn != NULL);
 
-	newconn = l9p_calloc(1, sizeof (*newconn));
+	newconn = calloc(1, sizeof (*newconn));
+	if (newconn == NULL)
+		return (-1);
 	newconn->lc_server = server;
 	newconn->lc_msize = L9P_DEFAULT_MSIZE;
+	if (l9p_threadpool_init(&newconn->lc_tp, L9P_NUMTHREADS)) {
+		free(newconn);
+		return (-1);
+	}
 	ht_init(&newconn->lc_files, 100);
 	ht_init(&newconn->lc_requests, 100);
 	LIST_INSERT_HEAD(&server->ls_conns, newconn, lc_link);
@@ -105,7 +112,6 @@ l9p_connection_recv(struct l9p_connection *conn, const struct iovec *iov,
 	req = l9p_calloc(1, sizeof (struct l9p_request));
 	req->lr_aux = aux;
 	req->lr_conn = conn;
-	ht_add(&conn->lc_requests, req->lr_req.hdr.tag, req);
 
 	req->lr_req_msg.lm_mode = L9P_UNPACK;
 	req->lr_req_msg.lm_niov = niov;
@@ -115,16 +121,42 @@ l9p_connection_recv(struct l9p_connection *conn, const struct iovec *iov,
 
 	if (l9p_pufcall(&req->lr_req_msg, &req->lr_req, conn->lc_version) != 0) {
 		L9P_LOG(L9P_WARNING, "cannot unpack received message");
+		l9p_freefcall(&req->lr_req);
+		free(req);
+		return;
+	}
+
+	if (ht_add(&conn->lc_requests, req->lr_req.hdr.tag, req)) {
+		L9P_LOG(L9P_WARNING, "client reusing outstanding tag %d",
+		    req->lr_req.hdr.tag);
+		l9p_freefcall(&req->lr_req);
+		free(req);
 		return;
 	}
 
 	if (conn->lc_get_response_buffer(req, req->lr_resp_msg.lm_iov,
 	    &req->lr_resp_msg.lm_niov, conn->lc_get_response_buffer_aux) != 0) {
 		L9P_LOG(L9P_WARNING, "cannot obtain buffers for response");
+		l9p_freefcall(&req->lr_req);
+		l9p_connection_reqfree(req);
 		return;
 	}
 
-	l9p_dispatch_request(req);
+	l9p_threadpool_enqueue(&conn->lc_tp, req);
+}
+
+/*
+ * Normal path indicating done-with-request.  We release the tag
+ * for re-use here as well as freeing the request.
+ */
+void
+l9p_connection_reqfree(struct l9p_request *req)
+{
+	struct l9p_connection *conn;
+
+	conn = req->lr_conn;
+	ht_remove(&conn->lc_requests, req->lr_req.hdr.tag);
+	free(req);
 }
 
 void
@@ -134,18 +166,26 @@ l9p_connection_close(struct l9p_connection *conn)
 	struct l9p_fid *fid;
 	struct l9p_request *req;
 
+	L9P_LOG(L9P_DEBUG, "waiting for thread pool to shut down");
+	l9p_threadpool_shutdown(&conn->lc_tp);
+
 	/* Drain pending requests (if any) */
+	L9P_LOG(L9P_DEBUG, "draining pending requests");
 	ht_iter(&conn->lc_requests, &iter);
 	while ((req = ht_next(&iter)) != NULL) {
+		/* XXX need to know if there is anyone listening */
 		l9p_respond(req, EINTR);
+		free(req);
 		ht_remove_at_iter(&iter);
 	}
 
 	/* Close opened files (if any) */
+	L9P_LOG(L9P_DEBUG, "closing opened files");
 	ht_iter(&conn->lc_files, &iter);
 	while ((fid = ht_next(&iter)) != NULL) {
 		conn->lc_server->ls_backend->freefid(
 		    conn->lc_server->ls_backend->softc, fid);
+		free(fid);
 		ht_remove_at_iter(&iter);
 	}
 
@@ -166,6 +206,7 @@ l9p_connection_alloc_fid(struct l9p_connection *conn, uint32_t fid)
 	 * in use, otherwise we have an invalid fid in the
 	 * table (as desired).
 	 */
+
 	if (ht_add(&conn->lc_files, fid, file) != 0) {
 		free(file);
 		return (NULL);
@@ -186,4 +227,5 @@ l9p_connection_remove_fid(struct l9p_connection *conn, struct l9p_fid *fid)
 	be->freefid(be->softc, fid);
 
 	ht_remove(&conn->lc_files, fid->lo_fid);
+	free(fid);
 }

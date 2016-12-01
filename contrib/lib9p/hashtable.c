@@ -29,6 +29,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/queue.h>
 #include "lib9p_impl.h"
@@ -42,6 +43,7 @@ ht_init(struct ht *h, size_t size)
 	memset(h, 0, sizeof(struct ht));
 	h->ht_nentries = size;
 	h->ht_entries = l9p_calloc(size, sizeof(struct ht_entry));
+	pthread_rwlock_init(&h->ht_rwlock, NULL);
 
 	for (i = 0; i < size; i++)
 		TAILQ_INIT(&h->ht_entries[i].hte_items);
@@ -51,19 +53,19 @@ void
 ht_destroy(struct ht *h)
 {
 	struct ht_entry *he;
-	struct ht_item *hi;
+	struct ht_item *item, *tmp;
 	size_t i;
 
 	for (i = 0; i < h->ht_nentries; i++) {
 		he = &h->ht_entries[i];
-		hi = TAILQ_FIRST(&he->hte_items);
-
-		while ((hi = TAILQ_NEXT(hi, hti_link)) != NULL)
-			TAILQ_REMOVE(&he->hte_items, hi, hti_link);
+		TAILQ_FOREACH_SAFE(item, &he->hte_items, hti_link, tmp) {
+			free(item);
+		}
 	}
 
+	pthread_rwlock_destroy(&h->ht_rwlock);
 	free(h->ht_entries);
-	free(h);
+	h->ht_entries = NULL;
 }
 
 void *
@@ -71,15 +73,20 @@ ht_find(struct ht *h, uint32_t hash)
 {
 	struct ht_entry *entry;
 	struct ht_item *item;
+	void *result = NULL;
 
+	pthread_rwlock_rdlock(&h->ht_rwlock);
 	entry = &h->ht_entries[hash % h->ht_nentries];
 
 	TAILQ_FOREACH(item, &entry->hte_items, hti_link) {
-		if (item->hti_hash == hash)
-			return (item->hti_data);
+		if (item->hti_hash == hash) {
+			result = item->hti_data;
+			break;
+		}
 	}
 
-	return (NULL);
+	pthread_rwlock_unlock(&h->ht_rwlock);
+	return (result);
 }
 
 int
@@ -88,11 +95,13 @@ ht_add(struct ht *h, uint32_t hash, void *value)
 	struct ht_entry *entry;
 	struct ht_item *item;
 
+	pthread_rwlock_wrlock(&h->ht_rwlock);
 	entry = &h->ht_entries[hash % h->ht_nentries];
 
 	TAILQ_FOREACH(item, &entry->hte_items, hti_link) {
 		if (item->hti_hash == hash) {
 			errno = EEXIST;
+			pthread_rwlock_unlock(&h->ht_rwlock);
 			return (-1);
 		}
 	}
@@ -101,6 +110,7 @@ ht_add(struct ht *h, uint32_t hash, void *value)
 	item->hti_hash = hash;
 	item->hti_data = value;
 	TAILQ_INSERT_TAIL(&entry->hte_items, item, hti_link);
+	pthread_rwlock_unlock(&h->ht_rwlock);
 
 	return (0);
 }
@@ -112,61 +122,130 @@ ht_remove(struct ht *h, uint32_t hash)
 	struct ht_item *item, *tmp;
 	size_t slot = hash % h->ht_nentries;
 
+	pthread_rwlock_wrlock(&h->ht_rwlock);
 	entry = &h->ht_entries[slot];
 
 	TAILQ_FOREACH_SAFE(item, &entry->hte_items, hti_link, tmp) {
 		if (item->hti_hash == hash) {
 			TAILQ_REMOVE(&entry->hte_items, item, hti_link);
-			free(item->hti_data);
 			free(item);
+			pthread_rwlock_unlock(&h->ht_rwlock);
 			return (0);
 		}
 	}
 
 	errno = ENOENT;
+	pthread_rwlock_unlock(&h->ht_rwlock);
 	return (-1);
 }
 
+/*
+ * Inner workings for advancing the iterator.
+ *
+ * If we have a current item, that tells us how to find the
+ * next item.  If not, we get the first item from the next
+ * slot (well, the next slot with an item); in any case, we
+ * record the new slot and return the next item.
+ *
+ * For bootstrapping, iter->htit_slot can be -1 to start
+ * searching at slot 0.
+ *
+ * Caller must hold a lock on the table.
+ */
+struct ht_item *
+ht_iter_advance(struct ht_iter *iter, struct ht_item *cur)
+{
+	struct ht_item *next;
+	struct ht *h;
+	size_t slot;
+
+	h = iter->htit_parent;
+
+	if (cur == NULL)
+		next = NULL;
+	else
+		next = TAILQ_NEXT(cur, hti_link);
+
+	if (next == NULL) {
+		slot = iter->htit_slot;
+		while (++slot < h->ht_nentries) {
+			next = TAILQ_FIRST(&h->ht_entries[slot].hte_items);
+			if (next != NULL)
+				break;
+		}
+		iter->htit_slot = slot;
+	}
+	return (next);
+}
+
+/*
+ * Remove the current item - there must be one, or this is an
+ * error.  This (necessarily) pre-locates the next item, so callers
+ * must not use it on an actively-changing table.
+ */
 int
 ht_remove_at_iter(struct ht_iter *iter)
 {
+	struct ht_item *item;
+	struct ht *h;
+	size_t slot;
+
 	assert(iter != NULL);
 
-	if (iter->htit_cursor == NULL) {
+	if ((item = iter->htit_curr) == NULL) {
 		errno = EINVAL;
 		return (-1);
 	}
 
-	TAILQ_REMOVE(&iter->htit_parent->ht_entries[iter->htit_slot].hte_items,
-	    iter->htit_cursor, hti_link);
+	/* remove the item from the table, saving the NEXT one */
+	h = iter->htit_parent;
+	pthread_rwlock_wrlock(&h->ht_rwlock);
+	slot = iter->htit_slot;
+	iter->htit_next = ht_iter_advance(iter, item);
+	TAILQ_REMOVE(&h->ht_entries[slot].hte_items, item, hti_link);
+	pthread_rwlock_unlock(&h->ht_rwlock);
+
+	/* mark us as no longer on an item, then free it */
+	iter->htit_curr = NULL;
+	free(item);
+
 	return (0);
 }
 
+/*
+ * Initialize iterator.  Subsequent ht_next calls will find the
+ * first item, then the next, and so on.  Callers should in general
+ * not use this on actively-changing tables, though we do our best
+ * to make it semi-sensible.
+ */
 void
 ht_iter(struct ht *h, struct ht_iter *iter)
 {
+
 	iter->htit_parent = h;
-	iter->htit_slot = 0;
-	iter->htit_cursor = TAILQ_FIRST(&h->ht_entries[0].hte_items);
+	iter->htit_curr = NULL;
+	iter->htit_next = NULL;
+	iter->htit_slot = -1;	/* which will increment to 0 */
 }
 
+/*
+ * Return the next item, which is the first item if we have not
+ * yet been called on this iterator, or the next item if we have.
+ */
 void *
 ht_next(struct ht_iter *iter)
 {
 	struct ht_item *item;
+	struct ht *h;
 
-	item = iter->htit_cursor;
-
-retry:
-	if ((iter->htit_cursor = TAILQ_NEXT(iter->htit_cursor, hti_link)) == NULL)
-	{
-		if (iter->htit_slot == iter->htit_parent->ht_nentries)
-			return (NULL);
-
-		iter->htit_slot++;
-		goto retry;
-
-	}
-
-	return (item);
+	if ((item = iter->htit_next) == NULL) {
+		/* no pre-loaded next; find next from current */
+		h = iter->htit_parent;
+		pthread_rwlock_rdlock(&h->ht_rwlock);
+		item = ht_iter_advance(iter, iter->htit_curr);
+		pthread_rwlock_unlock(&h->ht_rwlock);
+	} else
+		iter->htit_next = NULL;
+	iter->htit_curr = item;
+	return (item == NULL ? NULL : item->hti_data);
 }
