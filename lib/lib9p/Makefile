@@ -13,6 +13,7 @@ SRCS=		pack.c \
 		hashtable.c \
 		rfuncs.c \
 		utils.c \
+		threadpool.c \
 		transport/socket.c \
 		backend/fs.c
 
