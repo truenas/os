@@ -2,7 +2,7 @@
 
 .PATH: ${.CURDIR}/../../contrib/lib9p
 CFLAGS+=-I${.CURDIR}/../../contrib/lib9p
-CFLAGS+=-DL9P_DEBUG=L9P_DEBUG
+CFLAGS+=-DL9P_DEBUG=L9P_DEBUG -g -O0
 
 LIB=		9p
 SHLIB_MAJOR=	1
