@@ -971,7 +971,7 @@ getrpc(int (*fn)(union key, struct rpcent *, char *, size_t, struct rpcent **),
 }
 
 struct rpcent *
-getrpcbyname(char *name)
+getrpcbyname(const char *name)
 {
 	union key key;
 
@@ -991,7 +991,7 @@ getrpcbynumber(int number)
 }
 
 struct rpcent *
-getrpcent()
+getrpcent(void)
 {
 	union key key;
 
@@ -1025,7 +1025,7 @@ setrpcent(int stayopen)
 }
 
 void
-endrpcent()
+endrpcent(void)
 {
 #ifdef NS_CACHING
 	static const nss_cache_info cache_info = NS_MP_CACHE_INFO_INITIALIZER(
