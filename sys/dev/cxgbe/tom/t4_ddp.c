@@ -480,6 +480,8 @@ handle_ddp_close(struct toepcb *toep, struct tcpcb *tp, struct sockbuf *sb,
 	 F_DDP_INVALID_TAG | F_DDP_COLOR_ERR | F_DDP_TID_MISMATCH |\
 	 F_DDP_INVALID_PPOD | F_DDP_HDRCRC_ERR | F_DDP_DATACRC_ERR)
 
+extern cpl_handler_t t4_cpl_handler[];
+
 static int
 do_rx_data_ddp(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 {
@@ -488,7 +490,6 @@ do_rx_data_ddp(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	unsigned int tid = GET_TID(cpl);
 	uint32_t vld;
 	struct toepcb *toep = lookup_tid(sc, tid);
-	struct tom_data *td = toep->td;
 
 	KASSERT(m == NULL, ("%s: wasn't expecting payload", __func__));
 	KASSERT(toep->tid == tid, ("%s: toep tid/atid mismatch", __func__));
@@ -500,16 +501,11 @@ do_rx_data_ddp(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 		panic("%s: DDP error 0x%x (tid %d, toep %p)",
 		    __func__, vld, tid, toep);
 	}
+
 	if (toep->ulp_mode == ULP_MODE_ISCSI) {
-		m = m_get(M_NOWAIT, MT_DATA);
-		if (m == NULL)
-			CXGBE_UNIMPLEMENTED("mbuf alloc failure");
-		memcpy(mtod(m, unsigned char *), cpl,
-		    sizeof(struct cpl_rx_data_ddp));
-        	if (!t4_cpl_iscsi_callback(td, toep, m, CPL_RX_DATA_DDP))
-			return (0);
-		m_freem(m);
-        }
+		t4_cpl_handler[CPL_RX_ISCSI_DDP](iq, rss, m);
+		return (0);
+	}
 
 	handle_ddp_data(toep, cpl->u.ddp_report, cpl->seq, be16toh(cpl->len));
 
@@ -547,13 +543,14 @@ enable_ddp(struct adapter *sc, struct toepcb *toep)
 	    __func__, toep->tid, time_uptime);
 
 	toep->ddp_flags |= DDP_SC_REQ;
-	t4_set_tcb_field(sc, toep, 1, W_TCB_RX_DDP_FLAGS,
+	t4_set_tcb_field(sc, toep->ctrlq, toep->tid, W_TCB_RX_DDP_FLAGS,
 	    V_TF_DDP_OFF(1) | V_TF_DDP_INDICATE_OUT(1) |
 	    V_TF_DDP_BUF0_INDICATE(1) | V_TF_DDP_BUF1_INDICATE(1) |
 	    V_TF_DDP_BUF0_VALID(1) | V_TF_DDP_BUF1_VALID(1),
-	    V_TF_DDP_BUF0_INDICATE(1) | V_TF_DDP_BUF1_INDICATE(1));
-	t4_set_tcb_field(sc, toep, 1, W_TCB_T_FLAGS,
-	    V_TF_RCV_COALESCE_ENABLE(1), 0);
+	    V_TF_DDP_BUF0_INDICATE(1) | V_TF_DDP_BUF1_INDICATE(1), 0, 0,
+	    toep->ofld_rxq->iq.abs_id);
+	t4_set_tcb_field(sc, toep->ctrlq, toep->tid, W_TCB_T_FLAGS,
+	    V_TF_RCV_COALESCE_ENABLE(1), 0, 0, 0, toep->ofld_rxq->iq.abs_id);
 }
 
 static inline void
@@ -568,10 +565,11 @@ disable_ddp(struct adapter *sc, struct toepcb *toep)
 	    __func__, toep->tid, time_uptime);
 
 	toep->ddp_flags |= DDP_SC_REQ;
-	t4_set_tcb_field(sc, toep, 1, W_TCB_T_FLAGS,
-	    V_TF_RCV_COALESCE_ENABLE(1), V_TF_RCV_COALESCE_ENABLE(1));
-	t4_set_tcb_field(sc, toep, 1, W_TCB_RX_DDP_FLAGS, V_TF_DDP_OFF(1),
-	    V_TF_DDP_OFF(1));
+	t4_set_tcb_field(sc, toep->ctrlq, toep->tid, W_TCB_T_FLAGS,
+	    V_TF_RCV_COALESCE_ENABLE(1), V_TF_RCV_COALESCE_ENABLE(1), 0, 0,
+	    toep->ofld_rxq->iq.abs_id);
+	t4_set_tcb_field(sc, toep->ctrlq, toep->tid, W_TCB_RX_DDP_FLAGS,
+	    V_TF_DDP_OFF(1), V_TF_DDP_OFF(1), 0, 0, toep->ofld_rxq->iq.abs_id);
 }
 
 static int
@@ -984,9 +982,6 @@ t4_init_ddp(struct adapter *sc, struct tom_data *td)
 	td->ppod_start = sc->vres.ddp.start;
 	td->ppod_arena = vmem_create("DDP page pods", sc->vres.ddp.start,
 	    sc->vres.ddp.size, 1, 32, M_FIRSTFIT | M_NOWAIT);
-
-	t4_register_cpl_handler(sc, CPL_RX_DATA_DDP, do_rx_data_ddp);
-	t4_register_cpl_handler(sc, CPL_RX_DDP_COMPLETE, do_rx_ddp_complete);
 }
 
 void
@@ -1282,4 +1277,20 @@ out:
 	return (error);
 }
 
+int
+t4_ddp_mod_load(void)
+{
+
+	t4_register_cpl_handler(CPL_RX_DATA_DDP, do_rx_data_ddp);
+	t4_register_cpl_handler(CPL_RX_DDP_COMPLETE, do_rx_ddp_complete);
+	return (0);
+}
+
+void
+t4_ddp_mod_unload(void)
+{
+
+	t4_register_cpl_handler(CPL_RX_DATA_DDP, NULL);
+	t4_register_cpl_handler(CPL_RX_DDP_COMPLETE, NULL);
+}
 #endif

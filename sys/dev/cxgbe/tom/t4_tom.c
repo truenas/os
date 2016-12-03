@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/ktr.h>
+#include <sys/limits.h>
 #include <sys/module.h>
 #include <sys/protosw.h>
 #include <sys/domain.h>
@@ -103,6 +104,39 @@ static int in6_ifaddr_gen;
 static eventhandler_tag ifaddr_evhandler;
 static struct timeout_task clip_task;
 
+static void
+mbufq_init(struct mbufq *q, int limit)
+{
+
+	q->head = q->tail = NULL;
+}
+
+static void
+mbufq_drain(struct mbufq *q)
+{
+	struct mbuf *m;
+
+	while ((m = q->head) != NULL) {
+		q->head = m->m_nextpkt;
+		m_freem(m);
+	}
+	q->tail = NULL;
+}
+
+#ifdef INVARIANTS
+static inline int
+mbufq_len(const struct mbufq *q)
+{
+	struct mbuf *m;
+	int len;
+
+	len = 0;
+	for (m = q->head; m != NULL; m = m->m_nextpkt)
+		len++;
+	return (len);
+}
+#endif
+	
 struct toepcb *
 alloc_toepcb(struct vi_info *vi, int txqid, int rxqid, int flags)
 {
@@ -155,6 +189,8 @@ alloc_toepcb(struct vi_info *vi, int txqid, int rxqid, int flags)
 	toep->ofld_txq = &sc->sge.ofld_txq[txqid];
 	toep->ofld_rxq = &sc->sge.ofld_rxq[rxqid];
 	toep->ctrlq = &sc->sge.ctrlq[pi->port_id];
+	mbufq_init(&toep->ulp_pduq, INT_MAX);
+	mbufq_init(&toep->ulp_pdu_reclaimq, INT_MAX);
 	toep->txsd_total = txsd_total;
 	toep->txsd_avail = txsd_total;
 	toep->txsd_pidx = 0;
@@ -270,6 +306,14 @@ release_offload_resources(struct toepcb *toep)
 	CTR5(KTR_CXGBE, "%s: toep %p (tid %d, l2te %p, ce %p)",
 	    __func__, toep, tid, toep->l2te, toep->ce);
 
+	/*
+	 * These queues should have been emptied at approximately the same time
+	 * that a normal connection's socket's so_snd would have been purged or
+	 * drained.  Do _not_ clean up here.
+	 */
+	MPASS(mbufq_len(&toep->ulp_pduq) == 0);
+	MPASS(mbufq_len(&toep->ulp_pdu_reclaimq) == 0);
+
 	if (toep->ulp_mode == ULP_MODE_TCPDDP)
 		release_ddp_resources(toep);
 
@@ -350,8 +394,9 @@ t4_ctloutput(struct toedev *tod, struct tcpcb *tp, int dir, int name)
 
 	switch (name) {
 	case TCP_NODELAY:
-		t4_set_tcb_field(sc, toep, 1, W_TCB_T_FLAGS, V_TF_NAGLE(1),
-		    V_TF_NAGLE(tp->t_flags & TF_NODELAY ? 0 : 1));
+		t4_set_tcb_field(sc, toep->ctrlq, toep->tid, W_TCB_T_FLAGS,
+		    V_TF_NAGLE(1), V_TF_NAGLE(tp->t_flags & TF_NODELAY ? 0 : 1),
+		    0, 0, toep->ofld_rxq->iq.abs_id);
 		break;
 	default:
 		break;
@@ -377,6 +422,7 @@ final_cpl_received(struct toepcb *toep)
 
 	toep->inp = NULL;
 	toep->flags &= ~TPF_CPL_PENDING;
+	mbufq_drain(&toep->ulp_pdu_reclaimq);
 
 	if (!(toep->flags & TPF_ATTACHED))
 		release_offload_resources(toep);
@@ -896,8 +942,6 @@ free_tom_data(struct adapter *sc, struct tom_data *td)
 	KASSERT(td->lctx_count == 0,
 	    ("%s: lctx hash table is not empty.", __func__));
 
-	t4_uninit_l2t_cpl_handlers(sc);
-	t4_uninit_cpl_io_handlers(sc);
 	t4_uninit_ddp(sc, td);
 	destroy_clip_table(sc, td);
 
@@ -963,7 +1007,8 @@ t4_tom_activate(struct adapter *sc)
 	struct tom_data *td;
 	struct toedev *tod;
 	struct vi_info *vi;
-	int i, rc, v;
+	struct sge_ofld_rxq *ofld_rxq;
+	int i, j, rc, v;
 
 	ASSERT_SYNCHRONIZED_OP(sc);
 
@@ -997,12 +1042,6 @@ t4_tom_activate(struct adapter *sc)
 	/* CLIP table for IPv6 offload */
 	init_clip_table(sc, td);
 
-	/* CPL handlers */
-	t4_init_connect_cpl_handlers(sc);
-	t4_init_l2t_cpl_handlers(sc);
-	t4_init_listen_cpl_handlers(sc);
-	t4_init_cpl_io_handlers(sc);
-
 	/* toedev ops */
 	tod = &td->tod;
 	init_toedev(tod);
@@ -1025,6 +1064,10 @@ t4_tom_activate(struct adapter *sc)
 	for_each_port(sc, i) {
 		for_each_vi(sc->port[i], v, vi) {
 			TOEDEV(vi->ifp) = &td->tod;
+			for_each_ofld_rxq(vi, j, ofld_rxq) {
+				ofld_rxq->iq.set_tcb_rpl = do_set_tcb_rpl;
+				ofld_rxq->iq.l2t_write_rpl = do_l2t_write_rpl2;
+			}
 		}
 	}
 
@@ -1093,6 +1136,15 @@ t4_tom_mod_load(void)
 	int rc;
 	struct protosw *tcp_protosw, *tcp6_protosw;
 
+	/* CPL handlers */
+	t4_init_connect_cpl_handlers();
+	t4_init_listen_cpl_handlers();
+	t4_init_cpl_io_handlers();
+
+	rc = t4_ddp_mod_load();
+	if (rc != 0)
+		return (rc);
+
 	tcp_protosw = pffindproto(PF_INET, IPPROTO_TCP, SOCK_STREAM);
 	if (tcp_protosw == NULL)
 		return (ENOPROTOOPT);
@@ -1145,6 +1197,8 @@ t4_tom_mod_unload(void)
 		EVENTHANDLER_DEREGISTER(ifaddr_event, ifaddr_evhandler);
 		taskqueue_cancel_timeout(taskqueue_thread, &clip_task, NULL);
 	}
+
+	t4_ddp_mod_unload();
 
 	return (0);
 }
