@@ -395,6 +395,7 @@ main(int argc, char *argv[])
 	struct dirent *dirp;
 	struct _dom_binding *ypdb, *next;
 	pid_t other_pid = -1;
+	int debug_mode = 0;
 	
 	/* NULL means to use /var/run/argv[0].pid */
 	if ((pidfile = pidfile_open(NULL, 0444, &other_pid)) == NULL)
@@ -406,6 +407,8 @@ main(int argc, char *argv[])
 		errx(1, "domainname not set. Aborting");
 
 	for (i = 1; i<argc; i++) {
+		if (strcmp("-d", argv[i]) == 0)
+			debug_mode++;
 		if (strcmp("-ypset", argv[i]) == 0)
 			ypsetmode = YPSET_ALL;
 		else if (strcmp("-ypsetme", argv[i]) == 0)
@@ -436,10 +439,10 @@ main(int argc, char *argv[])
 		closedir(dird);
 	}
 
-#ifdef DAEMON
-	if (daemon(0,0))
-		err(1, "fork");
-#endif
+	if (debug_mode == 0)
+		if (daemon(0,0))
+			err(1, "fork");
+
 	pidfile_write(pidfile);
 	
 	pmap_unset(YPBINDPROG, YPBINDVERS);
