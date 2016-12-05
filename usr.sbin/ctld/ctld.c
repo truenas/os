@@ -2603,8 +2603,11 @@ main(int argc, char **argv)
 	bool dont_daemonize = false;
 	bool use_ucl = false;
 
-	while ((ch = getopt(argc, argv, "duf:R")) != -1) {
+	while ((ch = getopt(argc, argv, "duf:DR")) != -1) {
 		switch (ch) {
+		case 'D':
+			dont_daemonize = true;
+			break;
 		case 'd':
 			dont_daemonize = true;
 			debug++;
@@ -2667,7 +2670,7 @@ main(int argc, char **argv)
 		set_timeout((newconf->conf_isns_period + 2) / 3, false);
 
 	for (;;) {
-		main_loop(newconf, dont_daemonize);
+		main_loop(newconf, debug > 0);
 		if (sighup_received) {
 			sighup_received = false;
 			log_debugx("received SIGHUP, reloading configuration");

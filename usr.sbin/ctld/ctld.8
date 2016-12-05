@@ -87,6 +87,12 @@ The daemon will also not fork and will exit after processing one connection.
 This option is only intended for debugging the target.
 .It Fl u
 Use UCL configuration file format instead of the traditional non-UCL format.
+.It Fl D
+Non-Deamon mode.  Causes the server to not
+.Xr fork 2
+during startup; server
+processes will still be created via
+.Xr fork 2
 .El
 .Sh FILES
 .Bl -tag -width ".Pa /var/run/ctld.pid" -compact
@@ -105,6 +111,7 @@ The
 .Nm
 utility exits 0 on success, and >0 if an error occurs.
 .Sh SEE ALSO
+.Xr fork 3 ,
 .Xr ctl 4 ,
 .Xr ctl.conf 5 ,
 .Xr ctladm 8 ,
