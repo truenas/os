@@ -176,8 +176,8 @@ static int free_ring(struct adapter *, bus_dma_tag_t, bus_dmamap_t, bus_addr_t,
 static int alloc_iq_fl(struct vi_info *, struct sge_iq *, struct sge_fl *,
     int, int);
 static int free_iq_fl(struct vi_info *, struct sge_iq *, struct sge_fl *);
-static void add_fl_sysctls(struct sysctl_ctx_list *, struct sysctl_oid *,
-    struct sge_fl *);
+static void add_fl_sysctls(struct adapter *, struct sysctl_ctx_list *,
+    struct sysctl_oid *, struct sge_fl *);
 static int alloc_fwq(struct adapter *);
 static int free_fwq(struct adapter *);
 static int alloc_mgmtq(struct adapter *);
@@ -228,8 +228,8 @@ static inline u_int txpkts0_len16(u_int);
 static inline u_int txpkts1_len16(void);
 static u_int write_txpkt_wr(struct sge_txq *, struct fw_eth_tx_pkt_wr *,
     struct mbuf *, u_int);
-static u_int write_txpkt_vm_wr(struct sge_txq *, struct fw_eth_tx_pkt_vm_wr *,
-    struct mbuf *, u_int);
+static u_int write_txpkt_vm_wr(struct adapter *, struct sge_txq *,
+    struct fw_eth_tx_pkt_vm_wr *, struct mbuf *, u_int);
 static int try_txpkts(struct mbuf *, struct mbuf *, struct txpkts *, u_int);
 static int add_to_txpkts(struct mbuf *, struct txpkts *, u_int);
 static u_int write_txpkts_wr(struct sge_txq *, struct fw_eth_tx_pkts_wr *,
@@ -432,16 +432,20 @@ static inline void
 setup_pad_and_pack_boundaries(struct adapter *sc)
 {
 	uint32_t v, m;
-	int pad, pack;
+	int pad, pack, pad_shift;
 
+	pad_shift = chip_id(sc) > CHELSIO_T5 ? X_T6_INGPADBOUNDARY_SHIFT :
+	    X_INGPADBOUNDARY_SHIFT;
 	pad = fl_pad;
-	if (fl_pad < 32 || fl_pad > 4096 || !powerof2(fl_pad)) {
+	if (fl_pad < (1 << pad_shift) ||
+	    fl_pad > (1 << (pad_shift + M_INGPADBOUNDARY)) ||
+	    !powerof2(fl_pad)) {
 		/*
 		 * If there is any chance that we might use buffer packing and
 		 * the chip is a T4, then pick 64 as the pad/pack boundary.  Set
-		 * it to 32 in all other cases.
+		 * it to the minimum allowed in all other cases.
 		 */
-		pad = is_t4(sc) && buffer_packing ? 64 : 32;
+		pad = is_t4(sc) && buffer_packing ? 64 : 1 << pad_shift;
 
 		/*
 		 * For fl_pad = 0 we'll still write a reasonable value to the
@@ -455,7 +459,7 @@ setup_pad_and_pack_boundaries(struct adapter *sc)
 		}
 	}
 	m = V_INGPADBOUNDARY(M_INGPADBOUNDARY);
-	v = V_INGPADBOUNDARY(ilog2(pad) - 5);
+	v = V_INGPADBOUNDARY(ilog2(pad) - pad_shift);
 	t4_set_reg_field(sc, A_SGE_CONTROL, m, v);
 
 	if (is_t4(sc)) {
@@ -2452,7 +2456,8 @@ eth_tx(struct mp_ring *r, u_int cidx, u_int pidx)
 			total++;
 			remaining--;
 			ETHER_BPF_MTAP(ifp, m0);
-			n = write_txpkt_vm_wr(txq, (void *)wr, m0, available);
+			n = write_txpkt_vm_wr(sc, txq, (void *)wr, m0,
+			    available);
 		} else if (remaining > 1 &&
 		    try_txpkts(m0, r->items[next_cidx], &txp, available) == 0) {
 
@@ -2720,8 +2725,10 @@ alloc_iq_fl(struct vi_info *vi, struct sge_iq *iq, struct sge_fl *fl,
 				    F_FW_IQ_CMD_FL0CONGEN);
 		}
 		c.fl0dcaen_to_fl0cidxfthresh =
-		    htobe16(V_FW_IQ_CMD_FL0FBMIN(X_FETCHBURSTMIN_128B) |
-			V_FW_IQ_CMD_FL0FBMAX(X_FETCHBURSTMAX_512B));
+		    htobe16(V_FW_IQ_CMD_FL0FBMIN(chip_id(sc) <= CHELSIO_T5 ?
+			X_FETCHBURSTMIN_128B : X_FETCHBURSTMIN_64B) |
+			V_FW_IQ_CMD_FL0FBMAX(chip_id(sc) <= CHELSIO_T5 ?
+			X_FETCHBURSTMAX_512B : X_FETCHBURSTMAX_256B));
 		c.fl0size = htobe16(fl->qsize);
 		c.fl0addr = htobe64(fl->ba);
 	}
@@ -2784,7 +2791,7 @@ alloc_iq_fl(struct vi_info *vi, struct sge_iq *iq, struct sge_fl *fl,
 		FL_UNLOCK(fl);
 	}
 
-	if (is_t5(sc) && !(sc->flags & IS_VF) && cong >= 0) {
+	if (chip_id(sc) >= CHELSIO_T5 && !(sc->flags & IS_VF) && cong >= 0) {
 		uint32_t param, val;
 
 		param = V_FW_PARAMS_MNEM(FW_PARAMS_MNEM_DMAQ) |
@@ -2862,8 +2869,8 @@ free_iq_fl(struct vi_info *vi, struct sge_iq *iq, struct sge_fl *fl)
 }
 
 static void
-add_fl_sysctls(struct sysctl_ctx_list *ctx, struct sysctl_oid *oid,
-    struct sge_fl *fl)
+add_fl_sysctls(struct adapter *sc, struct sysctl_ctx_list *ctx,
+    struct sysctl_oid *oid, struct sge_fl *fl)
 {
 	struct sysctl_oid_list *children = SYSCTL_CHILDREN(oid);
 
@@ -2871,6 +2878,11 @@ add_fl_sysctls(struct sysctl_ctx_list *ctx, struct sysctl_oid *oid,
 	    "freelist");
 	children = SYSCTL_CHILDREN(oid);
 
+	SYSCTL_ADD_UAUTO(ctx, children, OID_AUTO, "ba", CTLFLAG_RD,
+	    &fl->ba, "bus address of descriptor ring");
+	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
+	    fl->sidx * EQ_ESIZE + sc->params.sge.spg_len,
+	    "desc ring size in bytes");
 	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "cntxt_id",
 	    CTLTYPE_INT | CTLFLAG_RD, &fl->cntxt_id, 0, sysctl_uint16, "I",
 	    "SGE context id of the freelist");
@@ -2926,6 +2938,10 @@ alloc_fwq(struct adapter *sc)
 	    NULL, "firmware event queue");
 	children = SYSCTL_CHILDREN(oid);
 
+	SYSCTL_ADD_UAUTO(&sc->ctx, children, OID_AUTO, "ba", CTLFLAG_RD,
+	    &fwq->ba, "bus address of descriptor ring");
+	SYSCTL_ADD_INT(&sc->ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
+	    fwq->qsize * IQ_ESIZE, "descriptor ring size in bytes");
 	SYSCTL_ADD_PROC(&sc->ctx, children, OID_AUTO, "abs_id",
 	    CTLTYPE_INT | CTLFLAG_RD, &fwq->abs_id, 0, sysctl_uint16, "I",
 	    "absolute id of the queue");
@@ -3037,6 +3053,10 @@ alloc_rxq(struct vi_info *vi, struct sge_rxq *rxq, int intr_idx, int idx,
 	    NULL, "rx queue");
 	children = SYSCTL_CHILDREN(oid);
 
+	SYSCTL_ADD_UAUTO(&vi->ctx, children, OID_AUTO, "ba", CTLFLAG_RD,
+	    &rxq->iq.ba, "bus address of descriptor ring");
+	SYSCTL_ADD_INT(&vi->ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
+	    rxq->iq.qsize * IQ_ESIZE, "descriptor ring size in bytes");
 	SYSCTL_ADD_PROC(&vi->ctx, children, OID_AUTO, "abs_id",
 	    CTLTYPE_INT | CTLFLAG_RD, &rxq->iq.abs_id, 0, sysctl_uint16, "I",
 	    "absolute id of the queue");
@@ -3058,7 +3078,7 @@ alloc_rxq(struct vi_info *vi, struct sge_rxq *rxq, int intr_idx, int idx,
 	    CTLFLAG_RD, &rxq->vlan_extraction,
 	    "# of times hardware extracted 802.1Q tag");
 
-	add_fl_sysctls(&vi->ctx, oid, &rxq->fl);
+	add_fl_sysctls(sc, &vi->ctx, oid, &rxq->fl);
 
 	return (rc);
 }
@@ -3087,12 +3107,13 @@ static int
 alloc_ofld_rxq(struct vi_info *vi, struct sge_ofld_rxq *ofld_rxq,
     int intr_idx, int idx, struct sysctl_oid *oid)
 {
+	struct port_info *pi = vi->pi;
 	int rc;
 	struct sysctl_oid_list *children;
 	char name[16];
 
 	rc = alloc_iq_fl(vi, &ofld_rxq->iq, &ofld_rxq->fl, intr_idx,
-	    vi->pi->rx_chan_map);
+	    pi->rx_chan_map);
 	if (rc != 0)
 		return (rc);
 
@@ -3103,6 +3124,10 @@ alloc_ofld_rxq(struct vi_info *vi, struct sge_ofld_rxq *ofld_rxq,
 	    NULL, "rx queue");
 	children = SYSCTL_CHILDREN(oid);
 
+	SYSCTL_ADD_UAUTO(&vi->ctx, children, OID_AUTO, "ba", CTLFLAG_RD,
+	    &ofld_rxq->iq.ba, "bus address of descriptor ring");
+	SYSCTL_ADD_INT(&vi->ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
+	    ofld_rxq->iq.qsize * IQ_ESIZE, "descriptor ring size in bytes");
 	SYSCTL_ADD_PROC(&vi->ctx, children, OID_AUTO, "abs_id",
 	    CTLTYPE_INT | CTLFLAG_RD, &ofld_rxq->iq.abs_id, 0, sysctl_uint16,
 	    "I", "absolute id of the queue");
@@ -3113,7 +3138,7 @@ alloc_ofld_rxq(struct vi_info *vi, struct sge_ofld_rxq *ofld_rxq,
 	    CTLTYPE_INT | CTLFLAG_RD, &ofld_rxq->iq.cidx, 0, sysctl_uint16, "I",
 	    "consumer index");
 
-	add_fl_sysctls(&vi->ctx, oid, &ofld_rxq->fl);
+	add_fl_sysctls(pi->adapter, &vi->ctx, oid, &ofld_rxq->fl);
 
 	return (rc);
 }
@@ -3238,8 +3263,9 @@ alloc_nm_txq(struct vi_info *vi, struct sge_nm_txq *nm_txq, int iqidx, int idx,
 	nm_txq->nid = idx;
 	nm_txq->iqidx = iqidx;
 	nm_txq->cpl_ctrl0 = htobe32(V_TXPKT_OPCODE(CPL_TX_PKT) |
-	    V_TXPKT_INTF(pi->tx_chan) | V_TXPKT_VF_VLD(1) |
-	    V_TXPKT_VF(vi->viid));
+	    V_TXPKT_INTF(pi->tx_chan) | V_TXPKT_PF(G_FW_VIID_PFN(vi->viid)) |
+	    V_TXPKT_VF(G_FW_VIID_VIN(vi->viid)) |
+	    V_TXPKT_VF_VLD(G_FW_VIID_VIVLD(vi->viid)));
 
 	snprintf(name, sizeof(name), "%d", idx);
 	oid = SYSCTL_ADD_NODE(&vi->ctx, children, OID_AUTO, name, CTLFLAG_RD,
@@ -3533,6 +3559,11 @@ alloc_wrq(struct adapter *sc, struct vi_info *vi, struct sge_wrq *wrq,
 	wrq->nwr_pending = 0;
 	wrq->ndesc_needed = 0;
 
+	SYSCTL_ADD_UAUTO(ctx, children, OID_AUTO, "ba", CTLFLAG_RD,
+	    &wrq->eq.ba, "bus address of descriptor ring");
+	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
+	    wrq->eq.sidx * EQ_ESIZE + sc->params.sge.spg_len,
+	    "desc ring size in bytes");
 	SYSCTL_ADD_UINT(ctx, children, OID_AUTO, "cntxt_id", CTLFLAG_RD,
 	    &wrq->eq.cntxt_id, 0, "SGE context id of the queue");
 	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "cidx",
@@ -3541,6 +3572,8 @@ alloc_wrq(struct adapter *sc, struct vi_info *vi, struct sge_wrq *wrq,
 	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "pidx",
 	    CTLTYPE_INT | CTLFLAG_RD, &wrq->eq.pidx, 0, sysctl_uint16, "I",
 	    "producer index");
+	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "sidx", CTLFLAG_RD, NULL,
+	    wrq->eq.sidx, "status page index");
 	SYSCTL_ADD_UQUAD(ctx, children, OID_AUTO, "tx_wrs_direct", CTLFLAG_RD,
 	    &wrq->tx_wrs_direct, "# of work requests (direct)");
 	SYSCTL_ADD_UQUAD(ctx, children, OID_AUTO, "tx_wrs_copied", CTLFLAG_RD,
@@ -3607,8 +3640,10 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 		    V_TXPKT_INTF(pi->tx_chan));
 	else
 		txq->cpl_ctrl0 = htobe32(V_TXPKT_OPCODE(CPL_TX_PKT) |
-		    V_TXPKT_INTF(pi->tx_chan) | V_TXPKT_VF_VLD(1) |
-		    V_TXPKT_VF(vi->viid));
+		    V_TXPKT_INTF(pi->tx_chan) |
+		    V_TXPKT_PF(G_FW_VIID_PFN(vi->viid)) |
+		    V_TXPKT_VF(G_FW_VIID_VIN(vi->viid)) |
+		    V_TXPKT_VF_VLD(G_FW_VIID_VIVLD(vi->viid)));
 	txq->tc_idx = -1;
 	txq->sdesc = malloc(eq->sidx * sizeof(struct tx_sdesc), M_CXGBE,
 	    M_ZERO | M_WAITOK);
@@ -3618,6 +3653,11 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 	    NULL, "tx queue");
 	children = SYSCTL_CHILDREN(oid);
 
+	SYSCTL_ADD_UAUTO(&vi->ctx, children, OID_AUTO, "ba", CTLFLAG_RD,
+	    &eq->ba, "bus address of descriptor ring");
+	SYSCTL_ADD_INT(&vi->ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
+	    eq->sidx * EQ_ESIZE + sc->params.sge.spg_len,
+	    "desc ring size in bytes");
 	SYSCTL_ADD_UINT(&vi->ctx, children, OID_AUTO, "abs_id", CTLFLAG_RD,
 	    &eq->abs_id, 0, "absolute id of the queue");
 	SYSCTL_ADD_UINT(&vi->ctx, children, OID_AUTO, "cntxt_id", CTLFLAG_RD,
@@ -3628,6 +3668,8 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 	SYSCTL_ADD_PROC(&vi->ctx, children, OID_AUTO, "pidx",
 	    CTLTYPE_INT | CTLFLAG_RD, &eq->pidx, 0, sysctl_uint16, "I",
 	    "producer index");
+	SYSCTL_ADD_INT(&vi->ctx, children, OID_AUTO, "sidx", CTLFLAG_RD, NULL,
+	    eq->sidx, "status page index");
 
 	SYSCTL_ADD_PROC(&vi->ctx, children, OID_AUTO, "tc",
 	    CTLTYPE_INT | CTLFLAG_RW, vi, idx, sysctl_tc, "I",
@@ -4033,8 +4075,8 @@ imm_payload(u_int ndesc)
  * The return value is the # of hardware descriptors used.
  */
 static u_int
-write_txpkt_vm_wr(struct sge_txq *txq, struct fw_eth_tx_pkt_vm_wr *wr,
-    struct mbuf *m0, u_int available)
+write_txpkt_vm_wr(struct adapter *sc, struct sge_txq *txq,
+    struct fw_eth_tx_pkt_vm_wr *wr, struct mbuf *m0, u_int available)
 {
 	struct sge_eq *eq = &txq->eq;
 	struct tx_sdesc *txsd;
@@ -4150,9 +4192,13 @@ write_txpkt_vm_wr(struct sge_txq *txq, struct fw_eth_tx_pkt_vm_wr *wr,
 	    ("%s: mbuf %p needs checksum offload but missing header lengths",
 			__func__, m0));
 
-		/* XXX: T6 */
-		ctrl1 |= V_TXPKT_ETHHDR_LEN(m0->m_pkthdr.l2hlen -
-		    ETHER_HDR_LEN);
+		if (chip_id(sc) <= CHELSIO_T5) {
+			ctrl1 |= V_TXPKT_ETHHDR_LEN(m0->m_pkthdr.l2hlen -
+			    ETHER_HDR_LEN);
+		} else {
+			ctrl1 |= V_T6_TXPKT_ETHHDR_LEN(m0->m_pkthdr.l2hlen -
+			    ETHER_HDR_LEN);
+		}
 		ctrl1 |= V_TXPKT_IPHDR_LEN(m0->m_pkthdr.l3hlen);
 		ctrl1 |= V_TXPKT_CSUM_TYPE(csum_type);
 	} else
