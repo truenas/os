@@ -2539,6 +2539,19 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		break;
 #endif
 
+	case SIOCGIFORIGNAME:
+		/*
+		 * Getting the interface name seems like a strange
+		 * thing to do: you pass in "xyz12" and get its name,
+		 * won't that be "xyz12"?  Well, no ... at least,
+		 * not if you have used SIOCSIFNAME.  This gets the
+		 * original name, i.e., the driver name and driver
+		 * unit.
+		 */
+		snprintf(ifr->ifr_name, sizeof(ifr->ifr_name), "%s%d",
+		    ifp->if_dname, ifp->if_dunit);
+		break;
+
 	case SIOCSIFMETRIC:
 		error = priv_check(td, PRIV_NET_SETIFMETRIC);
 		if (error)
