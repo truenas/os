@@ -60,6 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <libutil.h>
 
 /*
  * This program loads the password and group databases into the kernel
@@ -112,7 +113,8 @@ main(int argc, char *argv[])
 	static uid_t check_dups[MAXUSERMAX];
 	gid_t grps[NGROUPS];
 	int ngroup;
-
+	int nodaemon = 0;
+	
 	if (modfind("nfscommon") < 0) {
 		/* Not present in kernel, try loading it */
 		if (kldload("nfscommon") < 0 ||
@@ -158,6 +160,8 @@ main(int argc, char *argv[])
 			strncpy(hostname, *argv, MAXHOSTNAMELEN);
 			hostname[MAXHOSTNAMELEN] = '\0';
 			dnsname = hostname;
+		} else if (!strcmp(*argv, "-nodaemon")) {
+			nodaemon = 1;
 		} else if (!strcmp(*argv, "-verbose")) {
 			verbose = 1;
 		} else if (!strcmp(*argv, "-force")) {
@@ -402,11 +406,17 @@ main(int argc, char *argv[])
 	sigaddset(&signew, SIGCHLD);
 	sigprocmask(SIG_BLOCK, &signew, NULL);
 
-	daemon(0, 0);
-	(void)signal(SIGHUP, SIG_IGN);
-	(void)signal(SIGINT, SIG_IGN);
-	(void)signal(SIGQUIT, SIG_IGN);
-	(void)signal(SIGTERM, SIG_IGN);
+	if (nodaemon) {
+		pid_t oldpid = 0;
+		struct pidfh *ph = pidfile_open(NULL, 0600, &oldpid);
+		pidfile_write(ph);
+	} else {
+		daemon(0, 0);
+		(void)signal(SIGHUP, SIG_IGN);
+		(void)signal(SIGINT, SIG_IGN);
+		(void)signal(SIGQUIT, SIG_IGN);
+		(void)signal(SIGTERM, SIG_IGN);
+	}
 	(void)signal(SIGUSR1, cleanup_term);
 	(void)signal(SIGCHLD, cleanup_term);
 
