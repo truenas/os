@@ -40,6 +40,7 @@ services plus support manage-gids for all NFS versions
 .Op Fl verbose
 .Op Fl force
 .Op Fl manage-gids
+.Op Fl nodaemon
 .Op Ar num_servers
 .Sh DESCRIPTION
 .Nm
@@ -91,6 +92,12 @@ and uses the group list for that uid provided by
 .Xr getgrouplist 3
 on the server instead of the list of groups provided in the RPC authenticator.
 This can be used to avoid the 16 group limit for AUTH_SYS.
+.It Fl nodaemon
+This flag causes
+.Nm
+to not call
+.Xr daemon 3
+during startup.
 .It Ar num_servers
 Specifies how many servers to create (max 20).
 The default of 4 may be sufficient. You should run enough servers, so that
