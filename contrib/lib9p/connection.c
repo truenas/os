@@ -86,28 +86,11 @@ l9p_connection_free(struct l9p_connection *conn)
 }
 
 void
-l9p_connection_on_send_response(struct l9p_connection *conn,
-    l9p_send_response_t cb, void *aux)
-{
-
-	conn->lc_send_response = cb;
-	conn->lc_send_response_aux = aux;
-}
-
-void
-l9p_connection_on_get_response_buffer(struct l9p_connection *conn,
-    l9p_get_response_buffer_t cb, void *aux)
-{
-
-	conn->lc_get_response_buffer = cb;
-	conn->lc_get_response_buffer_aux = aux;
-}
-
-void
 l9p_connection_recv(struct l9p_connection *conn, const struct iovec *iov,
     const size_t niov, void *aux)
 {
 	struct l9p_request *req;
+	int error;
 
 	req = l9p_calloc(1, sizeof (struct l9p_request));
 	req->lr_aux = aux;
@@ -134,28 +117,24 @@ l9p_connection_recv(struct l9p_connection *conn, const struct iovec *iov,
 		return;
 	}
 
-	if (conn->lc_get_response_buffer(req, req->lr_resp_msg.lm_iov,
-	    &req->lr_resp_msg.lm_niov, conn->lc_get_response_buffer_aux) != 0) {
+	error = conn->lc_lt.lt_get_response_buffer(req,
+	    req->lr_resp_msg.lm_iov,
+	    &req->lr_resp_msg.lm_niov,
+	    conn->lc_lt.lt_aux);
+	if (error) {
 		L9P_LOG(L9P_WARNING, "cannot obtain buffers for response");
+		ht_remove(&conn->lc_requests, req->lr_req.hdr.tag);
 		l9p_freefcall(&req->lr_req);
-		l9p_connection_reqfree(req);
+		free(req);
 		return;
 	}
 
-	l9p_threadpool_enqueue(&conn->lc_tp, req);
-}
-
-/*
- * Normal path indicating done-with-request.  We release the tag
- * for re-use here as well as freeing the request.
- */
-void
-l9p_connection_reqfree(struct l9p_request *req)
-{
-	struct l9p_connection *conn;
-
-	conn = req->lr_conn;
-	free(req);
+	/*
+	 * NB: it's up to l9p_threadpool_run to decide whether
+	 * to queue the work or to run it immediately and wait
+	 * (it must do the latter for Tflush requests).
+	 */
+	l9p_threadpool_run(&conn->lc_tp, req);
 }
 
 void
@@ -173,8 +152,7 @@ l9p_connection_close(struct l9p_connection *conn)
 	ht_iter(&conn->lc_requests, &iter);
 	while ((req = ht_next(&iter)) != NULL) {
 		/* XXX need to know if there is anyone listening */
-		l9p_respond(req, EINTR);
-		free(req);
+		l9p_respond(req, EINTR, true);
 		ht_remove_at_iter(&iter);
 	}
 

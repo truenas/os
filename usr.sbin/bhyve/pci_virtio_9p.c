@@ -90,6 +90,10 @@ struct pci_vt9p_config {
 	char tag[0];
 } __attribute__((packed));
 
+static int pci_vt9p_send(struct l9p_request *, const struct iovec *,
+    const size_t, const size_t, void *);
+static void pci_vt9p_drop(struct l9p_request *, const struct iovec *, size_t,
+    void *);
 static void pci_vt9p_reset(void *);
 static void pci_vt9p_notify(void *, struct vqueue_info *);
 static int pci_vt9p_cfgread(void *, int, int, uint32_t *);
@@ -166,6 +170,20 @@ pci_vt9p_send(struct l9p_request *req, const struct iovec *iov,
 	pthread_mutex_unlock(&sc->vsc_mtx);
 	free(preq);
 	return (0);
+}
+
+static void
+pci_vt9p_drop(struct l9p_request *req, const struct iovec *iov, size_t niov,
+    void *arg)
+{
+	struct pci_vt9p_request *preq = req->lr_aux;
+	struct pci_vt9p_softc *sc = preq->vsr_sc;
+
+	pthread_mutex_lock(&sc->vsc_mtx);
+	vq_relchain(&sc->vsc_vq, preq->vsr_idx, 0);
+	vq_endchains(&sc->vsc_vq, 1);
+	pthread_mutex_unlock(&sc->vsc_mtx);
+	free(preq);
 }
 
 static void
@@ -255,9 +273,9 @@ pci_vt9p_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 		return (1);
 	}
 
-	l9p_connection_on_send_response(sc->vsc_conn, pci_vt9p_send, NULL);
-	l9p_connection_on_get_response_buffer(sc->vsc_conn, pci_vt9p_get_buffer,
-	    NULL);
+	sc->vsc_conn->lc_lt.lt_get_response_buffer = pci_vt9p_get_buffer;
+	sc->vsc_conn->lc_lt.lt_send_response = pci_vt9p_send;
+	sc->vsc_conn->lc_lt.lt_drop_response = pci_vt9p_drop;
 
 	vi_softc_linkup(&sc->vsc_vs, &vt9p_vi_consts, sc, pi, &sc->vsc_vq);
 	sc->vsc_vs.vs_mtx = &sc->vsc_mtx;

@@ -40,7 +40,8 @@ struct l9p_threadpool {
     struct l9p_request_queue	ltp_queue;
     int 			ltp_size;
     pthread_mutex_t		ltp_mtx;
-    pthread_cond_t		ltp_cv;
+    pthread_cond_t		ltp_work_cv;
+    pthread_cond_t		ltp_flush_cv;
     LIST_HEAD(, l9p_worker)	ltp_workers;
 };
 
@@ -51,8 +52,10 @@ struct l9p_worker {
     LIST_ENTRY(l9p_worker)	ltw_link;
 };
 
-int l9p_threadpool_init(struct l9p_threadpool *, int);
-int l9p_threadpool_enqueue(struct l9p_threadpool *, struct l9p_request *);
-int l9p_threadpool_shutdown(struct l9p_threadpool *);
+void	l9p_threadpool_flushee_done(struct l9p_request *);
+int	l9p_threadpool_init(struct l9p_threadpool *, int);
+void	l9p_threadpool_run(struct l9p_threadpool *, struct l9p_request *);
+int	l9p_threadpool_shutdown(struct l9p_threadpool *);
+int	l9p_threadpool_tflush(struct l9p_request *);
 
 #endif	/* LIB9P_THREADPOOL_H  */

@@ -13,6 +13,7 @@ except ImportError:
     import configparser
 import functools
 import logging
+import os
 import socket
 import struct
 import sys
@@ -37,6 +38,7 @@ class TestState(object):
         self.clnt_tab = {}
         self.mkclient = None
         self.stop = False
+        self.gid = 0
 
     def ccc(self, cid=None):
         """
@@ -183,6 +185,8 @@ class TestCase(object):
         self.detail = None
         self.tstate = tstate
         self._shutdown = None
+        self._autoclunk = None
+        self._acconn = None
 
     def auto_disconnect(self, conn):
         self._shutdown = conn
@@ -205,10 +209,16 @@ class TestCase(object):
         self.detail = detail
         raise TCDone()
 
+    def autoclunk(self, fid):
+        "mark fid to be closed/clunked on test exit"
+        if self._acconn is None:
+            raise ValueError('autoclunk: no _acconn')
+        self._autoclunk.append(fid)
+
     def trace(self, msg, *args, **kwargs):
         "add tracing info to log-file output"
         level = kwargs.pop('level', logging.INFO)
-        self.tstate.logger.log(logging.INFO, msg, *args, **kwargs)
+        self.tstate.logger.log(level, '      ' + msg, *args, **kwargs)
 
     def ccs(self):
         "call tstate ccs, turn socket.error connect failure into test fail"
@@ -216,12 +226,14 @@ class TestCase(object):
             self.detail = 'connecting'
             ret = self.tstate.ccs()
             self.detail = None
+            self._acconn = ret
             return ret
         except socket.error as err:
             self.fail(str(err))
 
     def __enter__(self):
         self.tstate.logger.log(logging.DEBUG, 'ENTER: %s', self.name)
+        self._autoclunk = []
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -266,6 +278,8 @@ class TestCase(object):
         if tb_detail:
             for line in tb_detail:
                 tstate.logger.log(level, '      %s', line.rstrip())
+        for fid in self._autoclunk:
+            self._acconn.clunk(fid, ignore_error=True)
         if self._shutdown:
             self._shutdown.shutdown()
         return eat_exc
@@ -393,6 +407,8 @@ def main():
 
     try:
         if not tstate.stop:
+            # Various Linux tests need gids.  Just get them for everyone.
+            tstate.gid = getint(tstate.config, 'client', 'gid', 0)
             more_test_cases(tstate)
     finally:
         tstate.dcc()
@@ -441,19 +457,20 @@ def more_test_cases(tstate):
         clnt = tc.ccs()
         try:
             fid, qid = clnt.lookup(clnt.rootfid, [b'/'])
+            tc.autoclunk(fid)
         except RemoteError as err:
             tc.succ(err.args[0])
-        clnt.clunk(fid)
         tc.fail('/ in lookup component name not rejected')
 
     # Proceed from a clean tree.  As a side effect, this also tests
-    # at least the old style readdir (read() on a directory fid).
+    # either the old style readdir (read() on a directory fid) or
+    # the dot-L readdir().
     #
     # The test case will fail if we don't have permission to remove
     # some file(s).
     with TestCase('clean up tree (readdir+remove)', tstate) as tc:
         clnt = tc.ccs()
-        fset = clnt.uxreaddir(b'/', no_dotl=True)
+        fset = clnt.uxreaddir(b'/')
         fset = [i for i in fset if i != '.' and i != '..']
         tc.trace("what's there initially: {0!r}".format(fset))
         try:
@@ -463,7 +480,7 @@ def more_test_cases(tstate):
             tc.trace('this might be a permissions error', level=logging.ERROR)
             tstate.stop = True
             tc.fail(str(err))
-        fset = clnt.uxreaddir(b'/', no_dotl=True)
+        fset = clnt.uxreaddir(b'/')
         fset = [i for i in fset if i != '.' and i != '..']
         tc.trace("what's left after removing everything: {0!r}".format(fset))
         if fset:
@@ -477,28 +494,49 @@ def more_test_cases(tstate):
     # Name supplied to create, mkdir, etc, may not contain /.
     # Note that this test may fail for the wrong reason if /dir
     # itself does not already exist, so first let's make /dir.
+    only_dotl = getbool(tstate.config, 'client', 'only_dotl', False)
     with TestCase('mkdir', tstate) as tc:
         clnt = tc.ccs()
+        if only_dotl and not clnt.supports(protocol.td.Tmkdir):
+            tc.skip('cannot test dot-L mkdir on {0}'.format(clnt.proto))
         try:
             fid, qid = clnt.uxlookup(b'/dir', None)
+            tc.autoclunk(fid)
             tstate.stop = True
             tc.fail('found existing /dir after cleaning tree')
         except RemoteError as err:
             # we'll just assume it's "no such file or directory"
             pass
-        qid, _ = clnt.create(clnt.rootfid, b'dir',
-                             protocol.td.DMDIR | 0o777,
-                             protocol.td.OREAD)
+        if only_dotl:
+            qid = clnt.mkdir(clnt.rootfid, b'dir', 0o777, tstate.gid)
+        else:
+            qid, _ = clnt.create(clnt.rootfid, b'dir',
+                                 protocol.td.DMDIR | 0o777,
+                                 protocol.td.OREAD)
         if qid.type != protocol.td.QTDIR:
             tstate.stop = True
             tc.fail('creating /dir: result is not a directory')
         tc.trace('now attempting to create /dir/sub the wrong way')
         try:
-            qid, _ = clnt.create(clnt.rootfid, b'dir/sub',
-                                 protocol.td.DMDIR | 0o777,
-                                 protocol.td.OREAD)
-            tc.fail('created dir/sub as single directory with embedded slash')
+            if only_dotl:
+                qid = clnt.mkdir(clnt.rootfid, b'dir/sub', 0o777, tstate.gid)
+            else:
+                qid, _ = clnt.create(clnt.rootfid, b'dir/sub',
+                                     protocol.td.DMDIR | 0o777,
+                                     protocol.td.OREAD)
             # it's not clear what happened on the server at this point!
+            tc.trace("creating dir/sub (with embedded '/') should have "
+                     'failed but did not')
+            tstate.stop = True
+            fset = clnt.uxreaddir(b'/dir')
+            if 'sub' in fset:
+                tc.trace('(found our dir/sub detritus)')
+                clnt.uxremove(b'dir/sub', force=True)
+                fset = clnt.uxreaddir(b'/dir')
+                if 'sub' not in fset:
+                    tc.trace('(successfully removed our dir/sub detritus)')
+                    tstate.stop = False
+            tc.fail('created dir/sub as single directory with embedded slash')
         except RemoteError as err:
             # we'll just assume it's the right kind of error
             tc.trace('invalid path dir/sub failed with: %s', str(err))
@@ -506,11 +544,97 @@ def more_test_cases(tstate):
     if tstate.stop:
         return
 
+    with TestCase('getattr/setattr', tstate) as tc:
+        # This test is not really thorough enough, need to test
+        # all combinations of settings.  Should also test that
+        # old values are restored on failure, although it is not
+        # clear how to trigger failures.
+        clnt = tc.ccs()
+        if not clnt.supports(protocol.td.Tgetattr):
+            tc.skip('%s does not support Tgetattr', clnt)
+        fid, _, _, _ = clnt.uxopen(b'/dir/file', os.O_CREAT | os.O_RDWR, 0o666,
+            gid=tstate.gid)
+        tc.autoclunk(fid)
+        written = clnt.write(fid, 0, 'bytes\n')
+        if written != 6:
+            tc.trace('expected to write 6 bytes, actually wrote %d', written,
+                     level=logging.WARN)
+        attrs = clnt.Tgetattr(fid)
+        #tc.trace('getattr: after write, before setattr: got %s', attrs)
+        if attrs.size != written:
+            tc.fail('getattr: expected size=%d, got size=%d',
+                    written, attrs.size)
+        # now truncate, set mtime to (3,14), and check result
+        set_time_to = p9conn.Timespec(sec=0, nsec=140000000)
+        clnt.Tsetattr(fid, size=0, mtime=set_time_to)
+        attrs = clnt.Tgetattr(fid)
+        #tc.trace('getattr: after setattr: got %s', attrs)
+        if attrs.mtime.sec != set_time_to.sec or attrs.size != 0:
+            tc.fail('setattr: expected to get back mtime.sec={0}, size=0; '
+                    'got mtime.sec={1}, size='
+                    '{1}'.format(set_time_to.sec, attrs.mtime.sec, attrs.size))
+        # nsec is not as stable but let's check
+        if attrs.mtime.nsec != set_time_to.nsec:
+            tc.trace('setattr: expected to get back mtime_nsec=%d; '
+                     'got %d', set_time_to.nsec, mtime_nsec)
+        tc.succ('able to set and see size and mtime')
+
+    # this test should be much later, but we know the current
+    # server is broken...
     with TestCase('rename adjusts other fids', tstate) as tc:
         clnt = tc.ccs()
-        if clnt.proto < protocol.dotl or True:
-            tc.skip('applies only to 9P2000.L')
+        dirfid, _ = clnt.uxlookup(b'/dir')
+        tc.autoclunk(dirfid)
+        clnt.uxmkdir(b'd1', 0o777, tstate.gid, startdir=dirfid)
+        clnt.uxmkdir(b'd1/sub', 0o777, tstate.gid, startdir=dirfid)
+        d1fid, _ = clnt.uxlookup(b'd1', dirfid)
+        tc.autoclunk(d1fid)
+        subfid, _ = clnt.uxlookup(b'sub', d1fid)
+        tc.autoclunk(subfid)
+        fid, _, _, _ = clnt.uxopen(b'file', os.O_CREAT | os.O_RDWR,
+                                   0o666, startdir=subfid, gid=tstate.gid)
+        tc.autoclunk(fid)
+        written = clnt.write(fid, 0, 'filedata\n')
+        if written != 9:
+            tc.trace('expected to write 9 bytes, actually wrote %d', written,
+                     level=logging.WARN)
+        # Now if we rename /dir/d1 to /dir/d2, the fids for both
+        # sub/file and sub itself should still be usable.  This
+        # holds for both Trename (Linux only) and Twstat based
+        # rename ops.
+        #
+        # Note that some servers may cache some number of files and/or
+        # diretories held open, so we should open many fids to wipe
+        # out the cache (XXX notyet).
+        if clnt.supports(protocol.td.Trename):
+            clnt.rename(d1fid, dirfid, name=b'd2')
+        else:
+            clnt.wstat(d1fid, name=b'd2')
+        try:
+            rofid, _, _, _ = clnt.uxopen(b'file', os.O_RDONLY, startdir=subfid)
+            clnt.clunk(rofid)
+        except RemoteError as err:
+            tc.fail('open file in renamed dir/d2/sub: {0}'.format(err))
         tc.succ()
+
+    # Even if xattrwalk is supported by the protocol, it's optional
+    # on the server.
+    with TestCase('xattrwalk', tstate) as tc:
+        clnt = tc.ccs()
+        if not clnt.supports(protocol.td.Txattrwalk):
+            tc.skip('{0} does not support Txattrwalk'.format(clnt))
+        dirfid, _ = clnt.uxlookup(b'/dir')
+        tc.autoclunk(dirfid)
+        try:
+            # need better tests...
+            attrfid, size = clnt.xattrwalk(dirfid)
+            tc.autoclunk(attrfid)
+            data = clnt.read(attrfid, 0, size)
+            tc.trace('xattrwalk with no name: data=%r', data)
+            tc.succ('xattrwalk size={0} datalen={1}'.format(size, len(data)))
+        except RemoteError as err:
+            tc.trace('xattrwalk on /dir: {0}'.format(err))
+        tc.succ('xattrwalk apparently not implemented')
 
 if __name__ == '__main__':
     try:
