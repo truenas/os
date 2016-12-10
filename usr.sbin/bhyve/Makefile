@@ -73,8 +73,9 @@ SRCS=	\
 .PATH:  ${BHYVE_SYSDIR}/sys/amd64/vmm
 SRCS+=	vmm_instruction_emul.c
 
+DPADD=	${LIBVMMAPI} ${LIBMD} ${LIBZ} ${LIBUTIL} ${LIB9P} ${LIBSBUF}
+DPADD+=	${LIBVNCSERVER} ${LIBCAM}
 LDADD=	-lvmmapi -lmd -lpthread -lz -lutil -l9p -lsbuf -lvncserver -lcam
-#LIBADD=	vmmapi md pthread z
 
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/e1000
 CFLAGS+= -I${BHYVE_SYSDIR}/sys/dev/mii
