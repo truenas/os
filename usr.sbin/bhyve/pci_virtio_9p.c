@@ -52,7 +52,8 @@ __FBSDID("$FreeBSD$");
 #include "pci_emul.h"
 #include "virtio.h"
 
-#define VT9P_RINGSZ	64
+#define	VT9P_MAX_IOV	128
+#define VT9P_RINGSZ	128
 #define	VT9P_MAXTAGSZ	256
 #define	VT9P_CONFIGSPACESZ	(VT9P_MAXTAGSZ + sizeof(uint16_t))
 
@@ -189,16 +190,16 @@ pci_vt9p_drop(struct l9p_request *req, const struct iovec *iov, size_t niov,
 static void
 pci_vt9p_notify(void *vsc, struct vqueue_info *vq)
 {
-	struct iovec iov[8];
+	struct iovec iov[VT9P_MAX_IOV];
 	struct pci_vt9p_softc *sc;
 	struct pci_vt9p_request *preq;
 	uint16_t idx, n, i;
-	uint16_t flags[8];
+	uint16_t flags[VT9P_MAX_IOV];
 
 	sc = vsc;
 
 	while (vq_has_descs(vq)) {
-		n = vq_getchain(vq, &idx, iov, 8, flags);
+		n = vq_getchain(vq, &idx, iov, VT9P_MAX_IOV, flags);
 		preq = calloc(1, sizeof(struct pci_vt9p_request));
 		preq->vsr_sc = sc;
 		preq->vsr_idx = idx;
@@ -273,6 +274,7 @@ pci_vt9p_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 		return (1);
 	}
 
+	sc->vsc_conn->lc_msize = L9P_MAX_IOV * PAGE_SIZE;
 	sc->vsc_conn->lc_lt.lt_get_response_buffer = pci_vt9p_get_buffer;
 	sc->vsc_conn->lc_lt.lt_send_response = pci_vt9p_send;
 	sc->vsc_conn->lc_lt.lt_drop_response = pci_vt9p_drop;
