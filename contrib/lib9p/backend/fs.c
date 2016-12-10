@@ -2340,6 +2340,7 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	struct fs_fid *file;
 	struct dirent *dp;
 	struct stat st;
+	uint32_t count;
 	int error = 0;
 
 	file = req->lr_fid->lo_aux;
@@ -2351,15 +2352,15 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 	pthread_mutex_lock(&file->ff_mtx);
 
 	/*
-	 * There is no getdirentries variant that accepts an
-	 * offset, so once we are multithreaded, this will need
-	 * a lock (which will cover the dirent structures as well).
-	 *
 	 * It's not clear whether we can use the same trick for
 	 * discarding offsets here as we do in fs_read.  It
 	 * probably should work, we'll have to see if some
 	 * client(s) use the zero-offset thing to rescan without
 	 * clunking the directory first.
+	 *
+	 * Probably the thing to do is switch to calling
+	 * getdirentries() / getdents() directly, instead of
+	 * going through libc.
 	 */
 	if (req->lr_req.io.offset == 0)
 		rewinddir(file->ff_dir);
@@ -2367,6 +2368,7 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 		seekdir(file->ff_dir, (long)req->lr_req.io.offset);
 
 	l9p_init_msg(&msg, req, L9P_PACK);
+	count = (uint32_t)msg.lm_size; /* in case we get no entries */
 	while ((dp = readdir(file->ff_dir)) != NULL) {
 		/*
 		 * Although "." is forbidden in naming and ".." is
@@ -2375,11 +2377,6 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 		 * should perhaps alter the inode number, but not
 		 * yet.)
 		 */
-#ifdef wrong
-		if (dp->d_name[0] == '.' &&
-		    (dp->d_namlen == 1 || strcmp(dp->d_name, "..") == 0))
-			continue;
-#endif
 
 		/*
 		 * TODO: we do a full lstat here; could use dp->d_*
@@ -2395,12 +2392,14 @@ fs_readdir(void *softc __unused, struct l9p_request *req)
 		de.type = dp->d_type;
 		de.name = dp->d_name;
 
+		/* Update count only if we completely pack the dirent. */
 		if (l9p_pudirent(&msg, &de) < 0)
 			break;
+		count = (uint32_t)msg.lm_size;
 	}
 
 	pthread_mutex_unlock(&file->ff_mtx);
-	req->lr_resp.io.count = (uint32_t)msg.lm_size;
+	req->lr_resp.io.count = count;
 	return (error);
 }
 
