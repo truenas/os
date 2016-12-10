@@ -53,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include "virtio.h"
 
 #define	VT9P_MAX_IOV	128
-#define VT9P_RINGSZ	128
+#define VT9P_RINGSZ	256
 #define	VT9P_MAXTAGSZ	256
 #define	VT9P_CONFIGSPACESZ	(VT9P_MAXTAGSZ + sizeof(uint16_t))
 
