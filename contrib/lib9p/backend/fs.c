@@ -1473,7 +1473,7 @@ fs_read(void *softc __unused, struct l9p_request *req)
 {
 	struct l9p_stat l9stat;
 	struct fs_fid *file;
-	bool dotu = req->lr_conn->lc_version >= L9P_2000U;
+	bool dotu = req->lr_conn->lc_version == L9P_2000U;
 	ssize_t ret;
 
 	file = req->lr_fid->lo_aux;
@@ -1570,7 +1570,7 @@ fs_stat(void *softc __unused, struct l9p_request *req)
 {
 	struct fs_fid *file;
 	struct stat st;
-	bool dotu = req->lr_conn->lc_version >= L9P_2000U;
+	bool dotu = req->lr_conn->lc_version == L9P_2000U;
 
 	file = req->lr_fid->lo_aux;
 	assert(file);
