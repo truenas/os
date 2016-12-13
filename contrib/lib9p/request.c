@@ -201,11 +201,6 @@ l9p_dispatch_request(struct l9p_request *req)
 	L9P_LOG(L9P_WARNING, "unknown request of type %d", req->lr_req.hdr.type);
 	error = ENOSYS;
 done:
-	/*
-	 * Remove tag from hash table before responding to avoid possible race
-	 * when client immediately wants to reuse tag
-	 */
-	ht_remove(&req->lr_conn->lc_requests, req->lr_req.hdr.tag);
 	l9p_respond(req, error);
 	l9p_connection_reqfree(req);
 }
