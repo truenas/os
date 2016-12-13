@@ -63,7 +63,7 @@ static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: iscsid [-P pidfile][-d][-m maxproc][-t timeout]\n");
+	fprintf(stderr, "usage: iscsid [-P pidfile][-D][-d][-m maxproc][-t timeout]\n");
 	exit(1);
 }
 
@@ -494,18 +494,23 @@ main(int argc, char **argv)
 	int ch, debug = 0, error, iscsi_fd, maxproc = 30, retval, saved_errno,
 	    timeout = 60;
 	bool dont_daemonize = false;
+	bool single = false;
 	struct pidfh *pidfh;
 	pid_t pid, otherpid;
 	const char *pidfile_path = DEFAULT_PIDFILE;
 	struct iscsi_daemon_request request;
 
-	while ((ch = getopt(argc, argv, "P:dl:m:t:")) != -1) {
+	while ((ch = getopt(argc, argv, "P:Ddl:m:t:")) != -1) {
 		switch (ch) {
 		case 'P':
 			pidfile_path = optarg;
 			break;
+		case 'D':
+			dont_daemonize = true;
+			break;
 		case 'd':
 			dont_daemonize = true;
+			single = true;
 			debug++;
 			break;
 		case 'l':
@@ -576,7 +581,7 @@ main(int argc, char **argv)
 			log_err(1, "ISCSIDWAIT");
 		}
 
-		if (dont_daemonize) {
+		if (single) {
 			log_debugx("not forking due to -d flag; "
 			    "will exit after servicing a single request");
 		} else {
