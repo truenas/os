@@ -298,8 +298,7 @@ main(int argc, char **argv)
 
   /* Note that it is NOT sensible to run this program from inetd - the 	*/
   /* protocol assumes that it will run immediately at boot time.	*/
-  if (debug == 0)
-	  daemon(0, 0);
+  daemon(0, 0);
   openlog("rpc.statd", 0, LOG_DAEMON);
   if (debug) syslog(LOG_INFO, "Starting - debug enabled");
   else syslog(LOG_INFO, "Starting");

@@ -440,11 +440,9 @@ main(int argc, char **argv)
 	 * Note that it is NOT sensible to run this program from inetd - the
 	 * protocol assumes that it will run immediately at boot time.
 	 */
-	if (debug_level == 0) {
-		if (daemon(0, 0)) {
-			err(1, "cannot fork");
-			/* NOTREACHED */
-		}
+	if (daemon(0, debug_level > 0)) {
+		err(1, "cannot fork");
+		/* NOTREACHED */
 	}
 
 	openlog("rpc.lockd", 0, LOG_DAEMON);
