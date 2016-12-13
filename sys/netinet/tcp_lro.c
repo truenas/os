@@ -46,7 +46,6 @@ __FBSDID("$FreeBSD$");
 #include <net/if_var.h>
 #include <net/ethernet.h>
 #include <net/vnet.h>
-#include <net/route.h>
 
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
@@ -424,25 +423,9 @@ tcp_lro_rx(struct lro_ctrl *lc, struct mbuf *m, uint32_t csum)
 	{
 		CURVNET_SET(lc->ifp->if_vnet);
 		if (V_ipforwarding != 0) {
-			struct rtentry *rout;
-			struct sockaddr_in saddr = { };
-			int same = 0;
-			
-			ip4 = (struct ip *)(eh + 1);
-			saddr.sin_family = AF_INET;
-			saddr.sin_len = sizeof(saddr);
-			bcopy(&ip4->ip_src, &saddr.sin_addr, sizeof(saddr.sin_addr));
-			saddr.sin_port = 0;
-			rout = rtalloc1_fib((struct sockaddr*)&saddr, 0, 0, RT_DEFAULT_FIB);
-			if (rout) {
-				same = rout->rt_ifp == lc->ifp;
-				RTFREE_LOCKED(rout);
-			}
-			if (!same) {
-				CURVNET_RESTORE();
-				/* XXX-BZ stats but changing lro_ctrl is a problem. */
-				return (TCP_LRO_CANNOT);
-			}
+			/* XXX-BZ stats but changing lro_ctrl is a problem. */
+			CURVNET_RESTORE();
+			return (TCP_LRO_CANNOT);
 		}
 		CURVNET_RESTORE();
 		l3hdr = ip4 = (struct ip *)(eh + 1);
