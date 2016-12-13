@@ -8,13 +8,10 @@ handle plan9 server <-> client connections
 This code needs some doctests or other unit tests...
 """
 
-import collections
 import errno
 import logging
-import math
 import os
 import socket
-import stat
 import struct
 import sys
 import threading
@@ -23,20 +20,7 @@ import time
 import lerrno
 import numalloc
 import p9err
-import pfod
 import protocol
-
-# Timespec based timestamps, if present, have
-# both seconds and nanoseconds.
-Timespec = collections.namedtuple('Timespec', 'sec nsec')
-
-# File attributes from Tgetattr, or given to Tsetattr.
-# (move to protocol.py?)  We use pfod here instead of
-# namedtuple so that we can create instances with all-None
-# fields easily.
-Fileattrs = pfod.pfod('Fileattrs',
-    'ino mode uid gid nlink rdev size blksize blocks '
-    'atime mtime ctime btime gen data_version')
 
 qt2n = protocol.qid_type2name
 
@@ -80,7 +64,7 @@ class RemoteError(P9Error):
 
     def is_ENOTSUP(self):
         if self.etype == 'Rlerror':
-            return self.errno == lerrno.EOPNOTSUPP
+            return self.errno == lerrno.ENOTSUP
         return self.errno == errno.EOPNOTSUPP
 
     def _get_message(self):
@@ -328,7 +312,7 @@ class P9Client(P9SockIO):
         self.timeout = timeout
         self.iproto = protocol.p9_version(version)
         self.may_downgrade = may_downgrade
-        self.tagalloc = numalloc.NumAlloc(0, 65534)
+        self.tagalloc = numalloc.NumAlloc(0, 65535)
         self.tagstate = {}
         # The next bit is slighlty dirty: perhaps we should just
         # allocate NOFID out of the 2**32-1 range, so as to avoid
@@ -382,13 +366,10 @@ class P9Client(P9SockIO):
         with self.lock:
             self._monkeywrench[what] = how
 
-    def get_tag(self, for_Tversion=False):
+    def get_tag(self):
         "get next available tag ID"
         with self.lock:
-            if for_Tversion:
-                tag = 65535
-            else:
-                tag = self.tagalloc.alloc()
+            tag = self.tagalloc.alloc()
             if tag is None:
                 raise LocalError('all tags in use')
             self.tagstate[tag] = True # ie, in use, still waiting
@@ -396,7 +377,7 @@ class P9Client(P9SockIO):
 
     def set_tag(self, tag, reply):
         "set the reply info for the given tag"
-        assert tag >= 0 and tag < 65536
+        assert tag >= 0 and tag < 65535
         with self.lock:
             # check whether we're still waiting for the tag
             state = self.tagstate.get(tag)
@@ -427,8 +408,6 @@ class P9Client(P9SockIO):
 
     def retire_tag(self, tag):
         "retire the given tag - only used by the thread that handled the result"
-        if tag == 65535:
-            return
         assert tag >= 0 and tag < 65535
         with self.lock:
             self.retire_tag_locked(tag)
@@ -490,80 +469,6 @@ class P9Client(P9SockIO):
                 # Set the new path (which may be just a placeholder).
                 self.live_fids[fid] = path
 
-    def did_rename(self, fid, ncomp, newdir=None):
-        """
-        Announce that we renamed using a fid - we'll try to update
-        other fids based on this (we can't really do it perfectly).
-
-        NOTE: caller must provide a final-component.
-        The caller can supply the new path (and should
-        do so if the rename is not based on the retained path
-        for the supplied fid, i.e., for rename ops where fid
-        can move across directories).  The rules:
-
-         - If newdir is None (default), we use stored path.
-         - Otherwise, newdir provides the best approximation
-           we have to the path that needs ncomp appended.
-
-        (This is based on the fact that renames happen via Twstat
-        or Trename, or Trenameat, which change just one tail component,
-        but the path names vary.)
-        """
-        if ncomp is None:
-            return
-        opath = self.getpath(fid)
-        if newdir is None:
-            if opath is None:
-                return
-            ocomps = opath.split(b'/')
-            ncomps = ocomps[0:-1]
-        else:
-            ocomps = None           # well, none yet anyway
-            ncomps = newdir.split(b'/')
-        ncomps.append(ncomp)
-        if opath is None or opath[0] != '/':
-            # We don't have enough information to fix anything else.
-            # Just store the new path and return.  We have at least
-            # a partial path now, which is no worse than before.
-            npath = b'/'.join(ncomps)
-            with self.lock:
-                if fid in self.live_fids:
-                    self.live_fids[fid] = npath
-            return
-        if ocomps is None:
-            ocomps = opath.split(b'/')
-        olen = len(ocomps)
-        ofinal = ocomps[olen - 1]
-        # Old paths is full path.  Find any other fids that start
-        # with some or all the components in ocomps.  Note that if
-        # we renamed /one/two/three to /four/five this winds up
-        # renaming files /one/a to /four/a, /one/two/b to /four/five/b,
-        # and so on.
-        with self.lock:
-            for fid2, path2 in self.live_fids.iteritems():
-                # Skip fids without byte-string paths
-                if not isinstance(path2, bytes):
-                    continue
-                # Before splitting (which is a bit expensive), try
-                # a straightforward prefix match.  This might give
-                # some false hits, e.g., prefix /one/two/threepenny
-                # starts with /one/two/three, but it quickly eliminates
-                # /raz/baz/mataz and the like.
-                if not path2.startswith(opath):
-                    continue
-                # Split up the path, and use that to make sure that
-                # the final component is a full match.
-                parts2 = path2.split(b'/')
-                if parts2[olen - 1] != ofinal:
-                    continue
-                # OK, path2 starts with the old (renamed) sequence.
-                # Replace the old components with the new ones.
-                # This updates the renamed fid when we come across
-                # it!  It also handles a change in the number of
-                # components, thanks to Python's slice assignment.
-                parts2[0:olen] = ncomps
-                self.live_fids[fid2] = b'/'.join(parts2)
-
     def retire_fid(self, fid):
         "retire one fid"
         with self.lock:
@@ -572,9 +477,6 @@ class P9Client(P9SockIO):
 
     def retire_all_fids(self):
         "return live fids to pool"
-        # this is useful for debugging fid leaks:
-        #for fid in self.live_fids:
-        #    print 'retiring', fid, self.getpathX(fid)
         with self.lock:
             self.fidalloc.free_multi(self.live_fids.keys())
             self.live_fids = {}
@@ -730,7 +632,7 @@ class P9Client(P9SockIO):
         self.have_version = False
         self.rthread = threading.Thread(target=self.read_responses)
         self.rthread.start()
-        tag = self.get_tag(for_Tversion=True)
+        tag = self.get_tag()
         req = protocol.rrd.Tversion(tag=tag, msize=maxio,
                                     version=self.get_monkey('version'))
         super(P9Client, self).write(self.proto.pack_from(req))
@@ -787,7 +689,6 @@ class P9Client(P9SockIO):
         super(P9Client, self).write(pkt)
         resp = self.wait_for(tag)
         if not isinstance(resp, protocol.rrd.Rattach):
-            self.retire_fid(fid)
             self.badresp('attach', resp)
         # probably should check resp.qid
         self.rootfid = fid
@@ -796,8 +697,6 @@ class P9Client(P9SockIO):
 
     def shutdown(self):
         "disconnect from server"
-        if self.rootfid is not None:
-            self.clunk(self.rootfid, ignore_error=True)
         self.retire_all_tags()
         self.retire_all_fids()
         self.rootfid = None
@@ -818,7 +717,6 @@ class P9Client(P9SockIO):
         super(P9Client, self).write(pkt)
         resp = self.wait_for(tag)
         if not isinstance(resp, protocol.rrd.Rwalk):
-            self.retire_fid(newfid)
             self.badresp('walk {0}'.format(self.getpathX(fid)), resp)
         # Copy path too
         self.setpath(newfid, fid)
@@ -852,28 +750,9 @@ class P9Client(P9SockIO):
         super(P9Client, self).write(pkt)
         resp = self.wait_for(tag)
         if not isinstance(resp, protocol.rrd.Rwalk):
-            self.retire_fid(newfid)
             self.badresp('walk {0} in '
                          '{1}'.format(components, self.getpathX(fid)),
                          resp)
-        # Just because we got Rwalk does not mean we got ALL the
-        # way down the path.  Raise OSError(ENOENT) if we're short.
-        if resp.nwqid > len(components):
-            # ??? this should be impossible. Local error?  Remote error?
-            # OS Error?
-            self.clunk(newfid, ignore_error=True)
-            raise LocalError('{0}: walk {1} in {2} returned {3} '
-                             'items'.format(self, components,
-                                            self.getpathX(fid), resp.nwqid))
-        if resp.nwqid < len(components):
-            self.clunk(newfid, ignore_error=True)
-            # Looking up a/b/c and got just a/b, c is what's missing.
-            # Looking up a/b/c and got just a, b is what's missing.
-            missing = components[resp.nwqid]
-            within = _pathcat(startpath, b'/'.join(components[:resp.nwqid]))
-            raise OSError(errno.ENOENT,
-                          '{0}: {1} in {2}'.format(os.strerror(errno.ENOENT),
-                                                   missing, within))
         self.setpath(newfid, _pathcat(startpath, b'/'.join(components)))
         return newfid, resp.wqid
 
@@ -894,8 +773,7 @@ class P9Client(P9SockIO):
         resp = self.wait_for(tag)
         if not isinstance(resp, protocol.rrd.Rstat):
             self.badresp('stat {0}'.format(self.getpathX(fid)), resp)
-        statval = self.proto.unpack_wirestat(resp.data)
-        return rfid, statval.qid
+        return rfid, stat.qid
 
     def clunk(self, fid, ignore_error=False):
         "issue clunk(fid)"
@@ -1009,84 +887,9 @@ class P9Client(P9SockIO):
         resp = self.wait_for(tag)
         if not isinstance(resp, protocol.rrd.Rwrite):
             self.badresp('write {0} bytes at offset {1} in '
-                         '{2}'.format(len(data), offset, self.getpathX(fid)),
+                         '{2}'.format(count, offset, self.getpathX(fid)),
                          resp)
         return resp.count
-
-    # Caller may
-    #  - pass an actual stat object, or
-    #  - pass in all the individual to-set items by keyword, or
-    #  - mix and match a bit: get an existing stat, then use
-    #    keywords to override fields.
-    # We convert "None"s to the internal "do not change" values,
-    # and for diagnostic purposes, can turn "do not change" back
-    # to None at the end, too.
-    def wstat(self, fid, statobj=None, **kwargs):
-        if statobj is None:
-            statobj = protocol.td.stat()
-        else:
-            statobj = statobj._copy()
-        # Fields in stat that you can't send as a wstat: the
-        # type and qid are informative.  Similarly, the
-        # 'extension' is an input when creating a file but
-        # read-only when stat-ing.
-        #
-        # It's not clear what it means to set dev, but we'll leave
-        # it in as an optional parameter here.  fs/backend.c just
-        # errors out on an attempt to change it.
-        if self.proto == protocol.plain:
-            forbid = ('type', 'qid', 'extension',
-                      'n_uid', 'n_gid', 'n_muid')
-        else:
-            forbid = ('type', 'qid', 'extension')
-        nochange = {
-            'type': 0,
-            'qid': protocol.td.qid(0, 0, 0),
-            'dev': 2**32 - 1,
-            'mode': 2**32 - 1,
-            'atime': 2**32 - 1,
-            'mtime': 2**32 - 1,
-            'length': 2**64 - 1,
-            'name': b'',
-            'uid': b'',
-            'gid': b'',
-            'muid': b'',
-            'extension': b'',
-            'n_uid': 2**32 - 1,
-            'n_gid': 2**32 - 1,
-            'n_muid': 2**32 - 1,
-        }
-        for field in statobj._fields:
-            if field in kwargs:
-                if field in forbid:
-                    raise ValueError('cannot wstat a stat.{0}'.format(field))
-                statobj[field] = kwargs.pop(field)
-            else:
-                if field in forbid or statobj[field] is None:
-                    statobj[field] = nochange[field]
-        if kwargs:
-            raise TypeError('wstat() got an unexpected keyword argument '
-                            '{0!r}'.format(kwargs.popitem()))
-
-        data = self.proto.pack_wirestat(statobj)
-        tag = self.get_tag()
-        pkt = self.proto.Twstat(tag=tag, fid=fid, data=data)
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rwstat):
-            # For error viewing, switch all the do-not-change
-            # and can't-change fields to None.
-            statobj.qid = None
-            for field in statobj._fields:
-                if field in forbid:
-                    statobj[field] = None
-                elif field in nochange and statobj[field] == nochange[field]:
-                    statobj[field] = None
-            self.badresp('wstat {0}={1}'.format(self.getpathX(fid), statobj),
-                         resp)
-        # wstat worked - change path names if needed
-        if statobj.name != b'':
-            self.did_rename(fid, statobj.name)
 
     def readdir(self, fid, offset, count):
         "read (up to) count bytes of dir data from offset, given open fid"
@@ -1100,35 +903,6 @@ class P9Client(P9SockIO):
                          resp)
         return resp.data
 
-    def rename(self, fid, dfid, name):
-        "invoke Trename: rename file <fid> to <dfid>/name"
-        tag = self.get_tag()
-        pkt = self.proto.Trename(tag=tag, fid=fid, dfid=dfid, name=name)
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rrename):
-            self.badresp('rename {0} to {2} in '
-                         '{1}'.format(self.getpathX(fid),
-                                      self.getpathX(dfid), name),
-                         resp)
-        self.did_rename(fid, name, self.getpath(dfid))
-
-    def renameat(self, olddirfid, oldname, newdirfid, newname):
-        "invoke Trenameat: rename <olddirfid>/oldname to <newdirfid>/newname"
-        tag = self.get_tag()
-        pkt = self.proto.Trenameat(tag=tag,
-                                   olddirfid=olddirfid, oldname=oldname,
-                                   newdirfid=newdirfid, newname=newname)
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rrenameat):
-            self.badresp('rename {1} in {0} to {3} in '
-                         '{2}'.format(oldname, self.getpathX(olddirfid),
-                                      newname, self.getpathX(newdirdfid)),
-                         resp)
-        # There's no renamed *fid*, just a renamed file!  So no
-        # call to self.did_rename().
-
     def unlinkat(self, dirfd, name, flags):
         "invoke Tunlinkat - flags should be 0 or protocol.td.AT_REMOVEDIR"
         tag = self.get_tag()
@@ -1138,7 +912,7 @@ class P9Client(P9SockIO):
         resp = self.wait_for(tag)
         if not isinstance(resp, protocol.rrd.Runlinkat):
             self.badresp('unlinkat {0} in '
-                         '{1}'.format(name, self.getpathX(dirfd)), resp)
+                         '{1}'.format(name, self.getpathX(fid)), resp)
 
     def decode_stat_objects(self, bstring, noerror=False):
         """
@@ -1151,7 +925,7 @@ class P9Client(P9SockIO):
         objlist = []
         offset = 0
         while offset < len(bstring):
-            obj, offset = self.proto.unpack_wirestat(bstring, offset, noerror)
+            obj, offset = self.proto.unpack_dirstat(bstring, offset, noerror)
             objlist.append(obj)
         return objlist
 
@@ -1169,21 +943,6 @@ class P9Client(P9SockIO):
             objlist.append(obj)
         return objlist
 
-    def lcreate(self, fid, name, lflags, mode, gid):
-        "issue lcreate (.L)"
-        tag = self.get_tag()
-        pkt = self.proto.Tlcreate(tag=tag, fid=fid, name=name,
-                                  flags=lflags, mode=mode, gid=gid)
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rlcreate):
-            self.badresp('create {0} in '
-                         '{1}'.format(name, self.getpathX(fid)), resp)
-        # Creating a file opens the file,
-        # thus changing the fid's path.
-        self.setpath(fid, _pathcat(self.getpath(fid), name))
-        return resp.qid, resp.iounit
-
     def mkdir(self, dfid, name, mode, gid):
         "issue mkdir (.L)"
         tag = self.get_tag()
@@ -1195,148 +954,6 @@ class P9Client(P9SockIO):
             self.badresp('mkdir {0} in '
                          '{1}'.format(name, self.getpathX(dfid)), resp)
         return resp.qid
-
-    # We don't call this getattr(), for the obvious reason.
-    def Tgetattr(self, fid, request_mask=protocol.td.GETATTR_ALL):
-        "issue Tgetattr.L - get what you ask for, or everything by default"
-        tag = self.get_tag()
-        pkt = self.proto.Tgetattr(tag=tag, fid=fid, request_mask=request_mask)
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rgetattr):
-            self.badresp('Tgetattr {0} of '
-                         '{1}'.format(request_mask, self.getpathX(fid)), resp)
-        attrs = Fileattrs()
-        # Handle the simplest valid-bit tests:
-        for name in ('mode', 'nlink', 'uid', 'gid', 'rdev',
-                     'size', 'blocks', 'gen', 'data_version'):
-            bit = getattr(protocol.td, 'GETATTR_' + name.upper())
-            if resp.valid & bit:
-                attrs[name] = resp[name]
-        # Handle the timestamps, which are timespec pairs
-        for name in ('atime', 'mtime', 'ctime', 'btime'):
-            bit = getattr(protocol.td, 'GETATTR_' + name.upper())
-            if resp.valid & bit:
-                attrs[name] = Timespec(sec=resp[name + '_sec'],
-                                       nsec=resp[name + '_nsec'])
-        # There is no control bit for blksize; qemu and Linux always
-        # provide one.
-        attrs.blksize = resp.blksize
-        # Handle ino, which comes out of qid.path
-        if resp.valid & protocol.td.GETATTR_INO:
-            attrs.ino = resp.qid.path
-        return attrs
-
-    # We don't call this setattr(), for the obvious reason.
-    # See wstat for usage.  Note that time fields can be set
-    # with either second or nanosecond resolutions, and some
-    # can be set without supplying an actual timestamp, so
-    # this is all pretty ad-hoc.
-    #
-    # There's also one keyword-only argument, ctime=<anything>,
-    # which means "set SETATTR_CTIME".  This has the same effect
-    # as supplying valid=protocol.td.SETATTR_CTIME.
-    def Tsetattr(self, fid, valid=0, attrs=None, **kwargs):
-        if attrs is None:
-            attrs = Fileattrs()
-        else:
-            attrs = attrs._copy()
-
-        # Start with an empty (all-zero) Tsetattr instance.  We
-        # don't really need to zero out tag and fid, but it doesn't
-        # hurt.  Note that if caller says, e.g., valid=SETATTR_SIZE
-        # but does not supply an incoming size (via "attrs" or a size=
-        # argument), we'll ask to set that field to 0.
-        attrobj = protocol.rrd.Tsetattr()
-        for field in attrobj._fields:
-            attrobj[field] = 0
-
-        # In this case, forbid means "only as kwargs": these values
-        # in an incoming attrs object are merely ignored.
-        forbid = ('ino', 'nlink', 'rdev', 'blksize', 'blocks', 'btime',
-                  'gen', 'data_version')
-        for field in attrs._fields:
-            if field in kwargs:
-                if field in forbid:
-                    raise ValueError('cannot Tsetattr {0}'.format(field))
-                attrs[field] = kwargs.pop(field)
-            elif attrs[field] is None:
-                continue
-            # OK, we're setting this attribute.  Many are just
-            # numeric - if that's the case, we're good, set the
-            # field and the appropriate bit.
-            bitname = 'SETATTR_' + field.upper()
-            bit = getattr(protocol.td, bitname)
-            if field in ('mode', 'uid', 'gid', 'size'):
-                valid |= bit
-                attrobj[field] = attrs[field]
-                continue
-            # Timestamps are special:  The value may be given as
-            # an integer (seconds), or as a float (we convert to
-            # (we convert to sec+nsec), or as a timespec (sec+nsec).
-            # If specified as 0, we mean "we are not providing the
-            # actual time, use the server's time."
-            #
-            # The ctime field's value, if any, is *ignored*.
-            if field in ('atime', 'mtime'):
-                value = attrs[field]
-                if hasattr(value, '__len__'):
-                    if len(value) != 2:
-                        raise ValueError('invalid {0}={1!r}'.format(field,
-                                                                    value))
-                    sec = value[0]
-                    nsec = value[1]
-                else:
-                    sec = value
-                    if isinstance(sec, float):
-                        nsec, sec = math.modf(sec)
-                        nsec = int(round(nsec * 1000000000))
-                    else:
-                        nsec = 0
-                valid |= bit
-                attrobj[field + '_sec'] = sec
-                attrobj[field + '_nsec'] = nsec
-                if sec != 0 or nsec != 0:
-                    # Add SETATTR_ATIME_SET or SETATTR_MTIME_SET
-                    # as appropriate, to tell the server to *this
-                    # specific* time, instead of just "server now".
-                    bit = getattr(protocol.td, bitname + '_SET')
-                    valid |= bit
-        if 'ctime' in kwargs:
-            kwargs.pop('ctime')
-            valid |= protocol.td.SETATTR_CTIME
-        if kwargs:
-            raise TypeError('Tsetattr() got an unexpected keyword argument '
-                            '{0!r}'.format(kwargs.popitem()))
-
-        tag = self.get_tag()
-        attrobj.valid = valid
-        attrobj.tag = tag
-        attrobj.fid = fid
-        pkt = self.proto.pack(attrobj)
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rsetattr):
-            self.badresp('Tsetattr {0} {1} of '
-                         '{2}'.format(valid, attrs, self.getpathX(fid)), resp)
-
-    def xattrwalk(self, fid, name=None):
-        "walk one name or all names: caller should read() the returned fid"
-        tag = self.get_tag()
-        newfid = self.alloc_fid()
-        pkt = self.proto.Txattrwalk(tag=tag, fid=fid, newfid=newfid,
-                                    name=name or '')
-        super(P9Client, self).write(pkt)
-        resp = self.wait_for(tag)
-        if not isinstance(resp, protocol.rrd.Rxattrwalk):
-            self.retire_fid(newfid)
-            self.badresp('Txattrwalk {0} of '
-                         '{1}'.format(name, self.getpathX(fid)), resp)
-        if name:
-            self.setpath(newfid, 'xattr:' + name)
-        else:
-            self.setpath(newfid, 'xattr')
-        return newfid, resp.size
 
     def _pathsplit(self, path, startdir, allow_empty=False):
         "common code for uxlookup and uxopen"
@@ -1358,14 +975,11 @@ class P9Client(P9SockIO):
         components, startdir = self._pathsplit(path, startdir, allow_empty=True)
         return self.lookup_last(startdir, components)
 
-    def uxopen(self, path, oflags=0, perm=None, gid=None,
-               startdir=None, filetype=None):
+    def uxopen(self, path, oflags=0, perm=None, startdir=None, filetype=None):
         """
         Unix-style open()-with-option-to-create, or mkdir().
         oflags is 0/1/2 with optional os.O_CREAT, perm defaults
-        to 0o666 (files) or 0o777 (directories).  If we use
-        a Linux create or mkdir op, we will need a gid, but it's
-        not required if you are opening an existing file.
+        to 0o666 (files) or 0o777 (directories).
 
         Adds a final boolean value for "did we actually create".
         Raises OSError if you ask for a directory but it's a file,
@@ -1390,24 +1004,16 @@ class P9Client(P9SockIO):
             # create the file.
             return self._uxopen2(path, needtype, fid, qid, omode_byte, False)
 
-        # Only used if using dot-L, but make sure it's always provided
-        # since this is generic.
-        if gid is None:
-            raise ValueError('gid is required when creating file or dir')
-
         if len(components) > 1:
             # Look up all but last component; this part must succeed.
             fid, _ = self.lookup(startdir, components[:-1])
 
             # Now proceed with the final component, using fid
-            # as the start dir.  Remember to clunk it!
+            # as the start dir.
             startdir = fid
-            clunk_startdir = True
             components = components[-1:]
         else:
             # Use startdir as the start dir, and get a new fid.
-            # Do not clunk startdir!
-            clunk_startdir = False
             fid = self.alloc_fid()
 
         # Now look up the (single) component.  If this fails,
@@ -1418,93 +1024,47 @@ class P9Client(P9SockIO):
         super(P9Client, self).write(pkt)
         resp = self.wait_for(tag)
         if isinstance(resp, protocol.rrd.Rwalk):
-            if clunk_startdir:
-                self.clunk(startdir, ignore_error=True)
             # fid successfully walked to refer to final component.
             # Just need to actually open the file.
             self.setpath(fid, _pathcat(self.getpath(startdir), components[0]))
             qid = resp.wqid[0]
             return self._uxopen2(needtype, fid, qid, omode_byte, False)
 
-        # Walk failed.  If we allocated a fid, retire it.  Then set
-        # up a fid that points to the parent directory in which to
-        # create the file or directory.  Note that if we're creating
-        # a file, this fid will get changed so that it points to the
-        # file instead of the directory, but if we're creating a
-        # directory, it will be unchanged.
-        if fid != startdir:
-            self.retire_fid(fid)
-        fid = self.dupfid(startdir)
-
-        try:
-            qid, iounit = self._uxcreate(filetype, fid, components[0],
-                                         oflags, omode_byte, perm, gid)
-
-            # Success.  If we created an ordinary file, we have everything
-            # now as create alters the incoming (dir) fid to open the file.
-            # Otherwise (mkdir), we need to open the file, as with
-            # a successful lookup.
-            #
-            # Note that qid type should match "needtype".
-            if filetype != 'dir':
-                if qid.type == needtype:
-                    return fid, qid, iounit, True
-                self.clunk(fid, ignore_error=True)
-                raise OSError(_wrong_file_type(qid),
-                             '{0}: server told to create {1} but '
-                             'created {2} instead'.format(path,
-                                                          qt2n(needtype),
-                                                          qt2n(qid.type)))
-
-            # Success: created dir; but now need to walk to and open it.
-            fid = self.alloc_fid()
-            tag = self.get_tag()
-            pkt = self.proto.Twalk(tag=tag, fid=startdir, newfid=fid,
-                                   nwname=1, wname=components)
-            super(P9Client, self).write(pkt)
-            resp = self.wait_for(tag)
-            if not isinstance(resp, protocol.rrd.Rwalk):
-                self.clunk(fid, ignore_error=True)
-                raise OSError(errno.ENOENT,
-                              '{0}: server made dir but then failed to '
-                              'find it again'.format(path))
-                self.setpath(fid, _pathcat(self.getpath(fid), components[0]))
-            return self._uxopen2(needtype, fid, qid, omode_byte, True)
-        finally:
-            # Regardless of success/failure/exception, make sure
-            # we clunk startdir if needed.
-            if clunk_startdir:
-                self.clunk(startdir, ignore_error=True)
-
-    def _uxcreate(self, filetype, fid, name, oflags, omode_byte, perm, gid):
-        """
-        Helper for creating dir-or-file.  The fid argument is the
-        parent directory on input, but will point to the file (if
-        we're creating a file) on return.  oflags only applies if
-        we're creating a file (even then we use omode_byte if we
-        are using the plan9 create op).
-        """
         # Try to create or mkdir as appropriate.
-        if self.supports_all(protocol.td.Tlcreate, protocol.td.Tmkdir):
-            # Use Linux style create / mkdir.
-            if filetype == 'dir':
-                if perm is None:
-                    perm = 0o777
-                return self.mkdir(startdir, name, perm, gid), None
-            if perm is None:
-                perm = 0o666
-            lflags = flags_to_linux_flags(oflags)
-            return self.lcreate(fid, name, lflags, perm, gid)
+        if perm is None:
+            perm = protocol.td.DMDIR | 0o777 if filetype == 'dir' else 0o666
+        qid, iounit = self.create(fid, components[0], perm, omode_byte)
 
-        if filetype == 'dir':
-            if perm is None:
-                perm = protocol.td.DMDIR | 0o777
-            else:
-                perm |= protocol.td.DMDIR
-        else:
-            if perm is None:
-                perm = 0o666
-        return self.create(fid, name, perm, omode_byte)
+        # Success.  If we created an ordinary file, we have everything
+        # now as create alters the incoming (dir) fid to open the file.
+        # Otherwise (mkdir), we need to open the file, as with
+        # a successful lookup.
+        #
+        # Note that qid type should match "needtype".
+        if filetype != 'dir':
+            if qid.type == needtype:
+                self.setpath(fid,
+                             _pathcat(self.getpath(startdir), components[0]))
+                return fid, qid, iounit, True
+            self.clunk(fid, ignore_error=True)
+            raise OSError(_wrong_file_type(qid),
+                         '{0}: server told to create {1} but '
+                         'created {2} instead'.format(path,
+                                                      qt2n(needtype),
+                                                      qt2n(qid.type)))
+
+        # Success: created dir; but now need to walk to and open it.
+        tag = self.get_tag()
+        pkt = self.proto.Twalk(tag=tag, fid=fid, newfid=fid,
+                               nwname=1, wname=components)
+        super(P9Client, self).write(pkt)
+        resp = self.wait_for(tag)
+        if not isinstance(resp, protocol.rrd.Rwalk):
+            self.clunk(fid, ignore_error=True)
+            raise OSError('{0}: server made dir but then failed to '
+                          'find it again'.format(path))
+            self.setpath(fid, _pathcat(self.getpath(fid), components[0]))
+        return self._uxopen2(needtype, fid, qid, omode_byte, True)
 
     def _uxopen2(self, needtype, fid, qid, omode_byte, didcreate):
         "common code for finishing up uxopen"
@@ -1554,22 +1114,19 @@ class P9Client(P9SockIO):
         """
         components, startdir = self._pathsplit(path, startdir, allow_empty=True)
         fid, qid = self.lookup_last(startdir, components)
-        try:
-            if qid.type != protocol.td.QTDIR:
-                raise OSError(errno.ENOTDIR,
-                              '{0}: {1}'.format(self.getpathX(fid),
-                                                os.strerror(errno.ENOTDIR)))
-            # We need both Tlopen and Treaddir to use Treaddir.
-            if not self.supports_all(protocol.td.Tlopen, protocol.td.Treaddir):
-                no_dotl = True
-            if no_dotl:
-                statvals = self.uxreaddir_stat_fid(fid)
-                return [i.name for i in statvals]
+        if qid.type != protocol.td.QTDIR:
+            raise OSError(errno.ENOTDIR,
+                          '{0}: {1}'.format(self.getpathX(fid),
+                                            os.strerror(errno.ENOTDIR)))
+        # We need both Tlopen and Treaddir to use Treaddir.
+        if not self.supports_all(protocol.td.Tlopen, protocol.td.Treaddir):
+            no_dotl = True
+        if no_dotl:
+            statvals = self.uxreaddir_stat_fid(fid)
+            return [stat.name for stat in statvals]
 
-            dirents = self.uxreaddir_dotl_fid(fid)
-            return [dirent.name for dirent in dirents]
-        finally:
-            self.clunk(fid, ignore_error=True)
+        dirents = self.uxreaddir_dotl_fid(fid)
+        return [dirent.name for dirent in dirents]
 
     def uxreaddir_stat(self, path, startdir=None):
         """
@@ -1577,8 +1134,7 @@ class P9Client(P9SockIO):
 
         Note that this gets a fid, then opens it, reads, then clunks
         the fid.  If you already have a fid, you may want to use
-        uxreaddir_stat_fid (but note that this opens, yet does not
-        clunk, the fid).
+        uxreaddir_stat_fid (and you may need to dupfid it).
 
         We return the qid plus the list of the contents.  If the
         target is not a directory, the qid will not have type QTDIR
@@ -1588,64 +1144,66 @@ class P9Client(P9SockIO):
         """
         components, startdir = self._pathsplit(path, startdir)
         fid, qid = self.lookup_last(startdir, components)
-        try:
-            if qid.type != protocol.td.QTDIR:
-                raise OSError(errno.ENOTDIR,
-                              '{0}: {1}'.format(self.getpathX(fid),
-                                                os.strerror(errno.ENOTDIR)))
-            statvals = self.ux_readdir_stat_fid(fid)
-            return qid, statvals
-        finally:
-            self.clunk(fid, ignore_error=True)
+        if qid.type != protocol.td.QTDIR:
+            raise OSError(errno.ENOTDIR,
+                          '{0}: {1}'.format(self.getpathX(fid),
+                                            os.strerror(errno.ENOTDIR)))
+        statvals = self.ux_readdir_stat_fid(fid)
+        return qid, statvals
 
     def uxreaddir_stat_fid(self, fid):
         """
         Implement readdir loop that extracts stat values.
-        This opens, but does not clunk, the given fid.
+        Clunks the fid when done (since we always open it).
+        Clunks the fid even if it's not a directory or open fails.
 
         Unlike uxreaddir_stat(), if this is applied to a file,
         rather than a directory, it just returns no entries.
         """
         statvals = []
-        qid, iounit = self.open(fid, protocol.td.OREAD)
-        # ?? is a zero iounit allowed? if so, what do we use here?
-        if qid.type == protocol.td.QTDIR:
-            if iounit <= 0:
-                iounit = 512 # probably good enough
-            offset = 0
-            while True:
-                bstring = self.read(fid, offset, iounit)
-                if bstring == b'':
-                    break
-                statvals.extend(self.decode_stat_objects(bstring))
-                offset += len(bstring)
+        try:
+            qid, iounit = self.open(fid, protocol.td.OREAD)
+            # ?? is a zero iounit allowed? if so, what do we use here?
+            if qid.type == protocol.td.QTDIR:
+                if iounit <= 0:
+                    iounit = 512 # probably good enough
+                offset = 0
+                while True:
+                    bstring = self.read(fid, offset, iounit)
+                    if bstring == b'':
+                        break
+                    statvals.extend(self.decode_stat_objects(bstring))
+                    offset += len(bstring)
+        finally:
+            self.clunk(fid, ignore_error=True)
         return statvals
 
     def uxreaddir_dotl_fid(self, fid):
         """
         Implement readdir loop that uses dot-L style dirents.
-        This opens, but does not clunk, the given fid.
+        Clunks the fid when done (since we always open it).
+        Clunks the fid even if it's not a directory or lopen fails.
 
         If applied to a file, the lopen should fail, because of the
         L_O_DIRECTORY flag.
         """
         dirents = []
-        qid, iounit = self.lopen(fid, protocol.td.OREAD |
-                                      protocol.td.L_O_DIRECTORY)
-        # ?? is a zero iounit allowed? if so, what do we use here?
-        # but, we want a minimum of over 256 anyway, let's go for 512
-        if iounit < 512:
-            iounit = 512
-        offset = 0
-        while True:
-            bstring = self.readdir(fid, offset, iounit)
-            if bstring == b'':
-                break
-            ents = self.decode_readdir_dirents(bstring)
-            if len(ents) == 0:
-                break               # ???
-            dirents.extend(ents)
-            offset = ents[-1].offset
+        try:
+            qid, iounit = self.lopen(fid, protocol.td.OREAD |
+                                          protocol.td.L_O_DIRECTORY)
+            # ?? is a zero iounit allowed? if so, what do we use here?
+            # but, we want a minimum of over 256 anyway, let's go for 512
+            if iounit < 512:
+                iounit = 512
+            offset = 0
+            while True:
+                bstring = self.readdir(fid, offset, iounit)
+                if bstring == b'':
+                    break
+                dirents.extend(self.decode_readdir_dirents(bstring))
+                offset += len(bstring)
+        finally:
+            self.clunk(fid, ignore_error=True)
         return dirents
 
     def uxremove(self, path, startdir=None, filetype=None,
@@ -1669,23 +1227,23 @@ class P9Client(P9SockIO):
             return
         if qid.type == protocol.td.QTDIR:
             # it's a directory, remove only if allowed.
-            # Note that we must check for "rm -r /" (len(components)==0).
+            # Note that we must check for "rm -r /" (len(compoents)==0).
             if filetype == 'file':
-                self.clunk(fid, ignore_error=True)
                 raise OSError(_wrong_file_type(qid),
                               '{0}: is dir, expected file'.format(path))
-            isroot = len(components) == 0
-            closer = self.clunk if isroot else self.remove
+            finalfunc = self.remove if len(components) else self.clunk
             if recurse:
-                # NB: _rm_recursive does not clunk fid
-                self._rm_recursive(fid, filetype, force)
+                try:
+                    self._rm_recursive(fid, filetype, force)
+                finally:
+                    finalfunc(fid, ignore_error=force)
+                return
             # This will fail if the directory is non-empty, unless of
             # course we tell it to ignore error.
-            closer(fid, ignore_error=force)
+            finalfunc(fid, ignore_error=force)
             return
         # Not a directory, call it a file (even if socket or fifo etc).
         if filetype == 'dir':
-            self.clunk(fid, ignore_error=True)
             raise OSError(_wrong_file_type(qid),
                           '{0}: is file, expected dir'.format(path))
         self.remove(fid, ignore_error=force)
@@ -1727,62 +1285,20 @@ class P9Client(P9SockIO):
         files.
 
         If force is set, ignore failures.
-
-        Although we open dfid (via the readdir.*_fid calls) we
-        do not clunk it here; that's the caller's job.
         """
         # first, remove contents
-        if self.supports_all(protocol.td.Tlopen, protocol.td.Treaddir):
-            for entry in self.uxreaddir_dotl_fid(dfid):
-                if entry.name in (b'.', b'..'):
-                    continue
-                fid, qid = self.lookup(dfid, [entry.name])
-                try:
-                    attrs = self.Tgetattr(fid, protocol.td.GETATTR_MODE)
-                    if stat.S_ISDIR(attrs.mode):
-                        self.uxremove(entry.name, dfid, filetype, force, True)
-                    else:
-                        self.remove(fid)
-                        fid = None
-                finally:
-                    if fid is not None:
-                        self.clunk(fid, ignore_error=True)
-        else:
-            for statobj in self.uxreaddir_stat_fid(dfid):
-                # skip . and ..
-                name = statobj.name
-                if name in (b'.', b'..'):
-                    continue
-                if statobj.qid.type == protocol.td.QTDIR:
-                    self.uxremove(name, dfid, filetype, force, True)
-                else:
-                    self._rm_file_by_dfid(dfid, name, force)
+        for stat in self.uxreaddir_stat_fid(self.dupfid(dfid)):
+            # skip . and ..
+            name = stat.name
+            if name in (b'.', b'..'):
+                continue
+            if stat.qid.type == protocol.td.QTDIR:
+                self.uxremove(name, dfid, filetype, force, True)
+            else:
+                self._rm_file_by_dfid(dfid, name, force)
 
 def _wrong_file_type(qid):
     "return EISDIR or ENOTDIR for passing to OSError"
     if qid.type == protocol.td.QTDIR:
         return errno.EISDIR
     return errno.ENOTDIR
-
-def flags_to_linux_flags(flags):
-    """
-    Convert OS flags (O_CREAT etc) to Linux flags (protocol.td.L_O_CREAT etc).
-    """
-    flagmap = {
-        os.O_CREAT: protocol.td.L_O_CREAT,
-        os.O_EXCL: protocol.td.L_O_EXCL,
-        os.O_NOCTTY: protocol.td.L_O_NOCTTY,
-        os.O_TRUNC: protocol.td.L_O_TRUNC,
-        os.O_APPEND: protocol.td.L_O_APPEND,
-        os.O_DIRECTORY: protocol.td.L_O_DIRECTORY,
-    }
-
-    result = flags & os.O_RDWR
-    flags &= ~os.O_RDWR
-    for key, value in flagmap.iteritems():
-        if flags & key:
-            result |= value
-            flags &= ~key
-    if flags:
-        raise ValueError('untranslated bits 0x{0:x} in os flags'.format(flags))
-    return result

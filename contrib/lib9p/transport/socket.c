@@ -60,8 +60,6 @@ static int l9p_socket_get_response_buffer(struct l9p_request *,
     struct iovec *, size_t *, void *);
 static int l9p_socket_send_response(struct l9p_request *, const struct iovec *,
     const size_t, const size_t, void *);
-static void l9p_socket_drop_response(struct l9p_request *, const struct iovec *,
-    size_t, void *);
 static void *l9p_socket_thread(void *);
 static ssize_t xread(int, void *, size_t);
 static ssize_t xwrite(int, void *, size_t);
@@ -174,13 +172,9 @@ l9p_socket_accept(struct l9p_server *server, int conn_fd,
 	sc->ls_conn = conn;
 	sc->ls_fd = conn_fd;
 
-	/*
-	 * Fill in transport handler functions and aux argument.
-	 */
-	conn->lc_lt.lt_aux = sc;
-	conn->lc_lt.lt_get_response_buffer = l9p_socket_get_response_buffer;
-	conn->lc_lt.lt_send_response = l9p_socket_send_response;
-	conn->lc_lt.lt_drop_response = l9p_socket_drop_response;
+	l9p_connection_on_send_response(conn, l9p_socket_send_response, sc);
+	l9p_connection_on_get_response_buffer(conn,
+	    l9p_socket_get_response_buffer, sc);
 
 	err = pthread_create(&sc->ls_thread, NULL, l9p_socket_thread, sc);
 	if (err) {
@@ -291,7 +285,7 @@ l9p_socket_send_response(struct l9p_request *req __unused,
 {
 	struct l9p_socket_softc *sc = (struct l9p_socket_softc *)arg;
 
-	assert(sc->ls_fd >= 0);
+	assert(sc->ls_fd > 0);
 
 	L9P_LOG(L9P_DEBUG, "%p: sending reply, buf=%p, size=%d", arg,
 	    iov[0].iov_base, iolen);
@@ -303,15 +297,6 @@ l9p_socket_send_response(struct l9p_request *req __unused,
 
 	free(iov[0].iov_base);
 	return (0);
-}
-
-static void
-l9p_socket_drop_response(struct l9p_request *req __unused,
-    const struct iovec *iov, size_t niov __unused, void *arg)
-{
-
-	L9P_LOG(L9P_DEBUG, "%p: drop buf=%p", arg, iov[0].iov_base);
-	free(iov[0].iov_base);
 }
 
 static ssize_t

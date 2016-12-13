@@ -73,29 +73,22 @@ ht_destroy(struct ht *h)
 void *
 ht_find(struct ht *h, uint32_t hash)
 {
-	void *result;
-
-	ht_rdlock(h);
-	result = ht_find_locked(h, hash);
-	ht_unlock(h);
-	return (result);
-}
-
-void *
-ht_find_locked(struct ht *h, uint32_t hash)
-{
 	struct ht_entry *entry;
 	struct ht_item *item;
+	void *result = NULL;
 
+	pthread_rwlock_rdlock(&h->ht_rwlock);
 	entry = &h->ht_entries[hash % h->ht_nentries];
 
 	TAILQ_FOREACH(item, &entry->hte_items, hti_link) {
 		if (item->hti_hash == hash) {
-			return (item->hti_data);
+			result = item->hti_data;
+			break;
 		}
 	}
 
-	return (NULL);
+	pthread_rwlock_unlock(&h->ht_rwlock);
+	return (result);
 }
 
 int
@@ -104,13 +97,13 @@ ht_add(struct ht *h, uint32_t hash, void *value)
 	struct ht_entry *entry;
 	struct ht_item *item;
 
-	ht_wrlock(h);
+	pthread_rwlock_wrlock(&h->ht_rwlock);
 	entry = &h->ht_entries[hash % h->ht_nentries];
 
 	TAILQ_FOREACH(item, &entry->hte_items, hti_link) {
 		if (item->hti_hash == hash) {
 			errno = EEXIST;
-			ht_unlock(h);
+			pthread_rwlock_unlock(&h->ht_rwlock);
 			return (-1);
 		}
 	}
@@ -119,7 +112,7 @@ ht_add(struct ht *h, uint32_t hash, void *value)
 	item->hti_hash = hash;
 	item->hti_data = value;
 	TAILQ_INSERT_TAIL(&entry->hte_items, item, hti_link);
-	ht_unlock(h);
+	pthread_rwlock_unlock(&h->ht_rwlock);
 
 	return (0);
 }
@@ -127,32 +120,24 @@ ht_add(struct ht *h, uint32_t hash, void *value)
 int
 ht_remove(struct ht *h, uint32_t hash)
 {
-	int result;
-
-	ht_wrlock(h);
-	result = ht_remove_locked(h, hash);
-	ht_unlock(h);
-	return (result);
-}
-
-int
-ht_remove_locked(struct ht *h, uint32_t hash)
-{
 	struct ht_entry *entry;
 	struct ht_item *item, *tmp;
 	ssize_t slot = hash % h->ht_nentries;
 
+	pthread_rwlock_wrlock(&h->ht_rwlock);
 	entry = &h->ht_entries[slot];
 
 	TAILQ_FOREACH_SAFE(item, &entry->hte_items, hti_link, tmp) {
 		if (item->hti_hash == hash) {
 			TAILQ_REMOVE(&entry->hte_items, item, hti_link);
 			free(item);
+			pthread_rwlock_unlock(&h->ht_rwlock);
 			return (0);
 		}
 	}
 
 	errno = ENOENT;
+	pthread_rwlock_unlock(&h->ht_rwlock);
 	return (-1);
 }
 
@@ -216,11 +201,11 @@ ht_remove_at_iter(struct ht_iter *iter)
 
 	/* remove the item from the table, saving the NEXT one */
 	h = iter->htit_parent;
-	ht_wrlock(h);
+	pthread_rwlock_wrlock(&h->ht_rwlock);
 	slot = iter->htit_slot;
 	iter->htit_next = ht_iter_advance(iter, item);
 	TAILQ_REMOVE(&h->ht_entries[slot].hte_items, item, hti_link);
-	ht_unlock(h);
+	pthread_rwlock_unlock(&h->ht_rwlock);
 
 	/* mark us as no longer on an item, then free it */
 	iter->htit_curr = NULL;
@@ -258,9 +243,9 @@ ht_next(struct ht_iter *iter)
 	if ((item = iter->htit_next) == NULL) {
 		/* no pre-loaded next; find next from current */
 		h = iter->htit_parent;
-		ht_rdlock(h);
+		pthread_rwlock_rdlock(&h->ht_rwlock);
 		item = ht_iter_advance(iter, iter->htit_curr);
-		ht_unlock(h);
+		pthread_rwlock_unlock(&h->ht_rwlock);
 	} else
 		iter->htit_next = NULL;
 	iter->htit_curr = item;

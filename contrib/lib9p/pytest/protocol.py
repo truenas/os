@@ -27,7 +27,8 @@ set only when unpacking those), so here's just one field:
     >>> td.stat(*(15 * [0])).mode
     0
     >>> import pprint; pprint.pprint(td.stat()._fields)
-    ('type',
+    ('size',
+     'type',
      'dev',
      'qid',
      'mode',
@@ -43,19 +44,12 @@ set only when unpacking those), so here's just one field:
      'n_gid',
      'n_muid')
 
-Stat objects sent across the protocol must first be encoded into
-wirestat objects, which are basically size-counted pre-sequenced
-stat objects.  The pre-sequencing uses:
+For parsing bytes returned in a Tread on a directory, td.stat_seq
+is the sequencer to use.  However, most users should rely on
+the unpackers in each protocol (see unpack_dirstat below).
 
     >>> td.stat_seq
     Sequencer('stat')
-
-For parsing bytes returned in a Tread on a directory, td.wirestat_seq
-is the sequencer.  However, most users should rely on the packers and
-unpackers in each protocol (see {pack,unpack}_wirestat below).
-
-    >>> td.wirestat_seq
-    Sequencer('wirestat')
 
 There is a dictionary fcall_to_name that maps from byte value
 to protocol code.  Names map to themselves as well:
@@ -362,28 +356,22 @@ If the packet is too long, noerror suppresses the SequenceError:
     >>> dotl.unpack(pkt + b'x', noerror=True)
     Rlink(tag=12345)
 
-To pack a stat object when producing data for reading a directory,
-use pack_wirestat.  This puts a size in front of the packed stat
-data (they're represented this way in read()-of-directory data,
-but not elsewhere).
-
-To unpack the result of a Tstat or a read() on a directory, use
-unpack_wirestat.  The stat values are variable length so this
-works with offsets.  If the packet is truncated, you'll get a
-SequenceError, but just as for header unpacking, you can use
-noerror to suppress this.
+To unpack the result of a read() on a directory, use unpack_dirstat.
+The dir-stat values are variable length so this works with offsets.
+If the packet is truncated, you'll get a SequenceError, but just as
+for header unpacking, you can use noerror to suppress this.
 
 (First, we'll need to build some valid packet data.)
 
-    >>> statobj = td.stat(type=0,dev=0,qid=td.qid(0,0,0),mode=0,
+    >>> statobj = td.stat(size=55,type=0,dev=0,qid=td.qid(0,0,0),mode=0,
     ... atime=0,mtime=0,length=0,name=b'foo',uid=b'0',gid=b'0',muid=b'0')
-    >>> data = plain.pack_wirestat(statobj)
-    >>> len(data)
+    >>> pkt = td.stat_seq.pack(statobj, plain.conditions)
+    >>> len(pkt)
     55
 
 Now we can unpack it:
 
-    >>> newobj, offset = plain.unpack_wirestat(data, 0)
+    >>> newobj, offset = plain.unpack_dirstat(pkt, 0)
     >>> newobj == statobj
     True
     >>> offset
@@ -392,27 +380,26 @@ Now we can unpack it:
 Since the packed data do not include the dotu extensions, we get
 a SequenceError if we try to unpack with dotu or dotl:
 
-    >>> dotu.unpack_wirestat(data, 0)       # doctest: +IGNORE_EXCEPTION_DETAIL
+    >>> dotu.unpack_dirstat(pkt, 0)         # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
         ...
     SequenceError: out of data while unpacking 'extension'
 
 When using noerror, the returned new offset will be greater
-than the length of the packet, after a failed unpack, and some
-elements may be None:
+than the length of the packet, after a failed unpack:
 
-    >>> newobj, offset = plain.unpack_wirestat(data[0:10], 0, noerror=True)
-    >>> offset
-    55
-    >>> newobj.length is None
+    >>> newobj, offset = dotu.unpack_dirstat(pkt, 0, noerror=True)
+    >>> offset > len(pkt)
     True
 
 Similarly, use unpack_dirent to unpack the result of a dot-L
-readdir(), using offsets.  (Build them with pack_dirent.)
+readdir(), using offsets.  Note that these are not (currently?)
+conditional but we might as well use dotl.conditions here,
+since dirent data is only supported in dot-L anyway.
 
     >>> dirent = td.dirent(qid=td.qid(1,2,3),offset=0,
     ... type=td.DT_REG,name=b'foo')
-    >>> pkt = dotl.pack_dirent(dirent)
+    >>> pkt = td.dirent_seq.pack(dirent, dotl.conditions)
     >>> len(pkt)
     27
 
@@ -533,7 +520,7 @@ class _PackInfo(object):
 class _P9Proto(object):
     def __init__(self, auto_vars, conditions, p9_data, pfods, index):
         self.auto_vars = auto_vars      # currently, just version
-        self.conditions = conditions    # '.u'
+        self.conditions = conditions    # '.u' and '.uauth'
         self.pfods = pfods # dictionary, maps pfod to packinfo
         self.index = index # for comparison: plain < dotu < dotl
 
@@ -738,59 +725,25 @@ class _P9Proto(object):
         # we can always proceed if we support fcall.
         if self.supports(fcall):
             fcall = fcall_names[fcall]
-            cls = getattr(rrd, fcall)
-            seq = self.pfods[cls].seq
-        elif fcall == td.Rlerror:
-            # As a special case for diod, we accept Rlerror even
-            # if it's not formally part of the protocol.
-            cls = rrd.Rlerror
-            seq = dotl.pfods[rrd.Rlerror].seq
         else:
             fcall = fcall_names.get(fcall, fcall)
             raise SequenceError('invalid fcall {0!r} for '
                                 '{1}'.format(fcall, self))
+        cls = getattr(rrd, fcall)
         vdict = cls()
+        seq = self.pfods[cls].seq
         seq.unpack(vdict, self.conditions, data, noerror)
         return vdict
 
-    def pack_wirestat(self, statobj):
-        """
-        Pack a stat object to appear as data returned by read()
-        on a directory.  Essentially, we prefix the data with a size.
-        """
-        data = td.stat_seq.pack(statobj, self.conditions)
-        return td.wirestat_seq.pack({'size': len(data), 'data': data}, {})
-
-    def unpack_wirestat(self, bstring, offset, noerror=False):
+    def unpack_dirstat(self, bstring, offset, noerror=False):
         """
         Produce the next td.stat object from byte-string,
         returning it and new offset.
         """
         statobj = td.stat()
-        d = { 'size': None }
-        newoff = td.wirestat_seq.unpack_from(d, self.conditions, bstring,
-                                             offset, noerror)
-        size = d['size']
-        if size is None:        # implies noerror; newoff==offset+2
-            return statobj, newoff
-        # We now have size and data.  If noerror, data might be
-        # too short, in which case we'll unpack a partial statobj.
-        # Or (with or without noeror), data might be too long, so
-        # that while len(data) == size, not all the data get used.
-        # That may be allowed by the protocol: it's not clear.
-        data = d['data']
-        used = td.stat_seq.unpack_from(statobj, self.conditions, data,
-                                       0, noerror)
-        # if size != used ... then what?
-        return statobj, newoff
-
-    def pack_dirent(self, dirent):
-        """
-        Dirents (dot-L only) are easy to pack, but we provide
-        this function for symmetry.  (Should we raise an error
-        if called on plain or dotu?)
-        """
-        return td.dirent_seq.pack(dirent, self.conditions)
+        offset = td.stat_seq.unpack_from(statobj, self.conditions, bstring,
+                                         offset, noerror)
+        return statobj, offset
 
     def unpack_dirent(self, bstring, offset, noerror=False):
         """
@@ -864,11 +817,11 @@ typedef qid: type[1] version[4] path[8]
 """
 
 # This defines a stat decoder, which has a 9p2000 standard front,
-# followed by an optional additional portion.
+# followed by an optional 9p2000.u specific additional portion.
 #
 # The constants are named DMDIR etc.
 STATDesc = """
-typedef stat: type[2] dev[4] qid[qid] mode[4] atime[4] mtime[4] \
+typedef stat: size[2] type[2] dev[4] qid[qid] mode[4] atime[4] mtime[4] \
 length[8] name[s] uid[s] gid[s] muid[s] \
 {.u: extension[s] n_uid[4] n_gid[4] n_muid[4] }
 
@@ -884,12 +837,6 @@ length[8] name[s] uid[s] gid[s] muid[s] \
     #define DMSOCKET        0x00100000
     #define DMSETUID        0x00080000
     #define DMSETGID        0x00040000
-"""
-
-# This defines a wirestat decoder.  A wirestat is a size and then
-# a (previously encoded, or future-decoded) stat.
-WirestatDesc = """
-typedef wirestat: size[2] data[size]
 """
 
 # This defines a dirent decoder, which has a dot-L specific format.
@@ -1259,7 +1206,7 @@ Rauth: tag[2] aqid[qid]
     handshake (protocol does not specify what is read/written),
     and afid is presented in the attach.
 
-Tattach = 104: tag[2] fid[4] afid[4] uname[s] aname[s] {.u: n_uname[4] }
+Tattach = 104: tag[2] fid[4] afid[4] uname[s] aname[s] {.uauth: n_uname[4] }
 Rattach: tag[2] qid[qid]
     attach introduces a new user to the server, and establishes
     fid as the root for that user on the file tree selected by
@@ -1351,9 +1298,9 @@ Rremove: tag[2]
     The fid is always clunked (even on error).
 
 Tstat = 124: tag[2] fid[4]
-Rstat: tag[2] size[2] data[size]
+Rstat: tag[2] stat[stat]
 
-Twstat = 126: tag[2] fid[4] size[2] data[size]
+Twstat = 126: tag[2] stat[stat]
 Rwstat: tag[2]
 """
 
@@ -1588,7 +1535,6 @@ def _parse_expr(seq, string, typedefs):
         seq.append_encdec(condval, encdec)
         names.append(name1)
 
-    supported_conditions = ('.u')
     while tokens:
         token = tokens.popleft()
         if token.ttype == 'label':
@@ -1603,7 +1549,7 @@ def _parse_expr(seq, string, typedefs):
             cond = tokens.popleft()
             if cond.ttype != 'label':
                 raise ValueError('"{" not followed by cond label')
-            if cond.value not in supported_conditions:
+            if cond.value != '.u' and cond.value != '.uauth':
                 raise ValueError('unsupported condition "{0}"'.format(
                     cond.value))
             continue
@@ -1668,8 +1614,6 @@ class _ProtoDefs(object):
         self.parse_lines('SDesc', SDesc, typedef_re, self.handle_typedef)
         self.parse_lines('QIDDesc', QIDDesc, typedef_re, self.handle_typedef)
         self.parse_lines('STATDesc', STATDesc, typedef_re, self.handle_typedef)
-        self.parse_lines('WirestatDesc', WirestatDesc, typedef_re,
-                         self.handle_typedef)
         self.parse_lines('DirentDesc', DirentDesc, typedef_re,
                          self.handle_typedef)
 
@@ -1860,10 +1804,9 @@ class _ProtoDefs(object):
                 continue
             setattr(namespace, key, cls)
 
-        # Export two sequencers for en/decoding stat fields
-        # (needed for reading directories and doing Twstat).
+        # Export the sequencer for decoding stat fields
+        # (needed for reading directories).
         setattr(namespace, 'stat_seq', self.typedefs['stat'][1])
-        setattr(namespace, 'wirestat_seq', self.typedefs['wirestat'][1])
 
         # Export the similar dirent decoder.
         setattr(namespace, 'dirent_seq', self.typedefs['dirent'][1])
@@ -1935,17 +1878,17 @@ _9p_data.export(sys.modules[__name__])
 # Currently we look up by text-string, in lowercase.
 _9p_versions = {
     '9p2000': _P9Proto({'version': '9P2000'},
-                       {'.u': False},
+                       {'.u': False, '.uauth': False},
                        _9p_data,
                        _9p_data.plain,
                        0),
     '9p2000.u': _P9Proto({'version': '9P2000.u'},
-                         {'.u': True},
+                         {'.u': True, '.uauth': True},
                          _9p_data,
                          _9p_data.dotu,
                          1),
     '9p2000.l': _P9Proto({'version': '9P2000.L'},
-                         {'.u': True},
+                         {'.u': False, '.uauth': True},
                          _9p_data,
                          _9p_data.dotl,
                          2),
