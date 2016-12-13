@@ -409,7 +409,6 @@
 	tp_ddp = 2
 	tp_ddp_iscsi = 2
 	tp_tls_key = 3
-	tp_tls_mxrxsize = 17408    # 16384 + 1024, governs max rx data, pm max xfer len, rx coalesce sizes
 	tp_stag = 2
 	tp_pbl = 5
 	tp_rq = 7
@@ -552,9 +551,7 @@
 	dcb_app_tlv[0] = 0x8906, ethertype, 3
 	dcb_app_tlv[1] = 0x8914, ethertype, 3
 	dcb_app_tlv[2] = 3260, socketnum, 5
-	#aec_retry_cnt = 4
-	flags = an_dis
-	fec = none		# FEC type none/rs/firecode
+	aec_retry_cnt = 4
 
 
 [port "1"]
@@ -567,14 +564,12 @@
 	dcb_app_tlv[0] = 0x8906, ethertype, 3
 	dcb_app_tlv[1] = 0x8914, ethertype, 3
 	dcb_app_tlv[2] = 3260, socketnum, 5
-	#aec_retry_cnt = 4
-	flags = an_dis
-	fec = none		# FEC type none/rs/firecode
+	aec_retry_cnt = 4
 
 
 [fini]
-	version = 0x01000024
-	checksum = 0x36cebfcb
+	version = 0x01000023
+	checksum = 0x683208a2
 
 # Total resources used by above allocations:
 #   Virtual Interfaces: 104
