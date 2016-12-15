@@ -382,7 +382,9 @@ main(int argc, char **argv)
 		 */
 		(void)signal(SIGTERM, SIG_IGN);
 		(void)signal(SIGQUIT, SIG_IGN);
-	}
+	} else
+		(void)signal(SIGTERM, cleanup);
+
 	(void)signal(SIGSYS, nonfs);
 	(void)signal(SIGCHLD, reapchild);
 	(void)signal(SIGUSR2, backup_stable);
