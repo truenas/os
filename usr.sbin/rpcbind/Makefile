@@ -20,6 +20,6 @@ SUBDIR+=	tests
 
 WARNS?=	1
 
-LIBADD=	wrap
+LIBADD=	wrap util
 
 .include <bsd.prog.mk>
