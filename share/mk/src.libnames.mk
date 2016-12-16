@@ -168,6 +168,7 @@ _LIBRARIES=	\
 		util \
 		uutil \
 		vmmapi \
+		vncserver \
 		wind \
 		wrap \
 		xo \

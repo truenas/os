@@ -156,6 +156,7 @@ LIBUTIL?=	${DESTDIR}${LIBDIR}/libutil.a
 LIBUUTIL?=	${DESTDIR}${LIBDIR}/libuutil.a
 LIBVGL?=	${DESTDIR}${LIBDIR}/libvgl.a
 LIBVMMAPI?=	${DESTDIR}${LIBDIR}/libvmmapi.a
+LIBVNCSERVER?=	${DESTDIR}${LIBDIR}/libvncserver.a
 LIBWIND?=	${DESTDIR}${LIBDIR}/libwind.a
 LIBWRAP?=	${DESTDIR}${LIBDIR}/libwrap.a
 LIBXO?=		${DESTDIR}${LIBDIR}/libxo.a

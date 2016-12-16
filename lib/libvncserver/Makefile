@@ -10,6 +10,7 @@ CFLAGS+=-I${.CURDIR}/../../contrib/libvncserver/libvncserver
 CFLAGS+=-I${.CURDIR}
 
 LIB=		vncserver
+PACKAGE=	lib${LIB}
 SHLIB_MAJOR=	1
 WARNS=		1
 SRCS=		main.c \
