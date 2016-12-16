@@ -2125,7 +2125,7 @@ unp_internalize_fds(struct internalize_transform_data *ix)
 		fde = &fdesc->fd_ofiles[*fdp];
 		fdep[i] = fdev;
 		fdep[i]->fde_file = fde->fde_file;
-		filecaps_copy(&fde->fde_caps, &fdep[i]->fde_caps);
+		filecaps_copy(&fde->fde_caps, &fdep[i]->fde_caps, true);
 		unp_internalize_fp(fdep[i]->fde_file);
 	}
 	FILEDESC_SUNLOCK(fdesc);
