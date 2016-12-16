@@ -251,6 +251,8 @@
     ..
     lib80211
     ..
+    lib9p
+    ..
     libmilter
     ..
     libxo
