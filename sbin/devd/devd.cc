@@ -751,10 +751,11 @@ config::set_vars(const event_t &event)
 		if (it.first.compare("location") == 0 ||
 		    it.first.compare("pnp") == 0) {
 			char *buffer = strdup(it.second.c_str());
+			char *tmp = buffer;
 			char *lhs, *rhs;
 
 			while (1) {
-				if (!chop_var(buffer, lhs, rhs))
+				if (!chop_var(tmp, lhs, rhs))
 					break;
 				cfg.set_variable(lhs, rhs);
 			}
