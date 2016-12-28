@@ -250,9 +250,9 @@ vncserver_send_screen(struct vncserver_softc *sc, int all)
 				cellwidth = PIX_PER_CELL;
 
 			rfbMarkRectAsModified(sc->vs_screen, x * PIX_PER_CELL,
-				celly * PIX_PER_CELL,
-				x * PIX_PER_CELL + cellwidth,
-				(celly * PIX_PER_CELL) + (y + PIX_PER_CELL >= h ? rem_y : PIX_PER_CELL));
+			    celly * PIX_PER_CELL,
+			    x * PIX_PER_CELL + cellwidth,
+			    (celly * PIX_PER_CELL) + (y + PIX_PER_CELL >= h ? rem_y : PIX_PER_CELL));
 		}
 	}
 	retval = 1;
@@ -349,9 +349,9 @@ vncserver_init(struct sockaddr *sa, size_t sa_len, int wait)
 	sc = calloc(1, sizeof(struct vncserver_softc));
 
 	sc->vs_crc = calloc(howmany(RFB_MAX_WIDTH * RFB_MAX_HEIGHT, 32),
-	                 sizeof(uint32_t));
+	    sizeof(uint32_t));
 	sc->vs_crc_tmp = calloc(howmany(RFB_MAX_WIDTH * RFB_MAX_HEIGHT, 32),
-	                     sizeof(uint32_t));
+	    sizeof(uint32_t));
 	sc->vs_crc_width = RFB_MAX_WIDTH;
 	sc->vs_crc_height = RFB_MAX_HEIGHT;
 
