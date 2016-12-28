@@ -761,11 +761,11 @@ trap_fatal(frame, eva)
 #endif
 	if (type == T_PAGEFLT) {
 		printf("fault virtual address	= 0x%lx\n", eva);
-		printf("fault code		= %s %s %s%s, %s\n",
+		printf("fault code		= %s %s %s, %s\n",
 			code & PGEX_U ? "user" : "supervisor",
 			code & PGEX_W ? "write" : "read",
 			code & PGEX_I ? "instruction" : "data",
-			code & PGEX_RSV ? " rsv" : "",
+			code & PGEX_RSV ? "reserved bits in PTE" :
 			code & PGEX_P ? "protection violation" : "page not present");
 	}
 	printf("instruction pointer	= 0x%lx:0x%lx\n",
@@ -914,7 +914,7 @@ amd64_syscall(struct thread *td, int traced)
 	}
 
 	KASSERT(PCB_USER_FPU(td->td_pcb),
-	    ("System call %s returing with kernel FPU ctx leaked",
+	    ("System call %s returning with kernel FPU ctx leaked",
 	     syscallname(td->td_proc, sa.code)));
 	KASSERT(td->td_pcb->pcb_save == get_pcb_user_save_td(td),
 	    ("System call %s returning with mangled pcb_save",
@@ -922,7 +922,6 @@ amd64_syscall(struct thread *td, int traced)
 	KASSERT(td->td_md.md_invl_gen.gen == 0,
 	    ("System call %s returning with leaked invl_gen %lu",
 	    syscallname(td->td_proc, sa.code), td->td_md.md_invl_gen.gen));
-
 
 	syscallret(td, error, &sa);
 
