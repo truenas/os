@@ -172,6 +172,16 @@ cfi_ioctl_port_create(struct ctl_req *req)
 
 	if (pp_num != NULL && *pp_num != -1)
 		port_num = *pp_num;
+
+		/* Check for duplicates */
+		TAILQ_FOREACH(cfi, &isoftc->ports, link) {
+			if (port_num == cfi->port.physical_port) {
+				req->status = CTL_LUN_ERROR;
+				snprintf(req->error_str, sizeof(req->error_str),
+				    "port %d already exists", port_num);
+				return;
+			}
+		}
 	else {
 		/* Find free port number */
 		TAILQ_FOREACH(cfi, &isoftc->ports, link) {
