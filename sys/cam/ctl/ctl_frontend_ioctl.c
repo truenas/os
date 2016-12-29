@@ -170,7 +170,7 @@ cfi_ioctl_port_create(struct ctl_req *req)
 	if (req->num_args > 0 && strcmp(req->kern_args[0].kname, "cfi_pp") == 0)
 		pp_num = (int *)req->kern_args[0].kvalue;
 
-	if (pp_num != NULL && *pp_num != -1)
+	if (pp_num != NULL && *pp_num != -1) {
 		port_num = *pp_num;
 
 		/* Check for duplicates */
@@ -182,7 +182,7 @@ cfi_ioctl_port_create(struct ctl_req *req)
 				return;
 			}
 		}
-	else {
+	} else {
 		/* Find free port number */
 		TAILQ_FOREACH(cfi, &isoftc->ports, link) {
 			port_num = MAX(port_num, cfi->port.physical_port);
