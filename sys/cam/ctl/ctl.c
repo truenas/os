@@ -1792,6 +1792,7 @@ ctl_init(void)
 	args.mda_gid = GID_OPERATOR;
 	args.mda_mode = 0600;
 	args.mda_si_drv1 = softc;
+	args.mda_si_drv2 = NULL;
 	error = make_dev_s(&args, &softc->dev, "cam/ctl");
 	if (error != 0) {
 		free(control_softc, M_DEVBUF);

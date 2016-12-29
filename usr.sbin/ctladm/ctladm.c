@@ -178,7 +178,7 @@ static struct ctladm_opts option_table[] = {
 	{"lunmap", CTLADM_CMD_LUNMAP, CTLADM_ARG_NONE, "p:l:L:"},
 	{"modesense", CTLADM_CMD_MODESENSE, CTLADM_ARG_NEED_TL, "P:S:dlm:c:"},
 	{"modify", CTLADM_CMD_MODIFY, CTLADM_ARG_NONE, "b:l:o:s:"},
-	{"port", CTLADM_CMD_PORT, CTLADM_ARG_NONE, "lo:p:qt:w:W:x"},
+	{"port", CTLADM_CMD_PORT, CTLADM_ARG_NONE, "lo:crp:qt:w:W:x"},
 	{"portlist", CTLADM_CMD_PORTLIST, CTLADM_ARG_NONE, "f:ilp:qvx"},
 	{"prin", CTLADM_CMD_PRES_IN, CTLADM_ARG_NEED_TL, "a:"},
 	{"prout", CTLADM_CMD_PRES_OUT, CTLADM_ARG_NEED_TL, "a:k:r:s:"},
@@ -369,7 +369,9 @@ typedef enum {
 	CCTL_PORT_MODE_LIST,
 	CCTL_PORT_MODE_SET,
 	CCTL_PORT_MODE_ON,
-	CCTL_PORT_MODE_OFF
+	CCTL_PORT_MODE_OFF,
+	CCTL_PORT_MODE_CREATE,
+	CCTL_PORT_MODE_REMOVE
 } cctl_port_mode;
 
 static struct ctladm_opts cctl_fe_table[] = {
@@ -392,6 +394,7 @@ cctl_port(int fd, int argc, char **argv, char *combinedopt)
 	uint64_t wwnn = 0, wwpn = 0;
 	cctl_port_mode port_mode = CCTL_PORT_MODE_NONE;
 	struct ctl_port_entry entry;
+	struct ctl_req req;
 	ctl_port_type port_type = CTL_PORT_NONE;
 	int quiet = 0, xml = 0;
 
@@ -402,6 +405,12 @@ cctl_port(int fd, int argc, char **argv, char *combinedopt)
 				goto bailout_badarg;
 
 			port_mode = CCTL_PORT_MODE_LIST;
+			break;
+		case 'c':
+			port_mode = CCTL_PORT_MODE_CREATE;
+			break;
+		case 'r':
+			port_mode = CCTL_PORT_MODE_REMOVE;
 			break;
 		case 'o':
 			if (port_mode != CCTL_PORT_MODE_NONE)
@@ -515,6 +524,51 @@ cctl_port(int fd, int argc, char **argv, char *combinedopt)
 		cctl_portlist(fd, argcx, argvx, opts);
 		break;
 	}
+	case CCTL_PORT_MODE_REMOVE:
+		if (targ_port == -1) {
+			warnx("%s: -r require -p", __func__);
+			retval = 1;
+			goto bailout;
+		}
+	case CCTL_PORT_MODE_CREATE:
+		bzero(&req, sizeof(req));
+		strlcpy(req.driver, "ioctl", sizeof(req.driver));
+		req.reqtype = port_mode == CCTL_PORT_MODE_CREATE
+		    ? CTL_REQ_CREATE
+		    : CTL_REQ_REMOVE;
+		req.num_args = 1;
+		req.args = malloc(req.num_args * sizeof(*req.args));
+		req.args[0].namelen = sizeof("cfi_pp");
+		req.args[0].name = __DECONST(char *, "cfi_pp");
+		req.args[0].vallen = sizeof(int);
+		req.args[0].value = (void *)&targ_port;
+		req.args[0].flags = CTL_BEARG_RD;
+
+		if (ioctl(fd, CTL_PORT_REQ, &req) == -1) {
+			warn("%s: CTL_PORT_REQ ioctl failed", __func__);
+			retval = 1;
+			free(req.args);
+			goto bailout;
+		}
+
+		switch (req.status) {
+		case CTL_LUN_ERROR:
+			warnx("LUN creation error: %s", req.error_str);
+			retval = 1;
+			goto bailout;
+		case CTL_LUN_WARNING:
+			warnx("LUN creation warning: %s", req.error_str);
+			break;
+		case CTL_LUN_OK:
+			break;
+		default:
+			warnx("unknown LUN creation status: %d", req.status);
+			retval = 1;
+			goto bailout;
+		}
+
+		free(req.args);
+		break;
 	case CCTL_PORT_MODE_SET:
 		if (targ_port == -1) {
 			warnx("%s: -w and -W require -n", __func__);

@@ -68,22 +68,41 @@ struct ctl_fe_ioctl_params {
 	ctl_fe_ioctl_state	state;
 };
 
-struct cfi_softc {
+struct cfi_port {
+	TAILQ_ENTRY(cfi_port)	link;
 	uint32_t		cur_tag_num;
+	struct cdev *		dev;
 	struct ctl_port		port;
 };
 
+struct cfi_softc {
+	TAILQ_HEAD(, cfi_port)	ports;
+};
+
+
 static struct cfi_softc cfi_softc;
+
 
 static int cfi_init(void);
 static void cfi_shutdown(void);
 static void cfi_datamove(union ctl_io *io);
 static void cfi_done(union ctl_io *io);
+static int cfi_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
+    struct thread *td);
+static void cfi_ioctl_port_create(struct ctl_req *req);
+static void cfi_ioctl_port_remove(struct ctl_req *req);
+
+static struct cdevsw cfi_cdevsw = {
+	.d_version = D_VERSION,
+	.d_flags = 0,
+	.d_ioctl = ctl_ioctl_io
+};
 
 static struct ctl_frontend cfi_frontend =
 {
 	.name = "ioctl",
 	.init = cfi_init,
+	.ioctl = cfi_ioctl,
 	.shutdown = cfi_shutdown,
 };
 CTL_FRONTEND_DECLARE(ctlioctl, cfi_frontend);
@@ -92,11 +111,14 @@ static int
 cfi_init(void)
 {
 	struct cfi_softc *isoftc = &cfi_softc;
+	struct cfi_port *cfi;
 	struct ctl_port *port;
 
 	memset(isoftc, 0, sizeof(*isoftc));
+	TAILQ_INIT(&isoftc->ports);
 
-	port = &isoftc->port;
+	cfi = malloc(sizeof(*cfi), M_CTL, M_WAITOK | M_ZERO);
+	port = &cfi->port;
 	port->frontend = &cfi_frontend;
 	port->port_type = CTL_PORT_IOCTL;
 	port->num_requested_ctl_io = 100;
@@ -105,14 +127,16 @@ cfi_init(void)
 	port->fe_done = cfi_done;
 	port->max_targets = 1;
 	port->max_target_id = 0;
+	port->physical_port = 0;
 	port->targ_port = -1;
-	port->max_initiators = 1;
 
 	if (ctl_port_register(port) != 0) {
 		printf("%s: ioctl port registration failed\n", __func__);
 		return (0);
 	}
+
 	ctl_port_online(port);
+	TAILQ_INSERT_TAIL(&isoftc->ports, cfi, link);
 	return (0);
 }
 
@@ -120,12 +144,138 @@ void
 cfi_shutdown(void)
 {
 	struct cfi_softc *isoftc = &cfi_softc;
+	struct cfi_port *cfi;
 	struct ctl_port *port;
 
-	port = &isoftc->port;
-	ctl_port_offline(port);
-	if (ctl_port_deregister(&isoftc->port) != 0)
-		printf("%s: ctl_frontend_deregister() failed\n", __func__);
+	TAILQ_FOREACH(cfi, &isoftc->ports, link) {
+		port = &cfi->port;
+		ctl_port_offline(port);
+		if (ctl_port_deregister(port) != 0) {
+			printf("%s: ctl_frontend_deregister() failed\n",
+			   __func__);
+		}
+	}
+}
+
+static void
+cfi_ioctl_port_create(struct ctl_req *req)
+{
+	struct cfi_softc *isoftc = &cfi_softc;
+	struct cfi_port *cfi;
+	struct ctl_port *port;
+	struct cdev *dev;
+	int *pp_num = NULL;
+	int retval, port_num = 0;
+
+	if (req->num_args > 0 && strcmp(req->kern_args[0].kname, "cfi_pp") == 0)
+		pp_num = (int *)req->kern_args[0].kvalue;
+
+	if (pp_num != NULL && *pp_num != -1)
+		port_num = *pp_num;
+	else {
+		/* Find free port number */
+		TAILQ_FOREACH(cfi, &isoftc->ports, link) {
+			port_num = MAX(port_num, cfi->port.physical_port);
+		}
+
+		port_num++;
+	}
+
+	cfi = malloc(sizeof(*cfi), M_CTL, M_WAITOK | M_ZERO);
+	port = &cfi->port;
+	port->frontend = &cfi_frontend;
+	port->port_type = CTL_PORT_IOCTL;
+	port->num_requested_ctl_io = 100;
+	port->port_name = "ioctl";
+	port->fe_datamove = cfi_datamove;
+	port->fe_done = cfi_done;
+	port->max_targets = 1;
+	port->max_target_id = 15;
+	port->physical_port = port_num;
+	port->targ_port = -1;
+
+	retval = ctl_port_register(port);
+	if (retval != 0) {
+		req->status = CTL_LUN_ERROR;
+		snprintf(req->error_str, sizeof(req->error_str),
+		    "ctl_port_register() failed with error %d", retval);
+		free(port, M_CTL);
+		return;
+	}
+
+	ctl_port_online(port);
+
+	dev = make_dev(&cfi_cdevsw, 0, UID_ROOT, GID_WHEEL, 0600, "cam/ctl%d",
+	    port_num);
+
+	dev->si_drv2 = cfi;
+	req->status = CTL_LUN_OK;
+
+	TAILQ_INSERT_TAIL(&isoftc->ports, cfi, link);
+}
+
+static void
+cfi_ioctl_port_remove(struct ctl_req *req)
+{
+	struct cfi_softc *isoftc = &cfi_softc;
+	struct cfi_port *cfi = NULL;
+	int *pp_ptr;
+	int pp;
+
+	if (strcmp(req->kern_args[0].kname, "cfi_pp") != 0) {
+		req->status = CTL_LUN_ERROR;
+		snprintf(req->error_str, sizeof(req->error_str),
+		    "cfi_pp not provided");
+		return;
+	}
+
+	pp_ptr = (int *)req->kern_args[0].kvalue;
+	pp = *pp_ptr;
+
+	TAILQ_FOREACH(cfi, &isoftc->ports, link) {
+		if (cfi->port.physical_port == pp)
+			break;
+	}
+
+	if (cfi == NULL) {
+		req->status = CTL_LUN_ERROR;
+		snprintf(req->error_str, sizeof(req->error_str),
+		    "cannot find port %d", pp);
+
+		return;
+	}
+
+	ctl_port_offline(&cfi->port);
+	ctl_port_deregister(&cfi->port);
+	TAILQ_REMOVE(&isoftc->ports, cfi, link);
+	free(cfi, M_CTL);
+	req->status = CTL_LUN_OK;
+}
+
+static int
+cfi_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
+    struct thread *td)
+{
+	struct ctl_req *req;
+
+	if (cmd == CTL_PORT_REQ) {
+		req = (struct ctl_req *)addr;
+		switch (req->reqtype) {
+		case CTL_REQ_CREATE:
+			cfi_ioctl_port_create(req);
+			break;
+		case CTL_REQ_REMOVE:
+			cfi_ioctl_port_remove(req);
+			break;
+		default:
+			req->status = CTL_LUN_ERROR;
+			snprintf(req->error_str, sizeof(req->error_str),
+			    "Unsupported request type %d", req->reqtype);
+		}
+		return (0);
+	}
+
+	return (ENOTTY);
 }
 
 /*
@@ -396,18 +546,26 @@ int
 ctl_ioctl_io(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
     struct thread *td)
 {
+	struct cfi_port *cfi;
 	union ctl_io *io;
 	void *pool_tmp;
 	int retval = 0;
+
+	if (cmd != CTL_IO)
+		return (ENOTTY);
+
+	cfi = dev->si_drv2 == NULL
+	    ? TAILQ_FIRST(&cfi_softc.ports)
+	    : dev->si_drv2;
 
 	/*
 	 * If we haven't been "enabled", don't allow any SCSI I/O
 	 * to this FETD.
 	 */
-	if ((cfi_softc.port.status & CTL_PORT_STATUS_ONLINE) == 0)
+	if ((cfi->port.status & CTL_PORT_STATUS_ONLINE) == 0)
 		return (EPERM);
 
-	io = ctl_alloc_io(cfi_softc.port.ctl_pool_ref);
+	io = ctl_alloc_io(cfi->port.ctl_pool_ref);
 
 	/*
 	 * Need to save the pool reference so it doesn't get
@@ -425,15 +583,16 @@ ctl_ioctl_io(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 	/*
 	 * The user sets the initiator ID, target and LUN IDs.
 	 */
-	io->io_hdr.nexus.targ_port = cfi_softc.port.targ_port;
+	io->io_hdr.nexus.targ_port = cfi->port.targ_port;
 	io->io_hdr.flags |= CTL_FLAG_USER_REQ;
 	if ((io->io_hdr.io_type == CTL_IO_SCSI) &&
 	    (io->scsiio.tag_type != CTL_TAG_UNTAGGED))
-		io->scsiio.tag_num = cfi_softc.cur_tag_num++;
+		io->scsiio.tag_num = cfi->cur_tag_num++;
 
 	retval = cfi_submit_wait(io);
 	if (retval == 0)
 		memcpy((void *)addr, io, sizeof(*io));
+
 	ctl_free_io(io);
 	return (retval);
 }
