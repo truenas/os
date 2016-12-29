@@ -397,6 +397,7 @@ cctl_port(int fd, int argc, char **argv, char *combinedopt)
 	struct ctl_req req;
 	ctl_port_type port_type = CTL_PORT_NONE;
 	int quiet = 0, xml = 0;
+	char pp_num[8];
 
 	while ((c = getopt(argc, argv, combinedopt)) != -1) {
 		switch (c) {
@@ -533,16 +534,17 @@ cctl_port(int fd, int argc, char **argv, char *combinedopt)
 	case CCTL_PORT_MODE_CREATE:
 		bzero(&req, sizeof(req));
 		strlcpy(req.driver, "ioctl", sizeof(req.driver));
+		snprintf(pp_num, sizeof(pp_num), "%d", targ_port);
 		req.reqtype = port_mode == CCTL_PORT_MODE_CREATE
 		    ? CTL_REQ_CREATE
 		    : CTL_REQ_REMOVE;
 		req.num_args = 1;
 		req.args = malloc(req.num_args * sizeof(*req.args));
-		req.args[0].namelen = sizeof("cfi_pp");
-		req.args[0].name = __DECONST(char *, "cfi_pp");
-		req.args[0].vallen = sizeof(int);
-		req.args[0].value = (void *)&targ_port;
-		req.args[0].flags = CTL_BEARG_RD;
+		req.args[0].namelen = sizeof("pp");
+		req.args[0].name = __DECONST(char *, "pp");
+		req.args[0].vallen = sizeof(pp_num);
+		req.args[0].value = pp_num;
+		req.args[0].flags = CTL_BEARG_RD | CTL_BEARG_ASCII;
 
 		if (ioctl(fd, CTL_PORT_REQ, &req) == -1) {
 			warn("%s: CTL_PORT_REQ ioctl failed", __func__);

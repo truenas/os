@@ -163,22 +163,23 @@ cfi_ioctl_port_create(struct ctl_req *req)
 	struct cfi_softc *isoftc = &cfi_softc;
 	struct cfi_port *cfi;
 	struct ctl_port *port;
+	struct make_dev_args args;
 	struct cdev *dev;
-	int *pp_num = NULL;
-	int retval, port_num = 0;
+	ctl_options_t opts;
+	int retval;
+	int64_t port_num = 0;
 
-	if (req->num_args > 0 && strcmp(req->kern_args[0].kname, "cfi_pp") == 0)
-		pp_num = (int *)req->kern_args[0].kvalue;
+	ctl_init_opts(&opts, req->num_args, req->kern_args);
+	retval = ctl_get_opt_number(&opts, "pp", (uint64_t *)&port_num);
+	ctl_free_opts(&opts);
 
-	if (pp_num != NULL && *pp_num != -1) {
-		port_num = *pp_num;
-
+	if (retval >= 0 && port_num != -1) {
 		/* Check for duplicates */
 		TAILQ_FOREACH(cfi, &isoftc->ports, link) {
 			if (port_num == cfi->port.physical_port) {
 				req->status = CTL_LUN_ERROR;
 				snprintf(req->error_str, sizeof(req->error_str),
-				    "port %d already exists", port_num);
+				    "port %ld already exists", port_num);
 				return;
 			}
 		}
@@ -201,7 +202,7 @@ cfi_ioctl_port_create(struct ctl_req *req)
 	port->fe_done = cfi_done;
 	port->max_targets = 1;
 	port->max_target_id = 15;
-	port->physical_port = port_num;
+	port->physical_port = (int)port_num;
 	port->targ_port = -1;
 
 	retval = ctl_port_register(port);
@@ -215,12 +216,24 @@ cfi_ioctl_port_create(struct ctl_req *req)
 
 	ctl_port_online(port);
 
-	dev = make_dev(&cfi_cdevsw, 0, UID_ROOT, GID_WHEEL, 0600, "cam/ctl%d",
-	    port_num);
+	make_dev_args_init(&args);
+	args.mda_devsw = &cfi_cdevsw;
+	args.mda_uid = UID_ROOT;
+	args.mda_gid = GID_OPERATOR;
+	args.mda_mode = 0600;
+	args.mda_si_drv1 = NULL;
+	args.mda_si_drv2 = cfi;
 
-	dev->si_drv2 = cfi;
+	retval = make_dev_s(&args, &dev, "cam/ctl%ld", port_num);
+	if (retval != 0) {
+		req->status = CTL_LUN_ERROR;
+		snprintf(req->error_str, sizeof(req->error_str),
+		    "make_dev_s() failed with error %d", retval);
+		free(port, M_CTL);
+		return;
+	}
+
 	req->status = CTL_LUN_OK;
-
 	TAILQ_INSERT_TAIL(&isoftc->ports, cfi, link);
 }
 
@@ -229,28 +242,30 @@ cfi_ioctl_port_remove(struct ctl_req *req)
 {
 	struct cfi_softc *isoftc = &cfi_softc;
 	struct cfi_port *cfi = NULL;
-	int *pp_ptr;
-	int pp;
+	ctl_options_t opts;
+	uint64_t port_num;
+	int retval;
 
-	if (strcmp(req->kern_args[0].kname, "cfi_pp") != 0) {
+	ctl_init_opts(&opts, req->num_args, req->kern_args);
+	retval = ctl_get_opt_number(&opts, "pp", &port_num);
+	ctl_free_opts(&opts);
+
+	if (retval < 0) {
 		req->status = CTL_LUN_ERROR;
 		snprintf(req->error_str, sizeof(req->error_str),
-		    "cfi_pp not provided");
+		    "pp not provided");
 		return;
 	}
 
-	pp_ptr = (int *)req->kern_args[0].kvalue;
-	pp = *pp_ptr;
-
 	TAILQ_FOREACH(cfi, &isoftc->ports, link) {
-		if (cfi->port.physical_port == pp)
+		if (cfi->port.physical_port == port_num)
 			break;
 	}
 
 	if (cfi == NULL) {
 		req->status = CTL_LUN_ERROR;
 		snprintf(req->error_str, sizeof(req->error_str),
-		    "cannot find port %d", pp);
+		    "cannot find port %ld", port_num);
 
 		return;
 	}
