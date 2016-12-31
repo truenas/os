@@ -2027,16 +2027,21 @@ again:
 	 * a VFS_VGET() for "." or "..".
 	 */
 	if (is_zfs == 1) {
+#if 1
+		usevget = 0;
+#else
 		r = VFS_VGET(mp, at.na_fileid, LK_SHARED, &nvp);
-		if (r == EOPNOTSUPP) {
+		if (r == EOPNOTSUPP)
 			usevget = 0;
-			cn.cn_nameiop = LOOKUP;
-			cn.cn_lkflags = LK_SHARED | LK_RETRY;
-			cn.cn_cred = nd->nd_cred;
-			cn.cn_thread = p;
-		} else if (r == 0)
+		else if (r == 0)
 			vput(nvp);
+#endif
 	}
+
+	cn.cn_nameiop = LOOKUP;
+	cn.cn_lkflags = LK_SHARED | LK_RETRY;
+	cn.cn_cred = nd->nd_cred;
+	cn.cn_thread = p;
 
 	/*
 	 * Save this position, in case there is an error before one entry
@@ -2105,16 +2110,7 @@ again:
 					else
 						r = EOPNOTSUPP;
 					if (r == EOPNOTSUPP) {
-						if (usevget) {
-							usevget = 0;
-							cn.cn_nameiop = LOOKUP;
-							cn.cn_lkflags =
-							    LK_SHARED |
-							    LK_RETRY;
-							cn.cn_cred =
-							    nd->nd_cred;
-							cn.cn_thread = p;
-						}
+						usevget = 0;
 						cn.cn_nameptr = dp->d_name;
 						cn.cn_namelen = nlen;
 						cn.cn_flags = ISLASTCN |
