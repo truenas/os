@@ -1105,18 +1105,16 @@ typedef struct efx_nic_cfg_s {
 #if EFSYS_OPT_PHY_STATS
 	uint64_t		enc_phy_stat_mask;
 #endif	/* EFSYS_OPT_PHY_STATS */
-#if EFSYS_OPT_SIENA
+#if EFSYS_OPT_MCDI
 	uint8_t			enc_mcdi_mdio_channel;
 #if EFSYS_OPT_PHY_STATS
 	uint32_t		enc_mcdi_phy_stat_mask;
 #endif	/* EFSYS_OPT_PHY_STATS */
-#endif /* EFSYS_OPT_SIENA */
-#if (EFSYS_OPT_SIENA || EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD)
 #if EFSYS_OPT_MON_STATS
 	uint32_t		*enc_mcdi_sensor_maskp;
 	uint32_t		enc_mcdi_sensor_mask_size;
 #endif	/* EFSYS_OPT_MON_STATS */
-#endif	/* (EFSYS_OPT_SIENA || EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD) */
+#endif	/* EFSYS_OPT_MCDI */
 #if EFSYS_OPT_BIST
 	uint32_t		enc_bist_mask;
 #endif	/* EFSYS_OPT_BIST */
@@ -1311,6 +1309,7 @@ typedef enum efx_nvram_type_e {
 	EFX_NVRAM_FPGA_BACKUP,
 	EFX_NVRAM_DYNAMIC_CFG,
 	EFX_NVRAM_LICENSE,
+	EFX_NVRAM_UEFIROM,
 	EFX_NVRAM_NTYPES,
 } efx_nvram_type_t;
 
@@ -1595,6 +1594,11 @@ efx_ev_fini(
 #define	EFX_EVQ_SIZE(_nevs)	((_nevs) * sizeof (efx_qword_t))
 #define	EFX_EVQ_NBUFS(_nevs)	(EFX_EVQ_SIZE(_nevs) / EFX_BUF_SIZE)
 
+#define	EFX_EVQ_FLAGS_TYPE_MASK		(0x3)
+#define	EFX_EVQ_FLAGS_TYPE_AUTO		(0x0)
+#define	EFX_EVQ_FLAGS_TYPE_THROUGHPUT	(0x1)
+#define	EFX_EVQ_FLAGS_TYPE_LOW_LATENCY	(0x2)
+
 extern	__checkReturn	efx_rc_t
 efx_ev_qcreate(
 	__in		efx_nic_t *enp,
@@ -1603,6 +1607,7 @@ efx_ev_qcreate(
 	__in		size_t n,
 	__in		uint32_t id,
 	__in		uint32_t us,
+	__in		uint32_t flags,
 	__deref_out	efx_evq_t **eepp);
 
 extern		void

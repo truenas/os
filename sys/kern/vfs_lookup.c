@@ -200,7 +200,7 @@ namei_handle_root(struct nameidata *ndp, struct vnode **dpp)
 		ndp->ni_pathlen--;
 	}
 	*dpp = ndp->ni_rootdir;
-	VREF(*dpp);
+	vrefact(*dpp);
 	return (0);
 }
 
@@ -321,7 +321,7 @@ namei(struct nameidata *ndp)
 	 */
 	FILEDESC_SLOCK(fdp);
 	ndp->ni_rootdir = fdp->fd_rdir;
-	VREF(ndp->ni_rootdir);
+	vrefact(ndp->ni_rootdir);
 	ndp->ni_topdir = fdp->fd_jdir;
 
 	/*
@@ -343,7 +343,7 @@ namei(struct nameidata *ndp)
 			startdir_used = 1;
 		} else if (ndp->ni_dirfd == AT_FDCWD) {
 			dp = fdp->fd_cdir;
-			VREF(dp);
+			vrefact(dp);
 		} else {
 			rights = ndp->ni_rightsneeded;
 			cap_rights_set(&rights, CAP_LOOKUP);
@@ -380,9 +380,7 @@ namei(struct nameidata *ndp)
 	if (error != 0) {
 		if (dp != NULL)
 			vrele(dp);
-		vrele(ndp->ni_rootdir);
-		namei_cleanup_cnp(cnp);
-		return (error);
+		goto out;
 	}
 	if ((ndp->ni_lcf & NI_LCF_STRICTRELATIVE) != 0 &&
 	    lookup_cap_dotdot != 0)
@@ -392,12 +390,8 @@ namei(struct nameidata *ndp)
 	for (;;) {
 		ndp->ni_startdir = dp;
 		error = lookup(ndp);
-		if (error != 0) {
-			vrele(ndp->ni_rootdir);
-			namei_cleanup_cnp(cnp);
-			SDT_PROBE2(vfs, namei, lookup, return, error, NULL);
-			return (error);
-		}
+		if (error != 0)
+			goto out;
 		/*
 		 * If not a symbolic link, we're done.
 		 */
@@ -471,18 +465,16 @@ namei(struct nameidata *ndp)
 		if (*(cnp->cn_nameptr) == '/') {
 			vrele(dp);
 			error = namei_handle_root(ndp, &dp);
-			if (error != 0) {
-				vrele(ndp->ni_rootdir);
-				namei_cleanup_cnp(cnp);
-				return (error);
-			}
+			if (error != 0)
+				goto out;
 		}
 	}
-	vrele(ndp->ni_rootdir);
-	namei_cleanup_cnp(cnp);
 	vput(ndp->ni_vp);
 	ndp->ni_vp = NULL;
 	vrele(ndp->ni_dvp);
+out:
+	vrele(ndp->ni_rootdir);
+	namei_cleanup_cnp(cnp);
 	nameicap_cleanup(ndp);
 	SDT_PROBE2(vfs, namei, lookup, return, error, NULL);
 	return (error);
@@ -810,9 +802,8 @@ unionlookup:
 	 * If we have a shared lock we may need to upgrade the lock for the
 	 * last operation.
 	 */
-	if (dp != vp_crossmp &&
-	    VOP_ISLOCKED(dp) == LK_SHARED &&
-	    (cnp->cn_flags & ISLASTCN) && (cnp->cn_flags & LOCKPARENT))
+	if ((cnp->cn_flags & LOCKPARENT) && (cnp->cn_flags & ISLASTCN) &&
+	    dp != vp_crossmp && VOP_ISLOCKED(dp) == LK_SHARED)
 		vn_lock(dp, LK_UPGRADE|LK_RETRY);
 	if ((dp->v_iflag & VI_DOOMED) != 0) {
 		error = ENOENT;
@@ -910,7 +901,7 @@ good:
 			vput(ndp->ni_dvp);
 		else
 			vrele(ndp->ni_dvp);
-		vref(vp_crossmp);
+		vrefact(vp_crossmp);
 		ndp->ni_dvp = vp_crossmp;
 		error = VFS_ROOT(mp, compute_cn_lkflags(mp, cnp->cn_lkflags,
 		    cnp->cn_flags), &tdp);
