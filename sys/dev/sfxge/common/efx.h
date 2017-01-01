@@ -128,11 +128,6 @@ typedef struct efx_rxq_s	efx_rxq_t;
 
 typedef struct efx_nic_s	efx_nic_t;
 
-#define	EFX_NIC_FUNC_PRIMARY	0x00000001
-#define	EFX_NIC_FUNC_LINKCTRL	0x00000002
-#define	EFX_NIC_FUNC_TRUSTED	0x00000004
-
-
 extern	__checkReturn	efx_rc_t
 efx_nic_create(
 	__in		efx_family_t family,
@@ -534,6 +529,29 @@ efx_mac_stat_name(
 	__in				unsigned int id);
 
 #endif	/* EFSYS_OPT_NAMES */
+
+#define	EFX_MAC_STATS_MASK_BITS_PER_PAGE	(8 * sizeof (uint32_t))
+
+#define	EFX_MAC_STATS_MASK_NPAGES	\
+	(P2ROUNDUP(EFX_MAC_NSTATS, EFX_MAC_STATS_MASK_BITS_PER_PAGE) / \
+	    EFX_MAC_STATS_MASK_BITS_PER_PAGE)
+
+/*
+ * Get mask of MAC statistics supported by the hardware.
+ *
+ * If mask_size is insufficient to return the mask, EINVAL error is
+ * returned. EFX_MAC_STATS_MASK_NPAGES multiplied by size of the page
+ * (which is sizeof (uint32_t)) is sufficient.
+ */
+extern	__checkReturn			efx_rc_t
+efx_mac_stats_get_mask(
+	__in				efx_nic_t *enp,
+	__out_bcount(mask_size)		uint32_t *maskp,
+	__in				size_t mask_size);
+
+#define	EFX_MAC_STAT_SUPPORTED(_mask, _stat)	\
+	((_mask)[(_stat) / EFX_MAC_STATS_MASK_BITS_PER_PAGE] &	\
+	 (1ULL << ((_stat) & (EFX_MAC_STATS_MASK_BITS_PER_PAGE - 1))))
 
 #define	EFX_MAC_STATS_SIZE 0x400
 
@@ -1077,7 +1095,6 @@ typedef struct efx_nic_cfg_s {
 	unsigned int		enc_features;
 	uint8_t			enc_mac_addr[6];
 	uint8_t			enc_port;	/* PHY port number */
-	uint32_t		enc_func_flags;
 	uint32_t		enc_intr_vec_base;
 	uint32_t		enc_intr_limit;
 	uint32_t		enc_evq_limit;
@@ -1139,13 +1156,19 @@ typedef struct efx_nic_cfg_s {
 	uint32_t		enc_tx_tso_tcp_header_offset_limit;
 	boolean_t		enc_fw_assisted_tso_enabled;
 	boolean_t		enc_fw_assisted_tso_v2_enabled;
+	/* Number of TSO contexts on the NIC (FATSOv2) */
+	uint32_t		enc_fw_assisted_tso_v2_n_contexts;
 	boolean_t		enc_hw_tx_insert_vlan_enabled;
+	/* Number of PFs on the NIC */
+	uint32_t		enc_hw_pf_count;
 	/* Datapath firmware vadapter/vport/vswitch support */
 	boolean_t		enc_datapath_cap_evb;
 	boolean_t		enc_rx_disable_scatter_supported;
 	boolean_t		enc_allow_set_mac_with_installed_filters;
 	boolean_t		enc_enhanced_set_mac_supported;
 	boolean_t		enc_init_evq_v2_supported;
+	boolean_t		enc_pm_and_rxdp_counters;
+	boolean_t		enc_mac_stats_40g_tx_size_bins;
 	/* External port identifier */
 	uint8_t			enc_external_port;
 	uint32_t		enc_mcdi_max_payload_length;
@@ -1599,6 +1622,10 @@ efx_ev_fini(
 #define	EFX_EVQ_FLAGS_TYPE_THROUGHPUT	(0x1)
 #define	EFX_EVQ_FLAGS_TYPE_LOW_LATENCY	(0x2)
 
+#define	EFX_EVQ_FLAGS_NOTIFY_MASK	(0xC)
+#define	EFX_EVQ_FLAGS_NOTIFY_INTERRUPT	(0x0)	/* Interrupting (default) */
+#define	EFX_EVQ_FLAGS_NOTIFY_DISABLED	(0x4)	/* Non-interrupting */
+
 extern	__checkReturn	efx_rc_t
 efx_ev_qcreate(
 	__in		efx_nic_t *enp,
@@ -1838,12 +1865,12 @@ typedef enum efx_rx_hash_alg_e {
 	EFX_RX_HASHALG_TOEPLITZ
 } efx_rx_hash_alg_t;
 
-typedef enum efx_rx_hash_type_e {
-	EFX_RX_HASH_IPV4 = 0,
-	EFX_RX_HASH_TCPIPV4,
-	EFX_RX_HASH_IPV6,
-	EFX_RX_HASH_TCPIPV6,
-} efx_rx_hash_type_t;
+#define	EFX_RX_HASH_IPV4	(1U << 0)
+#define	EFX_RX_HASH_TCPIPV4	(1U << 1)
+#define	EFX_RX_HASH_IPV6	(1U << 2)
+#define	EFX_RX_HASH_TCPIPV6	(1U << 3)
+
+typedef unsigned int efx_rx_hash_type_t;
 
 typedef enum efx_rx_hash_support_e {
 	EFX_RX_HASH_UNAVAILABLE = 0,	/* Hardware hash not inserted */
@@ -1891,16 +1918,16 @@ efx_rx_scale_key_set(
 	__in		size_t n);
 
 extern	__checkReturn	uint32_t
-efx_psuedo_hdr_hash_get(
-	__in		efx_nic_t *enp,
+efx_pseudo_hdr_hash_get(
+	__in		efx_rxq_t *erp,
 	__in		efx_rx_hash_alg_t func,
 	__in		uint8_t *buffer);
 
 #endif	/* EFSYS_OPT_RX_SCALE */
 
 extern	__checkReturn	efx_rc_t
-efx_psuedo_hdr_pkt_length_get(
-	__in		efx_nic_t *enp,
+efx_pseudo_hdr_pkt_length_get(
+	__in		efx_rxq_t *erp,
 	__in		uint8_t *buffer,
 	__out		uint16_t *pkt_lengthp);
 
@@ -2151,20 +2178,22 @@ efx_tx_qdestroy(
 #define	EFX_IPPROTO_TCP 6
 #define	EFX_IPPROTO_UDP 17
 
-typedef enum efx_filter_flag_e {
-	EFX_FILTER_FLAG_RX_RSS = 0x01,		/* use RSS to spread across
-						 * multiple queues */
-	EFX_FILTER_FLAG_RX_SCATTER = 0x02,	/* enable RX scatter */
-	EFX_FILTER_FLAG_RX_OVER_AUTO = 0x04,	/* Override an automatic filter
-						 * (priority EFX_FILTER_PRI_AUTO).
-						 * May only be set by the filter
-						 * implementation for each type.
-						 * A removal request will
-						 * restore the automatic filter
-						 * in its place. */
-	EFX_FILTER_FLAG_RX = 0x08,		/* Filter is for RX */
-	EFX_FILTER_FLAG_TX = 0x10,		/* Filter is for TX */
-} efx_filter_flag_t;
+/* Use RSS to spread across multiple queues */
+#define	EFX_FILTER_FLAG_RX_RSS		0x01
+/* Enable RX scatter */
+#define	EFX_FILTER_FLAG_RX_SCATTER	0x02
+/*
+ * Override an automatic filter (priority EFX_FILTER_PRI_AUTO).
+ * May only be set by the filter implementation for each type.
+ * A removal request will restore the automatic filter in its place.
+ */
+#define	EFX_FILTER_FLAG_RX_OVER_AUTO	0x04
+/* Filter is for RX */
+#define	EFX_FILTER_FLAG_RX		0x08
+/* Filter is for TX */
+#define	EFX_FILTER_FLAG_TX		0x10
+
+typedef unsigned int efx_filter_flags_t;
 
 typedef enum efx_filter_match_flags_e {
 	EFX_FILTER_MATCH_REM_HOST = 0x0001,	/* Match by remote IP host
@@ -2260,7 +2289,7 @@ extern			void
 efx_filter_spec_init_rx(
 	__out		efx_filter_spec_t *spec,
 	__in		efx_filter_priority_t priority,
-	__in		efx_filter_flag_t flags,
+	__in		efx_filter_flags_t flags,
 	__in		efx_rxq_t *erp);
 
 extern			void

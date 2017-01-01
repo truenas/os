@@ -591,7 +591,7 @@ timer2sbintime(intptr_t data, int flags)
 	case NOTE_SECONDS:
 #ifdef __LP64__
 		if (data > (SBT_MAX / SBT_1S))
-			return SBT_MAX;
+			return (SBT_MAX);
 #endif
 		return ((sbintime_t)data << 32);
 	case NOTE_MSECONDS: /* FALLTHROUGH */
@@ -600,7 +600,7 @@ timer2sbintime(intptr_t data, int flags)
 			int64_t secs = data / 1000;
 #ifdef __LP64__
 			if (secs > (SBT_MAX / SBT_1S))
-				return SBT_MAX;
+				return (SBT_MAX);
 #endif
 			return (secs << 32 | MS_TO_SBT(data % 1000));
 		}
@@ -610,7 +610,7 @@ timer2sbintime(intptr_t data, int flags)
 			int64_t secs = data / 1000000;
 #ifdef __LP64__
 			if (secs > (SBT_MAX / SBT_1S))
-				return SBT_MAX;
+				return (SBT_MAX);
 #endif
 			return (secs << 32 | US_TO_SBT(data % 1000000));
 		}
@@ -620,34 +620,40 @@ timer2sbintime(intptr_t data, int flags)
 			int64_t secs = data / 1000000000;
 #ifdef __LP64__
 			if (secs > (SBT_MAX / SBT_1S))
-				return SBT_MAX;
+				return (SBT_MAX);
 #endif
 			return (secs << 32 | US_TO_SBT(data % 1000000000));
 		}
-		return NS_TO_SBT(data);
+		return (NS_TO_SBT(data));
 	default:
 		break;
 	}
 	return (-1);
 }
 
+struct kq_timer_cb_data {
+	struct callout c;
+	sbintime_t next;	/* next timer event fires at */
+	sbintime_t to;		/* precalculated timer period */
+};
+
 static void
 filt_timerexpire(void *knx)
 {
-	struct callout *calloutp;
 	struct knote *kn;
+	struct kq_timer_cb_data *kc;
 
 	kn = knx;
 	kn->kn_data++;
 	KNOTE_ACTIVATE(kn, 0);	/* XXX - handle locking */
 
-	if ((kn->kn_flags & EV_ONESHOT) != EV_ONESHOT) {
-		calloutp = (struct callout *)kn->kn_hook;
-		*kn->kn_ptr.p_nexttime += timer2sbintime(kn->kn_sdata, 
-		    kn->kn_sfflags);
-		callout_reset_sbt_on(calloutp, *kn->kn_ptr.p_nexttime, 0,
-		    filt_timerexpire, kn, PCPU_GET(cpuid), C_ABSOLUTE);
-	}
+	if ((kn->kn_flags & EV_ONESHOT) != 0)
+		return;
+
+	kc = kn->kn_ptr.p_v;
+	kc->next += kc->to;
+	callout_reset_sbt_on(&kc->c, kc->next, 0, filt_timerexpire, kn,
+	    PCPU_GET(cpuid), C_ABSOLUTE);
 }
 
 /*
@@ -656,16 +662,16 @@ filt_timerexpire(void *knx)
 static int
 filt_timerattach(struct knote *kn)
 {
-	struct callout *calloutp;
+	struct kq_timer_cb_data *kc;
 	sbintime_t to;
 	unsigned int ncallouts;
 
-	if ((intptr_t)kn->kn_sdata < 0)
+	if (kn->kn_sdata < 0)
 		return (EINVAL);
-	if ((intptr_t)kn->kn_sdata == 0 && (kn->kn_flags & EV_ONESHOT) == 0)
+	if (kn->kn_sdata == 0 && (kn->kn_flags & EV_ONESHOT) == 0)
 		kn->kn_sdata = 1;
 	/* Only precision unit are supported in flags so far */
-	if (kn->kn_sfflags & ~NOTE_TIMER_PRECMASK)
+	if ((kn->kn_sfflags & ~NOTE_TIMER_PRECMASK) != 0)
 		return (EINVAL);
 
 	to = timer2sbintime(kn->kn_sdata, kn->kn_sfflags);
@@ -680,13 +686,12 @@ filt_timerattach(struct knote *kn)
 
 	kn->kn_flags |= EV_CLEAR;		/* automatically set */
 	kn->kn_status &= ~KN_DETACHED;		/* knlist_add clears it */
-	kn->kn_ptr.p_nexttime = malloc(sizeof(sbintime_t), M_KQUEUE, M_WAITOK);
-	calloutp = malloc(sizeof(*calloutp), M_KQUEUE, M_WAITOK);
-	callout_init(calloutp, 1);
-	kn->kn_hook = calloutp;
-	*kn->kn_ptr.p_nexttime = to + sbinuptime();
-	callout_reset_sbt_on(calloutp, *kn->kn_ptr.p_nexttime, 0,
-	    filt_timerexpire, kn, PCPU_GET(cpuid), C_ABSOLUTE);
+	kn->kn_ptr.p_v = kc = malloc(sizeof(*kc), M_KQUEUE, M_WAITOK);
+	callout_init(&kc->c, 1);
+	kc->next = to + sbinuptime();
+	kc->to = to;
+	callout_reset_sbt_on(&kc->c, kc->next, 0, filt_timerexpire, kn,
+	    PCPU_GET(cpuid), C_ABSOLUTE);
 
 	return (0);
 }
@@ -694,13 +699,12 @@ filt_timerattach(struct knote *kn)
 static void
 filt_timerdetach(struct knote *kn)
 {
-	struct callout *calloutp;
+	struct kq_timer_cb_data *kc;
 	unsigned int old;
 
-	calloutp = (struct callout *)kn->kn_hook;
-	callout_drain(calloutp);
-	free(calloutp, M_KQUEUE);
-	free(kn->kn_ptr.p_nexttime, M_KQUEUE);
+	kc = kn->kn_ptr.p_v;
+	callout_drain(&kc->c);
+	free(kc, M_KQUEUE);
 	old = atomic_fetchadd_int(&kq_ncallouts, -1);
 	KASSERT(old > 0, ("Number of callouts cannot become negative"));
 	kn->kn_status |= KN_DETACHED;	/* knlist_remove sets it */

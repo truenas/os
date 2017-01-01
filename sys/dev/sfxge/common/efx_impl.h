@@ -194,6 +194,7 @@ typedef struct efx_mac_ops_s {
 					    efx_loopback_type_t);
 #endif	/* EFSYS_OPT_LOOPBACK */
 #if EFSYS_OPT_MAC_STATS
+	efx_rc_t	(*emo_stats_get_mask)(efx_nic_t *, uint32_t *, size_t);
 	efx_rc_t	(*emo_stats_upload)(efx_nic_t *, efsys_mem_t *);
 	efx_rc_t	(*emo_stats_periodic)(efx_nic_t *, efsys_mem_t *,
 					      uint16_t, boolean_t);
@@ -709,6 +710,8 @@ struct efx_evq_s {
 #endif	/* EFSYS_OPT_MCDI */
 
 	efx_evq_rxq_state_t		ee_rxq_state[EFX_EV_RX_NLABELS];
+
+	uint32_t			ee_flags;
 };
 
 #define	EFX_EVQ_MAGIC	0x08081997
@@ -1154,6 +1157,27 @@ efx_mcdi_get_workarounds(
 	__out_opt		uint32_t *enabledp);
 
 #endif /* EFSYS_OPT_MCDI */
+
+#if EFSYS_OPT_MAC_STATS
+
+/*
+ * Closed range of stats (i.e. the first and the last are included).
+ * The last must be greater or equal (if the range is one item only) to
+ * the first.
+ */
+struct efx_mac_stats_range {
+	efx_mac_stat_t		first;
+	efx_mac_stat_t		last;
+};
+
+extern					efx_rc_t
+efx_mac_stats_mask_add_ranges(
+	__inout_bcount(mask_size)	uint32_t *maskp,
+	__in				size_t mask_size,
+	__in_ecount(rng_count)		const struct efx_mac_stats_range *rngp,
+	__in				unsigned int rng_count);
+
+#endif	/* EFSYS_OPT_MAC_STATS */
 
 #ifdef	__cplusplus
 }
