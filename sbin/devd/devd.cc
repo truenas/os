@@ -314,7 +314,7 @@ match::do_match(config &c)
 	 * can consume excessive amounts of systime inside of connect().  Only
 	 * log when we're in -d mode.
 	 */
-	if (no_daemon) {
+	if (no_daemon && !quiet_mode) {
 		devdlog(LOG_DEBUG, "Testing %s=%s against %s, invert=%d\n",
 		    _var.c_str(), value.c_str(), _re.c_str(), _inv);
 	}
@@ -424,7 +424,7 @@ var_list::set_variable(const string &var, const string &val)
 	 * can consume excessive amounts of systime inside of connect().  Only
 	 * log when we're in -d mode.
 	 */
-	if (no_daemon)
+	if (no_daemon && !quiet_mode)
 		devdlog(LOG_DEBUG, "setting %s=%s\n", var.c_str(), val.c_str());
 	_vars[var] = val;
 }
