@@ -717,8 +717,6 @@ send_iterate_prop(zfs_handle_t *zhp, nvlist_t *nv)
 }
 
 /*
-<<<<<<< HEAD
-=======
  * returns snapshot creation txg
  * and returns 0 if the snapshot does not exist
  */
@@ -744,7 +742,6 @@ get_snap_txg(libzfs_handle_t *hdl, const char *fs, const char *snap)
 }
 
 /*
->>>>>>> 35ddd83332f... MFV r302660: 6314 buffer overflow in dsl_dataset_name
  * recursively generate nvlists describing datasets.  See comment
  * for the data structure send_data_t above for description of contents
  * of the nvlist.

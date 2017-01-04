@@ -1994,8 +1994,6 @@ spa_load_verify_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	return (0);
 }
 
-<<<<<<< HEAD
-=======
 /* ARGSUSED */
 int
 verify_dataset_name_len(dsl_pool_t *dp, dsl_dataset_t *ds, void *arg)
@@ -2006,7 +2004,6 @@ verify_dataset_name_len(dsl_pool_t *dp, dsl_dataset_t *ds, void *arg)
 	return (0);
 }
 
->>>>>>> 35ddd83332f... MFV r302660: 6314 buffer overflow in dsl_dataset_name
 static int
 spa_load_verify(spa_t *spa)
 {

@@ -21,14 +21,8 @@
 
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
-<<<<<<< HEAD
- * Copyright (c) 2011 Pawel Jakub Dawidek <pawel@dawidek.net>.
- * All rights reserved.
- * Copyright (c) 2013 by Delphix. All rights reserved.
-=======
  * Copyright (c) 2011 Pawel Jakub Dawidek. All rights reserved.
  * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
->>>>>>> 35ddd83332f... MFV r302660: 6314 buffer overflow in dsl_dataset_name
  * Copyright (c) 2013 Martin Matuska <mm@FreeBSD.org>. All rights reserved.
  */
 
