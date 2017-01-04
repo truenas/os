@@ -274,7 +274,6 @@ SUBDIR=	\
 	${_ntb} \
 	${_nvd} \
 	${_nvdimm} \
-	${_nve} \
 	${_nvme} \
 	${_nvram} \
 	${_nxge} \
@@ -674,13 +673,8 @@ _ixlv=		ixlv
 _linux64=	linux64
 _linux_common=	linux_common
 _ntb=		ntb
-<<<<<<< HEAD
-=======
 _nvd=		nvd
 _nvdimm=	nvdimm
-.if ${MK_SOURCELESS_HOST} != "no"
-_nve=		nve
-.endif
 _nvme=		nvme
 _nvram=		nvram
 _nxge=		nxge
@@ -691,7 +685,6 @@ _opensolaris=	opensolaris
 _padlock=	padlock
 .endif
 _pccard=	pccard
->>>>>>> ca014fb... Initial import of the legacy NVDIMM driver.
 _pms=		pms
 _qlxge=		qlxge
 _qlxgb=		qlxgb
