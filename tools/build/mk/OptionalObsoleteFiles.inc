@@ -828,6 +828,9 @@ OLD_FILES+=usr/share/man/man3/asn_slice_oid.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_add_binding.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_calc_keychange.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_client.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_client_init.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_client_set_host.3.gz
+OLD_FILES+=usr/share/man/man3/snmp_client_set_port.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_close.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_debug.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_dep_commit.3.gz
@@ -3045,6 +3048,12 @@ OLD_FILES+=usr/share/man/man5/hast.conf.5.gz
 OLD_FILES+=usr/share/man/man8/hastctl.8.gz
 OLD_FILES+=usr/share/man/man8/hastd.8.gz
 OLD_DIRS+=usr/share/examples/hast
+# bsnmp
+OLD_FILES+=usr/lib/snmp_hast.so
+OLD_LIBS+=usr/lib/snmp_hast.so.6
+OLD_FILES+=usr/share/man/man3/snmp_hast.3.gz
+OLD_FILES+=usr/share/snmp/defs/hast_tree.def
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-HAST-MIB.txt
 .endif
 
 .if ${MK_HESIOD} == no
@@ -9091,6 +9100,12 @@ OLD_FILES+=usr/share/man/man8/wlandebug.8.gz
 OLD_FILES+=usr/share/man/man8/wpa_cli.8.gz
 OLD_FILES+=usr/share/man/man8/wpa_passphrase.8.gz
 OLD_FILES+=usr/share/man/man8/wpa_supplicant.8.gz
+OLD_FILES+=usr/lib/snmp_wlan.so
+OLD_LIBS+=usr/lib/snmp_wlan.so.6
+# bsnmp module
+OLD_FILES+=usr/share/man/man3/snmp_wlan.3.gz
+OLD_FILES+=usr/share/snmp/defs/wlan_tree.def
+OLD_FILES+=usr/share/snmp/mibs/BEGEMOT-WIRELESS-MIB.txt
 .endif
 
 .if ${MK_SVNLITE} == no || ${MK_SVN} == yes
