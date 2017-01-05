@@ -607,6 +607,73 @@ dsl_prop_changed_notify(dsl_pool_t *dp, uint64_t ddobj,
 	dsl_dir_rele(dd, FTAG);
 }
 
+static void
+dsl_event_notify_prop(dsl_dataset_t *ds, zprop_source_t source,
+    const char *propname, const char *propvalue)
+{
+#ifdef _KERNEL
+	spa_t			*spa;
+	sysevent_t		*ev;
+	sysevent_attr_list_t	*attr = NULL;
+	sysevent_value_t	value;
+	sysevent_id_t		eid;
+	char			dsname[MAXNAMELEN];
+
+	spa = dsl_dataset_get_spa(ds);
+	ev = sysevent_alloc(EC_ZFS, ESC_ZFS_DATASET_SETPROP,
+	    SUNW_KERN_PUB "zfs", SE_SLEEP);
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = spa_name(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_NAME, &value, SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_UINT64;
+	value.value.sv_uint64 = spa_guid(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_GUID, &value, SE_SLEEP) != 0)
+		goto done;
+
+	dsl_dataset_name(ds, dsname);
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = dsname;
+	if (sysevent_add_attr(&attr, ZFS_EV_DSL_NAME, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = (source == ZPROP_SRC_NONE ||
+	    source == ZPROP_SRC_INHERITED) ? "inherit" : "set";
+	if (sysevent_add_attr(&attr, ZFS_EV_PROP_ACTION, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = (char *)propname;
+	if (sysevent_add_attr(&attr, ZFS_EV_PROP_NAME, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	if (propvalue != NULL) {
+		value.value_type = SE_DATA_TYPE_STRING;
+		value.value.sv_string = (char *)propvalue;
+		if (sysevent_add_attr(&attr, ZFS_EV_PROP_VALUE, &value,
+		    SE_SLEEP) != 0)
+			goto done;
+	}
+
+	if (sysevent_attach_attributes(ev, attr) != 0)
+		goto done;
+	attr = NULL;
+
+	(void) log_sysevent(ev, SE_SLEEP, &eid);
+
+done:
+	if (attr)
+		sysevent_free_attr(attr);
+	sysevent_free(ev);
+#endif
+}
+
 void
 dsl_prop_set_sync_impl(dsl_dataset_t *ds, const char *propname,
     zprop_source_t source, int intsz, int numints, const void *value,
@@ -759,6 +826,8 @@ dsl_prop_set_sync_impl(dsl_dataset_t *ds, const char *propname,
 	spa_history_log_internal_ds(ds, (source == ZPROP_SRC_NONE ||
 	    source == ZPROP_SRC_INHERITED) ? "inherit" : "set", tx,
 	    "%s=%s", propname, (valstr == NULL ? "" : valstr));
+
+	dsl_event_notify_prop(ds, source, propname, valstr);
 
 	if (tbuf != NULL)
 		kmem_free(tbuf, ZAP_MAXVALUELEN);

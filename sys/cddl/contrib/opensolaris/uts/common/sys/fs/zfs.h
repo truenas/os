@@ -980,6 +980,12 @@ typedef enum {
 #define	ZFS_EV_POOL_GUID	"pool_guid"
 #define	ZFS_EV_VDEV_PATH	"vdev_path"
 #define	ZFS_EV_VDEV_GUID	"vdev_guid"
+#define	ZFS_EV_VDEV_STATE	"vdev_state"
+#define	ZFS_EV_DSL_NAME		"ds"
+#define	ZFS_EV_DSL_NEW_NAME	"new_ds"
+#define	ZFS_EV_PROP_ACTION	"action"
+#define	ZFS_EV_PROP_NAME	"prop_name"
+#define	ZFS_EV_PROP_VALUE	"prop_value"
 
 #ifdef	__cplusplus
 }

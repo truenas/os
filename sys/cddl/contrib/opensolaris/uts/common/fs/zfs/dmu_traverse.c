@@ -44,6 +44,7 @@ boolean_t send_holes_without_birth_time = B_TRUE;
 
 #ifdef _KERNEL
 SYSCTL_DECL(_vfs_zfs);
+TUNABLE_INT("vfs.zfs.send_holes_without_birth_time", &send_holes_without_birth_time);
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, send_holes_without_birth_time, CTLFLAG_RWTUN,
     &send_holes_without_birth_time, 0, "Send holes without birth time");
 #endif
