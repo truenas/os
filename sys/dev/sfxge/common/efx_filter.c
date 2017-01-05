@@ -276,7 +276,7 @@ fail1:
 efx_filter_spec_init_rx(
 	__out		efx_filter_spec_t *spec,
 	__in		efx_filter_priority_t priority,
-	__in		efx_filter_flag_t flags,
+	__in		efx_filter_flags_t flags,
 	__in		efx_rxq_t *erp)
 {
 	EFSYS_ASSERT3P(spec, !=, NULL);
@@ -970,7 +970,7 @@ siena_filter_search(
 	__out		int *filter_index,
 	__out		unsigned int *depth_required)
 {
-	unsigned hash, incr, filter_idx, depth;
+	unsigned int hash, incr, filter_idx, depth;
 
 	hash = siena_filter_tbl_hash(key);
 	incr = siena_filter_tbl_increment(key);
@@ -1030,7 +1030,7 @@ siena_filter_tbl_clear(
 	siena_filter_t *sfp = enp->en_filter.ef_siena_filter;
 	siena_filter_tbl_t *sftp = &sfp->sf_tbl[tbl_id];
 	int index;
-	int state;
+	efsys_lock_state_t state;
 
 	EFSYS_LOCK(enp->en_eslp, state);
 
@@ -1178,7 +1178,8 @@ siena_filter_restore(
 	siena_filter_spec_t *spec;
 	efx_oword_t filter;
 	int filter_idx;
-	int state;
+	efsys_lock_state_t state;
+	uint32_t key;
 	efx_rc_t rc;
 
 	EFSYS_LOCK(enp->en_eslp, state);
@@ -1192,8 +1193,10 @@ siena_filter_restore(
 				continue;
 
 			spec = &sftp->sft_spec[filter_idx];
-			if ((rc = siena_filter_build(&filter, spec)) != 0)
+			if ((key = siena_filter_build(&filter, spec)) == 0) {
+				rc = EINVAL;
 				goto fail1;
+			}
 			if ((rc = siena_filter_push_entry(enp,
 				    spec->sfs_type, filter_idx, &filter)) != 0)
 				goto fail2;
@@ -1233,7 +1236,7 @@ siena_filter_add(
 	efx_oword_t filter;
 	int filter_idx;
 	unsigned int depth;
-	int state;
+	efsys_lock_state_t state;
 	uint32_t key;
 
 
@@ -1314,7 +1317,7 @@ siena_filter_delete(
 	efx_oword_t filter;
 	int filter_idx;
 	unsigned int depth;
-	int state;
+	efsys_lock_state_t state;
 	uint32_t key;
 
 	EFSYS_ASSERT3P(spec, !=, NULL);

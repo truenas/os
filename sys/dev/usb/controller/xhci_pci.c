@@ -122,6 +122,8 @@ xhci_pci_match(device_t self)
 		return ("Intel Wellsburg USB 3.0 controller");
 	case 0x9cb18086:
 		return ("Broadwell Integrated PCH-LP chipset USB 3.0 controller");
+	case 0x9d2f8086:
+		return ("Intel Sunrise Point-LP USB 3.0 controller");
 	case 0xa12f8086:
 		return ("Intel Sunrise Point USB 3.0 controller");
 
@@ -340,13 +342,7 @@ static int
 xhci_pci_detach(device_t self)
 {
 	struct xhci_softc *sc = device_get_softc(self);
-	device_t bdev;
 
-	if (sc->sc_bus.bdev != NULL) {
-		bdev = sc->sc_bus.bdev;
-		device_detach(bdev);
-		device_delete_child(self, bdev);
-	}
 	/* during module unload there are lots of children leftover */
 	device_delete_children(self);
 

@@ -21,13 +21,12 @@
 
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2011-2012 Pawel Jakub Dawidek <pawel@dawidek.net>.
- * All rights reserved.
+ * Copyright (c) 2011-2012 Pawel Jakub Dawidek. All rights reserved.
  * Copyright 2013 Martin Matuska <mm@FreeBSD.org>. All rights reserved.
  * Copyright 2014 Xin Li <delphij@FreeBSD.org>. All rights reserved.
  * Copyright 2015, OmniTI Computer Consulting, Inc. All rights reserved.
  * Copyright 2015 Nexenta Systems, Inc.  All rights reserved.
- * Copyright (c) 2014, Joyent, Inc. All rights reserved.
+ * Copyright (c) 2014, 2016 Joyent, Inc. All rights reserved.
  * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
@@ -500,6 +499,14 @@ zfs_secpolicy_write_perms(const char *name, const char *perm, cred_t *cr)
 	int error;
 	dsl_dataset_t *ds;
 	dsl_pool_t *dp;
+
+	/*
+	 * First do a quick check for root in the global zone, which
+	 * is allowed to do all write_perms.  This ensures that zfs_ioc_*
+	 * will get to handle nonexistent datasets.
+	 */
+	if (INGLOBALZONE(curthread) && secpolicy_zfs(cr) == 0)
+		return (0);
 
 	error = dsl_pool_hold(name, FTAG, &dp);
 	if (error != 0)
@@ -3464,6 +3471,53 @@ zfs_ioc_log_history(const char *unused, nvlist_t *innvl, nvlist_t *outnvl)
 	return (error);
 }
 
+#ifdef __FreeBSD__
+static int
+zfs_ioc_nextboot(const char *unused, nvlist_t *innvl, nvlist_t *outnvl)
+{
+	char name[MAXNAMELEN];
+	spa_t *spa;
+	vdev_t *vd;
+	char *command;
+	uint64_t pool_guid;
+	uint64_t vdev_guid;
+	int error;
+
+	if (nvlist_lookup_uint64(innvl,
+	    ZPOOL_CONFIG_POOL_GUID, &pool_guid) != 0)
+		return (EINVAL);
+	if (nvlist_lookup_uint64(innvl,
+	    ZPOOL_CONFIG_GUID, &vdev_guid) != 0)
+		return (EINVAL);
+	if (nvlist_lookup_string(innvl,
+	    "command", &command) != 0)
+		return (EINVAL);
+
+	mutex_enter(&spa_namespace_lock);
+	spa = spa_by_guid(pool_guid, vdev_guid);
+	if (spa != NULL)
+		strcpy(name, spa_name(spa));
+	mutex_exit(&spa_namespace_lock);
+	if (spa == NULL)
+		return (ENOENT);
+
+	if ((error = spa_open(name, &spa, FTAG)) != 0)
+		return (error);
+	spa_vdev_state_enter(spa, SCL_ALL);
+	vd = spa_lookup_by_guid(spa, vdev_guid, B_TRUE);
+	if (vd == NULL) {
+		(void) spa_vdev_state_exit(spa, NULL, ENXIO);
+		spa_close(spa, FTAG);
+		return (ENODEV);
+	}
+	error = vdev_label_write_pad2(vd, command, strlen(command));
+	(void) spa_vdev_state_exit(spa, NULL, 0);
+	txg_wait_synced(spa->spa_dsl_pool, 0);
+	spa_close(spa, FTAG);
+	return (error);
+}
+#endif
+
 /*
  * The dp_config_rwlock must not be held when calling this, because the
  * unmount may need to write out data.
@@ -3734,12 +3788,15 @@ zfs_ioc_rollback(const char *fsname, nvlist_t *args, nvlist_t *outnvl)
 	int error;
 
 	if (getzfsvfs(fsname, &zfsvfs) == 0) {
+		dsl_dataset_t *ds;
+
+		ds = dmu_objset_ds(zfsvfs->z_os);
 		error = zfs_suspend_fs(zfsvfs);
 		if (error == 0) {
 			int resume_err;
 
 			error = dsl_dataset_rollback(fsname, zfsvfs, outnvl);
-			resume_err = zfs_resume_fs(zfsvfs, fsname);
+			resume_err = zfs_resume_fs(zfsvfs, ds);
 			error = error ? error : resume_err;
 		}
 #ifdef illumos
@@ -4390,8 +4447,10 @@ zfs_ioc_recv(zfs_cmd_t *zc)
 
 		if (getzfsvfs(tofs, &zfsvfs) == 0) {
 			/* online recv */
+			dsl_dataset_t *ds;
 			int end_err;
 
+			ds = dmu_objset_ds(zfsvfs->z_os);
 			error = zfs_suspend_fs(zfsvfs);
 			/*
 			 * If the suspend fails, then the recv_end will
@@ -4399,7 +4458,7 @@ zfs_ioc_recv(zfs_cmd_t *zc)
 			 */
 			end_err = dmu_recv_end(&drc, zfsvfs);
 			if (error == 0)
-				error = zfs_resume_fs(zfsvfs, tofs);
+				error = zfs_resume_fs(zfsvfs, ds);
 			error = error ? error : end_err;
 #ifdef illumos
 			VFS_RELE(zfsvfs->z_vfs);
@@ -4945,11 +5004,14 @@ zfs_ioc_userspace_upgrade(zfs_cmd_t *zc)
 			 * objset needs to be closed & reopened (to grow the
 			 * objset_phys_t).  Suspend/resume the fs will do that.
 			 */
+			dsl_dataset_t *ds;
+
+			ds = dmu_objset_ds(zfsvfs->z_os);
 			error = zfs_suspend_fs(zfsvfs);
 			if (error == 0) {
 				dmu_objset_refresh_ownership(zfsvfs->z_os,
 				    zfsvfs);
-				error = zfs_resume_fs(zfsvfs, zc->zc_name);
+				error = zfs_resume_fs(zfsvfs, ds);
 			}
 		}
 		if (error == 0)
@@ -6026,6 +6088,9 @@ zfs_ioctl_init(void)
 	    zfs_secpolicy_config, POOL_CHECK_NONE);
 	zfs_ioctl_register_dataset_nolog(ZFS_IOC_UNJAIL, zfs_ioc_unjail,
 	    zfs_secpolicy_config, POOL_CHECK_NONE);
+	zfs_ioctl_register("fbsd_nextboot", ZFS_IOC_NEXTBOOT,
+	    zfs_ioc_nextboot, zfs_secpolicy_config, NO_NAME,
+	    POOL_CHECK_NONE, B_FALSE, B_FALSE);
 #endif
 }
 
@@ -6254,6 +6319,14 @@ zfsdev_ioctl(struct cdev *dev, u_long zcmd, caddr_t arg, int flag,
 				goto out;
 			}
 			break;
+		case ZFS_IOCVER_INLANES:
+			if (zc_iocparm->zfs_cmd_size != sizeof(zfs_cmd_inlanes_t)) {
+				error = SET_ERROR(EFAULT);
+				goto out;
+			}
+			compat = B_TRUE;
+			cflag = ZFS_CMD_COMPAT_INLANES;
+			break;
 		case ZFS_IOCVER_RESUME:
 			if (zc_iocparm->zfs_cmd_size != sizeof(zfs_cmd_resume_t)) {
 				error = SET_ERROR(EFAULT);
@@ -6361,7 +6434,7 @@ zfsdev_ioctl(struct cdev *dev, u_long zcmd, caddr_t arg, int flag,
 		break;
 	}
 
-	if (error == 0 && !(flag & FKIOCTL))
+	if (error == 0)
 		error = vec->zvec_secpolicy(zc, innvl, cr);
 
 	if (error != 0)

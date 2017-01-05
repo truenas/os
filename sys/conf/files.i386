@@ -7,6 +7,18 @@
 # limitations in config: backslash-newline doesn't work in strings, and
 # dependency lines other than the first are silently ignored.
 #
+cloudabi32_vdso.o		optional	compat_cloudabi32	\
+	dependency	"$S/contrib/cloudabi/cloudabi_vdso_i686.S" \
+	compile-with	"${CC} -x assembler-with-cpp -shared -nostdinc -nostdlib -Wl,-T$S/compat/cloudabi/cloudabi_vdso.lds $S/contrib/cloudabi/cloudabi_vdso_i686.S -o ${.TARGET}" \
+	no-obj no-implicit-rule						\
+	clean		"cloudabi32_vdso.o"
+#
+cloudabi32_vdso_blob.o		optional	compat_cloudabi32	\
+	dependency 	"cloudabi32_vdso.o"				\
+	compile-with	"${OBJCOPY} --input-target binary --output-target elf32-i386-freebsd --binary-architecture i386 cloudabi32_vdso.o ${.TARGET}" \
+	no-implicit-rule						\
+	clean		"cloudabi32_vdso_blob.o"
+#
 linux_genassym.o		optional	compat_linux		\
 	dependency 	"$S/i386/linux/linux_genassym.c"		\
 	compile-with	"${CC} ${CFLAGS:N-fno-common} -c ${.IMPSRC}"	\
@@ -213,6 +225,7 @@ dev/fe/if_fe_isa.c		optional fe isa
 dev/glxiic/glxiic.c		optional glxiic
 dev/glxsb/glxsb.c		optional glxsb
 dev/glxsb/glxsb_hash.c		optional glxsb
+dev/gpio/bytgpio.c		optional	bytgpio
 dev/hpt27xx/hpt27xx_os_bsd.c	optional hpt27xx
 dev/hpt27xx/hpt27xx_osm_bsd.c	optional hpt27xx
 dev/hpt27xx/hpt27xx_config.c	optional hpt27xx
@@ -236,24 +249,25 @@ dev/hwpmc/hwpmc_piv.c		optional hwpmc
 dev/hwpmc/hwpmc_ppro.c		optional hwpmc
 dev/hwpmc/hwpmc_tsc.c		optional hwpmc
 dev/hwpmc/hwpmc_x86.c		optional hwpmc
-dev/hyperv/netvsc/hv_net_vsc.c				optional	hyperv
-dev/hyperv/netvsc/hv_netvsc_drv_freebsd.c		optional	hyperv
-dev/hyperv/netvsc/hv_rndis_filter.c			optional	hyperv
-dev/hyperv/stordisengage/hv_ata_pci_disengage.c		optional	hyperv
+dev/hyperv/pcib/vmbus_pcib.c				optional	hyperv pci
+dev/hyperv/netvsc/hn_nvs.c				optional	hyperv
+dev/hyperv/netvsc/hn_rndis.c				optional	hyperv
+dev/hyperv/netvsc/if_hn.c				optional	hyperv
 dev/hyperv/storvsc/hv_storvsc_drv_freebsd.c		optional	hyperv
-dev/hyperv/utilities/hv_heartbeat.c			optional	hyperv
 dev/hyperv/utilities/hv_kvp.c				optional	hyperv
-dev/hyperv/utilities/hv_shutdown.c			optional	hyperv
-dev/hyperv/utilities/hv_timesync.c			optional	hyperv
-dev/hyperv/utilities/hv_util.c				optional	hyperv
-dev/hyperv/vmbus/hv_channel.c				optional	hyperv
-dev/hyperv/vmbus/hv_channel_mgmt.c			optional	hyperv
-dev/hyperv/vmbus/hv_connection.c			optional	hyperv
-dev/hyperv/vmbus/hv_ring_buffer.c			optional	hyperv
+dev/hyperv/utilities/hv_snapshot.c			optional	hyperv
+dev/hyperv/utilities/vmbus_heartbeat.c			optional	hyperv
+dev/hyperv/utilities/vmbus_ic.c				optional	hyperv
+dev/hyperv/utilities/vmbus_shutdown.c			optional	hyperv
+dev/hyperv/utilities/vmbus_timesync.c			optional	hyperv
 dev/hyperv/vmbus/hyperv.c				optional	hyperv
 dev/hyperv/vmbus/hyperv_busdma.c			optional	hyperv
-dev/hyperv/vmbus/vmbus.c				optional	hyperv
+dev/hyperv/vmbus/vmbus.c				optional	hyperv pci
+dev/hyperv/vmbus/vmbus_br.c				optional	hyperv
+dev/hyperv/vmbus/vmbus_chan.c				optional	hyperv
 dev/hyperv/vmbus/vmbus_et.c				optional	hyperv
+dev/hyperv/vmbus/vmbus_if.m				optional	hyperv
+dev/hyperv/vmbus/vmbus_xact.c				optional	hyperv
 dev/hyperv/vmbus/i386/hyperv_machdep.c			optional	hyperv
 dev/hyperv/vmbus/i386/vmbus_vector.S			optional	hyperv
 dev/ichwd/ichwd.c		optional ichwd
@@ -456,6 +470,7 @@ i386/bios/apm.c			optional apm
 i386/bios/mca_machdep.c		optional mca
 i386/bios/smapi.c		optional smapi
 i386/bios/smapi_bios.S		optional smapi
+i386/cloudabi32/cloudabi32_sysvec.c	optional compat_cloudabi32
 #i386/i386/apic_vector.s		optional apic
 i386/i386/atomic.c		standard		\
 	compile-with	"${CC} -c ${CFLAGS} ${DEFINED_PROF:S/^$/-fomit-frame-pointer/} ${.IMPSRC}"

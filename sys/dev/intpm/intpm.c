@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcivar.h>
 #include <dev/intpm/intpmreg.h>
+#include <dev/amdsbwd/amd_chipset.h>
 
 #include "opt_intpm.h"
 
@@ -103,12 +104,11 @@ intsmb_probe(device_t dev)
 	case 0x43721002:
 		device_set_desc(dev, "ATI IXP400 SMBus Controller");
 		break;
-	case 0x43851002:
+	case AMDSB_SMBUS_DEVID:
 		device_set_desc(dev, "AMD SB600/7xx/8xx/9xx SMBus Controller");
 		break;
-	case 0x780b1022:	/* AMD FCH */
-		if (pci_get_revid(dev) < 0x40)
-			return (ENXIO);
+	case AMDFCH_SMBUS_DEVID:	/* AMD FCH */
+	case AMDCZ_SMBUS_DEVID:		/* AMD Carizzo FCH */
 		device_set_desc(dev, "AMD FCH SMBus Controller");
 		break;
 	default:
@@ -119,7 +119,7 @@ intsmb_probe(device_t dev)
 }
 
 static uint8_t
-sb8xx_pmio_read(struct resource *res, uint8_t reg)
+amd_pmio_read(struct resource *res, uint8_t reg)
 {
 	bus_write_1(res, 0, reg);	/* Index */
 	return (bus_read_1(res, 1));	/* Data */
@@ -128,27 +128,18 @@ sb8xx_pmio_read(struct resource *res, uint8_t reg)
 static int
 sb8xx_attach(device_t dev)
 {
-	static const int	AMDSB_PMIO_INDEX = 0xcd6;
-	static const int	AMDSB_PMIO_WIDTH = 2;
-	static const int	AMDSB8_SMBUS_ADDR = 0x2c;
-	static const int		AMDSB8_SMBUS_EN = 0x01;
-	static const int		AMDSB8_SMBUS_ADDR_MASK = ~0x1fu;
 	static const int	AMDSB_SMBIO_WIDTH = 0x14;
-	static const int	AMDSB_SMBUS_CFG = 0x10;
-	static const int		AMDSB_SMBUS_IRQ = 0x01;
-	static const int		AMDSB_SMBUS_REV_MASK = ~0x0fu;
-	static const int		AMDSB_SMBUS_REV_SHIFT = 4;
-	static const int	AMDSB_IO_RID = 0;
-
 	struct intsmb_softc	*sc;
 	struct resource		*res;
+	uint32_t		devid;
+	uint8_t			revid;
 	uint16_t		addr;
-	uint8_t			cfg;
 	int			rid;
 	int			rc;
+	bool			enabled;
 
 	sc = device_get_softc(dev);
-	rid = AMDSB_IO_RID;
+	rid = 0;
 	rc = bus_set_resource(dev, SYS_RES_IOPORT, rid, AMDSB_PMIO_INDEX,
 	    AMDSB_PMIO_WIDTH);
 	if (rc != 0) {
@@ -156,26 +147,38 @@ sb8xx_attach(device_t dev)
 		return (ENXIO);
 	}
 	res = bus_alloc_resource_any(dev, SYS_RES_IOPORT, &rid,
-	    RF_ACTIVE | RF_SHAREABLE);
+	    RF_ACTIVE);
 	if (res == NULL) {
 		device_printf(dev, "bus_alloc_resource for PM IO failed\n");
 		return (ENXIO);
 	}
 
-	addr = sb8xx_pmio_read(res, AMDSB8_SMBUS_ADDR + 1);
-	addr <<= 8;
-	addr |= sb8xx_pmio_read(res, AMDSB8_SMBUS_ADDR);
+	devid = pci_get_devid(dev);
+	revid = pci_get_revid(dev);
+	if (devid == AMDSB_SMBUS_DEVID ||
+	    (devid == AMDFCH_SMBUS_DEVID && revid < AMDFCH41_SMBUS_REVID) ||
+	    (devid == AMDCZ_SMBUS_DEVID  && revid < AMDCZ49_SMBUS_REVID)) {
+		addr = amd_pmio_read(res, AMDSB8_PM_SMBUS_EN + 1);
+		addr <<= 8;
+		addr |= amd_pmio_read(res, AMDSB8_PM_SMBUS_EN);
+		enabled = (addr & AMDSB8_SMBUS_EN) != 0;
+		addr &= AMDSB8_SMBUS_ADDR_MASK;
+	} else {
+		addr = amd_pmio_read(res, AMDFCH41_PM_DECODE_EN0);
+		enabled = (addr & AMDFCH41_SMBUS_EN) != 0;
+		addr = amd_pmio_read(res, AMDFCH41_PM_DECODE_EN1);
+		addr <<= 8;
+	}
 
 	bus_release_resource(dev, SYS_RES_IOPORT, rid, res);
 	bus_delete_resource(dev, SYS_RES_IOPORT, rid);
 
-	if ((addr & AMDSB8_SMBUS_EN) == 0) {
-		device_printf(dev, "SB8xx SMBus not enabled\n");
+	if (!enabled) {
+		device_printf(dev, "SB8xx/SB9xx/FCH SMBus not enabled\n");
 		return (ENXIO);
 	}
 
-	addr &= AMDSB8_SMBUS_ADDR_MASK;
-	sc->io_rid = AMDSB_IO_RID;
+	sc->io_rid = 0;
 	rc = bus_set_resource(dev, SYS_RES_IOPORT, sc->io_rid, addr,
 	    AMDSB_SMBIO_WIDTH);
 	if (rc != 0) {
@@ -187,15 +190,8 @@ sb8xx_attach(device_t dev)
 		return (ENXIO);
 	}
 	sc->io_res = bus_alloc_resource_any(dev, SYS_RES_IOPORT, &sc->io_rid,
-	    RF_ACTIVE | RF_SHAREABLE);
-	cfg = bus_read_1(sc->io_res, AMDSB_SMBUS_CFG);
-
+	    RF_ACTIVE);
 	sc->poll = 1;
-	device_printf(dev, "intr %s disabled ",
-	    (cfg & AMDSB_SMBUS_IRQ) != 0 ? "IRQ" : "SMI");
-	printf("revision %d\n",
-	    (cfg & AMDSB_SMBUS_REV_MASK) >> AMDSB_SMBUS_REV_SHIFT);
-
 	return (0);
 }
 
@@ -237,11 +233,12 @@ intsmb_attach(device_t dev)
 		sc->cfg_irq9 = 1;
 		break;
 #endif
-	case 0x43851002:
-		if (pci_get_revid(dev) >= 0x40)
+	case AMDSB_SMBUS_DEVID:
+		if (pci_get_revid(dev) >= AMDSB8_SMBUS_REVID)
 			sc->sb8xx = 1;
 		break;
-	case 0x780b1022:
+	case AMDFCH_SMBUS_DEVID:
+	case AMDCZ_SMBUS_DEVID:
 		sc->sb8xx = 1;
 		break;
 	}
@@ -788,39 +785,11 @@ intsmb_readw(device_t dev, u_char slave, char cmd, short *word)
 	return (error);
 }
 
-/*
- * Data sheet claims that it implements all function, but also claims
- * that it implements 7 function and not mention PCALL. So I don't know
- * whether it will work.
- */
 static int
 intsmb_pcall(device_t dev, u_char slave, char cmd, short sdata, short *rdata)
 {
-#ifdef PROCCALL_TEST
-	struct intsmb_softc *sc = device_get_softc(dev);
-	int error;
 
-	INTSMB_LOCK(sc);
-	error = intsmb_free(sc);
-	if (error) {
-		INTSMB_UNLOCK(sc);
-		return (error);
-	}
-	bus_write_1(sc->io_res, PIIX4_SMBHSTADD, slave & ~LSB);
-	bus_write_1(sc->io_res, PIIX4_SMBHSTCMD, cmd);
-	bus_write_1(sc->io_res, PIIX4_SMBHSTDAT0, sdata & 0xff);
-	bus_write_1(sc->io_res, PIIX4_SMBHSTDAT1, (sdata & 0xff) >> 8);
-	intsmb_start(sc, PIIX4_SMBHSTCNT_PROT_WDATA, 0);
-	error = intsmb_stop(sc);
-	if (error == 0) {
-		*rdata = bus_read_1(sc->io_res, PIIX4_SMBHSTDAT0);
-		*rdata |= bus_read_1(sc->io_res, PIIX4_SMBHSTDAT1) << 8;
-	}
-	INTSMB_UNLOCK(sc);
-	return (error);
-#else
 	return (SMB_ENOTSUPP);
-#endif
 }
 
 static int
@@ -860,9 +829,6 @@ intsmb_bread(device_t dev, u_char slave, char cmd, u_char *count, char *buf)
 	int error, i;
 	u_char data, nread;
 
-	if (*count > SMBBLOCKTRANS_MAX || *count == 0)
-		return (SMB_EINVAL);
-
 	INTSMB_LOCK(sc);
 	error = intsmb_free(sc);
 	if (error) {
@@ -875,18 +841,14 @@ intsmb_bread(device_t dev, u_char slave, char cmd, u_char *count, char *buf)
 
 	bus_write_1(sc->io_res, PIIX4_SMBHSTADD, slave | LSB);
 	bus_write_1(sc->io_res, PIIX4_SMBHSTCMD, cmd);
-	bus_write_1(sc->io_res, PIIX4_SMBHSTDAT0, *count);
 	intsmb_start(sc, PIIX4_SMBHSTCNT_PROT_BLOCK, 0);
 	error = intsmb_stop(sc);
 	if (error == 0) {
 		nread = bus_read_1(sc->io_res, PIIX4_SMBHSTDAT0);
 		if (nread != 0 && nread <= SMBBLOCKTRANS_MAX) {
-			for (i = 0; i < nread; i++) {
-				data = bus_read_1(sc->io_res, PIIX4_SMBBLKDAT);
-				if (i < *count)
-					buf[i] = data;
-			}
 			*count = nread;
+			for (i = 0; i < nread; i++)
+				data = bus_read_1(sc->io_res, PIIX4_SMBBLKDAT);
 		} else
 			error = SMB_EBUSERR;
 	}

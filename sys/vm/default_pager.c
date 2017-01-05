@@ -63,6 +63,16 @@ static boolean_t default_pager_haspage(vm_object_t, vm_pindex_t, int *,
 		int *);
 /*
  * pagerops for OBJT_DEFAULT - "default pager".
+ *
+ * This pager handles anonymous (no handle) swap-backed memory, just
+ * like the swap pager.  It allows several optimizations based on the
+ * fact that no pages of a default object can be swapped out.  The
+ * most important optimization is in vm_fault(), where the pager is
+ * never asked for a non-resident page.  Instead, a freshly allocated
+ * zeroed page is used.
+ *
+ * On the first request to page out a page from a default object, the
+ * object is converted to swap pager type.
  */
 struct pagerops defaultpagerops = {
 	.pgo_alloc =	default_pager_alloc,
@@ -91,10 +101,8 @@ default_pager_alloc(void *handle, vm_ooffset_t size, vm_prot_t prot,
 	object = vm_object_allocate(OBJT_DEFAULT,
 	    OFF_TO_IDX(round_page(offset + size)));
 	if (cred != NULL) {
-		VM_OBJECT_WLOCK(object);
 		object->cred = cred;
 		object->charge = size;
-		VM_OBJECT_WUNLOCK(object);
 	}
 	return (object);
 }

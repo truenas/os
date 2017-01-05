@@ -454,7 +454,7 @@ __elfN(map_insert)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 			rv = vm_map_find(map, NULL, 0, &start, end - start, 0,
 			    VMFS_NO_SPACE, prot | VM_PROT_WRITE, VM_PROT_ALL,
 			    0);
-			if (rv)
+			if (rv != KERN_SUCCESS)
 				return (rv);
 			if (object == NULL)
 				return (KERN_SUCCESS);
@@ -469,9 +469,8 @@ __elfN(map_insert)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 				error = copyout((caddr_t)sf_buf_kva(sf) + off,
 				    (caddr_t)start, sz);
 				vm_imgact_unmap_page(sf);
-				if (error) {
+				if (error != 0)
 					return (KERN_FAILURE);
-				}
 				offset += sz;
 			}
 			rv = KERN_SUCCESS;
@@ -1823,8 +1822,12 @@ typedef vm_offset_t elf_ps_strings_t;
 static void
 __elfN(note_prpsinfo)(void *arg, struct sbuf *sb, size_t *sizep)
 {
+	struct sbuf sbarg;
+	size_t len;
+	char *cp, *end;
 	struct proc *p;
 	elf_prpsinfo_t *psinfo;
+	int error;
 
 	p = (struct proc *)arg;
 	if (sb != NULL) {
@@ -1833,13 +1836,44 @@ __elfN(note_prpsinfo)(void *arg, struct sbuf *sb, size_t *sizep)
 		psinfo->pr_version = PRPSINFO_VERSION;
 		psinfo->pr_psinfosz = sizeof(elf_prpsinfo_t);
 		strlcpy(psinfo->pr_fname, p->p_comm, sizeof(psinfo->pr_fname));
-		/*
-		 * XXX - We don't fill in the command line arguments properly
-		 * yet.
-		 */
-		strlcpy(psinfo->pr_psargs, p->p_comm,
-		    sizeof(psinfo->pr_psargs));
-
+		PROC_LOCK(p);
+		if (p->p_args != NULL) {
+			len = sizeof(psinfo->pr_psargs) - 1;
+			if (len > p->p_args->ar_length)
+				len = p->p_args->ar_length;
+			memcpy(psinfo->pr_psargs, p->p_args->ar_args, len);
+			PROC_UNLOCK(p);
+			error = 0;
+		} else {
+			_PHOLD(p);
+			PROC_UNLOCK(p);
+			sbuf_new(&sbarg, psinfo->pr_psargs,
+			    sizeof(psinfo->pr_psargs), SBUF_FIXEDLEN);
+			error = proc_getargv(curthread, p, &sbarg);
+			PRELE(p);
+			if (sbuf_finish(&sbarg) == 0)
+				len = sbuf_len(&sbarg) - 1;
+			else
+				len = sizeof(psinfo->pr_psargs) - 1;
+			sbuf_delete(&sbarg);
+		}
+		if (error || len == 0)
+			strlcpy(psinfo->pr_psargs, p->p_comm,
+			    sizeof(psinfo->pr_psargs));
+		else {
+			KASSERT(len < sizeof(psinfo->pr_psargs),
+			    ("len is too long: %zu vs %zu", len,
+			    sizeof(psinfo->pr_psargs)));
+			cp = psinfo->pr_psargs;
+			end = cp + len - 1;
+			for (;;) {
+				cp = memchr(cp, '\0', end - cp);
+				if (cp == NULL)
+					break;
+				*cp = ' ';
+			}
+		}
+		psinfo->pr_pid = p->p_pid;
 		sbuf_bcat(sb, psinfo, sizeof(*psinfo));
 		free(psinfo, M_TEMP);
 	}

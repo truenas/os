@@ -147,7 +147,7 @@ emac_sys_setup(struct emac_softc *sc)
 	int error;
 
 	/* Activate EMAC clock. */
-	error = clk_get_by_ofw_index(sc->emac_dev, 0, &sc->emac_clk);
+	error = clk_get_by_ofw_index(sc->emac_dev, 0, 0, &sc->emac_clk);
 	if (error != 0) {
 		device_printf(sc->emac_dev, "cannot get clock\n");
 		return (error);
@@ -783,6 +783,9 @@ emac_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 static int
 emac_probe(device_t dev)
 {
+
+	if (!ofw_bus_status_okay(dev))
+		return (ENXIO);
 
 	if (!ofw_bus_is_compatible(dev, "allwinner,sun4i-a10-emac"))
 		return (ENXIO);

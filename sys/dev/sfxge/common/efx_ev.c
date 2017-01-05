@@ -71,6 +71,7 @@ siena_ev_qcreate(
 	__in		size_t n,
 	__in		uint32_t id,
 	__in		uint32_t us,
+	__in		uint32_t flags,
 	__in		efx_evq_t *eep);
 
 static			void
@@ -228,6 +229,7 @@ efx_ev_qcreate(
 	__in		size_t n,
 	__in		uint32_t id,
 	__in		uint32_t us,
+	__in		uint32_t flags,
 	__deref_out	efx_evq_t **eepp)
 {
 	const efx_ev_ops_t *eevop = enp->en_eevop;
@@ -240,17 +242,32 @@ efx_ev_qcreate(
 
 	EFSYS_ASSERT3U(enp->en_ev_qcount + 1, <, encp->enc_evq_limit);
 
+	switch (flags & EFX_EVQ_FLAGS_NOTIFY_MASK) {
+	case EFX_EVQ_FLAGS_NOTIFY_INTERRUPT:
+		break;
+	case EFX_EVQ_FLAGS_NOTIFY_DISABLED:
+		if (us != 0) {
+			rc = EINVAL;
+			goto fail1;
+		}
+		break;
+	default:
+		rc = EINVAL;
+		goto fail2;
+	}
+
 	/* Allocate an EVQ object */
 	EFSYS_KMEM_ALLOC(enp->en_esip, sizeof (efx_evq_t), eep);
 	if (eep == NULL) {
 		rc = ENOMEM;
-		goto fail1;
+		goto fail3;
 	}
 
 	eep->ee_magic = EFX_EVQ_MAGIC;
 	eep->ee_enp = enp;
 	eep->ee_index = index;
 	eep->ee_mask = n - 1;
+	eep->ee_flags = flags;
 	eep->ee_esmp = esmp;
 
 	/*
@@ -264,17 +281,22 @@ efx_ev_qcreate(
 	enp->en_ev_qcount++;
 	*eepp = eep;
 
-	if ((rc = eevop->eevo_qcreate(enp, index, esmp, n, id, us, eep)) != 0)
-		goto fail2;
+	if ((rc = eevop->eevo_qcreate(enp, index, esmp, n, id, us, flags,
+	    eep)) != 0)
+		goto fail4;
 
 	return (0);
 
-fail2:
-	EFSYS_PROBE(fail2);
+fail4:
+	EFSYS_PROBE(fail4);
 
 	*eepp = NULL;
 	enp->en_ev_qcount--;
 	EFSYS_KMEM_FREE(enp->en_esip, sizeof (efx_evq_t), eep);
+fail3:
+	EFSYS_PROBE(fail3);
+fail2:
+	EFSYS_PROBE(fail2);
 fail1:
 	EFSYS_PROBE1(fail1, efx_rc_t, rc);
 	return (rc);
@@ -437,11 +459,19 @@ efx_ev_qmoderate(
 
 	EFSYS_ASSERT3U(eep->ee_magic, ==, EFX_EVQ_MAGIC);
 
-	if ((rc = eevop->eevo_qmoderate(eep, us)) != 0)
+	if ((eep->ee_flags & EFX_EVQ_FLAGS_NOTIFY_MASK) ==
+	    EFX_EVQ_FLAGS_NOTIFY_DISABLED) {
+		rc = EINVAL;
 		goto fail1;
+	}
+
+	if ((rc = eevop->eevo_qmoderate(eep, us)) != 0)
+		goto fail2;
 
 	return (0);
 
+fail2:
+	EFSYS_PROBE(fail2);
 fail1:
 	EFSYS_PROBE1(fail1, efx_rc_t, rc);
 	return (rc);
@@ -953,7 +983,7 @@ siena_ev_mcdi(
 	__in_opt	void *arg)
 {
 	efx_nic_t *enp = eep->ee_enp;
-	unsigned code;
+	unsigned int code;
 	boolean_t should_abort = B_FALSE;
 
 	EFSYS_ASSERT3U(enp->en_family, ==, EFX_FAMILY_SIENA);
@@ -1279,12 +1309,14 @@ siena_ev_qcreate(
 	__in		size_t n,
 	__in		uint32_t id,
 	__in		uint32_t us,
+	__in		uint32_t flags,
 	__in		efx_evq_t *eep)
 {
 	efx_nic_cfg_t *encp = &(enp->en_nic_cfg);
 	uint32_t size;
 	efx_oword_t oword;
 	efx_rc_t rc;
+	boolean_t notify_mode;
 
 	_NOTE(ARGUNUSED(esmp))
 
@@ -1325,8 +1357,13 @@ siena_ev_qcreate(
 	eep->ee_mcdi	= siena_ev_mcdi;
 #endif	/* EFSYS_OPT_MCDI */
 
+	notify_mode = ((flags & EFX_EVQ_FLAGS_NOTIFY_MASK) !=
+	    EFX_EVQ_FLAGS_NOTIFY_INTERRUPT);
+
 	/* Set up the new event queue */
-	EFX_POPULATE_OWORD_1(oword, FRF_CZ_TIMER_Q_EN, 1);
+	EFX_POPULATE_OWORD_3(oword, FRF_CZ_TIMER_Q_EN, 1,
+	    FRF_CZ_HOST_NOTIFY_MODE, notify_mode,
+	    FRF_CZ_TIMER_MODE, FFE_CZ_TIMER_MODE_DIS);
 	EFX_BAR_TBL_WRITEO(enp, FR_AZ_TIMER_TBL, index, &oword, B_TRUE);
 
 	EFX_POPULATE_OWORD_3(oword, FRF_AZ_EVQ_EN, 1, FRF_AZ_EVQ_SIZE, size,
@@ -1357,8 +1394,8 @@ fail1:
 
 #if EFSYS_OPT_QSTATS
 #if EFSYS_OPT_NAMES
-/* START MKCONFIG GENERATED EfxEventQueueStatNamesBlock b693ddf85aee1bfd */
-static const char 	*__efx_ev_qstat_name[] = {
+/* START MKCONFIG GENERATED EfxEventQueueStatNamesBlock c0f3bc5083b40532 */
+static const char * const __efx_ev_qstat_name[] = {
 	"all",
 	"rx",
 	"rx_ok",

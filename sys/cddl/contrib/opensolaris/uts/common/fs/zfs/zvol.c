@@ -169,6 +169,7 @@ typedef struct zvol_state {
 	uint32_t	zv_open_count[OTYPCNT];	/* open counts */
 #endif
 	uint32_t	zv_total_opens;	/* total open count */
+	uint32_t	zv_sync_cnt;	/* synchronous open count */
 	zilog_t		*zv_zilog;	/* ZIL handle */
 	list_t		zv_extents;	/* List of extents for dump */
 	znode_t		zv_znode;	/* for range locking */
@@ -782,8 +783,10 @@ zvol_remove_zv(zvol_state_t *zv)
 		g_topology_lock();
 		zvol_geom_destroy(zv);
 		g_topology_unlock();
-	} else if (zv->zv_volmode == ZFS_VOLMODE_DEV)
-		destroy_dev(zv->zv_dev);
+	} else if (zv->zv_volmode == ZFS_VOLMODE_DEV) {
+		if (zv->zv_dev != NULL)
+			destroy_dev(zv->zv_dev);
+	}
 #endif
 
 	avl_destroy(&zv->zv_znode.z_range_avl);
@@ -1435,7 +1438,9 @@ zvol_log_write(zvol_state_t *zv, dmu_tx_t *tx, offset_t off, ssize_t resid,
 		BP_ZERO(&lr->lr_blkptr);
 
 		itx->itx_private = zv;
-		itx->itx_sync = sync;
+
+		if (!sync && (zv->zv_sync_cnt == 0))
+			itx->itx_sync = B_FALSE;
 
 		zil_itx_assign(zilog, itx, tx);
 
@@ -1668,7 +1673,7 @@ zvol_strategy(struct bio *bp)
 		if (error != 0) {
 			dmu_tx_abort(tx);
 		} else {
-			zvol_log_truncate(zv, tx, off, resid, B_TRUE);
+			zvol_log_truncate(zv, tx, off, resid, sync);
 			dmu_tx_commit(tx);
 			error = dmu_free_long_range(zv->zv_objset, ZVOL_OBJ,
 			    off, resid);
@@ -2077,7 +2082,7 @@ zvol_log_truncate(zvol_state_t *zv, dmu_tx_t *tx, uint64_t off, uint64_t len,
 	lr->lr_offset = off;
 	lr->lr_length = len;
 
-	itx->itx_sync = sync;
+	itx->itx_sync = (sync || zv->zv_sync_cnt != 0);
 	zil_itx_assign(zilog, itx, tx);
 }
 
@@ -2973,14 +2978,14 @@ zvol_rename_minor(zvol_state_t *zv, const char *newname)
 	} else if (zv->zv_volmode == ZFS_VOLMODE_DEV) {
 		struct make_dev_args args;
 
-		dev = zv->zv_dev;
-		ASSERT(dev != NULL);
-		zv->zv_dev = NULL;
-		destroy_dev(dev);
-		if (zv->zv_total_opens > 0) {
-			zv->zv_flags &= ~ZVOL_EXCL;
-			zv->zv_total_opens = 0;
-			zvol_last_close(zv);
+		if ((dev = zv->zv_dev) != NULL) {
+			zv->zv_dev = NULL;
+			destroy_dev(dev);
+			if (zv->zv_total_opens > 0) {
+				zv->zv_flags &= ~ZVOL_EXCL;
+				zv->zv_total_opens = 0;
+				zvol_last_close(zv);
+			}
 		}
 
 		make_dev_args_init(&args);
@@ -3069,6 +3074,11 @@ zvol_d_open(struct cdev *dev, int flags, int fmt, struct thread *td)
 #endif
 
 	zv->zv_total_opens++;
+	if (flags & (FSYNC | FDSYNC)) {
+		zv->zv_sync_cnt++;
+		if (zv->zv_sync_cnt == 1)
+			zil_async_to_sync(zv->zv_zilog, ZVOL_OBJ);
+	}
 	mutex_exit(&zfsdev_state_lock);
 	return (err);
 out:
@@ -3099,6 +3109,8 @@ zvol_d_close(struct cdev *dev, int flags, int fmt, struct thread *td)
 	 * You may get multiple opens, but only one close.
 	 */
 	zv->zv_total_opens--;
+	if (flags & (FSYNC | FDSYNC))
+		zv->zv_sync_cnt--;
 
 	if (zv->zv_total_opens == 0)
 		zvol_last_close(zv);
@@ -3112,9 +3124,9 @@ zvol_d_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag, struct threa
 {
 	zvol_state_t *zv;
 	rl_t *rl;
-	off_t offset, length, chunk;
+	off_t offset, length;
 	int i, error;
-	u_int u;
+	boolean_t sync;
 
 	zv = dev->si_drv2;
 
@@ -3152,15 +3164,17 @@ zvol_d_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag, struct threa
 		dmu_tx_t *tx = dmu_tx_create(zv->zv_objset);
 		error = dmu_tx_assign(tx, TXG_WAIT);
 		if (error != 0) {
+			sync = FALSE;
 			dmu_tx_abort(tx);
 		} else {
-			zvol_log_truncate(zv, tx, offset, length, B_TRUE);
+			sync = (zv->zv_objset->os_sync == ZFS_SYNC_ALWAYS);
+			zvol_log_truncate(zv, tx, offset, length, sync);
 			dmu_tx_commit(tx);
 			error = dmu_free_long_range(zv->zv_objset, ZVOL_OBJ,
 			    offset, length);
 		}
 		zfs_range_unlock(rl);
-		if (zv->zv_objset->os_sync == ZFS_SYNC_ALWAYS)
+		if (sync)
 			zil_commit(zv->zv_zilog, ZVOL_OBJ);
 		break;
 	case DIOCGSTRIPESIZE:

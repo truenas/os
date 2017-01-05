@@ -95,7 +95,7 @@ typedef struct efx_ev_ops_s {
 	void		(*eevo_fini)(efx_nic_t *);
 	efx_rc_t	(*eevo_qcreate)(efx_nic_t *, unsigned int,
 					  efsys_mem_t *, size_t, uint32_t,
-					  uint32_t, efx_evq_t *);
+					  uint32_t, uint32_t, efx_evq_t *);
 	void		(*eevo_qdestroy)(efx_evq_t *);
 	efx_rc_t	(*eevo_qprime)(efx_evq_t *, unsigned int);
 	void		(*eevo_qpost)(efx_evq_t *, uint16_t);
@@ -124,7 +124,7 @@ typedef struct efx_tx_ops_s {
 	void		(*etxo_qenable)(efx_txq_t *);
 	efx_rc_t	(*etxo_qpio_enable)(efx_txq_t *);
 	void		(*etxo_qpio_disable)(efx_txq_t *);
-	efx_rc_t	(*etxo_qpio_write)(efx_txq_t *,uint8_t *, size_t,
+	efx_rc_t	(*etxo_qpio_write)(efx_txq_t *, uint8_t *, size_t,
 					   size_t);
 	efx_rc_t	(*etxo_qpio_post)(efx_txq_t *, size_t, unsigned int,
 					   unsigned int *);
@@ -194,6 +194,7 @@ typedef struct efx_mac_ops_s {
 					    efx_loopback_type_t);
 #endif	/* EFSYS_OPT_LOOPBACK */
 #if EFSYS_OPT_MAC_STATS
+	efx_rc_t	(*emo_stats_get_mask)(efx_nic_t *, uint32_t *, size_t);
 	efx_rc_t	(*emo_stats_upload)(efx_nic_t *, efsys_mem_t *);
 	efx_rc_t	(*emo_stats_periodic)(efx_nic_t *, efsys_mem_t *,
 					      uint16_t, boolean_t);
@@ -252,7 +253,7 @@ efx_filter_reconfigure(
 
 typedef struct efx_port_s {
 	efx_mac_type_t		ep_mac_type;
-	uint32_t  		ep_phy_type;
+	uint32_t		ep_phy_type;
 	uint8_t			ep_port;
 	uint32_t		ep_mac_pdu;
 	uint8_t			ep_mac_addr[6];
@@ -564,7 +565,7 @@ typedef struct efx_lic_ops_s {
 	efx_rc_t	(*elo_find_start)
 				(efx_nic_t *, caddr_t, size_t, uint32_t *);
 	efx_rc_t	(*elo_find_end)(efx_nic_t *, caddr_t, size_t,
-				uint32_t , uint32_t *);
+				uint32_t, uint32_t *);
 	boolean_t	(*elo_find_key)(efx_nic_t *, caddr_t, size_t,
 				uint32_t, uint32_t *, uint32_t *);
 	boolean_t	(*elo_validate_key)(efx_nic_t *,
@@ -600,7 +601,7 @@ struct efx_nic_s {
 	uint32_t		en_features;
 	efsys_identifier_t	*en_esip;
 	efsys_lock_t		*en_eslp;
-	efsys_bar_t 		*en_esbp;
+	efsys_bar_t		*en_esbp;
 	unsigned int		en_mod_flags;
 	unsigned int		en_reset_flags;
 	efx_nic_cfg_t		en_nic_cfg;
@@ -709,6 +710,8 @@ struct efx_evq_s {
 #endif	/* EFSYS_OPT_MCDI */
 
 	efx_evq_rxq_state_t		ee_rxq_state[EFX_EV_RX_NLABELS];
+
+	uint32_t			ee_flags;
 };
 
 #define	EFX_EVQ_MAGIC	0x08081997
@@ -801,7 +804,7 @@ struct efx_txq_s {
 #else
 #define	EFX_CHECK_REG(_enp, _reg) do {					\
 	_NOTE(CONSTANTCONDITION)					\
-	} while(B_FALSE)
+	} while (B_FALSE)
 #endif
 
 #define	EFX_BAR_READD(_enp, _reg, _edp, _lock)				\
@@ -913,7 +916,7 @@ struct efx_txq_s {
 		    uint32_t, (_edp)->ed_u32[0]);			\
 		EFSYS_BAR_WRITED((_enp)->en_esbp,			\
 		    (_reg ## _OFST +					\
-		    (2 * sizeof (efx_dword_t)) + 			\
+		    (2 * sizeof (efx_dword_t)) +			\
 		    ((_index) * _reg ## _STEP)),			\
 		    (_edp), (_lock));					\
 	_NOTE(CONSTANTCONDITION)					\
@@ -928,7 +931,7 @@ struct efx_txq_s {
 		    uint32_t, (_edp)->ed_u32[0]);			\
 		EFSYS_BAR_WRITED((_enp)->en_esbp,			\
 		    (_reg ## _OFST +					\
-		    (3 * sizeof (efx_dword_t)) + 			\
+		    (3 * sizeof (efx_dword_t)) +			\
 		    ((_index) * _reg ## _STEP)),			\
 		    (_edp), (_lock));					\
 	_NOTE(CONSTANTCONDITION)					\
@@ -1154,6 +1157,27 @@ efx_mcdi_get_workarounds(
 	__out_opt		uint32_t *enabledp);
 
 #endif /* EFSYS_OPT_MCDI */
+
+#if EFSYS_OPT_MAC_STATS
+
+/*
+ * Closed range of stats (i.e. the first and the last are included).
+ * The last must be greater or equal (if the range is one item only) to
+ * the first.
+ */
+struct efx_mac_stats_range {
+	efx_mac_stat_t		first;
+	efx_mac_stat_t		last;
+};
+
+extern					efx_rc_t
+efx_mac_stats_mask_add_ranges(
+	__inout_bcount(mask_size)	uint32_t *maskp,
+	__in				size_t mask_size,
+	__in_ecount(rng_count)		const struct efx_mac_stats_range *rngp,
+	__in				unsigned int rng_count);
+
+#endif	/* EFSYS_OPT_MAC_STATS */
 
 #ifdef	__cplusplus
 }

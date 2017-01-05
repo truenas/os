@@ -39,6 +39,7 @@
 #include <sys/zfs_context.h>
 #include <sys/dsl_deadlist.h>
 #include <sys/refcount.h>
+#include <sys/rrwlock.h>
 #include <zfeature_common.h>
 
 #ifdef	__cplusplus
@@ -84,13 +85,6 @@ struct dsl_pool;
  * in the refcount of the SPA_FEATURES_BOOKMARKS feature.
  */
 #define	DS_FIELD_BOOKMARK_NAMES "com.delphix:bookmarks"
-
-/*
- * This field is present (with value=0) if this dataset may contain large
- * blocks (>128KB).  If it is present, then this dataset
- * is counted in the refcount of the SPA_FEATURE_LARGE_BLOCKS feature.
- */
-#define	DS_FIELD_LARGE_BLOCKS "org.open-zfs:large_blocks"
 
 /*
  * These fields are set on datasets that are in the middle of a resumable
@@ -148,6 +142,7 @@ typedef struct dsl_dataset_phys {
 
 typedef struct dsl_dataset {
 	dmu_buf_user_t ds_dbu;
+	rrwlock_t ds_bp_rwlock; /* Protects ds_phys->ds_bp */
 
 	/* Immutable: */
 	struct dsl_dir *ds_dir;
@@ -272,7 +267,6 @@ int dsl_dataset_snapshot_tmp(const char *fsname, const char *snapname,
     minor_t cleanup_minor, const char *htag);
 
 blkptr_t *dsl_dataset_get_blkptr(dsl_dataset_t *ds);
-void dsl_dataset_set_blkptr(dsl_dataset_t *ds, blkptr_t *bp, dmu_tx_t *tx);
 
 spa_t *dsl_dataset_get_spa(dsl_dataset_t *ds);
 
@@ -280,6 +274,7 @@ boolean_t dsl_dataset_modified_since_snap(dsl_dataset_t *ds,
     dsl_dataset_t *snap);
 
 void dsl_dataset_sync(dsl_dataset_t *os, zio_t *zio, dmu_tx_t *tx);
+void dsl_dataset_sync_done(dsl_dataset_t *os, dmu_tx_t *tx);
 
 void dsl_dataset_block_born(dsl_dataset_t *ds, const blkptr_t *bp,
     dmu_tx_t *tx);
