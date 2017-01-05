@@ -31,46 +31,70 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
+#include <sys/reboot.h>
 #include <sys/systm.h>
 
 #include <dev/hyperv/include/hyperv.h>
 #include <dev/hyperv/include/vmbus.h>
-#include <dev/hyperv/utilities/hv_util.h>
 #include <dev/hyperv/utilities/vmbus_icreg.h>
+#include <dev/hyperv/utilities/vmbus_icvar.h>
 
-#include "vmbus_if.h"
+#define VMBUS_SHUTDOWN_FWVER_MAJOR	3
+#define VMBUS_SHUTDOWN_FWVER		\
+	VMBUS_IC_VERSION(VMBUS_SHUTDOWN_FWVER_MAJOR, 0)
 
-#define VMBUS_HEARTBEAT_FWVER_MAJOR	3
-#define VMBUS_HEARTBEAT_FWVER		\
-	VMBUS_IC_VERSION(VMBUS_HEARTBEAT_FWVER_MAJOR, 0)
+#define VMBUS_SHUTDOWN_MSGVER_MAJOR	3
+#define VMBUS_SHUTDOWN_MSGVER		\
+	VMBUS_IC_VERSION(VMBUS_SHUTDOWN_MSGVER_MAJOR, 0)
 
-#define VMBUS_HEARTBEAT_MSGVER_MAJOR	3
-#define VMBUS_HEARTBEAT_MSGVER		\
-	VMBUS_IC_VERSION(VMBUS_HEARTBEAT_MSGVER_MAJOR, 0)
+static int			vmbus_shutdown_probe(device_t);
+static int			vmbus_shutdown_attach(device_t);
 
-static const struct vmbus_ic_desc vmbus_heartbeat_descs[] = {
+static const struct vmbus_ic_desc vmbus_shutdown_descs[] = {
 	{
 		.ic_guid = { .hv_guid = {
-		    0x39, 0x4f, 0x16, 0x57, 0x15, 0x91, 0x78, 0x4e,
-		    0xab, 0x55, 0x38, 0x2f, 0x3b, 0xd5, 0x42, 0x2d} },
-		.ic_desc = "Hyper-V Heartbeat"
+		    0x31, 0x60, 0x0b, 0x0e, 0x13, 0x52, 0x34, 0x49,
+		    0x81, 0x8b, 0x38, 0xd9, 0x0c, 0xed, 0x39, 0xdb } },
+		.ic_desc = "Hyper-V Shutdown"
 	},
 	VMBUS_IC_DESC_END
 };
 
+static device_method_t vmbus_shutdown_methods[] = {
+	/* Device interface */
+	DEVMETHOD(device_probe,		vmbus_shutdown_probe),
+	DEVMETHOD(device_attach,	vmbus_shutdown_attach),
+	DEVMETHOD(device_detach,	vmbus_ic_detach),
+	DEVMETHOD_END
+};
+
+static driver_t vmbus_shutdown_driver = {
+	"hvshutdown",
+	vmbus_shutdown_methods,
+	sizeof(struct vmbus_ic_softc)
+};
+
+static devclass_t vmbus_shutdown_devclass;
+
+DRIVER_MODULE(hv_shutdown, vmbus, vmbus_shutdown_driver,
+    vmbus_shutdown_devclass, NULL, NULL);
+MODULE_VERSION(hv_shutdown, 1);
+MODULE_DEPEND(hv_shutdown, vmbus, 1, 1, 1);
+
 static void
-vmbus_heartbeat_cb(struct vmbus_channel *chan, void *xsc)
+vmbus_shutdown_cb(struct vmbus_channel *chan, void *xsc)
 {
-	struct hv_util_sc *sc = xsc;
+	struct vmbus_ic_softc *sc = xsc;
 	struct vmbus_icmsg_hdr *hdr;
-	int dlen, error;
+	struct vmbus_icmsg_shutdown *msg;
+	int dlen, error, do_shutdown = 0;
 	uint64_t xactid;
 	void *data;
 
 	/*
 	 * Receive request.
 	 */
-	data = sc->receive_buffer;
+	data = sc->ic_buf;
 	dlen = sc->ic_buflen;
 	error = vmbus_chan_recv(chan, data, &dlen, &xactid);
 	KASSERT(error != ENOBUFS, ("icbuf is not large enough"));
@@ -89,19 +113,29 @@ vmbus_heartbeat_cb(struct vmbus_channel *chan, void *xsc)
 	switch (hdr->ic_type) {
 	case VMBUS_ICMSG_TYPE_NEGOTIATE:
 		error = vmbus_ic_negomsg(sc, data, &dlen,
-		    VMBUS_HEARTBEAT_FWVER, VMBUS_HEARTBEAT_MSGVER);
+		    VMBUS_SHUTDOWN_FWVER, VMBUS_SHUTDOWN_MSGVER);
 		if (error)
 			return;
 		break;
 
-	case VMBUS_ICMSG_TYPE_HEARTBEAT:
-		/* Only ic_seq is a must */
-		if (dlen < VMBUS_ICMSG_HEARTBEAT_SIZE_MIN) {
-			device_printf(sc->ic_dev, "invalid heartbeat len %d\n",
+	case VMBUS_ICMSG_TYPE_SHUTDOWN:
+		if (dlen < VMBUS_ICMSG_SHUTDOWN_SIZE_MIN) {
+			device_printf(sc->ic_dev, "invalid shutdown len %d\n",
 			    dlen);
 			return;
 		}
-		((struct vmbus_icmsg_heartbeat *)data)->ic_seq++;
+		msg = data;
+
+		/* XXX ic_flags definition? */
+		if (msg->ic_haltflags == 0 || msg->ic_haltflags == 1) {
+			device_printf(sc->ic_dev, "shutdown requested\n");
+			hdr->ic_status = VMBUS_ICMSG_STATUS_OK;
+			do_shutdown = 1;
+		} else {
+			device_printf(sc->ic_dev, "unknown shutdown flags "
+			    "0x%08x\n", msg->ic_haltflags);
+			hdr->ic_status = VMBUS_ICMSG_STATUS_FAIL;
+		}
 		break;
 
 	default:
@@ -110,41 +144,24 @@ vmbus_heartbeat_cb(struct vmbus_channel *chan, void *xsc)
 	}
 
 	/*
-	 * Send response by echoing the updated request back.
+	 * Send response by echoing the request back.
 	 */
-	hdr->ic_flags = VMBUS_ICMSG_FLAG_XACT | VMBUS_ICMSG_FLAG_RESP;
-	error = vmbus_chan_send(chan, VMBUS_CHANPKT_TYPE_INBAND, 0,
-	    data, dlen, xactid);
-	if (error)
-		device_printf(sc->ic_dev, "resp send failed: %d\n", error);
+	vmbus_ic_sendresp(sc, chan, data, dlen, xactid);
+
+	if (do_shutdown)
+		shutdown_nice(RB_POWEROFF);
 }
 
 static int
-hv_heartbeat_probe(device_t dev)
+vmbus_shutdown_probe(device_t dev)
 {
 
-	return (vmbus_ic_probe(dev, vmbus_heartbeat_descs));
+	return (vmbus_ic_probe(dev, vmbus_shutdown_descs));
 }
 
 static int
-hv_heartbeat_attach(device_t dev)
+vmbus_shutdown_attach(device_t dev)
 {
 
-	return (hv_util_attach(dev, vmbus_heartbeat_cb));
+	return (vmbus_ic_attach(dev, vmbus_shutdown_cb));
 }
-
-static device_method_t heartbeat_methods[] = {
-	/* Device interface */
-	DEVMETHOD(device_probe, hv_heartbeat_probe),
-	DEVMETHOD(device_attach, hv_heartbeat_attach),
-	DEVMETHOD(device_detach, hv_util_detach),
-	{ 0, 0 }
-};
-
-static driver_t heartbeat_driver = { "hvheartbeat", heartbeat_methods, sizeof(hv_util_sc)};
-
-static devclass_t heartbeat_devclass;
-
-DRIVER_MODULE(hv_heartbeat, vmbus, heartbeat_driver, heartbeat_devclass, NULL, NULL);
-MODULE_VERSION(hv_heartbeat, 1);
-MODULE_DEPEND(hv_heartbeat, vmbus, 1, 1, 1);

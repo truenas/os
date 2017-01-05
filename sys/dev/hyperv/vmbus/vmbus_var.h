@@ -93,7 +93,7 @@ struct vmbus_softc {
 
 	u_long			*vmbus_rx_evtflags;
 						/* compat evtflgs from host */
-	struct vmbus_channel	**vmbus_chmap;
+	struct vmbus_channel *volatile *vmbus_chmap;
 	struct vmbus_xact_ctx	*vmbus_xc;
 	struct vmbus_pcpu_data	vmbus_pcpu[MAXCPU];
 
@@ -160,8 +160,13 @@ void		vmbus_msghc_put(struct vmbus_softc *, struct vmbus_msghc *);
 void		*vmbus_msghc_dataptr(struct vmbus_msghc *);
 int		vmbus_msghc_exec_noresult(struct vmbus_msghc *);
 int		vmbus_msghc_exec(struct vmbus_softc *, struct vmbus_msghc *);
+void		vmbus_msghc_exec_cancel(struct vmbus_softc *,
+		    struct vmbus_msghc *);
 const struct vmbus_message *
 		vmbus_msghc_wait_result(struct vmbus_softc *,
+		    struct vmbus_msghc *);
+const struct vmbus_message *
+		vmbus_msghc_poll_result(struct vmbus_softc *,
 		    struct vmbus_msghc *);
 void		vmbus_msghc_wakeup(struct vmbus_softc *,
 		    const struct vmbus_message *);
