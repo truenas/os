@@ -26,38 +26,31 @@
  * $FreeBSD$
  */
 
-#ifndef _VMBUS_XACT_H_
-#define _VMBUS_XACT_H_
+#ifndef _VSS_H
+#define _VSS_H
+#include <sys/ioccom.h>
+#define FS_VSS_DEV_NAME		"hv_fsvss_dev"
+#define APP_VSS_DEV_NAME	"hv_appvss_dev"
 
-#include <sys/param.h>
-#include <sys/bus.h>
+#define VSS_DEV(VSS)		"/dev/"VSS
 
-struct vmbus_xact;
-struct vmbus_xact_ctx;
+#define VSS_SUCCESS		0x00000000
+#define VSS_FAIL		0x00000001
 
-struct vmbus_xact_ctx	*vmbus_xact_ctx_create(bus_dma_tag_t dtag,
-			    size_t req_size, size_t resp_size,
-			    size_t priv_size);
-void			vmbus_xact_ctx_destroy(struct vmbus_xact_ctx *ctx);
-bool			vmbus_xact_ctx_orphan(struct vmbus_xact_ctx *ctx);
+enum hv_vss_op_t {
+	HV_VSS_NONE = 0,
+	HV_VSS_CHECK,
+	HV_VSS_FREEZE,
+	HV_VSS_THAW,
+	HV_VSS_COUNT
+};
 
-struct vmbus_xact	*vmbus_xact_get(struct vmbus_xact_ctx *ctx,
-			    size_t req_len);
-void			vmbus_xact_put(struct vmbus_xact *xact);
-
-void			*vmbus_xact_req_data(const struct vmbus_xact *xact);
-bus_addr_t		vmbus_xact_req_paddr(const struct vmbus_xact *xact);
-void			*vmbus_xact_priv(const struct vmbus_xact *xact,
-			    size_t priv_len);
-void			vmbus_xact_activate(struct vmbus_xact *xact);
-void			vmbus_xact_deactivate(struct vmbus_xact *xact);
-const void		*vmbus_xact_wait(struct vmbus_xact *xact,
-			    size_t *resp_len);
-const void		*vmbus_xact_busywait(struct vmbus_xact *xact,
-			    size_t *resp_len);
-void			vmbus_xact_wakeup(struct vmbus_xact *xact,
-			    const void *data, size_t dlen);
-void			vmbus_xact_ctx_wakeup(struct vmbus_xact_ctx *ctx,
-			    const void *data, size_t dlen);
-
-#endif	/* !_VMBUS_XACT_H_ */
+struct hv_vss_opt_msg {
+	uint32_t	opt;		/* operation */
+	uint32_t	status;		/* 0 for success, 1 for error */
+	uint64_t	msgid;		/* an ID used to identify the transaction */
+	uint8_t		reserved[48];	/* reserved values are all zeroes */
+};
+#define IOCHVVSSREAD		_IOR('v', 2, struct hv_vss_opt_msg)
+#define IOCHVVSSWRITE		_IOW('v', 3, struct hv_vss_opt_msg)
+#endif
