@@ -608,7 +608,7 @@ sfxge_tx_qdpl_put_unlocked(struct sfxge_txq *txq, struct mbuf *mbuf)
 	volatile uintptr_t *putp;
 	uintptr_t old;
 	uintptr_t new;
-	unsigned old_len;
+	unsigned int put_count;
 
 	KASSERT(mbuf->m_nextpkt == NULL, ("mbuf->m_nextpkt != NULL"));
 
@@ -622,14 +622,14 @@ sfxge_tx_qdpl_put_unlocked(struct sfxge_txq *txq, struct mbuf *mbuf)
 		old = *putp;
 		if (old != 0) {
 			struct mbuf *mp = (struct mbuf *)old;
-			old_len = mp->m_pkthdr.csum_data;
+			put_count = mp->m_pkthdr.csum_data;
 		} else
-			old_len = 0;
-		if (old_len >= stdp->std_put_max) {
+			put_count = 0;
+		if (put_count >= stdp->std_put_max) {
 			atomic_add_long(&txq->put_overflow, 1);
 			return (ENOBUFS);
 		}
-		mbuf->m_pkthdr.csum_data = old_len + 1;
+		mbuf->m_pkthdr.csum_data = put_count + 1;
 		mbuf->m_nextpkt = (void *)old;
 	} while (atomic_cmpset_ptr(putp, old, new) == 0);
 
@@ -838,8 +838,9 @@ sfxge_if_transmit(struct ifnet *ifp, struct mbuf *m)
 		/* check if flowid is set */
 		if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE) {
 			uint32_t hash = m->m_pkthdr.flowid;
+			uint32_t idx = hash % nitems(sc->rx_indir_table);
 
-			index = sc->rx_indir_table[hash % SFXGE_RX_SCALE_MAX];
+			index = sc->rx_indir_table[idx];
 		}
 #endif
 #if SFXGE_TX_PARSE_EARLY
@@ -1784,26 +1785,6 @@ sfxge_tx_qinit(struct sfxge_softc *sc, unsigned int txq_index,
 	    (rc = tso_init(txq)) != 0)
 		goto fail3;
 
-	if (sfxge_tx_dpl_get_max <= 0) {
-		log(LOG_ERR, "%s=%d must be greater than 0",
-		    SFXGE_PARAM_TX_DPL_GET_MAX, sfxge_tx_dpl_get_max);
-		rc = EINVAL;
-		goto fail_tx_dpl_get_max;
-	}
-	if (sfxge_tx_dpl_get_non_tcp_max <= 0) {
-		log(LOG_ERR, "%s=%d must be greater than 0",
-		    SFXGE_PARAM_TX_DPL_GET_NON_TCP_MAX,
-		    sfxge_tx_dpl_get_non_tcp_max);
-		rc = EINVAL;
-		goto fail_tx_dpl_get_max;
-	}
-	if (sfxge_tx_dpl_put_max < 0) {
-		log(LOG_ERR, "%s=%d must be greater or equal to 0",
-		    SFXGE_PARAM_TX_DPL_PUT_MAX, sfxge_tx_dpl_put_max);
-		rc = EINVAL;
-		goto fail_tx_dpl_put_max;
-	}
-
 	/* Initialize the deferred packet list. */
 	stdp = &txq->dpl;
 	stdp->std_put_max = sfxge_tx_dpl_put_max;
@@ -1848,8 +1829,6 @@ sfxge_tx_qinit(struct sfxge_softc *sc, unsigned int txq_index,
 
 fail_txq_stat_init:
 fail_dpl_node:
-fail_tx_dpl_put_max:
-fail_tx_dpl_get_max:
 fail3:
 fail_txq_node:
 	free(txq->pend_desc, M_SFXGE);
@@ -1950,6 +1929,26 @@ sfxge_tx_init(struct sfxge_softc *sc)
 	KASSERT(intr->state == SFXGE_INTR_INITIALIZED,
 	    ("intr->state != SFXGE_INTR_INITIALIZED"));
 
+	if (sfxge_tx_dpl_get_max <= 0) {
+		log(LOG_ERR, "%s=%d must be greater than 0",
+		    SFXGE_PARAM_TX_DPL_GET_MAX, sfxge_tx_dpl_get_max);
+		rc = EINVAL;
+		goto fail_tx_dpl_get_max;
+	}
+	if (sfxge_tx_dpl_get_non_tcp_max <= 0) {
+		log(LOG_ERR, "%s=%d must be greater than 0",
+		    SFXGE_PARAM_TX_DPL_GET_NON_TCP_MAX,
+		    sfxge_tx_dpl_get_non_tcp_max);
+		rc = EINVAL;
+		goto fail_tx_dpl_get_non_tcp_max;
+	}
+	if (sfxge_tx_dpl_put_max < 0) {
+		log(LOG_ERR, "%s=%d must be greater or equal to 0",
+		    SFXGE_PARAM_TX_DPL_PUT_MAX, sfxge_tx_dpl_put_max);
+		rc = EINVAL;
+		goto fail_tx_dpl_put_max;
+	}
+
 	sc->txq_count = SFXGE_TXQ_NTYPES - 1 + sc->intr.n_alloc;
 
 	sc->tso_fw_assisted = sfxge_tso_fw_assisted;
@@ -2002,5 +2001,8 @@ fail2:
 fail:
 fail_txq_node:
 	sc->txq_count = 0;
+fail_tx_dpl_put_max:
+fail_tx_dpl_get_non_tcp_max:
+fail_tx_dpl_get_max:
 	return (rc);
 }

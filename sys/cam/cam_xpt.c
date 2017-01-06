@@ -1097,7 +1097,7 @@ xpt_denounce_periph(struct cam_periph *periph)
 int
 xpt_getattr(char *buf, size_t len, const char *attr, struct cam_path *path)
 {
-	int ret = -1, l;
+	int ret = -1, l, o;
 	struct ccb_dev_advinfo cdai;
 	struct scsi_vpd_id_descriptor *idd;
 
@@ -1106,6 +1106,7 @@ xpt_getattr(char *buf, size_t len, const char *attr, struct cam_path *path)
 	memset(&cdai, 0, sizeof(cdai));
 	xpt_setup_ccb(&cdai.ccb_h, path, CAM_PRIORITY_NORMAL);
 	cdai.ccb_h.func_code = XPT_DEV_ADVINFO;
+	cdai.flags = CDAI_FLAG_NONE;
 	cdai.bufsiz = len;
 
 	if (!strcmp(attr, "GEOM::ident"))
@@ -1136,6 +1137,12 @@ xpt_getattr(char *buf, size_t len, const char *attr, struct cam_path *path)
 			if (idd == NULL)
 				idd = scsi_get_devid((struct scsi_vpd_device_id *)cdai.buf,
 				    cdai.provsiz, scsi_devid_is_lun_eui64);
+			if (idd == NULL)
+				idd = scsi_get_devid((struct scsi_vpd_device_id *)cdai.buf,
+				    cdai.provsiz, scsi_devid_is_lun_uuid);
+			if (idd == NULL)
+				idd = scsi_get_devid((struct scsi_vpd_device_id *)cdai.buf,
+				    cdai.provsiz, scsi_devid_is_lun_md5);
 		} else
 			idd = NULL;
 		if (idd == NULL)
@@ -1160,6 +1167,17 @@ xpt_getattr(char *buf, size_t len, const char *attr, struct cam_path *path)
 			if (l < len) {
 				bcopy(idd->identifier, buf, l);
 				buf[l] = 0;
+			} else
+				ret = EFAULT;
+		} else if ((idd->id_type & SVPD_ID_TYPE_MASK) == SVPD_ID_TYPE_UUID
+		    && idd->identifier[0] == 0x10) {
+			if ((idd->length - 2) * 2 + 4 < len) {
+				for (l = 2, o = 0; l < idd->length; l++) {
+					if (l == 6 || l == 8 || l == 10 || l == 12)
+					    o += sprintf(buf + o, "-");
+					o += sprintf(buf + o, "%02x",
+					    idd->identifier[l]);
+				}
 			} else
 				ret = EFAULT;
 		} else {
@@ -2565,21 +2583,25 @@ xpt_action_default(union ccb *start_ccb)
 
 		abort_ccb = start_ccb->cab.abort_ccb;
 		if (XPT_FC_IS_DEV_QUEUED(abort_ccb)) {
+			struct cam_ed *device;
+			struct cam_devq *devq;
 
-			if (abort_ccb->ccb_h.pinfo.index >= 0) {
-				struct cam_ccbq *ccbq;
-				struct cam_ed *device;
+			device = abort_ccb->ccb_h.path->device;
+			devq = device->sim->devq;
 
-				device = abort_ccb->ccb_h.path->device;
-				ccbq = &device->ccbq;
-				cam_ccbq_remove_ccb(ccbq, abort_ccb);
+			mtx_lock(&devq->send_mtx);
+			if (abort_ccb->ccb_h.pinfo.index > 0) {
+				cam_ccbq_remove_ccb(&device->ccbq, abort_ccb);
 				abort_ccb->ccb_h.status =
 				    CAM_REQ_ABORTED|CAM_DEV_QFRZN;
-				xpt_freeze_devq(abort_ccb->ccb_h.path, 1);
+				xpt_freeze_devq_device(device, 1);
+				mtx_unlock(&devq->send_mtx);
 				xpt_done(abort_ccb);
 				start_ccb->ccb_h.status = CAM_REQ_CMP;
 				break;
 			}
+			mtx_unlock(&devq->send_mtx);
+
 			if (abort_ccb->ccb_h.pinfo.index == CAM_UNQUEUED_INDEX
 			 && (abort_ccb->ccb_h.status & CAM_SIM_QUEUED) == 0) {
 				/*

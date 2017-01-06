@@ -599,6 +599,9 @@ options 	ENABLE_ALART		# Control alarm on Intel intpm driver
 #
 options 	NKPT=31
 
+# EFI Runtime Services support (not functional yet).
+options 	EFIRT
+
 
 #####################################################################
 # ABI Emulation
@@ -614,6 +617,9 @@ options 	COMPAT_FREEBSD32
 
 # Emulate spx device for client side of SVR3 local X interface
 #XXX#options 	SPX_HACK
+
+# Enable 32-bit runtime support for CloudABI binaries.
+options 	COMPAT_CLOUDABI32
 
 # Enable 64-bit runtime support for CloudABI binaries.
 options 	COMPAT_CLOUDABI64

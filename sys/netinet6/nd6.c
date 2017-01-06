@@ -1159,7 +1159,7 @@ nd6_purge(struct ifnet *ifp)
 			 * still be above zero. We therefore reset it to
 			 * make sure that the prefix really gets purged.
 			 */
-			pr->ndpr_refcnt = 0;
+			pr->ndpr_addrcnt = 0;
 
 			prelist_remove(pr);
 		}
@@ -1227,7 +1227,7 @@ nd6_is_new_addr_neighbor(const struct sockaddr_in6 *addr, struct ifnet *ifp)
 	struct ifaddr *dstaddr;
 	struct rt_addrinfo info;
 	struct sockaddr_in6 rt_key;
-	struct sockaddr *dst6;
+	const struct sockaddr *dst6;
 	int fibnum;
 
 	/*
@@ -1273,7 +1273,7 @@ nd6_is_new_addr_neighbor(const struct sockaddr_in6 *addr, struct ifnet *ifp)
 		if (!(pr->ndpr_stateflags & NDPRF_ONLINK)) {
 
 			/* Always use the default FIB here. */
-			dst6 = (struct sockaddr *)&pr->ndpr_prefix;
+			dst6 = (const struct sockaddr *)&pr->ndpr_prefix;
 
 			/* Restore length field before retrying lookup */
 			rt_key.sin6_len = sizeof(rt_key);
@@ -2674,7 +2674,7 @@ nd6_sysctl_prlist(SYSCTL_HANDLER_ARGS)
 			else
 				p.expire = maxexpire;
 		}
-		p.refcnt = pr->ndpr_refcnt;
+		p.refcnt = pr->ndpr_addrcnt;
 		p.flags = pr->ndpr_stateflags;
 		p.advrtrs = 0;
 		LIST_FOREACH(pfr, &pr->ndpr_advrtrs, pfr_entry)

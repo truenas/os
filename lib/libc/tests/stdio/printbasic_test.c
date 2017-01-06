@@ -80,7 +80,7 @@ _testfmt(const char *result, const char *argstr, const char *fmt,...)
 	vsnprintf(s, sizeof(s), fmt, ap);
 	if (strcmp(result, s) != 0) {
 		atf_tc_fail(
-		    "printf(\"%s\", %s) ==> [%s], expected [%s]\n",
+		    "printf(\"%s\", %s) ==> [%s], expected [%s]",
 		    fmt, argstr, s, result);
 	}
 
@@ -91,7 +91,7 @@ _testfmt(const char *result, const char *argstr, const char *fmt,...)
 	vswprintf(ws, sizeof(ws) / sizeof(ws[0]), wfmt, ap2);
 	if (wcscmp(wresult, ws) != 0) {
 		atf_tc_fail(
-		    "wprintf(\"%ls\", %s) ==> [%ls], expected [%ls]\n",
+		    "wprintf(\"%ls\", %s) ==> [%ls], expected [%ls]",
 		    wfmt, argstr, ws, wresult);
 	}
 	va_end(ap);
@@ -124,10 +124,10 @@ ATF_TC_BODY(int_within_limits, tc)
 	testfmt(S_ULONGMAX, "%lu", ULONG_MAX);
 
 	testfmt("-1", "%lld", (long long)-1);
-	testfmt(S_ULONGMAX, "%lu", ULLONG_MAX);
+	testfmt(S_ULLONGMAX, "%llu", ULLONG_MAX);
 
 	testfmt("-1", "%d", -1);
-	testfmt(S_UINT32MAX, "%lu", UINT32_MAX);
+	testfmt(S_UINT32MAX, "%u", UINT32_MAX);
 
 	testfmt("-1", "%hd", -1);
 	testfmt("65535", "%hu", USHRT_MAX);

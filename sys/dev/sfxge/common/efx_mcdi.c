@@ -67,6 +67,7 @@ static const efx_mcdi_ops_t	__efx_mcdi_siena_ops = {
 	siena_mcdi_read_response,	/* emco_read_response */
 	siena_mcdi_fini,		/* emco_fini */
 	siena_mcdi_feature_supported,	/* emco_feature_supported */
+	siena_mcdi_get_timeout,		/* emco_get_timeout */
 };
 
 #endif	/* EFSYS_OPT_SIENA */
@@ -81,6 +82,7 @@ static const efx_mcdi_ops_t	__efx_mcdi_ef10_ops = {
 	ef10_mcdi_read_response,	/* emco_read_response */
 	ef10_mcdi_fini,			/* emco_fini */
 	ef10_mcdi_feature_supported,	/* emco_feature_supported */
+	ef10_mcdi_get_timeout,		/* emco_get_timeout */
 };
 
 #endif	/* EFSYS_OPT_HUNTINGTON || EFSYS_OPT_MEDFORD */
@@ -181,7 +183,7 @@ efx_mcdi_new_epoch(
 	__in		efx_nic_t *enp)
 {
 	efx_mcdi_iface_t *emip = &(enp->en_mcdi.em_emip);
-	int state;
+	efsys_lock_state_t state;
 
 	/* Start a new epoch (allow fresh MCDI requests to succeed) */
 	EFSYS_LOCK(enp->en_eslp, state);
@@ -252,7 +254,7 @@ efx_mcdi_request_start(
 	unsigned int seq;
 	unsigned int xflags;
 	boolean_t new_epoch;
-	int state;
+	efsys_lock_state_t state;
 
 	EFSYS_ASSERT3U(enp->en_magic, ==, EFX_NIC_MAGIC);
 	EFSYS_ASSERT3U(enp->en_mod_flags, &, EFX_MOD_MCDI);
@@ -500,7 +502,7 @@ efx_mcdi_request_poll(
 {
 	efx_mcdi_iface_t *emip = &(enp->en_mcdi.em_emip);
 	efx_mcdi_req_t *emrp;
-	int state;
+	efsys_lock_state_t state;
 	efx_rc_t rc;
 
 	EFSYS_ASSERT3U(enp->en_magic, ==, EFX_NIC_MAGIC);
@@ -568,7 +570,7 @@ efx_mcdi_request_abort(
 	efx_mcdi_iface_t *emip = &(enp->en_mcdi.em_emip);
 	efx_mcdi_req_t *emrp;
 	boolean_t aborted;
-	int state;
+	efsys_lock_state_t state;
 
 	EFSYS_ASSERT3U(enp->en_magic, ==, EFX_NIC_MAGIC);
 	EFSYS_ASSERT3U(enp->en_mod_flags, &, EFX_MOD_MCDI);
@@ -603,6 +605,17 @@ efx_mcdi_request_abort(
 	EFSYS_UNLOCK(enp->en_eslp, state);
 
 	return (aborted);
+}
+
+			void
+efx_mcdi_get_timeout(
+	__in		efx_nic_t *enp,
+	__in		efx_mcdi_req_t *emrp,
+	__out		uint32_t *timeoutp)
+{
+	const efx_mcdi_ops_t *emcop = enp->en_mcdi.em_emcop;
+
+	emcop->emco_get_timeout(enp, emrp, timeoutp);
 }
 
 	__checkReturn	efx_rc_t
@@ -646,6 +659,8 @@ efx_mcdi_request_errcode(
 	case MC_CMD_ERR_ENOSPC:
 		return (ENOSPC);
 #endif
+	case MC_CMD_ERR_ERANGE:
+		return (ERANGE);
 
 	case MC_CMD_ERR_ALLOC_FAIL:
 		return (ENOMEM);
@@ -741,7 +756,7 @@ efx_mcdi_ev_cpl(
 	efx_mcdi_iface_t *emip = &(enp->en_mcdi.em_emip);
 	const efx_mcdi_transport_t *emtp = enp->en_mcdi.em_emtp;
 	efx_mcdi_req_t *emrp;
-	int state;
+	efsys_lock_state_t state;
 
 	EFSYS_ASSERT3U(enp->en_mod_flags, &, EFX_MOD_MCDI);
 	EFSYS_ASSERT3U(enp->en_features, &, EFX_FEATURE_MCDI);
@@ -852,7 +867,7 @@ efx_mcdi_ev_death(
 	const efx_mcdi_transport_t *emtp = enp->en_mcdi.em_emtp;
 	efx_mcdi_req_t *emrp = NULL;
 	boolean_t ev_cpl;
-	int state;
+	efsys_lock_state_t state;
 
 	/*
 	 * The MCDI request (if there is one) has been terminated, either
@@ -1182,11 +1197,9 @@ efx_mcdi_drv_attach(
 	__in		efx_nic_t *enp,
 	__in		boolean_t attach)
 {
-	efx_nic_cfg_t *encp = &(enp->en_nic_cfg);
 	efx_mcdi_req_t req;
 	uint8_t payload[MAX(MC_CMD_DRV_ATTACH_IN_LEN,
 			    MC_CMD_DRV_ATTACH_EXT_OUT_LEN)];
-	uint32_t flags;
 	efx_rc_t rc;
 
 	(void) memset(payload, 0, sizeof (payload));
@@ -1217,36 +1230,8 @@ efx_mcdi_drv_attach(
 		goto fail2;
 	}
 
-	if (attach == B_FALSE) {
-		flags = 0;
-	} else if (enp->en_family == EFX_FAMILY_SIENA) {
-		efx_mcdi_iface_t *emip = &(enp->en_mcdi.em_emip);
-
-		/* Create synthetic privileges for Siena functions */
-		flags = EFX_NIC_FUNC_LINKCTRL | EFX_NIC_FUNC_TRUSTED;
-		if (emip->emi_port == 1)
-			flags |= EFX_NIC_FUNC_PRIMARY;
-	} else {
-		EFX_STATIC_ASSERT(EFX_NIC_FUNC_PRIMARY ==
-		    (1u << MC_CMD_DRV_ATTACH_EXT_OUT_FLAG_PRIMARY));
-		EFX_STATIC_ASSERT(EFX_NIC_FUNC_LINKCTRL ==
-		    (1u << MC_CMD_DRV_ATTACH_EXT_OUT_FLAG_LINKCTRL));
-		EFX_STATIC_ASSERT(EFX_NIC_FUNC_TRUSTED ==
-		    (1u << MC_CMD_DRV_ATTACH_EXT_OUT_FLAG_TRUSTED));
-
-		/* Save function privilege flags (EF10 and later) */
-		if (req.emr_out_length_used < MC_CMD_DRV_ATTACH_EXT_OUT_LEN) {
-			rc = EMSGSIZE;
-			goto fail3;
-		}
-		flags = MCDI_OUT_DWORD(req, DRV_ATTACH_EXT_OUT_FUNC_FLAGS);
-	}
-	encp->enc_func_flags = flags;
-
 	return (0);
 
-fail3:
-	EFSYS_PROBE(fail3);
 fail2:
 	EFSYS_PROBE(fail2);
 fail1:
@@ -1728,8 +1713,7 @@ fail1:
 
 #if EFSYS_OPT_MAC_STATS
 
-typedef enum efx_stats_action_e
-{
+typedef enum efx_stats_action_e {
 	EFX_STATS_CLEAR,
 	EFX_STATS_UPLOAD,
 	EFX_STATS_ENABLE_NOEVENTS,
@@ -1766,7 +1750,7 @@ efx_mcdi_mac_stats(
 	    MAC_STATS_IN_PERIODIC_CHANGE, enable | events | disable,
 	    MAC_STATS_IN_PERIODIC_ENABLE, enable | events,
 	    MAC_STATS_IN_PERIODIC_NOEVENT, !events,
-	    MAC_STATS_IN_PERIOD_MS, (enable | events) ? 1000: 0);
+	    MAC_STATS_IN_PERIOD_MS, (enable | events) ? 1000 : 0);
 
 	if (esmp != NULL) {
 		int bytes = MC_CMD_MAC_NSTATS * sizeof (uint64_t);

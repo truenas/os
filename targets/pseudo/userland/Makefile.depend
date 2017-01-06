@@ -325,6 +325,7 @@ DIRDEPS+= \
 	usr.bin/pr \
 	usr.bin/printenv \
 	usr.bin/printf \
+	usr.bin/proccontrol \
 	usr.bin/procstat \
 	usr.bin/protect \
 	usr.bin/quota \
@@ -701,6 +702,7 @@ DIRDEPS+= \
 	usr.sbin/pmcannotate \
 	usr.sbin/pmccontrol \
 	usr.sbin/pmcstat \
+	usr.sbin/pmcstudy \
 	usr.sbin/portsnap/make_index \
 	usr.sbin/portsnap/phttpget \
 	usr.sbin/portsnap/portsnap \
@@ -785,6 +787,7 @@ DIRDEPS+= \
 	usr.sbin/wpa/wpa_supplicant \
 	usr.sbin/yp_mkdb \
 	usr.sbin/ypbind \
+	usr.sbin/ypldap \
 	usr.sbin/yppoll \
 	usr.sbin/yppush \
 	usr.sbin/ypserv \

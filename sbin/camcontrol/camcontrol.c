@@ -103,7 +103,8 @@ typedef enum {
 	CAM_CMD_OPCODES		= 0x00000024,
 	CAM_CMD_REPROBE		= 0x00000025,
 	CAM_CMD_ZONE		= 0x00000026,
-	CAM_CMD_EPC		= 0x00000027
+	CAM_CMD_EPC		= 0x00000027,
+	CAM_CMD_TIMESTAMP	= 0x00000028
 } cam_cmdmask;
 
 typedef enum {
@@ -234,6 +235,7 @@ static struct camcontrol_opts option_table[] = {
 	{"opcodes", CAM_CMD_OPCODES, CAM_ARG_NONE, "No:s:T"},
 	{"zone", CAM_CMD_ZONE, CAM_ARG_NONE, "ac:l:No:P:"},
 	{"epc", CAM_CMD_EPC, CAM_ARG_NONE, "c:dDeHp:Pr:sS:T:"},
+	{"timestamp", CAM_CMD_TIMESTAMP, CAM_ARG_NONE, "f:mrsUT:"},
 #endif /* MINIMALISTIC */
 	{"help", CAM_CMD_USAGE, CAM_ARG_NONE, NULL},
 	{"-?", CAM_CMD_USAGE, CAM_ARG_NONE, NULL},
@@ -3127,8 +3129,8 @@ dorescan_or_reset(int argc, char **argv, int rescan)
 static int
 rescan_or_reset_bus(path_id_t bus, int rescan)
 {
-	union ccb ccb, matchccb;
-	int fd, retval;
+	union ccb *ccb = NULL, *matchccb = NULL;
+	int fd = -1, retval;
 	int bufsize;
 
 	retval = 0;
@@ -3139,35 +3141,41 @@ rescan_or_reset_bus(path_id_t bus, int rescan)
 		return(1);
 	}
 
+	ccb = malloc(sizeof(*ccb));
+	if (ccb == NULL) {
+		warn("failed to allocate CCB");
+		retval = 1;
+		goto bailout;
+	}
+	bzero(ccb, sizeof(*ccb));
+
 	if (bus != CAM_BUS_WILDCARD) {
-		ccb.ccb_h.func_code = rescan ? XPT_SCAN_BUS : XPT_RESET_BUS;
-		ccb.ccb_h.path_id = bus;
-		ccb.ccb_h.target_id = CAM_TARGET_WILDCARD;
-		ccb.ccb_h.target_lun = CAM_LUN_WILDCARD;
-		ccb.crcn.flags = CAM_FLAG_NONE;
+		ccb->ccb_h.func_code = rescan ? XPT_SCAN_BUS : XPT_RESET_BUS;
+		ccb->ccb_h.path_id = bus;
+		ccb->ccb_h.target_id = CAM_TARGET_WILDCARD;
+		ccb->ccb_h.target_lun = CAM_LUN_WILDCARD;
+		ccb->crcn.flags = CAM_FLAG_NONE;
 
 		/* run this at a low priority */
-		ccb.ccb_h.pinfo.priority = 5;
+		ccb->ccb_h.pinfo.priority = 5;
 
-		if (ioctl(fd, CAMIOCOMMAND, &ccb) == -1) {
+		if (ioctl(fd, CAMIOCOMMAND, ccb) == -1) {
 			warn("CAMIOCOMMAND ioctl failed");
-			close(fd);
-			return(1);
+			retval = 1;
+			goto bailout;
 		}
 
-		if ((ccb.ccb_h.status & CAM_STATUS_MASK) == CAM_REQ_CMP) {
+		if ((ccb->ccb_h.status & CAM_STATUS_MASK) == CAM_REQ_CMP) {
 			fprintf(stdout, "%s of bus %d was successful\n",
 			    rescan ? "Re-scan" : "Reset", bus);
 		} else {
 			fprintf(stdout, "%s of bus %d returned error %#x\n",
 				rescan ? "Re-scan" : "Reset", bus,
-				ccb.ccb_h.status & CAM_STATUS_MASK);
+				ccb->ccb_h.status & CAM_STATUS_MASK);
 			retval = 1;
 		}
 
-		close(fd);
-		return(retval);
-
+		goto bailout;
 	}
 
 
@@ -3181,58 +3189,64 @@ rescan_or_reset_bus(path_id_t bus, int rescan)
 	 * no-op, sending a rescan to the xpt bus would result in a status of
 	 * CAM_REQ_INVALID.
 	 */
-	CCB_CLEAR_ALL_EXCEPT_HDR(&matchccb.cdm);
-	matchccb.ccb_h.func_code = XPT_DEV_MATCH;
-	matchccb.ccb_h.path_id = CAM_BUS_WILDCARD;
+	matchccb = malloc(sizeof(*matchccb));
+	if (matchccb == NULL) {
+		warn("failed to allocate CCB");
+		retval = 1;
+		goto bailout;
+	}
+	bzero(matchccb, sizeof(*matchccb));
+	matchccb->ccb_h.func_code = XPT_DEV_MATCH;
+	matchccb->ccb_h.path_id = CAM_BUS_WILDCARD;
 	bufsize = sizeof(struct dev_match_result) * 20;
-	matchccb.cdm.match_buf_len = bufsize;
-	matchccb.cdm.matches=(struct dev_match_result *)malloc(bufsize);
-	if (matchccb.cdm.matches == NULL) {
+	matchccb->cdm.match_buf_len = bufsize;
+	matchccb->cdm.matches=(struct dev_match_result *)malloc(bufsize);
+	if (matchccb->cdm.matches == NULL) {
 		warnx("can't malloc memory for matches");
 		retval = 1;
 		goto bailout;
 	}
-	matchccb.cdm.num_matches = 0;
+	matchccb->cdm.num_matches = 0;
 
-	matchccb.cdm.num_patterns = 1;
-	matchccb.cdm.pattern_buf_len = sizeof(struct dev_match_pattern);
+	matchccb->cdm.num_patterns = 1;
+	matchccb->cdm.pattern_buf_len = sizeof(struct dev_match_pattern);
 
-	matchccb.cdm.patterns = (struct dev_match_pattern *)malloc(
-		matchccb.cdm.pattern_buf_len);
-	if (matchccb.cdm.patterns == NULL) {
+	matchccb->cdm.patterns = (struct dev_match_pattern *)malloc(
+		matchccb->cdm.pattern_buf_len);
+	if (matchccb->cdm.patterns == NULL) {
 		warnx("can't malloc memory for patterns");
 		retval = 1;
 		goto bailout;
 	}
-	matchccb.cdm.patterns[0].type = DEV_MATCH_BUS;
-	matchccb.cdm.patterns[0].pattern.bus_pattern.flags = BUS_MATCH_ANY;
+	matchccb->cdm.patterns[0].type = DEV_MATCH_BUS;
+	matchccb->cdm.patterns[0].pattern.bus_pattern.flags = BUS_MATCH_ANY;
 
 	do {
 		unsigned int i;
 
-		if (ioctl(fd, CAMIOCOMMAND, &matchccb) == -1) {
+		if (ioctl(fd, CAMIOCOMMAND, matchccb) == -1) {
 			warn("CAMIOCOMMAND ioctl failed");
 			retval = 1;
 			goto bailout;
 		}
 
-		if ((matchccb.ccb_h.status != CAM_REQ_CMP)
-		 || ((matchccb.cdm.status != CAM_DEV_MATCH_LAST)
-		   && (matchccb.cdm.status != CAM_DEV_MATCH_MORE))) {
+		if ((matchccb->ccb_h.status != CAM_REQ_CMP)
+		 || ((matchccb->cdm.status != CAM_DEV_MATCH_LAST)
+		   && (matchccb->cdm.status != CAM_DEV_MATCH_MORE))) {
 			warnx("got CAM error %#x, CDM error %d\n",
-			      matchccb.ccb_h.status, matchccb.cdm.status);
+			      matchccb->ccb_h.status, matchccb->cdm.status);
 			retval = 1;
 			goto bailout;
 		}
 
-		for (i = 0; i < matchccb.cdm.num_matches; i++) {
+		for (i = 0; i < matchccb->cdm.num_matches; i++) {
 			struct bus_match_result *bus_result;
 
 			/* This shouldn't happen. */
-			if (matchccb.cdm.matches[i].type != DEV_MATCH_BUS)
+			if (matchccb->cdm.matches[i].type != DEV_MATCH_BUS)
 				continue;
 
-			bus_result = &matchccb.cdm.matches[i].result.bus_result;
+			bus_result =&matchccb->cdm.matches[i].result.bus_result;
 
 			/*
 			 * We don't want to rescan or reset the xpt bus.
@@ -3241,23 +3255,23 @@ rescan_or_reset_bus(path_id_t bus, int rescan)
 			if (bus_result->path_id == CAM_XPT_PATH_ID)
 				continue;
 
-			ccb.ccb_h.func_code = rescan ? XPT_SCAN_BUS :
+			ccb->ccb_h.func_code = rescan ? XPT_SCAN_BUS :
 						       XPT_RESET_BUS;
-			ccb.ccb_h.path_id = bus_result->path_id;
-			ccb.ccb_h.target_id = CAM_TARGET_WILDCARD;
-			ccb.ccb_h.target_lun = CAM_LUN_WILDCARD;
-			ccb.crcn.flags = CAM_FLAG_NONE;
+			ccb->ccb_h.path_id = bus_result->path_id;
+			ccb->ccb_h.target_id = CAM_TARGET_WILDCARD;
+			ccb->ccb_h.target_lun = CAM_LUN_WILDCARD;
+			ccb->crcn.flags = CAM_FLAG_NONE;
 
 			/* run this at a low priority */
-			ccb.ccb_h.pinfo.priority = 5;
+			ccb->ccb_h.pinfo.priority = 5;
 
-			if (ioctl(fd, CAMIOCOMMAND, &ccb) == -1) {
+			if (ioctl(fd, CAMIOCOMMAND, ccb) == -1) {
 				warn("CAMIOCOMMAND ioctl failed");
 				retval = 1;
 				goto bailout;
 			}
 
-			if ((ccb.ccb_h.status & CAM_STATUS_MASK) ==CAM_REQ_CMP){
+			if ((ccb->ccb_h.status & CAM_STATUS_MASK)==CAM_REQ_CMP){
 				fprintf(stdout, "%s of bus %d was successful\n",
 					rescan? "Re-scan" : "Reset",
 					bus_result->path_id);
@@ -3270,22 +3284,24 @@ rescan_or_reset_bus(path_id_t bus, int rescan)
 				fprintf(stderr, "%s of bus %d returned error "
 					"%#x\n", rescan? "Re-scan" : "Reset",
 					bus_result->path_id,
-					ccb.ccb_h.status & CAM_STATUS_MASK);
+					ccb->ccb_h.status & CAM_STATUS_MASK);
 				retval = 1;
 			}
 		}
-	} while ((matchccb.ccb_h.status == CAM_REQ_CMP)
-		 && (matchccb.cdm.status == CAM_DEV_MATCH_MORE));
+	} while ((matchccb->ccb_h.status == CAM_REQ_CMP)
+		 && (matchccb->cdm.status == CAM_DEV_MATCH_MORE));
 
 bailout:
 
 	if (fd != -1)
 		close(fd);
 
-	if (matchccb.cdm.patterns != NULL)
-		free(matchccb.cdm.patterns);
-	if (matchccb.cdm.matches != NULL)
-		free(matchccb.cdm.matches);
+	if (matchccb != NULL) {
+		free(matchccb->cdm.patterns);
+		free(matchccb->cdm.matches);
+		free(matchccb);
+	}
+	free(ccb);
 
 	return(retval);
 }
@@ -8908,6 +8924,9 @@ usage(int printlong)
 "        camcontrol epc        [dev_id][generic_args]<-c cmd> [-d] [-D] [-e]\n"
 "                              [-H] [-p power_cond] [-P] [-r rst_src] [-s]\n"
 "                              [-S power_src] [-T timer]\n"
+"        camcontrol timestamp  [dev_id][generic_args] <-r [-f format|-m|-U]>|\n"
+"                              <-s <-f format -T time | -U >>\n"
+"                              \n"
 #endif /* MINIMALISTIC */
 "        camcontrol help\n");
 	if (!printlong)
@@ -8952,6 +8971,7 @@ usage(int printlong)
 "opcodes     send the SCSI REPORT SUPPORTED OPCODES command\n"
 "zone        manage Zoned Block (Shingled) devices\n"
 "epc         send ATA Extended Power Conditions commands\n"
+"timestamp   report or set the device's timestamp\n"
 "help        this message\n"
 "Device Identifiers:\n"
 "bus:target        specify the bus and target, lun defaults to 0\n"
@@ -9143,6 +9163,17 @@ usage(int printlong)
 "-s                save mode (timer, state, restore)\n"
 "-S power_src      set power source: battery, nonbattery (source)\n"
 "-T timer          set timer, seconds, .1 sec resolution (timer)\n"
+"timestamp arguments:\n"
+"-r                report the timestamp of the device\n"
+"-f format         report the timestamp of the device with the given\n"
+"                  strftime(3) format string\n"
+"-m                report the timestamp of the device as milliseconds since\n"
+"                  January 1st, 1970\n"
+"-U                report the time with UTC instead of the local time zone\n"
+"-s                set the timestamp of the device\n"
+"-f format         the format of the time string passed into strptime(3)\n"
+"-T time           the time value passed into strptime(3)\n"
+"-U                set the timestamp of the device to UTC time\n"
 );
 #endif /* MINIMALISTIC */
 }
@@ -9504,6 +9535,10 @@ main(int argc, char **argv)
 			break;
 		case CAM_CMD_EPC:
 			error = epc(cam_dev, argc, argv, combinedopt,
+			    retry_count, timeout, arglist & CAM_ARG_VERBOSE);
+			break;
+		case CAM_CMD_TIMESTAMP:
+			error = timestamp(cam_dev, argc, argv, combinedopt,
 			    retry_count, timeout, arglist & CAM_ARG_VERBOSE);
 			break;
 #endif /* MINIMALISTIC */

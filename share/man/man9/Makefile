@@ -1089,7 +1089,6 @@ MLINKS+=\
 	mbuf.9 m_get2.9 \
 	mbuf.9 m_getjcl.9 \
 	mbuf.9 m_getcl.9 \
-	mbuf.9 m_getclr.9 \
 	mbuf.9 MGETHDR.9 \
 	mbuf.9 m_gethdr.9 \
 	mbuf.9 m_getm.9 \
@@ -1303,6 +1302,7 @@ MLINKS+=pci.9 pci_alloc_msi.9 \
 	pci.9 pci_get_vpd_ident.9 \
 	pci.9 pci_get_vpd_readonly.9 \
 	pci.9 pci_iov_attach.9 \
+	pci.9 pci_iov_attach_name.9 \
 	pci.9 pci_iov_detach.9 \
 	pci.9 pci_msi_count.9 \
 	pci.9 pci_msix_count.9 \
@@ -1318,7 +1318,10 @@ MLINKS+=pci.9 pci_alloc_msi.9 \
 	pci.9 pci_set_max_read_req.9 \
 	pci.9 pci_write_config.9 \
 	pci.9 pcie_adjust_config.9 \
+	pci.9 pcie_flr.9 \
+	pci.9 pcie_max_completion_timeout.9 \
 	pci.9 pcie_read_config.9 \
+	pci.9 pcie_wait_for_pending_transactions.9 \
 	pci.9 pcie_write_config.9
 MLINKS+=pci_iov_schema.9 pci_iov_schema_alloc_node.9 \
 	pci_iov_schema.9 pci_iov_schema_add_bool.9 \

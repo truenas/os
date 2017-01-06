@@ -3466,11 +3466,14 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	PMAP_LOCK(pmap);
 	sched_pin();
 
-	/*
-	 * In the case that a page table page is not
-	 * resident, we are creating it here.
-	 */
+	pde = pmap_pde(pmap, va);
 	if (va < VM_MAXUSER_ADDRESS) {
+		/*
+		 * va is for UVA.
+		 * In the case that a page table page is not resident,
+		 * we are creating it here.  pmap_allocpte() handles
+		 * demotion.
+		 */
 		mpte = pmap_allocpte(pmap, va, flags);
 		if (mpte == NULL) {
 			KASSERT((flags & PMAP_ENTER_NOSLEEP) != 0,
@@ -3480,19 +3483,28 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 			PMAP_UNLOCK(pmap);
 			return (KERN_RESOURCE_SHORTAGE);
 		}
+	} else {
+		/*
+		 * va is for KVA, so pmap_demote_pde() will never fail
+		 * to install a page table page.  PG_V is also
+		 * asserted by pmap_demote_pde().
+		 */
+		KASSERT(pde != NULL && (*pde & PG_V) != 0,
+		    ("KVA %#x invalid pde pdir %#jx", va,
+		    (uintmax_t)pmap->pm_pdir[PTDPTDI]));
+		if ((*pde & PG_PS) != 0)
+			pmap_demote_pde(pmap, pde, va);
 	}
-
-	pde = pmap_pde(pmap, va);
-	if ((*pde & PG_PS) != 0)
-		panic("pmap_enter: attempted pmap_enter on 4MB page");
 	pte = pmap_pte_quick(pmap, va);
 
 	/*
-	 * Page Directory table entry not valid, we need a new PT page
+	 * Page Directory table entry is not valid, which should not
+	 * happen.  We should have either allocated the page table
+	 * page or demoted the existing mapping above.
 	 */
 	if (pte == NULL) {
 		panic("pmap_enter: invalid page directory pdir=%#jx, va=%#x",
-			(uintmax_t)pmap->pm_pdir[PTDPTDI], va);
+		    (uintmax_t)pmap->pm_pdir[PTDPTDI], va);
 	}
 
 	pa = VM_PAGE_TO_PHYS(m);
@@ -4802,6 +4814,14 @@ retry:
  *	XXX: The exact number of bits to check and clear is a matter that
  *	should be tested and standardized at some point in the future for
  *	optimal aging of shared pages.
+ *
+ *	As an optimization, update the page's dirty field if a modified bit is
+ *	found while counting reference bits.  This opportunistic update can be
+ *	performed at low cost and can eliminate the need for some future calls
+ *	to pmap_is_modified().  However, since this function stops after
+ *	finding PMAP_TS_REFERENCED_MAX reference bits, it may not detect some
+ *	dirty pages.  Those dirty pages will only be detected by a future call
+ *	to pmap_is_modified().
  */
 int
 pmap_ts_referenced(vm_page_t m)
@@ -4828,6 +4848,14 @@ pmap_ts_referenced(vm_page_t m)
 		pmap = PV_PMAP(pv);
 		PMAP_LOCK(pmap);
 		pde = pmap_pde(pmap, pv->pv_va);
+		if ((*pde & (PG_M | PG_RW)) == (PG_M | PG_RW)) {
+			/*
+			 * Although "*pde" is mapping a 2/4MB page, because
+			 * this function is called at a 4KB page granularity,
+			 * we only update the 4KB page under test.
+			 */
+			vm_page_dirty(m);
+		}
 		if ((*pde & PG_A) != 0) {
 			/*
 			 * Since this reference bit is shared by either 1024
@@ -4876,6 +4904,8 @@ small_mappings:
 		    ("pmap_ts_referenced: found a 4mpage in page %p's pv list",
 		    m));
 		pte = pmap_pte_quick(pmap, pv->pv_va);
+		if ((*pte & (PG_M | PG_RW)) == (PG_M | PG_RW))
+			vm_page_dirty(m);
 		if ((*pte & PG_A) != 0) {
 			atomic_clear_int((u_int *)pte, PG_A);
 			pmap_invalidate_page(pmap, pv->pv_va);

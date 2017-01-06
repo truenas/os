@@ -269,6 +269,16 @@ native_lapic_enable_x2apic(void)
 	wrmsr(MSR_APICBASE, apic_base);
 }
 
+static bool
+native_lapic_is_x2apic(void)
+{
+	uint64_t apic_base;
+
+	apic_base = rdmsr(MSR_APICBASE);
+	return ((apic_base & (APICBASE_X2APIC | APICBASE_ENABLED)) ==
+	    (APICBASE_X2APIC | APICBASE_ENABLED));
+}
+
 static void	lapic_enable(void);
 static void	lapic_resume(struct pic *pic, bool suspend_cancelled);
 static void	lapic_timer_oneshot(struct lapic *);
@@ -329,6 +339,7 @@ struct apic_ops apic_ops = {
 	.create			= native_lapic_create,
 	.init			= native_lapic_init,
 	.xapic_mode		= native_lapic_xapic_mode,
+	.is_x2apic		= native_lapic_is_x2apic,
 	.setup			= native_lapic_setup,
 	.dump			= native_lapic_dump,
 	.disable		= native_lapic_disable,
@@ -467,8 +478,9 @@ native_lapic_init(vm_paddr_t addr)
 		lapic_et.et_quality = 600;
 		if (!arat) {
 			lapic_et.et_flags |= ET_FLAGS_C3STOP;
-			lapic_et.et_quality -= 200;
-		} else if ((cpu_feature & CPUID_TSC) != 0 &&
+			lapic_et.et_quality = 100;
+		}
+		if ((cpu_feature & CPUID_TSC) != 0 &&
 		    (cpu_feature2 & CPUID2_TSCDLT) != 0 &&
 		    tsc_is_invariant && tsc_freq != 0) {
 			lapic_timer_tsc_deadline = 1;
