@@ -74,7 +74,6 @@ extern "C" {
 #define	EFX_MOD_TX		0x00000100
 #define	EFX_MOD_PORT		0x00000200
 #define	EFX_MOD_MON		0x00000400
-#define	EFX_MOD_WOL		0x00000800
 #define	EFX_MOD_FILTER		0x00001000
 #define	EFX_MOD_LIC		0x00002000
 
@@ -231,7 +230,8 @@ typedef struct efx_filter_ops_s {
 	efx_rc_t	(*efo_add)(efx_nic_t *, efx_filter_spec_t *,
 				   boolean_t may_replace);
 	efx_rc_t	(*efo_delete)(efx_nic_t *, efx_filter_spec_t *);
-	efx_rc_t	(*efo_supported_filters)(efx_nic_t *, uint32_t *, size_t *);
+	efx_rc_t	(*efo_supported_filters)(efx_nic_t *, uint32_t *,
+				   size_t, size_t *);
 	efx_rc_t	(*efo_reconfigure)(efx_nic_t *, uint8_t const *, boolean_t,
 				   boolean_t, boolean_t, boolean_t,
 				   uint8_t const *, uint32_t);
@@ -427,7 +427,10 @@ typedef struct efx_mcdi_ops_s {
 	boolean_t	(*emco_poll_response)(efx_nic_t *);
 	void		(*emco_read_response)(efx_nic_t *, void *, size_t, size_t);
 	void		(*emco_fini)(efx_nic_t *);
-	efx_rc_t	(*emco_feature_supported)(efx_nic_t *, efx_mcdi_feature_id_t, boolean_t *);
+	efx_rc_t	(*emco_feature_supported)(efx_nic_t *,
+					    efx_mcdi_feature_id_t, boolean_t *);
+	void		(*emco_get_timeout)(efx_nic_t *, efx_mcdi_req_t *,
+					    uint32_t *);
 } efx_mcdi_ops_t;
 
 typedef struct efx_mcdi_s {
@@ -453,7 +456,7 @@ typedef struct efx_nvram_ops_s {
 					    unsigned int, size_t);
 	efx_rc_t	(*envo_partn_write)(efx_nic_t *, uint32_t,
 					    unsigned int, caddr_t, size_t);
-	void		(*envo_partn_rw_finish)(efx_nic_t *, uint32_t);
+	efx_rc_t	(*envo_partn_rw_finish)(efx_nic_t *, uint32_t);
 	efx_rc_t	(*envo_partn_get_version)(efx_nic_t *, uint32_t,
 					    uint32_t *, uint16_t *);
 	efx_rc_t	(*envo_partn_set_version)(efx_nic_t *, uint32_t,
@@ -541,7 +544,8 @@ efx_mcdi_nvram_write(
 efx_mcdi_nvram_update_finish(
 	__in			efx_nic_t *enp,
 	__in			uint32_t partn,
-	__in			boolean_t reboot);
+	__in			boolean_t reboot,
+	__out_opt		uint32_t *resultp);
 
 #if EFSYS_OPT_DIAG
 

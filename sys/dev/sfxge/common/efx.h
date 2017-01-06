@@ -243,6 +243,12 @@ efx_mcdi_new_epoch(
 	__in		efx_nic_t *enp);
 
 extern			void
+efx_mcdi_get_timeout(
+	__in		efx_nic_t *enp,
+	__in		efx_mcdi_req_t *emrp,
+	__out		uint32_t *usec_timeoutp);
+
+extern			void
 efx_mcdi_request_start(
 	__in		efx_nic_t *enp,
 	__in		efx_mcdi_req_t *emrp,
@@ -1069,7 +1075,6 @@ efx_bist_stop(
 #define	EFX_FEATURE_LFSR_HASH_INSERT	0x00000002
 #define	EFX_FEATURE_LINK_EVENTS		0x00000004
 #define	EFX_FEATURE_PERIODIC_MAC_STATS	0x00000008
-#define	EFX_FEATURE_WOL			0x00000010
 #define	EFX_FEATURE_MCDI		0x00000020
 #define	EFX_FEATURE_LOOKAHEAD_SPLIT	0x00000040
 #define	EFX_FEATURE_MAC_HEADER_FILTERS	0x00000080
@@ -1177,6 +1182,8 @@ typedef struct efx_nic_cfg_s {
 	/* Minimum unidirectional bandwidth in Mb/s to max out all ports */
 	uint32_t		enc_required_pcie_bandwidth_mbps;
 	uint32_t		enc_max_pcie_link_gen;
+	/* Firmware verifies integrity of NVRAM updates */
+	uint32_t		enc_fw_verified_nvram_update_required;
 } efx_nic_cfg_t;
 
 #define	EFX_PCI_FUNCTION_IS_PF(_encp)	((_encp)->enc_vf == 0xffff)
@@ -1360,7 +1367,7 @@ efx_nvram_rw_start(
 	__in			efx_nvram_type_t type,
 	__out_opt		size_t *pref_chunkp);
 
-extern				void
+extern	__checkReturn		efx_rc_t
 efx_nvram_rw_finish(
 	__in			efx_nic_t *enp,
 	__in			efx_nvram_type_t type);
@@ -1414,6 +1421,29 @@ efx_nvram_fini(
 
 #if EFSYS_OPT_BOOTCFG
 
+/* Report size and offset of bootcfg sector in NVRAM partition. */
+extern	__checkReturn		efx_rc_t
+efx_bootcfg_sector_info(
+	__in			efx_nic_t *enp,
+	__in			uint32_t pf,
+	__out_opt		uint32_t *sector_countp,
+	__out			size_t *offsetp,
+	__out			size_t *max_sizep);
+
+/*
+ * Copy bootcfg sector data to a target buffer which may differ in size.
+ * Optionally corrects format errors in source buffer.
+ */
+extern				efx_rc_t
+efx_bootcfg_copy_sector(
+	__in			efx_nic_t *enp,
+	__inout_bcount(sector_length)
+				uint8_t *sector,
+	__in			size_t sector_length,
+	__out_bcount(data_size)	uint8_t *data,
+	__in			size_t data_size,
+	__in			boolean_t handle_format_errors);
+
 extern				efx_rc_t
 efx_bootcfg_read(
 	__in			efx_nic_t *enp,
@@ -1427,87 +1457,6 @@ efx_bootcfg_write(
 	__in			size_t size);
 
 #endif	/* EFSYS_OPT_BOOTCFG */
-
-#if EFSYS_OPT_WOL
-
-typedef enum efx_wol_type_e {
-	EFX_WOL_TYPE_INVALID,
-	EFX_WOL_TYPE_MAGIC,
-	EFX_WOL_TYPE_BITMAP,
-	EFX_WOL_TYPE_LINK,
-	EFX_WOL_NTYPES,
-} efx_wol_type_t;
-
-typedef enum efx_lightsout_offload_type_e {
-	EFX_LIGHTSOUT_OFFLOAD_TYPE_INVALID,
-	EFX_LIGHTSOUT_OFFLOAD_TYPE_ARP,
-	EFX_LIGHTSOUT_OFFLOAD_TYPE_NS,
-} efx_lightsout_offload_type_t;
-
-#define	EFX_WOL_BITMAP_MASK_SIZE    (48)
-#define	EFX_WOL_BITMAP_VALUE_SIZE   (128)
-
-typedef union efx_wol_param_u {
-	struct {
-		uint8_t mac_addr[6];
-	} ewp_magic;
-	struct {
-		uint8_t mask[EFX_WOL_BITMAP_MASK_SIZE];   /* 1 bit per byte */
-		uint8_t value[EFX_WOL_BITMAP_VALUE_SIZE]; /* value to match */
-		uint8_t value_len;
-	} ewp_bitmap;
-} efx_wol_param_t;
-
-typedef union efx_lightsout_offload_param_u {
-	struct {
-		uint8_t mac_addr[6];
-		uint32_t ip;
-	} elop_arp;
-	struct {
-		uint8_t mac_addr[6];
-		uint32_t solicited_node[4];
-		uint32_t ip[4];
-	} elop_ns;
-} efx_lightsout_offload_param_t;
-
-extern	__checkReturn	efx_rc_t
-efx_wol_init(
-	__in		efx_nic_t *enp);
-
-extern	__checkReturn	efx_rc_t
-efx_wol_filter_clear(
-	__in		efx_nic_t *enp);
-
-extern	__checkReturn	efx_rc_t
-efx_wol_filter_add(
-	__in		efx_nic_t *enp,
-	__in		efx_wol_type_t type,
-	__in		efx_wol_param_t *paramp,
-	__out		uint32_t *filter_idp);
-
-extern	__checkReturn	efx_rc_t
-efx_wol_filter_remove(
-	__in		efx_nic_t *enp,
-	__in		uint32_t filter_id);
-
-extern	__checkReturn	efx_rc_t
-efx_lightsout_offload_add(
-	__in		efx_nic_t *enp,
-	__in		efx_lightsout_offload_type_t type,
-	__in		efx_lightsout_offload_param_t *paramp,
-	__out		uint32_t *filter_idp);
-
-extern	__checkReturn	efx_rc_t
-efx_lightsout_offload_remove(
-	__in		efx_nic_t *enp,
-	__in		efx_lightsout_offload_type_t type,
-	__in		uint32_t filter_id);
-
-extern			void
-efx_wol_fini(
-	__in		efx_nic_t *enp);
-
-#endif	/* EFSYS_OPT_WOL */
 
 #if EFSYS_OPT_DIAG
 
@@ -2209,10 +2158,10 @@ typedef enum efx_filter_match_flags_e {
 	EFX_FILTER_MATCH_OUTER_VID = 0x0100,	/* Match by outer VLAN ID */
 	EFX_FILTER_MATCH_IP_PROTO = 0x0200,	/* Match by IP transport
 						 * protocol */
-	EFX_FILTER_MATCH_LOC_MAC_IG = 0x0400,	/* Match by local MAC address
-						 * I/G bit. Used for RX default
-						 * unicast and multicast/
-						 * broadcast filters. */
+	/* Match otherwise-unmatched multicast and broadcast packets */
+	EFX_FILTER_MATCH_UNKNOWN_MCAST_DST = 0x40000000,
+	/* Match otherwise-unmatched unicast packets */
+	EFX_FILTER_MATCH_UNKNOWN_UCAST_DST = 0x80000000,
 } efx_filter_match_flags_t;
 
 typedef enum efx_filter_priority_s {
@@ -2234,7 +2183,7 @@ typedef enum efx_filter_priority_s {
  */
 
 typedef struct efx_filter_spec_s {
-	uint32_t	efs_match_flags:12;
+	uint32_t	efs_match_flags;
 	uint32_t	efs_priority:2;
 	uint32_t	efs_flags:6;
 	uint32_t	efs_dmaq_id:12;
@@ -2281,9 +2230,10 @@ efx_filter_restore(
 
 extern	__checkReturn	efx_rc_t
 efx_filter_supported_filters(
-	__in		efx_nic_t *enp,
-	__out		uint32_t *list,
-	__out		size_t *length);
+	__in				efx_nic_t *enp,
+	__out_ecount(buffer_length)	uint32_t *buffer,
+	__in				size_t buffer_length,
+	__out				size_t *list_lengthp);
 
 extern			void
 efx_filter_spec_init_rx(
