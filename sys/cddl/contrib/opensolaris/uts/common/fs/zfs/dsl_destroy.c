@@ -265,6 +265,7 @@ dsl_destroy_snapshot_sync_impl(dsl_dataset_t *ds, boolean_t defer, dmu_tx_t *tx)
 
 	/* We need to log before removing it from the namespace. */
 	spa_history_log_internal_ds(ds, "destroy", tx, "");
+	dsl_event_notify(ds, ESC_ZFS_DATASET_DELETE);
 
 	dsl_scan_ds_destroyed(ds, tx);
 
@@ -729,6 +730,7 @@ dsl_destroy_head_sync_impl(dsl_dataset_t *ds, dmu_tx_t *tx)
 
 	/* We need to log before removing it from the namespace. */
 	spa_history_log_internal_ds(ds, "destroy", tx, "");
+	dsl_event_notify(ds, ESC_ZFS_DATASET_DELETE);
 
 	rmorigin = (dsl_dir_is_clone(ds->ds_dir) &&
 	    DS_IS_DEFER_DESTROY(ds->ds_prev) &&

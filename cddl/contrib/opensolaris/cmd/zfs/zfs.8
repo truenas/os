@@ -200,6 +200,23 @@
 .Nm
 .Cm receive Ns | Ns Cm recv
 .Op Fl vnsFu
+.Op Fl vnFu
+.Op Fl l Ar filesystem Ns | Ns Ar volume
+.Ar ...
+.Op Fl o Ar property Ns = Ns Ar value
+.Ar ...
+.Op Fl x Ar property
+.Ar ...
+.Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
+.Nm
+.Cm receive Ns | Ns Cm recv
+.Op Fl vnFu
+.Op Fl l Ar filesystem Ns | Ns Ar volume
+.Ar ...
+.Op Fl o Ar property Ns = Ns Ar value
+.Ar ...
+.Op Fl x Ar property
+.Ar ...
 .Op Fl d | e
 .Op Fl o Sy origin Ns = Ns Ar snapshot
 .Ar filesystem
@@ -2757,12 +2774,26 @@ for more details.
 .Cm receive Ns | Ns Cm recv
 .Op Fl vnsFu
 .Op Fl o Sy origin Ns = Ns Ar snapshot
+.Op Fl vnFu
+.Op Fl l Ar filesystem Ns | Ns Ar volume
+.Ar ...
+.Op Fl o Ar property Ns = Ns Ar value
+.Ar ...
+.Op Fl x Ar property
+.Ar ...
 .Ar filesystem Ns | Ns Ar volume Ns | Ns Ar snapshot
 .Xc
 .It Xo
 .Nm
 .Cm receive Ns | Ns Cm recv
 .Op Fl vnsFu
+.Op Fl vnFu
+.Op Fl l Ar filesystem Ns | Ns Ar volume
+.Ar ...
+.Op Fl o Ar property Ns = Ns Ar value
+.Ar ...
+.Op Fl x Ar property
+.Ar ...
 .Op Fl d | e
 .Op Fl o Sy origin Ns = Ns Ar snapshot
 .Ar filesystem
@@ -2886,6 +2917,109 @@ To use this flag, the storage pool must have the
 feature enabled.  See
 .Xr zpool-features 5
 for details on ZFS feature flags.
+.It Fl l
+Limits the the recieve to only the
+.Ar filesystem
+or
+.Ar volume
+specified. As multiple
+.Fl l
+options may be specified, this can be used to restore specific filesystems or
+volumes from the received stream.
+.It Fl o Ar property Ns = Ns Ar value
+Sets the specified property as if the command zfs set
+.Ar property=value
+is invoked at the same time the received dataset is created from the
+non-incremental send stream or updated from the incremental send stream.
+.Pp
+Any editable ZFS property can also be set at receive time. Set-once properties
+bound to the received data, such as normalization and casesensitivity, cannot
+be set at receive time even when the datasets are newly created by zfs receive.
+.Pp
+Multiple
+.Fl o
+options can be specified.
+.Pp
+The
+.Ar property
+option may take one of two forms
+.Bl -bullet -compact
+.It
+.Ar property
+- Global property applied to all streams.
+.It
+.Ar property Ns @ Ns Op Ar volume Ns | Ns Ar filesystem
+- Local property applied to the specified
+.Ar volume
+or
+.Ar filesystem
+streams only.
+.El
+.Pp
+The most specific
+.Fl o
+option takes precedence so in the case where both a global
+.Ar property
+and a
+.Ar property Ns @ Ns Op Ar filesystem Ns | Ns Ar volume
+are specified for the same
+.Ar property
+the value of said
+.Ar property
+will be the one which most closely matches the domain of the
+.Ar property .
+.Pp
+If both
+.Fl o
+and
+.Fl x
+are specified for the same
+.Ar property
+the
+.Fl x
+option takes precedence unless the
+.Fl o
+option is a better domain match than the
+.Fl x
+option.
+.It Xo
+.Fl x Ar property
+.Xc
+Ensures that the effective value of the specified property after the receive is
+unaffected by the value of that property in the send stream (if any), as if the
+property had been excluded from the send stream.
+.Pp
+If the specified property is not present in the send stream, this option does
+nothing.
+.Pp
+If a received property needs to be overridden, the effective value can be
+set or inherited, depending on the property.
+.Pp
+In the case of an incremental update,
+.Fl x
+leaves any existing local setting or explicit inheritance unchanged (since the
+received property is already overridden).
+.Pp
+The
+.Ar property
+option may take one of two forms
+.Bl -bullet -compact
+.It
+.Ar property
+- Global property excluded from all streams.
+.It
+.Ar property Ns @ Ns Op Ar volume Ns | Ns Ar filesystem
+- Local property excluded from the specified
+.Ar volume
+or
+.Ar filesystem
+streams only.
+.El
+.Pp
+All
+.Fl o
+restrictions apply equally to
+.Fl x.
 .El
 .It Xo
 .Nm

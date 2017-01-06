@@ -383,6 +383,7 @@ dsl_scan_cancel_sync(void *arg, dmu_tx_t *tx)
 
 	dsl_scan_done(scn, B_FALSE, tx);
 	dsl_scan_sync_state(scn, tx);
+	spa_event_notify(scn->scn_dp->dp_spa, NULL, ESC_ZFS_SCRUB_ABORT);
 }
 
 int

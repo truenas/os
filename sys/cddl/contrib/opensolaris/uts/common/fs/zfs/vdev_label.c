@@ -490,7 +490,7 @@ retry:
 			if ((error || label_txg == 0) && !config) {
 				config = label;
 				break;
-			} else if (label_txg <= txg && label_txg > best_txg) {
+			} else if ((spa->spa_extreme_rewind || label_txg <= txg ) && label_txg > best_txg) {
 				best_txg = label_txg;
 				nvlist_free(config);
 				config = fnvlist_dup(label);

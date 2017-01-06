@@ -1487,6 +1487,7 @@ dsl_dataset_snapshot_sync_impl(dsl_dataset_t *ds, const char *snapname,
 
 	dsl_dir_snap_cmtime_update(ds->ds_dir);
 
+	dsl_event_notify(ds->ds_prev, ESC_ZFS_DATASET_CREATE);
 	spa_history_log_internal_ds(ds->ds_prev, "snapshot", tx, "");
 }
 
@@ -2171,6 +2172,7 @@ dsl_dataset_rename_snapshot_sync_impl(dsl_pool_t *dp,
 	    ddrsa->ddrsa_newsnapname);
 	zfsvfs_update_fromname(oldname, newname);
 	zvol_rename_minors(oldname, newname);
+	dsl_event_notify_rename(dsl_dataset_get_spa(ds), oldname, newname, ESC_ZFS_DATASET_RENAME);
 	kmem_free(newname, MAXPATHLEN);
 	kmem_free(oldname, MAXPATHLEN);
 #endif
@@ -3712,3 +3714,100 @@ dsl_dataset_has_resume_receive_state(dsl_dataset_t *ds)
 	    zap_contains(ds->ds_dir->dd_pool->dp_meta_objset,
 	    ds->ds_object, DS_FIELD_RESUME_TOGUID) == 0);
 }
+
+void
+dsl_event_notify(dsl_dataset_t *ds, const char *name)
+{
+#ifdef _KERNEL
+	spa_t			*spa;
+	sysevent_t		*ev;
+	sysevent_attr_list_t	*attr = NULL;
+	sysevent_value_t	value;
+	sysevent_id_t		eid;
+	char			dsname[MAXNAMELEN];
+
+	spa = dsl_dataset_get_spa(ds);
+	ev = sysevent_alloc(EC_ZFS, (char *)name, SUNW_KERN_PUB "zfs",
+	    SE_SLEEP);
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = spa_name(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_NAME, &value, SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_UINT64;
+	value.value.sv_uint64 = spa_guid(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_GUID, &value, SE_SLEEP) != 0)
+		goto done;
+
+	if (ds) {
+		dsl_dataset_name(ds, dsname);
+		value.value_type = SE_DATA_TYPE_STRING;
+		value.value.sv_string = dsname;
+		if (sysevent_add_attr(&attr, ZFS_EV_DSL_NAME, &value,
+		    SE_SLEEP) != 0)
+			goto done;
+	}
+
+	if (sysevent_attach_attributes(ev, attr) != 0)
+		goto done;
+	attr = NULL;
+
+	(void) log_sysevent(ev, SE_SLEEP, &eid);
+
+done:
+	if (attr)
+		sysevent_free_attr(attr);
+	sysevent_free(ev);
+#endif
+}
+
+void
+dsl_event_notify_rename(spa_t *spa, const char *oldname, const char *newname,
+    const char *name)
+{
+#ifdef _KERNEL
+	sysevent_t		*ev;
+	sysevent_attr_list_t	*attr = NULL;
+	sysevent_value_t	value;
+	sysevent_id_t		eid;
+	char			dsname[MAXNAMELEN];
+
+	ev = sysevent_alloc(EC_ZFS, (char *)name, SUNW_KERN_PUB "zfs",
+	    SE_SLEEP);
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = spa_name(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_NAME, &value, SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_UINT64;
+	value.value.sv_uint64 = spa_guid(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_GUID, &value, SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = (char *)oldname;
+	if (sysevent_add_attr(&attr, ZFS_EV_DSL_NAME, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = (char *)newname;
+	if (sysevent_add_attr(&attr, ZFS_EV_DSL_NEW_NAME, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	if (sysevent_attach_attributes(ev, attr) != 0)
+		goto done;
+	attr = NULL;
+
+	(void) log_sysevent(ev, SE_SLEEP, &eid);
+
+done:
+	if (attr)
+		sysevent_free_attr(attr);
+	sysevent_free(ev);
+#endif
+}
+

@@ -5839,6 +5839,8 @@ spa_vdev_remove(spa_t *spa, uint64_t guid, boolean_t unspare)
 		error = SET_ERROR(ENOENT);
 	}
 
+	spa_event_notify(spa, vd, ESC_ZFS_VDEV_REMOVE);
+
 	if (!locked)
 		error = spa_vdev_exit(spa, NULL, txg, error);
 
@@ -6579,6 +6581,59 @@ spa_sync_config_object(spa_t *spa, dmu_tx_t *tx)
 }
 
 static void
+spa_event_notify_prop(spa_t *spa, const char *propname,
+    const char *fmt, ...)
+{
+#ifdef _KERNEL
+	sysevent_t		*ev;
+	sysevent_attr_list_t	*attr = NULL;
+	sysevent_value_t	value;
+	sysevent_id_t		eid;
+	char			propval[1024];
+	va_list			args;
+
+	ev = sysevent_alloc(EC_ZFS, ESC_ZFS_POOL_SETPROP,
+	    SUNW_KERN_PUB "zfs", SE_SLEEP);
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = spa_name(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_NAME, &value, SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_UINT64;
+	value.value.sv_uint64 = spa_guid(spa);
+	if (sysevent_add_attr(&attr, ZFS_EV_POOL_GUID, &value, SE_SLEEP) != 0)
+		goto done;
+
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = (char *)propname;
+	if (sysevent_add_attr(&attr, ZFS_EV_PROP_NAME, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	va_start(args, fmt);
+	vsnprintf(propval, sizeof(propval), fmt, args);
+	va_end(args);
+	value.value_type = SE_DATA_TYPE_STRING;
+	value.value.sv_string = propval;
+	if (sysevent_add_attr(&attr, ZFS_EV_PROP_VALUE, &value,
+	    SE_SLEEP) != 0)
+		goto done;
+
+	if (sysevent_attach_attributes(ev, attr) != 0)
+		goto done;
+	attr = NULL;
+
+	(void) log_sysevent(ev, SE_SLEEP, &eid);
+
+done:
+	if (attr)
+		sysevent_free_attr(attr);
+	sysevent_free(ev);
+#endif
+}
+
+static void
 spa_sync_version(void *arg, dmu_tx_t *tx)
 {
 	uint64_t *versionp = arg;
@@ -6595,6 +6650,7 @@ spa_sync_version(void *arg, dmu_tx_t *tx)
 
 	spa->spa_uberblock.ub_version = version;
 	vdev_config_dirty(spa->spa_root_vdev);
+	spa_event_notify_prop(spa, "version", "%lld", version);
 	spa_history_log_internal(spa, "set", tx, "version=%lld", version);
 }
 
@@ -6630,6 +6686,7 @@ spa_sync_props(void *arg, dmu_tx_t *tx)
 			VERIFY0(zfeature_lookup_name(fname, &fid));
 
 			spa_feature_enable(spa, fid, tx);
+			spa_event_notify_prop(spa, nvpair_name(elem), "enabled");
 			spa_history_log_internal(spa, "set", tx,
 			    "%s=enabled", nvpair_name(elem));
 			break;
@@ -6671,6 +6728,8 @@ spa_sync_props(void *arg, dmu_tx_t *tx)
 			 */
 			if (tx->tx_txg != TXG_INITIAL)
 				vdev_config_dirty(spa->spa_root_vdev);
+			spa_event_notify_prop(spa, nvpair_name(elem), "%s",
+			    strval);
 			spa_history_log_internal(spa, "set", tx,
 			    "%s=%s", nvpair_name(elem), strval);
 			break;
@@ -6695,6 +6754,8 @@ spa_sync_props(void *arg, dmu_tx_t *tx)
 				VERIFY0(zap_update(mos,
 				    spa->spa_pool_props_object, propname,
 				    1, strlen(strval) + 1, strval, tx));
+				spa_event_notify_prop(spa, nvpair_name(elem),
+				    "%s", strval);
 				spa_history_log_internal(spa, "set", tx,
 				    "%s=%s", nvpair_name(elem), strval);
 			} else if (nvpair_type(elem) == DATA_TYPE_UINT64) {
@@ -6708,6 +6769,8 @@ spa_sync_props(void *arg, dmu_tx_t *tx)
 				VERIFY0(zap_update(mos,
 				    spa->spa_pool_props_object, propname,
 				    8, 1, &intval, tx));
+				spa_event_notify_prop(spa, nvpair_name(elem),
+				    "%lld", intval);
 				spa_history_log_internal(spa, "set", tx,
 				    "%s=%lld", nvpair_name(elem), intval);
 			} else {
@@ -7286,6 +7349,30 @@ spa_has_active_shared_spare(spa_t *spa)
 	return (B_FALSE);
 }
 
+static const char *
+spa_vdev_state_to_str(vdev_state_t state)
+{
+
+	switch (state) {
+	case VDEV_STATE_HEALTHY:
+		return "ONLINE";
+	case VDEV_STATE_DEGRADED:
+		return "DEGRADED";
+	case VDEV_STATE_FAULTED:
+		return "FAULTED";
+	case VDEV_STATE_CANT_OPEN:
+		return "CANT_OPEN";
+	case VDEV_STATE_REMOVED:
+		return "REMOVED";
+	case VDEV_STATE_OFFLINE:
+		return "OFFLINE";
+	case VDEV_STATE_CLOSED:
+		return "CLOSED";
+	case VDEV_STATE_UNKNOWN:
+		return "UNKNOWN";
+	}
+}
+
 static sysevent_t *
 spa_event_create(spa_t *spa, vdev_t *vd, const char *name)
 {
@@ -7322,6 +7409,12 @@ spa_event_create(spa_t *spa, vdev_t *vd, const char *name)
 			    &value, SE_SLEEP) != 0)
 				goto done;
 		}
+
+		value.value_type = SE_DATA_TYPE_STRING;
+		value.value.sv_string = (char *)spa_vdev_state_to_str(vd->vdev_state);
+		if (sysevent_add_attr(&attr, ZFS_EV_VDEV_STATE,
+		    &value, SE_SLEEP) != 0)
+			goto done;
 	}
 
 	if (sysevent_attach_attributes(ev, attr) != 0)

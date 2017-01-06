@@ -1477,6 +1477,7 @@ dmu_recv_begin_sync(void *arg, dmu_tx_t *tx)
 		drba->drba_cookie->drc_newfs = B_TRUE;
 	}
 	VERIFY0(dsl_dataset_own_obj(dp, dsobj, dmu_recv_tag, &newds));
+	dsl_event_notify(newds, ESC_ZFS_DATASET_CREATE);
 
 	if (drba->drba_cookie->drc_resumable) {
 		dsl_dataset_zapify(newds, tx);
