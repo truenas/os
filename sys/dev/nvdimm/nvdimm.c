@@ -54,7 +54,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/pc/bios.h>
 #include <machine/cpu.h>
 
-#include "ntb.h"
+#include "../ntb/ntb.h"
 
 #define	ELF_KERN_STR	("elf"__XSTRING(__ELF_WORD_SIZE)" kernel")
 
