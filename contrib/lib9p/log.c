@@ -62,6 +62,5 @@ l9p_logf(enum l9p_log_level level, const char *func, const char *fmt, ...)
 	fprintf(stream, "[%s]\t %s: ", l9p_log_level_names[level], func);
 	vfprintf(stream, fmt, ap);
 	fprintf(stream, "\n");
-	fflush(stream);
 	va_end(ap);
 }

@@ -155,6 +155,7 @@ l9p_connection_reqfree(struct l9p_request *req)
 	struct l9p_connection *conn;
 
 	conn = req->lr_conn;
+	ht_remove(&conn->lc_requests, req->lr_req.hdr.tag);
 	free(req);
 }
 

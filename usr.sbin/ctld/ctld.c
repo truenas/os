@@ -401,6 +401,7 @@ auth_portal_new(struct auth_group *ag, const char *portal)
 	return (ap);
 
 error:
+	free(str);
 	free(ap);
 	log_errx(1, "Incorrect initiator portal '%s'", portal);
 	return (NULL);
@@ -674,8 +675,10 @@ parse_addr_port(char *arg, const char *def_port, struct addrinfo **ai)
 		 */
 		arg++;
 		addr = strsep(&arg, "]");
-		if (arg == NULL)
+		if (arg == NULL) {
+			free(str);
 			return (1);
+		}
 		if (arg[0] == '\0') {
 			port = def_port;
 		} else if (arg[0] == ':') {
@@ -2584,11 +2587,8 @@ main(int argc, char **argv)
 	bool dont_daemonize = false;
 	bool use_ucl = false;
 
-	while ((ch = getopt(argc, argv, "duf:DR")) != -1) {
+	while ((ch = getopt(argc, argv, "duf:R")) != -1) {
 		switch (ch) {
-		case 'D':
-			dont_daemonize = true;
-			break;
 		case 'd':
 			dont_daemonize = true;
 			debug++;
@@ -2651,7 +2651,7 @@ main(int argc, char **argv)
 		set_timeout((newconf->conf_isns_period + 2) / 3, false);
 
 	for (;;) {
-		main_loop(newconf, debug > 0);
+		main_loop(newconf, dont_daemonize);
 		if (sighup_received) {
 			sighup_received = false;
 			log_debugx("received SIGHUP, reloading configuration");
