@@ -2872,7 +2872,7 @@ nextfield(char **cp, char **endcp)
 					break;
 				if (*p == quot) {
 					quot = 0;
-				};
+				}
 				p++;
 				continue;
 			} else {
@@ -2955,7 +2955,8 @@ parsecred(char *namelist, struct xucred *cr)
 	/*
 	 * Get the user's password table entry.
 	 * Format is <name>[:<grp>[...]], so
-	 * First we want to get a 
+	 * First we want to get the name field, and
+	 * see if there are any groups.
 	 */
 	if (debug)
 		warnx("namelist starts out as %s", namelist);
