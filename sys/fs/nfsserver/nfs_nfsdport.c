@@ -2018,25 +2018,12 @@ again:
 	}
 
 	/*
-	 * Check to see if entries in this directory can be safely acquired
-	 * via VFS_VGET() or if a switch to VOP_LOOKUP() is required.
-	 * ZFS snapshot directories need VOP_LOOKUP(), so that any
-	 * automount of the snapshot directory that is required will
-	 * be done.
-	 * This needs to be done here for NFSv4, since NFSv4 never does
-	 * a VFS_VGET() for "." or "..".
+	 * For now ZFS requires VOP_LOOKUP as a workaround.  Until ino_t is changed
+	 * to 64 bit type a ZFS filesystem with over 1 billion files in it
+	 * will suffer from 64bit -> 32bit truncation.
 	 */
-	if (is_zfs == 1) {
-#if 1
+	if (is_zfs == 1)
 		usevget = 0;
-#else
-		r = VFS_VGET(mp, at.na_fileid, LK_SHARED, &nvp);
-		if (r == EOPNOTSUPP)
-			usevget = 0;
-		else if (r == 0)
-			vput(nvp);
-#endif
-	}
 
 	cn.cn_nameiop = LOOKUP;
 	cn.cn_lkflags = LK_SHARED | LK_RETRY;
