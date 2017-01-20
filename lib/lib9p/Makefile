@@ -11,6 +11,7 @@ WARNS=		2
 SRCS=		pack.c \
 		connection.c \
 		request.c \
+		genacl.c \
 		log.c \
 		hashtable.c \
 		rfuncs.c \
