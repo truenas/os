@@ -363,8 +363,22 @@ static int sfxge_tx_queue_mbuf(struct sfxge_txq *txq, struct mbuf *mbuf)
 
 	KASSERT(!txq->blocked, ("txq->blocked"));
 
+#if SFXGE_TX_PARSE_EARLY
+	/*
+	 * If software TSO is used, we still need to copy packet header,
+	 * even if we have already parsed it early before enqueue.
+	 */
+	if ((mbuf->m_pkthdr.csum_flags & CSUM_TSO) &&
+	    (txq->tso_fw_assisted == 0))
+		prefetch_read_many(mbuf->m_data);
+#else
+	/*
+	 * Prefetch packet header since we need to parse it and extract
+	 * IP ID, TCP sequence number and flags.
+	 */
 	if (mbuf->m_pkthdr.csum_flags & CSUM_TSO)
 		prefetch_read_many(mbuf->m_data);
+#endif
 
 	if (__predict_false(txq->init_state != SFXGE_TXQ_STARTED)) {
 		rc = EINTR;
@@ -1720,6 +1734,7 @@ static int
 sfxge_tx_qinit(struct sfxge_softc *sc, unsigned int txq_index,
 	       enum sfxge_txq_type type, unsigned int evq_index)
 {
+	const efx_nic_cfg_t *encp = efx_nic_cfg_get(sc->enp);
 	char name[16];
 	struct sysctl_ctx_list *ctx = device_get_sysctl_ctx(sc->dev);
 	struct sysctl_oid *txq_node;
@@ -1750,9 +1765,11 @@ sfxge_tx_qinit(struct sfxge_softc *sc, unsigned int txq_index,
 				 &txq->buf_base_id);
 
 	/* Create a DMA tag for packet mappings. */
-	if (bus_dma_tag_create(sc->parent_dma_tag, 1, 0x1000,
+	if (bus_dma_tag_create(sc->parent_dma_tag, 1,
+	    encp->enc_tx_dma_desc_boundary,
 	    MIN(0x3FFFFFFFFFFFUL, BUS_SPACE_MAXADDR), BUS_SPACE_MAXADDR, NULL,
-	    NULL, 0x11000, SFXGE_TX_MAPPING_MAX_SEG, 0x1000, 0, NULL, NULL,
+	    NULL, 0x11000, SFXGE_TX_MAPPING_MAX_SEG,
+	    encp->enc_tx_dma_desc_size_max, 0, NULL, NULL,
 	    &txq->packet_dma_tag) != 0) {
 		device_printf(sc->dev, "Couldn't allocate txq DMA tag\n");
 		rc = ENOMEM;

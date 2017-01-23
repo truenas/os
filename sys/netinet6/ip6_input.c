@@ -119,6 +119,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet6/in6_rss.h>
 
 #ifdef IPSEC
+#include <netipsec/key.h>
 #include <netipsec/ipsec.h>
 #include <netinet6/ip6_ipsec.h>
 #include <netipsec/ipsec6.h>
@@ -554,6 +555,12 @@ ip6_input(struct mbuf *m)
 	int nxt, ours = 0;
 	int srcrt = 0;
 
+	/*
+	 * Drop the packet if IPv6 operation is disabled on the interface.
+	 */
+	if ((ND_IFINFO(m->m_pkthdr.rcvif)->flags & ND6_IFF_IFDISABLED))
+		goto bad;
+
 #ifdef IPSEC
 	/*
 	 * should the inner packet be considered authentic?
@@ -596,10 +603,6 @@ ip6_input(struct mbuf *m)
 		} else
 			IP6STAT_INC(ip6s_m1);
 	}
-
-	/* drop the packet if IPv6 operation is disabled on the IF */
-	if ((ND_IFINFO(m->m_pkthdr.rcvif)->flags & ND6_IFF_IFDISABLED))
-		goto bad;
 
 	in6_ifstat_inc(m->m_pkthdr.rcvif, ifs6_in_receive);
 	IP6STAT_INC(ip6s_total);
@@ -728,14 +731,36 @@ ip6_input(struct mbuf *m)
 		goto bad;
 	}
 #endif
+	/*
+	 * Try to forward the packet, but if we fail continue.
+	 * ip6_tryforward() does inbound and outbound packet firewall
+	 * processing. If firewall has decided that destination becomes
+	 * our local address, it sets M_FASTFWD_OURS flag. In this
+	 * case skip another inbound firewall processing and update
+	 * ip6 pointer.
+	 */
+	if (V_ip6_forwarding != 0
+#ifdef IPSEC
+	    && !key_havesp(IPSEC_DIR_INBOUND)
+	    && !key_havesp(IPSEC_DIR_OUTBOUND)
+#endif
+	    ) {
+		if ((m = ip6_tryforward(m)) == NULL)
+			return;
+		if (m->m_flags & M_FASTFWD_OURS) {
+			m->m_flags &= ~M_FASTFWD_OURS;
+			ours = 1;
+			ip6 = mtod(m, struct ip6_hdr *);
+			goto hbhcheck;
+		}
+	}
 #ifdef IPSEC
 	/*
 	 * Bypass packet filtering for packets previously handled by IPsec.
 	 */
 	if (ip6_ipsec_filtertunnel(m))
 		goto passin;
-#endif /* IPSEC */
-
+#endif
 	/*
 	 * Run through list of hooks for input packets.
 	 *
@@ -743,12 +768,12 @@ ip6_input(struct mbuf *m)
 	 *     (e.g. by NAT rewriting).  When this happens,
 	 *     tell ip6_forward to do the right thing.
 	 */
-	odst = ip6->ip6_dst;
 
 	/* Jump over all PFIL processing if hooks are not active. */
 	if (!PFIL_HOOKED(&V_inet6_pfil_hook))
 		goto passin;
 
+	odst = ip6->ip6_dst;
 	if (pfil_run_hooks(&V_inet6_pfil_hook, &m,
 	    m->m_pkthdr.rcvif, PFIL_IN, NULL))
 		return;
