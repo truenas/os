@@ -117,10 +117,12 @@ tmpfs_lookup(struct vop_cachedlookup_args *v)
 		if (de != NULL && de->td_node == NULL)
 			cnp->cn_flags |= ISWHITEOUT;
 		if (de == NULL || de->td_node == NULL) {
-			/* The entry was not found in the directory.
+			/*
+			 * The entry was not found in the directory.
 			 * This is OK if we are creating or renaming an
 			 * entry and are working on the last component of
-			 * the path name. */
+			 * the path name.
+			 */
 			if ((cnp->cn_flags & ISLASTCN) &&
 			    (cnp->cn_nameiop == CREATE || \
 			    cnp->cn_nameiop == RENAME ||
@@ -132,8 +134,10 @@ tmpfs_lookup(struct vop_cachedlookup_args *v)
 				if (error != 0)
 					goto out;
 
-				/* Keep the component name in the buffer for
-				 * future uses. */
+				/*
+				 * Keep the component name in the buffer for
+				 * future uses.
+				 */
 				cnp->cn_flags |= SAVENAME;
 
 				error = EJUSTRETURN;
@@ -142,14 +146,18 @@ tmpfs_lookup(struct vop_cachedlookup_args *v)
 		} else {
 			struct tmpfs_node *tnode;
 
-			/* The entry was found, so get its associated
-			 * tmpfs_node. */
+			/*
+			 * The entry was found, so get its associated
+			 * tmpfs_node.
+			 */
 			tnode = de->td_node;
 
-			/* If we are not at the last path component and
+			/*
+			 * If we are not at the last path component and
 			 * found a non-directory or non-link entry (which
 			 * may itself be pointing to a directory), raise
-			 * an error. */
+			 * an error.
+			 */
 			if ((tnode->tn_type != VDIR &&
 			    tnode->tn_type != VLNK) &&
 			    !(cnp->cn_flags & ISLASTCN)) {
@@ -157,9 +165,11 @@ tmpfs_lookup(struct vop_cachedlookup_args *v)
 				goto out;
 			}
 
-			/* If we are deleting or renaming the entry, keep
+			/*
+			 * If we are deleting or renaming the entry, keep
 			 * track of its tmpfs_dirent so that it can be
-			 * easily deleted later. */
+			 * easily deleted later.
+			 */
 			if ((cnp->cn_flags & ISLASTCN) &&
 			    (cnp->cn_nameiop == DELETE ||
 			    cnp->cn_nameiop == RENAME)) {
@@ -175,8 +185,9 @@ tmpfs_lookup(struct vop_cachedlookup_args *v)
 					goto out;
 
 				if ((dnode->tn_mode & S_ISTXT) &&
-				  VOP_ACCESS(dvp, VADMIN, cnp->cn_cred, cnp->cn_thread) &&
-				  VOP_ACCESS(*vpp, VADMIN, cnp->cn_cred, cnp->cn_thread)) {
+				  VOP_ACCESS(dvp, VADMIN, cnp->cn_cred,
+				  cnp->cn_thread) && VOP_ACCESS(*vpp, VADMIN,
+				  cnp->cn_cred, cnp->cn_thread)) {
 					error = EPERM;
 					vput(*vpp);
 					*vpp = NULL;
@@ -192,18 +203,22 @@ tmpfs_lookup(struct vop_cachedlookup_args *v)
 		}
 	}
 
-	/* Store the result of this lookup in the cache.  Avoid this if the
+	/*
+	 * Store the result of this lookup in the cache.  Avoid this if the
 	 * request was for creation, as it does not improve timings on
-	 * emprical tests. */
+	 * emprical tests.
+	 */
 	if ((cnp->cn_flags & MAKEENTRY) != 0)
 		cache_enter(dvp, *vpp, cnp);
 
 out:
-	/* If there were no errors, *vpp cannot be null and it must be
-	 * locked. */
+	/*
+	 * If there were no errors, *vpp cannot be null and it must be
+	 * locked.
+	 */
 	MPASS(IFF(error == 0, *vpp != NULLVP && VOP_ISLOCKED(*vpp)));
 
-	return error;
+	return (error);
 }
 
 static int
@@ -1096,7 +1111,6 @@ tmpfs_rmdir(struct vop_rmdir_args *v)
 
 	/* No vnode should be allocated for this entry from this point */
 	TMPFS_NODE_LOCK(node);
-	TMPFS_ASSERT_ELOCKED(node);
 	node->tn_links--;
 	node->tn_dir.tn_parent = NULL;
 	node->tn_status |= TMPFS_NODE_ACCESSED | TMPFS_NODE_CHANGED |
@@ -1105,7 +1119,6 @@ tmpfs_rmdir(struct vop_rmdir_args *v)
 	TMPFS_NODE_UNLOCK(node);
 
 	TMPFS_NODE_LOCK(dnode);
-	TMPFS_ASSERT_ELOCKED(dnode);
 	dnode->tn_links--;
 	dnode->tn_status |= TMPFS_NODE_ACCESSED | TMPFS_NODE_CHANGED |
 	    TMPFS_NODE_MODIFIED;
@@ -1259,7 +1272,6 @@ tmpfs_reclaim(struct vop_reclaim_args *v)
 	cache_purge(vp);
 
 	TMPFS_NODE_LOCK(node);
-	TMPFS_ASSERT_ELOCKED(node);
 	tmpfs_free_vp(vp);
 
 	/* If the node referenced by this vnode was deleted by the user,
@@ -1390,7 +1402,7 @@ tmpfs_whiteout(struct vop_whiteout_args *ap)
 }
 
 /*
- * vnode operations vector used for files stored in a tmpfs file system.
+ * Vnode operations vector used for files stored in a tmpfs file system.
  */
 struct vop_vector tmpfs_vnodeop_entries = {
 	.vop_default =			&default_vnodeops,
