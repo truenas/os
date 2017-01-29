@@ -73,7 +73,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-+#include <sys/syslog.h>
+#include <sys/syslog.h>
 #include <sys/sysproto.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
