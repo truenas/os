@@ -462,7 +462,7 @@ kern_fcntl_freebsd(struct thread *td, int fd, int cmd, long arg)
 		 * rude as well and is just for tracking down the
 		 * culprit.
 		 */
-		if (arg < 0) {
+		if ((int)arg < 0) {
 			tprintf(td->td_proc, LOG_INFO,
 			    "pid %d (%s): fcntl(%d, F_SETFL, %ld)\n",
 			    td->td_proc->p_pid, td->td_name, fd, arg);
