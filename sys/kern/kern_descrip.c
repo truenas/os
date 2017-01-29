@@ -73,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
++#include <sys/syslog.h>
 #include <sys/sysproto.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
@@ -454,6 +455,20 @@ kern_fcntl_freebsd(struct thread *td, int fd, int cmd, long arg)
 		error = copyin((void *)(intptr_t)arg, &fl, sizeof(fl));
 		arg1 = (intptr_t)&fl;
 		break;
+	case F_SETFL:
+		/*
+		 * Perhaps should check for any bad bits here, rather
+		 * than just the sign bit.  The tprintf() is a bit
+		 * rude as well and is just for tracking down the
+		 * culprit.
+		 */
+		if (arg < 0) {
+			tprintf(td->td_proc, LOG_INFO,
+			    "pid %d (%s): fcntl(%d, F_SETFL, %ld)\n",
+			    td->td_proc->p_pid, td->td_name, fd, arg);
+			error = EINVAL;
+		}
+		/* FALLTHROUGH */
 	default:
 		arg1 = arg;
 		break;
