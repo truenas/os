@@ -620,7 +620,7 @@ pci_vtscsi_init_queue(struct pci_vtscsi_softc *sc,
 	int i;
 
 	queue->vsq_sc = sc;
-	queue->vsq_ctl_fd = open("/dev/cam/ctl", O_RDWR);
+	queue->vsq_ctl_fd = sc->vss_ctl_fd;
 	queue->vsq_vq = &sc->vss_vq[num + 2];
 
 	if (queue->vsq_ctl_fd < 0) {
@@ -660,12 +660,7 @@ pci_vtscsi_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	int i;
 
 	sc = calloc(1, sizeof(struct pci_vtscsi_softc));
-	sc->vss_ctl_fd = open("/dev/cam/ctl", O_RDWR);
-
-	if (sc->vss_ctl_fd < 0) {
-		WPRINTF(("cannot open /dev/cam/ctl: %s\n", strerror(errno)));
-		return (1);
-	}
+	sc->vss_ctl_fd = -1;
 
 	while ((opt = strsep(&opts, ",")) != NULL) {
 		optname = strsep(&opt, "=");
@@ -673,6 +668,20 @@ pci_vtscsi_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 		if (strcmp(optname, "iid") == 0)
 			sc->vss_iid = strtoul(optvalue, NULL, 10);
+
+		if (strcmp(optname, "port") == 0) {
+			sc->vss_ctl_fd = open(optvalue, O_RDWR);
+			if (sc->vss_ctl_fd < 0) {
+				WPRINTF(("cannot open %s: %s\n", optvalue,
+				    strerror(errno)));
+				return (1);
+			}
+		}
+	}
+
+	if (sc->vss_ctl_fd == -1) {
+		WPRINTF(("no CTL port specified"));
+		return (1);
 	}
 
 	vi_softc_linkup(&sc->vss_vs, &vtscsi_vi_consts, sc, pi, sc->vss_vq);
