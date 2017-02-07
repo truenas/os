@@ -379,6 +379,7 @@ TUNABLE_QUAD("vfs.zfs.arc_meta_limit", &zfs_arc_meta_limit);
 TUNABLE_QUAD("vfs.zfs.arc_meta_min", &zfs_arc_meta_min);
 TUNABLE_QUAD("vfs.zfs.arc_average_blocksize", &zfs_arc_average_blocksize);
 TUNABLE_INT("vfs.zfs.arc_shrink_shift", &zfs_arc_shrink_shift);
+TUNABLE_INT("vfs.zfs.compressed_arc_enabled", &zfs_compressed_arc_enabled);
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_PROC(_vfs_zfs, OID_AUTO, arc_max, CTLTYPE_U64 | CTLFLAG_RWTUN,
     0, sizeof(uint64_t), sysctl_vfs_zfs_arc_max, "QU", "Maximum ARC size");
