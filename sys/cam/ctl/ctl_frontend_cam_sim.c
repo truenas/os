@@ -94,15 +94,14 @@ struct cfcs_softc {
 	CAM_SNS_BUF_PHYS | CAM_CDB_PHYS | CAM_SENSE_PTR |		\
 	CAM_SENSE_PHYS)
 
-int cfcs_init(void);
+static int cfcs_init(void);
+static int cfcs_shutdown(void);
 static void cfcs_poll(struct cam_sim *sim);
 static void cfcs_online(void *arg);
 static void cfcs_offline(void *arg);
 static void cfcs_datamove(union ctl_io *io);
 static void cfcs_done(union ctl_io *io);
 void cfcs_action(struct cam_sim *sim, union ccb *ccb);
-static void cfcs_async(void *callback_arg, uint32_t code,
-		       struct cam_path *path, void *arg);
 
 struct cfcs_softc cfcs_softc;
 /*
@@ -121,14 +120,14 @@ static struct ctl_frontend cfcs_frontend =
 {
 	.name = "camsim",
 	.init = cfcs_init,
+	.shutdown = cfcs_shutdown,
 };
 CTL_FRONTEND_DECLARE(ctlcfcs, cfcs_frontend);
 
-int
+static int
 cfcs_init(void)
 {
 	struct cfcs_softc *softc;
-	struct ccb_setasync csa;
 	struct ctl_port *port;
 	int retval;
 
@@ -214,13 +213,6 @@ cfcs_init(void)
 		goto bailout;
 	}
 
-	xpt_setup_ccb(&csa.ccb_h, softc->path, CAM_PRIORITY_NONE);
-	csa.ccb_h.func_code = XPT_SASYNC_CB;
-	csa.event_enable = AC_LOST_DEVICE;
-	csa.callback = cfcs_async;
-        csa.callback_arg = softc->sim;
-        xpt_action((union ccb *)&csa);
-
 	mtx_unlock(&softc->lock);
 
 	return (retval);
@@ -234,6 +226,27 @@ bailout:
 	mtx_destroy(&softc->lock);
 
 	return (retval);
+}
+
+static int
+cfcs_shutdown(void)
+{
+	struct cfcs_softc *softc = &cfcs_softc;
+	struct ctl_port *port = &softc->port;
+	int error;
+
+	ctl_port_offline(port);
+
+	mtx_lock(&softc->lock);
+	xpt_free_path(softc->path);
+	xpt_bus_deregister(cam_sim_path(softc->sim));
+	cam_sim_free(softc->sim, /*free_devq*/ TRUE);
+	mtx_unlock(&softc->lock);
+	mtx_destroy(&softc->lock);
+
+	if ((error = ctl_port_deregister(port)) != 0)
+		printf("%s: cam_sim port deregistration failed\n", __func__);
+	return (error);
 }
 
 static void
@@ -300,7 +313,7 @@ cfcs_datamove(union ctl_io *io)
 	struct ctl_sg_entry ctl_sg_entry, *ctl_sglist;
 	int cam_sg_count, ctl_sg_count, cam_sg_start;
 	int cam_sg_offset;
-	int len_to_copy, len_copied;
+	int len_to_copy;
 	int ctl_watermark, cam_watermark;
 	int i, j;
 
@@ -365,7 +378,6 @@ cfcs_datamove(union ctl_io *io)
 
 	ctl_watermark = 0;
 	cam_watermark = cam_sg_offset;
-	len_copied = 0;
 	for (i = cam_sg_start, j = 0;
 	     i < cam_sg_count && j < ctl_sg_count;) {
 		uint8_t *cam_ptr, *ctl_ptr;
@@ -387,9 +399,6 @@ cfcs_datamove(union ctl_io *io)
 			ctl_ptr = (uint8_t *)ctl_sglist[j].addr;
 		ctl_ptr = ctl_ptr + ctl_watermark;
 
-		ctl_watermark += len_to_copy;
-		cam_watermark += len_to_copy;
-
 		if ((io->io_hdr.flags & CTL_FLAG_DATA_MASK) ==
 		     CTL_FLAG_DATA_IN) {
 			CTL_DEBUG_PRINT(("%s: copying %d bytes to CAM\n",
@@ -405,29 +414,21 @@ cfcs_datamove(union ctl_io *io)
 			bcopy(cam_ptr, ctl_ptr, len_to_copy);
 		}
 
-		len_copied += len_to_copy;
+		io->scsiio.ext_data_filled += len_to_copy;
+		io->scsiio.kern_data_resid -= len_to_copy;
 
+		cam_watermark += len_to_copy;
 		if (cam_sglist[i].ds_len == cam_watermark) {
 			i++;
 			cam_watermark = 0;
 		}
 
+		ctl_watermark += len_to_copy;
 		if (ctl_sglist[j].len == ctl_watermark) {
 			j++;
 			ctl_watermark = 0;
 		}
 	}
-
-	io->scsiio.ext_data_filled += len_copied;
-
-	/*
-	 * Report write underflow as error, since CTL and backends don't
-	 * really support it.
-	 */
-	if ((io->io_hdr.flags & CTL_FLAG_DATA_MASK) == CTL_FLAG_DATA_OUT &&
-	    j < ctl_sg_count) {
-		io->io_hdr.port_status = 43;
-	} else
 
 	if ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS) {
 		io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr = NULL;
@@ -812,10 +813,4 @@ cfcs_action(struct cam_sim *sim, union ccb *ccb)
 		xpt_done(ccb);
 		break;
 	}
-}
-
-static void
-cfcs_async(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
-{
-
 }
