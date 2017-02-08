@@ -3881,6 +3881,7 @@ ixgbe_handle_msf(void *context, int pending)
 	/* Adjust media types shown in ifconfig */
 	ifmedia_removeall(&adapter->media);
 	ixgbe_add_media_types(adapter);
+	ifmedia_set(&adapter->media, IFM_ETHER | IFM_AUTO);
 	IXGBE_CORE_UNLOCK(adapter);
 	return;
 }
