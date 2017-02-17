@@ -2268,8 +2268,11 @@ dataset_name_hidden(const char *name)
 	 */
 	if (strchr(name, '$') != NULL)
 		return (B_TRUE);
+#if 0
+	/* We need to see %datasets to be able to track resumable send status */
 	if (strchr(name, '%') != NULL)
 		return (B_TRUE);
+#endif
 	if (!INGLOBALZONE(curthread) && !zone_dataset_visible(name, NULL))
 		return (B_TRUE);
 	return (B_FALSE);
