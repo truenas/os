@@ -152,10 +152,6 @@ __FBSDID("$FreeBSD$");
 #include <machine/xbox.h>
 #endif
 
-#if !defined(CPU_DISABLE_SSE) && defined(I686_CPU)
-#define CPU_ENABLE_SSE
-#endif
-
 #ifndef PMAP_SHPGPERPROC
 #define PMAP_SHPGPERPROC 200
 #endif
@@ -441,7 +437,7 @@ pmap_bootstrap(vm_paddr_t firstaddr)
 	 * CMAP1/CMAP2 are used for zeroing and copying pages.
 	 * CMAP3 is used for the idle process page zeroing.
 	 */
-	pc = pcpu_find(curcpu);
+	pc = get_pcpu();
 	mtx_init(&pc->pc_cmap_lock, "SYSMAPS", NULL, MTX_DEF);
 	SYSMAP(caddr_t, pc->pc_cmap_pte1, pc->pc_cmap_addr1, 1)
 	SYSMAP(caddr_t, pc->pc_cmap_pte2, pc->pc_cmap_addr2, 1)
@@ -3150,12 +3146,12 @@ pmap_protect_pde(pmap_t pmap, pd_entry_t *pde, vm_offset_t sva, vm_prot_t prot)
 	anychanged = FALSE;
 retry:
 	oldpde = newpde = *pde;
-	if (oldpde & PG_MANAGED) {
+	if ((oldpde & (PG_MANAGED | PG_M | PG_RW)) ==
+	    (PG_MANAGED | PG_M | PG_RW)) {
 		eva = sva + NBPDR;
 		for (va = sva, m = PHYS_TO_VM_PAGE(oldpde & PG_PS_FRAME);
 		    va < eva; va += PAGE_SIZE, m++)
-			if ((oldpde & (PG_M | PG_RW)) == (PG_M | PG_RW))
-				vm_page_dirty(m);
+			vm_page_dirty(m);
 	}
 	if ((prot & VM_PROT_WRITE) == 0)
 		newpde &= ~(PG_RW | PG_M);
@@ -4231,11 +4227,9 @@ pagezero(void *page)
 {
 #if defined(I686_CPU)
 	if (cpu_class == CPUCLASS_686) {
-#if defined(CPU_ENABLE_SSE)
 		if (cpu_feature & CPUID_SSE2)
 			sse2_pagezero(page);
 		else
-#endif
 			i686_pagezero(page);
 	} else
 #endif
@@ -4253,7 +4247,7 @@ pmap_zero_page(vm_page_t m)
 	struct pcpu *pc;
 
 	sched_pin();
-	pc = pcpu_find(curcpu);
+	pc = get_pcpu();
 	cmap_pte2 = pc->pc_cmap_pte2;
 	mtx_lock(&pc->pc_cmap_lock);
 	if (*cmap_pte2)
@@ -4286,7 +4280,7 @@ pmap_zero_page_area(vm_page_t m, int off, int size)
 	struct pcpu *pc;
 
 	sched_pin();
-	pc = pcpu_find(curcpu);
+	pc = get_pcpu();
 	cmap_pte2 = pc->pc_cmap_pte2;
 	mtx_lock(&pc->pc_cmap_lock);
 	if (*cmap_pte2)
@@ -4337,7 +4331,7 @@ pmap_copy_page(vm_page_t src, vm_page_t dst)
 	struct pcpu *pc;
 
 	sched_pin();
-	pc = pcpu_find(curcpu);
+	pc = get_pcpu();
 	cmap_pte1 = pc->pc_cmap_pte1; 
 	cmap_pte2 = pc->pc_cmap_pte2;
 	mtx_lock(&pc->pc_cmap_lock);
@@ -4372,7 +4366,7 @@ pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
 	int cnt;
 
 	sched_pin();
-	pc = pcpu_find(curcpu);
+	pc = get_pcpu();
 	cmap_pte1 = pc->pc_cmap_pte1; 
 	cmap_pte2 = pc->pc_cmap_pte2;
 	mtx_lock(&pc->pc_cmap_lock);
@@ -5368,7 +5362,7 @@ pmap_flush_page(vm_page_t m)
 	useclflushopt = (cpu_stdext_feature & CPUID_STDEXT_CLFLUSHOPT) != 0;
 	if (useclflushopt || (cpu_feature & CPUID_CLFSH) != 0) {
 		sched_pin();
-		pc = pcpu_find(curcpu);
+		pc = get_pcpu();
 		cmap_pte2 = pc->pc_cmap_pte2; 
 		mtx_lock(&pc->pc_cmap_lock);
 		if (*cmap_pte2)
