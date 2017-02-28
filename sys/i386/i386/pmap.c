@@ -152,10 +152,6 @@ __FBSDID("$FreeBSD$");
 #include <machine/xbox.h>
 #endif
 
-#if !defined(CPU_DISABLE_SSE) && defined(I686_CPU)
-#define CPU_ENABLE_SSE
-#endif
-
 #ifndef PMAP_SHPGPERPROC
 #define PMAP_SHPGPERPROC 200
 #endif
@@ -3150,12 +3146,12 @@ pmap_protect_pde(pmap_t pmap, pd_entry_t *pde, vm_offset_t sva, vm_prot_t prot)
 	anychanged = FALSE;
 retry:
 	oldpde = newpde = *pde;
-	if (oldpde & PG_MANAGED) {
+	if ((oldpde & (PG_MANAGED | PG_M | PG_RW)) ==
+	    (PG_MANAGED | PG_M | PG_RW)) {
 		eva = sva + NBPDR;
 		for (va = sva, m = PHYS_TO_VM_PAGE(oldpde & PG_PS_FRAME);
 		    va < eva; va += PAGE_SIZE, m++)
-			if ((oldpde & (PG_M | PG_RW)) == (PG_M | PG_RW))
-				vm_page_dirty(m);
+			vm_page_dirty(m);
 	}
 	if ((prot & VM_PROT_WRITE) == 0)
 		newpde &= ~(PG_RW | PG_M);
@@ -4231,11 +4227,9 @@ pagezero(void *page)
 {
 #if defined(I686_CPU)
 	if (cpu_class == CPUCLASS_686) {
-#if defined(CPU_ENABLE_SSE)
 		if (cpu_feature & CPUID_SSE2)
 			sse2_pagezero(page);
 		else
-#endif
 			i686_pagezero(page);
 	} else
 #endif

@@ -275,6 +275,7 @@ dev/if_ndis/if_ndis.c		optional ndis
 dev/if_ndis/if_ndis_pccard.c	optional ndis pccard
 dev/if_ndis/if_ndis_pci.c	optional ndis cardbus | ndis pci
 dev/if_ndis/if_ndis_usb.c	optional ndis usb
+dev/intel/spi.c			optional intelspi
 dev/io/iodev.c			optional io
 dev/ipmi/ipmi.c			optional ipmi
 dev/ipmi/ipmi_acpi.c		optional ipmi acpi
@@ -528,7 +529,7 @@ i386/ibcs2/ibcs2_xenix.c	optional ibcs2
 i386/ibcs2/ibcs2_xenix_sysent.c	optional ibcs2
 i386/ibcs2/imgact_coff.c	optional ibcs2
 i386/isa/elink.c		optional ep | ie
-i386/isa/npx.c			optional npx
+i386/isa/npx.c			standard
 i386/isa/pmtimer.c		optional pmtimer
 i386/isa/prof_machdep.c		optional profiling-routine
 i386/isa/spic.c			optional spic
