@@ -1455,8 +1455,8 @@ event_loop(void)
 		if (FD_ISSET(seqpacket_fd_compat, &fds))
 			new_client(seqpacket_fd_compat, false, SOCK_SEQPACKET);
 	}
-	close(seqpacket_fd);
-	close(stream_fd);
+	close(seqpacket_fd_xml);
+	close(stream_fd_compat);
 	close(fd);
 }
 
