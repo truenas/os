@@ -57,7 +57,6 @@ __FBSDID("$FreeBSD$");
 #include <vm/pmap.h>
 #include <vm/uma.h>
 
-#include <machine/cpuconf.h>
 #include <machine/cpufunc.h>
 
 #if defined(CPU_XSCALE_81342)
@@ -585,7 +584,7 @@ static int	arm_dcache_l2_assoc;
 static int	arm_dcache_l2_linesize;
 
 static void
-get_cachetype_cp15()
+get_cachetype_cp15(void)
 {
 	u_int ctype, isize, dsize, cpuid;
 	u_int clevel, csize, i, sel;
@@ -700,7 +699,7 @@ get_cachetype_cp15()
  */
 
 int
-set_cpufuncs()
+set_cpufuncs(void)
 {
 	cputype = cpu_ident();
 	cputype &= CPU_ID_CPU_MASK;

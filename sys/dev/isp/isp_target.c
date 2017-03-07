@@ -503,11 +503,11 @@ isp_endcmd(ispsoftc_t *isp, ...)
 		ct7_entry_t _ctio7;
 	} un;
 	va_list ap;
+	int vpidx, nphdl;
 
 	ISP_MEMZERO(&un, sizeof un);
 
 	if (IS_24XX(isp)) {
-		int vpidx, nphdl;
 		at7_entry_t *aep;
 		ct7_entry_t *cto = &un._ctio7;
 
@@ -558,13 +558,9 @@ isp_endcmd(ispsoftc_t *isp, ...)
 		} else {
 			cto->ct_flags |= CT7_FLAG_MODE1 | CT7_SENDSTATUS;
 		}
-		if (aep->at_cmnd.cdb_dl.sf.fcp_cmnd_dl) {
+		if (aep->at_cmnd.cdb_dl.sf.fcp_cmnd_dl != 0) {
 			cto->ct_resid = aep->at_cmnd.cdb_dl.sf.fcp_cmnd_dl;
-			if (cto->ct_resid < 0) {
-				 cto->ct_scsi_status |= (FCP_RESID_OVERFLOW << 8);
-			} else if (cto->ct_resid > 0) {
-				 cto->ct_scsi_status |= (FCP_RESID_UNDERFLOW << 8);
-			}
+			cto->ct_scsi_status |= (FCP_RESID_UNDERFLOW << 8);
 		}
 		cto->ct_syshandle = hdl;
 	} else {
@@ -573,6 +569,9 @@ isp_endcmd(ispsoftc_t *isp, ...)
 
 		va_start(ap, isp);
 		aep = va_arg(ap, at2_entry_t *);
+		/* nphdl and vpidx are unused here. */
+		nphdl = va_arg(ap, int);
+		vpidx = va_arg(ap, int);
 		code = va_arg(ap, uint32_t);
 		hdl = va_arg(ap, uint32_t);
 		va_end(ap);

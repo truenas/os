@@ -632,6 +632,8 @@
         ..
         soelim
         ..
+        tail
+        ..
         tar
         ..
         timeout
@@ -645,6 +647,8 @@
         uudecode
         ..
         uuencode
+        ..
+        uniq
         ..
         xargs
         ..

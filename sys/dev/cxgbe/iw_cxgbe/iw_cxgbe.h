@@ -559,6 +559,8 @@ static inline int to_ib_qp_state(int c4iw_qp_state)
 	return IB_QPS_ERR;
 }
 
+#define C4IW_DRAIN_OPCODE FW_RI_SGE_EC_CR_RETURN
+
 static inline u32 c4iw_ib_to_tpt_access(int a)
 {
 	return (a & IB_ACCESS_REMOTE_WRITE ? FW_RI_MEM_ACCESS_REM_WRITE : 0) |
@@ -754,7 +756,6 @@ struct c4iw_ep_common {
         int rpl_done;
         struct thread *thread;
         struct socket *so;
-	struct mutex so_mutex;
 };
 
 struct c4iw_listen_ep {

@@ -245,8 +245,6 @@ _REDUNDANT_LIB_DIRS+=    ${LOCAL_LIB_DIRS:M${_DIR}*}
 .for _DIR in ${LOCAL_LIB_DIRS}
 .if empty(_REDUNDANT_LIB_DIRS:M${_DIR}) && exists(${.CURDIR}/${_DIR}/Makefile)
 SUBDIR+=	${_DIR}
-.else
-.warning ${_DIR} not added to SUBDIR list.  See UPDATING 20141121.
 .endif
 .endfor
 
@@ -1920,6 +1918,7 @@ native-xtools: .PHONY
     usr.bin/mktemp \
     usr.bin/mt \
     usr.bin/patch \
+    usr.bin/readelf \
     usr.bin/sed \
     usr.bin/sort \
     usr.bin/tar \
@@ -2462,16 +2461,35 @@ CDBENV=MAKEOBJDIRPREFIX=${MAKEOBJDIRPREFIX}/${XDDIR} \
 	INSTALL="sh ${.CURDIR}/tools/install.sh"
 CDENV= ${CDBENV} \
 	TOOLS_PREFIX=${XDTP}
-CD2CFLAGS=-isystem ${XDDESTDIR}/usr/include -L${XDDESTDIR}/usr/lib \
-	--sysroot=${XDDESTDIR}/ -B${XDDESTDIR}/usr/libexec \
-	-B${XDDESTDIR}/usr/bin -B${XDDESTDIR}/usr/lib
-CD2ENV=${CDENV} CC="${CC} ${CD2CFLAGS}" CXX="${CXX} ${CD2CFLAGS}" \
+
+.if ${WANT_COMPILER_TYPE} == gcc || \
+    (defined(X_COMPILER_TYPE) && ${X_COMPILER_TYPE} == gcc)
+# GCC requires -isystem and -L when using a cross-compiler.  --sysroot
+# won't set header path and -L is used to ensure the base library path
+# is added before the port PREFIX library path.
+CD2CFLAGS+=	-isystem ${XDDESTDIR}/usr/include -L${XDDESTDIR}/usr/lib
+# GCC requires -B to find /usr/lib/crti.o when using a cross-compiler
+# combined with --sysroot.
+CD2CFLAGS+=	-B${XDDESTDIR}/usr/lib
+# Force using libc++ for external GCC.
+# XXX: This should be checking MK_GNUCXX == no
+.if ${X_COMPILER_VERSION} >= 40800
+CD2CXXFLAGS+=	-isystem ${XDDESTDIR}/usr/include/c++/v1 -std=c++11 \
+		-nostdinc++
+.endif
+.endif
+CD2CFLAGS+=	--sysroot=${XDDESTDIR}/
+CD2ENV=${CDENV} CC="${CC} ${CD2CFLAGS}" CXX="${CXX} ${CD2CXXFLAGS} ${CD2CFLAGS}" \
 	CPP="${CPP} ${CD2CFLAGS}" \
 	MACHINE=${TARGET} MACHINE_ARCH=${TARGET_ARCH}
 
 CDTMP=	${MAKEOBJDIRPREFIX}/${XDDIR}/${.CURDIR}/tmp
 CDMAKE=${CDENV} PATH=${CDTMP}/usr/bin:${PATH} ${MAKE} ${NOFUN}
 CD2MAKE=${CD2ENV} PATH=${CDTMP}/usr/bin:${XDDESTDIR}/usr/bin:${PATH} ${MAKE} ${NOFUN}
+.if ${MK_META_MODE} != "no"
+# Don't rebuild build-tools targets during normal build.
+CD2MAKE+=	BUILD_TOOLS_META=.NOMETA_CMP
+.endif
 XDDESTDIR=${DESTDIR}/${XDTP}
 .if !defined(OSREL)
 OSREL!= uname -r | sed -e 's/[-(].*//'
@@ -2491,7 +2509,8 @@ _xb-worldtmp: .PHONY
 _xb-bootstrap-tools: .PHONY
 .for _tool in \
     ${_clang_tblgen} \
-    ${_gperf}
+    ${_gperf} \
+    ${_yacc}
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,all,install)"; \
 	cd ${.CURDIR}/${_tool}; \
 	${CDMAKE} DIRPRFX=${_tool}/ obj; \
