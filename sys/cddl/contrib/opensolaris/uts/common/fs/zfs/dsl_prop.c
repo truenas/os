@@ -607,7 +607,7 @@ dsl_prop_changed_notify(dsl_pool_t *dp, uint64_t ddobj,
 	dsl_dir_rele(dd, FTAG);
 }
 
-static void
+void
 dsl_event_notify_prop(dsl_dataset_t *ds, zprop_source_t source,
     const char *propname, const char *propvalue)
 {

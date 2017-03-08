@@ -927,6 +927,7 @@ static int
 zvol_update_volsize(objset_t *os, uint64_t volsize)
 {
 	dmu_tx_t *tx;
+	char strsize[32];
 	int error;
 
 	ASSERT(MUTEX_HELD(&zfsdev_state_lock));
@@ -947,6 +948,11 @@ zvol_update_volsize(objset_t *os, uint64_t volsize)
 	if (error == 0)
 		error = dmu_free_long_range(os,
 		    ZVOL_OBJ, volsize, DMU_OBJECT_END);
+
+	sprintf(strsize, "%ju", volsize);
+	dsl_event_notify_prop(os->os_dsl_dataset, ZPROP_SRC_LOCAL, "volsize",
+	    strsize);
+
 	return (error);
 }
 

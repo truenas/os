@@ -29,6 +29,7 @@
 #include <sys/dmu.h>
 #include <sys/dsl_pool.h>
 #include <sys/zfs_context.h>
+#include <sys/dsl_dataset.h>
 #include <sys/dsl_synctask.h>
 
 #ifdef	__cplusplus
@@ -107,6 +108,9 @@ void dsl_prop_unset_hasrecvd(const char *dsname);
 void dsl_prop_nvlist_add_uint64(nvlist_t *nv, zfs_prop_t prop, uint64_t value);
 void dsl_prop_nvlist_add_string(nvlist_t *nv,
     zfs_prop_t prop, const char *value);
+
+void dsl_event_notify_prop(dsl_dataset_t *ds, zprop_source_t source,
+    const char *propname, const char *propvalue);
 
 #ifdef	__cplusplus
 }
