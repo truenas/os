@@ -1778,11 +1778,6 @@ passdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread 
 
 		inccb = (union ccb *)addr;
 
-		if (inccb->ccb_h.flags & CAM_UNLOCKED) {
-			error = EINVAL;
-			break;
-		}
-
 		/*
 		 * Some CCB types, like scan bus and scan lun can only go
 		 * through the transport layer device.
@@ -1876,23 +1871,20 @@ passdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread 
 			xpt_print(periph->path, "Copy of user CCB %p to "
 				  "kernel address %p failed with error %d\n",
 				  *user_ccb, ccb, error);
-			goto camioqueue_error;
-		}
-
-		if (ccb->ccb_h.flags & CAM_UNLOCKED) {
-			error = EINVAL;
-			goto camioqueue_error;
+			uma_zfree(softc->pass_zone, io_req);
+			cam_periph_lock(periph);
+			break;
 		}
 
 		if (ccb->ccb_h.flags & CAM_CDB_POINTER) {
 			if (ccb->csio.cdb_len > IOCDBLEN) {
 				error = EINVAL;
-				goto camioqueue_error;
+				break;
 			}
 			error = copyin(ccb->csio.cdb_io.cdb_ptr,
 			    ccb->csio.cdb_io.cdb_bytes, ccb->csio.cdb_len);
-			if (error != 0)
-				goto camioqueue_error;
+			if (error)
+				break;
 			ccb->ccb_h.flags &= ~CAM_CDB_POINTER;
 		}
 
@@ -1904,8 +1896,10 @@ passdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread 
 			xpt_print(periph->path, "CCB function code %#x is "
 			    "restricted to the XPT device\n",
 			    ccb->ccb_h.func_code);
+			uma_zfree(softc->pass_zone, io_req);
+			cam_periph_lock(periph);
 			error = ENODEV;
-			goto camioqueue_error;
+			break;
 		}
 
 		/*
@@ -1951,8 +1945,11 @@ passdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread 
 		 || (fc == XPT_SMP_IO) || (fc == XPT_DEV_MATCH)
 		 || (fc == XPT_DEV_ADVINFO)) {
 			error = passmemsetup(periph, io_req);
-			if (error != 0)
-				goto camioqueue_error;
+			if (error != 0) {
+				uma_zfree(softc->pass_zone, io_req);
+				cam_periph_lock(periph);
+				break;
+			}
 		} else
 			io_req->mapinfo.num_bufs_used = 0;
 
@@ -1996,11 +1993,6 @@ passdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread 
 			TAILQ_REMOVE(&softc->active_queue, io_req, links);
 			TAILQ_INSERT_TAIL(&softc->done_queue, io_req, links);
 		}
-		break;
-
-camioqueue_error:
-		uma_zfree(softc->pass_zone, io_req);
-		cam_periph_lock(periph);
 		break;
 	}
 	case CAMIOGET:
