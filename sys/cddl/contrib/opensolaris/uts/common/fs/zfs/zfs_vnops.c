@@ -2901,6 +2901,9 @@ zfs_setattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
 
 	zilog = zfsvfs->z_log;
 
+	if (zfsvfs->z_acl_mode == ZFS_ACL_DISCARD_CHMOD)
+		mask &= ~AT_MODE;
+
 	/*
 	 * Make sure that if we have ephemeral uid/gid or xvattr specified
 	 * that file system is at proper version level
@@ -3191,6 +3194,8 @@ zfs_setattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
 	 * changed va_mask
 	 */
 	mask = vap->va_mask;
+	if (zfsvfs->z_acl_mode == ZFS_ACL_DISCARD_CHMOD)
+		mask &= ~AT_MODE;
 
 	if ((mask & (AT_UID | AT_GID))) {
 		err = sa_lookup(zp->z_sa_hdl, SA_ZPL_XATTR(zfsvfs),

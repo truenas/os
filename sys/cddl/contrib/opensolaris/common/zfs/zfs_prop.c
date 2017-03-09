@@ -130,6 +130,7 @@ zfs_prop_init(void)
 		{ "groupmask",	ZFS_ACL_GROUPMASK },
 		{ "passthrough", ZFS_ACL_PASSTHROUGH },
 		{ "restricted", ZFS_ACL_RESTRICTED },
+		{ "discard_chmod", ZFS_ACL_DISCARD_CHMOD },
 		{ NULL }
 	};
 
@@ -257,8 +258,8 @@ zfs_prop_init(void)
 	    "hidden | visible", "SNAPDIR", snapdir_table);
 	zprop_register_index(ZFS_PROP_ACLMODE, "aclmode", ZFS_ACL_DISCARD,
 	    PROP_INHERIT, ZFS_TYPE_FILESYSTEM,
-	    "discard | groupmask | passthrough | restricted", "ACLMODE",
-	    acl_mode_table);
+	    "discard | groupmask | passthrough | restricted | discard_chmod",
+	    "ACLMODE", acl_mode_table);
 	zprop_register_index(ZFS_PROP_ACLINHERIT, "aclinherit",
 	    ZFS_ACL_RESTRICTED, PROP_INHERIT, ZFS_TYPE_FILESYSTEM,
 	    "discard | noallow | restricted | passthrough | passthrough-x",
