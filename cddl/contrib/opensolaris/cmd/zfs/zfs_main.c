@@ -264,12 +264,13 @@ get_usage(zfs_help_t idx)
 	case HELP_PROMOTE:
 		return (gettext("\tpromote <clone-filesystem>\n"));
 	case HELP_RECEIVE:
-		return (gettext("\treceive|recv [-vnFu] "
-		"[-o <property>] ... [-x <property>] ... [-l <filesystem|volume>] ... "
-		"<filesystem|volume|snapshot>\n"
-		"\treceive|recv [-vnFu] [-d | -e] "
-		"[-o <property>] ... [-x <property>] ... [-l <filesystem|volume>] ... "
-		"<filesystem>\n"));
+		return (gettext("\treceive|recv [-vnsFu] "
+		    "[-o <property>] ... [-x <property>] ... [-l <filesystem|volume>] ... "
+		    "<filesystem|volume|snapshot>\n"
+		    "\treceive|recv [-vnsFu] [-d | -e] "
+		    "[-o <property>] ... [-x <property>] ... [-l <filesystem|volume>] ... "
+		    "<filesystem>\n"
+		    "\treceive|recv -A <filesystem|volume>\n"));
 	case HELP_RENAME:
 		return (gettext("\trename [-f] <filesystem|volume|snapshot> "
 		    "<filesystem|volume|snapshot>\n"
@@ -3990,7 +3991,7 @@ zfs_do_send(int argc, char **argv)
 }
 
 /*
- * zfs receive [-vnFu] [-d | -e] [-l <volume|filesystem>] ...
+ * zfs receive [-vnsFu] [-d | -e] [-l <volume|filesystem>] ...
  * [-o property=value] ... [-x property] ... <volume|filesytem|snapshot>
  *
  * Restore a backup stream from stdin.
@@ -4010,8 +4011,14 @@ zfs_do_receive(int argc, char **argv)
 		nomem();
 
 	/* check options */
-	while ((c = getopt(argc, argv, ":del:no:uvx:F")) != -1) {
+	while ((c = getopt(argc, argv, ":del:no:uvx:FsA")) != -1) {
 		switch (c) {
+		case 'o':
+			if (parseprop(props, optarg)) {
+				err = 1;
+				goto recverror;
+			}
+			break;
 		case 'd':
 			flags.isprefix = B_TRUE;
 			break;
@@ -4027,12 +4034,6 @@ zfs_do_receive(int argc, char **argv)
 			break;
 		case 'n':
 			flags.dryrun = B_TRUE;
-			break;
-		case 'o':
-			if (parseprop(props, optarg)) {
-				err = 1;
-				goto recverror;
-			}
 			break;
 		case 'u':
 			flags.nomount = B_TRUE;
