@@ -267,7 +267,16 @@ zvol_size_changed(zvol_state_t *zv, uint64_t volsize)
 		if (pp == NULL)
 			return;
 		g_topology_lock();
-		g_resize_provider(pp, zv->zv_volsize);
+
+		/*
+		 * Do not invoke resize event when initial size was zero.
+		 * ZVOL initializes the size on first open, this is not
+		 * real resizing.
+		 */
+		if (pp->mediasize == 0)
+			pp->mediasize = zv->zv_volsize;
+		else
+			g_resize_provider(pp, zv->zv_volsize);
 		g_topology_unlock();
 	}
 #endif	/* illumos */
@@ -1380,6 +1389,10 @@ zvol_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
  * Otherwise we will later flush the data out via dmu_sync().
  */
 ssize_t zvol_immediate_write_sz = 32768;
+#ifdef _KERNEL
+SYSCTL_LONG(_vfs_zfs_vol, OID_AUTO, immediate_write_sz, CTLFLAG_RWTUN,
+    &zvol_immediate_write_sz, 0, "Minimal size for indirect log write");
+#endif
 
 static void
 zvol_log_write(zvol_state_t *zv, dmu_tx_t *tx, offset_t off, ssize_t resid,
