@@ -427,7 +427,7 @@ static void
 hpt_copy_array_info(HPT_GET_INFO *pinfo, int nld, PVDevice pArray)
 {
 	int i;
-	char *sType = NULL, *sStatus = NULL;
+	char *sType=0, *sStatus=0;
 	char buf[32];
     PVDevice pTmpArray;
 

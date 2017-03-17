@@ -11,7 +11,8 @@ FILES=	100.chksetuid \
 	400.passwdless \
 	410.logincheck \
 	700.kernelmsg \
-	800.loginfail
+	800.loginfail \
+	900.tcpwrap
 DATA=	security.functions
 
 # NB: keep these sorted by MK_* knobs
@@ -28,10 +29,6 @@ FILES+=	500.ipfwdenied \
 
 .if ${MK_PF} != "no"
 FILES+=	520.pfdenied
-.endif
-
-.if ${MK_INETD} != "no" && ${MK_TCP_WRAPPERS} != "no"
-FILES+=	900.tcpwrap
 .endif
 
 .include <bsd.prog.mk>

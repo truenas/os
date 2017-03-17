@@ -251,7 +251,7 @@ icioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		if (ifr == NULL)
+		if (ifr == 0)
 			return (EAFNOSUPPORT);		/* XXX */
 		switch (ifr->ifr_addr.sa_family) {
 		case AF_INET:

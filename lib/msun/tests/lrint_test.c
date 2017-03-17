@@ -65,7 +65,7 @@ __FBSDID("$FreeBSD$");
 
 #pragma STDC FENV_ACCESS ON
 
-static void
+void
 run_tests(void)
 {
 
@@ -132,7 +132,7 @@ run_tests(void)
 }
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 
 	printf("1..1\n");

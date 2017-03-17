@@ -557,7 +557,7 @@ am79900_start_locked(struct lance_softc *sc)
 		}
 
 		IFQ_DRV_DEQUEUE(&ifp->if_snd, m);
-		if (m == NULL)
+		if (m == 0)
 			break;
 
 		/*

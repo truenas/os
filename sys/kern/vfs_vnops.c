@@ -1549,21 +1549,28 @@ _vn_lock(struct vnode *vp, int flags, char *file, int line)
 	int error;
 
 	VNASSERT((flags & LK_TYPE_MASK) != 0, vp,
-	    ("vn_lock: no locktype"));
-	VNASSERT(vp->v_holdcnt != 0, vp, ("vn_lock: zero hold count"));
-retry:
-	error = VOP_LOCK1(vp, flags, file, line);
-	flags &= ~LK_INTERLOCK;	/* Interlock is always dropped. */
-	KASSERT((flags & LK_RETRY) == 0 || error == 0,
-	    ("vn_lock: error %d incompatible with flags %#x", error, flags));
-
-	if ((flags & LK_RETRY) == 0) {
-		if (error == 0 && (vp->v_iflag & VI_DOOMED) != 0) {
+	    ("vn_lock called with no locktype."));
+	do {
+#ifdef DEBUG_VFS_LOCKS
+		KASSERT(vp->v_holdcnt != 0,
+		    ("vn_lock %p: zero hold count", vp));
+#endif
+		error = VOP_LOCK1(vp, flags, file, line);
+		flags &= ~LK_INTERLOCK;	/* Interlock is always dropped. */
+		KASSERT((flags & LK_RETRY) == 0 || error == 0,
+		    ("LK_RETRY set with incompatible flags (0x%x) or an error occurred (%d)",
+		    flags, error));
+		/*
+		 * Callers specify LK_RETRY if they wish to get dead vnodes.
+		 * If RETRY is not set, we return ENOENT instead.
+		 */
+		if (error == 0 && vp->v_iflag & VI_DOOMED &&
+		    (flags & LK_RETRY) == 0) {
 			VOP_UNLOCK(vp, 0);
 			error = ENOENT;
+			break;
 		}
-	} else if (error != 0)
-		goto retry;
+	} while (flags & LK_RETRY && error != 0);
 	return (error);
 }
 
@@ -1571,7 +1578,9 @@ retry:
  * File table vnode close routine.
  */
 static int
-vn_closefile(struct file *fp, struct thread *td)
+vn_closefile(fp, td)
+	struct file *fp;
+	struct thread *td;
 {
 	struct vnode *vp;
 	struct flock lf;
@@ -2470,12 +2479,10 @@ vn_mmap(struct file *fp, vm_map_t map, vm_offset_t *addr, vm_size_t size,
 	}
 #ifdef HWPMC_HOOKS
 	/* Inform hwpmc(4) if an executable is being mapped. */
-	if (PMC_HOOK_INSTALLED(PMC_FN_MMAP)) {
-		if ((prot & VM_PROT_EXECUTE) != 0 && error == 0) {
-			pkm.pm_file = vp;
-			pkm.pm_address = (uintptr_t) *addr;
-			PMC_CALL_HOOK(td, PMC_FN_MMAP, (void *) &pkm);
-		}
+	if (error == 0 && (prot & VM_PROT_EXECUTE) != 0) {
+		pkm.pm_file = vp;
+		pkm.pm_address = (uintptr_t) *addr;
+		PMC_CALL_HOOK(td, PMC_FN_MMAP, (void *) &pkm);
 	}
 #endif
 	return (error);

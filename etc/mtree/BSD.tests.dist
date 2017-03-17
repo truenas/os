@@ -648,8 +648,6 @@
         ..
         uuencode
         ..
-        uniq
-        ..
         xargs
         ..
         xinstall

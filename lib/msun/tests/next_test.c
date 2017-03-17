@@ -73,7 +73,7 @@ static double idd(double);
 static float idf(float);
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 	static const int ex_under = FE_UNDERFLOW | FE_INEXACT;	/* shorthand */
 	static const int ex_over = FE_OVERFLOW | FE_INEXACT;

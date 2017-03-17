@@ -110,9 +110,8 @@ test_fuzz(const struct files *filesets)
 		} else {
 			for (i = 0; filesets[n].names[i] != NULL; ++i)
 			{
-				char *newraw;
 				tmp = slurpfile(&size, filesets[n].names[i]);
-				newraw = realloc(rawimage, oldsize + size);
+				char *newraw = realloc(rawimage, oldsize + size);
 				if (!assert(newraw != NULL))
 				{
 					free(rawimage);

@@ -1,4 +1,4 @@
-/*	$NetBSD: t_glob.c,v 1.5 2017/01/14 20:47:41 christos Exp $	*/
+/*	$NetBSD: t_glob.c,v 1.3 2013/01/02 11:28:48 martin Exp $	*/
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_glob.c,v 1.5 2017/01/14 20:47:41 christos Exp $");
+__RCSID("$NetBSD: t_glob.c,v 1.3 2013/01/02 11:28:48 martin Exp $");
 
 #include <atf-c.h>
 
@@ -46,7 +46,13 @@ __RCSID("$NetBSD: t_glob.c,v 1.5 2017/01/14 20:47:41 christos Exp $");
 #include <string.h>
 #include <errno.h>
 
+#ifdef __FreeBSD__
 #include "h_macros.h"
+#define	__gl_stat_t struct stat
+#define	_S_IFDIR S_IFDIR
+#else
+#include "../../../h_macros.h"
+#endif
 
 
 #ifdef DEBUG
@@ -85,7 +91,7 @@ static struct gl_dir d[] = {
 	{ "a/b", b, __arraycount(b), 0 },
 };
 
-#ifdef GLOB_STAR
+#ifndef __FreeBSD__
 static const char *glob_star[] = {
     "a/1", "a/3", "a/4", "a/b", "a/b/w", "a/b/x", "a/b/y", "a/b/z",
 };
@@ -152,7 +158,7 @@ gl_stat(const char *name , __gl_stat_t *st)
 	memset(st, 0, sizeof(*st));
 
 	if (strcmp(buf, "a") == 0 || strcmp(buf, "a/b") == 0) {
-		st->st_mode |= S_IFDIR;
+		st->st_mode |= _S_IFDIR;
 		return 0;
 	}
 
@@ -219,7 +225,7 @@ run(const char *p, int flags, const char **res, size_t len)
 }
 
 
-#ifdef GLOB_STAR
+#ifndef __FreeBSD__
 ATF_TC(glob_star);
 ATF_TC_HEAD(glob_star, tc)
 {
@@ -268,7 +274,7 @@ ATF_TC_BODY(glob_nocheck, tc)
 
 ATF_TP_ADD_TCS(tp)
 {
-#ifdef GLOB_STAR
+#ifndef __FreeBSD__
 	ATF_TP_ADD_TC(tp, glob_star);
 #endif
 	ATF_TP_ADD_TC(tp, glob_star_not);

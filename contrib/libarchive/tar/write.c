@@ -583,7 +583,7 @@ cleanup:
 	archive_read_free(bsdtar->diskreader);
 	bsdtar->diskreader = NULL;
 
-	if (bsdtar->flags & OPTFLAG_TOTALS) {
+	if (bsdtar->option_totals) {
 		fprintf(stderr, "Total bytes written: %s\n",
 		    tar_i64toa(archive_filter_bytes(a, -1)));
 	}
@@ -606,8 +606,7 @@ archive_names_from_file(struct bsdtar *bsdtar, struct archive *a)
 
 	bsdtar->next_line_is_dir = 0;
 
-	lr = lafe_line_reader(bsdtar->names_from_file,
-	    (bsdtar->flags & OPTFLAG_NULL));
+	lr = lafe_line_reader(bsdtar->names_from_file, bsdtar->option_null);
 	while ((line = lafe_line_reader_next(lr)) != NULL) {
 		if (bsdtar->next_line_is_dir) {
 			if (*line != '\0')
@@ -618,8 +617,7 @@ archive_names_from_file(struct bsdtar *bsdtar, struct archive *a)
 				bsdtar->return_value = 1;
 			}
 			bsdtar->next_line_is_dir = 0;
-		} else if (((bsdtar->flags & OPTFLAG_NULL) == 0) &&
-		    strcmp(line, "-C") == 0)
+		} else if (!bsdtar->option_null && strcmp(line, "-C") == 0)
 			bsdtar->next_line_is_dir = 1;
 		else {
 			if (*line != '/')
@@ -692,7 +690,7 @@ append_archive(struct bsdtar *bsdtar, struct archive *a, struct archive *ina)
 	while (ARCHIVE_OK == (e = archive_read_next_header(ina, &in_entry))) {
 		if (archive_match_excluded(bsdtar->matching, in_entry))
 			continue;
-		if ((bsdtar->flags & OPTFLAG_INTERACTIVE) &&
+		if (bsdtar->option_interactive &&
 		    !yes("copy '%s'", archive_entry_pathname(in_entry)))
 			continue;
 		if (bsdtar->verbose > 1) {
@@ -811,11 +809,11 @@ excluded_callback(struct archive *a, void *_data, struct archive_entry *entry)
 {
 	struct bsdtar *bsdtar = (struct bsdtar *)_data;
 
-	if (bsdtar->flags & OPTFLAG_NO_SUBDIRS)
+	if (bsdtar->option_no_subdirs)
 		return;
 	if (!archive_read_disk_can_descend(a))
 		return;
-	if ((bsdtar->flags & OPTFLAG_INTERACTIVE) &&
+	if (bsdtar->option_interactive &&
 	    !yes("add '%s'", archive_entry_pathname(entry)))
 		return;
 	archive_read_disk_descend(a);
@@ -846,13 +844,12 @@ metadata_filter(struct archive *a, void *_data, struct archive_entry *entry)
 	 * check would veto this file, we shouldn't bother
 	 * the user with it.
 	 */
-	if ((bsdtar->flags & OPTFLAG_INTERACTIVE) &&
+	if (bsdtar->option_interactive &&
 	    !yes("add '%s'", archive_entry_pathname(entry)))
 		return (0);
 
 	/* Note: if user vetoes, we won't descend. */
-	if (((bsdtar->flags & OPTFLAG_NO_SUBDIRS) == 0) &&
-	    archive_read_disk_can_descend(a))
+	if (!bsdtar->option_no_subdirs && archive_read_disk_can_descend(a))
 		archive_read_disk_descend(a);
 
 	return (1);
@@ -1013,7 +1010,7 @@ report_write(struct bsdtar *bsdtar, struct archive *a,
 	uncomp = archive_filter_bytes(a, 0);
 	fprintf(stderr, "In: %d files, %s bytes;",
 	    archive_file_count(a), tar_i64toa(uncomp));
-	if (comp >= uncomp)
+	if (comp > uncomp)
 		compression = 0;
 	else
 		compression = (int)((uncomp - comp) * 100 / uncomp);

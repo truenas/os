@@ -4,9 +4,6 @@
 
 LIB=		clang_rt.profile-${CRTARCH}
 
-# This is needed for --coverage
-CFLAGS+=	-fvisibility=default
-
 SRCS+=		profile/GCDAProfiling.c
 SRCS+=		profile/InstrProfiling.c
 SRCS+=		profile/InstrProfilingBuffer.c

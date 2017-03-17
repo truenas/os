@@ -225,8 +225,6 @@ void
 usage(void)
 {
 
-	fprintf(stderr, "usage: %s\n%s\n",
-	    "\tdevfs [-m mount-point] [-s ruleset] rule ...",
-	    "\tdevfs [-m mount-point] ruleset ...");
+	fprintf(stderr, "usage: devfs rule|ruleset arguments\n");
 	exit(1);
 }

@@ -3217,16 +3217,10 @@ do_sem2_wait(struct thread *td, struct _usem2 *sem, struct _umtx_time *timeout)
 		error = 0;
 	else {
 		umtxq_remove(uq);
-		if (timeout != NULL && (timeout->_flags & UMTX_ABSTIME) == 0) {
-			/* A relative timeout cannot be restarted. */
-			if (error == ERESTART)
-				error = EINTR;
-			if (error == EINTR) {
-				abs_timeout_update(&timo);
-				timeout->_timeout = timo.end;
-				timespecsub(&timeout->_timeout, &timo.cur);
-			}
-		}
+		/* A relative timeout cannot be restarted. */
+		if (error == ERESTART && timeout != NULL &&
+		    (timeout->_flags & UMTX_ABSTIME) == 0)
+			error = EINTR;
 	}
 	umtxq_unlock(&uq->uq_key);
 	umtx_key_release(&uq->uq_key);
@@ -3589,33 +3583,19 @@ static int
 __umtx_op_sem2_wait(struct thread *td, struct _umtx_op_args *uap)
 {
 	struct _umtx_time *tm_p, timeout;
-	size_t uasize;
 	int error;
 
 	/* Allow a null timespec (wait forever). */
-	if (uap->uaddr2 == NULL) {
-		uasize = 0;
+	if (uap->uaddr2 == NULL)
 		tm_p = NULL;
-	} else {
-		uasize = (size_t)uap->uaddr1;
-		error = umtx_copyin_umtx_time(uap->uaddr2, uasize, &timeout);
+	else {
+		error = umtx_copyin_umtx_time(
+		    uap->uaddr2, (size_t)uap->uaddr1, &timeout);
 		if (error != 0)
 			return (error);
 		tm_p = &timeout;
 	}
-	error = do_sem2_wait(td, uap->obj, tm_p);
-	if (error == EINTR && uap->uaddr2 != NULL &&
-	    (timeout._flags & UMTX_ABSTIME) == 0 &&
-	    uasize >= sizeof(struct _umtx_time) + sizeof(struct timespec)) {
-		error = copyout(&timeout._timeout,
-		    (struct _umtx_time *)uap->uaddr2 + 1,
-		    sizeof(struct timespec));
-		if (error == 0) {
-			error = EINTR;
-		}
-	}
-
-	return (error);
+	return (do_sem2_wait(td, uap->obj, tm_p));
 }
 
 static int
@@ -4212,37 +4192,19 @@ static int
 __umtx_op_sem2_wait_compat32(struct thread *td, struct _umtx_op_args *uap)
 {
 	struct _umtx_time *tm_p, timeout;
-	size_t uasize;
 	int error;
 
 	/* Allow a null timespec (wait forever). */
-	if (uap->uaddr2 == NULL) {
-		uasize = 0;
+	if (uap->uaddr2 == NULL)
 		tm_p = NULL;
-	} else {
-		uasize = (size_t)uap->uaddr1;
-		error = umtx_copyin_umtx_time32(uap->uaddr2, uasize, &timeout);
+	else {
+		error = umtx_copyin_umtx_time32(uap->uaddr2,
+		    (size_t)uap->uaddr1, &timeout);
 		if (error != 0)
 			return (error);
 		tm_p = &timeout;
 	}
-	error = do_sem2_wait(td, uap->obj, tm_p);
-	if (error == EINTR && uap->uaddr2 != NULL &&
-	    (timeout._flags & UMTX_ABSTIME) == 0 &&
-	    uasize >= sizeof(struct umtx_time32) + sizeof(struct timespec32)) {
-		struct timespec32 remain32 = {
-			.tv_sec = timeout._timeout.tv_sec,
-			.tv_nsec = timeout._timeout.tv_nsec
-		};
-		error = copyout(&remain32,
-		    (struct umtx_time32 *)uap->uaddr2 + 1,
-		    sizeof(struct timespec32));
-		if (error == 0) {
-			error = EINTR;
-		}
-	}
-
-	return (error);
+	return (do_sem2_wait(td, uap->obj, tm_p));
 }
 
 static int

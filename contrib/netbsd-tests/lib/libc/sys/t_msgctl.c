@@ -1,4 +1,4 @@
-/* $NetBSD: t_msgctl.c,v 1.5 2017/01/13 20:44:45 christos Exp $ */
+/* $NetBSD: t_msgctl.c,v 1.4 2014/02/27 00:59:50 joerg Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_msgctl.c,v 1.5 2017/01/13 20:44:45 christos Exp $");
+__RCSID("$NetBSD: t_msgctl.c,v 1.4 2014/02/27 00:59:50 joerg Exp $");
 
 #include <sys/msg.h>
 #include <sys/stat.h>
@@ -38,7 +38,6 @@ __RCSID("$NetBSD: t_msgctl.c,v 1.5 2017/01/13 20:44:45 christos Exp $");
 
 #include <atf-c.h>
 #include <errno.h>
-#include <limits.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +45,10 @@ __RCSID("$NetBSD: t_msgctl.c,v 1.5 2017/01/13 20:44:45 christos Exp $");
 #include <sysexits.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifdef __FreeBSD__
+#include <limits.h>
+#endif
 
 #define MSG_KEY		12345689
 #define MSG_MTYPE_1	0x41

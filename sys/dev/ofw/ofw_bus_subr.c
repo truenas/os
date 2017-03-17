@@ -944,7 +944,7 @@ ofw_bus_string_list_to_array(phandle_t node, const char *list_name,
 		i += len;
 		tptr += len;
 	}
-	array[cnt] = NULL;
+	array[cnt] = 0;
 	*out_array = array;
 
 	return (cnt);

@@ -534,7 +534,7 @@ edit_pathname(struct bsdtar *bsdtar, struct archive_entry *entry)
 		}
 	}
 
-	if ((bsdtar->flags & OPTFLAG_ABSOLUTE_PATHS) == 0) {
+	if (!bsdtar->option_absolute_paths) {
 		/* By default, don't write or restore absolute pathnames. */
 		name = strip_absolute_path(bsdtar, name);
 		if (*name == '\0')

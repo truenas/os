@@ -6,7 +6,7 @@
 SOFTFLOAT_BITS=32
 
 # Long double is just double precision.
-SRCS+=machdep_ldisd.c
+MDSRCS+=machdep_ldisd.c
 SYM_MAPS+=${LIBC_SRCTOP}/arm/Symbol.map
 
 .include "${LIBC_SRCTOP}/arm/aeabi/Makefile.inc"

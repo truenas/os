@@ -1712,8 +1712,7 @@ _archive_write_disk_finish_entry(struct archive *_a)
 		const void *metadata;
 		size_t metadata_size;
 		metadata = archive_entry_mac_metadata(a->entry, &metadata_size);
-		if ((a->todo & TODO_MAC_METADATA) == 0 ||
-		    metadata == NULL || metadata_size == 0) {
+		if (metadata == NULL || metadata_size == 0) {
 #endif
 		r2 = archive_write_disk_set_acls(&a->archive, a->fd,
 		    archive_entry_pathname(a->entry),
@@ -2068,7 +2067,6 @@ create_filesystem_object(struct archive_write_disk *a)
 	int r;
 	/* these for check_symlinks_fsobj */
 	char *linkname_copy;	/* non-const copy of linkname */
-	struct stat st;
 	struct archive_string error_string;
 	int error_number;
 
@@ -2133,20 +2131,11 @@ create_filesystem_object(struct archive_write_disk *a)
 			a->todo = 0;
 			a->deferred = 0;
 		} else if (r == 0 && a->filesize > 0) {
-#ifdef HAVE_LSTAT
-			r = lstat(a->name, &st);
-#else
-			r = stat(a->name, &st);
-#endif
-			if (r != 0)
+			a->fd = open(a->name, O_WRONLY | O_TRUNC | O_BINARY
+			    | O_CLOEXEC | O_NOFOLLOW);
+			__archive_ensure_cloexec_flag(a->fd);
+			if (a->fd < 0)
 				r = errno;
-			else if ((st.st_mode & AE_IFMT) == AE_IFREG) {
-				a->fd = open(a->name, O_WRONLY | O_TRUNC |
-				    O_BINARY | O_CLOEXEC | O_NOFOLLOW);
-				__archive_ensure_cloexec_flag(a->fd);
-				if (a->fd < 0)
-					r = errno;
-			}
 		}
 		return (r);
 #endif
@@ -2294,8 +2283,7 @@ _archive_write_disk_close(struct archive *_a)
 			chmod(p->name, p->mode);
 		if (p->fixup & TODO_ACLS)
 #ifdef HAVE_DARWIN_ACL
-			if ((p->fixup & TODO_MAC_METADATA) == 0 ||
-			    p->mac_metadata == NULL ||
+			if (p->mac_metadata == NULL ||
 			    p->mac_metadata_size == 0)
 #endif
 				archive_write_disk_set_acls(&a->archive,
@@ -2467,7 +2455,7 @@ fsobj_error(int *a_eno, struct archive_string *a_estr,
 	if (a_eno)
 		*a_eno = err;
 	if (a_estr)
-		archive_string_sprintf(a_estr, "%s%s", errstr, path);
+		archive_string_sprintf(a_estr, errstr, path);
 }
 
 /*
@@ -2573,7 +2561,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 				 * with the deep-directory editing.
 				 */
 				fsobj_error(a_eno, a_estr, errno,
-				    "Could not stat ", path);
+				    "Could not stat %s", path);
 				res = ARCHIVE_FAILED;
 				break;
 			}
@@ -2582,7 +2570,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 				if (chdir(head) != 0) {
 					tail[0] = c;
 					fsobj_error(a_eno, a_estr, errno,
-					    "Could not chdir ", path);
+					    "Could not chdir %s", path);
 					res = (ARCHIVE_FATAL);
 					break;
 				}
@@ -2599,7 +2587,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 				if (unlink(head)) {
 					tail[0] = c;
 					fsobj_error(a_eno, a_estr, errno,
-					    "Could not remove symlink ",
+					    "Could not remove symlink %s",
 					    path);
 					res = ARCHIVE_FAILED;
 					break;
@@ -2618,7 +2606,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 				/*
 				if (!S_ISLNK(path)) {
 					fsobj_error(a_eno, a_estr, 0,
-					    "Removing symlink ", path);
+					    "Removing symlink %s", path);
 				}
 				*/
 				/* Symlink gone.  No more problem! */
@@ -2630,7 +2618,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 					tail[0] = c;
 					fsobj_error(a_eno, a_estr, 0,
 					    "Cannot remove intervening "
-					    "symlink ", path);
+					    "symlink %s", path);
 					res = ARCHIVE_FAILED;
 					break;
 				}
@@ -2652,7 +2640,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 					} else {
 						fsobj_error(a_eno, a_estr,
 						    errno,
-						    "Could not stat ", path);
+						    "Could not stat %s", path);
 						res = (ARCHIVE_FAILED);
 						break;
 					}
@@ -2661,7 +2649,7 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 						tail[0] = c;
 						fsobj_error(a_eno, a_estr,
 						    errno,
-						    "Could not chdir ", path);
+						    "Could not chdir %s", path);
 						res = (ARCHIVE_FATAL);
 						break;
 					}
@@ -2674,14 +2662,14 @@ check_symlinks_fsobj(char *path, int *a_eno, struct archive_string *a_estr,
 					tail[0] = c;
 					fsobj_error(a_eno, a_estr, 0,
 					    "Cannot extract through "
-					    "symlink ", path);
+					    "symlink %s", path);
 					res = ARCHIVE_FAILED;
 					break;
 				}
 			} else {
 				tail[0] = c;
 				fsobj_error(a_eno, a_estr, 0,
-				    "Cannot extract through symlink ", path);
+				    "Cannot extract through symlink %s", path);
 				res = ARCHIVE_FAILED;
 				break;
 			}
@@ -3467,18 +3455,11 @@ set_fflags(struct archive_write_disk *a)
 #ifdef UF_APPEND
 	critical_flags |= UF_APPEND;
 #endif
-#if defined(FS_APPEND_FL)
-	critical_flags |= FS_APPEND_FL;
-#elif defined(EXT2_APPEND_FL)
+#ifdef EXT2_APPEND_FL
 	critical_flags |= EXT2_APPEND_FL;
 #endif
-#if defined(FS_IMMUTABLE_FL)
-	critical_flags |= FS_IMMUTABLE_FL;
-#elif defined(EXT2_IMMUTABLE_FL)
+#ifdef EXT2_IMMUTABLE_FL
 	critical_flags |= EXT2_IMMUTABLE_FL;
-#endif
-#ifdef FS_JOURNAL_DATA_FL
-	critical_flags |= FS_JOURNAL_DATA_FL;
 #endif
 
 	if (a->todo & TODO_FFLAGS) {
@@ -3591,10 +3572,7 @@ set_fflags_platform(struct archive_write_disk *a, int fd, const char *name,
 	return (ARCHIVE_WARN);
 }
 
-#elif (defined(FS_IOC_GETFLAGS) && defined(FS_IOC_SETFLAGS) && \
-       defined(HAVE_WORKING_FS_IOC_GETFLAGS)) || \
-      (defined(EXT2_IOC_GETFLAGS) && defined(EXT2_IOC_SETFLAGS) && \
-       defined(HAVE_WORKING_EXT2_IOC_GETFLAGS))
+#elif defined(EXT2_IOC_GETFLAGS) && defined(EXT2_IOC_SETFLAGS) && defined(HAVE_WORKING_EXT2_IOC_GETFLAGS)
 /*
  * Linux uses ioctl() to read and write file flags.
  */
@@ -3607,7 +3585,7 @@ set_fflags_platform(struct archive_write_disk *a, int fd, const char *name,
 	int newflags, oldflags;
 	int sf_mask = 0;
 
-	if (set == 0 && clear == 0)
+	if (set == 0  && clear == 0)
 		return (ARCHIVE_OK);
 	/* Only regular files and dirs can have flags. */
 	if (!S_ISREG(mode) && !S_ISDIR(mode))
@@ -3628,18 +3606,11 @@ set_fflags_platform(struct archive_write_disk *a, int fd, const char *name,
 	 * defines. (?)  The code below degrades reasonably gracefully
 	 * if sf_mask is incomplete.
 	 */
-#if defined(FS_IMMUTABLE_FL)
-	sf_mask |= FS_IMMUTABLE_FL;
-#elif defined(EXT2_IMMUTABLE_FL)
+#ifdef EXT2_IMMUTABLE_FL
 	sf_mask |= EXT2_IMMUTABLE_FL;
 #endif
-#if defined(FS_APPEND_FL)
-	sf_mask |= FS_APPEND_FL;
-#elif defined(EXT2_APPEND_FL)
+#ifdef EXT2_APPEND_FL
 	sf_mask |= EXT2_APPEND_FL;
-#endif
-#if defined(FS_JOURNAL_DATA_FL)
-	sf_mask |= FS_JOURNAL_DATA_FL;
 #endif
 	/*
 	 * XXX As above, this would be way simpler if we didn't have
@@ -3648,24 +3619,12 @@ set_fflags_platform(struct archive_write_disk *a, int fd, const char *name,
 	ret = ARCHIVE_OK;
 
 	/* Read the current file flags. */
-	if (ioctl(myfd,
-#ifdef FS_IOC_GETFLAGS
-	    FS_IOC_GETFLAGS,
-#else
-	    EXT2_IOC_GETFLAGS,
-#endif
-	    &oldflags) < 0)
+	if (ioctl(myfd, EXT2_IOC_GETFLAGS, &oldflags) < 0)
 		goto fail;
 
 	/* Try setting the flags as given. */
 	newflags = (oldflags & ~clear) | set;
-	if (ioctl(myfd,
-#ifdef FS_IOC_SETFLAGS
-	    FS_IOC_SETFLAGS,
-#else
-	    EXT2_IOC_SETFLAGS,
-#endif
-	    &newflags) >= 0)
+	if (ioctl(myfd, EXT2_IOC_SETFLAGS, &newflags) >= 0)
 		goto cleanup;
 	if (errno != EPERM)
 		goto fail;
@@ -3674,13 +3633,7 @@ set_fflags_platform(struct archive_write_disk *a, int fd, const char *name,
 	newflags &= ~sf_mask;
 	oldflags &= sf_mask;
 	newflags |= oldflags;
-	if (ioctl(myfd,
-#ifdef FS_IOC_SETFLAGS
-	    FS_IOC_SETFLAGS,
-#else
-	    EXT2_IOC_SETFLAGS,
-#endif
-	    &newflags) >= 0)
+	if (ioctl(myfd, EXT2_IOC_SETFLAGS, &newflags) >= 0)
 		goto cleanup;
 
 	/* We couldn't set the flags, so report the failure. */

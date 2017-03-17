@@ -75,7 +75,7 @@ bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 	void *addr;
 
 	addr = malloc(dmat->maxsize + dmat->alignment, XXX, XXX);
-	if (addr == NULL)
+	if (addr == 0)
 		return (ENOMEM);
 
 	*mapp = addr;

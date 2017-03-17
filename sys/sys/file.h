@@ -50,6 +50,8 @@ struct thread;
 struct uio;
 struct knote;
 struct vnode;
+struct socket;
+
 
 #endif /* _KERNEL */
 
@@ -265,6 +267,10 @@ int fgetvp_read(struct thread *td, int fd, cap_rights_t *rightsp,
     struct vnode **vpp);
 int fgetvp_write(struct thread *td, int fd, cap_rights_t *rightsp,
     struct vnode **vpp);
+
+int fgetsock(struct thread *td, int fd, cap_rights_t *rightsp,
+    struct socket **spp, u_int *fflagp);
+void fputsock(struct socket *sp);
 
 static __inline int
 _fnoop(void)

@@ -35,7 +35,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
 #include <assert.h>
 #include <fenv.h>
 #include <math.h>
@@ -50,9 +49,9 @@ static const int rmodes[] = {
 };
 
 /* Make sure we're testing the library, not some broken compiler built-ins. */
-static double (*libnearbyint)(double) = nearbyint;
-static float (*libnearbyintf)(float) = nearbyintf;
-static long double (*libnearbyintl)(long double) = nearbyintl;
+double (*libnearbyint)(double) = nearbyint;
+float (*libnearbyintf)(float) = nearbyintf;
+long double (*libnearbyintl)(long double) = nearbyintl;
 #define nearbyintf libnearbyintf
 #define nearbyint libnearbyint
 #define nearbyintl libnearbyintl
@@ -69,6 +68,8 @@ static const struct {
     { INFINITY,	{ INFINITY, INFINITY, INFINITY }},
     { NAN,	{ NAN, NAN, NAN }},
 };
+
+static const int ntests = sizeof(tests) / sizeof(tests[0]);
 
 /* Get the appropriate result for the current rounding mode. */
 static float
@@ -92,7 +93,7 @@ static void
 test_nearby(int testindex)
 {
 	float in, out;
-	unsigned i;
+	int i;
 
 	for (i = 0; i < sizeof(rmodes) / sizeof(rmodes[0]); i++) {
 		fesetround(rmodes[i]);
@@ -123,7 +124,7 @@ test_modf(int testindex)
 	float ipartf, ipart_expected;
 	double ipart;
 	long double ipartl;
-	unsigned i;
+	int i;
 
 	for (i = 0; i < sizeof(rmodes) / sizeof(rmodes[0]); i++) {
 		fesetround(rmodes[i]);
@@ -160,13 +161,13 @@ test_modf(int testindex)
 }
 
 int
-main(void)
+main(int argc, char *argv[])
 {
-	unsigned i;
+	int i;
 
-	printf("1..%zu\n", (size_t)(nitems(tests) * 2));
+	printf("1..%d\n", ntests * 2);
 	testnum = 1;
-	for (i = 0; i < nitems(tests); i++) {
+	for (i = 0; i < ntests; i++) {
 		test_nearby(i);
 		test_modf(i);
 	}

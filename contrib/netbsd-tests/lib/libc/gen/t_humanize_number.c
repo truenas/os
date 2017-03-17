@@ -34,7 +34,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __FreeBSD__
+#include <libutil.h>
+#else
 #include <util.h>
+#endif
 
 const struct hnopts {
 	size_t ho_len;

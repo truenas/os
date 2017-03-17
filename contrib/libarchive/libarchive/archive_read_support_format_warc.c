@@ -543,7 +543,7 @@ xstrpisotime(const char *s, char **endptr)
 
 	/* as a courtesy to our callers, and since this is a non-standard
 	 * routine, we skip leading whitespace */
-	while (*s == ' ' || *s == '\t')
+	while (isblank((unsigned char)*s))
 		++s;
 
 	/* read year */
@@ -589,7 +589,6 @@ static unsigned int
 _warc_rdver(const char *buf, size_t bsz)
 {
 	static const char magic[] = "WARC/";
-	const char *c;
 	unsigned int ver = 0U;
 	unsigned int end = 0U;
 
@@ -600,10 +599,9 @@ _warc_rdver(const char *buf, size_t bsz)
 	/* looks good so far, read the version number for a laugh */
 	buf += sizeof(magic) - 1U;
 
-	if (isdigit((unsigned char)buf[0U]) && (buf[1U] == '.') &&
-	    isdigit((unsigned char)buf[2U])) {
+	if (isdigit(buf[0U]) && (buf[1U] == '.') && isdigit(buf[2U])) {
 		/* we support a maximum of 2 digits in the minor version */
-		if (isdigit((unsigned char)buf[3U]))
+		if (isdigit(buf[3U]))
 			end = 1U;
 		/* set up major version */
 		ver = (buf[0U] - '0') * 10000U;
@@ -617,12 +615,11 @@ _warc_rdver(const char *buf, size_t bsz)
 		 * WARC below version 0.12 has a space-separated header
 		 * WARC 0.12 and above terminates the version with a CRLF
 		 */
-		c = buf + 3U + end;
 		if (ver >= 1200U) {
-			if (memcmp(c, "\r\n", 2U) != 0)
+			if (memcmp(buf + 3U + end, "\r\n", 2U) != 0)
 				ver = 0U;
 		} else if (ver < 1200U) {
-			if (*c != ' ' && *c != '\t')
+			if (!isblank(*(buf + 3U + end)))
 				ver = 0U;
 		}
 	}
@@ -646,7 +643,7 @@ _warc_rdtyp(const char *buf, size_t bsz)
 	}
 
 	/* overread whitespace */
-	while (val < eol && (*val == ' ' || *val == '\t'))
+	while (val < eol && isblank((unsigned char)*val))
 		++val;
 
 	if (val + 8U == eol) {
@@ -676,7 +673,7 @@ _warc_rduri(const char *buf, size_t bsz)
 		return res;
 	}
 
-	while (val < eol && (*val == ' ' || *val == '\t'))
+	while (val < eol && isblank((unsigned char)*val))
 		++val;
 
 	/* overread URL designators */
@@ -687,7 +684,7 @@ _warc_rduri(const char *buf, size_t bsz)
 
 	/* spaces inside uri are not allowed, CRLF should follow */
 	for (p = val; p < eol; p++) {
-		if (isspace((unsigned char)*p))
+		if (isspace(*p))
 			return res;
 	}
 
@@ -734,10 +731,10 @@ _warc_rdlen(const char *buf, size_t bsz)
 	}
 
 	/* skip leading whitespace */
-	while (val < eol && (*val == ' ' || *val == '\t'))
+	while (val < eol && isblank(*val))
 		val++;
 	/* there must be at least one digit */
-	if (!isdigit((unsigned char)*val))
+	if (!isdigit(*val))
 		return -1;
 	len = strtol(val, &on, 10);
 	if (on != eol) {

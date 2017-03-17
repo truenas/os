@@ -7347,8 +7347,7 @@ ahc_handle_en_lun(struct ahc_softc *ahc, struct cam_sim *sim, union ccb *ccb)
 	else
 		our_id = ahc->our_id_b;
 
-	if (ccb->ccb_h.target_id != our_id
-	 && ccb->ccb_h.target_id != CAM_TARGET_WILDCARD) {
+	if (ccb->ccb_h.target_id != our_id) {
 		/*
 		 * our_id represents our initiator ID, or
 		 * the ID of the first target to have an

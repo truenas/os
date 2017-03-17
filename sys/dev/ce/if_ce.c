@@ -840,11 +840,11 @@ static int ce_detach (device_t dev)
 		if (! d || ! d->chan)
 			continue;
 		callout_drain (&d->timeout_handle);
-		channel [b->num * NCHAN + c->num] = NULL;
+		channel [b->num * NCHAN + c->num] = 0;
 		/* Deallocate buffers. */
 		ce_bus_dma_mem_free (&d->dmamem);
 	}
-	adapter [b->num] = NULL;
+	adapter [b->num] = 0;
 	ce_bus_dma_mem_free (&bd->dmamem);
 	free (b, M_DEVBUF);
 #if __FreeBSD_version >= 504000

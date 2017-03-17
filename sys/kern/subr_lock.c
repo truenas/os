@@ -56,9 +56,6 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/cpufunc.h>
 
-SDT_PROVIDER_DEFINE(lock);
-SDT_PROBE_DEFINE1(lock, , , starvation, "u_int");
-
 CTASSERT(LOCK_CLASS_MAX == 15);
 
 struct lock_class *lock_classes[LOCK_CLASS_MAX + 1] = {
@@ -106,56 +103,32 @@ lock_destroy(struct lock_object *lock)
 	lock->lo_flags &= ~LO_INITIALIZED;
 }
 
-static SYSCTL_NODE(_debug, OID_AUTO, lock, CTLFLAG_RD, NULL, "lock debugging");
-static SYSCTL_NODE(_debug_lock, OID_AUTO, delay, CTLFLAG_RD, NULL,
-    "lock delay");
-
-static u_int __read_mostly starvation_limit = 131072;
-SYSCTL_INT(_debug_lock_delay, OID_AUTO, starvation_limit, CTLFLAG_RW,
-    &starvation_limit, 0, "");
-
-static u_int __read_mostly restrict_starvation = 0;
-SYSCTL_INT(_debug_lock_delay, OID_AUTO, restrict_starvation, CTLFLAG_RW,
-    &restrict_starvation, 0, "");
-
 void
 lock_delay(struct lock_delay_arg *la)
 {
+	u_int i, delay, backoff, min, max;
 	struct lock_delay_config *lc = la->config;
-	u_int i;
 
-	la->delay <<= 1;
-	if (__predict_false(la->delay > lc->max))
-		la->delay = lc->max;
+	delay = la->delay;
 
-	for (i = la->delay; i > 0; i--)
+	if (delay == 0)
+		delay = lc->initial;
+	else {
+		delay += lc->step;
+		max = lc->max;
+		if (delay > max)
+			delay = max;
+	}
+
+	backoff = cpu_ticks() % delay;
+	min = lc->min;
+	if (backoff < min)
+		backoff = min;
+	for (i = 0; i < backoff; i++)
 		cpu_spinwait();
 
-	la->spin_cnt += la->delay;
-	if (__predict_false(la->spin_cnt > starvation_limit)) {
-		SDT_PROBE1(lock, , , starvation, la->delay);
-		if (restrict_starvation)
-			la->delay = lc->base;
-	}
-}
-
-static u_int
-lock_roundup_2(u_int val)
-{
-	u_int res;
-
-	for (res = 1; res <= val; res <<= 1)
-		continue;
-
-	return (res);
-}
-
-void
-lock_delay_default_init(struct lock_delay_config *lc)
-{
-
-	lc->base = lock_roundup_2(mp_ncpus) / 4;
-	lc->max = lc->base * 1024;
+	la->delay = delay;
+	la->spin_cnt += backoff;
 }
 
 #ifdef DDB
@@ -240,7 +213,7 @@ struct lock_prof_cpu {
 
 struct lock_prof_cpu *lp_cpu[MAXCPU];
 
-volatile int __read_mostly lock_prof_enable;
+volatile int lock_prof_enable = 0;
 static volatile int lock_prof_resetting;
 
 #define LPROF_SBUF_SIZE		256
@@ -682,6 +655,7 @@ out:
 	critical_exit();
 }
 
+static SYSCTL_NODE(_debug, OID_AUTO, lock, CTLFLAG_RD, NULL, "lock debugging");
 static SYSCTL_NODE(_debug_lock, OID_AUTO, prof, CTLFLAG_RD, NULL,
     "lock profiling");
 SYSCTL_INT(_debug_lock_prof, OID_AUTO, skipspin, CTLFLAG_RW,

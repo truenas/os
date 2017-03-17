@@ -859,7 +859,7 @@ main(int (*openfirm)(void *))
 	/*
 	 * Initialize devices.
 	 */
-	for (dp = devsw; *dp != NULL; dp++)
+	for (dp = devsw; *dp != 0; dp++)
 		if ((*dp)->dv_init != 0)
 			(*dp)->dv_init();
 

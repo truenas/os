@@ -71,7 +71,7 @@ static const double tests[] = {
 };
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 	static const int ntests = sizeof(tests) / sizeof(tests[0]) / 2;
 	complex float in;
@@ -90,7 +90,7 @@ main(void)
 		assert(fpequal(libcreall(in), __real__ in));
 		assert(fpequal(libcimagf(in), __imag__ in));
 		assert(fpequal(libcimag(in), __imag__ in));
-		assert(fpequal(libcimagl(in), __imag__ in));
+		assert(fpequal(libcimagl(in), __imag__ in));		
 
 		feclearexcept(FE_ALL_EXCEPT);
 		if (!cfpequal(libconjf(in), expected)) {

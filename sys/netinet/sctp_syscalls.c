@@ -121,18 +121,17 @@ sys_sctp_peeloff(td, uap)
 	} */ *uap;
 {
 #if (defined(INET) || defined(INET6)) && defined(SCTP)
-	struct file *headfp, *nfp = NULL;
+	struct file *nfp = NULL;
 	struct socket *head, *so;
 	cap_rights_t rights;
 	u_int fflag;
 	int error, fd;
 
 	AUDIT_ARG_FD(uap->sd);
-	error = getsock_cap(td, uap->sd, cap_rights_init(&rights, CAP_PEELOFF),
-	    &headfp, &fflag, NULL);
+	error = fgetsock(td, uap->sd, cap_rights_init(&rights, CAP_PEELOFF),
+	    &head, &fflag);
 	if (error != 0)
 		goto done2;
-	head = headfp->f_data;
 	if (head->so_proto->pr_protocol != IPPROTO_SCTP) {
 		error = EOPNOTSUPP;
 		goto done;
@@ -197,7 +196,7 @@ noconnection:
 done:
 	if (nfp != NULL)
 		fdrop(nfp, td);
-	fdrop(headfp, td);
+	fputsock(head);
 done2:
 	return (error);
 #else  /* SCTP */
@@ -249,7 +248,7 @@ sys_sctp_generic_sendmsg (td, uap)
 	}
 
 	AUDIT_ARG_FD(uap->sd);
-	error = getsock_cap(td, uap->sd, &rights, &fp, NULL, NULL);
+	error = getsock_cap(td, uap->sd, &rights, &fp, NULL);
 	if (error != 0)
 		goto sctp_bad;
 #ifdef KTRACE
@@ -362,7 +361,7 @@ sys_sctp_generic_sendmsg_iov(td, uap)
 	}
 
 	AUDIT_ARG_FD(uap->sd);
-	error = getsock_cap(td, uap->sd, &rights, &fp, NULL, NULL);
+	error = getsock_cap(td, uap->sd, &rights, &fp, NULL);
 	if (error != 0)
 		goto sctp_bad1;
 
@@ -478,7 +477,7 @@ sys_sctp_generic_recvmsg(td, uap)
 
 	AUDIT_ARG_FD(uap->sd);
 	error = getsock_cap(td, uap->sd, cap_rights_init(&rights, CAP_RECV),
-	    &fp, NULL, NULL);
+	    &fp, NULL);
 	if (error != 0)
 		return (error);
 #ifdef COMPAT_FREEBSD32

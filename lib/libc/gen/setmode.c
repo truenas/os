@@ -175,7 +175,7 @@ setmode(const char *p)
 	mode_t mask, perm, permXbits, who;
 	long perml;
 	int equalopdone;
-	u_int setlen;
+	int setlen;
 
 	if (!*p) {
 		errno = EINVAL;
@@ -190,7 +190,7 @@ setmode(const char *p)
 
 	setlen = SET_LEN + 2;
 
-	if ((set = malloc(setlen * sizeof(BITCMD))) == NULL)
+	if ((set = malloc((u_int)(sizeof(BITCMD) * setlen))) == NULL)
 		return (NULL);
 	saveset = set;
 	endset = set + (setlen - 2);

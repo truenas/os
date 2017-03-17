@@ -342,7 +342,7 @@ __build_env(void)
 	envVarsSize = envVarsTotal * 2;
 
 	/* Create new environment. */
-	envVars = calloc(envVarsSize, sizeof(*envVars));
+	envVars = calloc(1, sizeof (*envVars) * envVarsSize);
 	if (envVars == NULL)
 		goto Failure;
 

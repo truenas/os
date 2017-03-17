@@ -680,6 +680,7 @@ isc_stop_receiver(isc_session_t *sp)
 
      if(sp->fp != NULL)
 	  fdrop(sp->fp, sp->td);
+     fputsock(sp->soc);
      sp->soc = NULL;
      sp->fp = NULL;
 

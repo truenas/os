@@ -42,12 +42,8 @@ DEFINE_TEST(test_archive_api_feature)
 	if (strlen(buff) < strlen(archive_version_string())) {
 		p = archive_version_string() + strlen(buff);
 		failure("Version string is: %s", archive_version_string());
-		if (p[0] == 'd'&& p[1] == 'e' && p[2] == 'v')
-			p += 3;
-		else {
-			assert(*p == 'a' || *p == 'b' || *p == 'c' || *p == 'd');
-			++p;
-		}
+		assert(*p == 'a' || *p == 'b' || *p == 'c' || *p == 'd');
+		++p;
 		failure("Version string is: %s", archive_version_string());
 		assert(*p == '\0');
 	}

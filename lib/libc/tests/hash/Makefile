@@ -32,7 +32,8 @@ ${PACKAGE}DATA_FILES+=	data/sha1test2-out
 LIBADD+=		md
 LIBADD.sha2_test+=	crypto
 
-CFLAGS.h_hash+=		-I${SRCTOP}/lib/libnetbsd
+CFLAGS.sha2_test+=	-I${SRCTOP}/crypto/openssh/openbsd-compat
+CFLAGS.sha2_test+=	-I${SRCTOP}/crypto/openssh
 
 .include "../Makefile.netbsd-tests"
 

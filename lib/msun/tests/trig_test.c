@@ -153,7 +153,7 @@ run_reduction_tests(void)
 	};
 #endif
 
-	unsigned i;
+	int i;
 
 	for (i = 0; i < nitems(f_pi_odd); i++) {
 		assert(fabs(sinf(f_pi_odd[i])) < FLT_EPSILON);
@@ -258,7 +258,7 @@ run_accuracy_tests(void)
 }
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 
 	printf("1..3\n");

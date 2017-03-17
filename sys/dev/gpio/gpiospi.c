@@ -293,7 +293,6 @@ gpio_spi_txrx(struct gpio_spi_softc *sc, int cs, int mode, uint8_t data)
 			gpio_delay(sc);
 			GPIOBUS_PIN_SET(sc->sc_busdev, sc->sc_dev,
 			    sc->sc_sclk, 1);
-			gpio_delay(sc);
 		} else {
 			/* If mode 0 or 3 */
 
@@ -313,7 +312,6 @@ gpio_spi_txrx(struct gpio_spi_softc *sc, int cs, int mode, uint8_t data)
 			gpio_delay(sc);
 			GPIOBUS_PIN_SET(sc->sc_busdev, sc->sc_dev,
 			    sc->sc_sclk, 0);
-			gpio_delay(sc);
 		}
 	}
 

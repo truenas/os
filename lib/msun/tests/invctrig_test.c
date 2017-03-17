@@ -31,7 +31,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
 #include <assert.h>
 #include <complex.h>
 #include <fenv.h>
@@ -124,7 +123,7 @@ c3pi = 9.42477796076937971538793014983850839L;
 
 
 /* Tests for 0 */
-static void
+void
 test_zero(void)
 {
 	long double complex zero = CMPLXL(0.0, 0.0);
@@ -144,8 +143,8 @@ test_zero(void)
 /*
  * Tests for NaN inputs.
  */
-static void
-test_nan(void)
+void
+test_nan()
 {
 	long double complex nan_nan = CMPLXL(NAN, NAN);
 	long double complex z;
@@ -155,7 +154,7 @@ test_nan(void)
 	 * NaN,NaN	NaN,NaN	    NaN,NaN	NaN,NaN	    NaN,NaN
 	 * finite,NaN	NaN,NaN*    NaN,NaN*	NaN,NaN*    NaN,NaN*
 	 * NaN,finite   NaN,NaN*    NaN,NaN*	NaN,NaN*    NaN,NaN*
-	 * NaN,Inf	Inf,NaN     NaN,-Inf	?Inf,NaN    ?0,pi/2
+	 * NaN,Inf	Inf,NaN     NaN,-Inf	?Inf,NaN    ?0,pi/2	
 	 * +-Inf,NaN	Inf,NaN     NaN,?Inf	+-Inf,NaN   +-0,NaN
 	 * +-0,NaN	NaN,NaN*    pi/2,NaN	NaN,NaN*    +-0,NaN
 	 * NaN,0	NaN,NaN*    NaN,NaN*	NaN,0	    NaN,NaN*
@@ -223,7 +222,7 @@ test_nan(void)
 	testall(catan, z, CMPLXL(NAN, 0.0), ALL_STD_EXCEPT, 0, 0);
 }
 
-static void
+void
 test_inf(void)
 {
 	long double complex z;
@@ -270,16 +269,16 @@ test_inf(void)
 }
 
 /* Tests along the real and imaginary axes. */
-static void
+void
 test_axes(void)
 {
 	static const long double nums[] = {
 		-2, -1, -0.5, 0.5, 1, 2
 	};
 	long double complex z;
-	unsigned i;
+	int i;
 
-	for (i = 0; i < nitems(nums); i++) {
+	for (i = 0; i < sizeof(nums) / sizeof(nums[0]); i++) {
 		/* Real axis */
 		z = CMPLXL(nums[i], 0.0);
 		if (fabsl(nums[i]) <= 1) {
@@ -307,7 +306,7 @@ test_axes(void)
 	}
 }
 
-static void
+void
 test_small(void)
 {
 	/*
@@ -333,7 +332,7 @@ test_small(void)
 }
 
 /* Test inputs that might cause overflow in a sloppy implementation. */
-static void
+void
 test_large(void)
 {
 
@@ -341,7 +340,7 @@ test_large(void)
 }
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 
 	printf("1..6\n");

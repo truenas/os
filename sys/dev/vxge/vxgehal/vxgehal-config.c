@@ -2312,6 +2312,9 @@ vxge_hal_device_config_default_get(
 		port_config->host_chosen_aggr =
 		    VXGE_HAL_LAG_PORT_HOST_CHOSEN_AGGR_DEFAULT;
 
+		port_config->host_chosen_aggr =
+		    VXGE_HAL_LAG_PORT_HOST_CHOSEN_AGGR_DEFAULT;
+
 		port_config->discard_unknown_slow_proto =
 		    VXGE_HAL_LAG_PORT_DISCARD_UNKNOWN_SLOW_PROTO_DEFAULT;
 
@@ -2341,6 +2344,9 @@ vxge_hal_device_config_default_get(
 
 		port_config->actor_collecting =
 		    VXGE_HAL_LAG_PORT_ACTOR_COLLECTING_DEFAULT;
+
+		port_config->actor_distributing =
+		    VXGE_HAL_LAG_PORT_ACTOR_DISTRIBUTING_DEFAULT;
 
 		port_config->actor_distributing =
 		    VXGE_HAL_LAG_PORT_ACTOR_DISTRIBUTING_DEFAULT;
@@ -2377,6 +2383,9 @@ vxge_hal_device_config_default_get(
 
 		port_config->partner_collecting =
 		    VXGE_HAL_LAG_PORT_PARTNER_COLLECTING_DEFAULT;
+
+		port_config->partner_distributing =
+		    VXGE_HAL_LAG_PORT_PARTNER_DISTRIBUTING_DEFAULT;
 
 		port_config->partner_distributing =
 		    VXGE_HAL_LAG_PORT_PARTNER_DISTRIBUTING_DEFAULT;

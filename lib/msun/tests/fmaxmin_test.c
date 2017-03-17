@@ -61,7 +61,7 @@ __FBSDID("$FreeBSD$");
 	}								      \
 } while (0)
 
-static int
+int
 testall_r(long double big, long double small)
 {
 	int ok;
@@ -86,14 +86,14 @@ testall_r(long double big, long double small)
 	return (ok);
 }
 
-static const char *comment = NULL;
+const char *comment = NULL;
 
 /*
  * Test all the functions: fmaxf, fmax, fmaxl, fminf, fmin, and fminl,
  * in all rounding modes and with the arguments in different orders.
  * The input 'big' must be >= 'small'.
  */
-static void
+void
 testall(int testnum, long double big, long double small)
 {
 	static const int rmodes[] = {
@@ -122,7 +122,7 @@ testall(int testnum, long double big, long double small)
 #endif
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 
 	printf("1..12\n");

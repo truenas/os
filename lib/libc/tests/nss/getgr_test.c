@@ -479,7 +479,6 @@ fin:
 
 #define	SNAPSHOT_FILE	"snapshot_grp"
 
-ATF_TC_WITHOUT_HEAD(getgrent);
 ATF_TC_BODY(getgrent, tc)
 {
 
@@ -531,6 +530,7 @@ ATF_TC_BODY(getgrnam_with_snapshot, tc)
 	ATF_REQUIRE(run_tests(SNAPSHOT_FILE, TEST_GETGRNAM) == 0);
 }
 
+ATF_TC_WITHOUT_HEAD(getgrent);
 ATF_TP_ADD_TCS(tp)
 {
 

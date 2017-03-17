@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/cpu.h>
 #include <machine/smp.h>
 
+int			cpu_deepest_sleep = 0;	/* Deepest Cx state available. */
 int			cpu_disable_c2_sleep = 0; /* Timer dies in C2. */
 int			cpu_disable_c3_sleep = 0; /* Timer dies in C3. */
 
@@ -206,7 +207,7 @@ handleevents(sbintime_t now, int fake)
 		}
 	} else
 		state->nextprof = state->nextstat;
-	if (now >= state->nextcallopt || now >= state->nextcall) {
+	if (now >= state->nextcallopt) {
 		state->nextcall = state->nextcallopt = SBT_MAX;
 		callout_process(now);
 	}

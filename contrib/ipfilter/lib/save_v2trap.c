@@ -124,10 +124,8 @@ snmpv2_parse(char **strings)
 	str = strdup(*strings);
 
 	ctx = calloc(1, sizeof(*ctx));
-	if (ctx == NULL) {
-		free(str);
+	if (ctx == NULL)
 		return NULL;
-	}
 
 	ctx->fd = -1;
 

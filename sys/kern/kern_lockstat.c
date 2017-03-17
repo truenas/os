@@ -27,7 +27,6 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/systm.h>
 #include <sys/lock.h>
 #include <sys/lockstat.h>
 #include <sys/sdt.h>
@@ -62,7 +61,7 @@ SDT_PROBE_DEFINE1(lockstat, , , sx__downgrade, "struct sx *");
 
 SDT_PROBE_DEFINE2(lockstat, , , thread__spin, "struct mtx *", "uint64_t");
 
-volatile int __read_mostly lockstat_enabled;
+int lockstat_enabled = 0;
 
 uint64_t 
 lockstat_nsecs(struct lock_object *lo)

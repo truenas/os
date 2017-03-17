@@ -350,7 +350,7 @@ vx_setlink(struct vx_softc *sc)
          */
 	i = sc->vx_connector;	/* default in EEPROM */
 	reason = "default";
-	warning = NULL;
+	warning = 0;
 
 	if (ifp->if_flags & IFF_LINK0) {
 		if (sc->vx_connectors & conn_tab[CONNECTOR_AUI].bit) {
@@ -729,7 +729,7 @@ again:
 
 	/* Pull packet off interface. */
 	m = vx_get(sc, len);
-	if (m == NULL) {
+	if (m == 0) {
 		if_inc_counter(ifp, IFCOUNTER_IERRORS, 1);
 		goto abort;
 	}
