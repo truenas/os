@@ -2662,7 +2662,14 @@ ref_opcode_object(struct ip_fw_chain *ch, ipfw_insn *cmd, struct tid_info *ti,
 		return (0);
 	}
 
-	/* Found. Bump refcount and update kidx. */
+	/*
+	 * Object is already exist.
+	 * Its subtype should match with expected value.
+	 */
+	if (ti->type != no->subtype)
+		return (EINVAL);
+
+	/* Bump refcount and update kidx. */
 	no->refcnt++;
 	rw->update(cmd, no->kidx);
 	return (0);
@@ -3128,7 +3135,7 @@ int
 classify_opcode_kidx(ipfw_insn *cmd, uint16_t *puidx)
 {
 
-	if (find_op_rw(cmd, puidx, NULL) == 0)
+	if (find_op_rw(cmd, puidx, NULL) == NULL)
 		return (1);
 	return (0);
 }
