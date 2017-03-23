@@ -416,7 +416,7 @@ __elfN(map_partial)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 	/*
 	 * Find the page from the underlying object.
 	 */
-	if (object) {
+	if (object != NULL) {
 		sf = vm_imgact_map_page(object, offset);
 		if (sf == NULL)
 			return (KERN_FAILURE);
@@ -444,7 +444,7 @@ __elfN(map_insert)(struct image_params *imgp, vm_map_t map, vm_object_t object,
 	if (start != trunc_page(start)) {
 		rv = __elfN(map_partial)(map, object, offset, start,
 		    round_page(start), prot);
-		if (rv)
+		if (rv != KERN_SUCCESS)
 			return (rv);
 		offset += round_page(start) - start;
 		start = round_page(start);
@@ -452,54 +452,51 @@ __elfN(map_insert)(struct image_params *imgp, vm_map_t map, vm_object_t object,
 	if (end != round_page(end)) {
 		rv = __elfN(map_partial)(map, object, offset +
 		    trunc_page(end) - start, trunc_page(end), end, prot);
-		if (rv)
+		if (rv != KERN_SUCCESS)
 			return (rv);
 		end = trunc_page(end);
 	}
-	if (end > start) {
-		if (offset & PAGE_MASK) {
-			/*
-			 * The mapping is not page aligned. This means we have
-			 * to copy the data. Sigh.
-			 */
-			rv = vm_map_fixed(map, NULL, 0, start, end - start,
-			    prot | VM_PROT_WRITE, VM_PROT_ALL, MAP_CHECK_EXCL);
-			if (rv != KERN_SUCCESS)
-				return (rv);
-			if (object == NULL)
-				return (KERN_SUCCESS);
-			for (; start < end; start += sz) {
-				sf = vm_imgact_map_page(object, offset);
-				if (sf == NULL)
-					return (KERN_FAILURE);
-				off = offset - trunc_page(offset);
-				sz = end - start;
-				if (sz > PAGE_SIZE - off)
-					sz = PAGE_SIZE - off;
-				error = copyout((caddr_t)sf_buf_kva(sf) + off,
-				    (caddr_t)start, sz);
-				vm_imgact_unmap_page(sf);
-				if (error != 0)
-					return (KERN_FAILURE);
-				offset += sz;
-			}
-			rv = KERN_SUCCESS;
-		} else {
-			vm_object_reference(object);
-			rv = vm_map_fixed(map, object, offset, start,
-			    end - start, prot, VM_PROT_ALL,
-			    cow | MAP_CHECK_EXCL);
-			if (rv != KERN_SUCCESS) {
-				locked = VOP_ISLOCKED(imgp->vp);
-				VOP_UNLOCK(imgp->vp, 0);
-				vm_object_deallocate(object);
-				vn_lock(imgp->vp, locked | LK_RETRY);
-			}
-		}
-		return (rv);
-	} else {
+	if (start >= end)
 		return (KERN_SUCCESS);
+	if ((offset & PAGE_MASK) != 0) {
+		/*
+		 * The mapping is not page aligned.  This means that we have
+		 * to copy the data.
+		 */
+		rv = vm_map_fixed(map, NULL, 0, start, end - start,
+		    prot | VM_PROT_WRITE, VM_PROT_ALL, MAP_CHECK_EXCL);
+		if (rv != KERN_SUCCESS)
+			return (rv);
+		if (object == NULL)
+			return (KERN_SUCCESS);
+		for (; start < end; start += sz) {
+			sf = vm_imgact_map_page(object, offset);
+			if (sf == NULL)
+				return (KERN_FAILURE);
+			off = offset - trunc_page(offset);
+			sz = end - start;
+			if (sz > PAGE_SIZE - off)
+				sz = PAGE_SIZE - off;
+			error = copyout((caddr_t)sf_buf_kva(sf) + off,
+			    (caddr_t)start, sz);
+			vm_imgact_unmap_page(sf);
+			if (error != 0)
+				return (KERN_FAILURE);
+			offset += sz;
+		}
+	} else {
+		vm_object_reference(object);
+		rv = vm_map_fixed(map, object, offset, start, end - start,
+		    prot, VM_PROT_ALL, cow | MAP_CHECK_EXCL);
+		if (rv != KERN_SUCCESS) {
+			locked = VOP_ISLOCKED(imgp->vp);
+			VOP_UNLOCK(imgp->vp, 0);
+			vm_object_deallocate(object);
+			vn_lock(imgp->vp, locked | LK_RETRY);
+			return (rv);
+		}
 	}
+	return (KERN_SUCCESS);
 }
 
 static int
@@ -511,7 +508,7 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 	size_t map_len;
 	vm_map_t map;
 	vm_object_t object;
-	vm_offset_t map_addr;
+	vm_offset_t off, map_addr;
 	int error, rv, cow;
 	size_t copy_len;
 	vm_ooffset_t file_addr;
@@ -525,7 +522,8 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 	 * While I'm here, might as well check for something else that
 	 * is invalid: filsz cannot be greater than memsz.
 	 */
-	if ((off_t)filsz + offset > imgp->attr->va_size || filsz > memsz) {
+	if ((filsz != 0 && (off_t)filsz + offset > imgp->attr->va_size) ||
+	    filsz > memsz) {
 		uprintf("elf_load_section: truncated ELF file\n");
 		return (ENOEXEC);
 	}
@@ -539,9 +537,11 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 	 * We have two choices.  We can either clear the data in the last page
 	 * of an oversized mapping, or we can start the anon mapping a page
 	 * early and copy the initialized data into that first page.  We
-	 * choose the second..
+	 * choose the second.
 	 */
-	if (memsz > filsz)
+	if (filsz == 0)
+		map_len = 0;
+	else if (memsz > filsz)
 		map_len = trunc_page_ps(offset + filsz, pagesize) - file_addr;
 	else
 		map_len = round_page_ps(offset + filsz, pagesize) - file_addr;
@@ -562,9 +562,8 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 			return (EINVAL);
 
 		/* we can stop now if we've covered it all */
-		if (memsz == filsz) {
+		if (memsz == filsz)
 			return (0);
-		}
 	}
 
 
@@ -574,7 +573,8 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 	 * segment in the file is extended to provide bss.  It's a neat idea
 	 * to try and save a page, but it's a pain in the behind to implement.
 	 */
-	copy_len = (offset + filsz) - trunc_page_ps(offset + filsz, pagesize);
+	copy_len = filsz == 0 ? 0 : (offset + filsz) - trunc_page_ps(offset +
+	    filsz, pagesize);
 	map_addr = trunc_page_ps((vm_offset_t)vmaddr + filsz, pagesize);
 	map_len = round_page_ps((vm_offset_t)vmaddr + memsz, pagesize) -
 	    map_addr;
@@ -583,14 +583,11 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 	if (map_len != 0) {
 		rv = __elfN(map_insert)(imgp, map, NULL, 0, map_addr,
 		    map_addr + map_len, VM_PROT_ALL, 0);
-		if (rv != KERN_SUCCESS) {
+		if (rv != KERN_SUCCESS)
 			return (EINVAL);
-		}
 	}
 
 	if (copy_len != 0) {
-		vm_offset_t off;
-
 		sf = vm_imgact_map_page(object, offset + filsz);
 		if (sf == NULL)
 			return (EIO);
@@ -601,14 +598,12 @@ __elfN(load_section)(struct image_params *imgp, vm_ooffset_t offset,
 		error = copyout((caddr_t)sf_buf_kva(sf) + off,
 		    (caddr_t)map_addr, copy_len);
 		vm_imgact_unmap_page(sf);
-		if (error) {
+		if (error != 0)
 			return (error);
-		}
 	}
 
 	/*
 	 * set it to the specified protection.
-	 * XXX had better undo the damage from pasting over the cracks here!
 	 */
 	vm_map_protect(map, trunc_page(map_addr), round_page(map_addr +
 	    map_len), prot, FALSE);
