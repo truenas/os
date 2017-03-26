@@ -4343,19 +4343,18 @@ isp_start(XS_T *xs)
 			return (CMD_COMPLETE);
 		}
 
-		/*
-		 * Try again later.
-		 */
-		if (fcp->isp_loopstate != LOOP_READY) {
-			return (CMD_RQLATER);
-		}
-
 		isp_prt(isp, ISP_LOGDEBUG2, "XS_TGT(xs)=%d", target);
 		lp = &fcp->portdb[target];
 		if (target < 0 || target >= MAX_FC_TARG ||
 		    lp->is_target == 0) {
 			XS_SETERR(xs, HBA_SELTIMEOUT);
 			return (CMD_COMPLETE);
+		}
+		if (fcp->isp_loopstate != LOOP_READY) {
+			isp_prt(isp, ISP_LOGDEBUG1,
+			    "%d.%d.%jx loop is not ready",
+			    XS_CHANNEL(xs), target, (uintmax_t)XS_LUN(xs));
+			return (CMD_RQLATER);
 		}
 		if (lp->state == FC_PORTDB_STATE_ZOMBIE) {
 			isp_prt(isp, ISP_LOGDEBUG1,
@@ -4514,15 +4513,7 @@ isp_start(XS_T *xs)
 		t7->req_tidlo = lp->portid;
 		t7->req_tidhi = lp->portid >> 16;
 		t7->req_vpidx = ISP_GET_VPIDX(isp, XS_CHANNEL(xs));
-#if __FreeBSD_version >= 1000700
 		be64enc(t7->req_lun, CAM_EXTLUN_BYTE_SWIZZLE(XS_LUN(xs)));
-#else
-		if (XS_LUN(xs) >= 256) {
-			t7->req_lun[0] = XS_LUN(xs) >> 8;
-			t7->req_lun[0] |= 0x40;
-		}
-		t7->req_lun[1] = XS_LUN(xs);
-#endif
 		if (FCPARAM(isp, XS_CHANNEL(xs))->fctape_enabled && (lp->prli_word3 & PRLI_WD3_RETRY)) {
 			if (FCP_NEXT_CRN(isp, &t7->req_crn, xs)) {
 				isp_prt(isp, ISP_LOG_WARN1,
@@ -4555,19 +4546,11 @@ isp_start(XS_T *xs)
 			ispreqt2e_t *t2e = (ispreqt2e_t *)local;
 			t2e->req_target = lp->handle;
 			t2e->req_scclun = XS_LUN(xs);
-#if __FreeBSD_version < 1000700
-			if (XS_LUN(xs) >= 256)
-				t2e->req_scclun |= 0x4000;
-#endif
 			cdbp = t2e->req_cdb;
 		} else if (ISP_CAP_SCCFW(isp)) {
 			ispreqt2_t *t2 = (ispreqt2_t *)local;
 			t2->req_target = lp->handle;
 			t2->req_scclun = XS_LUN(xs);
-#if __FreeBSD_version < 1000700
-			if (XS_LUN(xs) >= 256)
-				t2->req_scclun |= 0x4000;
-#endif
 			cdbp = t2->req_cdb;
 		} else {
 			t2->req_target = lp->handle;
@@ -6560,7 +6543,8 @@ isp_parse_status(ispsoftc_t *isp, ispstatusreq_t *sp, XS_T *xs, long *rp)
 	case RQCS_PORT_CHANGED:
 		isp_prt(isp, ISP_LOGWARN, "port changed for target %d", XS_TGT(xs));
 		if (XS_NOERR(xs)) {
-			XS_SETERR(xs, HBA_SELTIMEOUT);
+			*XS_STSP(xs) = SCSI_BUSY;
+			XS_SETERR(xs, HBA_TGTBSY);
 		}
 		return;
 
@@ -6709,10 +6693,10 @@ isp_parse_status_24xx(ispsoftc_t *isp, isp24xx_statusreq_t *sp, XS_T *xs, long *
 	case RQCS_PORT_CHANGED:
 		isp_prt(isp, ISP_LOGWARN, "port changed for target %d chan %d", XS_TGT(xs), chan);
 		if (XS_NOERR(xs)) {
-			XS_SETERR(xs, HBA_SELTIMEOUT);
+			*XS_STSP(xs) = SCSI_BUSY;
+			XS_SETERR(xs, HBA_TGTBSY);
 		}
 		return;
-
 
 	case RQCS_24XX_ENOMEM:	/* f/w resource unavailable */
 		isp_prt(isp, ISP_LOGWARN, "f/w resource unavailable for target %d chan %d", XS_TGT(xs), chan);
