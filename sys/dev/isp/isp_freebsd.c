@@ -52,7 +52,6 @@ static const char prom3[] = "Chan %d [%u] PortID 0x%06x Departed because of %s";
 static void isp_freeze_loopdown(ispsoftc_t *, int);
 static void isp_loop_changed(ispsoftc_t *isp, int chan);
 static d_ioctl_t ispioctl;
-static void isp_intr_enable(void *);
 static void isp_cam_async(void *, uint32_t, struct cam_path *, void *);
 static void isp_poll(struct cam_sim *);
 static timeout_t isp_watchdog;
@@ -1530,7 +1529,7 @@ isp_target_start_ctio(ispsoftc_t *isp, union ccb *ccb, enum Start_Ctio_How how)
 					isp_prt(isp, ISP_LOGTDEBUG0, "%s: ests base %p vaddr %p ecmd_dma %jx addr %jx len %u", __func__, isp->isp_osinfo.ecmd_base, atp->ests,
 					    (uintmax_t) isp->isp_osinfo.ecmd_dma, (uintmax_t)addr, MIN_FCP_RESPONSE_SIZE + sense_length);
 					cto->rsp.m2.ct_datalen = MIN_FCP_RESPONSE_SIZE + sense_length;
-					if (isp->isp_osinfo.sixtyfourbit) {
+					if (cto->ct_header.rqs_entry_type == RQSTYPE_CTIO3) {
 						cto->rsp.m2.u.ct_fcp_rsp_iudata_64.ds_base = DMA_LO32(addr);
 						cto->rsp.m2.u.ct_fcp_rsp_iudata_64.ds_basehi = DMA_HI32(addr);
 						cto->rsp.m2.u.ct_fcp_rsp_iudata_64.ds_count = MIN_FCP_RESPONSE_SIZE + sense_length;
@@ -4292,32 +4291,19 @@ changed:
 			mbox6 = 0;
 		}
 		isp_prt(isp, ISP_LOGERR, "Internal Firmware Error on bus %d @ RISC Address 0x%x", mbox6, mbox1);
+#if 0
 		mbox1 = isp->isp_osinfo.mbox_sleep_ok;
 		isp->isp_osinfo.mbox_sleep_ok = 0;
 		isp_reinit(isp, 1);
 		isp->isp_osinfo.mbox_sleep_ok = mbox1;
 		isp_async(isp, ISPASYNC_FW_RESTARTED, NULL);
+#endif
 		break;
 	}
 	default:
 		isp_prt(isp, ISP_LOGERR, "unknown isp_async event %d", cmd);
 		break;
 	}
-}
-
-
-/*
- * Locks are held before coming here.
- */
-void
-isp_uninit(ispsoftc_t *isp)
-{
-	if (IS_24XX(isp)) {
-		ISP_WRITE(isp, BIU2400_HCCR, HCCR_2400_CMD_RESET);
-	} else {
-		ISP_WRITE(isp, HCCR, HCCR_CMD_RESET);
-	}
-	ISP_DISABLE_INTS(isp);
 }
 
 uint64_t
@@ -4429,50 +4415,33 @@ isp_mbox_acquire(ispsoftc_t *isp)
 void
 isp_mbox_wait_complete(ispsoftc_t *isp, mbreg_t *mbp)
 {
-	unsigned int usecs = mbp->timeout;
-	unsigned int max, olim, ilim;
+	u_int t, to;
 
-	if (usecs == 0) {
-		usecs = MBCMD_DEFAULT_TIMEOUT;
-	}
-	max = isp->isp_mbxwrk0 + 1;
-
+	to = (mbp->timeout == 0) ? MBCMD_DEFAULT_TIMEOUT : mbp->timeout;
 	if (isp->isp_osinfo.mbox_sleep_ok) {
-		unsigned int ms = (usecs + 999) / 1000;
-
 		isp->isp_osinfo.mbox_sleep_ok = 0;
 		isp->isp_osinfo.mbox_sleeping = 1;
-		for (olim = 0; olim < max; olim++) {
-			msleep(&isp->isp_mbxworkp, &isp->isp_osinfo.lock, PRIBIO, "ispmbx_sleep", isp_mstohz(ms));
-			if (isp->isp_osinfo.mboxcmd_done) {
-				break;
-			}
-		}
+		msleep_sbt(&isp->isp_osinfo.mboxcmd_done, &isp->isp_osinfo.lock,
+		    PRIBIO, "ispmbx_sleep", to * SBT_1US, 0, 0);
 		isp->isp_osinfo.mbox_sleep_ok = 1;
 		isp->isp_osinfo.mbox_sleeping = 0;
 	} else {
-		for (olim = 0; olim < max; olim++) {
-			for (ilim = 0; ilim < usecs; ilim += 100) {
-				uint16_t isr, sema, info;
-				if (isp->isp_osinfo.mboxcmd_done) {
-					break;
-				}
-				if (ISP_READ_ISR(isp, &isr, &sema, &info)) {
-					isp_intr(isp, isr, sema, info);
-					if (isp->isp_osinfo.mboxcmd_done) {
-						break;
-					}
-				}
-				ISP_DELAY(100);
-			}
-			if (isp->isp_osinfo.mboxcmd_done) {
+		for (t = 0; t < to; t += 100) {
+			uint16_t isr, sema, info;
+			if (isp->isp_osinfo.mboxcmd_done)
 				break;
+			if (ISP_READ_ISR(isp, &isr, &sema, &info)) {
+				isp_intr(isp, isr, sema, info);
+				if (isp->isp_osinfo.mboxcmd_done)
+					break;
 			}
+			ISP_DELAY(100);
 		}
 	}
 	if (isp->isp_osinfo.mboxcmd_done == 0) {
-		isp_prt(isp, ISP_LOGWARN, "%s Mailbox Command (0x%x) Timeout (%uus) (started @ %s:%d)",
-		    isp->isp_osinfo.mbox_sleep_ok? "Interrupting" : "Polled", isp->isp_lastmbxcmd, usecs, mbp->func, mbp->lineno);
+		isp_prt(isp, ISP_LOGWARN, "%s Mailbox Command (0x%x) Timeout (%uus) (%s:%d)",
+		    isp->isp_osinfo.mbox_sleep_ok? "Interrupting" : "Polled",
+		    isp->isp_lastmbxcmd, to, mbp->func, mbp->lineno);
 		mbp->param[0] = MBOX_TIMEOUT;
 		isp->isp_osinfo.mboxcmd_done = 1;
 	}
@@ -4481,10 +4450,9 @@ isp_mbox_wait_complete(ispsoftc_t *isp, mbreg_t *mbp)
 void
 isp_mbox_notify_done(ispsoftc_t *isp)
 {
-	if (isp->isp_osinfo.mbox_sleeping) {
-		wakeup(&isp->isp_mbxworkp);
-	}
 	isp->isp_osinfo.mboxcmd_done = 1;
+	if (isp->isp_osinfo.mbox_sleeping)
+		wakeup(&isp->isp_osinfo.mboxcmd_done);
 }
 
 void
