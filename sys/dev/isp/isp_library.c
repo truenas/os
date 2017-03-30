@@ -632,28 +632,6 @@ isp_clear_commands(ispsoftc_t *isp)
 #endif
 }
 
-void
-isp_shutdown(ispsoftc_t *isp)
-{
-	if (IS_FC(isp)) {
-		if (IS_24XX(isp)) {
-			ISP_WRITE(isp, BIU2400_ICR, 0);
-			ISP_WRITE(isp, BIU2400_HCCR, HCCR_2400_CMD_PAUSE);
-		} else {
-			ISP_WRITE(isp, BIU_ICR, 0);
-			ISP_WRITE(isp, HCCR, HCCR_CMD_PAUSE);
-			ISP_WRITE(isp, BIU2100_CSR, BIU2100_FPM0_REGS);
-			ISP_WRITE(isp, FPM_DIAG_CONFIG, FPM_SOFT_RESET);
-			ISP_WRITE(isp, BIU2100_CSR, BIU2100_FB_REGS);
-			ISP_WRITE(isp, FBM_CMD, FBMCMD_FIFO_RESET_ALL);
-			ISP_WRITE(isp, BIU2100_CSR, BIU2100_RISC_REGS);
-		}
-	} else {
-		ISP_WRITE(isp, BIU_ICR, 0);
-		ISP_WRITE(isp, HCCR, HCCR_CMD_PAUSE);
-	}
-}
-
 /*
  * Functions to move stuff to a form that the QLogic RISC engine understands
  * and functions to move stuff back to a form the processor understands.
@@ -3073,78 +3051,6 @@ isp_get_ctio7(ispsoftc_t *isp, ct7_entry_t *src, ct7_entry_t *dst)
 		ISP_IOXGET_32(isp, &src->rsp.m2.ct_fcp_rsp_iudata.ds_base, dst->rsp.m2.ct_fcp_rsp_iudata.ds_base);
 		ISP_IOXGET_32(isp, &src->rsp.m2.ct_fcp_rsp_iudata.ds_basehi, dst->rsp.m2.ct_fcp_rsp_iudata.ds_basehi);
 		ISP_IOXGET_32(isp, &src->rsp.m2.ct_fcp_rsp_iudata.ds_count, dst->rsp.m2.ct_fcp_rsp_iudata.ds_count);
-	}
-}
-
-void
-isp_put_enable_lun(ispsoftc_t *isp, lun_entry_t *lesrc, lun_entry_t *ledst)
-{
-	int i;
-	isp_put_hdr(isp, &lesrc->le_header, &ledst->le_header);
-	ISP_IOXPUT_32(isp, lesrc->le_reserved, &ledst->le_reserved);
-	if (ISP_IS_SBUS(isp)) {
-		ISP_IOXPUT_8(isp, lesrc->le_lun, &ledst->le_rsvd);
-		ISP_IOXPUT_8(isp, lesrc->le_rsvd, &ledst->le_lun);
-		ISP_IOXPUT_8(isp, lesrc->le_ops, &ledst->le_tgt);
-		ISP_IOXPUT_8(isp, lesrc->le_tgt, &ledst->le_ops);
-		ISP_IOXPUT_8(isp, lesrc->le_status, &ledst->le_reserved2);
-		ISP_IOXPUT_8(isp, lesrc->le_reserved2, &ledst->le_status);
-		ISP_IOXPUT_8(isp, lesrc->le_cmd_count, &ledst->le_in_count);
-		ISP_IOXPUT_8(isp, lesrc->le_in_count, &ledst->le_cmd_count);
-		ISP_IOXPUT_8(isp, lesrc->le_cdb6len, &ledst->le_cdb7len);
-		ISP_IOXPUT_8(isp, lesrc->le_cdb7len, &ledst->le_cdb6len);
-	} else {
-		ISP_IOXPUT_8(isp, lesrc->le_lun, &ledst->le_lun);
-		ISP_IOXPUT_8(isp, lesrc->le_rsvd, &ledst->le_rsvd);
-		ISP_IOXPUT_8(isp, lesrc->le_ops, &ledst->le_ops);
-		ISP_IOXPUT_8(isp, lesrc->le_tgt, &ledst->le_tgt);
-		ISP_IOXPUT_8(isp, lesrc->le_status, &ledst->le_status);
-		ISP_IOXPUT_8(isp, lesrc->le_reserved2, &ledst->le_reserved2);
-		ISP_IOXPUT_8(isp, lesrc->le_cmd_count, &ledst->le_cmd_count);
-		ISP_IOXPUT_8(isp, lesrc->le_in_count, &ledst->le_in_count);
-		ISP_IOXPUT_8(isp, lesrc->le_cdb6len, &ledst->le_cdb6len);
-		ISP_IOXPUT_8(isp, lesrc->le_cdb7len, &ledst->le_cdb7len);
-	}
-	ISP_IOXPUT_32(isp, lesrc->le_flags, &ledst->le_flags);
-	ISP_IOXPUT_16(isp, lesrc->le_timeout, &ledst->le_timeout);
-	for (i = 0; i < 20; i++) {
-		ISP_IOXPUT_8(isp, lesrc->le_reserved3[i], &ledst->le_reserved3[i]);
-	}
-}
-
-void
-isp_get_enable_lun(ispsoftc_t *isp, lun_entry_t *lesrc, lun_entry_t *ledst)
-{
-	int i;
-	isp_get_hdr(isp, &lesrc->le_header, &ledst->le_header);
-	ISP_IOXGET_32(isp, &lesrc->le_reserved, ledst->le_reserved);
-	if (ISP_IS_SBUS(isp)) {
-		ISP_IOXGET_8(isp, &lesrc->le_lun, ledst->le_rsvd);
-		ISP_IOXGET_8(isp, &lesrc->le_rsvd, ledst->le_lun);
-		ISP_IOXGET_8(isp, &lesrc->le_ops, ledst->le_tgt);
-		ISP_IOXGET_8(isp, &lesrc->le_tgt, ledst->le_ops);
-		ISP_IOXGET_8(isp, &lesrc->le_status, ledst->le_reserved2);
-		ISP_IOXGET_8(isp, &lesrc->le_reserved2, ledst->le_status);
-		ISP_IOXGET_8(isp, &lesrc->le_cmd_count, ledst->le_in_count);
-		ISP_IOXGET_8(isp, &lesrc->le_in_count, ledst->le_cmd_count);
-		ISP_IOXGET_8(isp, &lesrc->le_cdb6len, ledst->le_cdb7len);
-		ISP_IOXGET_8(isp, &lesrc->le_cdb7len, ledst->le_cdb6len);
-	} else {
-		ISP_IOXGET_8(isp, &lesrc->le_lun, ledst->le_lun);
-		ISP_IOXGET_8(isp, &lesrc->le_rsvd, ledst->le_rsvd);
-		ISP_IOXGET_8(isp, &lesrc->le_ops, ledst->le_ops);
-		ISP_IOXGET_8(isp, &lesrc->le_tgt, ledst->le_tgt);
-		ISP_IOXGET_8(isp, &lesrc->le_status, ledst->le_status);
-		ISP_IOXGET_8(isp, &lesrc->le_reserved2, ledst->le_reserved2);
-		ISP_IOXGET_8(isp, &lesrc->le_cmd_count, ledst->le_cmd_count);
-		ISP_IOXGET_8(isp, &lesrc->le_in_count, ledst->le_in_count);
-		ISP_IOXGET_8(isp, &lesrc->le_cdb6len, ledst->le_cdb6len);
-		ISP_IOXGET_8(isp, &lesrc->le_cdb7len, ledst->le_cdb7len);
-	}
-	ISP_IOXGET_32(isp, &lesrc->le_flags, ledst->le_flags);
-	ISP_IOXGET_16(isp, &lesrc->le_timeout, ledst->le_timeout);
-	for (i = 0; i < 20; i++) {
-		ISP_IOXGET_8(isp, &lesrc->le_reserved3[i], ledst->le_reserved3[i]);
 	}
 }
 

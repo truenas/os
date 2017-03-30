@@ -24,6 +24,8 @@
         ..
         pkill
         ..
+        pwait
+        ..
         sh
             builtins
             ..

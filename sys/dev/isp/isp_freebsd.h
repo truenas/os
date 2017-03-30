@@ -160,8 +160,6 @@ typedef struct tstate {
 	struct ccb_hdr_slist	atios;
 	struct ccb_hdr_slist	inots;
 	struct ntpdlist		restart_queue;
-	uint16_t		atio_count;
-	uint16_t		inot_count;
 } tstate_t;
 
 #define	LUN_HASH_SIZE		32
@@ -225,8 +223,6 @@ struct isp_fc {
 		simqfrozen	: 3,
 		default_id	: 8,
 		def_role	: 2,	/* default role */
-		gdt_running	: 1,
-		loop_dead	: 1,
 		loop_seen_once	: 1,
 		fcbsy		: 1,
 		ready		: 1;
@@ -272,7 +268,6 @@ struct isposinfo {
 	struct mtx		lock;
 	device_t		dev;
 	struct cdev *		cdev;
-	struct intr_config_hook	ehook;
 	struct cam_devq *	devq;
 
 	/*
@@ -311,12 +306,11 @@ struct isposinfo {
 #endif
 		sixtyfourbit	: 1,	/* sixtyfour bit platform */
 		timer_active	: 1,
-		autoconf	: 1,
-		ehook_active	: 1,
-		mbox_sleeping	: 1,
-		mbox_sleep_ok	: 1,
-		mboxcmd_done	: 1,
-		mboxbsy		: 1;
+		autoconf	: 1;
+	int			mbox_sleeping;
+	int			mbox_sleep_ok;
+	int			mboxbsy;
+	int			mboxcmd_done;
 
 	struct callout		tmo;	/* general timer */
 
@@ -384,13 +378,8 @@ struct isposinfo {
 #define	ISP_MEMCPY		memcpy
 #define	ISP_SNPRINTF		snprintf
 #define	ISP_DELAY(x)		DELAY(x)
-#if __FreeBSD_version < 1000029
-#define	ISP_SLEEP(isp, x)	msleep(&(isp)->isp_osinfo.is_exiting, \
-    &(isp)->isp_osinfo.lock, 0, "isp_sleep", ((x) + tick - 1) / tick)
-#else
 #define	ISP_SLEEP(isp, x)	msleep_sbt(&(isp)->isp_osinfo.is_exiting, \
     &(isp)->isp_osinfo.lock, 0, "isp_sleep", (x) * SBT_1US, 0, 0)
-#endif
 
 #define	ISP_MIN			imin
 
@@ -706,7 +695,6 @@ default:							\
  */
 extern int isp_attach(ispsoftc_t *);
 extern int isp_detach(ispsoftc_t *);
-extern void isp_uninit(ispsoftc_t *);
 extern uint64_t isp_default_wwn(ispsoftc_t *, int, int, int);
 
 /*

@@ -38,6 +38,25 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20170322: rename <x> to <x>_test to match the FreeBSD test suite name scheme
+OLD_FILES+=usr/tests/usr.bin/col/col
+OLD_FILES+=usr/tests/usr.bin/ident/ident
+OLD_FILES+=usr/tests/usr.bin/mkimg/mkimg
+OLD_FILES+=usr/tests/usr.bin/sdiff/sdiff
+OLD_FILES+=usr/tests/usr.bin/soelim/soelim
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_config_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_etcdir_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_lock_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_groupadd_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_groupdel_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_groupmod_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_useradd_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_userdel_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_usermod_test
+OLD_FILES+=usr/tests/usr.sbin/pw/pw_usernext_test
+# 20170308: rename some tests
+OLD_FILES+=usr/tests/bin/pwait/pwait
+OLD_FILES+=usr/tests/usr.bin/timeout/timeout
 # 20170214: Four files from ggate tests consolidated into one
 OLD_FILES+=usr/tests/sys/geom/class/gate/1_test
 OLD_FILES+=usr/tests/sys/geom/class/gate/2_test
@@ -1832,6 +1851,7 @@ OLD_FILES+=usr/share/man/man1/makeinfo.1.gz
 OLD_FILES+=usr/share/man/man1/texindex.1.gz
 OLD_FILES+=usr/share/man/man5/info.5.gz
 OLD_FILES+=usr/share/man/man5/texinfo.5.gz
+OLD_DIRS+=usr/share/info
 # 20141231: new clang import which bumps version from 3.4.1 to 3.5.0.
 OLD_FILES+=usr/include/clang/3.4.1/__wmmintrin_aes.h
 OLD_FILES+=usr/include/clang/3.4.1/__wmmintrin_pclmul.h
