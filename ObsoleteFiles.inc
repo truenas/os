@@ -38,6 +38,9 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20170308: rename some tests
+OLD_FILES+=usr/tests/bin/pwait/pwait
+OLD_FILES+=usr/tests/usr.bin/timeout/timeout
 # 20170214: Four files from ggate tests consolidated into one
 OLD_FILES+=usr/tests/sys/geom/class/gate/1_test
 OLD_FILES+=usr/tests/sys/geom/class/gate/2_test
@@ -45,6 +48,9 @@ OLD_FILES+=usr/tests/sys/geom/class/gate/3_test
 OLD_FILES+=usr/tests/sys/geom/class/gate/conf.sh
 # 20170211: libarchive ACL pax test renamed to test_acl_pax_posix1e.tar.uu
 OLD_FILES+=usr/tests/lib/libarchive/test_acl_pax.tar.uu
+# 20170206: merged projects/ipsec
+OLD_FILES+=usr/include/netinet/ip_ipsec.h
+OLD_FILES+=usr/include/netinet6/ip6_ipsec.h
 # 20170103: libbsnmptools.so made into an INTERNALLIB
 OLD_FILES+=usr/lib/libbsnmptools.a
 OLD_FILES+=usr/lib/libbsnmptools_p.a
@@ -1829,6 +1835,7 @@ OLD_FILES+=usr/share/man/man1/makeinfo.1.gz
 OLD_FILES+=usr/share/man/man1/texindex.1.gz
 OLD_FILES+=usr/share/man/man5/info.5.gz
 OLD_FILES+=usr/share/man/man5/texinfo.5.gz
+OLD_DIRS+=usr/share/info
 # 20141231: new clang import which bumps version from 3.4.1 to 3.5.0.
 OLD_FILES+=usr/include/clang/3.4.1/__wmmintrin_aes.h
 OLD_FILES+=usr/include/clang/3.4.1/__wmmintrin_pclmul.h

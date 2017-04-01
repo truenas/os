@@ -24,6 +24,8 @@
         ..
         pkill
         ..
+        pwait
+        ..
         sh
             builtins
             ..
@@ -307,6 +309,8 @@
             ..
             ttyio
             ..
+        ..
+        libcam
         ..
         libcrypt
         ..

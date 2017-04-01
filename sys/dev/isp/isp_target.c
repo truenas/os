@@ -617,7 +617,7 @@ isp_endcmd(ispsoftc_t *isp, ...)
  * These are either broadcast events or specifically CTIO fast completion
  */
 
-int
+void
 isp_target_async(ispsoftc_t *isp, int bus, int event)
 {
 	isp_notify_t notify;
@@ -694,7 +694,6 @@ isp_target_async(ispsoftc_t *isp, int bus, int event)
 		}
 		break;
 	}
-	return (0);
 }
 
 /*
@@ -726,9 +725,6 @@ isp_got_msg_fc(ispsoftc_t *isp, in_fcentry_t *inp)
 	/* nt_tgt set in outer layers */
 	if (ISP_CAP_SCCFW(isp)) {
 		notify.nt_lun = inp->in_scclun;
-#if __FreeBSD_version < 1000700
-		notify.nt_lun &= 0x3fff;
-#endif
 	} else {
 		notify.nt_lun = inp->in_lun;
 	}
@@ -1017,9 +1013,6 @@ isp_handle_atio2(ispsoftc_t *isp, at2_entry_t *aep)
 
 	if (ISP_CAP_SCCFW(isp)) {
 		lun = aep->at_scclun;
-#if __FreeBSD_version < 1000700
-		lun &= 0x3fff;
-#endif
 	} else {
 		lun = aep->at_lun;
 	}

@@ -2691,36 +2691,25 @@ call_sim:
 	}
 	case XPT_GDEV_STATS:
 	{
-		struct cam_ed *dev;
+		struct ccb_getdevstats *cgds = &start_ccb->cgds;
+		struct cam_ed *dev = path->device;
+		struct cam_eb *bus = path->bus;
+		struct cam_et *tar = path->target;
+		struct cam_devq *devq = bus->sim->devq;
 
-		dev = path->device;
-		if ((dev->flags & CAM_DEV_UNCONFIGURED) != 0) {
-			start_ccb->ccb_h.status = CAM_DEV_NOT_THERE;
-		} else {
-			struct ccb_getdevstats *cgds;
-			struct cam_eb *bus;
-			struct cam_et *tar;
-			struct cam_devq *devq;
-
-			cgds = &start_ccb->cgds;
-			bus = path->bus;
-			tar = path->target;
-			devq = bus->sim->devq;
-			mtx_lock(&devq->send_mtx);
-			cgds->dev_openings = dev->ccbq.dev_openings;
-			cgds->dev_active = dev->ccbq.dev_active;
-			cgds->allocated = dev->ccbq.allocated;
-			cgds->queued = cam_ccbq_pending_ccb_count(&dev->ccbq);
-			cgds->held = cgds->allocated - cgds->dev_active -
-			    cgds->queued;
-			cgds->last_reset = tar->last_reset;
-			cgds->maxtags = dev->maxtags;
-			cgds->mintags = dev->mintags;
-			if (timevalcmp(&tar->last_reset, &bus->last_reset, <))
-				cgds->last_reset = bus->last_reset;
-			mtx_unlock(&devq->send_mtx);
-			cgds->ccb_h.status = CAM_REQ_CMP;
-		}
+		mtx_lock(&devq->send_mtx);
+		cgds->dev_openings = dev->ccbq.dev_openings;
+		cgds->dev_active = dev->ccbq.dev_active;
+		cgds->allocated = dev->ccbq.allocated;
+		cgds->queued = cam_ccbq_pending_ccb_count(&dev->ccbq);
+		cgds->held = cgds->allocated - cgds->dev_active - cgds->queued;
+		cgds->last_reset = tar->last_reset;
+		cgds->maxtags = dev->maxtags;
+		cgds->mintags = dev->mintags;
+		if (timevalcmp(&tar->last_reset, &bus->last_reset, <))
+			cgds->last_reset = bus->last_reset;
+		mtx_unlock(&devq->send_mtx);
+		cgds->ccb_h.status = CAM_REQ_CMP;
 		break;
 	}
 	case XPT_GDEVLIST:
@@ -5146,9 +5135,9 @@ xptaction(struct cam_sim *sim, union ccb *work_ccb)
 		cpi->max_target = 0;
 		cpi->max_lun = 0;
 		cpi->initiator_id = 0;
-		strncpy(cpi->sim_vid, "FreeBSD", SIM_IDLEN);
-		strncpy(cpi->hba_vid, "", HBA_IDLEN);
-		strncpy(cpi->dev_name, sim->sim_name, DEV_IDLEN);
+		strlcpy(cpi->sim_vid, "FreeBSD", SIM_IDLEN);
+		strlcpy(cpi->hba_vid, "", HBA_IDLEN);
+		strlcpy(cpi->dev_name, sim->sim_name, DEV_IDLEN);
 		cpi->unit_number = sim->unit_number;
 		cpi->bus_id = sim->bus_id;
 		cpi->base_transfer_speed = 0;

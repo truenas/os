@@ -2904,7 +2904,7 @@ vm_map_entry_delete(vm_map_t map, vm_map_entry_t entry)
 {
 	vm_object_t object;
 	vm_pindex_t offidxstart, offidxend, count, size1;
-	vm_ooffset_t size;
+	vm_size_t size;
 
 	vm_map_entry_unlink(map, entry);
 	object = entry->object.vm_object;
@@ -2921,7 +2921,7 @@ vm_map_entry_delete(vm_map_t map, vm_map_entry_t entry)
 		KASSERT(entry->cred == NULL || object->cred == NULL ||
 		    (entry->eflags & MAP_ENTRY_NEEDS_COPY),
 		    ("OVERCOMMIT vm_map_entry_delete: both cred %p", entry));
-		count = OFF_TO_IDX(size);
+		count = atop(size);
 		offidxstart = OFF_TO_IDX(entry->offset);
 		offidxend = offidxstart + count;
 		VM_OBJECT_WLOCK(object);
@@ -4124,7 +4124,7 @@ RetryLookup:;
 	 * Return the object/offset from this entry.  If the entry was
 	 * copy-on-write or empty, it has been fixed up.
 	 */
-	*pindex = OFF_TO_IDX((vaddr - entry->start) + entry->offset);
+	*pindex = UOFF_TO_IDX((vaddr - entry->start) + entry->offset);
 	*object = entry->object.vm_object;
 
 	*out_prot = prot;
@@ -4205,7 +4205,7 @@ vm_map_lookup_locked(vm_map_t *var_map,		/* IN/OUT */
 	 * Return the object/offset from this entry.  If the entry was
 	 * copy-on-write or empty, it has been fixed up.
 	 */
-	*pindex = OFF_TO_IDX((vaddr - entry->start) + entry->offset);
+	*pindex = UOFF_TO_IDX((vaddr - entry->start) + entry->offset);
 	*object = entry->object.vm_object;
 
 	*out_prot = prot;
