@@ -4044,6 +4044,7 @@ zfs_do_receive(int argc, char **argv)
 			break;
 		case 's':
 			flags.resumable = B_TRUE;
+			break;
 		case 'x':
 			if (parsepropname(props, optarg)) {
 				err = 1;
