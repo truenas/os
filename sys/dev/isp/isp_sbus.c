@@ -53,14 +53,14 @@ __FBSDID("$FreeBSD$");
 
 static uint32_t isp_sbus_rd_reg(ispsoftc_t *, int);
 static void isp_sbus_wr_reg(ispsoftc_t *, int, uint32_t);
-static int isp_sbus_rd_isr(ispsoftc_t *, uint16_t *, uint16_t *, uint16_t *);
+static void isp_sbus_run_isr(ispsoftc_t *);
 static int isp_sbus_mbxdma(ispsoftc_t *);
 static void isp_sbus_mbxdmafree(ispsoftc_t *);
 static int isp_sbus_dmasetup(ispsoftc_t *, XS_T *, void *);
 static void isp_sbus_dumpregs(ispsoftc_t *, const char *);
 
 static struct ispmdvec mdvec = {
-	isp_sbus_rd_isr,
+	isp_sbus_run_isr,
 	isp_sbus_rd_reg,
 	isp_sbus_wr_reg,
 	isp_sbus_mbxdma,
@@ -139,12 +139,11 @@ isp_sbus_attach(device_t dev)
 	struct isp_sbussoftc *sbs = device_get_softc(dev);
 	ispsoftc_t *isp = &sbs->sbus_isp;
 	int tval, isp_debug, role, ispburst, default_id;
-	int ints_setup = 0;
 
 	sbs->sbus_dev = dev;
 	sbs->sbus_mdvec = mdvec;
 	isp->isp_dev = dev;
-	mtx_init(&isp->isp_osinfo.lock, "isp", NULL, MTX_DEF);
+	mtx_init(&isp->isp_lock, "isp", NULL, MTX_DEF);
 
 	role = 0;
 	if (resource_int_value(device_get_name(dev), device_get_unit(dev),
@@ -262,12 +261,14 @@ isp_sbus_attach(device_t dev)
 		goto bad;
 	}
 
-	if (isp_setup_intr(dev, sbs->irq, ISP_IFLAGS, NULL, isp_platform_intr,
+	if (bus_setup_intr(dev, sbs->irq, ISP_IFLAGS, NULL, isp_platform_intr,
 	    isp, &sbs->ih)) {
 		device_printf(dev, "could not setup interrupt\n");
+		(void) bus_release_resource(dev, SYS_RES_IRQ,
+		    sbs->iqd, sbs->irq);
 		goto bad;
 	}
-	ints_setup++;
+	isp->isp_nirq = 1;
 
 	/*
 	 * Set up logging levels.
@@ -299,20 +300,17 @@ isp_sbus_attach(device_t dev)
 	return (0);
 
 bad:
-
-	if (sbs && ints_setup) {
+	if (isp->isp_nirq > 0) {
 		(void) bus_teardown_intr(dev, sbs->irq, sbs->ih);
-	}
-
-	if (sbs && sbs->irq) {
-		bus_release_resource(dev, SYS_RES_IRQ, sbs->iqd, sbs->irq);
+		(void) bus_release_resource(dev, SYS_RES_IRQ, sbs->iqd,
+		    sbs->irq);
 	}
 
 	if (sbs->regs) {
 		(void) bus_release_resource(dev, SYS_RES_MEMORY, sbs->rgd,
 		    sbs->regs);
 	}
-	mtx_destroy(&isp->isp_osinfo.lock);
+	mtx_destroy(&isp->isp_lock);
 	return (ENXIO);
 }
 
@@ -329,12 +327,14 @@ isp_sbus_detach(device_t dev)
 	ISP_LOCK(isp);
 	isp_shutdown(isp);
 	ISP_UNLOCK(isp);
-	if (sbs->ih)
+	if (isp->isp_nirq > 0) {
 		(void) bus_teardown_intr(dev, sbs->irq, sbs->ih);
-	(void) bus_release_resource(dev, SYS_RES_IRQ, sbs->iqd, sbs->irq);
+		(void) bus_release_resource(dev, SYS_RES_IRQ, sbs->iqd,
+		    sbs->irq);
+	}
 	(void) bus_release_resource(dev, SYS_RES_MEMORY, sbs->rgd, sbs->regs);
 	isp_sbus_mbxdmafree(isp);
-	mtx_destroy(&isp->isp_osinfo.lock);
+	mtx_destroy(&isp->isp_lock);
 	return (0);
 }
 
@@ -344,23 +344,31 @@ isp_sbus_detach(device_t dev)
 
 #define	BXR2(isp, off)		bus_read_2((isp)->isp_regs, (off))
 
-static int
-isp_sbus_rd_isr(ispsoftc_t *isp, uint16_t *isrp, uint16_t *semap, uint16_t *info)
+static void
+isp_sbus_run_isr(ispsoftc_t *isp)
 {
-	uint16_t isr, sema;
+	uint16_t isr, sema, info;
 
 	isr = BXR2(isp, IspVirt2Off(isp, BIU_ISR));
 	sema = BXR2(isp, IspVirt2Off(isp, BIU_SEMA));
 	isp_prt(isp, ISP_LOGDEBUG3, "ISR 0x%x SEMA 0x%x", isr, sema);
 	isr &= INT_PENDING_MASK(isp);
 	sema &= BIU_SEMA_LOCK;
-	if (isr == 0 && sema == 0) {
-		return (0);
-	}
-	*isrp = isr;
-	if ((*semap = sema) != 0)
-		*info = BXR2(isp, IspVirt2Off(isp, OUTMAILBOX0));
-	return (1);
+	if (isr == 0 && sema == 0)
+		return;
+	if (sema != 0) {
+		info = BXR2(isp, IspVirt2Off(isp, OUTMAILBOX0));
+		if (info & MBOX_COMMAND_COMPLETE)
+			isp_intr_mbox(isp, info);
+		else
+			isp_intr_async(isp, info);
+		if (isp->isp_state == ISP_RUNSTATE)
+			isp_intr_respq(isp);
+	} else
+		isp_intr_respq(isp);
+	ISP_WRITE(isp, HCCR, HCCR_CMD_CLEAR_RISC_INT);
+	if (sema)
+		ISP_WRITE(isp, BIU_SEMA, 0);
 }
 
 static uint32_t
@@ -421,10 +429,11 @@ isp_sbus_mbxdma(ispsoftc_t *isp)
 	if (isp->isp_rquest != NULL)
 		goto gotmaxcmds;
 
-	if (isp_dma_tag_create(BUS_DMA_ROOTARG(ISP_SBD(isp)), 1,
+	if (bus_dma_tag_create(bus_get_dma_tag(ISP_SBD(isp)), 1,
 	    BUS_SPACE_MAXADDR_24BIT+1, BUS_SPACE_MAXADDR_32BIT,
 	    BUS_SPACE_MAXADDR_32BIT, NULL, NULL, BUS_SPACE_MAXSIZE_32BIT,
-	    ISP_NSEG_MAX, BUS_SPACE_MAXADDR_24BIT, 0, &isp->isp_osinfo.dmat)) {
+	    ISP_NSEG_MAX, BUS_SPACE_MAXADDR_24BIT, 0,
+	    busdma_lock_mutex, &isp->isp_lock, &isp->isp_osinfo.dmat)) {
 		isp_prt(isp, ISP_LOGERR, "could not create master dma tag");
 		goto bad;
 	}
@@ -433,9 +442,10 @@ isp_sbus_mbxdma(ispsoftc_t *isp)
 	 * Allocate and map the request queue.
 	 */
 	len = ISP_QUEUE_SIZE(RQUEST_QUEUE_LEN(isp));
-	if (isp_dma_tag_create(isp->isp_osinfo.dmat, QENTRY_LEN, BUS_SPACE_MAXADDR_24BIT+1,
+	if (bus_dma_tag_create(isp->isp_osinfo.dmat, QENTRY_LEN, BUS_SPACE_MAXADDR_24BIT+1,
 	    BUS_SPACE_MAXADDR_32BIT, BUS_SPACE_MAXADDR, NULL, NULL,
-	    len, 1, len, 0, &isp->isp_osinfo.reqdmat)) {
+	    len, 1, len, 0, busdma_lock_mutex, &isp->isp_lock,
+	    &isp->isp_osinfo.reqdmat)) {
 		isp_prt(isp, ISP_LOGERR, "cannot create request DMA tag");
 		goto bad;
 	}
@@ -460,9 +470,10 @@ isp_sbus_mbxdma(ispsoftc_t *isp)
 	 * Allocate and map the result queue.
 	 */
 	len = ISP_QUEUE_SIZE(RESULT_QUEUE_LEN(isp));
-	if (isp_dma_tag_create(isp->isp_osinfo.dmat, QENTRY_LEN, BUS_SPACE_MAXADDR_24BIT+1,
+	if (bus_dma_tag_create(isp->isp_osinfo.dmat, QENTRY_LEN, BUS_SPACE_MAXADDR_24BIT+1,
 	    BUS_SPACE_MAXADDR_32BIT, BUS_SPACE_MAXADDR, NULL, NULL,
-	    len, 1, len, 0, &isp->isp_osinfo.respdmat)) {
+	    len, 1, len, 0, busdma_lock_mutex, &isp->isp_lock,
+	    &isp->isp_osinfo.respdmat)) {
 		isp_prt(isp, ISP_LOGERR, "cannot create response DMA tag");
 		goto bad;
 	}
@@ -504,7 +515,7 @@ gotmaxcmds:
 			}
 			goto bad;
 		}
-		callout_init_mtx(&pcmd->wdog, &isp->isp_osinfo.lock, 0);
+		callout_init_mtx(&pcmd->wdog, &isp->isp_lock, 0);
 		if (i == isp->isp_maxcmds-1) {
 			pcmd->next = NULL;
 		} else {
@@ -574,12 +585,9 @@ typedef struct {
 	void *cmd_token;
 	void *rq;	/* original request */
 	int error;
-	bus_size_t mapsize;
 } mush_t;
 
 #define	MUSHERR_NOQENTRIES	-2
-
-static void dma2(void *, bus_dma_segment_t *, int, int);
 
 static void
 dma2(void *arg, bus_dma_segment_t *dm_segs, int nseg, int error)
@@ -623,7 +631,6 @@ static int
 isp_sbus_dmasetup(ispsoftc_t *isp, struct ccb_scsiio *csio, void *ff)
 {
 	mush_t mush, *mp;
-	void (*eptr)(void *, bus_dma_segment_t *, int, int);
 	int error;
 
 	mp = &mush;
@@ -631,12 +638,9 @@ isp_sbus_dmasetup(ispsoftc_t *isp, struct ccb_scsiio *csio, void *ff)
 	mp->cmd_token = csio;
 	mp->rq = ff;
 	mp->error = 0;
-	mp->mapsize = 0;
-
-	eptr = dma2;
 
 	error = bus_dmamap_load_ccb(isp->isp_osinfo.dmat,
-	    PISP_PCMD(csio)->dmap, (union ccb *)csio, eptr, mp, 0);
+	    PISP_PCMD(csio)->dmap, (union ccb *)csio, dma2, mp, 0);
 	if (error == EINPROGRESS) {
 		bus_dmamap_unload(isp->isp_osinfo.dmat, PISP_PCMD(csio)->dmap);
 		mp->error = EINVAL;

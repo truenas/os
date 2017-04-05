@@ -160,8 +160,6 @@ typedef struct tstate {
 	struct ccb_hdr_slist	atios;
 	struct ccb_hdr_slist	inots;
 	struct ntpdlist		restart_queue;
-	uint16_t		atio_count;
-	uint16_t		inot_count;
 } tstate_t;
 
 #define	LUN_HASH_SIZE		32
@@ -299,16 +297,7 @@ struct isposinfo {
 	struct isp_pcmd *	pcmd_pool;
 	struct isp_pcmd *	pcmd_free;
 
-	uint32_t
-#ifdef	ISP_TARGET_MODE
-		tmwanted	: 1,
-		tmbusy		: 1,
-#else
-				: 2,
-#endif
-		sixtyfourbit	: 1,	/* sixtyfour bit platform */
-		timer_active	: 1,
-		autoconf	: 1;
+	int			sixtyfourbit;	/* sixtyfour bit platform */
 	int			mbox_sleeping;
 	int			mbox_sleep_ok;
 	int			mboxbsy;
@@ -367,9 +356,9 @@ struct isposinfo {
 /*
  * Locking macros...
  */
-#define	ISP_LOCK(isp)	mtx_lock(&(isp)->isp_osinfo.lock)
-#define	ISP_UNLOCK(isp)	mtx_unlock(&(isp)->isp_osinfo.lock)
-#define	ISP_ASSERT_LOCKED(isp)	mtx_assert(&(isp)->isp_osinfo.lock, MA_OWNED)
+#define	ISP_LOCK(isp)	mtx_lock(&(isp)->isp_lock)
+#define	ISP_UNLOCK(isp)	mtx_unlock(&(isp)->isp_lock)
+#define	ISP_ASSERT_LOCKED(isp)	mtx_assert(&(isp)->isp_lock, MA_OWNED)
 
 /*
  * Required Macros/Defines
@@ -381,7 +370,7 @@ struct isposinfo {
 #define	ISP_SNPRINTF		snprintf
 #define	ISP_DELAY(x)		DELAY(x)
 #define	ISP_SLEEP(isp, x)	msleep_sbt(&(isp)->isp_osinfo.is_exiting, \
-    &(isp)->isp_osinfo.lock, 0, "isp_sleep", (x) * SBT_1US, 0, 0)
+    &(isp)->isp_lock, 0, "isp_sleep", (x) * SBT_1US, 0, 0)
 
 #define	ISP_MIN			imin
 
@@ -531,7 +520,9 @@ default:							\
 
 #define	XS_CDBLEN(ccb)		(ccb)->cdb_len
 #define	XS_XFRLEN(ccb)		(ccb)->dxfer_len
-#define	XS_TIME(ccb)		(ccb)->ccb_h.timeout
+#define	XS_TIME(ccb)	\
+	(((ccb)->ccb_h.timeout > 0xffff * 1000 - 999) ? 0 : \
+	  (((ccb)->ccb_h.timeout + 999) / 1000))
 #define	XS_GET_RESID(ccb)	(ccb)->resid
 #define	XS_SET_RESID(ccb, r)	(ccb)->resid = r
 #define	XS_STSP(ccb)		(&(ccb)->scsi_status)
@@ -722,8 +713,9 @@ void isp_mbox_wait_complete(ispsoftc_t *, mbreg_t *);
 void isp_mbox_notify_done(ispsoftc_t *);
 void isp_mbox_release(ispsoftc_t *);
 int isp_fc_scratch_acquire(ispsoftc_t *, int);
-int isp_mstohz(int);
 void isp_platform_intr(void *);
+void isp_platform_intr_resp(void *);
+void isp_platform_intr_atio(void *);
 void isp_common_dmateardown(ispsoftc_t *, struct ccb_scsiio *, uint32_t);
 void isp_fcp_reset_crn(ispsoftc_t *, int, uint32_t, int);
 int isp_fcp_next_crn(ispsoftc_t *, uint8_t *, XS_T *);
@@ -731,16 +723,6 @@ int isp_fcp_next_crn(ispsoftc_t *, uint8_t *, XS_T *);
 /*
  * Platform Version specific defines
  */
-#define	BUS_DMA_ROOTARG(x)	bus_get_dma_tag(x)
-#define	isp_dma_tag_create(a, b, c, d, e, f, g, h, i, j, k, z)	\
-	bus_dma_tag_create(a, b, c, d, e, f, g, h, i, j, k, \
-	busdma_lock_mutex, &isp->isp_osinfo.lock, z)
-
-#define	isp_setup_intr	bus_setup_intr
-
-#define	isp_sim_alloc(a, b, c, d, e, f, g, h)	\
-	cam_sim_alloc(a, b, c, d, e, &(d)->isp_osinfo.lock, f, g, h)
-
 #define	ISP_PATH_PRT(i, l, p, ...)					\
 	if ((l) == ISP_LOGALL || ((l)& (i)->isp_dblev) != 0) {		\
                 xpt_print(p, __VA_ARGS__);				\
