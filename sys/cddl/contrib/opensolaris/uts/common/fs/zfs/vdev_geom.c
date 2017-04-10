@@ -71,15 +71,6 @@ static void vdev_geom_detach(struct g_consumer *cp, boolean_t open_for_read);
  */
 uint_t zfs_geom_probe_vdev_key;
 
-/*
- * Increase minimal ashift to 12 to ease future upgrades.
- */
-static int vdev_larger_ashift_minimal = 0;
-TUNABLE_INT("vfs.zfs.vdev.larger_ashift_minimal", &vdev_larger_ashift_minimal);
-SYSCTL_DECL(_vfs_zfs_vdev);
-SYSCTL_INT(_vfs_zfs_vdev, OID_AUTO, larger_ashift_minimal, CTLFLAG_RW,
-    &vdev_larger_ashift_minimal, 0, "Use ashift=12 as minimal ashift");
-
 static void
 vdev_geom_set_rotation_rate(vdev_t *vd, struct g_consumer *cp)
 { 
@@ -891,9 +882,8 @@ skip_open:
 	 */
 	*logical_ashift = highbit(MAX(pp->sectorsize, SPA_MINBLOCKSIZE)) - 1;
 	*physical_ashift = 0;
-	if (vdev_larger_ashift_minimal && pp->stripesize < 4096) {
-		*physical_ashift = highbit(4096) - 1;
-	} else if (pp->stripesize)
+	if (pp->stripesize > (1 << *logical_ashift) && ISP2(pp->stripesize) &&
+	    pp->stripesize <= (1 << SPA_MAXASHIFT) && pp->stripeoffset == 0)
 		*physical_ashift = highbit(pp->stripesize) - 1;
 
 	/*
