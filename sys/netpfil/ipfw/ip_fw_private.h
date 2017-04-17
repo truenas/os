@@ -154,7 +154,9 @@ void ipfw_nat_destroy(void);
 /* In ip_fw_log.c */
 struct ip;
 struct ip_fw_chain;
-void ipfw_log_bpf(int);
+void ipfw_bpf_init(int);
+void ipfw_bpf_uninit(int);
+void ipfw_bpf_mtap2(void *, u_int, struct mbuf *);
 void ipfw_log(struct ip_fw_chain *chain, struct ip_fw *f, u_int hlen,
     struct ip_fw_args *args, struct mbuf *m, struct ifnet *oif,
     u_short offset, uint32_t tablearg, struct ip *ip);
@@ -270,8 +272,6 @@ struct ip_fw_chain {
 	void		**srvstate;	/* runtime service mappings */
 #if defined( __linux__ ) || defined( _WIN32 )
 	spinlock_t rwmtx;
-#else
-	struct rmlock	rwmtx;
 #endif
 	int		static_len;	/* total len of static rules (v0) */
 	uint32_t	gencnt;		/* NAT generation count */
@@ -412,25 +412,23 @@ struct ipfw_ifc {
 #define	IPFW_PF_RUNLOCK(p)		IPFW_RUNLOCK(p)
 #else /* FreeBSD */
 #define	IPFW_LOCK_INIT(_chain) do {			\
-	rm_init_flags(&(_chain)->rwmtx, "IPFW static rules", RM_RECURSE); \
 	rw_init(&(_chain)->uh_lock, "IPFW UH lock");	\
 	} while (0)
 
 #define	IPFW_LOCK_DESTROY(_chain) do {			\
-	rm_destroy(&(_chain)->rwmtx);			\
 	rw_destroy(&(_chain)->uh_lock);			\
 	} while (0)
 
-#define	IPFW_RLOCK_ASSERT(_chain)	rm_assert(&(_chain)->rwmtx, RA_RLOCKED)
-#define	IPFW_WLOCK_ASSERT(_chain)	rm_assert(&(_chain)->rwmtx, RA_WLOCKED)
+#define	IPFW_RLOCK_ASSERT(_chain)	rm_assert(&V_pfil_lock, RA_RLOCKED)
+#define	IPFW_WLOCK_ASSERT(_chain)	rm_assert(&V_pfil_lock, RA_WLOCKED)
 
 #define	IPFW_RLOCK_TRACKER		struct rm_priotracker _tracker
-#define	IPFW_RLOCK(p)			rm_rlock(&(p)->rwmtx, &_tracker)
-#define	IPFW_RUNLOCK(p)			rm_runlock(&(p)->rwmtx, &_tracker)
-#define	IPFW_WLOCK(p)			rm_wlock(&(p)->rwmtx)
-#define	IPFW_WUNLOCK(p)			rm_wunlock(&(p)->rwmtx)
-#define	IPFW_PF_RLOCK(p)		IPFW_RLOCK(p)
-#define	IPFW_PF_RUNLOCK(p)		IPFW_RUNLOCK(p)
+#define	IPFW_RLOCK(p)			rm_rlock(&V_pfil_lock, &_tracker)
+#define	IPFW_RUNLOCK(p)			rm_runlock(&V_pfil_lock, &_tracker)
+#define	IPFW_WLOCK(p)			rm_wlock(&V_pfil_lock)
+#define	IPFW_WUNLOCK(p)			rm_wunlock(&V_pfil_lock)
+#define	IPFW_PF_RLOCK(p)
+#define	IPFW_PF_RUNLOCK(p)
 #endif
 
 #define	IPFW_UH_RLOCK_ASSERT(_chain)	rw_assert(&(_chain)->uh_lock, RA_RLOCKED)
@@ -741,6 +739,10 @@ typedef int (table_lookup_t)(struct table_info *ti, void *key, uint32_t keylen,
 
 int ipfw_lookup_table(struct ip_fw_chain *ch, uint16_t tbl, uint16_t plen,
     void *paddr, uint32_t *val);
+struct named_object *ipfw_objhash_lookup_table_kidx(struct ip_fw_chain *ch,
+    uint16_t kidx);
+int ipfw_ref_table(struct ip_fw_chain *ch, ipfw_obj_ntlv *ntlv, uint16_t *kidx);
+void ipfw_unref_table(struct ip_fw_chain *ch, uint16_t kidx);
 int ipfw_init_tables(struct ip_fw_chain *ch, int first);
 int ipfw_resize_tables(struct ip_fw_chain *ch, unsigned int ntables);
 int ipfw_switch_tables_namespace(struct ip_fw_chain *ch, unsigned int nsets);

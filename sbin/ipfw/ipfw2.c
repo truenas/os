@@ -36,6 +36,7 @@
 #include <pwd.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
@@ -235,6 +236,10 @@ static struct _s_x ether_types[] = {
 };
 
 static struct _s_x rule_eactions[] = {
+	{ "nat64lsn",		TOK_NAT64LSN },
+	{ "nat64stl",		TOK_NAT64STL },
+	{ "nptv6",		TOK_NPTV6 },
+	{ "tcp-setmss",		TOK_TCPSETMSS },
 	{ NULL, 0 }	/* terminator */
 };
 
@@ -269,6 +274,7 @@ static struct _s_x rule_actions[] = {
 	{ "call",		TOK_CALL },
 	{ "return",		TOK_RETURN },
 	{ "eaction",		TOK_EACTION },
+	{ "tcp-setmss",		TOK_TCPSETMSS },
 	{ NULL, 0 }	/* terminator */
 };
 
@@ -1636,6 +1642,22 @@ show_static_rule(struct cmdline_opts *co, struct format_opts *fo,
 				    cmd->arg1,
 				    IPFW_TLV_EACTION_NAME(has_eaction->arg1));
 			bprintf(bp, " %s", ename);
+			break;
+		}
+
+		case O_EXTERNAL_DATA: {
+			if (has_eaction == NULL)
+				break;
+			/*
+			 * Currently we support data formatting only for
+			 * external data with datalen u16. For unknown data
+			 * print its size in bytes.
+			 */
+			if (cmd->len == F_INSN_SIZE(ipfw_insn))
+				bprintf(bp, " %u", cmd->arg1);
+			else
+				bprintf(bp, " %ubytes",
+				    cmd->len * sizeof(uint32_t));
 			break;
 		}
 
@@ -3987,6 +4009,26 @@ chkarg:
 	case TOK_RETURN:
 		fill_cmd(action, O_CALLRETURN, F_NOT, 0);
 		break;
+
+	case TOK_TCPSETMSS: {
+		u_long mss;
+		uint16_t idx;
+
+		idx = pack_object(tstate, "tcp-setmss", IPFW_TLV_EACTION);
+		if (idx == 0)
+			errx(EX_DATAERR, "pack_object failed");
+		fill_cmd(action, O_EXTERNAL_ACTION, 0, idx);
+		NEED1("Missing MSS value");
+		action = next_cmd(action, &ablen);
+		action->len = 1;
+		CHECK_ACTLEN;
+		mss = strtoul(*av, NULL, 10);
+		if (mss == 0 || mss > UINT16_MAX)
+			errx(EX_USAGE, "invalid MSS value %s", *av);
+		fill_cmd(action, O_EXTERNAL_DATA, 0, (uint16_t)mss);
+		av++;
+		break;
+	}
 
 	default:
 		av--;

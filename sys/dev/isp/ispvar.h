@@ -80,6 +80,7 @@ struct ispmdvec {
 #endif
 #define	ISP_MAX_TARGETS(isp)	(IS_FC(isp)? MAX_FC_TARG : MAX_TARGETS)
 #define	ISP_MAX_LUNS(isp)	(isp)->isp_maxluns
+#define	ISP_MAX_IRQS		3
 
 /*
  * Macros to access ISP registers through bus specific layers-
@@ -526,13 +527,13 @@ struct ispsoftc {
 	uint16_t		isp_maxcmds;	/* max possible I/O cmds */
 	uint8_t			isp_type;	/* HBA Chip Type */
 	uint8_t			isp_revision;	/* HBA Chip H/W Revision */
+	uint8_t			isp_nirq;	/* number of IRQs */
 	uint16_t		isp_nchan;	/* number of channels */
 	uint32_t		isp_maxluns;	/* maximum luns supported */
 
 	uint32_t		isp_clock	: 8,	/* input clock */
-						: 4,
+						: 5,
 				isp_port	: 1,	/* 23XX/24XX only */
-				isp_open	: 1,	/* opened (ioctl) */
 				isp_bustype	: 1,	/* SBus or PCI */
 				isp_loaded_fw	: 1,	/* loaded firmware */
 				isp_dblev	: 16;	/* debug log mask */
@@ -551,7 +552,6 @@ struct ispsoftc {
 
 	volatile u_int		isp_mboxbsy;	/* mailbox command active */
 	volatile u_int		isp_state;
-	volatile u_int		isp_nactive;	/* how many commands active */
 	volatile mbreg_t	isp_curmbx;	/* currently active mailbox command */
 	volatile uint32_t	isp_reqodx;	/* index of last ISP pickup */
 	volatile uint32_t	isp_reqidx;	/* index of next request */
@@ -1011,7 +1011,7 @@ void isp_prt_endcmd(ispsoftc_t *, XS_T *);
  *	XS_CDBP(xs)		gets a pointer to the scsi CDB ""
  *	XS_CDBLEN(xs)		gets the CDB's length ""
  *	XS_XFRLEN(xs)		gets the associated data transfer length ""
- *	XS_TIME(xs)		gets the time (in milliseconds) for this command
+ *	XS_TIME(xs)		gets the time (in seconds) for this command
  *	XS_GET_RESID(xs)	gets the current residual count
  *	XS_GET_RESID(xs, resid)	sets the current residual count
  *	XS_STSP(xs)		gets a pointer to the SCSI status byte ""

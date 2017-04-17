@@ -125,8 +125,7 @@ native_to_linux_timespec(struct l_timespec *ltp, struct timespec *ntp)
 
 	LIN_SDT_PROBE2(time, native_to_linux_timespec, entry, ltp, ntp);
 #ifdef COMPAT_LINUX32
-	if (ntp->tv_sec > INT_MAX &&
-	    sizeof(ltp->tv_sec) != sizeof(ntp->tv_sec))
+	if (ntp->tv_sec > INT_MAX || ntp->tv_sec < INT_MIN)
 		return (EOVERFLOW);
 #endif
 	ltp->tv_sec = ntp->tv_sec;
@@ -142,7 +141,7 @@ linux_to_native_timespec(struct timespec *ntp, struct l_timespec *ltp)
 
 	LIN_SDT_PROBE2(time, linux_to_native_timespec, entry, ntp, ltp);
 
-	if (ltp->tv_sec < 0 || ltp->tv_nsec > (l_long)999999999L) {
+	if (ltp->tv_sec < 0 || ltp->tv_nsec < 0 || ltp->tv_nsec > 999999999) {
 		LIN_SDT_PROBE1(time, linux_to_native_timespec, return, EINVAL);
 		return (EINVAL);
 	}

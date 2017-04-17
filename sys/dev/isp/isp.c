@@ -2089,7 +2089,7 @@ isp_fibre_init_2400(ispsoftc_t *isp)
 	}
 
 	if (IS_26XX(isp)) {
-		/* We don't support MSI-X yet, so set this unconditionally. */
+		/* Use handshake to reduce global lock congestion. */
 		icbp->icb_fwoptions2 |= ICB2400_OPT2_ENA_IHR;
 		icbp->icb_fwoptions2 |= ICB2400_OPT2_ENA_IHA;
 	}
@@ -2186,6 +2186,12 @@ isp_fibre_init_2400(ispsoftc_t *isp)
 	isp_prt(isp, ISP_LOGDEBUG0, "isp_fibre_init_2400: atioq %04x%04x%04x%04x", DMA_WD3(isp->isp_atioq_dma), DMA_WD2(isp->isp_atioq_dma),
 	    DMA_WD1(isp->isp_atioq_dma), DMA_WD0(isp->isp_atioq_dma));
 #endif
+
+	if (ISP_CAP_MSIX(isp) && isp->isp_nirq >= 2) {
+		icbp->icb_msixresp = 1;
+		if (IS_26XX(isp) && isp->isp_nirq >= 3)
+			icbp->icb_msixatio = 2;
+	}
 
 	isp_prt(isp, ISP_LOGDEBUG0, "isp_fibre_init_2400: fwopt1 0x%x fwopt2 0x%x fwopt3 0x%x", icbp->icb_fwoptions1, icbp->icb_fwoptions2, icbp->icb_fwoptions3);
 
@@ -4418,8 +4424,6 @@ isp_start(XS_T *xs)
 		}
 	}
 
-	tptr = &reqp->req_time;
-
 	/*
 	 * NB: we do not support long CDBs (yet)
 	 */
@@ -4433,8 +4437,9 @@ isp_start(XS_T *xs)
 		}
 		reqp->req_target = target | (XS_CHANNEL(xs) << 7);
 		reqp->req_lun_trn = XS_LUN(xs);
-		cdbp = reqp->req_cdb;
 		reqp->req_cdblen = cdblen;
+		tptr = &reqp->req_time;
+		cdbp = reqp->req_cdb;
 	} else if (IS_24XX(isp)) {
 		ispreqt7_t *t7 = (ispreqt7_t *)local;
 
@@ -4481,24 +4486,22 @@ isp_start(XS_T *xs)
 			ispreqt2e_t *t2e = (ispreqt2e_t *)local;
 			t2e->req_target = lp->handle;
 			t2e->req_scclun = XS_LUN(xs);
+			tptr = &t2e->req_time;
 			cdbp = t2e->req_cdb;
 		} else if (ISP_CAP_SCCFW(isp)) {
-			ispreqt2_t *t2 = (ispreqt2_t *)local;
 			t2->req_target = lp->handle;
 			t2->req_scclun = XS_LUN(xs);
+			tptr = &t2->req_time;
 			cdbp = t2->req_cdb;
 		} else {
 			t2->req_target = lp->handle;
 			t2->req_lun_trn = XS_LUN(xs);
+			tptr = &t2->req_time;
 			cdbp = t2->req_cdb;
 		}
 	}
+	*tptr = XS_TIME(xs);
 	ISP_MEMCPY(cdbp, XS_CDBP(xs), cdblen);
-
-	*tptr = (XS_TIME(xs) + 999) / 1000;
-	if (IS_24XX(isp) && *tptr > 0x1999) {
-		*tptr = 0x1999;
-	}
 
 	/* Whew. Thankfully the same for type 7 requests */
 	reqp->req_handle = isp_allocate_handle(isp, xs, ISP_HANDLE_INITIATOR);
@@ -4524,7 +4527,6 @@ isp_start(XS_T *xs)
 		return (dmaresult);
 	}
 	isp_xs_prt(isp, xs, ISP_LOGDEBUG0, "START cmd cdb[0]=0x%x datalen %ld", XS_CDBP(xs)[0], (long) XS_XFRLEN(xs));
-	isp->isp_nactive++;
 	return (CMD_QUEUED);
 }
 
@@ -5353,9 +5355,6 @@ isp_intr_respq(ispsoftc_t *isp)
 		}
 		isp_destroy_handle(isp, sp->req_handle);
 
-		if (isp->isp_nactive > 0) {
-		    isp->isp_nactive--;
-		}
 		complist[ndone++] = xs;	/* defer completion call until later */
 		ISP_MEMZERO(hp, QENTRY_LEN);	/* PERF */
 		last_etype = etype;
@@ -5926,9 +5925,6 @@ isp_handle_other_response(ispsoftc_t *isp, int type, isphdr_t *hp, uint32_t *opt
 	void *ptr;
 
 	switch (type) {
-	case RQSTYPE_STATUS_CONT:
-		isp_prt(isp, ISP_LOG_WARN1, "Ignored Continuation Response");
-		return (1);
 	case RQSTYPE_MARKER:
 		isp_prt(isp, ISP_LOG_WARN1, "Marker Response");
 		return (1);
@@ -6529,9 +6525,6 @@ isp_fastpost_complete(ispsoftc_t *isp, uint32_t fph)
 	*XS_STSP(xs) = SCSI_GOOD;
 	if (XS_XFRLEN(xs)) {
 		ISP_DMAFREE(isp, xs, fph);
-	}
-	if (isp->isp_nactive) {
-		isp->isp_nactive--;
 	}
 	isp_done(xs);
 }
@@ -7573,7 +7566,6 @@ isp_reinit(ispsoftc_t *isp, int do_load_defaults)
 	}
 
 cleanup:
-	isp->isp_nactive = 0;
 	isp_clear_commands(isp);
 	if (IS_FC(isp)) {
 		for (i = 0; i < isp->isp_nchan; i++)

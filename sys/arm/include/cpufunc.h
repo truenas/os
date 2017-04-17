@@ -58,7 +58,7 @@ breakpoint(void)
 struct cpu_functions {
 
 	/* CPU functions */
-
+#if __ARM_ARCH < 6
 	void	(*cf_cpwait)		(void);
 
 	/* MMU functions */
@@ -138,6 +138,7 @@ struct cpu_functions {
 	void	(*cf_idcache_inv_all)	(void);
 	void	(*cf_idcache_wbinv_all)	(void);
 	void	(*cf_idcache_wbinv_range) (vm_offset_t, vm_size_t);
+#endif
 	void	(*cf_l2cache_wbinv_all) (void);
 	void	(*cf_l2cache_wbinv_range) (vm_offset_t, vm_size_t);
 	void	(*cf_l2cache_inv_range)	  (vm_offset_t, vm_size_t);
@@ -146,13 +147,17 @@ struct cpu_functions {
 
 	/* Other functions */
 
+#if __ARM_ARCH < 6
 	void	(*cf_drain_writebuf)	(void);
+#endif
 
 	void	(*cf_sleep)		(int mode);
 
+#if __ARM_ARCH < 6
 	/* Soft functions */
 
 	void	(*cf_context_switch)	(void);
+#endif
 
 	void	(*cf_setup)		(void);
 };

@@ -148,7 +148,7 @@ cloudabi32_thread_setregs(struct thread *td,
 
 	/* Perform standard register initialization. */
 	stack.ss_sp = TO_PTR(attr->stack);
-	stack.ss_size = attr->stack_size;
+	stack.ss_size = attr->stack_len;
 	cpu_set_upcall(td, TO_PTR(attr->entry_point), NULL, &stack);
 
 	/*
@@ -189,5 +189,5 @@ Elf32_Brandinfo cloudabi32_brand = {
 	.brand		= ELFOSABI_CLOUDABI,
 	.machine	= EM_ARM,
 	.sysvec		= &cloudabi32_elf_sysvec,
-	.compat_3_brand	= "CloudABI",
+	.flags		= BI_BRAND_ONLY_STATIC,
 };

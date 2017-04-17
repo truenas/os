@@ -1665,11 +1665,10 @@ _kerberos5_bootstrap_tools= \
 .endif
 
 # r283777 makewhatis(1) replaced with mandoc version which builds a database.
-.if ${MK_MANDOCDB} != "no" && ${BOOTSTRAPPING} < 1100075
+.if ${MK_MANDOCDB} != "no"
 _libopenbsd?=	lib/libopenbsd
-_makewhatis=	lib/libsqlite3 \
-		usr.bin/mandoc
-${_bt}-usr.bin/mandoc: ${_bt}-lib/libopenbsd ${_bt}-lib/libsqlite3
+_makewhatis=	usr.bin/mandoc
+${_bt}-usr.bin/mandoc: ${_bt}-lib/libopenbsd
 .endif
 
 bootstrap-tools: .PHONY
@@ -1800,6 +1799,9 @@ _elftctools=	lib/libelftc \
 # cross-build on a FreeBSD 10 host:
 _elftctools+=	usr.bin/addr2line
 .endif
+.if ${MK_LLD_IS_LD} != "no"
+_lld=		usr.bin/clang/lld
+.endif
 .elif ${TARGET_ARCH} != ${MACHINE_ARCH} && ${MK_ELFTOOLCHAIN_BOOTSTRAP} != "no"
 # If cross-building with an external binutils we still need to build strip for
 # the target (for at least crunchide).
@@ -1813,7 +1815,7 @@ _clang=		usr.bin/clang
 _clang_libs=	lib/clang
 .endif
 .if ${MK_GCC_BOOTSTRAP} != "no"
-_cc=		gnu/usr.bin/cc
+_gcc=		gnu/usr.bin/cc
 .endif
 .if ${MK_USB} != "no"
 _usb_tools=	sys/boot/usb/tools
@@ -1823,10 +1825,11 @@ cross-tools: .MAKE .PHONY
 .for _tool in \
     ${_clang_libs} \
     ${_clang} \
+    ${_lld} \
     ${_binutils} \
     ${_elftctools} \
     ${_dtrace_tools} \
-    ${_cc} \
+    ${_gcc} \
     ${_btxld} \
     ${_usb_tools}
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,all,install)"; \
@@ -1898,7 +1901,7 @@ native-xtools: .PHONY
     usr.bin/ar \
     ${_binutils} \
     ${_elftctools} \
-    ${_cc} \
+    ${_gcc} \
     ${_gcc_tools} \
     ${_clang_libs} \
     ${_clang} \
@@ -2533,7 +2536,7 @@ _xb-cross-tools: .PHONY
     usr.bin/ar \
     ${_clang_libs} \
     ${_clang} \
-    ${_cc}
+    ${_gcc}
 	${_+_}@${ECHODIR} "===> xdev ${_tool} (obj,all)"; \
 	cd ${.CURDIR}/${_tool}; \
 	${CDMAKE} DIRPRFX=${_tool}/ obj; \
@@ -2570,7 +2573,7 @@ _xi-cross-tools: .PHONY
     usr.bin/ar \
     ${_clang_libs} \
     ${_clang} \
-    ${_cc}
+    ${_gcc}
 	${_+_}@${ECHODIR} "===> xdev ${_tool} (install)"; \
 	cd ${.CURDIR}/${_tool}; \
 	${CDMAKE} DIRPRFX=${_tool}/ install DESTDIR=${XDDESTDIR}
