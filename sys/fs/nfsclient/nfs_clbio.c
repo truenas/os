@@ -266,9 +266,7 @@ ncl_putpages(struct vop_putpages_args *ap)
 {
 	struct uio uio;
 	struct iovec iov;
-	vm_offset_t kva;
-	struct buf *bp;
-	int iomode, must_commit, i, error, npages, count;
+	int i, error, npages, count;
 	off_t offset;
 	int *rtvals;
 	struct vnode *vp;
@@ -322,44 +320,26 @@ ncl_putpages(struct vop_putpages_args *ap)
 	}
 	mtx_unlock(&np->n_mtx);
 
-	/*
-	 * We use only the kva address for the buffer, but this is extremely
-	 * convenient and fast.
-	 */
-	bp = getpbuf(&ncl_pbuf_freecnt);
-
-	kva = (vm_offset_t) bp->b_data;
-	pmap_qenter(kva, pages, npages);
 	PCPU_INC(cnt.v_vnodeout);
 	PCPU_ADD(cnt.v_vnodepgsout, count);
 
-	iov.iov_base = (caddr_t) kva;
+	iov.iov_base = unmapped_buf;
 	iov.iov_len = count;
 	uio.uio_iov = &iov;
 	uio.uio_iovcnt = 1;
 	uio.uio_offset = offset;
 	uio.uio_resid = count;
-	uio.uio_segflg = UIO_SYSSPACE;
+	uio.uio_segflg = UIO_NOCOPY;
 	uio.uio_rw = UIO_WRITE;
 	uio.uio_td = td;
 
-	if ((ap->a_sync & VM_PAGER_PUT_SYNC) == 0)
-	    iomode = NFSWRITE_UNSTABLE;
-	else
-	    iomode = NFSWRITE_FILESYNC;
-
-	error = ncl_writerpc(vp, &uio, cred, &iomode, &must_commit, 0);
+	error = VOP_WRITE(vp, &uio, vnode_pager_putpages_ioflags(ap->a_sync),
+	    cred);
 	crfree(cred);
 
-	pmap_qremove(kva, npages);
-	relpbuf(bp, &ncl_pbuf_freecnt);
-
-	if (error == 0 || !nfs_keep_dirty_on_error) {
+	if (error == 0 || !nfs_keep_dirty_on_error)
 		vnode_pager_undirty_pages(pages, rtvals, count - uio.uio_resid);
-		if (must_commit)
-			ncl_clearcommit(vp->v_mount);
-	}
-	return rtvals[0];
+	return (rtvals[0]);
 }
 
 /*
@@ -394,8 +374,8 @@ nfs_bioread_check_cons(struct vnode *vp, struct thread *td, struct ucred *cred)
 	 */
 	old_lock = ncl_upgrade_vnlock(vp);
 	if (vp->v_iflag & VI_DOOMED) {
-		ncl_downgrade_vnlock(vp, old_lock);
-		return (EBADF);
+		error = EBADF;
+		goto out;
 	}
 
 	mtx_lock(&np->n_mtx);
@@ -406,7 +386,9 @@ nfs_bioread_check_cons(struct vnode *vp, struct thread *td, struct ucred *cred)
 				panic("nfs: bioread, not dir");
 			ncl_invaldir(vp);
 			error = ncl_vinvalbuf(vp, V_SAVE, td, 1);
-			if (error)
+			if (error == 0 && (vp->v_iflag & VI_DOOMED) != 0)
+				error = EBADF;
+			if (error != 0)
 				goto out;
 		}
 		np->n_attrstamp = 0;
@@ -429,7 +411,9 @@ nfs_bioread_check_cons(struct vnode *vp, struct thread *td, struct ucred *cred)
 			if (vp->v_type == VDIR)
 				ncl_invaldir(vp);
 			error = ncl_vinvalbuf(vp, V_SAVE, td, 1);
-			if (error)
+			if (error == 0 && (vp->v_iflag & VI_DOOMED) != 0)
+				error = EBADF;
+			if (error != 0)
 				goto out;
 			mtx_lock(&np->n_mtx);
 			np->n_mtime = vattr.va_mtime;
@@ -439,7 +423,7 @@ nfs_bioread_check_cons(struct vnode *vp, struct thread *td, struct ucred *cred)
 	}
 out:
 	ncl_downgrade_vnlock(vp, old_lock);
-	return error;
+	return (error);
 }
 
 /*
@@ -623,6 +607,9 @@ ncl_bioread(struct vnode *vp, struct uio *uio, int ioflag, struct ucred *cred)
 		    while (error == NFSERR_BAD_COOKIE) {
 			ncl_invaldir(vp);
 			error = ncl_vinvalbuf(vp, 0, td, 1);
+			if (error == 0 && (vp->v_iflag & VI_DOOMED) != 0)
+				return (EBADF);
+
 			/*
 			 * Yuck! The directory has been modified on the
 			 * server. The only way to get the block is by
@@ -943,8 +930,11 @@ ncl_write(struct vop_write_args *ap)
 #endif
 			np->n_attrstamp = 0;
 			KDTRACE_NFS_ATTRCACHE_FLUSH_DONE(vp);
-			error = ncl_vinvalbuf(vp, V_SAVE, td, 1);
-			if (error)
+			error = ncl_vinvalbuf(vp, V_SAVE | ((ioflag &
+			    IO_VMIO) != 0 ? V_VMIO : 0), td, 1);
+			if (error == 0 && (vp->v_iflag & VI_DOOMED) != 0)
+				error = EBADF;
+			if (error != 0)
 				return (error);
 		} else
 			mtx_unlock(&np->n_mtx);
@@ -1023,8 +1013,12 @@ ncl_write(struct vop_write_args *ap)
 			if (wouldcommit > nmp->nm_wcommitsize) {
 				np->n_attrstamp = 0;
 				KDTRACE_NFS_ATTRCACHE_FLUSH_DONE(vp);
-				error = ncl_vinvalbuf(vp, V_SAVE, td, 1);
-				if (error)
+				error = ncl_vinvalbuf(vp, V_SAVE | ((ioflag &
+				    IO_VMIO) != 0 ? V_VMIO : 0), td, 1);
+				if (error == 0 &&
+				    (vp->v_iflag & VI_DOOMED) != 0)
+					error = EBADF;
+				if (error != 0)
 					return (error);
 				wouldcommit = biosize;
 			}
@@ -1261,7 +1255,7 @@ again:
 					error = error1;
 				break;
 			}
-		} else if ((n + on) == biosize) {
+		} else if ((n + on) == biosize || (ioflag & IO_ASYNC) != 0) {
 			bp->b_flags |= B_ASYNC;
 			(void) ncl_writebp(bp, 0, NULL);
 		} else {
@@ -1371,7 +1365,8 @@ ncl_vinvalbuf(struct vnode *vp, int flags, struct thread *td, int intrflg)
 	/*
 	 * Now, flush as required.
 	 */
-	if ((flags & V_SAVE) && (vp->v_bufobj.bo_object != NULL)) {
+	if ((flags & (V_SAVE | V_VMIO)) == V_SAVE &&
+	     vp->v_bufobj.bo_object != NULL) {
 		VM_OBJECT_WLOCK(vp->v_bufobj.bo_object);
 		vm_object_page_clean(vp->v_bufobj.bo_object, 0, 0, OBJPC_SYNC);
 		VM_OBJECT_WUNLOCK(vp->v_bufobj.bo_object);
