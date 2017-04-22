@@ -20,7 +20,8 @@ extra_commands="reload"
 
 mountd_precmd()
 {
-	force_depend rpcbind || return 1
+	# Commented-out because confuses FreeNAS middleware
+	# force_depend rpcbind || return 1
 
 	# mountd flags will differ depending on rc.conf settings
 	#

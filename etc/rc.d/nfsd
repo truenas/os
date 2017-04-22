@@ -45,8 +45,9 @@ nfsd_precmd()
 		sysctl vfs.nfsd.server_max_nfsvers=3 > /dev/null
 	fi
 
-	force_depend rpcbind || return 1
-	force_depend mountd || return 1
+	# Commented-out because confuses FreeNAS middleware
+	# force_depend rpcbind || return 1
+	# force_depend mountd || return 1
 }
 
 run_rc_command "$1"
