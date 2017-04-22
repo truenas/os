@@ -51,11 +51,12 @@ nfsd_precmd()
 		sysctl vfs.nfsd.server_max_nfsvers=3 > /dev/null
 	fi
 
-	if ! checkyesno nfsv4_server_only; then
-		force_depend rpcbind || return 1
-	fi
+	# Commented-out because confuses FreeNAS middleware
+	#if ! checkyesno nfsv4_server_only; then
+	#	force_depend rpcbind || return 1
+	#fi
 
-	force_depend mountd || return 1
+	#force_depend mountd || return 1
 	if [ -n "${nfs_server_vhost}" ]; then
 		command_args="-V \"${nfs_server_vhost}\""
 	fi
