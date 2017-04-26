@@ -83,7 +83,6 @@ __FBSDID("$FreeBSD$");
 #include "pathnames.h"
 #include "mntopts.h"
 
-#define DEBUG 1
 #ifdef DEBUG
 #include <stdarg.h>
 #endif
