@@ -83,6 +83,7 @@ __FBSDID("$FreeBSD$");
 #include "pathnames.h"
 #include "mntopts.h"
 
+#define DEBUG 1
 #ifdef DEBUG
 #include <stdarg.h>
 #endif
@@ -2933,12 +2934,13 @@ parsecred(char *namelist, struct xucred *cr)
 	cr->cr_ngroups = 1;
 	/*
 	 * Get the user's password table entry.
-	 * Format is <name>[:<grp>[...]], so
-	 * First we want to get a 
+	 * Format is <name>[:<grp>[...]].
+	 * First we want to split the name and optional
+	 * group[s] apart.
 	 */
 	if (debug)
 		warnx("namelist starts out as %s", namelist);
-	names = strsep_quote(&namelist, " \t\n");
+	names = strsep(&namelist, " \t\n");
 	name = strsep_quote(&names, ":");
 	if (debug)
 		syslog(LOG_DEBUG, "name=%s, names=%s", name, names);
