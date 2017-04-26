@@ -340,8 +340,8 @@ strsep_quote(char **stringp, const char *delim)
 		*dstptr++ = *srcptr++;
 	}
 
-	*dstptr = 0; /* Terminate the string */
 	*stringp = (*srcptr == '\0') ? NULL : srcptr + 1;
+	*dstptr = 0; /* Terminate the string */
 	return (retval);
 }
 
@@ -1451,12 +1451,16 @@ get_exportlist_one(void)
 		tgrp = grp = get_grp();
 		while (len > 0) {
 			if (len > MNTNAMLEN) {
+			    if (debug)
+				    syslog(LOG_DEBUG, "%s(%d): %d > MNTNAMELEN", __FUNCTION__, __LINE__, len);
 			    getexp_err(ep, tgrp);
 			    goto nextline;
 			}
 			if (*cp == '-') {
 			    if (ep == (struct exportlist *)NULL) {
 				getexp_err(ep, tgrp);
+				if (debug)
+					syslog(LOG_DEBUG, "%s(%d): ep is NULL", __FUNCTION__, __LINE__);
 				goto nextline;
 			    }
 			    if (debug)
@@ -1465,6 +1469,8 @@ get_exportlist_one(void)
 			    if (do_opt(&cp, &endcp, ep, grp, &has_host,
 				&exflags, &anon)) {
 				getexp_err(ep, tgrp);
+				if (debug)
+					syslog(LOG_DEBUG, "%s(%d):  do_opt returned error", __FUNCTION__, __LINE__);
 				goto nextline;
 			    }
 			} else if (*cp == '/') {
@@ -2932,10 +2938,10 @@ parsecred(char *namelist, struct xucred *cr)
 	 */
 	if (debug)
 		warnx("namelist starts out as %s", namelist);
-	names = namelist;
+	names = strsep_quote(&namelist, " \t\n");
 	name = strsep_quote(&names, ":");
 	if (debug)
-		warnx("name=%s, names=%s", name, names);
+		syslog(LOG_DEBUG, "name=%s, names=%s", name, names);
 	/* Bug?  name could be NULL here */
 	if (isdigit(*name) || *name == '-')
 		pw = getpwuid(atoi(name));
@@ -2978,7 +2984,7 @@ parsecred(char *namelist, struct xucred *cr)
 	while (names != NULL && *names != '\0' && cr->cr_ngroups < XU_NGROUPS) {
 		name = strsep_quote(&names, ":");
 		if (debug)
-			warnx("%s(%d):  name = %s", __FUNCTION__, __LINE__, name);
+			syslog(LOG_DEBUG, "%s(%d):  name = %s", __FUNCTION__, __LINE__, name);
 		if (isdigit(*name) || *name == '-') {
 			cr->cr_groups[cr->cr_ngroups++] = atoi(name);
 		} else {
@@ -3126,6 +3132,7 @@ SYSLOG(int pri, const char *fmt, ...)
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
+	fputc('\n', stderr);
 }
 #endif /* DEBUG */
 
