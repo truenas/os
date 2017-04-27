@@ -502,6 +502,7 @@ nfsrvd_nfsd(struct thread *td, struct nfsd_nfsd_args *args)
 		newnfs_numnfsd++;
 
 		NFSD_UNLOCK();
+		nfsrv_createdevids(args, td);
 
 		/* An empty string implies AUTH_SYS only. */
 		if (principal[0] != '\0') {
