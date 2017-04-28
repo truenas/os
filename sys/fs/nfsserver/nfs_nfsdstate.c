@@ -6215,7 +6215,7 @@ nfsrv_layoutget(struct nfsrv_descript *nd, vnode_t vp, struct nfsexstuff *exp,
 	}
 	NFSDDSUNLOCK();
 
-	if (*offset != 0 || *len != UINT64_MAX)
+	if (*offset != 0)
 		printf("nfsrv_layoutget: off=%ju len=%ju\n", (uintmax_t)*offset,
 		    (uintmax_t)*len);
 	error = nfsvno_getfh(vp, &fh, p);
