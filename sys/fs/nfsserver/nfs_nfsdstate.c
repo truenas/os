@@ -37,6 +37,8 @@ struct nfsrv_stablefirst nfsrv_stablefirst;
 int nfsrv_issuedelegs = 0;
 int nfsrv_dolocallocks = 0;
 struct nfsv4lock nfsv4rootfs_lock;
+struct nfsdevicehead nfsrv_devidhead;
+time_t nfsdev_time = 0;
 
 extern int newnfs_numnfsd;
 extern struct nfsstatsv1 nfsstatsv1;

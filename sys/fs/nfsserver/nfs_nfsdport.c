@@ -1766,7 +1766,6 @@ nfsrvd_readdir(struct nfsrv_descript *nd, int isdgram,
 	fullsiz = siz;
 	if (nd->nd_flag & ND_NFSV3) {
 		nd->nd_repstat = getret = nfsvno_getattr(vp, &at, nd, p, 1);
-		    p, 1);
 #if 0
 		/*
 		 * va_filerev is not sufficient as a cookie verifier,
