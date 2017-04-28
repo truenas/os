@@ -664,6 +664,7 @@
 #define	NFSFLEXFLAG_NO_READIO		0x00000004
 #define	NFSFLEXFLAG_WRITE_ONEMIRROR	0x00000008
 
+#if defined(_KERNEL) || defined(KERNEL)
 /* Conversion macros */
 #define	vtonfsv2_mode(t,m) 						\
 		txdr_unsigned(((t) == VFIFO) ? MAKEIMODE(VCHR, (m)) : 	\
@@ -815,6 +816,7 @@ struct nfsv3_sattr {
 	u_int32_t sa_mtimetype;
 	nfstime3  sa_mtime;
 };
+#endif	/* _KERNEL */
 
 /*
  * The attribute bits used for V4.
