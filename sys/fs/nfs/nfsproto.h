@@ -260,6 +260,10 @@
 #define	NFSX_V4SETTIME		(NFSX_UNSIGNED + NFSX_V4TIME)
 #define	NFSX_V4SESSIONID	16
 #define	NFSX_V4DEVICEID		16
+#define	NFSX_V4PNFSFH		(sizeof(fhandle_t) + 1)
+#define	NFSX_V4FILELAYOUT	(4 * NFSX_UNSIGNED + NFSX_V4DEVICEID +	\
+				 NFSX_HYPER + NFSM_RNDUP(NFSX_V4PNFSFH))
+#define	NFSX_V4MAXLAYOUT	NFSX_V4FILELAYOUT
 
 /* sizes common to multiple NFS versions */
 #define	NFSX_FHMAX		(NFSX_V4FHMAX)
@@ -652,6 +656,7 @@
 /* Flags for File Layout. */
 #define	NFSFLAYUTIL_DENSE		0x1
 #define	NFSFLAYUTIL_COMMIT_THRU_MDS	0x2
+#define	NFSFLAYUTIL_STRIPE_MASK		0xffffffc0
 
 /* Flags for Flex File Layout. */
 #define	NFSFLEXFLAG_NO_LAYOUTCOMMIT	0x00000001
@@ -1369,5 +1374,15 @@ struct nfsv4stateid {
 	u_int32_t	other[NFSX_STATEIDOTHER / NFSX_UNSIGNED];
 };
 typedef struct nfsv4stateid nfsv4stateid_t;
+
+/* Notify bits and notify bitmap size. */
+#define	NFSV4NOTIFY_CHANGE	1
+#define	NFSV4NOTIFY_DELETE	2
+#define	NFSV4_NOTIFYBITMAP	1	/* # of 32bit values needed for bits */
+
+/* Layoutreturn kinds. */
+#define	NFSV4LAYOUTRET_FILE	1
+#define	NFSV4LAYOUTRET_FSID	2
+#define	NFSV4LAYOUTRET_ALL	3
 
 #endif	/* _NFS_NFSPROTO_H_ */
