@@ -37,7 +37,6 @@ struct nfsrv_stablefirst nfsrv_stablefirst;
 int nfsrv_issuedelegs = 0;
 int nfsrv_dolocallocks = 0;
 struct nfsv4lock nfsv4rootfs_lock;
-struct nfsdevicehead nfsrv_devidhead;
 time_t nfsdev_time = 0;
 
 extern int newnfs_numnfsd;
@@ -48,6 +47,7 @@ extern u_int32_t newnfs_true, newnfs_false;
 extern struct mtx nfsrv_dslock_mtx;
 extern int nfsd_debuglevel;
 extern u_int nfsrv_dsdirsize;
+extern struct nfsdevicehead nfsrv_devidhead;
 NFSV4ROOTLOCKMUTEX;
 NFSSTATESPINLOCK;
 
@@ -6211,7 +6211,7 @@ nfsrv_layoutget(struct nfsrv_descript *nd, vnode_t vp, struct nfsexstuff *exp,
 	NFSDDSLOCK();
 	if (TAILQ_EMPTY(&nfsrv_devidhead)) {
 		NFSDDSUNLOCK();
-		return (NFSERR_LAYOUTTRYLATER);
+		return (NFSERR_UNKNLAYOUTTYPE);
 	}
 	NFSDDSUNLOCK();
 
@@ -6282,7 +6282,16 @@ nfsrv_layoutget(struct nfsrv_descript *nd, vnode_t vp, struct nfsexstuff *exp,
 	tl = (uint32_t *)lyp->lay_xdr;
 	NFSBCOPY(devid, tl, NFSX_V4DEVICEID);		/* Device ID. */
 	tl += (NFSX_V4DEVICEID / NFSX_UNSIGNED);
-	*tl++ = txdr_unsigned(NFSFLAYUTIL_STRIPE_MASK);	/* Max stripe size. */
+
+	/*
+	 * Make the stripe size as many 64K blocks as will fit in the stripe
+	 * mask. Since there is only one stripe, the stripe size doesn't really
+	 * matter, except that the Linux client will only handle an exact
+	 * multiple of their PAGE_SIZE (usually 4K).  I chose 64K as a value
+	 * that should cover most/all arches w.r.t. PAGE_SIZE.
+	 */
+	*tl++ = txdr_unsigned(NFSFLAYUTIL_STRIPE_MASK & ~0xffff);
+
 	*tl++ = 0;					/* 1st stripe index. */
 	pattern_offset = 0;
 	txdr_hyper(pattern_offset, tl); tl += 2;	/* Pattern offset. */

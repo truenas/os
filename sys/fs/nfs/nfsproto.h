@@ -1044,7 +1044,8 @@ struct nfsv3_sattr {
  	NFSATTRBM_MOUNTEDONFILEID |					\
 	NFSATTRBM_QUOTAHARD |                        			\
     	NFSATTRBM_QUOTASOFT |                        			\
-    	NFSATTRBM_QUOTAUSED)
+    	NFSATTRBM_QUOTAUSED |						\
+	NFSATTRBM_FSLAYOUTTYPE)
 
 
 #ifdef QUOTA

@@ -74,6 +74,8 @@ static int nfs_enable_uidtostring = 0;
 NFSNAMEIDMUTEX;
 NFSSOCKMUTEX;
 extern int nfsrv_lughashsize;
+extern struct mtx nfsrv_dslock_mtx;
+extern struct nfsdevicehead nfsrv_devidhead;
 
 SYSCTL_DECL(_vfs_nfs);
 SYSCTL_INT(_vfs_nfs, OID_AUTO, enable_uidtostring, CTLFLAG_RW,
@@ -2513,6 +2515,23 @@ nfsv4_fillattr(struct nfsrv_descript *nd, struct mount *mp, vnode_t vp,
 			NFSCLRNOTSETABLE_ATTRBIT(&attrbits);
 			NFSCLRBIT_ATTRBIT(&attrbits, NFSATTRBIT_TIMEACCESSSET);
 			retnum += nfsrv_putattrbit(nd, &attrbits);
+			break;
+		case NFSATTRBIT_FSLAYOUTTYPE:
+			NFSDDSLOCK();
+			if (TAILQ_EMPTY(&nfsrv_devidhead))
+				siz = 1;
+			else
+				siz = 2;
+			NFSDDSUNLOCK();
+			if (siz == 2) {
+				NFSM_BUILD(tl, u_int32_t *, 2 * NFSX_UNSIGNED);
+				*tl++ = txdr_unsigned(1);
+				*tl = txdr_unsigned(NFSLAYOUT_NFSV4_1_FILES);
+			} else {
+				NFSM_BUILD(tl, u_int32_t *, NFSX_UNSIGNED);
+				*tl = txdr_unsigned(0);
+			}
+			retnum += siz * NFSX_UNSIGNED;
 			break;
 		default:
 			printf("EEK! Bad V4 attribute bitpos=%d\n", bitpos);

@@ -68,6 +68,7 @@ extern int nfsrv_sessionhashsize;
 extern struct nfsstatsv1 nfsstatsv1;
 extern struct nfslayouthash *nfslayouthash;
 extern int nfsrv_layouthashsize;
+extern struct mtx nfsrv_dslock_mtx;
 struct vfsoptlist nfsv4root_opt, nfsv4root_newopt;
 NFSDLOCKMUTEX;
 NFSSTATESPINLOCK;
@@ -76,7 +77,6 @@ struct nfsrchash_bucket nfsrcahash_table[NFSRVCACHE_HASHSIZE];
 struct mtx nfsrc_udpmtx;
 struct mtx nfs_v4root_mutex;
 struct nfsrvfh nfs_rootfh, nfs_pubfh;
-struct mtx nfsrv_dslock_mtx;
 int nfs_pubfhset = 0, nfs_rootfhset = 0;
 struct proc *nfsd_master_proc = NULL;
 int nfsd_debuglevel = 0;
@@ -4482,8 +4482,6 @@ nfsd_modevent(module_t mod, int type, void *data)
 		mtx_init(&nfs_v4root_mutex, "nfs4rt", NULL, MTX_DEF);
 		mtx_init(&nfsv4root_mnt.mnt_mtx, "nfs4mnt", NULL, MTX_DEF);
 		lockinit(&nfsv4root_mnt.mnt_explock, PVFS, "explock", 0, 0);
-		mtx_init(&nfsrv_dslock_mtx, "nfs4ds", NULL, MTX_DEF);
-		TAILQ_INIT(&nfsrv_devidhead);
 		nfsrvd_initcache();
 		nfsd_init();
 		NFSD_LOCK();
@@ -4535,7 +4533,6 @@ nfsd_modevent(module_t mod, int type, void *data)
 		for (i = 0; i < nfsrv_layouthashsize; i++)
 			mtx_destroy(&nfslayouthash[i].mtx);
 		lockdestroy(&nfsv4root_mnt.mnt_explock);
-		mtx_destroy(&nfsrv_dslock_mtx);
 		free(nfsclienthash, M_NFSDCLIENT);
 		free(nfslockhash, M_NFSDLOCKFILE);
 		free(nfssessionhash, M_NFSDSESSION);
