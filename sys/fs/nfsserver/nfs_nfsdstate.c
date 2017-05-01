@@ -189,6 +189,8 @@ static int nfsrv_setdsserver(char *dspathp, NFSPROC_T *p,
     struct nfsdevice **dsp);
 static void nfsrv_allocdevid(struct nfsdevice *ds, char *addr, char *dnshost);
 static void nfsrv_freealldevids(void);
+static int nfsrv_findlayout(struct nfsrv_descript *nd, fhandle_t *fhp,
+    NFSPROC_T *, struct nfslayout **lypp);
 
 /*
  * Scan the client list for a match and either return the current one,
@@ -3292,7 +3294,8 @@ out:
  */
 APPLESTATIC int
 nfsrv_openupdate(vnode_t vp, struct nfsstate *new_stp, nfsquad_t clientid,
-    nfsv4stateid_t *stateidp, struct nfsrv_descript *nd, NFSPROC_T *p)
+    nfsv4stateid_t *stateidp, struct nfsrv_descript *nd, NFSPROC_T *p,
+    int *retwriteaccessp)
 {
 	struct nfsstate *stp;
 	struct nfsclient *clp;
@@ -3394,6 +3397,12 @@ nfsrv_openupdate(vnode_t vp, struct nfsstate *new_stp, nfsquad_t clientid,
 		NFSUNLOCKSTATE();
 	} else if (new_stp->ls_flags & NFSLCK_CLOSE) {
 		lfp = stp->ls_lfp;
+		if (retwriteaccessp != NULL) {
+			if ((stp->ls_flags & NFSLCK_WRITEACCESS) != 0)
+				*retwriteaccessp = 1;
+			else
+				*retwriteaccessp = 0;
+		}
 		if (nfsrv_dolocallocks != 0 && !LIST_EMPTY(&stp->ls_open)) {
 			/* Get the lf lock */
 			nfsrv_locklf(lfp);
@@ -3450,7 +3459,7 @@ out:
 APPLESTATIC int
 nfsrv_delegupdate(struct nfsrv_descript *nd, nfsquad_t clientid,
     nfsv4stateid_t *stateidp, vnode_t vp, int op, struct ucred *cred,
-    NFSPROC_T *p)
+    NFSPROC_T *p, int *retwriteaccessp)
 {
 	struct nfsstate *stp;
 	struct nfsclient *clp;
@@ -3514,6 +3523,12 @@ nfsrv_delegupdate(struct nfsrv_descript *nd, nfsquad_t clientid,
 			NFSUNLOCKSTATE();
 			error = NFSERR_BADSTATEID;
 			goto out;
+		}
+		if (retwriteaccessp != NULL) {
+			if ((stp->ls_flags & NFSLCK_DELEGWRITE) != 0)
+				*retwriteaccessp = 1;
+			else
+				*retwriteaccessp = 0;
 		}
 		nfsrv_freedeleg(stp);
 	} else {
@@ -6390,7 +6405,7 @@ nfsrv_layoutreturn(struct nfsrv_descript *nd, vnode_t vp,
 /*
  * Look for an existing layout.
  */
-int
+static int
 nfsrv_findlayout(struct nfsrv_descript *nd, fhandle_t *fhp, NFSPROC_T *p,
     struct nfslayout **lypp)
 {
@@ -6800,5 +6815,82 @@ nfsrv_freealldevids(void)
 
 	TAILQ_FOREACH_SAFE(ds, &nfsrv_devidhead, nfsdev_list, nds)
 		nfsrv_freedevid(ds);
+}
+
+/*
+ * Check to see if there is a Read/Write Layout plus either:
+ * - A Write Delegation
+ * or
+ * - An Open with Write_access.
+ * Return 1 if this is the case and 0 otherwise.
+ * This function is used by nfsrv_proxyds() to decide if doing a Proxy
+ * Getattr RPC to the Data Server (DS) is necessary.
+ */
+APPLESTATIC int
+nfsrv_checkdsattr(struct nfsrv_descript *nd, vnode_t vp, NFSPROC_T *p)
+{
+	fhandle_t fh, *tfhp;
+	struct nfsstate *stp;
+	struct nfslayout *lyp;
+	struct nfslayouthash *lhyp;
+	struct nfslockhashhead *hp;
+	struct nfslockfile *lfp;
+	int ret;
+
+	KASSERT((nd->nd_flag & ND_IMPLIEDCLID) != 0,
+	    ("nfsrv_chechdsattr: no nd_clientid\n"));
+	ret = nfsvno_getfh(vp, &fh, p);
+	if (ret != 0)
+		return (0);
+
+	/* First check for a Read/Write Layout. */
+	lhyp = NFSLAYOUTHASH(&fh);
+	NFSLOCKLAYOUT(lhyp);
+	ret = nfsrv_findlayout(nd, &fh, p, &lyp);
+	if (ret != 0 || lyp->lay_rw == 0) {
+		/* None found, so return 0. */
+		NFSUNLOCKLAYOUT(lhyp);
+		return (0);
+	}
+	NFSUNLOCKLAYOUT(lhyp);
+
+	/* Get the nfslockfile for this fh. */
+	NFSLOCKSTATE();
+	hp = NFSLOCKHASH(&fh);
+	LIST_FOREACH(lfp, hp, lf_hash) {
+		tfhp = &lfp->lf_fh;
+		if (NFSVNO_CMPFH(&fh, tfhp))
+			break;
+	}
+	if (lfp == NULL) {
+		/* None found, so return 0. */
+		NFSUNLOCKSTATE();
+		return (0);
+	}
+
+	/* Now, look for a Write delegation for this clientid. */
+	LIST_FOREACH(stp, &lfp->lf_deleg, ls_file) {
+		if ((stp->ls_flags & NFSLCK_DELEGWRITE) != 0 &&
+		    stp->ls_clp->lc_clientid.qval == nd->nd_clientid.qval)
+			break;
+	}
+	if (stp != NULL) {
+		/* Found one, so return 1. */
+		NFSUNLOCKSTATE();
+		return (1);
+	}
+
+	/* No Write delegation, so look for an Open with Write_access. */
+	LIST_FOREACH(stp, &lfp->lf_open, ls_file) {
+		KASSERT((stp->ls_flags & NFSLCK_OPEN) != 0,
+		    ("nfsrv_checkdsattr: Non-open in Open list\n"));
+		if ((stp->ls_flags & NFSLCK_WRITEACCESS) != 0 &&
+		    stp->ls_clp->lc_clientid.qval == nd->nd_clientid.qval)
+			break;
+	}
+	NFSUNLOCKSTATE();
+	if (stp != NULL)
+		return (1);
+	return (0);
 }
 

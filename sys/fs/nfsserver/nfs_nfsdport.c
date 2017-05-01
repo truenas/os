@@ -259,8 +259,8 @@ nfsvno_getattr(struct vnode *vp, struct nfsvattr *nvap,
 
 	/*
 	 * Acquire the Change, Size and Modify Time attributes from the DS file
-	 * for a pNFS server.  A return of ENOENT indicates that there is
-	 * no DS file or the MetaData file has up to date attributes.
+	 * for a pNFS server.  A return of 0 indicates that there are
+	 * DS file attributes to be merged into the returned attributes.
 	 */
 	gotattr = 0;
 	error = nfsrv_proxyds(nd, vp, 0, 0, nd->nd_cred, p, NFSPROC_GETATTR,
@@ -3848,13 +3848,11 @@ nfsrv_proxyds(struct nfsrv_descript *nd, struct vnode *vp, off_t off, int cnt,
     char *cp, struct mbuf **mpp2, struct nfsvattr *nap, struct acl *aclp)
 {
 	struct nfsmount *nmp;
-	struct nfslayouthash *lhyp;
-	struct nfslayout *lyp;
 	fhandle_t fh;
 	struct vnode *dvp;
 	struct pnfsdsattr dsattr;
 	char *buf;
-	int buflen, error, ret;
+	int buflen, error;
 
 	NFSD_DEBUG(4, "in nfsrv_proxyds\n");
 	/*
@@ -3890,32 +3888,16 @@ nfsrv_proxyds(struct nfsrv_descript *nd, struct vnode *vp, off_t off, int cnt,
 			nap->na_mtime = dsattr.dsa_mtime;
 		}
 
-		/* If nfsrv_pnfsgetdsattr isn't set, just return ENXIO. */
-		if (nfsrv_pnfsgetdsattr == 0) {
+		/*
+		 * If nfsrv_pnfsgetdsattr is 0 or nfsrv_checkdsattr() returns
+		 * 0, just return now.  nfsrv_checkdsattr() returns 0 if there
+		 * is no Read/Write layout + either an Open/Write_access or
+		 * Write delegation issued to a client for the file.
+		 */
+		if (nfsrv_pnfsgetdsattr == 0 || nfsrv_checkdsattr(nd, vp, p) ==
+		    0) {
 			free(buf, M_TEMP);
 			return (error);
-		}
-
-		/*
-		 * For Getattr, check to see if there is a write layout
-		 * issued to a client.  If there is no write layout, return
-		 * ENXIO to indicate that the MetaData file's attributes
-		 * are current w.r.t. the file, except the va_filerev, which
-		 * has already been acquired from the extended attribute.
-		 */
-		ret = nfsvno_getfh(vp, &fh, p);
-		if (ret == 0) {
-			lhyp = NFSLAYOUTHASH(&fh);
-			NFSLOCKLAYOUT(lhyp);
-			ret = nfsrv_findlayout(nd, &fh, p, &lyp);
-			if (ret != 0 || lyp->lay_rw == 0) {
-				NFSUNLOCKLAYOUT(lhyp);
-				free(buf, M_TEMP);
-				NFSD_DEBUG(4, "nfsrv_proxyds: getattr "
-				    "nolayout=%d\n", ret);
-				return (error);
-			}
-			NFSUNLOCKLAYOUT(lhyp);
 		}
 	}
 
