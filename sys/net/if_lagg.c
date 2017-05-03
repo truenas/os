@@ -72,10 +72,6 @@ __FBSDID("$FreeBSD$");
 #include <net/if_lagg.h>
 #include <net/ieee8023ad_lacp.h>
 
-#ifndef UNUSED_PARAMETER
-#define UNUSED_PARAMETER(x)	x = x
-#endif
-
 /* Special flags we should propagate to the lagg ports. */
 static struct {
 	int flag;
@@ -1481,7 +1477,6 @@ static int
 lagg_clrmulti(struct lagg_port *lp)
 {
 	struct lagg_softc *sc = lp->lp_softc;
-	UNUSED_PARAMETER(sc);
 	struct lagg_mc *mc;
 
 	LAGG_WLOCK_ASSERT(sc);
