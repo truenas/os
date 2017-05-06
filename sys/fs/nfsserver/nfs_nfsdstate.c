@@ -191,6 +191,7 @@ static void nfsrv_allocdevid(struct nfsdevice *ds, char *addr, char *dnshost);
 static void nfsrv_freealldevids(void);
 static int nfsrv_findlayout(struct nfsrv_descript *nd, fhandle_t *fhp,
     NFSPROC_T *, struct nfslayout **lypp);
+static int nfsrv_fndclid(nfsquad_t *clidvec, nfsquad_t clid, int clidcnt);
 
 /*
  * Scan the client list for a match and either return the current one,
@@ -6826,6 +6827,7 @@ nfsrv_freealldevids(void)
  * This function is used by nfsrv_proxyds() to decide if doing a Proxy
  * Getattr RPC to the Data Server (DS) is necessary.
  */
+#define	NFSCLIDVECSIZE	6
 APPLESTATIC int
 nfsrv_checkdsattr(struct nfsrv_descript *nd, vnode_t vp, NFSPROC_T *p)
 {
@@ -6835,24 +6837,30 @@ nfsrv_checkdsattr(struct nfsrv_descript *nd, vnode_t vp, NFSPROC_T *p)
 	struct nfslayouthash *lhyp;
 	struct nfslockhashhead *hp;
 	struct nfslockfile *lfp;
-	int ret;
+	nfsquad_t clid[NFSCLIDVECSIZE];
+	int clidcnt, ret;
 
-	KASSERT((nd->nd_flag & ND_IMPLIEDCLID) != 0,
-	    ("nfsrv_chechdsattr: no nd_clientid\n"));
 	ret = nfsvno_getfh(vp, &fh, p);
 	if (ret != 0)
 		return (0);
 
 	/* First check for a Read/Write Layout. */
+	clidcnt = 0;
 	lhyp = NFSLAYOUTHASH(&fh);
 	NFSLOCKLAYOUT(lhyp);
-	ret = nfsrv_findlayout(nd, &fh, p, &lyp);
-	if (ret != 0 || lyp->lay_rw == 0) {
-		/* None found, so return 0. */
-		NFSUNLOCKLAYOUT(lhyp);
-		return (0);
+	LIST_FOREACH(lyp, &lhyp->list, lay_list) {
+		if (NFSBCMP(&lyp->lay_fh, &fh, sizeof(fh)) == 0 && lyp->lay_rw
+		    != 0) {
+			if (clidcnt < NFSCLIDVECSIZE)
+				clid[clidcnt].qval = lyp->lay_clientid.qval;
+			clidcnt++;
+		}
 	}
 	NFSUNLOCKLAYOUT(lhyp);
+	if (clidcnt == 0) {
+		/* None found, so return 0. */
+		return (0);
+	}
 
 	/* Get the nfslockfile for this fh. */
 	NFSLOCKSTATE();
@@ -6871,7 +6879,7 @@ nfsrv_checkdsattr(struct nfsrv_descript *nd, vnode_t vp, NFSPROC_T *p)
 	/* Now, look for a Write delegation for this clientid. */
 	LIST_FOREACH(stp, &lfp->lf_deleg, ls_file) {
 		if ((stp->ls_flags & NFSLCK_DELEGWRITE) != 0 &&
-		    stp->ls_clp->lc_clientid.qval == nd->nd_clientid.qval)
+		    nfsrv_fndclid(clid, stp->ls_clp->lc_clientid, clidcnt) != 0)
 			break;
 	}
 	if (stp != NULL) {
@@ -6885,12 +6893,30 @@ nfsrv_checkdsattr(struct nfsrv_descript *nd, vnode_t vp, NFSPROC_T *p)
 		KASSERT((stp->ls_flags & NFSLCK_OPEN) != 0,
 		    ("nfsrv_checkdsattr: Non-open in Open list\n"));
 		if ((stp->ls_flags & NFSLCK_WRITEACCESS) != 0 &&
-		    stp->ls_clp->lc_clientid.qval == nd->nd_clientid.qval)
+		    nfsrv_fndclid(clid, stp->ls_clp->lc_clientid, clidcnt) != 0)
 			break;
 	}
 	NFSUNLOCKSTATE();
 	if (stp != NULL)
 		return (1);
+	return (0);
+}
+
+/*
+ * Look for a matching clientid in the vector. Return 1 if one might match.
+ */
+static int
+nfsrv_fndclid(nfsquad_t *clidvec, nfsquad_t clid, int clidcnt)
+{
+	int i;
+
+	/* If too many for the vector, return 1 since there might be a match. */
+	if (clidcnt > NFSCLIDVECSIZE)
+		return (1);
+
+	for (i = 0; i < clidcnt; i++)
+		if (clidvec[i].qval == clid.qval)
+			return (1);
 	return (0);
 }
 
