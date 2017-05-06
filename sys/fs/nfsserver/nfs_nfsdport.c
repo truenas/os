@@ -240,7 +240,8 @@ nfsrv_sequential_heuristic(struct uio *uio, struct vnode *vp)
  */
 int
 nfsvno_getattr(struct vnode *vp, struct nfsvattr *nvap,
-    struct nfsrv_descript *nd, struct thread *p, int vpislocked)
+    struct nfsrv_descript *nd, struct thread *p, int vpislocked,
+    nfsattrbit_t *attrbitp)
 {
 	int error, gotattr, lockedit = 0;
 	struct nfsvattr na;
@@ -258,15 +259,26 @@ nfsvno_getattr(struct vnode *vp, struct nfsvattr *nvap,
 	}
 
 	/*
-	 * Acquire the Change, Size and Modify Time attributes from the DS file
-	 * for a pNFS server.  A return of 0 indicates that there are
-	 * DS file attributes to be merged into the returned attributes.
+	 * Acquire the Change, Size and TimeModify attributes, as required.
+	 * This needs to be done for regular files if:
+	 * - non-NFSv4 RPCs or
+	 * - when attrbitp == NULL or
+	 * - an NFSv4 RPC with any of the above attributes in attrbitp.
+	 * A return of 0 for nfsrv_proxyds() indicates that it has acquired
+	 * these attributes.  nfsrv_proxyds() will return an error if the
+	 * server is not a pNFS one.
 	 */
 	gotattr = 0;
-	error = nfsrv_proxyds(nd, vp, 0, 0, nd->nd_cred, p, NFSPROC_GETATTR,
-	    NULL, NULL, NULL, &na, NULL);
-	if (error == 0)
-		gotattr = 1;
+	if (vp->v_type == VREG && (attrbitp == NULL ||
+	    (nd->nd_flag & ND_NFSV4) == 0 ||
+	    NFSISSET_ATTRBIT(attrbitp, NFSATTRBIT_CHANGE) ||
+	    NFSISSET_ATTRBIT(attrbitp, NFSATTRBIT_SIZE) ||
+	    NFSISSET_ATTRBIT(attrbitp, NFSATTRBIT_TIMEMODIFY))) {
+		error = nfsrv_proxyds(nd, vp, 0, 0, nd->nd_cred, p,
+		    NFSPROC_GETATTR, NULL, NULL, NULL, &na, NULL);
+		if (error == 0)
+			gotattr = 1;
+	}
 
 	error = VOP_GETATTR(vp, &nvap->na_vattr, nd->nd_cred);
 	if (lockedit != 0)
@@ -1681,7 +1693,7 @@ nfsvno_updfilerev(struct vnode *vp, struct nfsvattr *nvap,
 			return (ESTALE);
 	}
 	(void) VOP_SETATTR(vp, &va, nd->nd_cred);
-	(void) nfsvno_getattr(vp, nvap, nd, p, 1);
+	(void) nfsvno_getattr(vp, nvap, nd, p, 1, NULL);
 	return (0);
 }
 
@@ -1765,7 +1777,8 @@ nfsrvd_readdir(struct nfsrv_descript *nd, int isdgram,
 	siz = ((cnt + DIRBLKSIZ - 1) & ~(DIRBLKSIZ - 1));
 	fullsiz = siz;
 	if (nd->nd_flag & ND_NFSV3) {
-		nd->nd_repstat = getret = nfsvno_getattr(vp, &at, nd, p, 1);
+		nd->nd_repstat = getret = nfsvno_getattr(vp, &at, nd, p, 1,
+		    NULL);
 #if 0
 		/*
 		 * va_filerev is not sufficient as a cookie verifier,
@@ -1823,7 +1836,7 @@ again:
 	if (!cookies && !nd->nd_repstat)
 		nd->nd_repstat = NFSERR_PERM;
 	if (nd->nd_flag & ND_NFSV3) {
-		getret = nfsvno_getattr(vp, &at, nd, p, 1);
+		getret = nfsvno_getattr(vp, &at, nd, p, 1, NULL);
 		if (!nd->nd_repstat)
 			nd->nd_repstat = getret;
 	}
@@ -2038,7 +2051,7 @@ nfsrvd_readdirplus(struct nfsrv_descript *nd, int isdgram,
 		NFSZERO_ATTRBIT(&attrbits);
 	}
 	fullsiz = siz;
-	nd->nd_repstat = getret = nfsvno_getattr(vp, &at, nd, p, 1);
+	nd->nd_repstat = getret = nfsvno_getattr(vp, &at, nd, p, 1, NULL);
 	if (!nd->nd_repstat) {
 	    if (off && verf != at.na_filerev) {
 		/*
@@ -2098,7 +2111,7 @@ again:
 	if (io.uio_resid)
 		siz -= io.uio_resid;
 
-	getret = nfsvno_getattr(vp, &at, nd, p, 1);
+	getret = nfsvno_getattr(vp, &at, nd, p, 1, NULL);
 
 	if (!cookies && !nd->nd_repstat)
 		nd->nd_repstat = NFSERR_PERM;
@@ -2339,7 +2352,7 @@ again:
 					r = nfsvno_getfh(nvp, &nfh, p);
 					if (!r)
 					    r = nfsvno_getattr(nvp, nvap, nd, p,
-						1);
+						1, &attrbits);
 					if (r == 0 && is_zfs == 1 &&
 					    nfsrv_enable_crossmntpt != 0 &&
 					    (nd->nd_flag & ND_NFSV4) != 0 &&
