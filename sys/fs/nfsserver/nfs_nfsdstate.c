@@ -6261,6 +6261,16 @@ nfsrv_layoutget(struct nfsrv_descript *nd, vnode_t vp, struct nfsexstuff *exp,
 	error = nfsrv_findlayout(nd, &fh, p, &lyp);
 	NFSD_DEBUG(4, "layoutget findlay=%d\n", error);
 	if (error == 0) {
+		/*
+		 * Not sure if the seqid must be the same, so I won't check it.
+		 */
+		if (stateidp->other[0] != lyp->lay_stateid.other[0] ||
+		    stateidp->other[1] != lyp->lay_stateid.other[1] ||
+		    stateidp->other[2] != lyp->lay_stateid.other[2]) {
+			NFSUNLOCKLAYOUT(lhyp);
+			NFSD_DEBUG(1, "ret bad stateid\n");
+			return (NFSERR_BADSTATEID);
+		}
 		if (*iomode == NFSLAYOUTIOMODE_RW)
 			lyp->lay_rw = 1;
 		else
@@ -6270,9 +6280,6 @@ nfsrv_layoutget(struct nfsrv_descript *nd, vnode_t vp, struct nfsexstuff *exp,
 		if (++lyp->lay_stateid.seqid == 0)
 			lyp->lay_stateid.seqid = 1;
 		stateidp->seqid = lyp->lay_stateid.seqid;
-		stateidp->other[0] = lyp->lay_stateid.other[0];
-		stateidp->other[1] = lyp->lay_stateid.other[1];
-		stateidp->other[2] = lyp->lay_stateid.other[2];
 		NFSUNLOCKLAYOUT(lhyp);
 		NFSD_DEBUG(4, "ret fnd layout\n");
 		return (0);
