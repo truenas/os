@@ -105,6 +105,7 @@ static int nfs_proc(struct nfsrv_descript *, u_int32_t, SVCXPRT *xprt,
 extern u_long sb_max_adj;
 extern int newnfs_numnfsd;
 extern struct proc *nfsd_master_proc;
+extern time_t nfsdev_time;
 
 /*
  * NFS server system calls
@@ -495,6 +496,7 @@ nfsrvd_nfsd(struct thread *td, struct nfsd_nfsd_args *args)
 	 */
 	NFSD_LOCK();
 	if (newnfs_numnfsd == 0) {
+		nfsdev_time = time_second;
 		p = td->td_proc;
 		PROC_LOCK(p);
 		p->p_flag2 |= P2_AST_SU;
@@ -502,6 +504,7 @@ nfsrvd_nfsd(struct thread *td, struct nfsd_nfsd_args *args)
 		newnfs_numnfsd++;
 
 		NFSD_UNLOCK();
+		nfsrv_createdevids(args, td);
 
 		/* An empty string implies AUTH_SYS only. */
 		if (principal[0] != '\0') {
@@ -555,6 +558,7 @@ nfsrvd_init(int terminating)
 	if (terminating) {
 		nfsd_master_proc = NULL;
 		NFSD_UNLOCK();
+		nfsrv_freealllayoutsanddevids();
 		nfsrv_freeallbackchannel_xprts();
 		svcpool_close(nfsrvd_pool);
 		NFSD_LOCK();
