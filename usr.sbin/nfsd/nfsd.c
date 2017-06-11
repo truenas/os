@@ -232,7 +232,7 @@ main(int argc, char **argv)
 			/* now a no-op, since this is the default */
 			break;
 		case 'p':
-			/* Parse out the DS server host names and the port#s. */
+			/* Parse out the DS server host names and mount pts. */
 			parse_dsserver(optarg, &nfsdargs);
 			break;
 		case 0:
