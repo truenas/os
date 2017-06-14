@@ -92,6 +92,11 @@ SYSCTL_INT(_vfs_nfsd, OID_AUTO, allowreadforwriteopen, CTLFLAG_RW,
     &nfsrv_allowreadforwriteopen, 0,
     "Allow Reads to be done with Write Access StateIDs");
 
+static int	nfsrv_pnfsatime = 0;
+SYSCTL_INT(_vfs_nfsd, OID_AUTO, pnfsgetatime, CTLFLAG_RW,
+    &nfsrv_pnfsatime, 0,
+    "For pNFS service, do Getattr ops to keep atime up-to-date");
+
 /*
  * Hash lists for nfs V4.
  */
@@ -3295,8 +3300,7 @@ out:
  */
 APPLESTATIC int
 nfsrv_openupdate(vnode_t vp, struct nfsstate *new_stp, nfsquad_t clientid,
-    nfsv4stateid_t *stateidp, struct nfsrv_descript *nd, NFSPROC_T *p,
-    int *retwriteaccessp)
+    nfsv4stateid_t *stateidp, struct nfsrv_descript *nd, NFSPROC_T *p)
 {
 	struct nfsstate *stp;
 	struct nfsclient *clp;
@@ -3398,12 +3402,6 @@ nfsrv_openupdate(vnode_t vp, struct nfsstate *new_stp, nfsquad_t clientid,
 		NFSUNLOCKSTATE();
 	} else if (new_stp->ls_flags & NFSLCK_CLOSE) {
 		lfp = stp->ls_lfp;
-		if (retwriteaccessp != NULL) {
-			if ((stp->ls_flags & NFSLCK_WRITEACCESS) != 0)
-				*retwriteaccessp = 1;
-			else
-				*retwriteaccessp = 0;
-		}
 		if (nfsrv_dolocallocks != 0 && !LIST_EMPTY(&stp->ls_open)) {
 			/* Get the lf lock */
 			nfsrv_locklf(lfp);
@@ -3460,7 +3458,7 @@ out:
 APPLESTATIC int
 nfsrv_delegupdate(struct nfsrv_descript *nd, nfsquad_t clientid,
     nfsv4stateid_t *stateidp, vnode_t vp, int op, struct ucred *cred,
-    NFSPROC_T *p, int *retwriteaccessp)
+    NFSPROC_T *p)
 {
 	struct nfsstate *stp;
 	struct nfsclient *clp;
@@ -3524,12 +3522,6 @@ nfsrv_delegupdate(struct nfsrv_descript *nd, nfsquad_t clientid,
 			NFSUNLOCKSTATE();
 			error = NFSERR_BADSTATEID;
 			goto out;
-		}
-		if (retwriteaccessp != NULL) {
-			if ((stp->ls_flags & NFSLCK_DELEGWRITE) != 0)
-				*retwriteaccessp = 1;
-			else
-				*retwriteaccessp = 0;
 		}
 		nfsrv_freedeleg(stp);
 	} else {
@@ -6856,8 +6848,8 @@ nfsrv_checkdsattr(struct nfsrv_descript *nd, vnode_t vp, NFSPROC_T *p)
 	lhyp = NFSLAYOUTHASH(&fh);
 	NFSLOCKLAYOUT(lhyp);
 	LIST_FOREACH(lyp, &lhyp->list, lay_list) {
-		if (NFSBCMP(&lyp->lay_fh, &fh, sizeof(fh)) == 0 && lyp->lay_rw
-		    != 0) {
+		if (NFSBCMP(&lyp->lay_fh, &fh, sizeof(fh)) == 0 && (lyp->lay_rw
+		    != 0 || (lyp->lay_read != 0 && nfsrv_pnfsatime != 0))) {
 			if (clidcnt < NFSCLIDVECSIZE)
 				clid[clidcnt].qval = lyp->lay_clientid.qval;
 			clidcnt++;
