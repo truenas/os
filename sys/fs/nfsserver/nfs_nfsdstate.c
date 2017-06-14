@@ -92,8 +92,8 @@ SYSCTL_INT(_vfs_nfsd, OID_AUTO, allowreadforwriteopen, CTLFLAG_RW,
     &nfsrv_allowreadforwriteopen, 0,
     "Allow Reads to be done with Write Access StateIDs");
 
-static int	nfsrv_pnfsatime = 0;
-SYSCTL_INT(_vfs_nfsd, OID_AUTO, pnfsgetatime, CTLFLAG_RW,
+int	nfsrv_pnfsatime = 0;
+SYSCTL_INT(_vfs_nfsd, OID_AUTO, pnfsstrictatime, CTLFLAG_RW,
     &nfsrv_pnfsatime, 0,
     "For pNFS service, do Getattr ops to keep atime up-to-date");
 
@@ -3300,7 +3300,8 @@ out:
  */
 APPLESTATIC int
 nfsrv_openupdate(vnode_t vp, struct nfsstate *new_stp, nfsquad_t clientid,
-    nfsv4stateid_t *stateidp, struct nfsrv_descript *nd, NFSPROC_T *p)
+    nfsv4stateid_t *stateidp, struct nfsrv_descript *nd, NFSPROC_T *p,
+    int *retwriteaccessp)
 {
 	struct nfsstate *stp;
 	struct nfsclient *clp;
@@ -3402,6 +3403,12 @@ nfsrv_openupdate(vnode_t vp, struct nfsstate *new_stp, nfsquad_t clientid,
 		NFSUNLOCKSTATE();
 	} else if (new_stp->ls_flags & NFSLCK_CLOSE) {
 		lfp = stp->ls_lfp;
+		if (retwriteaccessp != NULL) {
+			if ((stp->ls_flags & NFSLCK_WRITEACCESS) != 0)
+				*retwriteaccessp = 1;
+			else
+				*retwriteaccessp = 0;
+		}
 		if (nfsrv_dolocallocks != 0 && !LIST_EMPTY(&stp->ls_open)) {
 			/* Get the lf lock */
 			nfsrv_locklf(lfp);
@@ -3458,7 +3465,7 @@ out:
 APPLESTATIC int
 nfsrv_delegupdate(struct nfsrv_descript *nd, nfsquad_t clientid,
     nfsv4stateid_t *stateidp, vnode_t vp, int op, struct ucred *cred,
-    NFSPROC_T *p)
+    NFSPROC_T *p, int *retwriteaccessp)
 {
 	struct nfsstate *stp;
 	struct nfsclient *clp;
@@ -3522,6 +3529,12 @@ nfsrv_delegupdate(struct nfsrv_descript *nd, nfsquad_t clientid,
 			NFSUNLOCKSTATE();
 			error = NFSERR_BADSTATEID;
 			goto out;
+		}
+		if (retwriteaccessp != NULL) {
+			if ((stp->ls_flags & NFSLCK_DELEGWRITE) != 0)
+				*retwriteaccessp = 1;
+			else
+				*retwriteaccessp = 0;
 		}
 		nfsrv_freedeleg(stp);
 	} else {
@@ -6346,7 +6359,7 @@ nfsrv_layoutreturn(struct nfsrv_descript *nd, vnode_t vp,
 	if (kind == NFSV4LAYOUTRET_FILE) {
 		*fndp = 0;
 		error = nfsvno_getfh(vp, &fh, p);
-		if (error == 0 && (iomode & NFSLAYOUTIOMODE_RW) != 0) {
+		if (error == 0) {
 			error = nfsrv_updatemdsattr(vp, &na, p);
 			if (error != 0)
 				printf("nfsrv_layoutreturn: updatemdsattr"
