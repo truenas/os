@@ -232,8 +232,8 @@ SLIST_HEAD(, uld_info) t4_uld_list;
  * Tunables.  See tweak_tunables() too.
  *
  * Each tunable is set to a default value here if it's known at compile-time.
- * Otherwise it is set to -1 as an indication to tweak_tunables() that it should
- * provide a reasonable default when the driver is loaded.
+ * Otherwise it is set to -n as an indication to tweak_tunables() that it should
+ * provide a reasonable default (upto n) when the driver is loaded.
  *
  * Tunables applicable to both T4 and T5 are under hw.cxgbe.  Those specific to
  * T5 are under hw.cxl.
@@ -243,27 +243,27 @@ SLIST_HEAD(, uld_info) t4_uld_list;
  * Number of queues for tx and rx, 10G and 1G, NIC and offload.
  */
 #define NTXQ_10G 16
-int t4_ntxq10g = -1;
+int t4_ntxq10g = -NTXQ_10G;
 TUNABLE_INT("hw.cxgbe.ntxq10g", &t4_ntxq10g);
 
 #define NRXQ_10G 8
-int t4_nrxq10g = -1;
+int t4_nrxq10g = -NRXQ_10G;
 TUNABLE_INT("hw.cxgbe.nrxq10g", &t4_nrxq10g);
 
 #define NTXQ_1G 4
-int t4_ntxq1g = -1;
+int t4_ntxq1g = -NTXQ_1G;
 TUNABLE_INT("hw.cxgbe.ntxq1g", &t4_ntxq1g);
 
 #define NRXQ_1G 2
-int t4_nrxq1g = -1;
+int t4_nrxq1g = -NRXQ_1G;
 TUNABLE_INT("hw.cxgbe.nrxq1g", &t4_nrxq1g);
 
 #define NTXQ_VI 1
-static int t4_ntxq_vi = -1;
+static int t4_ntxq_vi = -NTXQ_VI;
 TUNABLE_INT("hw.cxgbe.ntxq_vi", &t4_ntxq_vi);
 
 #define NRXQ_VI 1
-static int t4_nrxq_vi = -1;
+static int t4_nrxq_vi = -NRXQ_VI;
 TUNABLE_INT("hw.cxgbe.nrxq_vi", &t4_nrxq_vi);
 
 static int t4_rsrv_noflowq = 0;
@@ -271,37 +271,37 @@ TUNABLE_INT("hw.cxgbe.rsrv_noflowq", &t4_rsrv_noflowq);
 
 #ifdef TCP_OFFLOAD
 #define NOFLDTXQ_10G 8
-static int t4_nofldtxq10g = -1;
+static int t4_nofldtxq10g = -NOFLDTXQ_10G;
 TUNABLE_INT("hw.cxgbe.nofldtxq10g", &t4_nofldtxq10g);
 
 #define NOFLDRXQ_10G 2
-static int t4_nofldrxq10g = -1;
+static int t4_nofldrxq10g = -NOFLDRXQ_10G;
 TUNABLE_INT("hw.cxgbe.nofldrxq10g", &t4_nofldrxq10g);
 
 #define NOFLDTXQ_1G 2
-static int t4_nofldtxq1g = -1;
+static int t4_nofldtxq1g = -NOFLDTXQ_1G;
 TUNABLE_INT("hw.cxgbe.nofldtxq1g", &t4_nofldtxq1g);
 
 #define NOFLDRXQ_1G 1
-static int t4_nofldrxq1g = -1;
+static int t4_nofldrxq1g = -NOFLDRXQ_1G;
 TUNABLE_INT("hw.cxgbe.nofldrxq1g", &t4_nofldrxq1g);
 
 #define NOFLDTXQ_VI 1
-static int t4_nofldtxq_vi = -1;
+static int t4_nofldtxq_vi = -NOFLDTXQ_VI;
 TUNABLE_INT("hw.cxgbe.nofldtxq_vi", &t4_nofldtxq_vi);
 
 #define NOFLDRXQ_VI 1
-static int t4_nofldrxq_vi = -1;
+static int t4_nofldrxq_vi = -NOFLDRXQ_VI;
 TUNABLE_INT("hw.cxgbe.nofldrxq_vi", &t4_nofldrxq_vi);
 #endif
 
 #ifdef DEV_NETMAP
 #define NNMTXQ_VI 2
-static int t4_nnmtxq_vi = -1;
+static int t4_nnmtxq_vi = -NNMTXQ_VI;
 TUNABLE_INT("hw.cxgbe.nnmtxq_vi", &t4_nnmtxq_vi);
 
 #define NNMRXQ_VI 2
-static int t4_nnmrxq_vi = -1;
+static int t4_nnmrxq_vi = -NNMRXQ_VI;
 TUNABLE_INT("hw.cxgbe.nnmrxq_vi", &t4_nnmrxq_vi);
 #endif
 
@@ -623,13 +623,25 @@ struct {
 #endif
 }, t6_pciids[] = {
 	{0xc006, "Chelsio Terminator 6 FPGA"},	/* T6 PE10K6 FPGA (PF0) */
-	{0x6400, "Chelsio T6225-DBG"},		/* 2 x 10/25G, debug */
+	{0x6400, "Chelsio T6-DBG-25"},		/* 2 x 10/25G, debug */
 	{0x6401, "Chelsio T6225-CR"},		/* 2 x 10/25G */
 	{0x6402, "Chelsio T6225-SO-CR"},	/* 2 x 10/25G, nomem */
+	{0x6403, "Chelsio T6425-CR"},		/* 4 x 10/25G */
+	{0x6404, "Chelsio T6425-SO-CR"},	/* 4 x 10/25G, nomem */
+	{0x6405, "Chelsio T6225-OCP-SO"},	/* 2 x 10/25G, nomem */
+	{0x6406, "Chelsio T62100-OCP-SO"},	/* 2 x 40/50/100G, nomem */
 	{0x6407, "Chelsio T62100-LP-CR"},	/* 2 x 40/50/100G */
 	{0x6408, "Chelsio T62100-SO-CR"},	/* 2 x 40/50/100G, nomem */
+	{0x6409, "Chelsio T6210-BT"},		/* 2 x 10GBASE-T */
 	{0x640d, "Chelsio T62100-CR"},		/* 2 x 40/50/100G */
-	{0x6410, "Chelsio T62100-DBG"},		/* 2 x 40/50/100G, debug */
+	{0x6410, "Chelsio T6-DBG-100"},		/* 2 x 40/50/100G, debug */
+	{0x6411, "Chelsio T6225-LL-CR"},	/* 2 x 10/25G */
+	{0x6414, "Chelsio T61100-OCP-SO"},	/* 1 x 40/50/100G, nomem */
+	{0x6415, "Chelsio T6201-BT"},		/* 2 x 1000BASE-T */
+
+	/* Custom */
+	{0x6480, "Chelsio T6225 80"},
+	{0x6481, "Chelsio T62100 81"},
 };
 
 #ifdef TCP_OFFLOAD
@@ -983,6 +995,7 @@ t4_attach(device_t dev)
 			lc->autoneg = t4_autoneg ? AUTONEG_ENABLE :
 			    AUTONEG_DISABLE;
 		}
+		lc->requested_speed = port_top_speed_raw(pi);
 
 		rc = -t4_link_l1cfg(sc, sc->mbox, pi->tx_chan, lc);
 		if (rc != 0) {
@@ -997,9 +1010,6 @@ t4_attach(device_t dev)
 		    device_get_nameunit(dev), i);
 		mtx_init(&pi->pi_lock, pi->lockname, 0, MTX_DEF);
 		sc->chan_map[pi->tx_chan] = i;
-
-		pi->tc = malloc(sizeof(struct tx_sched_class) *
-		    sc->chip_params->nsched_cls, M_CXGBE, M_ZERO | M_WAITOK);
 
 		if (port_top_speed(pi) >= 10) {
 			n10g++;
@@ -1088,6 +1098,7 @@ t4_attach(device_t dev)
 	    M_ZERO | M_WAITOK);
 
 	t4_init_l2t(sc, M_WAITOK);
+	t4_init_tx_sched(sc);
 
 	/*
 	 * Second pass over the ports.  This time we know the number of rx and
@@ -1312,6 +1323,9 @@ t4_detach_common(device_t dev)
 	for (i = 0; i < sc->intr_count; i++)
 		t4_free_irq(sc, &sc->irq[i]);
 
+	if ((sc->flags & (IS_VF | FW_OK)) == FW_OK)
+		t4_free_tx_sched(sc);
+
 	for (i = 0; i < MAX_NPORTS; i++) {
 		pi = sc->port[i];
 		if (pi) {
@@ -1321,7 +1335,6 @@ t4_detach_common(device_t dev)
 
 			mtx_destroy(&pi->pi_lock);
 			free(pi->vi, M_CXGBE);
-			free(pi->tc, M_CXGBE);
 			free(pi, M_CXGBE);
 		}
 	}
@@ -1444,6 +1457,10 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 	if (vi->nofldrxq != 0)
 		ifp->if_capabilities |= IFCAP_TOE;
 #endif
+#ifdef DEV_NETMAP
+	if (vi->nnmrxq != 0)
+		ifp->if_capabilities |= IFCAP_NETMAP;
+#endif
 	ifp->if_capenable = T4_CAP_ENABLE;
 	ifp->if_hwassist = CSUM_TCP | CSUM_UDP | CSUM_IP | CSUM_TSO |
 	    CSUM_UDP_IPV6 | CSUM_TCP_IPV6;
@@ -1462,7 +1479,7 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 
 	ether_ifattach(ifp, vi->hw_addr);
 #ifdef DEV_NETMAP
-	if (vi->nnmrxq != 0)
+	if (ifp->if_capabilities & IFCAP_NETMAP)
 		cxgbe_nm_attach(vi);
 #endif
 	sb = sbuf_new_auto();
@@ -1852,12 +1869,15 @@ cxgbe_qflush(struct ifnet *ifp)
 	if (vi->flags & VI_INIT_DONE) {
 		for_each_txq(vi, i, txq) {
 			TXQ_LOCK(txq);
-			txq->eq.flags &= ~EQ_ENABLED;
+			txq->eq.flags |= EQ_QFLUSH;
 			TXQ_UNLOCK(txq);
 			while (!mp_ring_is_idle(txq->r)) {
 				mp_ring_check_drainage(txq->r, 0);
 				pause("qflush", 1);
 			}
+			TXQ_LOCK(txq);
+			txq->eq.flags &= ~EQ_QFLUSH;
+			TXQ_UNLOCK(txq);
 		}
 	}
 	if_qflush(ifp);
@@ -3490,6 +3510,21 @@ get_params__post_init(struct adapter *sc)
 		sc->vres.cq.size = val[3] - val[2] + 1;
 		sc->vres.ocq.start = val[4];
 		sc->vres.ocq.size = val[5] - val[4] + 1;
+
+		param[0] = FW_PARAM_PFVF(SRQ_START);
+		param[1] = FW_PARAM_PFVF(SRQ_END);
+		param[2] = FW_PARAM_DEV(MAXORDIRD_QP);
+		param[3] = FW_PARAM_DEV(MAXIRD_ADAPTER);
+		rc = -t4_query_params(sc, sc->mbox, sc->pf, 0, 4, param, val);
+		if (rc != 0) {
+			device_printf(sc->dev,
+			    "failed to query RDMA parameters(3): %d.\n", rc);
+			return (rc);
+		}
+		sc->vres.srq.start = val[0];
+		sc->vres.srq.size = val[1] - val[0] + 1;
+		sc->params.max_ordird_qp = val[2];
+		sc->params.max_ird_adapter = val[3];
 	}
 	if (sc->iscsicaps) {
 		param[0] = FW_PARAM_PFVF(ISCSI_START);
@@ -4219,6 +4254,10 @@ int
 adapter_full_init(struct adapter *sc)
 {
 	int rc, i;
+#ifdef RSS
+	uint32_t raw_rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
+	uint32_t rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
+#endif
 
 	ASSERT_SYNCHRONIZED_OP(sc);
 	ADAPTER_LOCK_ASSERT_NOTOWNED(sc);
@@ -4244,6 +4283,14 @@ adapter_full_init(struct adapter *sc)
 		taskqueue_start_threads(&sc->tq[i], 1, PI_NET, "%s tq%d",
 		    device_get_nameunit(sc->dev), i);
 	}
+#ifdef RSS
+	MPASS(RSS_KEYSIZE == 40);
+	rss_getkey((void *)&raw_rss_key[0]);
+	for (i = 0; i < nitems(rss_key); i++) {
+		rss_key[i] = htobe32(raw_rss_key[nitems(rss_key) - 1 - i]);
+	}
+	t4_write_rss_key(sc, &rss_key[0], -1);
+#endif
 
 	if (!(sc->flags & IS_VF))
 		t4_intr_enable(sc);
@@ -4351,8 +4398,6 @@ vi_full_init(struct vi_info *vi)
 	int nbuckets = rss_getnumbuckets();
 	int hashconfig = rss_gethashconfig();
 	int extra;
-	uint32_t raw_rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
-	uint32_t rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
 #endif
 
 	ASSERT_SYNCHRONIZED_OP(sc);
@@ -4382,17 +4427,10 @@ vi_full_init(struct vi_info *vi)
 		    vi->rss_size);
 	}
 #ifdef RSS
-	MPASS(RSS_KEYSIZE == 40);
 	if (vi->nrxq != nbuckets) {
 		if_printf(ifp, "nrxq (%d) != kernel RSS buckets (%d);"
 		    "performance will be impacted.\n", vi->nrxq, nbuckets);
 	}
-
-	rss_getkey((void *)&raw_rss_key[0]);
-	for (i = 0; i < nitems(rss_key); i++) {
-		rss_key[i] = htobe32(raw_rss_key[nitems(rss_key) - 1 - i]);
-	}
-	t4_write_rss_key(sc, &rss_key[0], -1);
 #endif
 	rss = malloc(vi->rss_size * sizeof (*rss), M_CXGBE, M_ZERO | M_WAITOK);
 	for (i = 0; i < vi->rss_size;) {
@@ -5316,9 +5354,9 @@ cxgbe_sysctls(struct port_info *pi)
 	 * dev.(cxgbe|cxl).X.tc.
 	 */
 	oid = SYSCTL_ADD_NODE(ctx, children, OID_AUTO, "tc", CTLFLAG_RD, NULL,
-	    "Tx scheduler traffic classes");
+	    "Tx scheduler traffic classes (cl_rl)");
 	for (i = 0; i < sc->chip_params->nsched_cls; i++) {
-		struct tx_sched_class *tc = &pi->tc[i];
+		struct tx_cl_rl_params *tc = &pi->sched_params->cl_rl[i];
 
 		snprintf(name, sizeof(name), "%d", i);
 		children2 = SYSCTL_CHILDREN(SYSCTL_ADD_NODE(ctx,
@@ -5849,7 +5887,12 @@ sysctl_autoneg(SYSCTL_HANDLER_ARGS)
 	if ((lc->supported & FW_PORT_CAP_ANEG) == 0)
 		return (ENOTSUP);
 
-	val = val ? AUTONEG_ENABLE : AUTONEG_DISABLE;
+	if (val == 0)
+		val = AUTONEG_DISABLE;
+	else if (val == 1)
+		val = AUTONEG_ENABLE;
+	else
+		return (EINVAL);
 	if (lc->autoneg == val)
 		return (0);	/* no change */
 
@@ -5862,6 +5905,7 @@ sysctl_autoneg(SYSCTL_HANDLER_ARGS)
 	rc = -t4_link_l1cfg(sc, sc->mbox, pi->tx_chan, lc);
 	if (rc != 0)
 		lc->autoneg = old;
+	end_synchronized_op(sc, 0);
 	return (rc);
 }
 
@@ -7833,10 +7877,9 @@ static int
 sysctl_tc_params(SYSCTL_HANDLER_ARGS)
 {
 	struct adapter *sc = arg1;
-	struct tx_sched_class *tc;
-	struct t4_sched_class_params p;
+	struct tx_cl_rl_params tc;
 	struct sbuf *sb;
-	int i, rc, port_id, flags, mbps, gbps;
+	int i, rc, port_id, mbps, gbps;
 
 	rc = sysctl_wire_old_buffer(req, 0);
 	if (rc != 0)
@@ -7851,52 +7894,34 @@ sysctl_tc_params(SYSCTL_HANDLER_ARGS)
 	MPASS(sc->port[port_id] != NULL);
 	i = arg2 & 0xffff;
 	MPASS(i < sc->chip_params->nsched_cls);
-	tc = &sc->port[port_id]->tc[i];
 
-	rc = begin_synchronized_op(sc, NULL, HOLD_LOCK | SLEEP_OK | INTR_OK,
-	    "t4tc_p");
-	if (rc)
-		goto done;
-	flags = tc->flags;
-	p = tc->params;
-	end_synchronized_op(sc, LOCK_HELD);
+	mtx_lock(&sc->tc_lock);
+	tc = sc->port[port_id]->sched_params->cl_rl[i];
+	mtx_unlock(&sc->tc_lock);
 
-	if ((flags & TX_SC_OK) == 0) {
-		sbuf_printf(sb, "none");
+	if (tc.flags & TX_CLRL_ERROR) {
+		sbuf_printf(sb, "error");
 		goto done;
 	}
 
-	if (p.level == SCHED_CLASS_LEVEL_CL_WRR) {
-		sbuf_printf(sb, "cl-wrr weight %u", p.weight);
-		goto done;
-	} else if (p.level == SCHED_CLASS_LEVEL_CL_RL)
-		sbuf_printf(sb, "cl-rl");
-	else if (p.level == SCHED_CLASS_LEVEL_CH_RL)
-		sbuf_printf(sb, "ch-rl");
-	else {
-		rc = ENXIO;
-		goto done;
-	}
-
-	if (p.ratemode == SCHED_CLASS_RATEMODE_REL) {
+	if (tc.ratemode == SCHED_CLASS_RATEMODE_REL) {
 		/* XXX: top speed or actual link speed? */
 		gbps = port_top_speed(sc->port[port_id]);
-		sbuf_printf(sb, " %u%% of %uGbps", p.maxrate, gbps);
-	}
-	else if (p.ratemode == SCHED_CLASS_RATEMODE_ABS) {
-		switch (p.rateunit) {
+		sbuf_printf(sb, " %u%% of %uGbps", tc.maxrate, gbps);
+	} else if (tc.ratemode == SCHED_CLASS_RATEMODE_ABS) {
+		switch (tc.rateunit) {
 		case SCHED_CLASS_RATEUNIT_BITS:
-			mbps = p.maxrate / 1000;
-			gbps = p.maxrate / 1000000;
-			if (p.maxrate == gbps * 1000000)
+			mbps = tc.maxrate / 1000;
+			gbps = tc.maxrate / 1000000;
+			if (tc.maxrate == gbps * 1000000)
 				sbuf_printf(sb, " %uGbps", gbps);
-			else if (p.maxrate == mbps * 1000)
+			else if (tc.maxrate == mbps * 1000)
 				sbuf_printf(sb, " %uMbps", mbps);
 			else
-				sbuf_printf(sb, " %uKbps", p.maxrate);
+				sbuf_printf(sb, " %uKbps", tc.maxrate);
 			break;
 		case SCHED_CLASS_RATEUNIT_PKTS:
-			sbuf_printf(sb, " %upps", p.maxrate);
+			sbuf_printf(sb, " %upps", tc.maxrate);
 			break;
 		default:
 			rc = ENXIO;
@@ -7904,7 +7929,7 @@ sysctl_tc_params(SYSCTL_HANDLER_ARGS)
 		}
 	}
 
-	switch (p.mode) {
+	switch (tc.mode) {
 	case SCHED_CLASS_MODE_CLASS:
 		sbuf_printf(sb, " aggregate");
 		break;
@@ -8806,225 +8831,6 @@ read_i2c(struct adapter *sc, struct t4_i2c_data *i2cd)
 	return (rc);
 }
 
-static int
-in_range(int val, int lo, int hi)
-{
-
-	return (val < 0 || (val <= hi && val >= lo));
-}
-
-static int
-set_sched_class_config(struct adapter *sc, int minmax)
-{
-	int rc;
-
-	if (minmax < 0)
-		return (EINVAL);
-
-	rc = begin_synchronized_op(sc, NULL, SLEEP_OK | INTR_OK, "t4sscc");
-	if (rc)
-		return (rc);
-	rc = -t4_sched_config(sc, FW_SCHED_TYPE_PKTSCHED, minmax, 1);
-	end_synchronized_op(sc, 0);
-
-	return (rc);
-}
-
-static int
-set_sched_class_params(struct adapter *sc, struct t4_sched_class_params *p,
-    int sleep_ok)
-{
-	int rc, top_speed, fw_level, fw_mode, fw_rateunit, fw_ratemode;
-	struct port_info *pi;
-	struct tx_sched_class *tc;
-
-	if (p->level == SCHED_CLASS_LEVEL_CL_RL)
-		fw_level = FW_SCHED_PARAMS_LEVEL_CL_RL;
-	else if (p->level == SCHED_CLASS_LEVEL_CL_WRR)
-		fw_level = FW_SCHED_PARAMS_LEVEL_CL_WRR;
-	else if (p->level == SCHED_CLASS_LEVEL_CH_RL)
-		fw_level = FW_SCHED_PARAMS_LEVEL_CH_RL;
-	else
-		return (EINVAL);
-
-	if (p->mode == SCHED_CLASS_MODE_CLASS)
-		fw_mode = FW_SCHED_PARAMS_MODE_CLASS;
-	else if (p->mode == SCHED_CLASS_MODE_FLOW)
-		fw_mode = FW_SCHED_PARAMS_MODE_FLOW;
-	else
-		return (EINVAL);
-
-	if (p->rateunit == SCHED_CLASS_RATEUNIT_BITS)
-		fw_rateunit = FW_SCHED_PARAMS_UNIT_BITRATE;
-	else if (p->rateunit == SCHED_CLASS_RATEUNIT_PKTS)
-		fw_rateunit = FW_SCHED_PARAMS_UNIT_PKTRATE;
-	else
-		return (EINVAL);
-
-	if (p->ratemode == SCHED_CLASS_RATEMODE_REL)
-		fw_ratemode = FW_SCHED_PARAMS_RATE_REL;
-	else if (p->ratemode == SCHED_CLASS_RATEMODE_ABS)
-		fw_ratemode = FW_SCHED_PARAMS_RATE_ABS;
-	else
-		return (EINVAL);
-
-	/* Vet our parameters ... */
-	if (!in_range(p->channel, 0, sc->chip_params->nchan - 1))
-		return (ERANGE);
-
-	pi = sc->port[sc->chan_map[p->channel]];
-	if (pi == NULL)
-		return (ENXIO);
-	MPASS(pi->tx_chan == p->channel);
-	top_speed = port_top_speed(pi) * 1000000; /* Gbps -> Kbps */
-
-	if (!in_range(p->cl, 0, sc->chip_params->nsched_cls) ||
-	    !in_range(p->minrate, 0, top_speed) ||
-	    !in_range(p->maxrate, 0, top_speed) ||
-	    !in_range(p->weight, 0, 100))
-		return (ERANGE);
-
-	/*
-	 * Translate any unset parameters into the firmware's
-	 * nomenclature and/or fail the call if the parameters
-	 * are required ...
-	 */
-	if (p->rateunit < 0 || p->ratemode < 0 || p->channel < 0 || p->cl < 0)
-		return (EINVAL);
-
-	if (p->minrate < 0)
-		p->minrate = 0;
-	if (p->maxrate < 0) {
-		if (p->level == SCHED_CLASS_LEVEL_CL_RL ||
-		    p->level == SCHED_CLASS_LEVEL_CH_RL)
-			return (EINVAL);
-		else
-			p->maxrate = 0;
-	}
-	if (p->weight < 0) {
-		if (p->level == SCHED_CLASS_LEVEL_CL_WRR)
-			return (EINVAL);
-		else
-			p->weight = 0;
-	}
-	if (p->pktsize < 0) {
-		if (p->level == SCHED_CLASS_LEVEL_CL_RL ||
-		    p->level == SCHED_CLASS_LEVEL_CH_RL)
-			return (EINVAL);
-		else
-			p->pktsize = 0;
-	}
-
-	rc = begin_synchronized_op(sc, NULL,
-	    sleep_ok ? (SLEEP_OK | INTR_OK) : HOLD_LOCK, "t4sscp");
-	if (rc)
-		return (rc);
-	tc = &pi->tc[p->cl];
-	tc->params = *p;
-	rc = -t4_sched_params(sc, FW_SCHED_TYPE_PKTSCHED, fw_level, fw_mode,
-	    fw_rateunit, fw_ratemode, p->channel, p->cl, p->minrate, p->maxrate,
-	    p->weight, p->pktsize, sleep_ok);
-	if (rc == 0)
-		tc->flags |= TX_SC_OK;
-	else {
-		/*
-		 * Unknown state at this point, see tc->params for what was
-		 * attempted.
-		 */
-		tc->flags &= ~TX_SC_OK;
-	}
-	end_synchronized_op(sc, sleep_ok ? 0 : LOCK_HELD);
-
-	return (rc);
-}
-
-int
-t4_set_sched_class(struct adapter *sc, struct t4_sched_params *p)
-{
-
-	if (p->type != SCHED_CLASS_TYPE_PACKET)
-		return (EINVAL);
-
-	if (p->subcmd == SCHED_CLASS_SUBCMD_CONFIG)
-		return (set_sched_class_config(sc, p->u.config.minmax));
-
-	if (p->subcmd == SCHED_CLASS_SUBCMD_PARAMS)
-		return (set_sched_class_params(sc, &p->u.params, 1));
-
-	return (EINVAL);
-}
-
-int
-t4_set_sched_queue(struct adapter *sc, struct t4_sched_queue *p)
-{
-	struct port_info *pi = NULL;
-	struct vi_info *vi;
-	struct sge_txq *txq;
-	uint32_t fw_mnem, fw_queue, fw_class;
-	int i, rc;
-
-	rc = begin_synchronized_op(sc, NULL, SLEEP_OK | INTR_OK, "t4setsq");
-	if (rc)
-		return (rc);
-
-	if (p->port >= sc->params.nports) {
-		rc = EINVAL;
-		goto done;
-	}
-
-	/* XXX: Only supported for the main VI. */
-	pi = sc->port[p->port];
-	vi = &pi->vi[0];
-	if (!(vi->flags & VI_INIT_DONE)) {
-		/* tx queues not set up yet */
-		rc = EAGAIN;
-		goto done;
-	}
-
-	if (!in_range(p->queue, 0, vi->ntxq - 1) ||
-	    !in_range(p->cl, 0, sc->chip_params->nsched_cls - 1)) {
-		rc = EINVAL;
-		goto done;
-	}
-
-	/*
-	 * Create a template for the FW_PARAMS_CMD mnemonic and value (TX
-	 * Scheduling Class in this case).
-	 */
-	fw_mnem = (V_FW_PARAMS_MNEM(FW_PARAMS_MNEM_DMAQ) |
-	    V_FW_PARAMS_PARAM_X(FW_PARAMS_PARAM_DMAQ_EQ_SCHEDCLASS_ETH));
-	fw_class = p->cl < 0 ? 0xffffffff : p->cl;
-
-	/*
-	 * If op.queue is non-negative, then we're only changing the scheduling
-	 * on a single specified TX queue.
-	 */
-	if (p->queue >= 0) {
-		txq = &sc->sge.txq[vi->first_txq + p->queue];
-		fw_queue = (fw_mnem | V_FW_PARAMS_PARAM_YZ(txq->eq.cntxt_id));
-		rc = -t4_set_params(sc, sc->mbox, sc->pf, 0, 1, &fw_queue,
-		    &fw_class);
-		goto done;
-	}
-
-	/*
-	 * Change the scheduling on all the TX queues for the
-	 * interface.
-	 */
-	for_each_txq(vi, i, txq) {
-		fw_queue = (fw_mnem | V_FW_PARAMS_PARAM_YZ(txq->eq.cntxt_id));
-		rc = -t4_set_params(sc, sc->mbox, sc->pf, 0, 1, &fw_queue,
-		    &fw_class);
-		if (rc)
-			goto done;
-	}
-
-	rc = 0;
-done:
-	end_synchronized_op(sc, 0);
-	return (rc);
-}
-
 int
 t4_os_find_pci_capability(struct adapter *sc, int cap)
 {
@@ -9538,6 +9344,22 @@ uld_active(struct adapter *sc, int uld_id)
 #endif
 
 /*
+ * t  = ptr to tunable.
+ * nc = number of CPUs.
+ * c  = compiled in default for that tunable.
+ */
+static void
+calculate_nqueues(int *t, int nc, const int c)
+{
+	int nq;
+
+	if (*t > 0)
+		return;
+	nq = *t < 0 ? -*t : c;
+	*t = min(nc, nq);
+}
+
+/*
  * Come up with reasonable defaults for some of the tunables, provided they're
  * not set by the user (in which case we'll use the values as is).
  */
@@ -9550,7 +9372,7 @@ tweak_tunables(void)
 #ifdef RSS
 		t4_ntxq10g = rss_getnumbuckets();
 #else
-		t4_ntxq10g = min(nc, NTXQ_10G);
+		calculate_nqueues(&t4_ntxq10g, nc, NTXQ_10G);
 #endif
 	}
 
@@ -9559,18 +9381,17 @@ tweak_tunables(void)
 		/* XXX: way too many for 1GbE? */
 		t4_ntxq1g = rss_getnumbuckets();
 #else
-		t4_ntxq1g = min(nc, NTXQ_1G);
+		calculate_nqueues(&t4_ntxq1g, nc, NTXQ_1G);
 #endif
 	}
 
-	if (t4_ntxq_vi < 1)
-		t4_ntxq_vi = min(nc, NTXQ_VI);
+	calculate_nqueues(&t4_ntxq_vi, nc, NTXQ_VI);
 
 	if (t4_nrxq10g < 1) {
 #ifdef RSS
 		t4_nrxq10g = rss_getnumbuckets();
 #else
-		t4_nrxq10g = min(nc, NRXQ_10G);
+		calculate_nqueues(&t4_nrxq10g, nc, NRXQ_10G);
 #endif
 	}
 
@@ -9579,31 +9400,19 @@ tweak_tunables(void)
 		/* XXX: way too many for 1GbE? */
 		t4_nrxq1g = rss_getnumbuckets();
 #else
-		t4_nrxq1g = min(nc, NRXQ_1G);
+		calculate_nqueues(&t4_nrxq1g, nc, NRXQ_1G);
 #endif
 	}
 
-	if (t4_nrxq_vi < 1)
-		t4_nrxq_vi = min(nc, NRXQ_VI);
+	calculate_nqueues(&t4_nrxq_vi, nc, NRXQ_VI);
 
 #ifdef TCP_OFFLOAD
-	if (t4_nofldtxq10g < 1)
-		t4_nofldtxq10g = min(nc, NOFLDTXQ_10G);
-
-	if (t4_nofldtxq1g < 1)
-		t4_nofldtxq1g = min(nc, NOFLDTXQ_1G);
-
-	if (t4_nofldtxq_vi < 1)
-		t4_nofldtxq_vi = min(nc, NOFLDTXQ_VI);
-
-	if (t4_nofldrxq10g < 1)
-		t4_nofldrxq10g = min(nc, NOFLDRXQ_10G);
-
-	if (t4_nofldrxq1g < 1)
-		t4_nofldrxq1g = min(nc, NOFLDRXQ_1G);
-
-	if (t4_nofldrxq_vi < 1)
-		t4_nofldrxq_vi = min(nc, NOFLDRXQ_VI);
+	calculate_nqueues(&t4_nofldtxq10g, nc, NOFLDTXQ_10G);
+	calculate_nqueues(&t4_nofldtxq1g, nc, NOFLDTXQ_1G);
+	calculate_nqueues(&t4_nofldtxq_vi, nc, NOFLDTXQ_VI);
+	calculate_nqueues(&t4_nofldrxq10g, nc, NOFLDRXQ_10G);
+	calculate_nqueues(&t4_nofldrxq1g, nc, NOFLDRXQ_1G);
+	calculate_nqueues(&t4_nofldrxq_vi, nc, NOFLDRXQ_VI);
 
 	if (t4_toecaps_allowed == -1)
 		t4_toecaps_allowed = FW_CAPS_CONFIG_TOE;
@@ -9630,11 +9439,8 @@ tweak_tunables(void)
 #endif
 
 #ifdef DEV_NETMAP
-	if (t4_nnmtxq_vi < 1)
-		t4_nnmtxq_vi = min(nc, NNMTXQ_VI);
-
-	if (t4_nnmrxq_vi < 1)
-		t4_nnmrxq_vi = min(nc, NNMRXQ_VI);
+	calculate_nqueues(&t4_nnmtxq_vi, nc, NNMTXQ_VI);
+	calculate_nqueues(&t4_nnmrxq_vi, nc, NNMRXQ_VI);
 #endif
 
 	if (t4_tmr_idx_10g < 0 || t4_tmr_idx_10g >= SGE_NTIMERS)

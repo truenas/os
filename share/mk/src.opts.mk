@@ -76,12 +76,14 @@ __DEFAULT_YES_OPTIONS = \
     CTM \
     CUSE \
     CXX \
+    DIALOG \
     DICT \
     DMAGENT \
     DYNAMICROOT \
     ED_CRYPTO \
     EE \
     ELFCOPY_AS_OBJCOPY \
+    EFI \
     ELFTOOLCHAIN_BOOTSTRAP \
     EXAMPLES \
     FDT \
@@ -188,6 +190,7 @@ __DEFAULT_NO_OPTIONS = \
     OFED \
     OPENLDAP \
     REPRODUCIBLE_BUILD \
+    RPCBIND_WARMSTART_SUPPORT \
     SHARED_TOOLCHAIN \
     SORT_THREADS \
     SVN \
@@ -247,9 +250,9 @@ BROKEN_OPTIONS+=TESTS   # "undefined reference to `_Unwind_Resume'"
 BROKEN_OPTIONS+=CXX     # "libcxxrt.so: undefined reference to `_Unwind_Resume_or_Rethrow'"
 .endif
 .if ${__T} == "aarch64"
-__DEFAULT_YES_OPTIONS+=LLD_IS_LD
+__DEFAULT_YES_OPTIONS+=LLD_BOOTSTRAP LLD_IS_LD
 .else
-__DEFAULT_NO_OPTIONS+=LLD_IS_LD
+__DEFAULT_NO_OPTIONS+=LLD_BOOTSTRAP LLD_IS_LD
 .endif
 .if ${__T} == "aarch64" || ${__T} == "amd64"
 __DEFAULT_YES_OPTIONS+=LLDB
@@ -263,6 +266,16 @@ BROKEN_OPTIONS+=LLDB
 # Only doing soft float API stuff on armv6
 .if ${__T} != "armv6"
 BROKEN_OPTIONS+=LIBSOFT
+.endif
+.if ${__T:Mmips*} || ${__T:Mpowerpc*} || ${__T:Msparc64} || ${__T:Mriscv*}
+BROKEN_OPTIONS+=EFI
+.endif
+
+.if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "i386" || \
+    ${__T} == "powerpc64" || ${__T} == "sparc64"
+__DEFAULT_YES_OPTIONS+=CXGBETOOL
+.else
+__DEFAULT_NO_OPTIONS+=CXGBETOOL
 .endif
 
 .include <bsd.mkopt.mk>
@@ -306,16 +319,6 @@ MK_LDNS_UTILS:=	no
 MK_UNBOUND:= no
 .endif
 
-.if ${MK_LLD} == "no"
-MK_LLD_IS_LD:=	no
-.endif
-
-# LLD requires LLVM libraries, and we do not yet compare in-tree and host LLD
-# versions to avoid building it if they are identical.
-.if ${MK_LLD_IS_LD} != "no"
-MK_SYSTEM_COMPILER:=	no
-.endif
-
 .if ${MK_SOURCELESS} == "no"
 MK_SOURCELESS_HOST:=	no
 MK_SOURCELESS_UCODE:= no
@@ -336,6 +339,10 @@ MK_KERBEROS:=	no
 MK_CLANG:=	no
 MK_GROFF:=	no
 MK_GNUCXX:=	no
+.endif
+
+.if ${MK_DIALOG} == "no"
+MK_BSDINSTALL:=	no
 .endif
 
 .if ${MK_MAIL} == "no"
@@ -383,6 +390,7 @@ MK_CLANG:=	no
 MK_GCC:=	no
 MK_GDB:=	no
 MK_INCLUDES:=	no
+MK_LLD:=	no
 MK_LLDB:=	no
 .endif
 

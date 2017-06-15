@@ -59,7 +59,6 @@ UNIMPLEMENTED(tuxcall);
 UNIMPLEMENTED(uselib);
 UNIMPLEMENTED(vserver);
 
-DUMMY(mincore);
 DUMMY(sendfile);
 DUMMY(syslog);
 DUMMY(setfsuid);
@@ -135,7 +134,6 @@ DUMMY(sched_getattr);
 DUMMY(renameat2);
 /* linux 3.15: */
 DUMMY(seccomp);
-DUMMY(getrandom);
 DUMMY(memfd_create);
 DUMMY(kexec_file_load);
 /* linux 3.18: */

@@ -82,7 +82,6 @@ DUMMY(sendfile);		/* different semantics */
 DUMMY(setfsuid);
 DUMMY(setfsgid);
 DUMMY(pivot_root);
-DUMMY(mincore);
 DUMMY(lookup_dcookie);
 DUMMY(remap_file_pages);
 DUMMY(mbind);
@@ -140,7 +139,6 @@ DUMMY(sched_getattr);
 DUMMY(renameat2);
 /* linux 3.15: */
 DUMMY(seccomp);
-DUMMY(getrandom);
 DUMMY(memfd_create);
 /* linux 3.18: */
 DUMMY(bpf);

@@ -433,6 +433,7 @@ MAN=	aac.4 \
 	ral.4 \
 	random.4 \
 	rc.4 \
+	rctl.4 \
 	re.4 \
 	rgephy.4 \
 	rights.4 \
@@ -540,6 +541,8 @@ MAN=	aac.4 \
 	tws.4 \
 	tx.4 \
 	txp.4 \
+	udp.4 \
+	udplite.4 \
 	ure.4 \
 	vale.4 \
 	vga.4 \
@@ -894,6 +897,7 @@ _dtrace_udp.4=	dtrace_udp.4
 .endif
 
 .if ${MK_ISCSI} != "no"
+MAN+=		cfiscsi.4
 MAN+=		iscsi.4
 MAN+=		iscsi_initiator.4
 MAN+=		iser.4
@@ -934,8 +938,6 @@ MAN+=	\
 	ucycom.4 \
 	udav.4 \
 	udbp.4 \
-	udp.4 \
-	udplite.4 \
 	udl.4 \
 	uep.4 \
 	ufm.4 \

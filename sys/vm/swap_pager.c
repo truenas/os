@@ -115,9 +115,8 @@ __FBSDID("$FreeBSD$");
 #include <geom/geom.h>
 
 /*
- * SWB_NPAGES must be a power of 2.  It may be set to 1, 2, 4, 8, 16
- * or 32 pages per allocation.
- * The 32-page limit is due to the radix code (kern/subr_blist.c).
+ * MAX_PAGEOUT_CLUSTER must be a power of 2 between 1 and 64.
+ * The 64-page limit is due to the radix code (kern/subr_blist.c).
  */
 #ifndef MAX_PAGEOUT_CLUSTER
 #define MAX_PAGEOUT_CLUSTER 16
@@ -380,18 +379,14 @@ struct pagerops swappagerops = {
 };
 
 /*
- * dmmax is in page-sized chunks with the new swap system.  It was
- * dev-bsized chunks in the old.  dmmax is always a power of 2.
- *
  * swap_*() routines are externally accessible.  swp_*() routines are
  * internal.
  */
-static int dmmax;
 static int nswap_lowat = 128;	/* in pages, swap_pager_almost_full warn */
 static int nswap_hiwat = 512;	/* in pages, swap_pager_almost_full warn */
 
-SYSCTL_INT(_vm, OID_AUTO, dmmax, CTLFLAG_RD, &dmmax, 0,
-    "Maximum size of a swap block");
+SYSCTL_INT(_vm, OID_AUTO, dmmax, CTLFLAG_RD, &nsw_cluster_max, 0,
+    "Maximum size of a swap block in pages");
 
 static void	swp_sizecheck(void);
 static void	swp_pager_async_iodone(struct buf *bp);
@@ -488,11 +483,6 @@ swap_pager_init(void)
 	mtx_init(&sw_dev_mtx, "swapdev", NULL, MTX_DEF);
 	sx_init(&sw_alloc_sx, "swspsx");
 	sx_init(&swdev_syscall_lock, "swsysc");
-
-	/*
-	 * Device Stripe, in PAGE_SIZE'd blocks
-	 */
-	dmmax = SWB_NPAGES * 2;
 }
 
 /*
@@ -1126,7 +1116,7 @@ swap_pager_getpages(vm_object_t object, vm_page_t *m, int count, int *rbehind,
 	if (shift != 0) {
 		for (i = 1; i <= shift; i++) {
 			p = vm_page_alloc(object, m[0]->pindex - i,
-			    VM_ALLOC_NORMAL | VM_ALLOC_IFNOTCACHED);
+			    VM_ALLOC_NORMAL);
 			if (p == NULL) {
 				/* Shift allocated pages to the left. */
 				for (j = 0; j < i - 1; j++)
@@ -1144,8 +1134,7 @@ swap_pager_getpages(vm_object_t object, vm_page_t *m, int count, int *rbehind,
 	if (rahead != NULL) {
 		for (i = 0; i < *rahead; i++) {
 			p = vm_page_alloc(object,
-			    m[reqcount - 1]->pindex + i + 1,
-			    VM_ALLOC_NORMAL | VM_ALLOC_IFNOTCACHED);
+			    m[reqcount - 1]->pindex + i + 1, VM_ALLOC_NORMAL);
 			if (p == NULL)
 				break;
 			bp->b_pages[shift + reqcount + i] = p;
@@ -1549,17 +1538,18 @@ swp_pager_async_iodone(struct buf *bp)
 			 * For write success, clear the dirty
 			 * status, then finish the I/O ( which decrements the
 			 * busy count and possibly wakes waiter's up ).
+			 * A page is only written to swap after a period of
+			 * inactivity.  Therefore, we do not expect it to be
+			 * reused.
 			 */
 			KASSERT(!pmap_page_is_write_mapped(m),
 			    ("swp_pager_async_iodone: page %p is not write"
 			    " protected", m));
 			vm_page_undirty(m);
+			vm_page_lock(m);
+			vm_page_deactivate_noreuse(m);
+			vm_page_unlock(m);
 			vm_page_sunbusy(m);
-			if (vm_page_count_severe()) {
-				vm_page_lock(m);
-				vm_page_try_to_cache(m);
-				vm_page_unlock(m);
-			}
 		}
 	}
 
@@ -1635,12 +1625,15 @@ swap_pager_isswapped(vm_object_t object, struct swdevt *sp)
 /*
  * SWP_PAGER_FORCE_PAGEIN() - force a swap block to be paged in
  *
- *	This routine dissociates the page at the given index within a
- *	swap block from its backing store, paging it in if necessary.
- *	If the page is paged in, it is placed in the inactive queue,
- *	since it had its backing store ripped out from under it.
- *	We also attempt to swap in all other pages in the swap block,
- *	we only guarantee that the one at the specified index is
+ *	This routine dissociates the page at the given index within an object
+ *	from its backing store, paging it in if it does not reside in memory.
+ *	If the page is paged in, it is marked dirty and placed in the laundry
+ *	queue.  The page is marked dirty because it no longer has backing
+ *	store.  It is placed in the laundry queue because it has not been
+ *	accessed recently.  Otherwise, it would already reside in memory.
+ *
+ *	We also attempt to swap in all other pages in the swap block.
+ *	However, we only guarantee that the one at the specified index is
  *	paged in.
  *
  *	XXX - The code to page the whole block in doesn't work, so we
@@ -1669,7 +1662,7 @@ swp_pager_force_pagein(vm_object_t object, vm_pindex_t pindex)
 	vm_object_pip_wakeup(object);
 	vm_page_dirty(m);
 	vm_page_lock(m);
-	vm_page_deactivate(m);
+	vm_page_launder(m);
 	vm_page_unlock(m);
 	vm_page_xunbusy(m);
 	vm_pager_page_unswapped(m);
@@ -2201,7 +2194,7 @@ swaponsomething(struct vnode *vp, void *id, u_long nblks,
 	sp->sw_end = dvbase + nblks;
 	TAILQ_INSERT_TAIL(&swtailq, sp, sw_list);
 	nswapdev++;
-	swap_pager_avail += nblks;
+	swap_pager_avail += nblks - 2;
 	swap_total += (vm_ooffset_t)nblks * PAGE_SIZE;
 	swapon_check_swzone(swap_total / PAGE_SIZE);
 	swp_sizecheck();
@@ -2268,7 +2261,7 @@ done:
 static int
 swapoff_one(struct swdevt *sp, struct ucred *cred)
 {
-	u_long nblks, dvbase;
+	u_long nblks;
 #ifdef MAC
 	int error;
 #endif
@@ -2299,10 +2292,7 @@ swapoff_one(struct swdevt *sp, struct ucred *cred)
 	 */
 	mtx_lock(&sw_dev_mtx);
 	sp->sw_flags |= SW_CLOSING;
-	for (dvbase = 0; dvbase < sp->sw_end; dvbase += dmmax) {
-		swap_pager_avail -= blist_fill(sp->sw_blist,
-		     dvbase, dmmax);
-	}
+	swap_pager_avail -= blist_fill(sp->sw_blist, 0, nblks);
 	swap_total -= (vm_ooffset_t)nblks * PAGE_SIZE;
 	mtx_unlock(&sw_dev_mtx);
 

@@ -16,6 +16,25 @@ __<bsd.init.mk>__:
 .include <bsd.own.mk>
 .MAIN: all
 
+# Handle INSTALL_AS_USER here to maximize the chance that
+# it has final authority over fooOWN and fooGRP.
+.if ${MK_INSTALL_AS_USER} != "no"
+.if !defined(_uid)
+_uid!=	id -u
+.export _uid
+.endif
+.if ${_uid} != 0
+.if !defined(_gid)
+_gid!=	id -g
+.export _gid
+.endif
+.for x in BIN CONF DOC DTB INFO KMOD LIB MAN NLS SHARE
+$xOWN=	${_uid}
+$xGRP=	${_gid}
+.endfor
+.endif
+.endif
+
 # Some targets need to know when something may build.  This is used to
 # optimize targets that are only needed when building something, such as
 # (not) reading in depend files.  For DIRDEPS_BUILD, it will only calculate
@@ -29,7 +48,7 @@ __<bsd.init.mk>__:
 .if ${MK_DIRDEPS_BUILD} == "yes" && ${.MAKE.LEVEL:U1} == 0 && \
     ${BUILD_AT_LEVEL0:Uyes:tl} == "no" && !make(clean*)
 _SKIP_BUILD=	not building at level 0
-.elseif !empty(.MAKEFLAGS:M-V${_V_DO_BUILD}) || \
+.elif !empty(.MAKEFLAGS:M-V${_V_DO_BUILD}) || \
     ${.TARGETS:M*install*} == ${.TARGETS} || \
     make(clean*) || make(obj) || make(analyze) || make(print-dir) || \
     make(destroy*)

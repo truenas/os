@@ -225,6 +225,8 @@ ip6_fragment(struct ifnet *ifp, struct mbuf *m0, int hlen, u_char nextproto,
 	int error;
 	int tlen = m0->m_pkthdr.len;
 
+	KASSERT(( mtu % 8 == 0), ("Fragment length must be a multiple of 8"));
+
 	m = m0;
 	ip6 = mtod(m, struct ip6_hdr *);
 	mnext = &m->m_nextpkt;
@@ -322,6 +324,7 @@ ip6_output(struct mbuf *m0, struct ip6_pktopts *opt,
 	uint32_t id;
 
 	if (inp != NULL) {
+		INP_LOCK_ASSERT(inp);
 		M_SETFIB(m, inp->inp_inc.inc_fibnum);
 		if ((flags & IP_NODEFAULTFLOWID) == 0) {
 			/* unconditionally set flowid */

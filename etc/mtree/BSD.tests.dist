@@ -316,6 +316,8 @@
         ..
         libdevdctl
         ..
+        libkvm
+        ..
         libmp
         ..
         libnv
@@ -592,6 +594,8 @@
         ..
         cmp
         ..
+        compress
+        ..
         cpio
         ..
         col
@@ -603,6 +607,8 @@
         dirname
         ..
         file2c
+        ..
+        getconf
         ..
         grep
         ..
@@ -625,6 +631,8 @@
         ncal
         ..
         opensm
+        ..
+        pr
         ..
         printf
         ..

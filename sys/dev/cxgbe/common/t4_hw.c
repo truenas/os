@@ -4332,7 +4332,8 @@ static void mem_intr_handler(struct adapter *adapter, int idx)
 	if (v & F_ECC_CE_INT_CAUSE) {
 		u32 cnt = G_ECC_CECNT(t4_read_reg(adapter, cnt_addr));
 
-		t4_edc_err_read(adapter, idx);
+		if (idx <= MEM_EDC1)
+			t4_edc_err_read(adapter, idx);
 
 		t4_write_reg(adapter, cnt_addr, V_ECC_CECNT(M_ECC_CECNT));
 		CH_WARN_RATELIMIT(adapter,
@@ -7906,7 +7907,7 @@ int t4_init_sge_params(struct adapter *adapter)
 {
 	u32 r;
 	struct sge_params *sp = &adapter->params.sge;
-	unsigned i;
+	unsigned i, tscale = 1;
 
 	r = t4_read_reg(adapter, A_SGE_INGRESS_RX_THRESHOLD);
 	sp->counter_val[0] = G_THRESHOLD_0(r);
@@ -7914,15 +7915,24 @@ int t4_init_sge_params(struct adapter *adapter)
 	sp->counter_val[2] = G_THRESHOLD_2(r);
 	sp->counter_val[3] = G_THRESHOLD_3(r);
 
+	if (chip_id(adapter) >= CHELSIO_T6) {
+		r = t4_read_reg(adapter, A_SGE_ITP_CONTROL);
+		tscale = G_TSCALE(r);
+		if (tscale == 0)
+			tscale = 1;
+		else
+			tscale += 2;
+	}
+
 	r = t4_read_reg(adapter, A_SGE_TIMER_VALUE_0_AND_1);
-	sp->timer_val[0] = core_ticks_to_us(adapter, G_TIMERVALUE0(r));
-	sp->timer_val[1] = core_ticks_to_us(adapter, G_TIMERVALUE1(r));
+	sp->timer_val[0] = core_ticks_to_us(adapter, G_TIMERVALUE0(r)) * tscale;
+	sp->timer_val[1] = core_ticks_to_us(adapter, G_TIMERVALUE1(r)) * tscale;
 	r = t4_read_reg(adapter, A_SGE_TIMER_VALUE_2_AND_3);
-	sp->timer_val[2] = core_ticks_to_us(adapter, G_TIMERVALUE2(r));
-	sp->timer_val[3] = core_ticks_to_us(adapter, G_TIMERVALUE3(r));
+	sp->timer_val[2] = core_ticks_to_us(adapter, G_TIMERVALUE2(r)) * tscale;
+	sp->timer_val[3] = core_ticks_to_us(adapter, G_TIMERVALUE3(r)) * tscale;
 	r = t4_read_reg(adapter, A_SGE_TIMER_VALUE_4_AND_5);
-	sp->timer_val[4] = core_ticks_to_us(adapter, G_TIMERVALUE4(r));
-	sp->timer_val[5] = core_ticks_to_us(adapter, G_TIMERVALUE5(r));
+	sp->timer_val[4] = core_ticks_to_us(adapter, G_TIMERVALUE4(r)) * tscale;
+	sp->timer_val[5] = core_ticks_to_us(adapter, G_TIMERVALUE5(r)) * tscale;
 
 	r = t4_read_reg(adapter, A_SGE_CONM_CTRL);
 	sp->fl_starve_threshold = G_EGRTHRESHOLD(r) * 2 + 1;
@@ -9380,6 +9390,79 @@ int t4_sched_params(struct adapter *adapter, int type, int level, int mode,
 	cmd.u.params.min = cpu_to_be32(minrate);
 	cmd.u.params.max = cpu_to_be32(maxrate);
 	cmd.u.params.weight = cpu_to_be16(weight);
+	cmd.u.params.pktsize = cpu_to_be16(pktsize);
+
+	return t4_wr_mbox_meat(adapter,adapter->mbox, &cmd, sizeof(cmd),
+			       NULL, sleep_ok);
+}
+
+int t4_sched_params_ch_rl(struct adapter *adapter, int channel, int ratemode,
+    unsigned int maxrate, int sleep_ok)
+{
+	struct fw_sched_cmd cmd;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.op_to_write = cpu_to_be32(V_FW_CMD_OP(FW_SCHED_CMD) |
+				      F_FW_CMD_REQUEST |
+				      F_FW_CMD_WRITE);
+	cmd.retval_len16 = cpu_to_be32(FW_LEN16(cmd));
+
+	cmd.u.params.sc = FW_SCHED_SC_PARAMS;
+	cmd.u.params.type = FW_SCHED_TYPE_PKTSCHED;
+	cmd.u.params.level = FW_SCHED_PARAMS_LEVEL_CH_RL;
+	cmd.u.params.ch = channel;
+	cmd.u.params.rate = ratemode;		/* REL or ABS */
+	cmd.u.params.max = cpu_to_be32(maxrate);/*  %  or kbps */
+
+	return t4_wr_mbox_meat(adapter,adapter->mbox, &cmd, sizeof(cmd),
+			       NULL, sleep_ok);
+}
+
+int t4_sched_params_cl_wrr(struct adapter *adapter, int channel, int cl,
+    int weight, int sleep_ok)
+{
+	struct fw_sched_cmd cmd;
+
+	if (weight < 0 || weight > 100)
+		return -EINVAL;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.op_to_write = cpu_to_be32(V_FW_CMD_OP(FW_SCHED_CMD) |
+				      F_FW_CMD_REQUEST |
+				      F_FW_CMD_WRITE);
+	cmd.retval_len16 = cpu_to_be32(FW_LEN16(cmd));
+
+	cmd.u.params.sc = FW_SCHED_SC_PARAMS;
+	cmd.u.params.type = FW_SCHED_TYPE_PKTSCHED;
+	cmd.u.params.level = FW_SCHED_PARAMS_LEVEL_CL_WRR;
+	cmd.u.params.ch = channel;
+	cmd.u.params.cl = cl;
+	cmd.u.params.weight = cpu_to_be16(weight);
+
+	return t4_wr_mbox_meat(adapter,adapter->mbox, &cmd, sizeof(cmd),
+			       NULL, sleep_ok);
+}
+
+int t4_sched_params_cl_rl_kbps(struct adapter *adapter, int channel, int cl,
+    int mode, unsigned int maxrate, int pktsize, int sleep_ok)
+{
+	struct fw_sched_cmd cmd;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.op_to_write = cpu_to_be32(V_FW_CMD_OP(FW_SCHED_CMD) |
+				      F_FW_CMD_REQUEST |
+				      F_FW_CMD_WRITE);
+	cmd.retval_len16 = cpu_to_be32(FW_LEN16(cmd));
+
+	cmd.u.params.sc = FW_SCHED_SC_PARAMS;
+	cmd.u.params.type = FW_SCHED_TYPE_PKTSCHED;
+	cmd.u.params.level = FW_SCHED_PARAMS_LEVEL_CL_RL;
+	cmd.u.params.mode = mode;
+	cmd.u.params.ch = channel;
+	cmd.u.params.cl = cl;
+	cmd.u.params.unit = FW_SCHED_PARAMS_UNIT_BITRATE;
+	cmd.u.params.rate = FW_SCHED_PARAMS_RATE_ABS;
+	cmd.u.params.max = cpu_to_be32(maxrate);
 	cmd.u.params.pktsize = cpu_to_be16(pktsize);
 
 	return t4_wr_mbox_meat(adapter,adapter->mbox, &cmd, sizeof(cmd),

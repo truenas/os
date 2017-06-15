@@ -83,6 +83,8 @@ int	kern_clock_getres(struct thread *td, clockid_t clock_id,
 	    struct timespec *ts);
 int	kern_clock_gettime(struct thread *td, clockid_t clock_id,
 	    struct timespec *ats);
+int	kern_clock_nanosleep(struct thread *td, clockid_t clock_id, int flags,
+	    const struct timespec *rqtp, struct timespec *rmtp);
 int	kern_clock_settime(struct thread *td, clockid_t clock_id,
 	    struct timespec *ats);
 int	kern_close(struct thread *td, int fd);
@@ -151,6 +153,7 @@ int	kern_lseek(struct thread *td, int fd, off_t offset, int whence);
 int	kern_lutimes(struct thread *td, char *path, enum uio_seg pathseg,
 	    struct timeval *tptr, enum uio_seg tptrseg);
 int	kern_madvise(struct thread *td, uintptr_t addr, size_t len, int behav);
+int	kern_mincore(struct thread *td, uintptr_t addr, size_t len, char *vec);
 int	kern_mkdirat(struct thread *td, int fd, char *path,
 	    enum uio_seg segflg, int mode);
 int	kern_mkfifoat(struct thread *td, int fd, char *path,
@@ -249,6 +252,8 @@ int	kern_sigprocmask(struct thread *td, int how,
 int	kern_sigsuspend(struct thread *td, sigset_t mask);
 int	kern_sigtimedwait(struct thread *td, sigset_t waitset,
 	    struct ksiginfo *ksi, struct timespec *timeout);
+int	kern_sigqueue(struct thread *td, pid_t pid, int signum,
+	    union sigval *value);
 int	kern_socket(struct thread *td, int domain, int type, int protocol);
 int	kern_statat(struct thread *td, int flag, int fd, char *path,
 	    enum uio_seg pathseg, struct stat *sbp,

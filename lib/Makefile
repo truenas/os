@@ -46,9 +46,9 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libdevdctl \
 	libdevinfo \
 	libdevstat \
-	libdpv \
 	libdwarf \
 	libedit \
+	${_libefivar} \
 	${_libelftc} \
 	libevent \
 	libexecinfo \
@@ -192,6 +192,8 @@ _libelftc=	libelftc
 _libpe=		libpe
 .endif
 
+SUBDIR.${MK_DIALOG}+=	libdpv
+
 .if ${MK_FILE} != "no"
 _libmagic=	libmagic
 .endif
@@ -230,6 +232,10 @@ _libclang_rt=	libclang_rt
 .if ${MK_LIBCPLUSPLUS} != "no"
 _libcxxrt=	libcxxrt
 _libcplusplus=	libc++
+.endif
+
+.if ${MK_EFI} != "no"
+_libefivar=	libefivar
 .endif
 
 .if ${MK_LIBTHR} != "no"

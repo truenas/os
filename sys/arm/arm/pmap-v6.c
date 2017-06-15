@@ -497,6 +497,42 @@ pmap_set_tex(void)
 }
 
 /*
+ * Remap one vm_meattr class to another one. This can be useful as
+ * workaround for SOC errata, e.g. if devices must be accessed using
+ * SO memory class.
+ *
+ * !!! Please note that this function is absolutely last resort thing.
+ * It should not be used under normal circumstances. !!!
+ *
+ * Usage rules:
+ * - it shall be called after pmap_bootstrap_prepare() and before
+ *   cpu_mp_start() (thus only on boot CPU). In practice, it's expected
+ *   to be called from platform_attach() or platform_late_init().
+ *
+ * - if remapping doesn't change caching mode, or until uncached class
+ *   is remapped to any kind of cached one, then no other restriction exists.
+ *
+ * - if pmap_remap_vm_attr() changes caching mode, but both (original and
+ *   remapped) remain cached, then caller is resposible for calling
+ *   of dcache_wbinv_poc_all().
+ *
+ * - remapping of any kind of cached class to uncached is not permitted.
+ */
+void
+pmap_remap_vm_attr(vm_memattr_t old_attr, vm_memattr_t new_attr)
+{
+	int old_idx, new_idx;
+	
+	/* Map VM memattrs to indexes to tex_class table. */
+	old_idx = pte2_attr_tab[(int)old_attr];
+	new_idx = pte2_attr_tab[(int)new_attr];
+	
+	/* Replace TEX attribute and apply it. */
+	tex_class[old_idx] = tex_class[new_idx];
+	pmap_set_tex();
+}
+
+/*
  * KERNBASE must be multiple of NPT2_IN_PG * PTE1_SIZE. In other words,
  * KERNBASE is mapped by first L2 page table in L2 page table page. It
  * meets same constrain due to PT2MAP being placed just under KERNBASE.
@@ -2746,31 +2782,25 @@ SYSCTL_INT(_vm_pmap, OID_AUTO, pv_entry_spare, CTLFLAG_RD, &pv_entry_spare, 0,
 /*
  *  Is given page managed?
  */
-static __inline boolean_t
+static __inline bool
 is_managed(vm_paddr_t pa)
 {
-	vm_offset_t pgnum;
 	vm_page_t m;
 
-	pgnum = atop(pa);
-	if (pgnum >= first_page) {
-		m = PHYS_TO_VM_PAGE(pa);
-		if (m == NULL)
-			return (FALSE);
-		if ((m->oflags & VPO_UNMANAGED) == 0)
-			return (TRUE);
-	}
-	return (FALSE);
+	m = PHYS_TO_VM_PAGE(pa);
+	if (m == NULL)
+		return (false);
+	return ((m->oflags & VPO_UNMANAGED) == 0);
 }
 
-static __inline boolean_t
+static __inline bool
 pte1_is_managed(pt1_entry_t pte1)
 {
 
 	return (is_managed(pte1_pa(pte1)));
 }
 
-static __inline boolean_t
+static __inline bool
 pte2_is_managed(pt2_entry_t pte2)
 {
 
@@ -6148,7 +6178,7 @@ pmap_mincore(pmap_t pmap, vm_offset_t addr, vm_paddr_t *locked_pa)
 	pt1_entry_t *pte1p, pte1;
 	pt2_entry_t *pte2p, pte2;
 	vm_paddr_t pa;
-	boolean_t managed;
+	bool managed;
 	int val;
 
 	PMAP_LOCK(pmap);
@@ -6175,7 +6205,7 @@ retry:
 		if (pte2 & PTE2_A)
 			val |= MINCORE_REFERENCED | MINCORE_REFERENCED_OTHER;
 	} else {
-		managed = FALSE;
+		managed = false;
 		val = 0;
 	}
 	if ((val & (MINCORE_MODIFIED_OTHER | MINCORE_REFERENCED_OTHER)) !=

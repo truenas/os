@@ -40,6 +40,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -139,6 +140,8 @@ set_restore_flags(struct cam_device *device, uint8_t *flags, int set_flag,
 	 * Create the control page at the correct point in the mode_buf, it
 	 * starts after the header and the blk description.
 	 */
+	assert(hdr_and_blk_length <=
+	    sizeof(mode_buf) - sizeof(struct scsi_control_ext_page));
 	control_page = (struct scsi_control_ext_page *)&mode_buf
 	    [hdr_and_blk_length];
 	if (set_flag != 0) {
@@ -241,6 +244,7 @@ report_timestamp(struct cam_device *device, uint64_t *ts, int task_attr,
 bailout:
 	if (ccb != NULL)
 		cam_freeccb(ccb);
+	free(report_buf);
 
 	return error;
 }
@@ -278,12 +282,18 @@ set_timestamp(struct cam_device *device, char *format_string,
 		ts = (uint64_t) time_value;
 	} else {
 		bzero(&time_struct, sizeof(struct tm));
-		strptime(timestamp_string, format_string, &time_struct);
+		if (strptime(timestamp_string, format_string,
+		    &time_struct) == NULL) {
+			warnx("%s: strptime(3) failed", __func__);
+			error = 1;
+			goto bailout;
+		}
 		time_value = mktime(&time_struct);
 		ts = (uint64_t) time_value;
 	}
 	/* Convert time from seconds to milliseconds */
 	ts *= 1000;
+	bzero(&ts_p, sizeof(ts_p));
 	scsi_create_timestamp(ts_p.timestamp, ts);
 
 	scsi_set_timestamp(&ccb->csio,

@@ -184,8 +184,8 @@ static struct ctl_frontend cfiscsi_frontend =
 	.ioctl = cfiscsi_ioctl,
 	.shutdown = cfiscsi_shutdown,
 };
-CTL_FRONTEND_DECLARE(ctlcfiscsi, cfiscsi_frontend);
-MODULE_DEPEND(ctlcfiscsi, icl, 1, 1, 1);
+CTL_FRONTEND_DECLARE(cfiscsi, cfiscsi_frontend);
+MODULE_DEPEND(cfiscsi, icl, 1, 1, 1);
 
 static struct icl_pdu *
 cfiscsi_pdu_new_response(struct icl_pdu *request, int flags)
@@ -321,11 +321,10 @@ cfiscsi_pdu_handle(struct icl_pdu *request)
 static void
 cfiscsi_receive_callback(struct icl_pdu *request)
 {
+#ifdef ICL_KERNEL_PROXY
 	struct cfiscsi_session *cs;
 
 	cs = PDU_SESSION(request);
-
-#ifdef ICL_KERNEL_PROXY
 	if (cs->cs_waiting_for_ctld || cs->cs_login_phase) {
 		if (cs->cs_login_pdu == NULL)
 			cs->cs_login_pdu = request;
@@ -1706,6 +1705,13 @@ cfiscsi_ioctl_list(struct ctl_iscsi *ci)
 	sbuf_finish(sb);
 
 	error = copyout(sbuf_data(sb), cilp->conn_xml, sbuf_len(sb) + 1);
+	if (error != 0) {
+		sbuf_delete(sb);
+		snprintf(ci->error_str, sizeof(ci->error_str),
+		    "copyout failed with error %d", error);
+		ci->status = CTL_ISCSI_ERROR;
+		return;
+	}
 	cilp->fill_len = sbuf_len(sb) + 1;
 	ci->status = CTL_ISCSI_OK;
 	sbuf_delete(sb);
@@ -2158,9 +2164,9 @@ cfiscsi_ioctl_port_create(struct ctl_req *req)
 	retval = ctl_port_register(port);
 	if (retval != 0) {
 		ctl_free_opts(&port->options);
-		cfiscsi_target_release(ct);
 		free(port->port_devid, M_CFISCSI);
 		free(port->target_devid, M_CFISCSI);
+		cfiscsi_target_release(ct);
 		req->status = CTL_LUN_ERROR;
 		snprintf(req->error_str, sizeof(req->error_str),
 		    "ctl_port_register() failed with error %d", retval);

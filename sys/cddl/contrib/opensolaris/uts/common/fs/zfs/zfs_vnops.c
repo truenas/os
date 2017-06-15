@@ -426,12 +426,8 @@ page_busy(vnode_t *vp, int64_t start, int64_t off, int64_t nbytes)
 				continue;
 			}
 			vm_page_sbusy(pp);
-		} else if (pp == NULL) {
-			pp = vm_page_alloc(obj, OFF_TO_IDX(start),
-			    VM_ALLOC_SYSTEM | VM_ALLOC_IFCACHED |
-			    VM_ALLOC_SBUSY);
-		} else {
-			ASSERT(pp != NULL && !pp->valid);
+		} else if (pp != NULL) {
+			ASSERT(!pp->valid);
 			pp = NULL;
 		}
 
@@ -1629,7 +1625,7 @@ zfs_lookup(vnode_t *dvp, char *nm, vnode_t **vpp, struct componentname *cnp,
 				cn.cn_nameptr = "snapshot";
 				cn.cn_namelen = strlen(cn.cn_nameptr);
 				cn.cn_nameiop = cnp->cn_nameiop;
-				cn.cn_flags = cnp->cn_flags;
+				cn.cn_flags = cnp->cn_flags & ~ISDOTDOT;
 				cn.cn_lkflags = cnp->cn_lkflags;
 				error = VOP_LOOKUP(zfsctl_vp, vpp, &cn);
 				vput(zfsctl_vp);

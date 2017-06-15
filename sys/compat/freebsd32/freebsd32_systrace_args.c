@@ -1260,6 +1260,16 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 1;
 		break;
 	}
+	/* freebsd32_clock_nanosleep */
+	case 244: {
+		struct freebsd32_clock_nanosleep_args *p = params;
+		iarg[0] = p->clock_id; /* clockid_t */
+		iarg[1] = p->flags; /* int */
+		uarg[2] = (intptr_t) p->rqtp; /* const struct timespec32 * */
+		uarg[3] = (intptr_t) p->rmtp; /* struct timespec32 * */
+		*n_args = 4;
+		break;
+	}
 	/* freebsd32_clock_getcpuclockid2 */
 	case 247: {
 		struct freebsd32_clock_getcpuclockid2_args *p = params;
@@ -2354,12 +2364,12 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
-	/* sigqueue */
+	/* freebsd32_sigqueue */
 	case 456: {
-		struct sigqueue_args *p = params;
+		struct freebsd32_sigqueue_args *p = params;
 		iarg[0] = p->pid; /* pid_t */
 		iarg[1] = p->signum; /* int */
-		uarg[2] = (intptr_t) p->value; /* void * */
+		iarg[2] = p->value; /* int */
 		*n_args = 3;
 		break;
 	}
@@ -5312,6 +5322,25 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* freebsd32_clock_nanosleep */
+	case 244:
+		switch(ndx) {
+		case 0:
+			p = "clockid_t";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "const struct timespec32 *";
+			break;
+		case 3:
+			p = "struct timespec32 *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* freebsd32_clock_getcpuclockid2 */
 	case 247:
 		switch(ndx) {
@@ -7126,7 +7155,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* sigqueue */
+	/* freebsd32_sigqueue */
 	case 456:
 		switch(ndx) {
 		case 0:
@@ -7136,7 +7165,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 2:
-			p = "void *";
+			p = "int";
 			break;
 		default:
 			break;
@@ -9651,6 +9680,11 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* freebsd32_clock_nanosleep */
+	case 244:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
 	/* freebsd32_clock_getcpuclockid2 */
 	case 247:
 		if (ndx == 0 || ndx == 1)
@@ -10301,7 +10335,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* sigqueue */
+	/* freebsd32_sigqueue */
 	case 456:
 		if (ndx == 0 || ndx == 1)
 			p = "int";

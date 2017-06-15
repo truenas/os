@@ -140,6 +140,7 @@ static vop_advlock_t	nfs_advlock;
 static vop_advlockasync_t nfs_advlockasync;
 static vop_getacl_t nfs_getacl;
 static vop_setacl_t nfs_setacl;
+static vop_set_text_t nfs_set_text;
 
 /*
  * Global vfs data structures for nfs
@@ -176,6 +177,7 @@ struct vop_vector newnfs_vnodeops = {
 	.vop_write =		ncl_write,
 	.vop_getacl =		nfs_getacl,
 	.vop_setacl =		nfs_setacl,
+	.vop_set_text =		nfs_set_text,
 };
 
 struct vop_vector newnfs_fifoops = {
@@ -707,12 +709,12 @@ nfs_close(struct vop_close_args *ap)
 		     * traditional vnode locking implemented for Vnode Ops.
 		     */
 		    int cm = newnfs_commit_on_close ? 1 : 0;
-		    error = ncl_flush(vp, MNT_WAIT, cred, ap->a_td, cm, 0);
+		    error = ncl_flush(vp, MNT_WAIT, ap->a_td, cm, 0);
 		    /* np->n_flag &= ~NMODIFIED; */
 		} else if (NFS_ISV4(vp)) { 
 			if (nfscl_mustflush(vp) != 0) {
 				int cm = newnfs_commit_on_close ? 1 : 0;
-				error = ncl_flush(vp, MNT_WAIT, cred, ap->a_td,
+				error = ncl_flush(vp, MNT_WAIT, ap->a_td,
 				    cm, 0);
 				/*
 				 * as above w.r.t races when clearing
@@ -2629,7 +2631,7 @@ nfs_fsync(struct vop_fsync_args *ap)
 		 */
 		return (0);
 	}
-	return (ncl_flush(ap->a_vp, ap->a_waitfor, NULL, ap->a_td, 1, 0));
+	return (ncl_flush(ap->a_vp, ap->a_waitfor, ap->a_td, 1, 0));
 }
 
 /*
@@ -2641,7 +2643,7 @@ nfs_fsync(struct vop_fsync_args *ap)
  * waiting for a buffer write to complete.
  */
 int
-ncl_flush(struct vnode *vp, int waitfor, struct ucred *cred, struct thread *td,
+ncl_flush(struct vnode *vp, int waitfor, struct thread *td,
     int commit, int called_from_renewthread)
 {
 	struct nfsnode *np = VTONFS(vp);
@@ -2971,14 +2973,17 @@ done:
 		free(bvec, M_TEMP);
 	if (error == 0 && commit != 0 && waitfor == MNT_WAIT &&
 	    (bo->bo_dirty.bv_cnt != 0 || bo->bo_numoutput != 0 ||
-	     np->n_directio_asyncwr != 0) && trycnt++ < 5) {
-		/* try, try again... */
-		passone = 1;
-		wcred = NULL;
-		bvec = NULL;
-		bvecsize = 0;
-printf("try%d\n", trycnt);
-		goto again;
+	    np->n_directio_asyncwr != 0)) {
+		if (trycnt++ < 5) {
+			/* try, try again... */
+			passone = 1;
+			wcred = NULL;
+			bvec = NULL;
+			bvecsize = 0;
+			goto again;
+		}
+		vn_printf(vp, "ncl_flush failed");
+		error = called_from_renewthread != 0 ? EIO : EBUSY;
 	}
 	return (error);
 }
@@ -3019,7 +3024,7 @@ nfs_advlock(struct vop_advlock_args *ap)
 		if (ap->a_op == F_UNLCK &&
 		    nfscl_checkwritelocked(vp, ap->a_fl, cred, td, ap->a_id,
 		    ap->a_flags))
-			(void) ncl_flush(vp, MNT_WAIT, cred, td, 1, 0);
+			(void) ncl_flush(vp, MNT_WAIT, td, 1, 0);
 
 		/*
 		 * Loop around doing the lock op, while a blocking lock
@@ -3376,6 +3381,39 @@ nfs_setacl(struct vop_setacl_args *ap)
 		error = EPERM;
 	}
 	return (error);
+}
+
+static int
+nfs_set_text(struct vop_set_text_args *ap)
+{
+	struct vnode *vp = ap->a_vp;
+	struct nfsnode *np;
+
+	/*
+	 * If the text file has been mmap'd, flush any dirty pages to the
+	 * buffer cache and then...
+	 * Make sure all writes are pushed to the NFS server.  If this is not
+	 * done, the modify time of the file can change while the text
+	 * file is being executed.  This will cause the process that is
+	 * executing the text file to be terminated.
+	 */
+	if (vp->v_object != NULL) {
+		VM_OBJECT_WLOCK(vp->v_object);
+		vm_object_page_clean(vp->v_object, 0, 0, OBJPC_SYNC);
+		VM_OBJECT_WUNLOCK(vp->v_object);
+	}
+
+	/* Now, flush the buffer cache. */
+	ncl_flush(vp, MNT_WAIT, curthread, 0, 0);
+
+	/* And, finally, make sure that n_mtime is up to date. */
+	np = VTONFS(vp);
+	mtx_lock(&np->n_mtx);
+	np->n_mtime = np->n_vattr.na_mtime;
+	mtx_unlock(&np->n_mtx);
+
+	vp->v_vflag |= VV_TEXT;
+	return (0);
 }
 
 /*

@@ -207,8 +207,10 @@ linux_to_native_clockid(clockid_t *n, clockid_t l)
 	case LINUX_CLOCK_MONOTONIC_COARSE:
 		*n = CLOCK_MONOTONIC_FAST;
 		break;
-	case LINUX_CLOCK_MONOTONIC_RAW:
 	case LINUX_CLOCK_BOOTTIME:
+		*n = CLOCK_UPTIME;
+		break;
+	case LINUX_CLOCK_MONOTONIC_RAW:
 	case LINUX_CLOCK_REALTIME_ALARM:
 	case LINUX_CLOCK_BOOTTIME_ALARM:
 	case LINUX_CLOCK_SGI_CYCLE:
@@ -225,6 +227,18 @@ linux_to_native_clockid(clockid_t *n, clockid_t l)
 	}
 
 	LIN_SDT_PROBE1(time, linux_to_native_clockid, return, 0);
+	return (0);
+}
+
+int
+linux_to_native_timerflags(int *nflags, int flags)
+{
+
+	if (flags & ~LINUX_TIMER_ABSTIME)
+		return (EINVAL);
+	*nflags = 0;
+	if (flags & LINUX_TIMER_ABSTIME)
+		*nflags |= TIMER_ABSTIME;
 	return (0);
 }
 
@@ -541,24 +555,26 @@ linux_clock_nanosleep(struct thread *td, struct linux_clock_nanosleep_args *args
 	struct timespec *rmtp;
 	struct l_timespec lrqts, lrmts;
 	struct timespec rqts, rmts;
-	int error, error2;
+	int error, error2, flags;
+	clockid_t clockid;
 
 	LIN_SDT_PROBE4(time, linux_clock_nanosleep, entry, args->which,
 	    args->flags, args->rqtp, args->rmtp);
 
-	if (args->flags != 0) {
-		/* XXX deal with TIMER_ABSTIME */
+	error = linux_to_native_timerflags(&flags, args->flags);
+	if (error != 0) {
 		LIN_SDT_PROBE1(time, linux_clock_nanosleep, unsupported_flags,
 		    args->flags);
-		LIN_SDT_PROBE1(time, linux_clock_nanosleep, return, EINVAL);
-		return (EINVAL);	/* XXX deal with TIMER_ABSTIME */
+		LIN_SDT_PROBE1(time, linux_clock_nanosleep, return, error);
+		return (error);
 	}
 
-	if (args->which != LINUX_CLOCK_REALTIME) {
+	error = linux_to_native_clockid(&clockid, args->which);
+	if (error != 0) {
 		LIN_SDT_PROBE1(time, linux_clock_nanosleep, unsupported_clockid,
 		    args->which);
-		LIN_SDT_PROBE1(time, linux_clock_nanosleep, return, EINVAL);
-		return (EINVAL);
+		LIN_SDT_PROBE1(time, linux_clock_settime, return, error);
+		return (error);
 	}
 
 	error = copyin(args->rqtp, &lrqts, sizeof(lrqts));
@@ -581,9 +597,9 @@ linux_clock_nanosleep(struct thread *td, struct linux_clock_nanosleep_args *args
 		LIN_SDT_PROBE1(time, linux_clock_nanosleep, return, error);
 		return (error);
 	}
-	error = kern_nanosleep(td, &rqts, rmtp);
-	if (error == EINTR && args->rmtp != NULL) {
-		/* XXX. Not for TIMER_ABSTIME */
+	error = kern_clock_nanosleep(td, clockid, flags, &rqts, rmtp);
+	if (error == EINTR && (flags & TIMER_ABSTIME) == 0 &&
+	    args->rmtp != NULL) {
 		error2 = native_to_linux_timespec(&lrmts, rmtp);
 		if (error2 != 0)
 			return (error2);

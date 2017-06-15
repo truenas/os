@@ -66,7 +66,6 @@ OLD_FILES+=usr/sbin/hlfsd
 OLD_FILES+=usr/sbin/mk-amd-map
 OLD_FILES+=usr/sbin/wire-test
 OLD_FILES+=usr/share/examples/etc/amd.map
-OLD_FILES+=usr/share/info/am-utils.info.gz
 OLD_FILES+=usr/share/man/man1/pawd.1.gz
 OLD_FILES+=usr/share/man/man5/amd.conf.5.gz
 OLD_FILES+=usr/share/man/man8/amd.8.gz
@@ -875,7 +874,6 @@ OLD_FILES+=usr/share/man/man3/snmp_trace.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_value_copy.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_value_free.3.gz
 OLD_FILES+=usr/share/man/man3/snmp_value_parse.3.gz
-OLD_FILES+=usr/share/man/man3/tree.3.gz
 OLD_FILES+=usr/share/man/man3/tree_size.3.gz
 # usr.sbin/bsnmpd/bsnmpd
 OLD_FILES+=usr/share/man/man3/FIND_OBJECT_INT.3.gz
@@ -1354,6 +1352,7 @@ OLD_FILES+=usr/bin/clang
 OLD_FILES+=usr/bin/clang++
 OLD_FILES+=usr/bin/clang-cpp
 OLD_FILES+=usr/bin/clang-tblgen
+OLD_FILES+=usr/bin/llvm-objdump
 OLD_FILES+=usr/bin/llvm-tblgen
 OLD_FILES+=usr/lib/clang/4.0.0/include/sanitizer/allocator_interface.h
 OLD_FILES+=usr/lib/clang/4.0.0/include/sanitizer/asan_interface.h
@@ -1498,7 +1497,6 @@ OLD_FILES+=usr/bin/llvm-lto2
 OLD_FILES+=usr/bin/llvm-mc
 OLD_FILES+=usr/bin/llvm-modextract
 OLD_FILES+=usr/bin/llvm-nm
-OLD_FILES+=usr/bin/llvm-objdump
 OLD_FILES+=usr/bin/llvm-pdbdump
 OLD_FILES+=usr/bin/llvm-ranlib
 OLD_FILES+=usr/bin/llvm-rtdyld
@@ -1581,6 +1579,25 @@ OLD_FILES+=usr/bin/CC
 OLD_FILES+=usr/bin/c++
 OLD_FILES+=usr/bin/g++
 OLD_FILES+=usr/libexec/cc1plus
+.endif
+
+.if ${MK_DIALOG} == no
+OLD_FILES+=usr/bin/dialog
+OLD_FILES+=usr/bin/dpv
+OLD_FILES+=usr/lib/libdialog.a
+OLD_FILES+=usr/lib/libdialog.so
+OLD_FILES+=usr/lib/libdialog.so.8
+OLD_FILES+=usr/lib/libdialog_p.a
+OLD_FILES+=usr/lib/libdpv.a
+OLD_FILES+=usr/lib/libdpv.so
+OLD_FILES+=usr/lib/libdpv.so.1
+OLD_FILES+=usr/lib/libdpv_p.a
+OLD_FILES+=usr/sbin/bsdconfig
+OLD_FILES+=usr/share/man/man1/dialog.1.gz
+OLD_FILES+=usr/share/man/man1/dpv.1.gz
+OLD_FILES+=usr/share/man/man3/dialog.3.gz
+OLD_FILES+=usr/share/man/man3/dpv.3.gz
+OLD_FILES+=usr/share/man/man8/bsdconfig.8.gz
 .endif
 
 .if ${MK_FMTREE} == no
@@ -2342,11 +2359,6 @@ OLD_LIBS+=usr/lib32/libgomp.so.1
 OLD_FILES+=usr/lib32/libgomp_p.a
 OLD_FILES+=usr/libexec/cc1
 OLD_FILES+=usr/libexec/cc1plus
-OLD_FILES+=usr/share/info/cpp.info.gz
-OLD_FILES+=usr/share/info/cppinternals.info.gz
-OLD_FILES+=usr/share/info/gcc.info.gz
-OLD_FILES+=usr/share/info/gccint.info.gz
-OLD_FILES+=usr/share/info/gperf.info.gz
 OLD_FILES+=usr/share/man/man1/g++.1.gz
 OLD_FILES+=usr/share/man/man1/gcc.1.gz
 OLD_FILES+=usr/share/man/man1/gcov.1.gz
@@ -2365,9 +2377,6 @@ OLD_FILES+=usr/bin/gdb
 OLD_FILES+=usr/bin/gdbserver
 OLD_FILES+=usr/bin/gdbtui
 OLD_FILES+=usr/bin/kgdb
-OLD_FILES+=usr/share/info/gdb.info.gz
-OLD_FILES+=usr/share/info/gdbint.info.gz
-OLD_FILES+=usr/share/info/stabs.info.gz
 OLD_FILES+=usr/share/man/man1/gdb.1.gz
 OLD_FILES+=usr/share/man/man1/gdbserver.1.gz
 OLD_FILES+=usr/share/man/man1/kgdb.1.gz
@@ -2817,7 +2826,6 @@ OLD_FILES+=usr/share/groff_font/devutf8/R
 OLD_FILES+=usr/share/groff_font/devutf8/S
 OLD_DIRS+=usr/share/groff_font/devutf8
 OLD_DIRS+=usr/share/groff_font
-OLD_FILES+=usr/share/info/groff.info.gz
 OLD_FILES+=usr/share/man/man1/addftinfo.1.gz
 OLD_FILES+=usr/share/man/man1/afmtodit.1.gz
 OLD_FILES+=usr/share/man/man1/eqn.1.gz
@@ -3588,7 +3596,6 @@ OLD_FILES+=usr/libexec/kpasswdd
 OLD_FILES+=usr/sbin/kstash
 OLD_FILES+=usr/sbin/ktutil
 OLD_FILES+=usr/sbin/iprop-log
-OLD_FILES+=usr/share/info/heimdal.info.gz
 OLD_FILES+=usr/share/man/man1/kdestroy.1.gz
 OLD_FILES+=usr/share/man/man1/kf.1.gz
 OLD_FILES+=usr/share/man/man1/kinit.1.gz
@@ -8341,6 +8348,13 @@ OLD_FILES+=usr/share/man/man1/colcrt.1.gz
 OLD_FILES+=usr/share/man/man1/ul.1.gz
 .endif
 
+.if ${MK_TFTP} == no
+OLD_FILES+=usr/bin/tftp
+OLD_FILES+=usr/libexec/tftpd
+OLD_FILES+=usr/share/man/man1/tftp.1.gz
+OLD_FILES+=usr/share/man/man8/tftpd.8.gz
+.endif
+
 .if ${MK_TIMED} == no
 OLD_FILES+=usr/sbin/timed
 OLD_FILES+=usr/sbin/timedc
@@ -9038,8 +9052,6 @@ OLD_FILES+=usr/share/man/man4/ucom.4.gz
 OLD_FILES+=usr/share/man/man4/ucycom.4.gz
 OLD_FILES+=usr/share/man/man4/udav.4.gz
 OLD_FILES+=usr/share/man/man4/udbp.4.gz
-OLD_FILES+=usr/share/man/man4/udp.4.gz
-OLD_FILES+=usr/share/man/man4/udplite.4.gz
 OLD_FILES+=usr/share/man/man4/uep.4.gz
 OLD_FILES+=usr/share/man/man4/ufm.4.gz
 OLD_FILES+=usr/share/man/man4/ufoma.4.gz

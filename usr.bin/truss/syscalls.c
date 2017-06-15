@@ -71,20 +71,6 @@ __FBSDID("$FreeBSD$");
 #include "extern.h"
 #include "syscall.h"
 
-/* 64-bit alignment on 32-bit platforms. */
-#if !defined(__LP64__) && defined(__powerpc__)
-#define	QUAD_ALIGN	1
-#else
-#define	QUAD_ALIGN	0
-#endif
-
-/* Number of slots needed for a 64-bit argument. */
-#ifdef __LP64__
-#define	QUAD_SLOTS	1
-#else
-#define	QUAD_SLOTS	2
-#endif
-
 /*
  * This should probably be in its own file, sorted alphabetically.
  */
@@ -100,16 +86,23 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "access", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { Accessmode, 1 } } },
 	{ .name = "bind", .ret_type = 1, .nargs = 3,
-	  .args = { { Int, 0 }, { Sockaddr | IN, 1 }, { Int, 2 } } },
+	  .args = { { Int, 0 }, { Sockaddr | IN, 1 }, { Socklent, 2 } } },
 	{ .name = "bindat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Int, 1 }, { Sockaddr | IN, 2 },
 		    { Int, 3 } } },
 	{ .name = "break", .ret_type = 1, .nargs = 1,
 	  .args = { { Ptr, 0 } } },
+	{ .name = "cap_fcntls_get", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { CapFcntlRights | OUT, 1 } } },
+	{ .name = "cap_fcntls_limit", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { CapFcntlRights, 1 } } },
 	{ .name = "chdir", .ret_type = 1, .nargs = 1,
 	  .args = { { Name, 0 } } },
 	{ .name = "chflags", .ret_type = 1, .nargs = 2,
-	  .args = { { Name | IN, 0 }, { Hex, 1 } } },
+	  .args = { { Name | IN, 0 }, { FileFlags, 1 } } },
+	{ .name = "chflagsat", .ret_type = 1, .nargs = 4,
+	  .args = { { Atfd, 0 }, { Name | IN, 1 }, { FileFlags, 2 },
+		    { Atflags, 3 } } },
 	{ .name = "chmod", .ret_type = 1, .nargs = 2,
 	  .args = { { Name, 0 }, { Octal, 1 } } },
 	{ .name = "chown", .ret_type = 1, .nargs = 3,
@@ -121,7 +114,7 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "close", .ret_type = 1, .nargs = 1,
 	  .args = { { Int, 0 } } },
 	{ .name = "connect", .ret_type = 1, .nargs = 3,
-	  .args = { { Int, 0 }, { Sockaddr | IN, 1 }, { Int, 2 } } },
+	  .args = { { Int, 0 }, { Sockaddr | IN, 1 }, { Socklent, 2 } } },
 	{ .name = "connectat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Int, 1 }, { Sockaddr | IN, 2 },
 		    { Int, 3 } } },
@@ -135,6 +128,8 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "faccessat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Name | IN, 1 }, { Accessmode, 2 },
 		    { Atflags, 3 } } },
+	{ .name = "fchflags", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { FileFlags, 1 } } },
 	{ .name = "fchmod", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Octal, 1 } } },
 	{ .name = "fchmodat", .ret_type = 1, .nargs = 4,
@@ -146,6 +141,8 @@ static struct syscall decoded_syscalls[] = {
 		    { Atflags, 4 } } },
 	{ .name = "fcntl", .ret_type = 1, .nargs = 3,
 	  .args = { { Int, 0 }, { Fcntl, 1 }, { Fcntlflag, 2 } } },
+	{ .name = "flock", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { Flockop, 1 } } },
 	{ .name = "fstat", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Stat | OUT, 1 } } },
 	{ .name = "fstatat", .ret_type = 1, .nargs = 4,
@@ -154,13 +151,15 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "fstatfs", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { StatFs | OUT, 1 } } },
 	{ .name = "ftruncate", .ret_type = 1, .nargs = 2,
-	  .args = { { Int | IN, 0 }, { QuadHex | IN, 1 + QUAD_ALIGN } } },
+	  .args = { { Int | IN, 0 }, { QuadHex | IN, 1 } } },
 	{ .name = "futimens", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Timespec2 | IN, 1 } } },
 	{ .name = "futimes", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Timeval2 | IN, 1 } } },
 	{ .name = "futimesat", .ret_type = 1, .nargs = 3,
 	  .args = { { Atfd, 0 }, { Name | IN, 1 }, { Timeval2 | IN, 2 } } },
+	{ .name = "getfsstat", .ret_type = 1, .nargs = 3,
+	  .args = { { Ptr, 0 }, { Long, 1 }, { Getfsstatmode, 2 } } },
 	{ .name = "getitimer", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Itimerval | OUT, 2 } } },
 	{ .name = "getpeername", .ret_type = 1, .nargs = 3,
@@ -175,10 +174,13 @@ static struct syscall decoded_syscalls[] = {
 	  .args = { { Int, 0 } } },
 	{ .name = "getsockname", .ret_type = 1, .nargs = 3,
 	  .args = { { Int, 0 }, { Sockaddr | OUT, 1 }, { Ptr | OUT, 2 } } },
+	{ .name = "getsockopt", .ret_type = 1, .nargs = 5,
+	  .args = { { Int, 0 }, { Sockoptlevel, 1 }, { Sockoptname, 2 },
+		    { Ptr | OUT, 3 }, { Ptr | OUT, 4 } } },
 	{ .name = "gettimeofday", .ret_type = 1, .nargs = 2,
 	  .args = { { Timeval | OUT, 0 }, { Ptr, 1 } } },
 	{ .name = "ioctl", .ret_type = 1, .nargs = 3,
-	  .args = { { Int, 0 }, { Ioctl, 1 }, { Hex, 2 } } },
+	  .args = { { Int, 0 }, { Ioctl, 1 }, { Ptr, 2 } } },
 	{ .name = "kevent", .ret_type = 1, .nargs = 6,
 	  .args = { { Int, 0 }, { Kevent, 1 }, { Int, 2 }, { Kevent | OUT, 3 },
 		    { Int, 4 }, { Timespec, 5 } } },
@@ -194,12 +196,16 @@ static struct syscall decoded_syscalls[] = {
 	  .args = { { Int, 0 } } },
 	{ .name = "kldstat", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Ptr, 1 } } },
+	{ .name = "kldsym", .ret_type = 1, .nargs = 3,
+	  .args = { { Int, 0 }, { Kldsymcmd, 1 }, { Ptr, 2 } } },
 	{ .name = "kldunload", .ret_type = 1, .nargs = 1,
 	  .args = { { Int, 0 } } },
+	{ .name = "kldunloadf", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { Kldunloadflags, 1 } } },
 	{ .name = "kse_release", .ret_type = 0, .nargs = 1,
 	  .args = { { Timespec, 0 } } },
 	{ .name = "lchflags", .ret_type = 1, .nargs = 2,
-	  .args = { { Name | IN, 0 }, { Hex, 1 } } },
+	  .args = { { Name | IN, 0 }, { FileFlags, 1 } } },
 	{ .name = "lchmod", .ret_type = 1, .nargs = 2,
 	  .args = { { Name, 0 }, { Octal, 1 } } },
 	{ .name = "lchown", .ret_type = 1, .nargs = 3,
@@ -209,13 +215,16 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "linkat", .ret_type = 1, .nargs = 5,
 	  .args = { { Atfd, 0 }, { Name, 1 }, { Atfd, 2 }, { Name, 3 },
 		    { Atflags, 4 } } },
-	{ .name = "lseek", .ret_type = 2, .nargs = 3,
-	  .args = { { Int, 0 }, { QuadHex, 1 + QUAD_ALIGN },
-		    { Whence, 1 + QUAD_SLOTS + QUAD_ALIGN } } },
+	{ .name = "listen", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { Int, 1 } } },
+ 	{ .name = "lseek", .ret_type = 2, .nargs = 3,
+	  .args = { { Int, 0 }, { QuadHex, 1 }, { Whence, 2 } } },
 	{ .name = "lstat", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { Stat | OUT, 1 } } },
 	{ .name = "lutimes", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { Timeval2 | IN, 1 } } },
+	{ .name = "madvise", .ret_type = 1, .nargs = 3,
+	  .args = { { Ptr, 0 }, { Sizet, 1 }, { Madvice, 2 } } },
 	{ .name = "mkdir", .ret_type = 1, .nargs = 2,
 	  .args = { { Name, 0 }, { Octal, 1 } } },
 	{ .name = "mkdirat", .ret_type = 1, .nargs = 3,
@@ -229,16 +238,16 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "mknodat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Name, 1 }, { Octal, 2 }, { Int, 3 } } },
 	{ .name = "mmap", .ret_type = 1, .nargs = 6,
-	  .args = { { Ptr, 0 }, { Int, 1 }, { Mprot, 2 }, { Mmapflags, 3 },
-		    { Int, 4 }, { QuadHex, 5 + QUAD_ALIGN } } },
+	  .args = { { Ptr, 0 }, { Sizet, 1 }, { Mprot, 2 }, { Mmapflags, 3 },
+		    { Int, 4 }, { QuadHex, 5 } } },
 	{ .name = "modfind", .ret_type = 1, .nargs = 1,
 	  .args = { { Name | IN, 0 } } },
 	{ .name = "mount", .ret_type = 1, .nargs = 4,
 	  .args = { { Name, 0 }, { Name, 1 }, { Int, 2 }, { Ptr, 3 } } },
 	{ .name = "mprotect", .ret_type = 1, .nargs = 3,
-	  .args = { { Ptr, 0 }, { Int, 1 }, { Mprot, 2 } } },
+	  .args = { { Ptr, 0 }, { Sizet, 1 }, { Mprot, 2 } } },
 	{ .name = "munmap", .ret_type = 1, .nargs = 2,
-	  .args = { { Ptr, 0 }, { Int, 1 } } },
+	  .args = { { Ptr, 0 }, { Sizet, 1 } } },
 	{ .name = "nanosleep", .ret_type = 1, .nargs = 1,
 	  .args = { { Timespec, 0 } } },
 	{ .name = "open", .ret_type = 1, .nargs = 3,
@@ -254,22 +263,26 @@ static struct syscall decoded_syscalls[] = {
 	  .args = { { Ptr, 0 }, { Pipe2, 1 } } },
 	{ .name = "poll", .ret_type = 1, .nargs = 3,
 	  .args = { { Pollfd, 0 }, { Int, 1 }, { Int, 2 } } },
+	{ .name = "posix_fadvise", .ret_type = 1, .nargs = 4,
+	  .args = { { Int, 0 }, { QuadHex, 1 }, { QuadHex, 2 },
+		    { Fadvice, 3 } } },
 	{ .name = "posix_openpt", .ret_type = 1, .nargs = 1,
 	  .args = { { Open, 0 } } },
 	{ .name = "procctl", .ret_type = 1, .nargs = 4,
-	  .args = { { Idtype, 0 }, { Quad, 1 + QUAD_ALIGN },
-		    { Procctl, 1 + QUAD_ALIGN + QUAD_SLOTS },
-		    { Ptr, 2 + QUAD_ALIGN + QUAD_SLOTS } } },
+	  .args = { { Idtype, 0 }, { Quad, 1 }, { Procctl, 2 }, { Ptr, 3 } } },
 	{ .name = "read", .ret_type = 1, .nargs = 3,
-	  .args = { { Int, 0 }, { BinString | OUT, 1 }, { Int, 2 } } },
+	  .args = { { Int, 0 }, { BinString | OUT, 1 }, { Sizet, 2 } } },
 	{ .name = "readlink", .ret_type = 1, .nargs = 3,
-	  .args = { { Name, 0 }, { Readlinkres | OUT, 1 }, { Int, 2 } } },
+	  .args = { { Name, 0 }, { Readlinkres | OUT, 1 }, { Sizet, 2 } } },
 	{ .name = "readlinkat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Name, 1 }, { Readlinkres | OUT, 2 },
-		    { Int, 3 } } },
+		    { Sizet, 3 } } },
 	{ .name = "recvfrom", .ret_type = 1, .nargs = 6,
-	  .args = { { Int, 0 }, { BinString | OUT, 1 }, { Int, 2 }, { Hex, 3 },
-		    { Sockaddr | OUT, 4 }, { Ptr | OUT, 5 } } },
+	  .args = { { Int, 0 }, { BinString | OUT, 1 }, { Sizet, 2 },
+	            { Msgflags, 3 }, { Sockaddr | OUT, 4 },
+	            { Ptr | OUT, 5 } } },
+	{ .name = "recvmsg", .ret_type = 1, .nargs = 3,
+	  .args = { { Int, 0 }, { Ptr, 1 }, { Msgflags, 2 } } },
 	{ .name = "rename", .ret_type = 1, .nargs = 2,
 	  .args = { { Name, 0 }, { Name, 1 } } },
 	{ .name = "renameat", .ret_type = 1, .nargs = 4,
@@ -278,16 +291,30 @@ static struct syscall decoded_syscalls[] = {
 	  .args = { { Rforkflags, 0 } } },
 	{ .name = "rmdir", .ret_type = 1, .nargs = 1,
 	  .args = { { Name, 0 } } },
+	{ .name = "sctp_generic_recvmsg", .ret_type = 1, .nargs = 7,
+	  .args = { { Int, 0 }, { Ptr | IN, 1 }, { Int, 2 },
+	            { Sockaddr | OUT, 3 }, { Ptr | OUT, 4 }, { Ptr | OUT, 5 },
+	            { Ptr | OUT, 6 } } },
+	{ .name = "sctp_generic_sendmsg", .ret_type = 1, .nargs = 7,
+	  .args = { { Int, 0 }, { BinString | IN, 1 }, { Int, 2 },
+	            { Sockaddr | IN, 3 }, { Socklent, 4 }, { Ptr | IN, 5 },
+	            { Msgflags, 6 } } },
 	{ .name = "select", .ret_type = 1, .nargs = 5,
 	  .args = { { Int, 0 }, { Fd_set, 1 }, { Fd_set, 2 }, { Fd_set, 3 },
 		    { Timeval, 4 } } },
+	{ .name = "sendmsg", .ret_type = 1, .nargs = 3,
+	  .args = { { Int, 0 }, { Ptr, 1 }, { Msgflags, 2 } } },
 	{ .name = "sendto", .ret_type = 1, .nargs = 6,
-	  .args = { { Int, 0 }, { BinString | IN, 1 }, { Int, 2 }, { Hex, 3 },
-		    { Sockaddr | IN, 4 }, { Ptr | IN, 5 } } },
+	  .args = { { Int, 0 }, { BinString | IN, 1 }, { Sizet, 2 },
+	            { Msgflags, 3 }, { Sockaddr | IN, 4 },
+	            { Socklent | IN, 5 } } },
 	{ .name = "setitimer", .ret_type = 1, .nargs = 3,
 	  .args = { { Int, 0 }, { Itimerval, 1 }, { Itimerval | OUT, 2 } } },
 	{ .name = "setrlimit", .ret_type = 1, .nargs = 2,
 	  .args = { { Resource, 0 }, { Rlimit | IN, 1 } } },
+	{ .name = "setsockopt", .ret_type = 1, .nargs = 5,
+	  .args = { { Int, 0 }, { Sockoptlevel, 1 }, { Sockoptname, 2 },
+		    { Ptr | IN, 3 }, { Socklent, 4 } } },
 	{ .name = "shutdown", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { Shutdown, 1 } } },
 	{ .name = "sigaction", .ret_type = 1, .nargs = 3,
@@ -310,7 +337,7 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "sigwaitinfo", .ret_type = 1, .nargs = 2,
 	  .args = { { Sigset | IN, 0 }, { Ptr, 1 } } },
 	{ .name = "socket", .ret_type = 1, .nargs = 3,
-	  .args = { { Sockdomain, 0 }, { Socktype, 1 }, { Int, 2 } } },
+	  .args = { { Sockdomain, 0 }, { Socktype, 1 }, { Sockprotocol, 2 } } },
 	{ .name = "stat", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { Stat | OUT, 1 } } },
 	{ .name = "statfs", .ret_type = 1, .nargs = 2,
@@ -326,7 +353,7 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "thr_self", .ret_type = 1, .nargs = 1,
 	  .args = { { Ptr, 0 } } },
 	{ .name = "truncate", .ret_type = 1, .nargs = 2,
-	  .args = { { Name | IN, 0 }, { QuadHex | IN, 1 + QUAD_ALIGN } } },
+	  .args = { { Name | IN, 0 }, { QuadHex | IN, 1 } } },
 #if 0
 	/* Does not exist */
 	{ .name = "umount", .ret_type = 1, .nargs = 2,
@@ -349,13 +376,10 @@ static struct syscall decoded_syscalls[] = {
 	  .args = { { Int, 0 }, { ExitStatus | OUT, 1 }, { Waitoptions, 2 },
 		    { Rusage | OUT, 3 } } },
 	{ .name = "wait6", .ret_type = 1, .nargs = 6,
-	  .args = { { Idtype, 0 }, { Quad, 1 + QUAD_ALIGN },
-		    { ExitStatus | OUT, 1 + QUAD_ALIGN + QUAD_SLOTS },
-		    { Waitoptions, 2 + QUAD_ALIGN + QUAD_SLOTS },
-		    { Rusage | OUT, 3 + QUAD_ALIGN + QUAD_SLOTS },
-		    { Ptr, 4 + QUAD_ALIGN + QUAD_SLOTS } } },
+	  .args = { { Idtype, 0 }, { Quad, 1 }, { ExitStatus | OUT, 2 },
+		    { Waitoptions, 3 }, { Rusage | OUT, 4 }, { Ptr, 5 } } },
 	{ .name = "write", .ret_type = 1, .nargs = 3,
-	  .args = { { Int, 0 }, { BinString | IN, 1 }, { Int, 2 } } },
+	  .args = { { Int, 0 }, { BinString | IN, 1 }, { Sizet, 2 } } },
 
 	/* Linux ABI */
 	{ .name = "linux_access", .ret_type = 1, .nargs = 2,
@@ -374,11 +398,11 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "linux_open", .ret_type = 1, .nargs = 3,
 	  .args = { { Name, 0 }, { Hex, 1 }, { Octal, 2 } } },
 	{ .name = "linux_readlink", .ret_type = 1, .nargs = 3,
-	  .args = { { Name, 0 }, { Name | OUT, 1 }, { Int, 2 } } },
+	  .args = { { Name, 0 }, { Name | OUT, 1 }, { Sizet, 2 } } },
 	{ .name = "linux_socketcall", .ret_type = 1, .nargs = 2,
 	  .args = { { Int, 0 }, { LinuxSockArgs, 1 } } },
-	{ .name = "linux_stat64", .ret_type = 1, .nargs = 3,
-	  .args = { { Name | IN, 0 }, { Ptr | OUT, 1 }, { Ptr | IN, 1 } } },
+	{ .name = "linux_stat64", .ret_type = 1, .nargs = 2,
+	  .args = { { Name | IN, 0 }, { Ptr | OUT, 1 } } },
 
 	/* CloudABI system calls. */
 	{ .name = "cloudabi_sys_clock_res_get", .ret_type = 1, .nargs = 1,
@@ -811,14 +835,77 @@ print_mask_arg(bool (*decoder)(FILE *, int, int *), FILE *fp, int value)
 		fprintf(fp, "|0x%x", rem);
 }
 
+static void
+print_mask_arg32(bool (*decoder)(FILE *, uint32_t, uint32_t *), FILE *fp,
+    uint32_t value)
+{
+	uint32_t rem;
+
+	if (!decoder(fp, value, &rem))
+		fprintf(fp, "0x%x", rem);
+	else if (rem != 0)
+		fprintf(fp, "|0x%x", rem);
+}
+
+#ifndef __LP64__
+/*
+ * Add argument padding to subsequent system calls afater a Quad
+ * syscall arguments as needed.  This used to be done by hand in the
+ * decoded_syscalls table which was ugly and error prone.  It is
+ * simpler to do the fixup of offsets at initalization time than when
+ * decoding arguments.
+ */
+static void
+quad_fixup(struct syscall *sc)
+{
+	int offset, prev;
+	u_int i;
+
+	offset = 0;
+	prev = -1;
+	for (i = 0; i < sc->nargs; i++) {
+		/* This arg type is a dummy that doesn't use offset. */
+		if ((sc->args[i].type & ARG_MASK) == PipeFds)
+			continue;
+
+		assert(prev < sc->args[i].offset);
+		prev = sc->args[i].offset;
+		sc->args[i].offset += offset;
+		switch (sc->args[i].type & ARG_MASK) {
+		case Quad:
+		case QuadHex:
+#ifdef __powerpc__
+			/*
+			 * 64-bit arguments on 32-bit powerpc must be
+			 * 64-bit aligned.  If the current offset is
+			 * not aligned, the calling convention inserts
+			 * a 32-bit pad argument that should be skipped.
+			 */
+			if (sc->args[i].offset % 2 == 1) {
+				sc->args[i].offset++;
+				offset++;
+			}
+#endif
+			offset++;
+		default:
+			break;
+		}
+	}
+}
+#endif
+
 void
 init_syscalls(void)
 {
 	struct syscall *sc;
 
 	STAILQ_INIT(&syscalls);
-	for (sc = decoded_syscalls; sc->name != NULL; sc++)
+	for (sc = decoded_syscalls; sc->name != NULL; sc++) {
+#ifndef __LP64__
+		quad_fixup(sc);
+#endif
 		STAILQ_INSERT_HEAD(&syscalls, sc, entries);
+	}
 }
 
 static struct syscall *
@@ -1103,6 +1190,9 @@ print_arg(struct syscall_args *sc, unsigned long *args, long *retval,
 		break;
 	case Long:
 		fprintf(fp, "%ld", args[sc->offset]);
+		break;
+	case Sizet:
+		fprintf(fp, "%zu", (size_t)args[sc->offset]);
 		break;
 	case Name: {
 		/* NULL-terminated string. */
@@ -1800,6 +1890,91 @@ print_arg(struct syscall_args *sc, unsigned long *args, long *retval,
 	}
 	case Pipe2:
 		print_mask_arg(sysdecode_pipe2_flags, fp, args[sc->offset]);
+		break;
+	case CapFcntlRights: {
+		uint32_t rights;
+
+		if (sc->type & OUT) {
+			if (get_struct(pid, (void *)args[sc->offset], &rights,
+			    sizeof(rights)) == -1) {
+				fprintf(fp, "0x%lx", args[sc->offset]);
+				break;
+			}
+		} else
+			rights = args[sc->offset];
+		print_mask_arg32(sysdecode_cap_fcntlrights, fp, rights);
+		break;
+	}
+	case Fadvice:
+		print_integer_arg(sysdecode_fadvice, fp, args[sc->offset]);
+		break;
+	case FileFlags: {
+		fflags_t rem;
+
+		if (!sysdecode_fileflags(fp, args[sc->offset], &rem))
+			fprintf(fp, "0x%x", rem);
+		else if (rem != 0)
+			fprintf(fp, "|0x%x", rem);
+		break;
+	}
+	case Flockop:
+		print_mask_arg(sysdecode_flock_operation, fp, args[sc->offset]);
+		break;
+	case Getfsstatmode:
+		print_integer_arg(sysdecode_getfsstat_mode, fp,
+		    args[sc->offset]);
+		break;
+	case Kldsymcmd:
+		print_integer_arg(sysdecode_kldsym_cmd, fp, args[sc->offset]);
+		break;
+	case Kldunloadflags:
+		print_integer_arg(sysdecode_kldunload_flags, fp,
+		    args[sc->offset]);
+		break;
+	case Madvice:
+		print_integer_arg(sysdecode_madvice, fp, args[sc->offset]);
+		break;
+	case Socklent:
+		fprintf(fp, "%u", (socklen_t)args[sc->offset]);
+		break;
+	case Sockprotocol: {
+		const char *temp;
+		int domain, protocol;
+
+		domain = args[sc->offset - 2];
+		protocol = args[sc->offset];
+		if (protocol == 0) {
+			fputs("0", fp);
+		} else {
+			temp = sysdecode_socket_protocol(domain, protocol);
+			if (temp) {
+				fputs(temp, fp);
+			} else {
+				fprintf(fp, "%d", protocol);
+			}
+		}
+		break;
+	}
+	case Sockoptlevel:
+		print_integer_arg(sysdecode_sockopt_level, fp,
+		    args[sc->offset]);
+		break;
+	case Sockoptname: {
+		const char *temp;
+		int level, name;
+
+		level = args[sc->offset - 1];
+		name = args[sc->offset];
+		temp = sysdecode_sockopt_name(level, name);
+		if (temp) {
+			fputs(temp, fp);
+		} else {
+			fprintf(fp, "%d", name);
+		}
+		break;
+	}
+	case Msgflags:
+		print_mask_arg(sysdecode_msg_flags, fp, args[sc->offset]);
 		break;
 
 	case CloudABIAdvice:

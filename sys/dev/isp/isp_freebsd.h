@@ -173,12 +173,8 @@ typedef struct tstate {
 struct isp_pcmd {
 	struct isp_pcmd *	next;
 	bus_dmamap_t 		dmap;		/* dma map for this command */
-	struct ispsoftc *	isp;		/* containing isp */
 	struct callout		wdog;		/* watchdog timer */
 	uint32_t		datalen;	/* data length for this command (target mode only) */
-	uint8_t			totslen;	/* sense length on status response */
-	uint8_t			cumslen;	/* sense length on status response */
-	uint8_t 		crn;		/* command reference number */
 };
 #define	ISP_PCMD(ccb)		(ccb)->ccb_h.spriv_ptr1
 #define	PISP_PCMD(ccb)		((struct isp_pcmd *)ISP_PCMD(ccb))
@@ -297,7 +293,6 @@ struct isposinfo {
 	struct isp_pcmd *	pcmd_pool;
 	struct isp_pcmd *	pcmd_free;
 
-	int			sixtyfourbit;	/* sixtyfour bit platform */
 	int			mbox_sleeping;
 	int			mbox_sleep_ok;
 	int			mboxbsy;
@@ -509,6 +504,13 @@ default:							\
         d->ds_base = DMA_LO32(e->ds_addr);	\
         d->ds_count = e->ds_len;		\
 }
+#if (BUS_SPACE_MAXADDR > UINT32_MAX)
+#define XS_NEED_DMA64_SEG(s, n)					\
+	(((bus_dma_segment_t *)s)[n].ds_addr +			\
+	    ((bus_dma_segment_t *)s)[n].ds_len > UINT32_MAX)
+#else
+#define XS_NEED_DMA64_SEG(s, n)	(0)
+#endif
 #define	XS_ISP(ccb)		cam_sim_softc(xpt_path_sim((ccb)->ccb_h.path))
 #define	XS_CHANNEL(ccb)		cam_sim_bus(xpt_path_sim((ccb)->ccb_h.path))
 #define	XS_TGT(ccb)		(ccb)->ccb_h.target_id
@@ -569,26 +571,19 @@ default:							\
 
 #define	XS_INITERR(ccb)		XS_SETERR(ccb, CAM_REQ_INPROG), ccb->sense_resid = ccb->sense_len
 
-#define	XS_SAVE_SENSE(xs, sense_ptr, totslen, slen)	do {			\
-		uint32_t tlen = slen;						\
-		if (tlen > (xs)->sense_len)					\
-			tlen = (xs)->sense_len;					\
-		PISP_PCMD(xs)->totslen = imin((xs)->sense_len, totslen);	\
-		PISP_PCMD(xs)->cumslen = tlen;					\
-		memcpy(&(xs)->sense_data, sense_ptr, tlen);			\
-		(xs)->sense_resid = (xs)->sense_len - tlen;			\
-		(xs)->ccb_h.status |= CAM_AUTOSNS_VALID;			\
+#define	XS_SAVE_SENSE(xs, sp, len)	do {				\
+		uint32_t amt = min(len, (xs)->sense_len);		\
+		memcpy(&(xs)->sense_data, sp, amt);			\
+		(xs)->sense_resid = (xs)->sense_len - amt;		\
+		(xs)->ccb_h.status |= CAM_AUTOSNS_VALID;		\
 	} while (0)
 
-#define	XS_SENSE_APPEND(xs, xsnsp, xsnsl)	do {				\
-		uint32_t off = PISP_PCMD(xs)->cumslen;				\
-		uint8_t *ptr = &((uint8_t *)(&(xs)->sense_data))[off];		\
-		uint32_t amt = imin(xsnsl, PISP_PCMD(xs)->totslen - off);	\
-		if (amt) {							\
-			memcpy(ptr, xsnsp, amt);				\
-			(xs)->sense_resid -= amt;				\
-			PISP_PCMD(xs)->cumslen += amt;				\
-		}								\
+#define	XS_SENSE_APPEND(xs, sp, len)	do {				\
+		uint8_t *ptr = (uint8_t *)(&(xs)->sense_data) +		\
+		    ((xs)->sense_len - (xs)->sense_resid);		\
+		uint32_t amt = min((len), (xs)->sense_resid);		\
+		memcpy(ptr, sp, amt);					\
+		(xs)->sense_resid -= amt;				\
 	} while (0)
 
 #define	XS_SENSE_VALID(xs)	(((xs)->ccb_h.status & CAM_AUTOSNS_VALID) != 0)

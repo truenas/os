@@ -117,7 +117,7 @@ __FBSDID("$FreeBSD$");
 static int
 ipsec_common_input(struct mbuf *m, int skip, int protoff, int af, int sproto)
 {
-	char buf[IPSEC_ADDRSTRLEN];
+	IPSEC_DEBUG_DECLARE(char buf[IPSEC_ADDRSTRLEN]);
 	union sockaddr_union dst_address;
 	struct secasvar *sav;
 	uint32_t spi;
@@ -223,8 +223,6 @@ ipsec_common_input(struct mbuf *m, int skip, int protoff, int af, int sproto)
 	 * everything else.
 	 */
 	error = (*sav->tdb_xform->xf_input)(m, sav, skip, protoff);
-	if (error != 0)
-		key_freesav(&sav);
 	return (error);
 }
 
@@ -279,7 +277,7 @@ int
 ipsec4_common_input_cb(struct mbuf *m, struct secasvar *sav, int skip,
     int protoff)
 {
-	char buf[IPSEC_ADDRSTRLEN];
+	IPSEC_DEBUG_DECLARE(char buf[IPSEC_ADDRSTRLEN]);
 	struct ipsec_ctx_data ctx;
 	struct xform_history *xh;
 	struct secasindex *saidx;
@@ -490,7 +488,7 @@ int
 ipsec6_common_input_cb(struct mbuf *m, struct secasvar *sav, int skip,
     int protoff)
 {
-	char buf[IPSEC_ADDRSTRLEN];
+	IPSEC_DEBUG_DECLARE(char buf[IPSEC_ADDRSTRLEN]);
 	struct ipsec_ctx_data ctx;
 	struct xform_history *xh;
 	struct secasindex *saidx;

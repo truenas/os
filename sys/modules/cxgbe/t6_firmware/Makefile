@@ -2,7 +2,7 @@
 # $FreeBSD$
 #
 
-T6FW=	${.CURDIR}/../../../dev/cxgbe/firmware
+T6FW=	${SRCTOP}/sys/dev/cxgbe/firmware
 .PATH: ${T6FW}
 
 KMOD=	t6fw_cfg
@@ -17,7 +17,7 @@ FIRMWS+=	${F}:${F:C/.txt//}:1.0.0.0
 .endif
 .endfor
 
-T6FW_VER=	1.16.26.0
+T6FW_VER=	1.16.45.0
 FIRMWS+=	t6fw.fw:t6fw:${T6FW_VER}
 CLEANFILES+=	t6fw.fw
 
