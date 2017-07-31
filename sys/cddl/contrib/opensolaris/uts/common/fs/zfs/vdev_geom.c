@@ -989,10 +989,7 @@ vdev_geom_io_intr(struct bio *bp)
 		break;
 	}
 	g_destroy_bio(bp);
-	if (THREAD_CAN_SLEEP())
-		zio_execute(zio);
-	else
-		zio_delay_interrupt(zio);
+	zio_delay_interrupt(zio);
 }
 
 static void
