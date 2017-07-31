@@ -23,10 +23,12 @@
 .\" Copyright (c) 2011, Justin T. Gibbs <gibbs@FreeBSD.org>
 .\" Copyright (c) 2013 by Delphix. All Rights Reserved.
 .\" Copyright (c) 2012, Glen Barber <gjb@FreeBSD.org>
+.\" Copyright (c) 2017 Datto Inc.
 .\"
 .\" $FreeBSD$
 .\"
 .Dd July 26, 2014
+.Dd June 21, 2017
 .Dt ZPOOL 8
 .Os
 .Sh NAME
@@ -153,7 +155,7 @@
 .Op Ar new_device
 .Nm
 .Cm scrub
-.Op Fl s
+.Op Fl s | Fl p
 .Ar pool ...
 .Nm
 .Cm set
@@ -1543,11 +1545,12 @@ manner.
 .It Xo
 .Nm
 .Cm scrub
-.Op Fl s
+.Op Fl s | Fl p
 .Ar pool ...
 .Xc
 .Pp
-Begins a scrub. The scrub examines all data in the specified pools to verify
+Begins a scrub or resumes a paused scrub.
+The scrub examines all data in the specified pools to verify
 that it checksums correctly. For replicated (mirror or
 .No raidz )
 devices,
@@ -1568,7 +1571,10 @@ Because scrubbing and resilvering are
 .Tn I/O Ns -intensive
 operations,
 .Tn ZFS
-only allows one at a time. If a scrub is already in progress, the
+only allows one at a time.
+If a scrub is paused, the
+.Qq Nm Cm scrub
+resumes it; if a scrub is already in progress, the
 .Qq Nm Cm scrub
 command returns an error. To start a new scrub, you have to stop the old scrub
 with the
@@ -1579,6 +1585,18 @@ does not allow a scrub to be started until the resilver completes.
 .Bl -tag -width indent
 .It Fl s
 Stop scrubbing.
+.El
+.Bl -tag -width Ds
+.It Fl p
+Pause scrubbing.
+Scrub pause state and progress are periodically synced to disk.
+If the system is restarted or pool is exported during a paused scrub,
+even after import, scrub will remain paused until it is resumed.
+Once resumed the scrub will pick up from the place where it was last
+checkpointed to disk.
+To resume a paused scrub issue
+.Nm zpool Cm scrub
+again.
 .El
 .It Xo
 .Nm
