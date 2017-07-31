@@ -159,7 +159,7 @@ SYSINIT(vmdaemon, SI_SUB_KTHREAD_VM, SI_ORDER_FIRST, kproc_start, &vm_kp);
 #define	VM_INACT_SCAN_RATE	2
 
 int vm_pageout_deficit;		/* Estimated number of pages deficit */
-int vm_pageout_wakeup_thresh;
+u_int vm_pageout_wakeup_thresh;
 static int vm_pageout_oom_seq = 12;
 bool vm_pageout_wanted;		/* Event on which pageout daemon sleeps */
 bool vm_pages_needed;		/* Are threads waiting for free pages? */
@@ -250,8 +250,7 @@ static u_int vm_background_launder_max = 20 * 1024;
 SYSCTL_UINT(_vm, OID_AUTO, background_launder_max, CTLFLAG_RW,
     &vm_background_launder_max, 0, "background laundering cap, in kilobytes");
 
-#define VM_PAGEOUT_PAGE_COUNT 16
-int vm_pageout_page_count = VM_PAGEOUT_PAGE_COUNT;
+int vm_pageout_page_count = 32;
 
 int vm_page_max_wired;		/* XXX max # of wired pages system-wide */
 SYSCTL_INT(_vm, OID_AUTO, max_wired,
@@ -1802,6 +1801,7 @@ vm_pageout_oom(int shortage)
 	vm_offset_t size, bigsize;
 	struct thread *td;
 	struct vmspace *vm;
+	bool breakout;
 
 	/*
 	 * We keep the process bigproc locked once we find it to keep anyone
@@ -1815,8 +1815,6 @@ vm_pageout_oom(int shortage)
 	bigsize = 0;
 	sx_slock(&allproc_lock);
 	FOREACH_PROC_IN_SYSTEM(p) {
-		int breakout;
-
 		PROC_LOCK(p);
 
 		/*
@@ -1833,7 +1831,7 @@ vm_pageout_oom(int shortage)
 		 * If the process is in a non-running type state,
 		 * don't touch it.  Check all the threads individually.
 		 */
-		breakout = 0;
+		breakout = false;
 		FOREACH_THREAD_IN_PROC(p, td) {
 			thread_lock(td);
 			if (!TD_ON_RUNQ(td) &&
@@ -1842,7 +1840,7 @@ vm_pageout_oom(int shortage)
 			    !TD_IS_SUSPENDED(td) &&
 			    !TD_IS_SWAPPED(td)) {
 				thread_unlock(td);
-				breakout = 1;
+				breakout = true;
 				break;
 			}
 			thread_unlock(td);

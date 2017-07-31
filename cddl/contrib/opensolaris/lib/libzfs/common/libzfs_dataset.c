@@ -30,6 +30,7 @@
  * Copyright (c) 2014 Integros [integros.com]
  * Copyright 2016 Igor Kozhukhov <ikozhukhov@gmail.com>
  * Copyright 2016 Nexenta Systems, Inc.
+ * Copyright 2017 RackTop Systems.
  */
 
 #include <ctype.h>
@@ -103,7 +104,7 @@ zfs_validate_name(libzfs_handle_t *hdl, const char *path, int type,
 	char what;
 
 	(void) zfs_prop_get_table();
-	if (dataset_namecheck(path, &why, &what) != 0) {
+	if (entity_namecheck(path, &why, &what) != 0) {
 		if (hdl != NULL) {
 			switch (why) {
 			case NAME_ERR_TOOLONG:
@@ -132,9 +133,10 @@ zfs_validate_name(libzfs_handle_t *hdl, const char *path, int type,
 				    "'%c' in name"), what);
 				break;
 
-			case NAME_ERR_MULTIPLE_AT:
+			case NAME_ERR_MULTIPLE_DELIMITERS:
 				zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
-				    "multiple '@' delimiters in name"));
+				    "multiple '@' and/or '#' delimiters in "
+				    "name"));
 				break;
 
 			case NAME_ERR_NOLETTER:
@@ -165,7 +167,7 @@ zfs_validate_name(libzfs_handle_t *hdl, const char *path, int type,
 	if (!(type & ZFS_TYPE_SNAPSHOT) && strchr(path, '@') != NULL) {
 		if (hdl != NULL)
 			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
-			    "snapshot delimiter '@' in filesystem name"));
+			    "snapshot delimiter '@' is not expected here"));
 		return (0);
 	}
 
@@ -173,6 +175,20 @@ zfs_validate_name(libzfs_handle_t *hdl, const char *path, int type,
 		if (hdl != NULL)
 			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
 			    "missing '@' delimiter in snapshot name"));
+		return (0);
+	}
+
+	if (!(type & ZFS_TYPE_BOOKMARK) && strchr(path, '#') != NULL) {
+		if (hdl != NULL)
+			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
+			    "bookmark delimiter '#' is not expected here"));
+		return (0);
+	}
+
+	if (type == ZFS_TYPE_BOOKMARK && strchr(path, '#') == NULL) {
+		if (hdl != NULL)
+			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
+			    "missing '#' delimiter in bookmark name"));
 		return (0);
 	}
 
@@ -613,8 +629,36 @@ make_bookmark_handle(zfs_handle_t *parent, const char *path,
 	return (zhp);
 }
 
+struct zfs_open_bookmarks_cb_data {
+	const char *path;
+	zfs_handle_t *zhp;
+};
+
+static int
+zfs_open_bookmarks_cb(zfs_handle_t *zhp, void *data)
+{
+	struct zfs_open_bookmarks_cb_data *dp = data;
+
+	/*
+	 * Is it the one we are looking for?
+	 */
+	if (strcmp(dp->path, zfs_get_name(zhp)) == 0) {
+		/*
+		 * We found it.  Save it and let the caller know we are done.
+		 */
+		dp->zhp = zhp;
+		return (EEXIST);
+	}
+
+	/*
+	 * Not found.  Close the handle and ask for another one.
+	 */
+	zfs_close(zhp);
+	return (0);
+}
+
 /*
- * Opens the given snapshot, filesystem, or volume.   The 'types'
+ * Opens the given snapshot, bookmark, filesystem, or volume.   The 'types'
  * argument is a mask of acceptable types.  The function will print an
  * appropriate error message and return NULL if it can't be opened.
  */
@@ -623,6 +667,7 @@ zfs_open(libzfs_handle_t *hdl, const char *path, int types)
 {
 	zfs_handle_t *zhp;
 	char errbuf[1024];
+	char *bookp;
 
 	(void) snprintf(errbuf, sizeof (errbuf),
 	    dgettext(TEXT_DOMAIN, "cannot open '%s'"), path);
@@ -630,20 +675,68 @@ zfs_open(libzfs_handle_t *hdl, const char *path, int types)
 	/*
 	 * Validate the name before we even try to open it.
 	 */
-	if (!zfs_validate_name(hdl, path, ZFS_TYPE_DATASET, B_FALSE)) {
-		zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
-		    "invalid dataset name"));
+	if (!zfs_validate_name(hdl, path, types, B_FALSE)) {
 		(void) zfs_error(hdl, EZFS_INVALIDNAME, errbuf);
 		return (NULL);
 	}
 
 	/*
-	 * Try to get stats for the dataset, which will tell us if it exists.
+	 * Bookmarks needs to be handled separately.
 	 */
-	errno = 0;
-	if ((zhp = make_dataset_handle(hdl, path)) == NULL) {
-		(void) zfs_standard_error(hdl, errno, errbuf);
-		return (NULL);
+	bookp = strchr(path, '#');
+	if (bookp == NULL) {
+		/*
+		 * Try to get stats for the dataset, which will tell us if it
+		 * exists.
+		 */
+		errno = 0;
+		if ((zhp = make_dataset_handle(hdl, path)) == NULL) {
+			(void) zfs_standard_error(hdl, errno, errbuf);
+			return (NULL);
+		}
+	} else {
+		char dsname[ZFS_MAX_DATASET_NAME_LEN];
+		zfs_handle_t *pzhp;
+		struct zfs_open_bookmarks_cb_data cb_data = {path, NULL};
+
+		/*
+		 * We need to cut out '#' and everything after '#'
+		 * to get the parent dataset name only.
+		 */
+		assert(bookp - path < sizeof (dsname));
+		(void) strncpy(dsname, path, bookp - path);
+		dsname[bookp - path] = '\0';
+
+		/*
+		 * Create handle for the parent dataset.
+		 */
+		errno = 0;
+		if ((pzhp = make_dataset_handle(hdl, dsname)) == NULL) {
+			(void) zfs_standard_error(hdl, errno, errbuf);
+			return (NULL);
+		}
+
+		/*
+		 * Iterate bookmarks to find the right one.
+		 */
+		errno = 0;
+		if ((zfs_iter_bookmarks(pzhp, zfs_open_bookmarks_cb,
+		    &cb_data) == 0) && (cb_data.zhp == NULL)) {
+			(void) zfs_error(hdl, EZFS_NOENT, errbuf);
+			zfs_close(pzhp);
+			return (NULL);
+		}
+		if (cb_data.zhp == NULL) {
+			(void) zfs_standard_error(hdl, errno, errbuf);
+			zfs_close(pzhp);
+			return (NULL);
+		}
+		zhp = cb_data.zhp;
+
+		/*
+		 * Cleanup.
+		 */
+		zfs_close(pzhp);
 	}
 
 	if (zhp == NULL) {
@@ -1620,7 +1713,7 @@ zfs_prop_set_list(zfs_handle_t *zhp, nvlist_t *props)
 		 */
 		if (prop != ZFS_PROP_CANMOUNT ||
 		    (fnvpair_value_uint64(elem) == ZFS_CANMOUNT_OFF &&
-		     zfs_is_mounted(zhp, NULL))) {
+		    zfs_is_mounted(zhp, NULL))) {
 			cls[cl_idx] = changelist_gather(zhp, prop, 0, 0);
 			if (cls[cl_idx] == NULL)
 				goto error;
@@ -3224,6 +3317,7 @@ zfs_create(libzfs_handle_t *hdl, const char *path, zfs_type_t type,
 	char errbuf[1024];
 	uint64_t zoned;
 	enum lzc_dataset_type ost;
+	zpool_handle_t *zpool_handle;
 
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
 	    "cannot create '%s'"), path);
@@ -3263,7 +3357,8 @@ zfs_create(libzfs_handle_t *hdl, const char *path, zfs_type_t type,
 	if (p != NULL)
 		*p = '\0';
 
-	zpool_handle_t *zpool_handle = zpool_open(hdl, pool_path);
+	if ((zpool_handle = zpool_open(hdl, pool_path)) == NULL)
+		return (-1);
 
 	if (props && (props = zfs_valid_proplist(hdl, type, props,
 	    zoned, NULL, zpool_handle, errbuf)) == 0) {
@@ -3581,8 +3676,7 @@ int
 zfs_promote(zfs_handle_t *zhp)
 {
 	libzfs_handle_t *hdl = zhp->zfs_hdl;
-	zfs_cmd_t zc = { 0 };
-	char parent[MAXPATHLEN];
+	char snapname[ZFS_MAX_DATASET_NAME_LEN];
 	int ret;
 	char errbuf[1024];
 
@@ -3595,31 +3689,25 @@ zfs_promote(zfs_handle_t *zhp)
 		return (zfs_error(hdl, EZFS_BADTYPE, errbuf));
 	}
 
-	(void) strlcpy(parent, zhp->zfs_dmustats.dds_origin, sizeof (parent));
-	if (parent[0] == '\0') {
+	if (zhp->zfs_dmustats.dds_origin[0] == '\0') {
 		zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
 		    "not a cloned filesystem"));
 		return (zfs_error(hdl, EZFS_BADTYPE, errbuf));
 	}
 
-	(void) strlcpy(zc.zc_value, zhp->zfs_dmustats.dds_origin,
-	    sizeof (zc.zc_value));
-	(void) strlcpy(zc.zc_name, zhp->zfs_name, sizeof (zc.zc_name));
-	ret = zfs_ioctl(hdl, ZFS_IOC_PROMOTE, &zc);
+	ret = lzc_promote(zhp->zfs_name, snapname, sizeof (snapname));
 
 	if (ret != 0) {
-		int save_errno = errno;
-
-		switch (save_errno) {
+		switch (ret) {
 		case EEXIST:
 			/* There is a conflicting snapshot name. */
 			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
 			    "conflicting snapshot '%s' from parent '%s'"),
-			    zc.zc_string, parent);
+			    snapname, zhp->zfs_dmustats.dds_origin);
 			return (zfs_error(hdl, EZFS_EXISTS, errbuf));
 
 		default:
-			return (zfs_standard_error(hdl, save_errno, errbuf));
+			return (zfs_standard_error(hdl, ret, errbuf));
 		}
 	}
 	return (ret);

@@ -561,8 +561,13 @@ vm_page_startup(vm_offset_t vaddr)
 		size += vm_phys_segs[i].end - vm_phys_segs[i].start;
 	for (i = 0; phys_avail[i + 1] != 0; i += 2)
 		size += phys_avail[i + 1] - phys_avail[i];
-	page_range = size / (PAGE_SIZE + sizeof(struct vm_page));
 #elif defined(VM_PHYSSEG_DENSE)
+	size = high_avail - low_avail;
+#else
+#error "Either VM_PHYSSEG_DENSE or VM_PHYSSEG_SPARSE must be defined."
+#endif
+
+#ifdef VM_PHYSSEG_DENSE
 	/*
 	 * In the VM_PHYSSEG_DENSE case, the number of pages can account for
 	 * the overhead of a page structure per page only if vm_page_array is
@@ -570,14 +575,27 @@ vm_page_startup(vm_offset_t vaddr)
 	 * allocate page structures representing the physical memory
 	 * underlying vm_page_array, even though they will not be used.
 	 */
-	if (new_end == high_avail)
-		page_range = (high_avail - low_avail) / (PAGE_SIZE +
-		    sizeof(struct vm_page));
+	if (new_end != high_avail)
+		page_range = size / PAGE_SIZE;
 	else
-		page_range = high_avail / PAGE_SIZE - first_page;
-#else
-#error "Either VM_PHYSSEG_DENSE or VM_PHYSSEG_SPARSE must be defined."
 #endif
+	{
+		page_range = size / (PAGE_SIZE + sizeof(struct vm_page));
+
+		/*
+		 * If the partial bytes remaining are large enough for
+		 * a page (PAGE_SIZE) without a corresponding
+		 * 'struct vm_page', then new_end will contain an
+		 * extra page after subtracting the length of the VM
+		 * page array.  Compensate by subtracting an extra
+		 * page from new_end.
+		 */
+		if (size % (PAGE_SIZE + sizeof(struct vm_page)) >= PAGE_SIZE) {
+			if (new_end == high_avail)
+				high_avail -= PAGE_SIZE;
+			new_end -= PAGE_SIZE;
+		}
+	}
 	end = new_end;
 
 	/*
@@ -1543,11 +1561,11 @@ vm_page_alloc(vm_object_t object, vm_pindex_t pindex, int req)
 	 * for the request class.
 	 */
 	mtx_lock(&vm_page_queue_free_mtx);
-	if (vm_cnt.v_free_count + vm_cnt.v_cache_count > vm_cnt.v_free_reserved ||
+	if (vm_cnt.v_free_count > vm_cnt.v_free_reserved ||
 	    (req_class == VM_ALLOC_SYSTEM &&
-	    vm_cnt.v_free_count + vm_cnt.v_cache_count > vm_cnt.v_interrupt_free_min) ||
+	    vm_cnt.v_free_count > vm_cnt.v_interrupt_free_min) ||
 	    (req_class == VM_ALLOC_INTERRUPT &&
-	    vm_cnt.v_free_count + vm_cnt.v_cache_count > 0)) {
+	    vm_cnt.v_free_count > 0)) {
 		/*
 		 * Can we allocate the page from a reservation?
 		 */
@@ -1734,11 +1752,11 @@ vm_page_alloc_contig(vm_object_t object, vm_pindex_t pindex, int req,
 	 * below the lower bound for the allocation class?
 	 */
 	mtx_lock(&vm_page_queue_free_mtx);
-	if (vm_cnt.v_free_count + vm_cnt.v_cache_count >= npages +
-	    vm_cnt.v_free_reserved || (req_class == VM_ALLOC_SYSTEM &&
-	    vm_cnt.v_free_count + vm_cnt.v_cache_count >= npages +
-	    vm_cnt.v_interrupt_free_min) || (req_class == VM_ALLOC_INTERRUPT &&
-	    vm_cnt.v_free_count + vm_cnt.v_cache_count >= npages)) {
+	if (vm_cnt.v_free_count >= npages + vm_cnt.v_free_reserved ||
+	    (req_class == VM_ALLOC_SYSTEM &&
+	    vm_cnt.v_free_count >= npages + vm_cnt.v_interrupt_free_min) ||
+	    (req_class == VM_ALLOC_INTERRUPT &&
+	    vm_cnt.v_free_count >= npages)) {
 		/*
 		 * Can we allocate the pages from a reservation?
 		 */
@@ -1898,11 +1916,11 @@ vm_page_alloc_freelist(int flind, int req)
 	 * Do not allocate reserved pages unless the req has asked for it.
 	 */
 	mtx_lock(&vm_page_queue_free_mtx);
-	if (vm_cnt.v_free_count + vm_cnt.v_cache_count > vm_cnt.v_free_reserved ||
+	if (vm_cnt.v_free_count > vm_cnt.v_free_reserved ||
 	    (req_class == VM_ALLOC_SYSTEM &&
-	    vm_cnt.v_free_count + vm_cnt.v_cache_count > vm_cnt.v_interrupt_free_min) ||
+	    vm_cnt.v_free_count > vm_cnt.v_interrupt_free_min) ||
 	    (req_class == VM_ALLOC_INTERRUPT &&
-	    vm_cnt.v_free_count + vm_cnt.v_cache_count > 0))
+	    vm_cnt.v_free_count > 0))
 		m = vm_phys_alloc_freelist_pages(flind, VM_FREEPOOL_DIRECT, 0);
 	else {
 		mtx_unlock(&vm_page_queue_free_mtx);
@@ -2430,7 +2448,7 @@ vm_page_reclaim_contig(int req, u_long npages, vm_paddr_t low, vm_paddr_t high,
 	 * Return if the number of free pages cannot satisfy the requested
 	 * allocation.
 	 */
-	count = vm_cnt.v_free_count + vm_cnt.v_cache_count;
+	count = vm_cnt.v_free_count;
 	if (count < npages + vm_cnt.v_free_reserved || (count < npages +
 	    vm_cnt.v_interrupt_free_min && req_class == VM_ALLOC_SYSTEM) ||
 	    (count < npages && req_class == VM_ALLOC_INTERRUPT))
@@ -2713,7 +2731,7 @@ vm_page_free_wakeup(void)
 	 * some free.
 	 */
 	if (vm_pageout_pages_needed &&
-	    vm_cnt.v_cache_count + vm_cnt.v_free_count >= vm_cnt.v_pageout_free_min) {
+	    vm_cnt.v_free_count >= vm_cnt.v_pageout_free_min) {
 		wakeup(&vm_pageout_pages_needed);
 		vm_pageout_pages_needed = 0;
 	}
@@ -3009,7 +3027,7 @@ vm_page_try_to_free(vm_page_t m)
 /*
  * vm_page_advise
  *
- * 	Deactivate or do nothing, as appropriate.
+ * 	Apply the specified advice to the given page.
  *
  *	The object and page must be locked.
  */
@@ -3027,8 +3045,11 @@ vm_page_advise(vm_page_t m, int advice)
 		 * would result in a page fault on a later access.
 		 */
 		vm_page_undirty(m);
-	else if (advice != MADV_DONTNEED)
+	else if (advice != MADV_DONTNEED) {
+		if (advice == MADV_WILLNEED)
+			vm_page_activate(m);
 		return;
+	}
 
 	/*
 	 * Clear any references to the page.  Otherwise, the page daemon will
@@ -3552,8 +3573,8 @@ vm_page_assert_pga_writeable(vm_page_t m, uint8_t bits)
 
 DB_SHOW_COMMAND(page, vm_page_print_page_info)
 {
+
 	db_printf("vm_cnt.v_free_count: %d\n", vm_cnt.v_free_count);
-	db_printf("vm_cnt.v_cache_count: %d\n", vm_cnt.v_cache_count);
 	db_printf("vm_cnt.v_inactive_count: %d\n", vm_cnt.v_inactive_count);
 	db_printf("vm_cnt.v_active_count: %d\n", vm_cnt.v_active_count);
 	db_printf("vm_cnt.v_laundry_count: %d\n", vm_cnt.v_laundry_count);
@@ -3568,8 +3589,7 @@ DB_SHOW_COMMAND(pageq, vm_page_print_pageq_info)
 {
 	int dom;
 
-	db_printf("pq_free %d pq_cache %d\n",
-	    vm_cnt.v_free_count, vm_cnt.v_cache_count);
+	db_printf("pq_free %d\n", vm_cnt.v_free_count);
 	for (dom = 0; dom < vm_ndomains; dom++) {
 		db_printf(
 	    "dom %d page_cnt %d free %d pq_act %d pq_inact %d pq_laund %d\n",

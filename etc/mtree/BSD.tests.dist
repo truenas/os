@@ -8,13 +8,17 @@
     bin
         cat
         ..
-        chown
+        chmod
         ..
         date
         ..
         dd
         ..
+        echo
+        ..
         expr
+        ..
+        ln
         ..
         ls
         ..
@@ -328,6 +332,8 @@
         ..
         librt
         ..
+        libsbuf
+        ..
         libthr
             dlopen
             ..
@@ -377,6 +383,8 @@
                 atf
                 ..
                 plain
+                ..
+                tap
                 ..
             ..
         ..
@@ -606,6 +614,8 @@
         ..
         dirname
         ..
+        du
+        ..
         file2c
         ..
         getconf
@@ -636,6 +646,8 @@
         ..
         printf
         ..
+        procstat
+        ..
         sdiff
         ..
         sed
@@ -643,6 +655,8 @@
             ..
         ..
         soelim
+        ..
+        stat
         ..
         tail
         ..
@@ -674,6 +688,8 @@
         ..
     ..
     usr.sbin
+        chown
+        ..
         etcupdate
         ..
         extattr

@@ -7,8 +7,6 @@ FILESGROUPS=	FILES
 
 # No need as it is empty and just causes rebuilds since this file does so much.
 UPDATE_DEPENDFILE=	no
-SUBDIR=	\
-	newsyslog.conf.d
 
 .if ${MK_SENDMAIL} != "no"
 SUBDIR+=sendmail
@@ -255,6 +253,7 @@ distribution:
 	${_+_}cd ${.CURDIR}/defaults; ${MAKE} install
 	${_+_}cd ${.CURDIR}/devd; ${MAKE} install
 	${_+_}cd ${.CURDIR}/gss; ${MAKE} install
+	${_+_}cd ${.CURDIR}/newsyslog.conf.d; ${MAKE} install
 .if ${MK_NTP} != "no"
 	${_+_}cd ${.CURDIR}/ntp; ${MAKE} install
 .endif
@@ -340,19 +339,6 @@ distribution:
 .endif
 
 MTREE_CMD?=	mtree
-
-.if ${MK_INSTALL_AS_USER} == "yes" && ${_uid} != 0
-MTREE_FILTER= sed -e 's,\([gu]\)name=,\1id=,g' \
-	-e 's,\(uid=\)[^ ]* ,\1${_uid} ,' \
-	-e 's,\(gid=\)[^ ]* ,\1${_gid} ,' \
-	-e 's,\(uid=\)[^ ]*$$,\1${_uid},' \
-	-e 's,\(gid=\)[^ ]*$$,\1${_gid},' 
-.else
-MTREE_FILTER= cat
-.if !defined(NO_FSCHG)
-MTREE_FSCHG=	-i
-.endif
-.endif
 
 MTREES=		mtree/BSD.root.dist		/		\
 		mtree/BSD.var.dist		/var		\
@@ -469,3 +455,16 @@ etc-examples: etc-examples-install
 	    DESTDIR=${DESTDIR}${SHAREDIR}/examples
 
 .include <bsd.prog.mk>
+
+.if ${MK_INSTALL_AS_USER} == "yes" && ${_uid} != 0
+MTREE_FILTER= sed -e 's,\([gu]\)name=,\1id=,g' \
+	-e 's,\(uid=\)[^ ]* ,\1${_uid} ,' \
+	-e 's,\(gid=\)[^ ]* ,\1${_gid} ,' \
+	-e 's,\(uid=\)[^ ]*$$,\1${_uid},' \
+	-e 's,\(gid=\)[^ ]*$$,\1${_gid},'
+.else
+MTREE_FILTER= cat
+.if !defined(NO_FSCHG)
+MTREE_FSCHG=	-i
+.endif
+.endif

@@ -636,6 +636,7 @@ _INSTALL_DDIR=	${DESTDIR}/${DISTDIR}
 INSTALL_DDIR=	${_INSTALL_DDIR:S://:/:g:C:/$::}
 .if defined(NO_ROOT)
 METALOG?=	${DESTDIR}/${DISTDIR}/METALOG
+METALOG:=	${METALOG:C,//+,/,g}
 IMAKE+=		-DNO_ROOT METALOG=${METALOG}
 INSTALLFLAGS+=	-U -M ${METALOG} -D ${INSTALL_DDIR}
 MTREEFLAGS+=	-W
@@ -678,7 +679,15 @@ _worldtmp: .PHONY
 .endif
 .else
 	rm -rf ${WORLDTMP}/legacy/usr/include
-.endif
+.if ${USING_SYSTEM_COMPILER} == "yes"
+.for cc in cc c++
+	if [ -x ${WORLDTMP}/usr/bin/${cc} ]; then \
+		inum=$$(stat -f %i ${WORLDTMP}/usr/bin/${cc}); \
+		find ${WORLDTMP}/usr/bin -inum $${inum} -delete; \
+	fi
+.endfor
+.endif	# ${USING_SYSTEM_COMPILER} == "yes"
+.endif	# !defined(NO_CLEAN)
 .for _dir in \
     lib lib/casper usr legacy/bin legacy/usr
 	mkdir -p ${WORLDTMP}/${_dir}
@@ -914,6 +923,22 @@ __installcheck_UGID: .PHONY
 		false; \
 	fi
 .endfor
+.endif
+#
+# If installing over the running system (DESTDIR is / or unset) and the install
+# includes rescue, try running rescue from the objdir as a sanity check.  If
+# rescue is not functional (e.g., because it depends on a system call not
+# supported by the currently running kernel), abort the installation.
+#
+.if !make(distributeworld) && ${MK_RESCUE} != "no" && \
+    (empty(DESTDIR) || ${DESTDIR} == "/") && empty(BYPASS_INSTALLCHECK_SH)
+_installcheck_world: __installcheck_sh_check
+__installcheck_sh_check: .PHONY
+	@if [ "`${OBJTREE}${.CURDIR}/rescue/rescue/rescue sh -c 'echo OK'`" != \
+	    OK ]; then \
+		echo "rescue/sh check failed, installation aborted" >&2; \
+		false; \
+	fi
 .endif
 
 #
