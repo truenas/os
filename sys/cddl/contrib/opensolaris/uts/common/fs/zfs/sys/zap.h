@@ -290,7 +290,7 @@ int zap_join(objset_t *os, uint64_t fromobj, uint64_t intoobj, dmu_tx_t *tx);
 
 /* Same as zap_join, but set the values to 'value'. */
 int zap_join_key(objset_t *os, uint64_t fromobj, uint64_t intoobj,
-    uint64_t value, dmu_tx_t *tx);
+    uint64_t value, dmu_tx_t *tx, boolean_t exists_ok);
 
 /* Same as zap_join, but add together any duplicated entries. */
 int zap_join_increment(objset_t *os, uint64_t fromobj, uint64_t intoobj,

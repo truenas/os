@@ -2032,6 +2032,7 @@ spa_init(int mode)
 	zpool_feature_init();
 	spa_config_load();
 	l2arc_start();
+	dsl_scan_global_init();
 #ifndef illumos
 #ifdef _KERNEL
 	zfs_deadman_init();
