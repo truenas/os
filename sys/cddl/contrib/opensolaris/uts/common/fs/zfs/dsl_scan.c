@@ -113,7 +113,7 @@ typedef int (scan_cb_t)(dsl_pool_t *, const blkptr_t *,
 
 static scan_cb_t dsl_scan_scrub_cb;
 
-static int scan_ds_queue_compar(const void *a, const void *b);
+static int scan_ds_queue_compare(const void *a, const void *b);
 static int scan_prefetch_queue_compare(const void *a, const void *b);
 static void scan_ds_queue_empty(dsl_scan_t *scn, boolean_t destroy);
 static boolean_t scan_ds_queue_contains(dsl_scan_t *scn, uint64_t dsobj,
@@ -124,6 +124,12 @@ static void scan_ds_queue_sync(dsl_scan_t *scn, dmu_tx_t *tx);
 
 extern int zfs_vdev_async_write_active_min_dirty_percent;
 
+/*
+ * By default zfs will check to ensure it is not over the hard memory
+ * limit before each txg. If finer-grained control of this is needed
+ * this value can be set to 1 to enable checking before scanning each
+ * block.
+ */
 int zfs_scan_strict_mem_lim = 0;
 
 /*
@@ -371,7 +377,7 @@ void
 dsl_scan_global_init(void)
 {
 	/*
-	 * This is used in ext_size_compar() to weight segments
+	 * This is used in ext_size_compare() to weight segments
 	 * based on how sparse they are. This cannot be changed
 	 * mid-scan and the tree comparison functions don't currently
 	 * have a mechansim for passing additional context to the
@@ -405,7 +411,7 @@ dsl_scan_init(dsl_pool_t *dp, uint64_t txg)
 	    SPA_FEATURE_ASYNC_DESTROY);
 
 	bcopy(&scn->scn_phys, &scn->scn_phys_cached, sizeof (scn->scn_phys));
-	avl_create(&scn->scn_queue, scan_ds_queue_compar, sizeof (scan_ds_t),
+	avl_create(&scn->scn_queue, scan_ds_queue_compare, sizeof (scan_ds_t),
 	    offsetof(scan_ds_t, sds_node));
 	avl_create(&scn->scn_prefetch_queue, scan_prefetch_queue_compare,
 	    sizeof (scan_prefetch_issue_ctx_t),
@@ -917,7 +923,7 @@ dsl_free_sync(zio_t *pio, dsl_pool_t *dp, uint64_t txg, const blkptr_t *bpp)
 }
 
 static int
-scan_ds_queue_compar(const void *a, const void *b)
+scan_ds_queue_compare(const void *a, const void *b)
 {
 	const scan_ds_t *sds_a = a, *sds_b = b;
 
@@ -1572,7 +1578,7 @@ dsl_scan_recurse(dsl_scan_t *scn, dsl_dataset_t *ds, dmu_objset_type_t ostype,
 		err = arc_read(NULL, dp->dp_spa, bp, arc_getbuf_func, &buf,
 		    ZIO_PRIORITY_ASYNC_READ, zio_flags, &flags, zb);
 		if (err) {
-			atomic_inc_64(&scn->scn_phys.scn_errors);
+			scn->scn_phys.scn_errors++;
 			return (err);
 		}
 		for (i = 0, cbp = buf->b_data; i < epb; i++, cbp++) {
@@ -1612,7 +1618,7 @@ dsl_scan_recurse(dsl_scan_t *scn, dsl_dataset_t *ds, dmu_objset_type_t ostype,
 		err = arc_read(NULL, dp->dp_spa, bp, arc_getbuf_func, &buf,
 		    ZIO_PRIORITY_ASYNC_READ, zio_flags, &flags, zb);
 		if (err) {
-			atomic_inc_64(&scn->scn_phys.scn_errors);
+			scn->scn_phys.scn_errors++;
 			return (err);
 		}
 
@@ -3545,7 +3551,7 @@ ext_size_compar(const void *x, const void *y)
  * based on LBA-order (from lowest to highest).
  */
 static int
-io_addr_compar(const void *x, const void *y)
+io_addr_compare(const void *x, const void *y)
 {
 	const scan_io_t *a = x, *b = y;
 	uint64_t off_a = SCAN_IO_GET_OFFSET(a);
@@ -3572,7 +3578,7 @@ scan_io_queue_create(vdev_t *vd)
 	    &q->q_vd->vdev_scan_io_queue_lock, zfs_scan_max_ext_gap);
 	avl_create(&q->q_exts_by_size, ext_size_compar,
 	    sizeof (range_seg_t), offsetof(range_seg_t, rs_pp_node));
-	avl_create(&q->q_zios_by_addr, io_addr_compar,
+	avl_create(&q->q_zios_by_addr, io_addr_compare,
 	    sizeof (scan_io_t), offsetof(scan_io_t, sio_nodes.sio_addr_node));
 
 	return (q);

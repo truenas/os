@@ -796,8 +796,6 @@ vdev_free(vdev_t *vd)
 	if (vd == spa->spa_root_vdev)
 		spa->spa_root_vdev = NULL;
 
-	ASSERT3P(vd->vdev_scan_io_queue, ==, NULL);
-
 	kmem_free(vd, sizeof (vdev_t));
 }
 

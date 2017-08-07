@@ -853,11 +853,6 @@ again:
 	vdev_queue_pending_add(vq, zio);
 	vq->vq_last_offset = zio->io_offset;
 
-	if (p == ZIO_PRIORITY_SCRUB) {
-		dprintf("issuing scrub for '%s' at %lld\n",
-		    vq->vq_vdev->vdev_path, (longlong_t)zio->io_offset);
-	}
-
 	return (zio);
 }
 

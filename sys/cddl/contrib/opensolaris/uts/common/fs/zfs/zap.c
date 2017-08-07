@@ -1035,7 +1035,7 @@ zap_join(objset_t *os, uint64_t fromobj, uint64_t intoobj, dmu_tx_t *tx)
 
 int
 zap_join_key(objset_t *os, uint64_t fromobj, uint64_t intoobj,
-    uint64_t value, dmu_tx_t *tx, boolean_t exists_ok)
+    uint64_t value, dmu_tx_t *tx)
 {
 	zap_cursor_t zc;
 	zap_attribute_t za;
@@ -1051,12 +1051,8 @@ zap_join_key(objset_t *os, uint64_t fromobj, uint64_t intoobj,
 		}
 		err = zap_add(os, intoobj, za.za_name,
 		    8, 1, &value, tx);
-		if (err != 0) {
-			if (err == EEXIST && exists_ok)
-				err = 0;
-			else
-				break;
-		}
+		if (err != 0)
+			break;
 	}
 	zap_cursor_fini(&zc);
 	return (err);
