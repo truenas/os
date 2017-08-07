@@ -1178,6 +1178,7 @@ sysctl_vfs_zfs_arc_min(SYSCTL_HANDLER_ARGS)
 #define	HDR_IO_IN_PROGRESS(hdr)	((hdr)->b_flags & ARC_FLAG_IO_IN_PROGRESS)
 #define	HDR_IO_ERROR(hdr)	((hdr)->b_flags & ARC_FLAG_IO_ERROR)
 #define	HDR_PREFETCH(hdr)	((hdr)->b_flags & ARC_FLAG_PREFETCH)
+#define	HDR_LONG_LIFE(hdr)	((hdr)->b_flags & ARC_FLAG_LONG_LIFE)
 #define	HDR_COMPRESSION_ENABLED(hdr)	\
 	((hdr)->b_flags & ARC_FLAG_COMPRESSED_ARC)
 
@@ -3494,7 +3495,7 @@ arc_evict_hdr(arc_buf_hdr_t *hdr, kmutex_t *hash_lock)
 {
 	arc_state_t *evicted_state, *state;
 	int64_t bytes_evicted = 0;
-	int min_lifetime = (hdr->b_flags & ARC_FLAG_LONG_LIFE) ?
+	int min_lifetime = HDR_LONG_LIFE(hdr) ?
 	    arc_min_long_lifespan : arc_min_prefetch_lifespan;
 
 	ASSERT(MUTEX_HELD(hash_lock));
@@ -4901,7 +4902,7 @@ arc_access(arc_buf_hdr_t *hdr, kmutex_t *hash_lock)
 		 * - move the buffer to the head of the list if this is
 		 *   another prefetch (to make it less likely to be evicted).
 		 */
-		if (HDR_PREFETCH(hdr) || hdr->b_flags & ARC_FLAG_LONG_LIFE) {
+		if (HDR_PREFETCH(hdr) || HDR_LONG_LIFE(hdr)) {
 			if (refcount_count(&hdr->b_l1hdr.b_refcnt) == 0) {
 				/* link protected by hash lock */
 				ASSERT(multilist_link_active(
@@ -4939,7 +4940,7 @@ arc_access(arc_buf_hdr_t *hdr, kmutex_t *hash_lock)
 		 * MFU state.
 		 */
 
-		if (HDR_PREFETCH(hdr) || hdr->b_flags & ARC_FLAG_LONG_LIFE) {
+		if (HDR_PREFETCH(hdr) || HDR_LONG_LIFE(hdr)) {
 			new_state = arc_mru;
 			if (refcount_count(&hdr->b_l1hdr.b_refcnt) > 0) {
 				arc_hdr_clear_flags(hdr,
@@ -4976,7 +4977,7 @@ arc_access(arc_buf_hdr_t *hdr, kmutex_t *hash_lock)
 		 * MFU state.
 		 */
 
-		if (HDR_PREFETCH(hdr) || hdr->b_flags & ARC_FLAG_LONG_LIFE) {
+		if (HDR_PREFETCH(hdr) || HDR_LONG_LIFE(hdr)) {
 			/*
 			 * This is a prefetch access...
 			 * move this block back to the MRU state.

@@ -257,14 +257,7 @@ range_tree_add_impl(void *arg, uint64_t start, uint64_t size, uint64_t fill)
 	if (rs != NULL) {
 		ASSERT3U(gap, !=, 0);
 		if (rs->rs_start <= start && rs->rs_end >= end) {
-			if (rt->rt_ops != NULL &&
-			    rt->rt_ops->rtop_remove != NULL)
-				rt->rt_ops->rtop_remove(rt, rs, rt->rt_arg);
-			rs->rs_fill += fill;
-			ASSERT3U(rs->rs_fill, <=, rs->rs_end - rs->rs_start);
-			if (rt->rt_ops != NULL &&
-			    rt->rt_ops->rtop_add != NULL)
-				rt->rt_ops->rtop_add(rt, rs, rt->rt_arg);
+			range_tree_adjust_fill(rt, rs, fill);
 			return;
 		}
 

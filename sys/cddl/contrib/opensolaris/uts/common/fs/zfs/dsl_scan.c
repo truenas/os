@@ -143,7 +143,7 @@ int zfs_scan_md_maxinflight = 1024;
 int zfs_scan_leaf_maxinflight = 50;
 
 int zfs_scan_issue_strategy = 0;
-int zfs_scan_direct = B_FALSE;	/* don't queue & sort zios, go direct */
+int zfs_scan_direct = B_TRUE;	/* don't queue & sort zios, go direct */
 uint64_t zfs_scan_max_ext_gap = 2 << 20;	/* bytes */
 
 int zfs_scan_checkpoint_intval = 7200;	/* seconds */
@@ -554,8 +554,25 @@ dsl_scan_is_paused_scrub(const dsl_scan_t *scn)
 static void
 dsl_scan_sync_state(dsl_scan_t *scn, dmu_tx_t *tx, state_sync_type_t sync_type)
 {
+	int i;
+	spa_t *spa = scn->scn_dp->dp_spa;
+
 	ASSERT(sync_type != SYNC_MANDATORY || scn->scn_bytes_pending == 0);
 	if (scn->scn_bytes_pending == 0) {
+		for (i = 0; i < spa->spa_root_vdev->vdev_children; i++) {
+			vdev_t *vd = spa->spa_root_vdev->vdev_child[i];
+			dsl_scan_io_queue_t *q = vd->vdev_scan_io_queue;
+
+			if (q == NULL)
+				continue;
+
+			mutex_enter(&vd->vdev_scan_io_queue_lock);
+			ASSERT3P(avl_first(&q->q_zios_by_addr), ==, NULL);
+			ASSERT3P(avl_first(&q->q_exts_by_size), ==, NULL);
+			ASSERT3P(range_tree_first(q->q_exts_by_addr), ==, NULL);
+			mutex_exit(&vd->vdev_scan_io_queue_lock);
+		}
+
 		if (scn->scn_phys.scn_queue_obj != 0)
 			scan_ds_queue_sync(scn, tx);
 		VERIFY0(zap_update(scn->scn_dp->dp_meta_objset,
@@ -1072,6 +1089,9 @@ dsl_scan_should_clear(dsl_scan_t *scn)
 	}
 
 	dprintf("current scan memory usage: %llu bytes\n", (longlong_t)mused);
+
+	if (mused == 0)
+		ASSERT0(scn->scn_bytes_pending);
 
 	/*
 	 * If we are above our hard limit, we need to clear out memory.
@@ -3096,8 +3116,11 @@ dsl_scan_sync(dsl_pool_t *dp, dmu_tx_t *tx)
 	 * but afterwards the scan will remain sorted unless reloaded from
 	 * a checkpoint after a reboot.
 	 */
-	if (!zfs_scan_direct)
+	if (!zfs_scan_direct) {
 		scn->scn_is_sorted = B_TRUE;
+		if (scn->scn_last_checkpoint == 0)
+			scn->scn_last_checkpoint = ddi_get_lbolt();
+	}
 
 	/*
 	 * For sorted scans, determine what kind of work we will be doing
@@ -3222,7 +3245,8 @@ dsl_scan_sync(dsl_pool_t *dp, dmu_tx_t *tx)
 	} else if (scn->scn_done_txg != 0 && scn->scn_done_txg <= tx->tx_txg) {
 		/* Finished with everything. Mark the scrub as complete */
 		zfs_dbgmsg("txg %llu scrub complete", tx->tx_txg);
-		ASSERT3U(spa->spa_scrub_inflight, ==, 0);
+		ASSERT3U(scn->scn_done_txg, !=, 0);
+		ASSERT0(spa->spa_scrub_inflight);
 		ASSERT0(scn->scn_bytes_pending);
 		dsl_scan_done(scn, B_TRUE, tx);
 		sync_type = SYNC_MANDATORY;
