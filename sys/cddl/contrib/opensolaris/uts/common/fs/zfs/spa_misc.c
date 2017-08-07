@@ -2157,6 +2157,7 @@ spa_scan_stat_init(spa_t *spa)
 		spa->spa_scan_pass_scrub_pause = 0;
 	spa->spa_scan_pass_scrub_spent_paused = 0;
 	spa->spa_scan_pass_exam = 0;
+	spa->spa_scan_pass_issued = 0;
 	vdev_scan_stat_init(spa->spa_root_vdev);
 }
 
@@ -2182,10 +2183,12 @@ spa_scan_get_stats(spa_t *spa, pool_scan_stat_t *ps)
 	ps->pss_processed = scn->scn_phys.scn_processed;
 	ps->pss_errors = scn->scn_phys.scn_errors;
 	ps->pss_state = scn->scn_phys.scn_state;
-
+	ps->pss_issued =
+		scn->scn_issued_before_pass + spa->spa_scan_pass_issued;
 	/* data not stored on disk */
 	ps->pss_pass_start = spa->spa_scan_pass_start;
 	ps->pss_pass_exam = spa->spa_scan_pass_exam;
+	ps->pss_pass_issued = spa->spa_scan_pass_issued;
 	ps->pss_pass_scrub_pause = spa->spa_scan_pass_scrub_pause;
 	ps->pss_pass_scrub_spent_paused = spa->spa_scan_pass_scrub_spent_paused;
 
