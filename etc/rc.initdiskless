@@ -146,6 +146,7 @@
 # (end of documentation, now get to the real code)
 
 dlv=`/sbin/sysctl -n vfs.nfs.diskless_valid 2> /dev/null`
+DEFAULT_TMPFS_SIZE=$(($(/sbin/sysctl -n hw.physmem) / 1536))
 
 # DEBUGGING
 # log something on stdout if verbose.
@@ -198,7 +199,7 @@ handle_remount() { # $1 = mount point
 # Create a generic memory disk (using tmpfs)
 #
 mount_md() {
-    mount -t tmpfs -o size=$(($1 * 512)) tmpfs $2
+	/sbin/mount -t tmpfs -o size=$1 tmpfs $2
 }
 
 # Create the memory filesystem if it has not already been created
@@ -206,11 +207,12 @@ mount_md() {
 create_md() {
 	[ "x`eval echo \\$md_created_$1`" = "x" ] || return # only once
 	if [ "x`eval echo \\$md_size_$1`" = "x" ]; then
-	    md_size=10240
+	    md_size=${DEFAULT_TMPFS_SIZE}
 	else
 	    md_size=`eval echo \\$md_size_$1`
 	fi
-	log create_md $1 with size $md_size
+	md_size=$((${md_size} * 512))
+	log mount_md $1 with size $md_size
 	mount_md $md_size /$1
 	/bin/chmod 755 /$1
 	eval md_created_$1=created

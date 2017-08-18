@@ -1033,7 +1033,7 @@ only forth definitions also menu-infrastructure
 		drop FALSE \ don't draw a box
 	( 4 ) then ( 3 ) then ( 2 )  then ( 1 ) then
 	if
-		42 13 menuX @ 3 - menuY @ 1- box \ Draw frame (w,h,x,y)
+		75 13 menuX @ 3 - menuY @ 1- box \ Draw frame (w,h,x,y)
 	then
 
 	0 25 at-xy \ Move cursor to the bottom for output

@@ -1460,7 +1460,7 @@ get_exportlist_one(void)
 				goto nextline;
 			    }
 			    if (debug)
-				warnx("doing opt %s", cp);
+				    warnx("doing opt %s (endcp = %s)", cp, endcp);
 			    got_nondir = 1;
 			    if (do_opt(&cp, &endcp, ep, grp, &has_host,
 				&exflags, &anon)) {
@@ -2234,16 +2234,25 @@ do_opt(char **cpp, char **endcpp, struct exportlist *ep, struct grouplist *grp,
 	savedc = *cp;
 	*cp = '\0';
 	while (cpopt && *cpopt) {
+		if (debug)
+			warnx("%s(%d): cpopt = %s", __FUNCTION__, __LINE__, cpopt);
 		allflag = 1;
 		usedarg = -2;
 		if ((cpoptend = strchr(cpopt, ','))) {
 			*cpoptend++ = '\0';
-			if ((cpoptarg = strchr(cpopt, '=')))
+			if ((cpoptarg = strchr(cpopt, '='))) {
+				if (debug)
+					warnx("%s(%d):  cpopt = %s, cpoptarg = %s",
+					      __FUNCTION__, __LINE__, cpopt, cpoptarg);
 				*cpoptarg++ = '\0';
+			}
 		} else {
-			if ((cpoptarg = strchr(cpopt, '=')))
+			if ((cpoptarg = strchr(cpopt, '='))) {
+				if (debug)
+					warnx("%s(%d): cpopt = %s, cpoptarg = %s",
+					      __FUNCTION__, __LINE__, cpopt, cpoptarg);
 				*cpoptarg++ = '\0';
-			else {
+			} else {
 				*cp = savedc;
 				nextfield(&cp, &endcp);
 				**endcpp = '\0';
@@ -2823,9 +2832,29 @@ nextfield(char **cp, char **endcp)
 	if (*p == '\n' || *p == '\0')
 		*cp = *endcp = p;
 	else {
+		char quot = 0;
 		*cp = p++;
-		while (*p != ' ' && *p != '\t' && *p != '\n' && *p != '\0')
+		do {
+			if (quot == 0 && (*p == '\'' || *p == '"')) {
+				quot = *p;
+				p++;
+				continue;
+			}
+			if (quot) {
+				if (*p == 0)
+					break;
+				if (*p == quot) {
+					quot = 0;
+				};
+				p++;
+				continue;
+			} else {
+				if (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\0')
+					break;
+			}
 			p++;
+		} while (1);
+		
 		*endcp = p;
 	}
 }
@@ -2898,9 +2927,15 @@ parsecred(char *namelist, struct xucred *cr)
 	cr->cr_ngroups = 1;
 	/*
 	 * Get the user's password table entry.
+	 * Format is <name>[:<grp>[...]], so
+	 * First we want to get a 
 	 */
-	names = strsep_quote(&namelist, " \t\n");
-	name = strsep(&names, ":");
+	if (debug)
+		warnx("namelist starts out as %s", namelist);
+	names = namelist;
+	name = strsep_quote(&names, ":");
+	if (debug)
+		warnx("name=%s, names=%s", name, names);
 	/* Bug?  name could be NULL here */
 	if (isdigit(*name) || *name == '-')
 		pw = getpwuid(atoi(name));
@@ -2941,7 +2976,9 @@ parsecred(char *namelist, struct xucred *cr)
 	}
 	cr->cr_ngroups = 0;
 	while (names != NULL && *names != '\0' && cr->cr_ngroups < XU_NGROUPS) {
-		name = strsep(&names, ":");
+		name = strsep_quote(&names, ":");
+		if (debug)
+			warnx("%s(%d):  name = %s", __FUNCTION__, __LINE__, name);
 		if (isdigit(*name) || *name == '-') {
 			cr->cr_groups[cr->cr_ngroups++] = atoi(name);
 		} else {
