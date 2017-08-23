@@ -319,6 +319,9 @@ DRIVER_MODULE(nvdimm, nexus, nvdimm_driver, nvdimm_devclass, 0, 0);
 DRIVER_MODULE(nvdimm, nvdimm_root, nvdimm_driver, nvdimm_devclass, 0, 0);
 MODULE_VERSION(mvdimm, 1);
 
+/* Hooks for the ACPI CA debugging infrastructure */
+#define _COMPONENT	ACPI_BUS
+ACPI_MODULE_NAME("NVDIMM")
 
 struct nvdimm_root {
 };
