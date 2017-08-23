@@ -6,7 +6,7 @@
 
 KMOD=	nvdimm
 SRCS=	nvdimm.c nvdimm_copy.S
-SRCS+=	device_if.h bus_if.h ntb_if.h opt_ddb.h
+SRCS+=	opt_acpi.h acpi_if.h device_if.h bus_if.h ntb_if.h opt_ddb.h
 
 # XXX: for assym.s
 SRCS+=  opt_kstack_pages.h opt_nfs.h opt_hwpmc_hooks.h opt_compat.h
