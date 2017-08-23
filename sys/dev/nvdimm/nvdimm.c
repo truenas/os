@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Alexander Motin <mav@FreeBSD.org>
+ * Copyright (c) 2016-2017 Alexander Motin <mav@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,6 +26,8 @@
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
+
+#include "opt_acpi.h"
 
 #include <sys/param.h>
 #include <sys/module.h>
@@ -54,6 +56,11 @@ __FBSDID("$FreeBSD$");
 #include <machine/metadata.h>
 #include <machine/pc/bios.h>
 #include <machine/cpu.h>
+
+#include <contrib/dev/acpica/include/acpi.h>
+#include <contrib/dev/acpica/include/accommon.h>
+
+#include <dev/acpica/acpivar.h>
 
 #include "../ntb/ntb.h"
 
@@ -217,8 +224,20 @@ nvdimm_identify(driver_t *driver, device_t parent)
 static int
 nvdimm_probe(device_t dev)
 {
+	struct resource *res;
+	int rid;
+	uintmax_t size;
+	char buf[32];
 
-	device_set_desc(dev, "NVDIMM");
+	rid = 0;
+	res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &rid, 0);
+	if (res == NULL)
+		return (ENXIO);
+	size = rman_get_size(res);
+	bus_release_resource(dev, SYS_RES_MEMORY, rid, res);
+
+	snprintf(buf, sizeof(buf), "NVDIMM region %juMB", size / (1024 * 1024));
+	device_set_desc_copy(dev, buf);
 	return (0);
 }
 
@@ -262,6 +281,7 @@ nvdimm_attach(device_t dev)
 	disk->d_sectorsize = DEV_BSIZE;
 	disk->d_mediasize = sc->size - PAGE_SIZE;
 	disk->d_flags = DISKFLAG_DIRECT_COMPLETION;
+	disk->d_rotation_rate = DISK_RR_NON_ROTATING;
 	disk_create(disk, DISK_VERSION);
 	return (0);
 }
@@ -293,10 +313,191 @@ static driver_t nvdimm_driver = {
 };
 
 static devclass_t nvdimm_devclass;
+static devclass_t nvdimm_root_devclass;
 
 DRIVER_MODULE(nvdimm, nexus, nvdimm_driver, nvdimm_devclass, 0, 0);
+DRIVER_MODULE(nvdimm, nvdimm_root, nvdimm_driver, nvdimm_devclass, 0, 0);
 MODULE_VERSION(mvdimm, 1);
 
+
+struct nvdimm_root {
+};
+
+struct nvdimm_child {
+	struct resource_list resources;
+	int domain;
+};
+
+static char *nvdimm_root_ids[] = { "ACPI0012", NULL };
+
+static int
+nvdimm_root_probe(device_t dev)
+{
+	ACPI_FUNCTION_TRACE((char *)(uintptr_t) __func__);
+
+	if (acpi_disabled("nvdimm"))
+		return (ENXIO);
+	if (acpi_get_handle(dev) != NULL &&
+	    ACPI_ID_PROBE(device_get_parent(dev), dev, nvdimm_root_ids) == NULL)
+		return (ENXIO);
+
+	device_set_desc(dev, "NVDIMM root");
+	return (0);
+}
+
+static int
+nvdimm_root_attach(device_t dev)
+{
+	ACPI_TABLE_NFIT	*nfit;
+	ACPI_STATUS	status;
+	ACPI_NFIT_HEADER	*subtable;
+	uint8_t		*end;
+	ACPI_NFIT_SYSTEM_ADDRESS *sa[16];
+	ACPI_NFIT_MEMORY_MAP *mm;
+	struct nvdimm_child	*ivar;
+	device_t	child;
+	int		error, san = 0, sai;
+
+	/* Search for NFIT table. */
+	status = AcpiGetTable("NFIT", 0, (ACPI_TABLE_HEADER **)&nfit);
+	if (ACPI_FAILURE(status))
+		return (ENXIO);
+
+	subtable = (ACPI_NFIT_HEADER *)(nfit + 1);
+	end = (uint8_t *)nfit + nfit->Header.Length;
+	while ((uint8_t *)subtable < end) {
+		if (subtable->Length < sizeof(ACPI_NFIT_HEADER)) {
+			device_printf(dev,
+			    "Invalid subtable length: %u", subtable->Length);
+			return (EIO);
+		}
+		if (subtable->Type == ACPI_NFIT_TYPE_SYSTEM_ADDRESS)
+			sa[san++] = (ACPI_NFIT_SYSTEM_ADDRESS *)subtable;
+		subtable = (ACPI_NFIT_HEADER *)((char *)subtable +
+		    subtable->Length);
+	}
+	subtable = (ACPI_NFIT_HEADER *)(nfit + 1);
+	while ((uint8_t *)subtable < end) {
+		if (subtable->Type == ACPI_NFIT_TYPE_MEMORY_MAP) {
+			mm = (ACPI_NFIT_MEMORY_MAP *)subtable;
+			if (mm->RangeIndex == 0)
+				goto next;
+			for (sai = 0; sai < san; sai++) {
+				if (sa[sai]->RangeIndex == mm->RangeIndex)
+					break;
+			}
+			if (sai >= san) {
+				device_printf(dev,
+				    "Unknown SPA Range Structure Index: %u\n",
+				    mm->RangeIndex);
+				goto next;
+			}
+			if (mm->InterleaveWays > 1) {
+				device_printf(dev,
+				    "InterleaveWays %u is not supported\n",
+				    mm->InterleaveWays);
+				goto next;
+			}
+
+			if (device_find_child(dev, "nvdimm", mm->RegionId) != NULL)
+				continue;
+
+			ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
+				M_WAITOK | M_ZERO);
+			resource_list_init(&ivar->resources);
+			resource_list_add(&ivar->resources, SYS_RES_MEMORY,
+			    0, sa[sai]->Address + mm->RegionOffset,
+			    sa[sai]->Address + mm->RegionOffset + mm->RegionSize - 1,
+			    mm->RegionSize);
+			if (sa[sai]->Flags & ACPI_NFIT_PROXIMITY_VALID)
+				ivar->domain = sa[sai]->ProximityDomain;
+			else
+				ivar->domain = -1;
+
+			child = device_add_child(dev, "nvdimm", mm->RegionId);
+			if (child) {
+				device_set_ivars(child, ivar);
+				if (mm->Flags & ~ACPI_NFIT_MEM_HEALTH_ENABLED) {
+					device_printf(child, "Flags: 0x%b\n",
+					    mm->Flags, "\020"
+					    "\001SAVE_FAILED\002RESTORE_FAILED"
+					    "\003FLUSH_FAILED\004NOT_ARMED"
+					    "\005HEALTH_OBSERVED\006HEALTH_ENABLED"
+					    "\007MAP_FAILED");
+				}
+			} else {
+				device_printf(dev, "Adding nvdimm%u failed\n",
+				    mm->RegionId);
+			}
+		}
+next:
+		subtable = (ACPI_NFIT_HEADER *)((char *)subtable +
+		    subtable->Length);
+	}
+
+	error = bus_generic_attach(dev);
+	if (error != 0)
+		device_printf(dev, "bus_generic_attach failed\n");
+
+	return (0);
+}
+
+static int
+nvdimm_root_detach(device_t dev)
+{
+
+	device_delete_children(dev);
+	return (0);
+}
+
+static int
+nvdimm_root_get_domain(device_t dev, device_t child, int *domain)
+{
+	struct nvdimm_child *ivar;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	if (ivar->domain >= 0) {
+		*domain = ivar->domain;
+		return (0);
+	}
+	return (bus_generic_get_domain(dev, child, domain));
+}
+
+static struct resource_list *
+nvdimm_root_get_resource_list(device_t dev, device_t child)
+{
+	struct nvdimm_child *ivar;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	return &ivar->resources;
+}
+
+static device_method_t nvdimm_root_methods[] = {
+	/* Device interface */
+	DEVMETHOD(device_probe,		nvdimm_root_probe),
+	DEVMETHOD(device_attach,	nvdimm_root_attach),
+	DEVMETHOD(device_detach,	nvdimm_root_detach),
+
+	DEVMETHOD(bus_get_domain,	nvdimm_root_get_domain),
+	DEVMETHOD(bus_get_resource_list,nvdimm_root_get_resource_list),
+	DEVMETHOD(bus_alloc_resource,	bus_generic_rl_alloc_resource),
+	DEVMETHOD(bus_release_resource,	bus_generic_rl_release_resource),
+	DEVMETHOD(bus_activate_resource, bus_generic_activate_resource),
+	DEVMETHOD(bus_deactivate_resource, bus_generic_deactivate_resource),
+	DEVMETHOD(bus_get_resource,	bus_generic_rl_get_resource),
+	DEVMETHOD(bus_set_resource,	bus_generic_rl_set_resource),
+	DEVMETHOD(bus_delete_resource,	bus_generic_rl_delete_resource),
+	{ 0, 0 }
+};
+
+static driver_t nvdimm_root_driver = {
+	"nvdimm_root",
+	nvdimm_root_methods,
+	sizeof(struct nvdimm_root),
+};
+
+DRIVER_MODULE(nvdimm_root, acpi, nvdimm_root_driver, nvdimm_root_devclass, 0, 0);
+MODULE_DEPEND(nvdimm_root, acpi, 1, 1, 1);
 
 static void
 ntb_nvdimm_start(void *data)
