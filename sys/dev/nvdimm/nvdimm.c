@@ -670,7 +670,7 @@ ntb_nvdimm_link_event(void *data)
 	if (ntb_link_is_up(dev, NULL, NULL)) {
 		ntb_nvdimm_link_work(dev);
 	} else {
-		device_printf(dev, "Connection lost\n");
+		device_printf(dev, "Connection is down\n");
 		callout_stop(&sc->ntb_link_work);
 		scd->rvaddr = NULL;
 		scd->rlabel = NULL;
@@ -688,7 +688,14 @@ ntb_nvdimm_probe(device_t dev)
 {
 
 	device_set_desc(dev, "NTB NVDIMM syncer");
-	return (0);
+
+	/*
+	 * Use lower priority if we can't find nvdimmX device with equal
+	 * unit number.  User may not want us, just not specified exactly.
+	 */
+	if (devclass_get_device(nvdimm_devclass, device_get_unit(dev)) == NULL)
+		return (BUS_PROBE_LOW_PRIORITY);
+	return (BUS_PROBE_DEFAULT);
 }
 
 static int
@@ -698,12 +705,40 @@ ntb_nvdimm_attach(device_t dev)
 	struct nvdimm_disk *scd;
 	int error;
 
-	sc->nvd_dev = devclass_get_device(nvdimm_devclass, 0);
+	/* Find nvdimmX device with equal unit number. */
+	sc->nvd_dev = devclass_get_device(nvdimm_devclass, device_get_unit(dev));
 	if (sc->nvd_dev == NULL) {
-		device_printf(dev, "Can not find nvdimm0 device\n");
+		device_printf(dev, "Can not find nvdimm%u device\n",
+		    device_get_unit(dev));
 		return (ENXIO);
 	}
 	scd = device_get_softc(sc->nvd_dev);
+
+	/* Make sure we have enough NTB resources. */
+	if (ntb_mw_count(dev) < 1) {
+		device_printf(dev, "At least 1 memory window required.\n");
+		return (ENXIO);
+	}
+	if (ntb_spad_count(dev) < 4) {
+		device_printf(dev, "At least 4 scratchpads required.\n");
+		return (ENXIO);
+	}
+	error = ntb_mw_get_range(dev, 0, &sc->ntb_paddr, &sc->ntb_caddr,
+	    &sc->ntb_size, &sc->ntb_xalign, NULL, NULL);
+	if (error != 0) {
+		device_printf(dev, "ntb_mw_get_range() error %d\n", error);
+		return (ENXIO);
+	}
+	sc->ntb_xpaddr = scd->paddr & ~(sc->ntb_xalign - 1);
+	sc->ntb_xsize = scd->paddr - sc->ntb_xpaddr + scd->size;
+	if (sc->ntb_size < sc->ntb_xsize) {
+		device_printf(dev, "Memory window is too small (%ju < %ju).\n",
+		    sc->ntb_size, sc->ntb_xsize);
+		return (ENXIO);
+	} else if (sc->ntb_size < 2 * scd->size) {
+		device_printf(dev, "Memory window may be too small (%ju < %ju).\n",
+		    sc->ntb_size, 2 * scd->size);
+	}
 
 	callout_init(&sc->ntb_link_work, 1);
 	callout_init(&sc->ntb_start, 1);
@@ -716,20 +751,12 @@ ntb_nvdimm_attach(device_t dev)
 		sc->ntb_rootmount = root_mount_hold("ntb_nvdimm");
 	}
 
-	/* Get memory window parameters. */
-	error = ntb_mw_get_range(dev, 0, &sc->ntb_paddr, &sc->ntb_caddr,
-	    &sc->ntb_size, &sc->ntb_xalign, NULL, NULL);
-	if (error != 0) {
-		device_printf(dev, "ntb_mw_get_range() error %d\n", error);
-		return (ENXIO);
-	}
+	/* Allow write combining for the memory window. */
 	error = ntb_mw_set_wc(dev, 0, VM_MEMATTR_WRITE_COMBINING);
 	if (error != 0)
 		device_printf(dev, "ntb_mw_set_wc() error %d\n", error);
 
-	/* Setup XLAT. */
-	sc->ntb_xpaddr = scd->paddr & ~(sc->ntb_xalign - 1);
-	sc->ntb_xsize = scd->paddr - sc->ntb_xpaddr + scd->size;
+	/* Setup address translation. */
 	error = ntb_mw_set_trans(dev, 0, sc->ntb_xpaddr, sc->ntb_xsize);
 	if (error != 0) {
 		device_printf(dev, "ntb_mw_set_trans() error %d\n", error);
