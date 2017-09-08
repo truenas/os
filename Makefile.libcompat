@@ -82,8 +82,7 @@ LIBCOMPATCFLAGS+=	-B${LIBCOMPATTMP}/usr/lib${libcompat}
 # sysroot path which --sysroot does not actually do for headers.
 LIBCOMPATCFLAGS+=	-isystem ${LIBCOMPATTMP}/usr/include
 # Force using libc++ for external GCC.
-# XXX: This should be checking MK_GNUCXX == no
-.if ${X_COMPILER_VERSION} >= 40800 && \
+.if ${X_COMPILER_TYPE} == gcc && ${X_COMPILER_VERSION} >= 40800 && \
     (${MK_CLANG_BOOTSTRAP} == "no" && ${MK_GCC_BOOTSTRAP} == "no")
 LIBCOMPATCXXFLAGS+=	-isystem ${LIBCOMPATTMP}/usr/include/c++/v1 -std=c++11 \
 			-nostdinc++ -L${LIBCOMPAT_OBJTREE}${.CURDIR}/lib/libc++
@@ -162,7 +161,7 @@ build${libcompat}: .PHONY
 .endfor
 	${_+_}cd ${.CURDIR}; \
 	    ${LIBCOMPATWMAKE} -f Makefile.inc1 -DNO_FSCHG libraries
-.if ${libcompat} == "32"
+.if ${libcompat} == "32" && !defined(NO_RTLD)
 .for _t in obj all
 	${_+_}cd ${.CURDIR}/libexec/rtld-elf; PROG=ld-elf32.so.1 ${LIBCOMPATWMAKE} \
 	    -DNO_FSCHG DIRPRFX=libexec/rtld-elf/ ${_t}
@@ -175,7 +174,7 @@ distribute${libcompat} install${libcompat}: .PHONY
 .for _dir in ${_LC_LIBDIRS.yes}
 	${_+_}cd ${.CURDIR}/${_dir}; ${LIBCOMPATIMAKE} ${.TARGET:S/${libcompat}$//}
 .endfor
-.if ${libcompat} == "32"
+.if ${libcompat} == "32" && !defined(NO_RTLD)
 	${_+_}cd ${.CURDIR}/libexec/rtld-elf; \
 	    PROG=ld-elf32.so.1 ${LIBCOMPATIMAKE} ${.TARGET:S/32$//}
 	${_+_}cd ${.CURDIR}/usr.bin/ldd; PROG=ldd32 ${LIBCOMPATIMAKE} \
