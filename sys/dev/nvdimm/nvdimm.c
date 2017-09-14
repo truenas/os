@@ -672,6 +672,14 @@ ntb_nvdimm_link_event(void *data)
 	} else {
 		device_printf(dev, "Connection is down\n");
 		callout_stop(&sc->ntb_link_work);
+
+		/*
+		 * The scratchpad registers keep the values if the remote side
+		 * goes down, blast them now to give them a sane value the next
+		 * time they are accessed.
+		 */
+		ntb_spad_clear(dev);
+
 		scd->rvaddr = NULL;
 		scd->rlabel = NULL;
 		scd->label->state = MIN(scd->label->state, STATE_IDLE);
@@ -746,10 +754,11 @@ ntb_nvdimm_attach(device_t dev)
 	/* Delay boot if this NVDIMM ever saw NTB. */
 	if (scd->label->state >= STATE_IDLE) {
 		device_printf(dev, "NVDIMM saw NTB, delaying root mount.\n");
+		sc->ntb_rootmount = root_mount_hold("ntb_nvdimm");
 		callout_reset(&sc->ntb_start, ntb_nvdimm_start_timeout * hz,
 		    ntb_nvdimm_start, dev);
-		sc->ntb_rootmount = root_mount_hold("ntb_nvdimm");
-	}
+	} else
+		sc->ntb_rootmount = NULL;
 
 	/* Allow write combining for the memory window. */
 	error = ntb_mw_set_wc(dev, 0, VM_MEMATTR_WRITE_COMBINING);
