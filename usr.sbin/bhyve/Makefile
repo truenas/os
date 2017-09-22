@@ -70,6 +70,7 @@ SRCS=	\
 	virtio.c		\
 	vga.c			\
 	vmgenc.c		\
+	vncserver.c		\
 	xmsr.c			\
 	spinup_ap.c		\
 	iov.c

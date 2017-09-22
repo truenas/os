@@ -34,5 +34,6 @@
 #define	RFB_PORT	5900
 
 int	rfb_init(char *hostname, int port, int wait, char *password);
+int	vncserver_init(char *hostname, int port, int wait, char *password, int webserver);
 
 #endif /* _RFB_H_ */
