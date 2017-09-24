@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2017 Marcelo Araujo <araujo@FreeBSD.org>.
  * Copyright (c) 2015 Nahanni Systems, Inc.
  * All rights reserved.
  *
@@ -38,8 +39,11 @@ __FBSDID("$FreeBSD$");
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 
+#include <dlfcn.h>
 #include <errno.h>
+#include <err.h>
 #include <unistd.h>
 
 #include "bhyvegc.h"
@@ -61,7 +65,7 @@ __FBSDID("$FreeBSD$");
 static int fbuf_debug = 1;
 #define	DEBUG_INFO	1
 #define	DEBUG_VERBOSE	4
-#define	DPRINTF(level, params)  if (level <= fbuf_debug) printf params
+#define	DPRINTF(level, params) if (level <= fbuf_debug) printf params
 
 
 #define	KB	(1024UL)
@@ -92,18 +96,19 @@ struct pci_fbuf_softc {
 	} __packed memregs;
 
 	/* rfb server */
-	char      *rfb_host;
-	char      *rfb_password;
-	int       rfb_port;
-	int       rfb_wait;
-	int       vga_enabled;
-	int	  vga_full;
+	char		*rfb_host;
+	char		*rfb_password;
+	int		rfb_port;
+	int		rfb_wait;
+	int		vga_enabled;
+	int		vga_full;
+	int		vncserver_enabled;
 
-	uint32_t  fbaddr;
-	char      *fb_base;
-	uint16_t  gc_width;
-	uint16_t  gc_height;
-	void      *vgasc;
+	uint32_t	fbaddr;
+	char		*fb_base;
+	uint16_t	gc_width;
+	uint16_t	gc_height;
+	void		*vgasc;
 	struct bhyvegc_image *gc_image;
 };
 
@@ -222,10 +227,13 @@ pci_fbuf_read(struct vmctx *ctx, int vcpu, struct pci_devinst *pi,
 static int
 pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 {
-	char	*uopts, *xopts, *config;
-	char	*tmpstr;
-	int	ret;
+	char *uopts, *xopts, *config;
+	char *tmpstr;
+	char *loader;
+	int ret;
+	void *shlib;
 
+	loader = NULL;
 	ret = 0;
 	uopts = strdup(opts);
 	for (xopts = strtok(uopts, ",");
@@ -233,6 +241,23 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 	     xopts = strtok(NULL, ",")) {
 		if (strcmp(xopts, "wait") == 0) {
 			sc->rfb_wait = 1;
+			continue;
+		}
+
+		if (strcmp(xopts, "vncserver") == 0) {
+			if (loader == NULL) {
+				loader = strdup("/usr/local/lib/libhyverem.so");
+				if (loader == NULL)
+					err(EX_OSERR, "malloc");
+			}
+			shlib = dlopen(loader, RTLD_LAZY);
+			if (!shlib) {
+				sc->vncserver_enabled = 0;
+				fprintf(stderr, "Using RFB bhyve implementation.\n");
+			} else
+				sc->vncserver_enabled = 1;
+			dlclose(shlib);
+			free(loader);
 			continue;
 		}
 
@@ -247,16 +272,17 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 		DPRINTF(DEBUG_VERBOSE, ("pci_fbuf option %s = %s\r\n",
 		   xopts, config));
 
-		if (!strcmp(xopts, "tcp") || !strcmp(xopts, "rfb")) {
+		if (!strcmp(xopts, "tcp") || !strcmp(xopts, "rfb") ||
+		    !strcmp(xopts, "vncserver")) {
 			/* parse host-ip:port */
-		        tmpstr = strsep(&config, ":");
+			tmpstr = strsep(&config, ":");
 			if (!config)
 				sc->rfb_port = atoi(tmpstr);
 			else {
 				sc->rfb_port = atoi(config);
 				sc->rfb_host = tmpstr;
 			}
-	        } else if (!strcmp(xopts, "vga")) {
+		} else if (!strcmp(xopts, "vga")) {
 			if (!strcmp(config, "off")) {
 				sc->vga_enabled = 0;
 			} else if (!strcmp(config, "io")) {
@@ -270,8 +296,8 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 				ret = -1;
 				goto done;
 			}
-	        } else if (!strcmp(xopts, "w")) {
-		        sc->memregs.width = atoi(config);
+		} else if (!strcmp(xopts, "w")) {
+			sc->memregs.width = atoi(config);
 			if (sc->memregs.width > COLS_MAX) {
 				pci_fbuf_usage(xopts);
 				ret = -1;
@@ -383,7 +409,7 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 		goto done;
 	}
 	DPRINTF(DEBUG_INFO, ("fbuf frame buffer base: %p [sz %lu]\r\n",
-	        sc->fb_base, FB_SIZE));
+		sc->fb_base, FB_SIZE));
 
 	/*
 	 * Map the framebuffer into the guest address space.
@@ -409,7 +435,10 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 	memset((void *)sc->fb_base, 0, FB_SIZE);
 
-	error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait, sc->rfb_password);
+	if (sc->vncserver_enabled)
+		error = vncserver_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait, sc->rfb_password);
+	else
+		error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait, sc->rfb_password);
 done:
 	if (error)
 		free(sc);
