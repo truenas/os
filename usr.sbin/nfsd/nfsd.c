@@ -1198,11 +1198,14 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 {
 	char *ad, *cp, *cp2, *dsaddr, *dshost, *dspath, *dsvol, nfsprt[9];
 	char *mirror, mirrorstr[NFSDEV_MIRRORSTR + 1], *cp3;
-	int adsiz, dsaddrcnt, dshostcnt, dspathcnt, ecode, hostsiz, pathsiz;
-	int mirrorcnt, mirrorstrsiz, mirrorindex;
+	size_t adsiz, dsaddrcnt, dshostcnt, dspathcnt, ecode, hostsiz, pathsiz;
+	size_t mirrorcnt, mirrorstrsiz, mirrorindex;
 	size_t dsaddrsiz, dshostsiz, dspathsiz, nfsprtsiz, mirrorsiz;
 	struct addrinfo hints, *ai_tcp;
-	struct sockaddr_in *sin;
+	union {
+		struct sockaddr *sa;
+		struct sockaddr_in *sin;
+	} su;
 
 	cp = strdup(dsoptarg);
 	if (cp == NULL)
@@ -1263,7 +1266,7 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 			usage();
 		*dsvol++ = '\0';
 
-printf("pnfs path=%s\n", dsvol);
+		printf("pnfs path=%s\n", dsvol);
 		/* Append this pathname to dspath. */
 		pathsiz = strlen(dsvol);
 		if (dspathcnt + pathsiz + 1 > dspathsiz) {
@@ -1288,12 +1291,12 @@ printf("pnfs path=%s\n", dsvol);
 		if (ecode != 0)
 			err(1, "getaddrinfo pnfs: %s %s", cp,
 			    gai_strerror(ecode));
-		sin = (struct sockaddr_in *)ai_tcp->ai_addr;
-		if (sin->sin_family != AF_INET)
+		su.sa = ai_tcp->ai_addr;
+		if (su.sin->sin_family != AF_INET)
 			err(1, "getaddrinfo() returned non-INET address");
 
 		/* Append this address to dsaddr. */
-		ad = inet_ntoa(sin->sin_addr);
+		ad = inet_ntoa(su.sin->sin_addr);
 		adsiz = strlen(ad);
 		if (dsaddrcnt + adsiz + nfsprtsiz + 1 > dsaddrsiz) {
 			dsaddrsiz *= 2;
@@ -1317,7 +1320,7 @@ printf("pnfs path=%s\n", dsvol);
 		dshostcnt += hostsiz + 1;
 
 		/* Append this mirrorindex to mirror. */
-		if (snprintf(mirrorstr, NFSDEV_MIRRORSTR + 1, "%d",
+		if (snprintf(mirrorstr, NFSDEV_MIRRORSTR + 1, "%zu",
 		    mirrorindex) > NFSDEV_MIRRORSTR)
 			errx(1, "Too many mirrors");
 		mirrorstrsiz = strlen(mirrorstr);
@@ -1338,7 +1341,7 @@ printf("pnfs path=%s\n", dsvol);
 	 * sin is set to point to the sockaddr structure in it.
 	 * Set the port# for the DS Mount protocol and get the DS root FH.
 	 */
-	sin->sin_port = htons(2049);
+	su.sin->sin_port = htons(2049);
 	nfsdargp->addr = dsaddr;
 	nfsdargp->addrlen = dsaddrcnt;
 	nfsdargp->dnshost = dshost;
