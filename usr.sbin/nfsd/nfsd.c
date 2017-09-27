@@ -104,8 +104,6 @@ static int stablefd = -1;	/* Fd for the stable restart file */
 static int backupfd;		/* Fd for the backup stable restart file */
 static const char *getopt_shortopts;
 static const char *getopt_usage;
-static char *dshost = NULL;
-static int dshostc = 0;
 
 static int minthreads_set;
 static int maxthreads_set;
@@ -1198,7 +1196,7 @@ backup_stable(__unused int signo)
  * Parse the pNFS string and extract the DS servers and ports numbers.
  */
 static void
-parse_dsserver(const char *optarg, struct nfsd_nfsd_args *nfsdargp)
+parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 {
 	char *ad, *cp, *cp2, *dsaddr, *dshost, *dspath, *dsvol, nfsprt[9];
 	char *mirror, mirrorstr[NFSDEV_MIRRORSTR + 1], *cp3;
@@ -1208,7 +1206,7 @@ parse_dsserver(const char *optarg, struct nfsd_nfsd_args *nfsdargp)
 	struct addrinfo hints, *ai_tcp;
 	struct sockaddr_in *sin;
 
-	cp = strdup(optarg);
+	cp = strdup(dsoptarg);
 	if (cp == NULL)
 		errx(1, "Out of memory");
 
