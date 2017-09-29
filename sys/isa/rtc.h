@@ -113,11 +113,11 @@
 
 #ifdef _KERNEL
 extern  struct mtx clock_lock;
+extern  struct mtx atrtc_time_lock;
 extern	int atrtcclock_disable;
 int	rtcin(int reg);
 void	atrtc_restore(void);
 void	writertc(int reg, u_char val);
-void	atrtc_set(struct timespec *ts);
 #endif
 
 #endif /* _I386_ISA_RTC_H_ */

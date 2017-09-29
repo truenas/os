@@ -123,6 +123,7 @@ SUBDIR=	\
 	fdc \
 	fdescfs \
 	${_fe} \
+	${_ffec} \
 	filemon \
 	firewire \
 	firmware \
@@ -727,8 +728,8 @@ _qlxge=		qlxge
 _qlxgb=		qlxgb
 .if ${MK_SOURCELESS_UCODE} != "no"
 _qlxgbe=	qlxgbe
-.endif
 _qlnx=		qlnx
+.endif
 _sfxge=		sfxge
 
 .if ${MK_BHYVE} != "no" || defined(ALL_MODULES)
@@ -803,6 +804,7 @@ _cpufreq=	cpufreq
 _drm=		drm
 _exca=		exca
 _nvram=		powermac_nvram
+_ffec=		ffec
 _pccard=	pccard
 _wi=		wi
 .endif
@@ -826,6 +828,10 @@ _cloudabi32=	cloudabi32
 _cloudabi64=	cloudabi64
 .endif
 
+.endif
+
+.if ${MACHINE_ARCH} == "armv6"
+_ffec=		ffec
 .endif
 
 SUBDIR+=${MODULES_EXTRA}
