@@ -67,18 +67,6 @@
  * queue and issue them out of logical order and in a way that most benefits
  * physical disks (LBA-order).
  *
- * This sorting algorithm is subject to limitations. We can't do this with
- * blocks that are non-leaf, because the scanner itself depends on these
- * being available ASAP for further metadata traversal. So we exclude any
- * block that is bp_level > 0. Fortunately, this usually represents only
- * around 1% of our data volume, so no great loss.
- *
- * As a further limitation, we cannot sort blocks which have more than
- * one DVA present (copies > 1), because there's no sensible way to sort
- * these (how do you sort a queue based on multiple contradictory
- * criteria?). So we exclude those as well. Again, these are very rarely
- * used for leaf blocks, usually only on metadata.
- *
  * Queue management:
  *
  * Ideally, we would want to scan all metadata and queue up all leaf block
@@ -130,7 +118,7 @@ extern int zfs_vdev_async_write_active_min_dirty_percent;
  * this value can be set to 1 to enable checking before scanning each
  * block.
  */
-int zfs_scan_strict_mem_lim = 0;
+int zfs_scan_strict_mem_lim = B_FALSE;
 
 /*
  * Maximum number of parallelly executing I/Os per top-level vdev.
@@ -143,8 +131,8 @@ int zfs_scan_md_maxinflight = 1024;
 int zfs_scan_leaf_maxinflight = 50;
 
 int zfs_scan_issue_strategy = 0;
-int zfs_scan_direct = B_TRUE;	/* don't queue & sort zios, go direct */
-uint64_t zfs_scan_max_ext_gap = 2 << 20;	/* bytes */
+int zfs_scan_legacy = B_FALSE; /* don't queue & sort zios, go direct */
+uint64_t zfs_scan_max_ext_gap = 2 << 20;       /* in bytes */
 
 int zfs_scan_checkpoint_intval = 7200;	/* seconds */
 #define	ZFS_SCAN_CHECKPOINT_INTVAL	SEC_TO_TICK(zfs_scan_checkpoint_intval)
@@ -163,7 +151,7 @@ uint64_t zfs_scan_mem_lim_soft_max = 128 << 20;	/* bytes */
 int zfs_scan_mem_lim_fact = 20;		/* fraction of physmem */
 int zfs_scan_mem_lim_soft_fact = 20;	/* fraction of mem lim above */
 
-unsigned int zfs_scan_min_time_ms = 1000; /* min millisecs to scrub per txg */
+unsigned int zfs_scrub_min_time_ms = 1000;/* min millisecs to scrub per txg */
 unsigned int zfs_free_min_time_ms = 1000; /* min millisecs to free per txg */
 unsigned int zfs_resilver_min_time_ms = 3000; /* min millisecs to resilver
 						 per txg */
@@ -174,7 +162,7 @@ SYSCTL_DECL(_vfs_zfs);
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, top_maxinflight, CTLFLAG_RWTUN,
     &zfs_top_maxinflight, 0, "Maximum I/Os per top-level vdev");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, scan_min_time_ms, CTLFLAG_RWTUN,
-    &zfs_scan_min_time_ms, 0, "Min millisecs to scrub per txg");
+    &zfs_scrub_min_time_ms, 0, "Min millisecs to scrub per txg");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, free_min_time_ms, CTLFLAG_RWTUN,
     &zfs_free_min_time_ms, 0, "Min millisecs to free per txg");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, resilver_min_time_ms, CTLFLAG_RWTUN,
@@ -183,6 +171,9 @@ SYSCTL_INT(_vfs_zfs, OID_AUTO, no_scrub_io, CTLFLAG_RWTUN,
     &zfs_no_scrub_io, 0, "Disable scrub I/O");
 SYSCTL_INT(_vfs_zfs, OID_AUTO, no_scrub_prefetch, CTLFLAG_RWTUN,
     &zfs_no_scrub_prefetch, 0, "Disable scrub prefetching");
+
+SYSCTL_UINT(_vfs_zfs, OID_AUTO, zfs_scan_legacy, CTLFLAG_RWTUN,
+    &zfs_scan_legacy, 0, "Scrub using lelgacy non-sequential method");
 
 enum ddt_class zfs_scrub_ddt_class_max = DDT_CLASS_DUPLICATE;
 /* max number of blocks to free in a single TXG */
@@ -1140,7 +1131,7 @@ dsl_scan_check_suspend(dsl_scan_t *scn, const zbookmark_phys_t *zb)
 	 *  - the scan queue has reached its memory use limit
 	 */
 	int mintime = (scn->scn_phys.scn_func == POOL_SCAN_RESILVER) ?
-	    zfs_resilver_min_time_ms : zfs_scan_min_time_ms;
+	    zfs_resilver_min_time_ms : zfs_scrub_min_time_ms;
 	uint64_t elapsed_nanosecs = gethrtime() - scn->scn_sync_start_time;
 	int dirty_pct = scn->scn_dp->dp_dirty_total * 100 / zfs_dirty_data_max;
 	if (elapsed_nanosecs / NANOSEC >= zfs_txg_timeout ||
@@ -2475,7 +2466,7 @@ scan_io_queue_check_suspend(dsl_scan_t *scn)
 {
 	uint64_t elapsed_nanosecs = gethrtime() - scn->scn_sync_start_time;
 	uint64_t mintime = (scn->scn_phys.scn_func == POOL_SCAN_RESILVER) ?
-	    zfs_resilver_min_time_ms : zfs_scan_min_time_ms;
+	    zfs_resilver_min_time_ms : zfs_scrub_min_time_ms;
 
 	return (elapsed_nanosecs / NANOSEC > zfs_txg_timeout ||
 	    (NSEC2MSEC(elapsed_nanosecs) > mintime &&
@@ -3116,7 +3107,7 @@ dsl_scan_sync(dsl_pool_t *dp, dmu_tx_t *tx)
 	 * but afterwards the scan will remain sorted unless reloaded from
 	 * a checkpoint after a reboot.
 	 */
-	if (!zfs_scan_direct) {
+	if (!zfs_scan_legacy) {
 		scn->scn_is_sorted = B_TRUE;
 		if (scn->scn_last_checkpoint == 0)
 			scn->scn_last_checkpoint = ddi_get_lbolt();

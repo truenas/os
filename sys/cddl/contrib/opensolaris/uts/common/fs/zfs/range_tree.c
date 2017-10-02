@@ -66,12 +66,12 @@
  * are then called at the appropriate times.
  *
  * The range tree code also supports a special variant of range trees
- * that can supporting bridging small gaps between segments. This kind
- * of tree is used by the dsl scanning code to group I/Os into mostly
- * sequential chunks to optimize disk performance. The code here attempts
- * to do this with as little memory and computational overhead as
- * possible. One limitation of this implementation is that segments of
- * range trees with gaps can only support removing complete segments.
+ * that can bridge small gaps between segments. This kind of tree is used
+ * by the dsl scanning code to group I/Os into mostly sequential chunks to
+ * optimize disk performance. The code here attempts to do this with as
+ * little memory and computational overhead as possible. One limitation of
+ * this implementation is that segments of range trees with gaps can only
+ * support removing complete segments.
  */
 
 kmem_cache_t *range_seg_cache;
