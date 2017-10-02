@@ -6211,7 +6211,6 @@ nfsrpc_writedsmir(vnode_t vp, int *iomode, int *must_commit,
 	struct nfssockreq *nrp;
 	struct nfsvattr na;
 
-	KASSERT(uiop->uio_iovcnt == 1, ("nfs: writerpc iovcnt > 1"));
 	nd->nd_mrep = NULL;
 	if (vers == 0 || vers == NFS_VER4) {
 		nfscl_reqstart(nd, NFSPROC_WRITEDS, nmp, fhp->nfh_fh,
