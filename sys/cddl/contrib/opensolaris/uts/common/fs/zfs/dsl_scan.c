@@ -2847,75 +2847,6 @@ dsl_scan_active(dsl_scan_t *scn)
 }
 
 /*
- * Given all the info we got from our metadata scanning process, we
- * construct a scan_io_t and insert it into the scan sorting queue. The
- * I/O must already be suitable for us to process. This is controlled
- * by dsl_scan_enqueue().
- */
-static void
-scan_io_queue_insert(dsl_scan_io_queue_t *queue, const blkptr_t *bp, int dva_i,
-    int zio_flags, const zbookmark_phys_t *zb)
-{
-	dsl_scan_t *scn = queue->q_scn;
-	scan_io_t *sio = kmem_zalloc(sizeof (*sio), KM_SLEEP);
-
-	ASSERT0(BP_IS_GANG(bp));
-	ASSERT(MUTEX_HELD(&queue->q_vd->vdev_scan_io_queue_lock));
-
-	bp2sio(bp, sio, dva_i);
-	sio->sio_flags = zio_flags;
-	sio->sio_zb = *zb;
-
-	/*
-	 * Increment the bytes pending counter now so that we can't
-	 * get an integer underflow in case the worker processes the
-	 * zio before we get to incrementing this counter.
-	 */
-	atomic_add_64(&scn->scn_bytes_pending, sio->sio_asize);
-
-	scan_io_queue_insert_impl(queue, sio);
-}
-
-/*
- * Given a set of I/O parameters as discovered by the metadata traversal
- * process, attempts to place the I/O into the sorted queues (if allowed),
- * or immediately executes the I/O.
- */
-static void
-dsl_scan_enqueue(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
-    const zbookmark_phys_t *zb)
-{
-	spa_t *spa = dp->dp_spa;
-
-	ASSERT(!BP_IS_EMBEDDED(bp));
-
-	/*
-	 * Gang blocks are hard to issue sequentially, so we just issue them
-	 * here immediately instead of queuing them.
-	 */
-	if (!dp->dp_scan->scn_is_sorted || BP_IS_GANG(bp)) {
-		scan_exec_io(dp, bp, zio_flags, zb, NULL);
-		return;
-	}
-	for (int i = 0; i < BP_GET_NDVAS(bp); i++) {
-		dva_t dva;
-		vdev_t *vdev;
-
-		dva = bp->blk_dva[i];
-		vdev = vdev_lookup_top(spa, DVA_GET_VDEV(&dva));
-		ASSERT(vdev != NULL);
-
-		mutex_enter(&vdev->vdev_scan_io_queue_lock);
-		if (vdev->vdev_scan_io_queue == NULL)
-			vdev->vdev_scan_io_queue = scan_io_queue_create(vdev);
-		ASSERT(dp->dp_scan != NULL);
-		scan_io_queue_insert(vdev->vdev_scan_io_queue, bp,
-		    i, zio_flags, zb);
-		mutex_exit(&vdev->vdev_scan_io_queue_lock);
-	}
-}
-
-/*
  * This is the primary entry point for scans that is called from syncing
  * context. Scans must happen entirely during syncing context so that we
  * cna guarantee that blocks we are currently scanning will not change out
@@ -3319,6 +3250,75 @@ scan_io_queue_insert_impl(dsl_scan_io_queue_t *queue, scan_io_t *sio)
 	}
 	avl_insert(&queue->q_zios_by_addr, sio, idx);
 	range_tree_add(queue->q_exts_by_addr, SCAN_IO_GET_OFFSET(sio), asize);
+}
+
+/*
+ * Given all the info we got from our metadata scanning process, we
+ * construct a scan_io_t and insert it into the scan sorting queue. The
+ * I/O must already be suitable for us to process. This is controlled
+ * by dsl_scan_enqueue().
+ */
+static void
+scan_io_queue_insert(dsl_scan_io_queue_t *queue, const blkptr_t *bp, int dva_i,
+    int zio_flags, const zbookmark_phys_t *zb)
+{
+	dsl_scan_t *scn = queue->q_scn;
+	scan_io_t *sio = kmem_zalloc(sizeof (*sio), KM_SLEEP);
+
+	ASSERT0(BP_IS_GANG(bp));
+	ASSERT(MUTEX_HELD(&queue->q_vd->vdev_scan_io_queue_lock));
+
+	bp2sio(bp, sio, dva_i);
+	sio->sio_flags = zio_flags;
+	sio->sio_zb = *zb;
+
+	/*
+	 * Increment the bytes pending counter now so that we can't
+	 * get an integer underflow in case the worker processes the
+	 * zio before we get to incrementing this counter.
+	 */
+	atomic_add_64(&scn->scn_bytes_pending, sio->sio_asize);
+
+	scan_io_queue_insert_impl(queue, sio);
+}
+
+/*
+ * Given a set of I/O parameters as discovered by the metadata traversal
+ * process, attempts to place the I/O into the sorted queues (if allowed),
+ * or immediately executes the I/O.
+ */
+static void
+dsl_scan_enqueue(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
+    const zbookmark_phys_t *zb)
+{
+	spa_t *spa = dp->dp_spa;
+
+	ASSERT(!BP_IS_EMBEDDED(bp));
+
+	/*
+	 * Gang blocks are hard to issue sequentially, so we just issue them
+	 * here immediately instead of queuing them.
+	 */
+	if (!dp->dp_scan->scn_is_sorted || BP_IS_GANG(bp)) {
+		scan_exec_io(dp, bp, zio_flags, zb, NULL);
+		return;
+	}
+	for (int i = 0; i < BP_GET_NDVAS(bp); i++) {
+		dva_t dva;
+		vdev_t *vdev;
+
+		dva = bp->blk_dva[i];
+		vdev = vdev_lookup_top(spa, DVA_GET_VDEV(&dva));
+		ASSERT(vdev != NULL);
+
+		mutex_enter(&vdev->vdev_scan_io_queue_lock);
+		if (vdev->vdev_scan_io_queue == NULL)
+			vdev->vdev_scan_io_queue = scan_io_queue_create(vdev);
+		ASSERT(dp->dp_scan != NULL);
+		scan_io_queue_insert(vdev->vdev_scan_io_queue, bp,
+		    i, zio_flags, zb);
+		mutex_exit(&vdev->vdev_scan_io_queue_lock);
+	}
 }
 
 static int
