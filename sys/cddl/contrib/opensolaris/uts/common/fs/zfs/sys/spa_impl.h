@@ -196,7 +196,7 @@ struct spa {
 	uint64_t	spa_scan_pass_scrub_pause; /* scrub pause time */
 	uint64_t	spa_scan_pass_scrub_spent_paused; /* total paused */
 	uint64_t	spa_scan_pass_exam;	/* examined bytes per pass */
-	uint64_t        spa_scan_pass_issued;   /* issued bytes per pass */
+	uint64_t	spa_scan_pass_issued;	/* issued bytes per pass */
 	kmutex_t	spa_async_lock;		/* protect async state */
 	kthread_t	*spa_async_thread;	/* thread doing async task */
 	kthread_t	*spa_async_thread_vd;	/* thread doing vd async task */

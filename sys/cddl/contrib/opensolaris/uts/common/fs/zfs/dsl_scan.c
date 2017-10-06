@@ -131,8 +131,8 @@ int zfs_scan_md_maxinflight = 1024;
 int zfs_scan_leaf_maxinflight = 50;
 
 int zfs_scan_issue_strategy = 0;
-int zfs_scan_legacy = B_FALSE; /* don't queue & sort zios, go direct */
-uint64_t zfs_scan_max_ext_gap = 2 << 20;       /* in bytes */
+int zfs_scan_legacy = B_FALSE;	/* don't queue & sort zios, go direct */
+uint64_t zfs_scan_max_ext_gap = 2 << 20;	/* in bytes */
 
 int zfs_scan_checkpoint_intval = 7200;	/* seconds */
 #define	ZFS_SCAN_CHECKPOINT_INTVAL	SEC_TO_TICK(zfs_scan_checkpoint_intval)
@@ -151,7 +151,7 @@ uint64_t zfs_scan_mem_lim_soft_max = 128 << 20;	/* bytes */
 int zfs_scan_mem_lim_fact = 20;		/* fraction of physmem */
 int zfs_scan_mem_lim_soft_fact = 20;	/* fraction of mem lim above */
 
-unsigned int zfs_scrub_min_time_ms = 1000;/* min millisecs to scrub per txg */
+unsigned int zfs_scrub_min_time_ms = 1000; /* min millisecs to scrub per txg */
 unsigned int zfs_free_min_time_ms = 1000; /* min millisecs to free per txg */
 unsigned int zfs_resilver_min_time_ms = 3000; /* min millisecs to resilver
 						 per txg */
@@ -171,9 +171,8 @@ SYSCTL_INT(_vfs_zfs, OID_AUTO, no_scrub_io, CTLFLAG_RWTUN,
     &zfs_no_scrub_io, 0, "Disable scrub I/O");
 SYSCTL_INT(_vfs_zfs, OID_AUTO, no_scrub_prefetch, CTLFLAG_RWTUN,
     &zfs_no_scrub_prefetch, 0, "Disable scrub prefetching");
-
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, zfs_scan_legacy, CTLFLAG_RWTUN,
-    &zfs_scan_legacy, 0, "Scrub using lelgacy non-sequential method");
+    &zfs_scan_legacy, 0, "Scrub using legacy non-sequential method");
 
 enum ddt_class zfs_scrub_ddt_class_max = DDT_CLASS_DUPLICATE;
 /* max number of blocks to free in a single TXG */
@@ -1932,6 +1931,7 @@ dsl_scan_ds_snapshotted(dsl_dataset_t *ds, dmu_tx_t *tx)
 		    (u_longlong_t)ds->ds_object,
 		    (u_longlong_t)dsl_dataset_phys(ds)->ds_prev_snap_obj);
 	}
+
 	dsl_scan_sync_state(scn, tx, SYNC_CACHED);
 }
 
@@ -2156,7 +2156,6 @@ dsl_scan_visitds(dsl_scan_t *scn, uint64_t dsobj, dmu_tx_t *tx)
 		scan_ds_queue_insert(scn,
 		    dsl_dataset_phys(ds)->ds_next_snap_obj,
 		    dsl_dataset_phys(ds)->ds_creation_txg);
-
 	}
 	if (dsl_dataset_phys(ds)->ds_num_children > 1) {
 		boolean_t usenext = B_FALSE;
@@ -2749,7 +2748,6 @@ scan_io_queues_run(dsl_scan_t *scn)
 	 * point.
 	 */
 	taskq_wait(scn->scn_taskq);
-
 }
 
 static boolean_t
@@ -3537,7 +3535,7 @@ scan_io_queue_vacate_cb(range_tree_t *rt, void *arg)
  * 100 with bitshifting by 7 (which effecitvely multiplies and divides by 128).
  */
 static int
-ext_size_compar(const void *x, const void *y)
+ext_size_compare(const void *x, const void *y)
 {
 	const range_seg_t *rsa = x, *rsb = y;
 	uint64_t sa = rsa->rs_end - rsa->rs_start,
@@ -3591,7 +3589,7 @@ scan_io_queue_create(vdev_t *vd)
 	cv_init(&q->q_zio_cv, NULL, CV_DEFAULT, NULL);
 	q->q_exts_by_addr = range_tree_create_impl(&scan_io_queue_ops, q,
 	    &q->q_vd->vdev_scan_io_queue_lock, zfs_scan_max_ext_gap);
-	avl_create(&q->q_exts_by_size, ext_size_compar,
+	avl_create(&q->q_exts_by_size, ext_size_compare,
 	    sizeof (range_seg_t), offsetof(range_seg_t, rs_pp_node));
 	avl_create(&q->q_zios_by_addr, io_addr_compare,
 	    sizeof (scan_io_t), offsetof(scan_io_t, sio_nodes.sio_addr_node));

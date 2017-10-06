@@ -3940,13 +3940,13 @@ print_scan_status(pool_scan_stat_t *ps)
 	start = ps->pss_start_time;
 	end = ps->pss_end_time;
 	pause = ps->pss_pass_scrub_pause;
+
 	zfs_nicenum(ps->pss_processed, processed_buf, sizeof (processed_buf));
 
 	assert(ps->pss_func == POOL_SCAN_SCRUB ||
 	    ps->pss_func == POOL_SCAN_RESILVER);
-	/*
-	 * Scan is finished or canceled.
-	 */
+
+	/* Scan is finished or canceled. */
 	if (ps->pss_state == DSS_FINISHED) {
 		uint64_t minutes_taken = (end - start) / 60;
 		char *fmt = NULL;
@@ -3978,19 +3978,15 @@ print_scan_status(pool_scan_stat_t *ps)
 
 	assert(ps->pss_state == DSS_SCANNING);
 
-	/*
-	 * Scan is in progress.
-	 */
+	/* Scan is in progress. Resilvers can't be paused. */
 	if (ps->pss_func == POOL_SCAN_SCRUB) {
 		if (pause == 0) {
 			(void) printf(gettext("scrub in progress since %s"),
 			    ctime(&start));
 		} else {
-			char buf[32];
-			struct tm *p = localtime(&pause);
-			(void) strftime(buf, sizeof (buf), "%a %b %e %T %Y", p);
-			(void) printf(gettext("scrub paused since %s\n"), buf);
-			(void) printf(gettext("\tscrub started on   %s"),
+			(void) printf(gettext("scrub paused since %s"),
+			    ctime(&pause));
+			(void) printf(gettext("\tscrub started on %s"),
 			    ctime(&start));
 		}
 	} else if (ps->pss_func == POOL_SCAN_RESILVER) {
@@ -4004,11 +4000,12 @@ print_scan_status(pool_scan_stat_t *ps)
 	pass_issued = ps->pss_pass_issued;
 	total = ps->pss_to_examine;
 
-       /* we are only done with a block once we have issued the IO for it */
-       fraction_done = (double)issued / total;
+	/* we are only done with a block once we have issued the IO for it */
+	fraction_done = (double)issued / total;
 
-       /* elapsed time for this pass, rounding up to 1 if it's 0 */
+	/* elapsed time for this pass, rounding up to 1 if it's 0 */
 	elapsed = time(NULL) - ps->pss_pass_start;
+	elapsed -= ps->pss_pass_scrub_spent_paused;
 	elapsed = (elapsed != 0) ? elapsed : 1;
 
 	scan_rate = pass_scanned / elapsed;
@@ -4036,8 +4033,8 @@ print_scan_status(pool_scan_stat_t *ps)
 
 	if (pause == 0) {
 		(void) printf(gettext("\t%s scanned at %s/s, "
-				      "%s issued at %s/s, %s total"),
-			      scanned_buf, srate_buf, issued_buf, irate_buf, total_buf);
+		    "%s issued at %s/s, %s total"),
+		    scanned_buf, srate_buf, issued_buf, irate_buf, total_buf);
 		if (hours_left < (30 * 24)) {
 			(void) printf(gettext(", %lluh%um to go\n"),
 			    (u_longlong_t)hours_left, (uint_t)(mins_left % 60));
@@ -4047,7 +4044,7 @@ print_scan_status(pool_scan_stat_t *ps)
 		}
 	} else {
 		(void) printf(gettext("\t%s scanned out of %s\n"),
-			      issued_buf, total_buf);
+		    issued_buf, total_buf);
 	}
 
 	if (ps->pss_func == POOL_SCAN_RESILVER) {
