@@ -59,8 +59,8 @@ _NOTE(CONSTCOND) } while (0)
 typedef struct arc_buf_hdr arc_buf_hdr_t;
 typedef struct arc_buf arc_buf_t;
 typedef void arc_read_done_func_t(zio_t *zio, const zbookmark_phys_t *zb,
-    const blkptr_t *bp, arc_buf_t *buf, void *private);
-typedef void arc_write_done_func_t(zio_t *zio, arc_buf_t *buf, void *private);
+    const blkptr_t *bp, arc_buf_t *buf, void *priv);
+typedef void arc_write_done_func_t(zio_t *zio, arc_buf_t *buf, void *priv);
 
 /* generic arc_done_func_t's which you can use */
 arc_read_done_func_t arc_bcopy_func;

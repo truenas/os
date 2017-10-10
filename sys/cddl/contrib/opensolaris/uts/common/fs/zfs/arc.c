@@ -5009,8 +5009,10 @@ void
 arc_bcopy_func(zio_t *zio, const zbookmark_phys_t *zb, const blkptr_t *bp,
     arc_buf_t *buf, void *arg)
 {
-	if (zio == NULL || zio->io_error == 0)
-		bcopy(buf->b_data, arg, arc_buf_size(buf));
+	if (buf == NULL)
+		return;
+
+	bcopy(buf->b_data, arg, arc_buf_size(buf));
 	arc_buf_destroy(buf, arg);
 }
 
@@ -5021,8 +5023,8 @@ arc_getbuf_func(zio_t *zio, const zbookmark_phys_t *zb, const blkptr_t *bp,
     arc_buf_t *buf, void *arg)
 {
 	arc_buf_t **bufp = arg;
-	if (zio && zio->io_error) {
-		arc_buf_destroy(buf, arg);
+
+	if (buf == NULL) {
 		*bufp = NULL;
 	} else {
 		*bufp = buf;
@@ -5054,7 +5056,6 @@ arc_read_done(zio_t *zio)
 	arc_callback_t	*callback_list;
 	arc_callback_t	*acb;
 	boolean_t	freeable = B_FALSE;
-	boolean_t	no_zio_error = (zio->io_error == 0);
 
 	/*
 	 * The hdr was inserted into hash-table and removed from lists
@@ -5080,7 +5081,7 @@ arc_read_done(zio_t *zio)
 		ASSERT3P(hash_lock, !=, NULL);
 	}
 
-	if (no_zio_error) {
+	if (zio->io_error == 0) {
 		/* byteswap if necessary */
 		if (BP_SHOULD_BYTESWAP(zio->io_bp)) {
 			if (BP_GET_LEVEL(zio->io_bp) > 0) {
@@ -5101,7 +5102,8 @@ arc_read_done(zio_t *zio)
 	callback_list = hdr->b_l1hdr.b_acb;
 	ASSERT3P(callback_list, !=, NULL);
 
-	if (hash_lock && no_zio_error && hdr->b_l1hdr.b_state == arc_anon) {
+	if (hash_lock && zio->io_error == 0 &&
+	    hdr->b_l1hdr.b_state == arc_anon) {
 		/*
 		 * Only call arc_access on anonymous buffers.  This is because
 		 * if we've issued an I/O for an evicted buffer, we've already
@@ -5122,14 +5124,21 @@ arc_read_done(zio_t *zio)
 		if (!acb->acb_done)
 			continue;
 
-		/* This is a demand read since prefetches don't use callbacks */
 		callback_cnt++;
 
+		if (zio->io_error != 0)
+			continue;
+		
 		int error = arc_buf_alloc_impl(hdr, acb->acb_private,
-		    acb->acb_compressed, no_zio_error, &acb->acb_buf);
-		if (no_zio_error) {
-			zio->io_error = error;
+		    acb->acb_compressed,
+		    B_TRUE, &acb->acb_buf);
+		if (error != 0) {
+			arc_buf_destroy(acb->acb_buf, acb->acb_private);
+			acb->acb_buf = NULL;
 		}
+
+		if (zio->io_error == 0)
+			zio->io_error = error;
 	}
 	hdr->b_l1hdr.b_acb = NULL;
 	arc_hdr_clear_flags(hdr, ARC_FLAG_IO_IN_PROGRESS);
@@ -5142,7 +5151,7 @@ arc_read_done(zio_t *zio)
 	ASSERT(refcount_is_zero(&hdr->b_l1hdr.b_refcnt) ||
 	    callback_list != NULL);
 
-	if (no_zio_error) {
+	if (zio->io_error == 0) {
 		arc_hdr_verify(hdr, zio->io_bp);
 	} else {
 		arc_hdr_set_flags(hdr, ARC_FLAG_IO_ERROR);
@@ -5221,7 +5230,8 @@ arc_read(zio_t *pio, spa_t *spa, const blkptr_t *bp, arc_read_done_func_t *done,
 	zio_t *rzio;
 	uint64_t guid = spa_load_guid(spa);
 	boolean_t compressed_read = (zio_flags & ZIO_FLAG_RAW) != 0;
-
+	int rc = 0;
+	
 	ASSERT(!BP_IS_EMBEDDED(bp) ||
 	    BPE_GET_ETYPE(bp) == BP_EMBEDDED_TYPE_DATA);
 
@@ -5319,10 +5329,15 @@ top:
 				    ARC_FLAG_PREDICTIVE_PREFETCH);
 			}
 			ASSERT(!BP_IS_EMBEDDED(bp) || !BP_IS_HOLE(bp));
-
 			/* Get a buf with the desired data in it. */
-			VERIFY0(arc_buf_alloc_impl(hdr, private,
-			    compressed_read, B_TRUE, &buf));
+			rc = arc_buf_alloc_impl(hdr, private,
+			   compressed_read, B_TRUE, &buf);
+			if (rc != 0) {
+				arc_buf_destroy(buf, private);
+				buf = NULL;
+			}
+			ASSERT((zio_flags & ZIO_FLAG_SPECULATIVE) ||
+                            rc == 0 || rc != ENOENT);
 		} else if (*arc_flags & ARC_FLAG_PREFETCH &&
 		    refcount_count(&hdr->b_l1hdr.b_refcnt) == 0) {
 			arc_hdr_set_flags(hdr, ARC_FLAG_PREFETCH);
