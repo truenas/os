@@ -257,7 +257,8 @@ nvdimm_probe(device_t dev)
 	size = rman_get_size(res);
 	bus_release_resource(dev, SYS_RES_MEMORY, rid, res);
 
-	snprintf(buf, sizeof(buf), "NVDIMM region %juMB", size / (1024 * 1024));
+	snprintf(buf, sizeof(buf), "NVDIMM region %juGB",
+	    (uintmax_t)(size + 536870912) / 1073741824);
 	device_set_desc_copy(dev, buf);
 	return (0);
 }
@@ -303,6 +304,11 @@ nvdimm_attach(device_t dev)
 	disk->d_sectorsize = DEV_BSIZE;
 	disk->d_mediasize = sc->size - PAGE_SIZE;
 	disk->d_flags = DISKFLAG_UNMAPPED_BIO | DISKFLAG_DIRECT_COMPLETION;
+	snprintf(disk->d_ident, sizeof(disk->d_ident),
+	    "%016jX", (uintmax_t)sc->label->array);
+	snprintf(disk->d_descr, sizeof(disk->d_descr),
+	    "NVDIMM region %juGB", (uintmax_t)(sc->size + 536870912) /
+	    1073741824);
 	disk->d_rotation_rate = DISK_RR_NON_ROTATING;
 	disk_create(disk, DISK_VERSION);
 	return (0);
@@ -497,12 +503,33 @@ nvdimm_root_get_resource_list(device_t dev, device_t child)
 	return &ivar->resources;
 }
 
+static int
+nvdimm_root_print_child(device_t dev, device_t child)
+{
+	struct nvdimm_child *ivar;
+	struct resource_list *rl;
+	int	retval = 0;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	rl = &ivar->resources;
+
+	retval += bus_print_child_header(dev, child);
+	if (STAILQ_FIRST(rl))
+		retval += printf(" at");
+	retval += resource_list_print_type(rl, "iomem", SYS_RES_MEMORY, "%#jx");
+	retval += bus_print_child_domain(dev, child);
+	retval += bus_print_child_footer(dev, child);
+
+	return (retval);
+}
+
 static device_method_t nvdimm_root_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe,		nvdimm_root_probe),
 	DEVMETHOD(device_attach,	nvdimm_root_attach),
 	DEVMETHOD(device_detach,	nvdimm_root_detach),
 
+	DEVMETHOD(bus_print_child,	nvdimm_root_print_child),
 	DEVMETHOD(bus_get_domain,	nvdimm_root_get_domain),
 	DEVMETHOD(bus_get_resource_list,nvdimm_root_get_resource_list),
 	DEVMETHOD(bus_alloc_resource,	bus_generic_rl_alloc_resource),
@@ -632,6 +659,8 @@ ntb_nvdimm_sync(void *data)
 		while (atomic_load_acq_32(&rl->state) == STATE_WAITING &&
 		    sc->rlabel != NULL)
 			cpu_spinwait();
+		snprintf(sc->disk->d_ident, sizeof(sc->disk->d_ident),
+		    "%016jX", (uintmax_t)ll->array);
 		disk_media_changed(sc->disk, M_NOWAIT);
 	} else {
 		device_printf(dev, "No need to copy.\n");
