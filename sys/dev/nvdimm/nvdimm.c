@@ -645,7 +645,7 @@ ntb_nvdimm_sync(void *data)
 		memcpy(sc->rvaddr, sc->vaddr, sc->size - PAGE_SIZE);
 		device_printf(dev, "Copied %juMB at %juMB/s\n",
 		    sc->size / 1024 / 1024,
-		    sc->size * hz / 1024 / 1024 / (ticks - b));
+		    sc->size * hz / 1024 / 1024 / imax(ticks - b, 1));
 		rl->array = ll->array;
 		rl->empty = 0;
 		rl->dirty = 0;
