@@ -80,7 +80,7 @@ static int	debug = 0;
 
 #define	NFSD_STABLERESTART	"/var/db/nfs-stablerestart"
 #define	NFSD_STABLEBACKUP	"/var/db/nfs-stablerestart.bak"
-#define NFSD_VIRTUALHOST    "/etc/nfsd.virtualhost"
+#define	NFSD_VIRTUALHOST    "/etc/nfsd.virtualhost"
 #define	MAXNFSDCNT	256
 #define	DEFNFSDCNT	 4
 #define	NFS_VER2	 2
