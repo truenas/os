@@ -11,6 +11,11 @@ INTERNALPROG=
 WARNS?=		3
 LOADER_NET_SUPPORT?=	yes
 
+LOADER_MSDOS_SUPPORT?=	yes
+LOADER_UFS_SUPPORT?=	yes
+LOADER_CD9660_SUPPORT?=	no
+LOADER_EXT2FS_SUPPORT?=	no
+
 # architecture-specific loader code
 SRCS=	autoload.c \
 	bootinfo.c \
@@ -33,10 +38,6 @@ CFLAGS+=	-DSKEIN_LOOP=111
 CWARNFLAGS.zfs.c+=	-Wno-sign-compare
 CWARNFLAGS.zfs.c+=	-Wno-array-bounds
 CWARNFLAGS.zfs.c+=	-Wno-missing-prototypes
-.endif
-
-.if defined(LOADER_NET_SUPPORT)
-CFLAGS+=	-I${.CURDIR}/../../../../lib/libstand
 .endif
 
 .if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} > 40201
@@ -82,14 +83,6 @@ CFLAGS+= -DSMBIOS_NETWORK_ENDIAN_UUID
 .endif
 .endif
 
-.if ${MK_FORTH} != "no"
-BOOT_FORTH=	yes
-CFLAGS+=	-DBOOT_FORTH
-CFLAGS+=	-I${.CURDIR}/../../ficl
-CFLAGS+=	-I${.CURDIR}/../../ficl/${MACHINE_CPUARCH}
-LIBFICL=	${.OBJDIR}/../../ficl/libficl.a
-.endif
-
 LOADER_FDT_SUPPORT?=	no
 .if ${MK_FDT} != "no" && ${LOADER_FDT_SUPPORT} != "no"
 CFLAGS+=	-I${.CURDIR}/../../fdt
@@ -107,9 +100,7 @@ CFLAGS+=	-DEFI_STAGING_SIZE=${EFI_STAGING_SIZE}
 .endif
 
 # Always add MI sources
-.PATH:		${.CURDIR}/../../common
-.include	"${.CURDIR}/../../common/Makefile.inc"
-CFLAGS+=	-I${.CURDIR}/../../common
+.include	"../../loader.mk"
 
 FILES+=	loader.efi
 FILESMODE_loader.efi=	${BINMODE}
@@ -149,9 +140,9 @@ loader.efi: ${PROG}
 
 LIBEFI=		${.OBJDIR}/../libefi/libefi.a
 
-DPADD=		${LIBFICL} ${LIBEFI} ${LIBFDT} ${LIBEFI_FDT} ${LIBSTAND} \
+DPADD=		${LIBFICL} ${LIBEFI} ${LIBFDT} ${LIBEFI_FDT} ${LIBSA} \
 		${LDSCRIPT}
-LDADD=		${LIBFICL} ${LIBEFI} ${LIBFDT} ${LIBEFI_FDT} ${LIBSTAND}
+LDADD=		${LIBFICL} ${LIBEFI} ${LIBFDT} ${LIBEFI_FDT} ${LIBSA}
 
 .include <bsd.prog.mk>
 

@@ -23,327 +23,466 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/disk.h>
 #include <machine/elf.h>
 #include <machine/stdarg.h>
 #include <stand.h>
+#include <disk.h>
 
 #include <efi.h>
+#include <efilib.h>
+#include <efiprot.h>
 #include <eficonsctl.h>
+#ifdef EFI_ZFS_BOOT
+#include <libzfs.h>
+#endif
+typedef CHAR16 efi_char;
+#include <efichar.h>
 
-#include "boot_module.h"
+#include <bootstrap.h>
+
+#include "efi_drivers.h"
+#include "efizfs.h"
 #include "paths.h"
 
-static const boot_module_t *boot_modules[] =
-{
-#ifdef EFI_ZFS_BOOT
-	&zfs_module,
+static void efi_panic(EFI_STATUS s, const char *fmt, ...) __dead2 __printflike(2, 3);
+#ifdef EFI_DEBUG
+#define DPRINTF(fmt, args...) printf(fmt, ##args)
+#define DSTALL(d) BS->Stall(d)
+#else
+#define DPRINTF(fmt, ...) {}
+#define DSTALL(d) {}
 #endif
-#ifdef EFI_UFS_BOOT
-	&ufs_module
-#endif
+
+struct arch_switch archsw;	/* MI/MD interface boundary */
+
+static const efi_driver_t *efi_drivers[] = {
+        NULL
 };
 
-#define	NUM_BOOT_MODULES	nitems(boot_modules)
+extern struct console efi_console;
+#if defined(__amd64__) || defined(__i386__)
+extern struct console comconsole;
+extern struct console nullconsole;
+#endif
+
+#ifdef EFI_ZFS_BOOT
+uint64_t pool_guid;
+#endif
+
+struct fs_ops *file_system[] = {
+#ifdef EFI_ZFS_BOOT
+	&zfs_fsops,
+#endif
+	&dosfs_fsops,
+#ifdef EFI_UFS_BOOT
+	&ufs_fsops,
+#endif
+	&cd9660_fsops,
+	&nfs_fsops,
+	&gzipfs_fsops,
+	&bzipfs_fsops,
+	NULL
+};
+
+struct devsw *devsw[] = {
+	&efipart_hddev,
+	&efipart_fddev,
+	&efipart_cddev,
+#ifdef EFI_ZFS_BOOT
+	&zfs_dev,
+#endif
+	NULL
+};
+
+struct console *consoles[] = {
+	&efi_console,
+	NULL
+};
+
+static EFI_LOADED_IMAGE *boot_image;
+static EFI_DEVICE_PATH *imgpath;
+static EFI_DEVICE_PATH *imgprefix;
+
+/* Definitions we don't actually need for boot, but we need to define
+ * to make the linker happy.
+ */
+struct file_format *file_formats[] = { NULL };
+
+struct netif_driver *netif_drivers[] = { NULL };
+
+static int
+efi_autoload(void)
+{
+  printf("******** Boot block should not call autoload\n");
+  return (-1);
+}
+
+static ssize_t
+efi_copyin(const void *src __unused, vm_offset_t dest __unused,
+    const size_t len __unused)
+{
+  printf("******** Boot block should not call copyin\n");
+  return (-1);
+}
+
+static ssize_t
+efi_copyout(vm_offset_t src __unused, void *dest __unused,
+    const size_t len __unused)
+{
+  printf("******** Boot block should not call copyout\n");
+  return (-1);
+}
+
+static ssize_t
+efi_readin(int fd __unused, vm_offset_t dest __unused,
+    const size_t len __unused)
+{
+  printf("******** Boot block should not call readin\n");
+  return (-1);
+}
+
 /* The initial number of handles used to query EFI for partitions. */
 #define NUM_HANDLES_INIT	24
 
-EFI_STATUS efi_main(EFI_HANDLE Ximage, EFI_SYSTEM_TABLE* Xsystab);
-
-EFI_SYSTEM_TABLE *systab;
-EFI_BOOT_SERVICES *bs;
-static EFI_HANDLE *image;
-
-static EFI_GUID BlockIoProtocolGUID = BLOCK_IO_PROTOCOL;
 static EFI_GUID DevicePathGUID = DEVICE_PATH_PROTOCOL;
 static EFI_GUID LoadedImageGUID = LOADED_IMAGE_PROTOCOL;
-static EFI_GUID ConsoleControlGUID = EFI_CONSOLE_CONTROL_PROTOCOL_GUID;
+static EFI_GUID FreeBSDBootVarGUID = FREEBSD_BOOT_VAR_GUID;
 
-/*
- * Provide Malloc / Free backed by EFIs AllocatePool / FreePool which ensures
- * memory is correctly aligned avoiding EFI_INVALID_PARAMETER returns from
- * EFI methods.
- */
-void *
-Malloc(size_t len, const char *file __unused, int line __unused)
-{
-	void *out;
-
-	if (bs->AllocatePool(EfiLoaderData, len, &out) == EFI_SUCCESS)
-		return (out);
-
-	return (NULL);
-}
-
-void
-Free(void *buf, const char *file __unused, int line __unused)
-{
-	if (buf != NULL)
-		(void)bs->FreePool(buf);
-}
-
-/*
- * nodes_match returns TRUE if the imgpath isn't NULL and the nodes match,
- * FALSE otherwise.
- */
-static BOOLEAN
-nodes_match(EFI_DEVICE_PATH *imgpath, EFI_DEVICE_PATH *devpath)
-{
-	int len;
-
-	if (imgpath == NULL || imgpath->Type != devpath->Type ||
-	    imgpath->SubType != devpath->SubType)
-		return (FALSE);
-
-	len = DevicePathNodeLength(imgpath);
-	if (len != DevicePathNodeLength(devpath))
-		return (FALSE);
-
-	return (memcmp(imgpath, devpath, (size_t)len) == 0);
-}
-
-/*
- * device_paths_match returns TRUE if the imgpath isn't NULL and all nodes
- * in imgpath and devpath match up to their respective occurrences of a
- * media node, FALSE otherwise.
- */
-static BOOLEAN
-device_paths_match(EFI_DEVICE_PATH *imgpath, EFI_DEVICE_PATH *devpath)
-{
-
-	if (imgpath == NULL)
-		return (FALSE);
-
-	while (!IsDevicePathEnd(imgpath) && !IsDevicePathEnd(devpath)) {
-		if (IsDevicePathType(imgpath, MEDIA_DEVICE_PATH) &&
-		    IsDevicePathType(devpath, MEDIA_DEVICE_PATH))
-			return (TRUE);
-
-		if (!nodes_match(imgpath, devpath))
-			return (FALSE);
-
-		imgpath = NextDevicePathNode(imgpath);
-		devpath = NextDevicePathNode(devpath);
-	}
-
-	return (FALSE);
-}
-
-/*
- * devpath_last returns the last non-path end node in devpath.
- */
-static EFI_DEVICE_PATH *
-devpath_last(EFI_DEVICE_PATH *devpath)
-{
-
-	while (!IsDevicePathEnd(NextDevicePathNode(devpath)))
-		devpath = NextDevicePathNode(devpath);
-
-	return (devpath);
-}
-
-/*
- * devpath_node_str is a basic output method for a devpath node which
- * only understands a subset of the available sub types.
- *
- * If we switch to UEFI 2.x then we should update it to use:
- * EFI_DEVICE_PATH_TO_TEXT_PROTOCOL.
- */
-static int
-devpath_node_str(char *buf, size_t size, EFI_DEVICE_PATH *devpath)
-{
-
-	switch (devpath->Type) {
-	case MESSAGING_DEVICE_PATH:
-		switch (devpath->SubType) {
-		case MSG_ATAPI_DP: {
-			ATAPI_DEVICE_PATH *atapi;
-
-			atapi = (ATAPI_DEVICE_PATH *)(void *)devpath;
-			return snprintf(buf, size, "ata(%s,%s,0x%x)",
-			    (atapi->PrimarySecondary == 1) ?  "Sec" : "Pri",
-			    (atapi->SlaveMaster == 1) ?  "Slave" : "Master",
-			    atapi->Lun);
-		}
-		case MSG_USB_DP: {
-			USB_DEVICE_PATH *usb;
-
-			usb = (USB_DEVICE_PATH *)devpath;
-			return snprintf(buf, size, "usb(0x%02x,0x%02x)",
-			    usb->ParentPortNumber, usb->InterfaceNumber);
-		}
-		case MSG_SCSI_DP: {
-			SCSI_DEVICE_PATH *scsi;
-
-			scsi = (SCSI_DEVICE_PATH *)(void *)devpath;
-			return snprintf(buf, size, "scsi(0x%02x,0x%02x)",
-			    scsi->Pun, scsi->Lun);
-		}
-		case MSG_SATA_DP: {
-			SATA_DEVICE_PATH *sata;
-
-			sata = (SATA_DEVICE_PATH *)(void *)devpath;
-			return snprintf(buf, size, "sata(0x%x,0x%x,0x%x)",
-			    sata->HBAPortNumber, sata->PortMultiplierPortNumber,
-			    sata->Lun);
-		}
-		default:
-			return snprintf(buf, size, "msg(0x%02x)",
-			    devpath->SubType);
-		}
-		break;
-	case HARDWARE_DEVICE_PATH:
-		switch (devpath->SubType) {
-		case HW_PCI_DP: {
-			PCI_DEVICE_PATH *pci;
-
-			pci = (PCI_DEVICE_PATH *)devpath;
-			return snprintf(buf, size, "pci(0x%02x,0x%02x)",
-			    pci->Device, pci->Function);
-		}
-		default:
-			return snprintf(buf, size, "hw(0x%02x)",
-			    devpath->SubType);
-		}
-		break;
-	case ACPI_DEVICE_PATH: {
-		ACPI_HID_DEVICE_PATH *acpi;
-
-		acpi = (ACPI_HID_DEVICE_PATH *)(void *)devpath;
-		if ((acpi->HID & PNP_EISA_ID_MASK) == PNP_EISA_ID_CONST) {
-			switch (EISA_ID_TO_NUM(acpi->HID)) {
-			case 0x0a03:
-				return snprintf(buf, size, "pciroot(0x%x)",
-				    acpi->UID);
-			case 0x0a08:
-				return snprintf(buf, size, "pcieroot(0x%x)",
-				    acpi->UID);
-			case 0x0604:
-				return snprintf(buf, size, "floppy(0x%x)",
-				    acpi->UID);
-			case 0x0301:
-				return snprintf(buf, size, "keyboard(0x%x)",
-				    acpi->UID);
-			case 0x0501:
-				return snprintf(buf, size, "serial(0x%x)",
-				    acpi->UID);
-			case 0x0401:
-				return snprintf(buf, size, "parallelport(0x%x)",
-				    acpi->UID);
-			default:
-				return snprintf(buf, size, "acpi(pnp%04x,0x%x)",
-				    EISA_ID_TO_NUM(acpi->HID), acpi->UID);
-			}
-		}
-
-		return snprintf(buf, size, "acpi(0x%08x,0x%x)", acpi->HID,
-		    acpi->UID);
-	}
-	case MEDIA_DEVICE_PATH:
-		switch (devpath->SubType) {
-		case MEDIA_CDROM_DP: {
-			CDROM_DEVICE_PATH *cdrom;
-
-			cdrom = (CDROM_DEVICE_PATH *)(void *)devpath;
-			return snprintf(buf, size, "cdrom(%x)",
-			    cdrom->BootEntry);
-		}
-		case MEDIA_HARDDRIVE_DP: {
-			HARDDRIVE_DEVICE_PATH *hd;
-
-			hd = (HARDDRIVE_DEVICE_PATH *)(void *)devpath;
-			return snprintf(buf, size, "hd(%x)",
-			    hd->PartitionNumber);
-		}
-		default:
-			return snprintf(buf, size, "media(0x%02x)",
-			    devpath->SubType);
-		}
-	case BBS_DEVICE_PATH:
-		return snprintf(buf, size, "bbs(0x%02x)", devpath->SubType);
-	case END_DEVICE_PATH_TYPE:
-		return (0);
-	}
-
-	return snprintf(buf, size, "type(0x%02x, 0x%02x)", devpath->Type,
-	    devpath->SubType);
-}
-
-/*
- * devpath_strlcat appends a text description of devpath to buf but not more
- * than size - 1 characters followed by NUL-terminator.
- */
-int
-devpath_strlcat(char *buf, size_t size, EFI_DEVICE_PATH *devpath)
-{
-	size_t len, used;
-	const char *sep;
-
-	sep = "";
-	used = 0;
-	while (!IsDevicePathEnd(devpath)) {
-		len = snprintf(buf, size - used, "%s", sep);
-		used += len;
-		if (used > size)
-			return (used);
-		buf += len;
-
-		len = devpath_node_str(buf, size - used, devpath);
-		used += len;
-		if (used > size)
-			return (used);
-		buf += len;
-		devpath = NextDevicePathNode(devpath);
-		sep = ":";
-	}
-
-	return (used);
-}
-
-/*
- * devpath_str is convenience method which returns the text description of
- * devpath using a static buffer, so it isn't thread safe!
- */
-char *
-devpath_str(EFI_DEVICE_PATH *devpath)
-{
-	static char buf[256];
-
-	devpath_strlcat(buf, sizeof(buf), devpath);
-
-	return buf;
-}
-
-/*
- * load_loader attempts to load the loader image data.
- *
- * It tries each module and its respective devices, identified by mod->probe,
- * in order until a successful load occurs at which point it returns EFI_SUCCESS
- * and EFI_NOT_FOUND otherwise.
- *
- * Only devices which have preferred matching the preferred parameter are tried.
- */
 static EFI_STATUS
-load_loader(const boot_module_t **modp, dev_info_t **devinfop, void **bufp,
-    size_t *bufsize, BOOLEAN preferred)
+do_load(const char *filepath, void **bufp, size_t *bufsize)
 {
-	UINTN i;
-	dev_info_t *dev;
-	const boot_module_t *mod;
+	struct stat st;
+        void *buf = NULL;
+        int fd, err;
+        size_t fsize, remaining;
+        ssize_t readsize;
 
-	for (i = 0; i < NUM_BOOT_MODULES; i++) {
-		mod = boot_modules[i];
-		for (dev = mod->devices(); dev != NULL; dev = dev->next) {
-			if (dev->preferred != preferred)
-				continue;
+        if ((fd = open(filepath, O_RDONLY)) < 0) {
+                return (ENOTSUP);
+        }
 
-			if (mod->load(PATH_LOADER_EFI, dev, bufp, bufsize) ==
-			    EFI_SUCCESS) {
-				*devinfop = dev;
-				*modp = mod;
-				return (EFI_SUCCESS);
+        if ((err = fstat(fd, &st)) != 0) {
+                goto close_file;
+        }
+
+        fsize = st.st_size;
+
+        if ((buf = malloc(fsize)) == NULL) {
+                err = ENOMEM;
+                goto close_file;
+        }
+
+        remaining = fsize;
+
+        do {
+                if ((readsize = read(fd, buf, fsize)) < 0) {
+                        err = (-readsize);
+                        goto free_buf;
+                }
+
+                remaining -= readsize;
+        } while(remaining != 0);
+
+        close(fd);
+        *bufsize = st.st_size;
+        *bufp = buf;
+
+ close_file:
+        close(fd);
+
+        return errno_to_efi_status(err);
+
+ free_buf:
+        free(buf);
+        goto close_file;
+}
+
+static EFI_STATUS
+efi_setenv_freebsd_wcs(const char *varname, CHAR16 *valstr)
+{
+	CHAR16 *var = NULL;
+	size_t len;
+	EFI_STATUS rv;
+
+	utf8_to_ucs2(varname, &var, &len);
+	if (var == NULL)
+		return (EFI_OUT_OF_RESOURCES);
+	rv = RS->SetVariable(var, &FreeBSDBootVarGUID,
+	    EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+	    (ucs2len(valstr) + 1) * sizeof(efi_char), valstr);
+	free(var);
+	return (rv);
+}
+
+static int
+probe_fs(const char *filepath)
+{
+        int fd;
+
+        if ((fd = open(filepath, O_RDONLY)) < 0) {
+                return (ENOTSUP);
+        }
+
+        close(fd);
+
+        return (0);
+}
+
+static int
+probe_dev(struct devsw *dev, int unit, const char *filepath)
+{
+        struct devdesc currdev;
+        char *devname;
+        int err;
+
+	currdev.d_dev = dev;
+	currdev.d_type = currdev.d_dev->dv_type;
+	currdev.d_unit = unit;
+	currdev.d_opendata = NULL;
+        devname = efi_fmtdev(&currdev);
+
+        env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
+            env_nounset);
+
+        err = probe_fs(filepath);
+
+        return (err);
+}
+
+static bool
+check_preferred(EFI_HANDLE *h)
+{
+         EFI_DEVICE_PATH *path = efi_lookup_devpath(h);
+         bool out;
+
+         if ((path = efi_lookup_devpath(h)) == NULL)
+                 return (false);
+
+         out = efi_devpath_is_prefix(imgpath, path) ||
+           efi_devpath_is_prefix(imgprefix, path);
+
+         return (out);
+}
+
+bool
+efi_zfs_is_preferred(EFI_HANDLE *h)
+{
+         return (check_preferred(h));
+}
+
+static int
+load_preferred(EFI_LOADED_IMAGE *img, const char *filepath, void **bufp,
+    size_t *bufsize, EFI_HANDLE *handlep)
+{
+	pdinfo_list_t *pdi_list;
+	pdinfo_t *dp, *pp;
+	char *devname;
+
+#ifdef EFI_ZFS_BOOT
+	/* Did efi_zfs_probe() detect the boot pool? */
+	if (pool_guid != 0) {
+                struct zfs_devdesc currdev;
+
+		currdev.d_dev = &zfs_dev;
+		currdev.d_unit = 0;
+		currdev.d_type = currdev.d_dev->dv_type;
+		currdev.d_opendata = NULL;
+		currdev.pool_guid = pool_guid;
+		currdev.root_guid = 0;
+		devname = efi_fmtdev(&currdev);
+
+		env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
+		    env_nounset);
+
+                if (probe_fs(filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = efizfs_get_handle_by_guid(pool_guid);
+                        return (0);
+                }
+	}
+#endif /* EFI_ZFS_BOOT */
+
+	/* We have device lists for hd, cd, fd, walk them all. */
+	pdi_list = efiblk_get_pdinfo_list(&efipart_hddev);
+	STAILQ_FOREACH(dp, pdi_list, pd_link) {
+                struct disk_devdesc currdev;
+
+		currdev.d_dev = &efipart_hddev;
+		currdev.d_type = currdev.d_dev->dv_type;
+		currdev.d_unit = dp->pd_unit;
+		currdev.d_opendata = NULL;
+		currdev.d_slice = -1;
+		currdev.d_partition = -1;
+		devname = efi_fmtdev(&currdev);
+
+		env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
+		    env_nounset);
+
+	        if (check_preferred(dp->pd_handle) &&
+                    probe_fs(filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = dp->pd_handle;
+                        return (0);
+		}
+
+                /* Assuming GPT partitioning. */
+		STAILQ_FOREACH(pp, &dp->pd_part, pd_link) {
+                        if (check_preferred(pp->pd_handle)) {
+				currdev.d_slice = pp->pd_unit;
+				currdev.d_partition = 255;
+                                devname = efi_fmtdev(&currdev);
+
+                                env_setenv("currdev", EV_VOLATILE, devname,
+                                    efi_setcurrdev, env_nounset);
+
+                                if (probe_fs(filepath) == 0 &&
+                                    do_load(filepath, bufp, bufsize) ==
+                                        EFI_SUCCESS) {
+                                        *handlep = pp->pd_handle;
+                                        return (0);
+                                }
 			}
 		}
 	}
+
+	pdi_list = efiblk_get_pdinfo_list(&efipart_cddev);
+	STAILQ_FOREACH(dp, pdi_list, pd_link) {
+                if ((dp->pd_handle == img->DeviceHandle ||
+		     dp->pd_alias == img->DeviceHandle ||
+                     check_preferred(dp->pd_handle)) &&
+                    probe_dev(&efipart_cddev, dp->pd_unit, filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = dp->pd_handle;
+                        return (0);
+		}
+	}
+
+	pdi_list = efiblk_get_pdinfo_list(&efipart_fddev);
+	STAILQ_FOREACH(dp, pdi_list, pd_link) {
+                if ((dp->pd_handle == img->DeviceHandle ||
+                     check_preferred(dp->pd_handle)) &&
+                    probe_dev(&efipart_cddev, dp->pd_unit, filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = dp->pd_handle;
+                        return (0);
+		}
+	}
+
+	return (ENOENT);
+}
+
+static int
+load_all(const char *filepath, void **bufp, size_t *bufsize,
+    EFI_HANDLE *handlep)
+{
+	pdinfo_list_t *pdi_list;
+	pdinfo_t *dp, *pp;
+	zfsinfo_list_t *zfsi_list;
+	zfsinfo_t *zi;
+        char *devname;
+
+#ifdef EFI_ZFS_BOOT
+	zfsi_list = efizfs_get_zfsinfo_list();
+	STAILQ_FOREACH(zi, zfsi_list, zi_link) {
+                struct zfs_devdesc currdev;
+
+		currdev.d_dev = &zfs_dev;
+		currdev.d_unit = 0;
+		currdev.d_type = currdev.d_dev->dv_type;
+		currdev.d_opendata = NULL;
+		currdev.pool_guid = zi->zi_pool_guid;
+		currdev.root_guid = 0;
+		devname = efi_fmtdev(&currdev);
+
+		env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
+		    env_nounset);
+
+                if (probe_fs(filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = zi->zi_handle;
+
+                        return (0);
+                }
+	}
+#endif /* EFI_ZFS_BOOT */
+
+	/* We have device lists for hd, cd, fd, walk them all. */
+	pdi_list = efiblk_get_pdinfo_list(&efipart_hddev);
+	STAILQ_FOREACH(dp, pdi_list, pd_link) {
+                struct disk_devdesc currdev;
+
+		currdev.d_dev = &efipart_hddev;
+		currdev.d_type = currdev.d_dev->dv_type;
+		currdev.d_unit = dp->pd_unit;
+		currdev.d_opendata = NULL;
+		currdev.d_slice = -1;
+		currdev.d_partition = -1;
+		devname = efi_fmtdev(&currdev);
+
+		env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
+		    env_nounset);
+
+		if (probe_fs(filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = dp->pd_handle;
+
+                        return (0);
+		}
+
+                /* Assuming GPT partitioning. */
+		STAILQ_FOREACH(pp, &dp->pd_part, pd_link) {
+                        currdev.d_slice = pp->pd_unit;
+                        currdev.d_partition = 255;
+                        devname = efi_fmtdev(&currdev);
+
+                        env_setenv("currdev", EV_VOLATILE, devname,
+                            efi_setcurrdev, env_nounset);
+
+                        if (probe_fs(filepath) == 0 &&
+                            do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                                *handlep = pp->pd_handle;
+
+                                return (0);
+			}
+		}
+	}
+
+	pdi_list = efiblk_get_pdinfo_list(&efipart_cddev);
+	STAILQ_FOREACH(dp, pdi_list, pd_link) {
+		if (probe_dev(&efipart_cddev, dp->pd_unit, filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = dp->pd_handle;
+
+                        return (0);
+		}
+	}
+
+	pdi_list = efiblk_get_pdinfo_list(&efipart_fddev);
+	STAILQ_FOREACH(dp, pdi_list, pd_link) {
+		if (probe_dev(&efipart_fddev, dp->pd_unit, filepath) == 0 &&
+                    do_load(filepath, bufp, bufsize) == EFI_SUCCESS) {
+                        *handlep = dp->pd_handle;
+
+                        return (0);
+		}
+	}
+
+	return (ENOENT);
+}
+
+static EFI_STATUS
+load_loader(EFI_HANDLE *handlep, void **bufp, size_t *bufsize)
+{
+        /* Try the preferred handles first, then all the handles */
+        if (load_preferred(boot_image, PATH_LOADER_EFI, bufp, bufsize,
+                handlep) == 0) {
+                return (0);
+        }
+
+        if (load_all(PATH_LOADER_EFI, bufp, bufsize, handlep) == 0) {
+                return (0);
+        }
 
 	return (EFI_NOT_FOUND);
 }
@@ -358,20 +497,27 @@ try_boot(void)
 	size_t bufsize, loadersize, cmdsize;
 	void *buf, *loaderbuf;
 	char *cmd;
-	dev_info_t *dev;
-	const boot_module_t *mod;
+        EFI_HANDLE fshandle;
 	EFI_HANDLE loaderhandle;
 	EFI_LOADED_IMAGE *loaded_image;
 	EFI_STATUS status;
+        EFI_DEVICE_PATH *fspath;
 
-	status = load_loader(&mod, &dev, &loaderbuf, &loadersize, TRUE);
-	if (status != EFI_SUCCESS) {
-		status = load_loader(&mod, &dev, &loaderbuf, &loadersize,
-		    FALSE);
+	status = load_loader(&fshandle, &loaderbuf, &loadersize);
+
+        if (status != EFI_SUCCESS) {
+                return (status);
+        }
+
+	fspath = NULL;
+	if (status == EFI_SUCCESS) {
+		status = BS->OpenProtocol(fshandle, &DevicePathGUID,
+                    (void **)&fspath, IH, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
 		if (status != EFI_SUCCESS) {
-			printf("Failed to load '%s'\n", PATH_LOADER_EFI);
-			return (status);
-		}
+			DPRINTF("Failed to get image DevicePath (%lu)\n",
+			    EFI_ERROR_CODE(status));
+                }
+		DPRINTF("filesystem device path: %s\n", devpath_str(fspath));
 	}
 
 	/*
@@ -386,9 +532,9 @@ try_boot(void)
 	 */
 	cmd = NULL;
 	cmdsize = 0;
-	status = mod->load(PATH_DOTCONFIG, dev, &buf, &bufsize);
+	status = do_load(PATH_DOTCONFIG, &buf, &bufsize);
 	if (status == EFI_NOT_FOUND)
-		status = mod->load(PATH_CONFIG, dev, &buf, &bufsize);
+		status = do_load(PATH_CONFIG, &buf, &bufsize);
 	if (status == EFI_SUCCESS) {
 		cmdsize = bufsize + 1;
 		cmd = malloc(cmdsize);
@@ -400,24 +546,25 @@ try_boot(void)
 		buf = NULL;
 	}
 
-	if ((status = bs->LoadImage(TRUE, image, devpath_last(dev->devpath),
+	if ((status = BS->LoadImage(TRUE, IH, efi_devpath_last_node(fspath),
 	    loaderbuf, loadersize, &loaderhandle)) != EFI_SUCCESS) {
-		printf("Failed to load image provided by %s, size: %zu, (%lu)\n",
-		     mod->name, loadersize, EFI_ERROR_CODE(status));
+		printf("Failed to load image, size: %zu, (%lu)\n",
+		     loadersize, EFI_ERROR_CODE(status));
 		goto errout;
 	}
 
-	if ((status = bs->HandleProtocol(loaderhandle, &LoadedImageGUID,
-	    (VOID**)&loaded_image)) != EFI_SUCCESS) {
-		printf("Failed to query LoadedImage provided by %s (%lu)\n",
-		    mod->name, EFI_ERROR_CODE(status));
+	if ((status = BS->OpenProtocol(loaderhandle, &LoadedImageGUID,
+            (VOID**)&loaded_image, IH, NULL,
+            EFI_OPEN_PROTOCOL_GET_PROTOCOL)) != EFI_SUCCESS) {
+		printf("Failed to query LoadedImage (%lu)\n",
+		    EFI_ERROR_CODE(status));
 		goto errout;
 	}
 
 	if (cmd != NULL)
 		printf("    command args: %s\n", cmd);
 
-	loaded_image->DeviceHandle = dev->devhandle;
+	loaded_image->DeviceHandle = fshandle;
 	loaded_image->LoadOptionsSize = cmdsize;
 	loaded_image->LoadOptions = cmd;
 
@@ -433,10 +580,10 @@ try_boot(void)
 	DSTALL(1000000);
 	DPRINTF(".\n");
 
-	if ((status = bs->StartImage(loaderhandle, NULL, NULL)) !=
+	if ((status = BS->StartImage(loaderhandle, NULL, NULL)) !=
 	    EFI_SUCCESS) {
-		printf("Failed to start image provided by %s (%lu)\n",
-		    mod->name, EFI_ERROR_CODE(status));
+		printf("Failed to start image (%lu)\n",
+		    EFI_ERROR_CODE(status));
 		loaded_image->LoadOptionsSize = 0;
 		loaded_image->LoadOptions = NULL;
 	}
@@ -452,138 +599,37 @@ errout:
 	return (status);
 }
 
-/*
- * probe_handle determines if the passed handle represents a logical partition
- * if it does it uses each module in order to probe it and if successful it
- * returns EFI_SUCCESS.
- */
-static EFI_STATUS
-probe_handle(EFI_HANDLE h, EFI_DEVICE_PATH *imgpath, BOOLEAN *preferred)
-{
-	dev_info_t *devinfo;
-	EFI_BLOCK_IO *blkio;
-	EFI_DEVICE_PATH *devpath;
-	EFI_STATUS status;
-	UINTN i;
-
-	/* Figure out if we're dealing with an actual partition. */
-	status = bs->HandleProtocol(h, &DevicePathGUID, (void **)&devpath);
-	if (status == EFI_UNSUPPORTED)
-		return (status);
-
-	if (status != EFI_SUCCESS) {
-		DPRINTF("\nFailed to query DevicePath (%lu)\n",
-		    EFI_ERROR_CODE(status));
-		return (status);
-	}
-
-	DPRINTF("probing: %s\n", devpath_str(devpath));
-
-	status = bs->HandleProtocol(h, &BlockIoProtocolGUID, (void **)&blkio);
-	if (status == EFI_UNSUPPORTED)
-		return (status);
-
-	if (status != EFI_SUCCESS) {
-		DPRINTF("\nFailed to query BlockIoProtocol (%lu)\n",
-		    EFI_ERROR_CODE(status));
-		return (status);
-	}
-
-	if (!blkio->Media->LogicalPartition)
-		return (EFI_UNSUPPORTED);
-
-	*preferred = device_paths_match(imgpath, devpath);
-
-	/* Run through each module, see if it can load this partition */
-	for (i = 0; i < NUM_BOOT_MODULES; i++) {
-		if ((status = bs->AllocatePool(EfiLoaderData,
-		    sizeof(*devinfo), (void **)&devinfo)) !=
-		    EFI_SUCCESS) {
-			DPRINTF("\nFailed to allocate devinfo (%lu)\n",
-			    EFI_ERROR_CODE(status));
-			continue;
-		}
-		devinfo->dev = blkio;
-		devinfo->devpath = devpath;
-		devinfo->devhandle = h;
-		devinfo->devdata = NULL;
-		devinfo->preferred = *preferred;
-		devinfo->next = NULL;
-
-		status = boot_modules[i]->probe(devinfo);
-		if (status == EFI_SUCCESS)
-			return (EFI_SUCCESS);
-		(void)bs->FreePool(devinfo);
-	}
-
-	return (EFI_UNSUPPORTED);
-}
-
-/*
- * probe_handle_status calls probe_handle and outputs the returned status
- * of the call.
- */
-static void
-probe_handle_status(EFI_HANDLE h, EFI_DEVICE_PATH *imgpath)
-{
-	EFI_STATUS status;
-	BOOLEAN preferred;
-
-	preferred = FALSE;
-	status = probe_handle(h, imgpath, &preferred);
-	
-	DPRINTF("probe: ");
-	switch (status) {
-	case EFI_UNSUPPORTED:
-		printf(".");
-		DPRINTF(" not supported\n");
-		break;
-	case EFI_SUCCESS:
-		if (preferred) {
-			printf("%c", '*');
-			DPRINTF(" supported (preferred)\n");
-		} else {
-			printf("%c", '+');
-			DPRINTF(" supported\n");
-		}
-		break;
-	default:
-		printf("x");
-		DPRINTF(" error (%lu)\n", EFI_ERROR_CODE(status));
-		break;
-	}
-	DSTALL(500000);
-}
-
 EFI_STATUS
-efi_main(EFI_HANDLE Ximage, EFI_SYSTEM_TABLE *Xsystab)
+main(int argc __unused, CHAR16 *argv[] __unused)
 {
-	EFI_HANDLE *handles;
-	EFI_LOADED_IMAGE *img;
-	EFI_DEVICE_PATH *imgpath;
-	EFI_STATUS status;
-	EFI_CONSOLE_CONTROL_PROTOCOL *ConsoleControl = NULL;
-	SIMPLE_TEXT_OUTPUT_INTERFACE *conout = NULL;
-	UINTN i, max_dim, best_mode, cols, rows, hsize, nhandles;
+        EFI_STATUS status;
 
-	/* Basic initialization*/
-	systab = Xsystab;
-	image = Ximage;
-	bs = Xsystab->BootServices;
+        SIMPLE_TEXT_OUTPUT_INTERFACE *conout = NULL;
+        UINTN i, max_dim, best_mode, cols, rows;
+        CHAR16 *text;
 
-	/* Set up the console, so printf works. */
-	status = bs->LocateProtocol(&ConsoleControlGUID, NULL,
-	    (VOID **)&ConsoleControl);
-	if (status == EFI_SUCCESS)
-		(void)ConsoleControl->SetMode(ConsoleControl,
-		    EfiConsoleControlScreenText);
+        archsw.arch_autoload = efi_autoload;
+	archsw.arch_getdev = efi_getdev;
+	archsw.arch_copyin = efi_copyin;
+	archsw.arch_copyout = efi_copyout;
+	archsw.arch_readin = efi_readin;
+#ifdef EFI_ZFS_BOOT
+        /* Note this needs to be set before ZFS init. */
+        archsw.arch_zfs_probe = efi_zfs_probe;
+#endif
+
+	/* Init the time source */
+	efi_time_init();
+        cons_probe();
+
 	/*
 	 * Reset the console and find the best text mode.
 	 */
-	conout = systab->ConOut;
+	conout = ST->ConOut;
 	conout->Reset(conout, TRUE);
 	max_dim = best_mode = 0;
-	for (i = 0; ; i++) {
+
+        for (i = 0; ; i++) {
 		status = conout->QueryMode(conout, i, &cols, &rows);
 		if (EFI_ERROR(status))
 			break;
@@ -592,128 +638,100 @@ efi_main(EFI_HANDLE Ximage, EFI_SYSTEM_TABLE *Xsystab)
 			best_mode = i;
 		}
 	}
-	if (max_dim > 0)
+
+        if (max_dim > 0)
 		conout->SetMode(conout, best_mode);
+
 	conout->EnableCursor(conout, TRUE);
 	conout->ClearScreen(conout);
 
+        /* Print this here, so people know it's at least starting. */
 	printf("\n>> FreeBSD EFI boot block\n");
 	printf("   Loader path: %s\n\n", PATH_LOADER_EFI);
-	printf("   Initializing modules:");
-	for (i = 0; i < NUM_BOOT_MODULES; i++) {
-		printf(" %s", boot_modules[i]->name);
-		if (boot_modules[i]->init != NULL)
-			boot_modules[i]->init();
-	}
-	putchar('\n');
 
-	/* Get all the device handles */
-	hsize = (UINTN)NUM_HANDLES_INIT * sizeof(EFI_HANDLE);
-	if ((status = bs->AllocatePool(EfiLoaderData, hsize, (void **)&handles))
-	    != EFI_SUCCESS)
-		panic("Failed to allocate %d handles (%lu)", NUM_HANDLES_INIT,
-		    EFI_ERROR_CODE(status));
-
-	status = bs->LocateHandle(ByProtocol, &BlockIoProtocolGUID, NULL,
-	    &hsize, handles);
-	switch (status) {
-	case EFI_SUCCESS:
-		break;
-	case EFI_BUFFER_TOO_SMALL:
-		(void)bs->FreePool(handles);
-		if ((status = bs->AllocatePool(EfiLoaderData, hsize,
-		    (void **)&handles)) != EFI_SUCCESS) {
-			panic("Failed to allocate %zu handles (%lu)", hsize /
-			    sizeof(*handles), EFI_ERROR_CODE(status));
-		}
-		status = bs->LocateHandle(ByProtocol, &BlockIoProtocolGUID,
-		    NULL, &hsize, handles);
-		if (status != EFI_SUCCESS)
-			panic("Failed to get device handles (%lu)\n",
-			    EFI_ERROR_CODE(status));
-		break;
-	default:
-		panic("Failed to get device handles (%lu)",
+        /* Get the image path and trim it to get the disk on which we
+         * found this loader.
+         */
+	if ((status = BS->OpenProtocol(IH, &LoadedImageGUID,
+            (VOID**)&boot_image, IH, NULL,
+            EFI_OPEN_PROTOCOL_GET_PROTOCOL)) != EFI_SUCCESS) {
+		panic("Failed to query LoadedImage (%lu)\n",
 		    EFI_ERROR_CODE(status));
 	}
-
-	/* Scan all partitions, probing with all modules. */
-	nhandles = hsize / sizeof(*handles);
-	printf("   Probing %zu block devices...", nhandles);
-	DPRINTF("\n");
 
 	/* Determine the devpath of our image so we can prefer it. */
-	status = bs->HandleProtocol(image, &LoadedImageGUID, (VOID**)&img);
+	status = BS->HandleProtocol(IH, &LoadedImageGUID, (VOID**)&boot_image);
 	imgpath = NULL;
 	if (status == EFI_SUCCESS) {
-		status = bs->HandleProtocol(img->DeviceHandle, &DevicePathGUID,
+		text = efi_devpath_name(boot_image->FilePath);
+		printf("   Load Path: %S\n", text);
+		efi_setenv_freebsd_wcs("Boot1Path", text);
+		efi_free_devpath_name(text);
+
+		status = BS->HandleProtocol(boot_image->DeviceHandle, &DevicePathGUID,
 		    (void **)&imgpath);
-		if (status != EFI_SUCCESS)
+		if (status != EFI_SUCCESS) {
 			DPRINTF("Failed to get image DevicePath (%lu)\n",
 			    EFI_ERROR_CODE(status));
-		DPRINTF("boot1 imagepath: %s\n", devpath_str(imgpath));
+		} else {
+			text = efi_devpath_name(imgpath);
+			printf("   Load Device: %S\n", text);
+			efi_setenv_freebsd_wcs("Boot1Dev", text);
+			efi_free_devpath_name(text);
+		}
+
 	}
 
-	for (i = 0; i < nhandles; i++)
-		probe_handle_status(handles[i], imgpath);
-	printf(" done\n");
+        /* The loaded image device path ends with a partition, then a
+         * file path.  Trim them both to get the actual disk.
+         */
+        if ((imgprefix = efi_devpath_trim(imgpath)) == NULL ||
+            (imgprefix = efi_devpath_trim(imgprefix)) == NULL) {
+                panic("Couldn't trim device path");
+        }
 
-	/* Status summary. */
-	for (i = 0; i < NUM_BOOT_MODULES; i++) {
-		printf("    ");
-		boot_modules[i]->status();
+	/*
+	 * Initialize the block cache. Set the upper limit.
+	 */
+	bcache_init(32768, 512);
+
+	printf("\n   Initializing modules:");
+
+	for (i = 0; efi_drivers[i] != NULL; i++) {
+		printf(" %s", efi_drivers[i]->name);
+		if (efi_drivers[i]->init != NULL)
+			efi_drivers[i]->init();
 	}
+
+	for (i = 0; devsw[i] != NULL; i++) {
+                if (devsw[i]->dv_init != NULL) {
+                        printf(" %s", devsw[i]->dv_name);
+			(devsw[i]->dv_init)();
+                }
+        }
+
+	putchar('\n');
 
 	try_boot();
 
 	/* If we get here, we're out of luck... */
-	panic("No bootable partitions found!");
+	efi_panic(EFI_LOAD_ERROR, "No bootable partitions found!");
 }
 
 /*
- * add_device adds a device to the passed devinfo list.
+ * OK. We totally give up. Exit back to EFI with a sensible status so
+ * it can try the next option on the list.
  */
-void
-add_device(dev_info_t **devinfop, dev_info_t *devinfo)
+static void
+efi_panic(EFI_STATUS s, const char *fmt, ...)
 {
-	dev_info_t *dev;
+       va_list ap;
 
-	if (*devinfop == NULL) {
-		*devinfop = devinfo;
-		return;
-	}
+       printf("panic: ");
+       va_start(ap, fmt);
+       vprintf(fmt, ap);
+       va_end(ap);
+       printf("\n");
 
-	for (dev = *devinfop; dev->next != NULL; dev = dev->next)
-		;
-
-	dev->next = devinfo;
-}
-
-void
-panic(const char *fmt, ...)
-{
-	va_list ap;
-
-	printf("panic: ");
-	va_start(ap, fmt);
-	vprintf(fmt, ap);
-	va_end(ap);
-	printf("\n");
-
-	while (1) {}
-}
-
-void
-putchar(int c)
-{
-	CHAR16 buf[2];
-
-	if (c == '\n') {
-		buf[0] = '\r';
-		buf[1] = 0;
-		systab->ConOut->OutputString(systab->ConOut, buf);
-	}
-	buf[0] = c;
-	buf[1] = 0;
-	systab->ConOut->OutputString(systab->ConOut, buf);
+       BS->Exit(IH, s, 0, NULL);
 }

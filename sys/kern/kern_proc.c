@@ -131,9 +131,9 @@ struct pgrphashhead *pgrphashtbl;
 u_long pgrphash;
 struct proclist allproc;
 struct proclist zombproc;
-struct sx allproc_lock;
-struct sx proctree_lock;
-struct mtx ppeers_lock;
+struct sx __exclusive_cache_line allproc_lock;
+struct sx __exclusive_cache_line proctree_lock;
+struct mtx __exclusive_cache_line ppeers_lock;
 uma_zone_t proc_zone;
 
 /*
@@ -2547,7 +2547,7 @@ sysctl_kern_proc_kstack(SYSCTL_HANDLER_ARGS)
 		return (error);
 
 	kkstp = malloc(sizeof(*kkstp), M_TEMP, M_WAITOK);
-	st = stack_create();
+	st = stack_create(M_WAITOK);
 
 	lwpidarray = NULL;
 	PROC_LOCK(p);

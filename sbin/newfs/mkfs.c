@@ -98,6 +98,7 @@ static void iput(union dinode *, ino_t);
 static int makedir(struct direct *, int);
 static void setblock(struct fs *, unsigned char *, int);
 static void wtfs(ufs2_daddr_t, int, char *);
+static void cgckhash(struct cg *);
 static u_int32_t newfs_random(void);
 
 static int
@@ -121,7 +122,8 @@ mkfs(struct partition *pp, char *fsys)
 	ino_t maxinum;
 	int minfragsperinode;	/* minimum ratio of frags to inodes */
 	char tmpbuf[100];	/* XXX this will break in about 2,500 years */
-	struct fsrecovery fsr;
+	struct fsrecovery *fsr;
+	char *fsrbuf;
 	union {
 		struct fs fdummy;
 		char cdummy[SBLOCKSIZE];
@@ -442,6 +444,8 @@ restart:
 	sblock.fs_sbsize = fragroundup(&sblock, sizeof(struct fs));
 	if (sblock.fs_sbsize > SBLOCKSIZE)
 		sblock.fs_sbsize = SBLOCKSIZE;
+	if (sblock.fs_sbsize < realsectorsize)
+		sblock.fs_sbsize = realsectorsize;
 	sblock.fs_minfree = minfree;
 	if (metaspace > 0 && metaspace < sblock.fs_fpg / 2)
 		sblock.fs_metaspace = blknum(&sblock, metaspace);
@@ -488,6 +492,11 @@ restart:
 		sblock.fs_old_cstotal.cs_nifree = sblock.fs_cstotal.cs_nifree;
 		sblock.fs_old_cstotal.cs_nffree = sblock.fs_cstotal.cs_nffree;
 	}
+	/*
+	 * Set flags for metadata that is being check-hashed.
+	 */
+	if (Oflag > 1)
+		sblock.fs_metackhash = CK_CYLGRP;
 
 	/*
 	 * Dump out summary information about file system.
@@ -514,7 +523,7 @@ restart:
 	/*
 	 * Wipe out old UFS1 superblock(s) if necessary.
 	 */
-	if (!Nflag && Oflag != 1) {
+	if (!Nflag && Oflag != 1 && realsectorsize <= SBLOCK_UFS1) {
 		i = bread(&disk, part_ofs + SBLOCK_UFS1 / disk.d_bsize, chdummy, SBLOCKSIZE);
 		if (i == -1)
 			err(1, "can't read old UFS1 superblock: %s", disk.d_error);
@@ -623,18 +632,20 @@ restart:
 	 * The recovery information only works for UFS2 filesystems.
 	 */
 	if (sblock.fs_magic == FS_UFS2_MAGIC) {
-		i = bread(&disk,
-		    part_ofs + (SBLOCK_UFS2 - sizeof(fsr)) / disk.d_bsize,
-		    (char *)&fsr, sizeof(fsr));
-		if (i == -1)
+		if ((fsrbuf = malloc(realsectorsize)) == NULL || bread(&disk,
+		    part_ofs + (SBLOCK_UFS2 - realsectorsize) / disk.d_bsize,
+		    fsrbuf, realsectorsize) == -1)
 			err(1, "can't read recovery area: %s", disk.d_error);
-		fsr.fsr_magic = sblock.fs_magic;
-		fsr.fsr_fpg = sblock.fs_fpg;
-		fsr.fsr_fsbtodb = sblock.fs_fsbtodb;
-		fsr.fsr_sblkno = sblock.fs_sblkno;
-		fsr.fsr_ncg = sblock.fs_ncg;
-		wtfs((SBLOCK_UFS2 - sizeof(fsr)) / disk.d_bsize, sizeof(fsr),
-		    (char *)&fsr);
+		fsr =
+		    (struct fsrecovery *)&fsrbuf[realsectorsize - sizeof *fsr];
+		fsr->fsr_magic = sblock.fs_magic;
+		fsr->fsr_fpg = sblock.fs_fpg;
+		fsr->fsr_fsbtodb = sblock.fs_fsbtodb;
+		fsr->fsr_sblkno = sblock.fs_sblkno;
+		fsr->fsr_ncg = sblock.fs_ncg;
+		wtfs((SBLOCK_UFS2 - realsectorsize) / disk.d_bsize,
+		    realsectorsize, fsrbuf);
+		free(fsrbuf);
 	}
 	/*
 	 * Update information about this partition in pack
@@ -786,6 +797,7 @@ initcg(int cylno, time_t utime)
 		}
 	}
 	*cs = acg.cg_cs;
+	cgckhash(&acg);
 	/*
 	 * Write out the duplicate super block, the cylinder group map
 	 * and two blocks worth of inodes in a single write.
@@ -1001,6 +1013,7 @@ goth:
 			setbit(cg_blksfree(&acg), d + i);
 	}
 	/* XXX cgwrite(&disk, 0)??? */
+	cgckhash(&acg);
 	wtfs(fsbtodb(&sblock, cgtod(&sblock, 0)), sblock.fs_cgsize,
 	    (char *)&acg);
 	return ((ufs2_daddr_t)d);
@@ -1022,6 +1035,7 @@ iput(union dinode *ip, ino_t ino)
 	}
 	acg.cg_cs.cs_nifree--;
 	setbit(cg_inosused(&acg), ino);
+	cgckhash(&acg);
 	wtfs(fsbtodb(&sblock, cgtod(&sblock, 0)), sblock.fs_cgsize,
 	    (char *)&acg);
 	sblock.fs_cstotal.cs_nifree--;
@@ -1052,6 +1066,20 @@ wtfs(ufs2_daddr_t bno, int size, char *bf)
 		return;
 	if (bwrite(&disk, part_ofs + bno, bf, size) < 0)
 		err(36, "wtfs: %d bytes at sector %jd", size, (intmax_t)bno);
+}
+
+/*
+ * Calculate the check-hash of the cylinder group.
+ */
+static void
+cgckhash(cgp)
+	struct cg *cgp;
+{
+
+	if ((sblock.fs_metackhash & CK_CYLGRP) == 0)
+		return;
+	cgp->cg_ckhash = 0;
+	cgp->cg_ckhash = calculate_crc32c(~0L, (void *)cgp, sblock.fs_cgsize);
 }
 
 /*

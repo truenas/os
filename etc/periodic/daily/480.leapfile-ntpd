@@ -13,9 +13,16 @@ fi
 
 case "$daily_ntpd_leapfile_enable" in
     [Yy][Ee][Ss])
-        anticongestion
-        service ntpd onefetch
-        ;;
+	case "$daily_ntpd_leapfile_background" in
+	[Yy][Ee][Ss])
+	    (anticongestion && service ntpd onefetch) &
+	    ;;
+	*)
+	    anticongestion
+	    service ntpd onefetch
+	    ;;
+	esac
+	;;
 esac
 
 exit $rc

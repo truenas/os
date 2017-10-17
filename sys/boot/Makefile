@@ -2,13 +2,14 @@
 
 .include <src.opts.mk>
 
+SUBDIR+=		libsa
 .if ${MK_FORTH} != "no"
 # Build the add-in FORTH interpreter.
 SUBDIR+=		ficl
 SUBDIR+=		forth
 .endif
 
-SUBDIR+=		common
+SUBDIR+=		man
 
 .include <bsd.arch.inc.mk>
 

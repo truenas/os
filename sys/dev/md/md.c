@@ -207,6 +207,7 @@ struct md_s {
 	unsigned opencount;
 	unsigned fwheads;
 	unsigned fwsectors;
+	char ident[32];
 	unsigned flags;
 	char name[20];
 	struct proc *procp;
@@ -226,6 +227,7 @@ struct md_s {
 	/* MD_VNODE related fields */
 	struct vnode *vnode;
 	char file[PATH_MAX];
+	char label[PATH_MAX];
 	struct ucred *cred;
 
 	/* MD_SWAP related fields */
@@ -1110,7 +1112,10 @@ mdstart_swap(struct md_s *sc, struct bio *bp)
 		if (m != NULL) {
 			vm_page_xunbusy(m);
 			vm_page_lock(m);
-			vm_page_activate(m);
+			if (vm_page_active(m))
+				vm_page_reference(m);
+			else
+				vm_page_activate(m);
 			vm_page_unlock(m);
 		}
 
@@ -1176,6 +1181,9 @@ md_kthread(void *arg)
 			    g_handleattr_int(bp, "GEOM::fwheads",
 			    sc->fwheads))) ||
 			    g_handleattr_int(bp, "GEOM::candelete", 1))
+				error = -1;
+			else if (sc->ident[0] != '\0' &&
+			    g_handleattr_str(bp, "GEOM::ident", sc->ident))
 				error = -1;
 			else if (g_handleattr_int(bp, "MNT::verified", isv))
 				error = -1;
@@ -1410,6 +1418,8 @@ mdcreate_vnode(struct md_s *sc, struct md_ioctl *mdio, struct thread *td)
 		sc->fwsectors = mdio->md_fwsectors;
 	if (mdio->md_fwheads != 0)
 		sc->fwheads = mdio->md_fwheads;
+	snprintf(sc->ident, sizeof(sc->ident), "MD-DEV%ju-INO%ju",
+	    (uintmax_t)vattr.va_fsid, (uintmax_t)vattr.va_fileid);
 	sc->flags = mdio->md_options & (MD_FORCE | MD_ASYNC | MD_VERIFY);
 	if (!(flags & FWRITE))
 		sc->flags |= MD_READONLY;
@@ -1645,6 +1655,11 @@ xmdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread
 		}
 		if (sc == NULL)
 			return (error);
+		if (mdio->md_label != NULL)
+			error = copyinstr(mdio->md_label, sc->label,
+			    sizeof(sc->label), NULL);
+		if (error != 0)
+			goto err_after_new;
 		if (mdio->md_options & MD_AUTOUNIT)
 			mdio->md_unit = sc->unit;
 		sc->mediasize = mdio->md_mediasize;
@@ -1676,6 +1691,7 @@ xmdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread
 			error = mdcreate_null(sc, mdio, td);
 			break;
 		}
+err_after_new:
 		if (error != 0) {
 			mddestroy(sc, td);
 			return (error);
@@ -1721,6 +1737,11 @@ xmdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread
 		mdio->md_options = sc->flags;
 		mdio->md_mediasize = sc->mediasize;
 		mdio->md_sectorsize = sc->sectorsize;
+		error = 0;
+		if (mdio->md_label != NULL) {
+			error = copyout(sc->label, mdio->md_label,
+			    strlen(sc->label) + 1);
+		}
 		if (sc->type == MD_VNODE ||
 		    (sc->type == MD_PRELOAD && mdio->md_file != NULL))
 			error = copyout(sc->file, mdio->md_file,
@@ -1873,6 +1894,7 @@ g_md_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 			if ((mp->type == MD_VNODE && mp->vnode != NULL) ||
 			    (mp->type == MD_PRELOAD && mp->file[0] != '\0'))
 				sbuf_printf(sb, " file %s", mp->file);
+			sbuf_printf(sb, " label %s", mp->label);
 		} else {
 			sbuf_printf(sb, "%s<unit>%d</unit>\n", indent,
 			    mp->unit);
@@ -1882,6 +1904,11 @@ g_md_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 			    indent, (uintmax_t) mp->fwheads);
 			sbuf_printf(sb, "%s<fwsectors>%ju</fwsectors>\n",
 			    indent, (uintmax_t) mp->fwsectors);
+			if (mp->ident[0] != '\0') {
+				sbuf_printf(sb, "%s<ident>", indent);
+				g_conf_printf_escaped(sb, "%s", mp->ident);
+				sbuf_printf(sb, "</ident>\n");
+			}
 			sbuf_printf(sb, "%s<length>%ju</length>\n",
 			    indent, (uintmax_t) mp->mediasize);
 			sbuf_printf(sb, "%s<compression>%s</compression>\n", indent,
@@ -1897,6 +1924,9 @@ g_md_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 				g_conf_printf_escaped(sb, "%s", mp->file);
 				sbuf_printf(sb, "</file>\n");
 			}
+			sbuf_printf(sb, "%s<label>", indent);
+			g_conf_printf_escaped(sb, "%s", mp->label);
+			sbuf_printf(sb, "</label>\n");
 		}
 	}
 }

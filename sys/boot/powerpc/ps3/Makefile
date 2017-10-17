@@ -15,7 +15,6 @@ SRCS+=		lv1call.S ps3cons.c font.h ps3mmu.c ps3net.c ps3repo.c \
 		ps3stor.c ps3disk.c ps3cdrom.c
 SRCS+=		ucmpdi2.c
 
-LOADER_DISK_SUPPORT?=	yes
 LOADER_UFS_SUPPORT?=	yes
 LOADER_CD9660_SUPPORT?=	yes
 LOADER_EXT2FS_SUPPORT?=	yes
@@ -26,33 +25,6 @@ LOADER_GZIP_SUPPORT?=	yes
 LOADER_FDT_SUPPORT?=	no
 LOADER_BZIP2_SUPPORT?=	no
 
-.if ${LOADER_DISK_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_DISK_SUPPORT
-.endif
-.if ${LOADER_UFS_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_UFS_SUPPORT
-.endif
-.if ${LOADER_CD9660_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_CD9660_SUPPORT
-.endif
-.if ${LOADER_EXT2FS_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_EXT2FS_SUPPORT
-.endif
-.if ${LOADER_GZIP_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_GZIP_SUPPORT
-.endif
-.if ${LOADER_BZIP2_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_BZIP2_SUPPORT
-.endif
-.if ${LOADER_NET_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_NET_SUPPORT
-.endif
-.if ${LOADER_NFS_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_NFS_SUPPORT
-.endif
-.if ${LOADER_TFTP_SUPPORT} == "yes"
-CFLAGS+=	-DLOADER_TFTP_SUPPORT
-.endif
 .if ${LOADER_FDT_SUPPORT} == "yes"
 CFLAGS+=	-I${.CURDIR}/../../fdt
 CFLAGS+=	-I${.OBJDIR}/../../fdt
@@ -60,21 +32,12 @@ CFLAGS+=	-DLOADER_FDT_SUPPORT
 LIBFDT=		${.OBJDIR}/../../fdt/libfdt.a
 .endif
 
-
-.if ${MK_FORTH} != "no"
-# Enable BootForth
-BOOT_FORTH=	yes
-CFLAGS+=	-DBOOT_FORTH -I${.CURDIR}/../../ficl
-CFLAGS+=	-I${.CURDIR}/../../ficl/powerpc
-LIBFICL=	${.OBJDIR}/../../ficl/libficl.a
-.endif
-
 CFLAGS+=	-mcpu=powerpc64
 
 # Always add MI sources
-.PATH:		${.CURDIR}/../../common ${.CURDIR}/../../../libkern
-.include	"${.CURDIR}/../../common/Makefile.inc"
-CFLAGS+=	-I${.CURDIR}/../../common -I${.CURDIR}/../../..
+.include	"../../loader.mk"
+.PATH:		${.CURDIR}/../../../libkern
+CFLAGS+=	-I${.CURDIR}/../../..
 CFLAGS+=	-I.
 
 CLEANFILES+=	loader.help
@@ -90,12 +53,8 @@ LDFLAGS=	-nostdlib -static -T ${.CURDIR}/ldscript.powerpc
 #.PATH:		${.CURDIR}/../../ofw/common
 #.include	"${.CURDIR}/../../ofw/common/Makefile.inc"
 
-# where to get libstand from
-LIBSTAND=	${.OBJDIR}/../../libstand32/libstand.a
-CFLAGS+=	-I${.CURDIR}/../../../../lib/libstand/
-
-DPADD=		${LIBFICL} ${LIBOFW} ${LIBSTAND}
-LDADD=		${LIBFICL} ${LIBOFW} ${LIBSTAND}
+DPADD=		${LIBFICL} ${LIBOFW} ${LIBSA32}
+LDADD=		${LIBFICL} ${LIBOFW} ${LIBSA32}
 
 SC_DFLT_FONT=cp437
 
@@ -104,7 +63,7 @@ font.h:
 
 loader.help: help.common help.ps3 ${.CURDIR}/../../fdt/help.fdt
 	cat ${.ALLSRC} | \
-	    awk -f ${.CURDIR}/../../common/merge_help.awk > ${.TARGET}
+	    awk -f ${LDR_MI}/merge_help.awk > ${.TARGET}
 
 .PATH: ${.CURDIR}/../../forth
 .include	"${.CURDIR}/../../forth/Makefile.inc"

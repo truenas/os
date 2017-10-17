@@ -43,6 +43,7 @@ arm/allwinner/clkng/aw_clk_nm.c	optional	aw_ccu fdt
 arm/allwinner/clkng/aw_clk_prediv_mux.c	optional	aw_ccu fdt
 arm/allwinner/clkng/ccu_a64.c	optional	aw_ccu fdt
 arm/allwinner/clkng/ccu_h3.c	optional	aw_ccu fdt
+arm/allwinner/clkng/ccu_sun8i_r.c	optional	aw_ccu fdt
 
 arm/allwinner/if_awg.c		optional	awg fdt
 arm/annapurna/alpine/alpine_ccu.c		optional	al_ccu fdt
@@ -73,6 +74,7 @@ arm/broadcom/bcm2835/bcm2835_vcio.c		optional soc_brcm_bcm2837 fdt
 arm/broadcom/bcm2835/bcm2835_wdog.c		optional soc_brcm_bcm2837 fdt
 arm/broadcom/bcm2835/bcm2836.c			optional soc_brcm_bcm2837 fdt
 arm/broadcom/bcm2835/bcm283x_dwc_fdt.c		optional dwcotg fdt soc_brcm_bcm2837
+arm/mv/armada38x/armada38x_rtc.c		optional mv_rtc fdt
 arm64/acpica/acpi_machdep.c	optional	acpi
 arm64/acpica/OsdEnvironment.c	optional	acpi
 arm64/acpica/acpi_wakeup.c	optional	acpi
@@ -93,6 +95,7 @@ arm64/arm64/db_trace.c		optional	ddb
 arm64/arm64/debug_monitor.c	optional	ddb
 arm64/arm64/disassem.c		optional	ddb
 arm64/arm64/dump_machdep.c	standard
+arm64/arm64/efirt_machdep.c	optional	efirt
 arm64/arm64/elf_machdep.c	standard
 arm64/arm64/exception.S		standard
 arm64/arm64/gicv3_its.c		optional	intrng fdt
@@ -117,6 +120,7 @@ arm64/arm64/sys_machdep.c	standard
 arm64/arm64/trap.c		standard
 arm64/arm64/uio_machdep.c	standard
 arm64/arm64/uma_machdep.c	standard
+arm64/arm64/undefined.c		standard
 arm64/arm64/unwind.c		optional	ddb | kdtrace_hooks | stack
 arm64/arm64/vfp.c		standard
 arm64/arm64/vm_machdep.c	standard
@@ -146,7 +150,7 @@ contrib/vchiq/interface/vchiq_arm/vchiq_util.c	optional vchiq soc_brcm_bcm2837 \
 crypto/armv8/armv8_crypto.c	optional	armv8crypto
 armv8_crypto_wrap.o		optional	armv8crypto		\
 	dependency	"$S/crypto/armv8/armv8_crypto_wrap.c"		\
-	compile-with	"${CC} -c ${CFLAGS:C/^-O2$/-O3/:N-nostdinc:N-mgeneral-regs-only} ${WERROR} ${NO_WCAST_QUAL} ${PROF} -march=armv8a+crypto ${.IMPSRC}" \
+	compile-with	"${CC} -c ${CFLAGS:C/^-O2$/-O3/:N-nostdinc:N-mgeneral-regs-only} ${WERROR} ${NO_WCAST_QUAL} ${PROF} -march=armv8-a+crypto ${.IMPSRC}" \
 	no-implicit-rule						\
 	clean		"armv8_crypto_wrap.o"
 crypto/blowfish/bf_enc.c	optional	crypto | ipsec | ipsec_support
@@ -166,6 +170,8 @@ dev/hwpmc/hwpmc_arm64_md.c	optional	hwpmc
 dev/mbox/mbox_if.m		optional	soc_brcm_bcm2837
 dev/mmc/host/dwmmc.c		optional	dwmmc fdt
 dev/mmc/host/dwmmc_hisi.c	optional	dwmmc fdt soc_hisi_hi6220
+dev/neta/if_mvneta_fdt.c	optional	neta fdt
+dev/neta/if_mvneta.c		optional	neta mdio mii
 dev/ofw/ofw_cpu.c		optional	fdt
 dev/ofw/ofwpci.c		optional 	fdt pci
 dev/pci/pci_host_generic.c	optional	pci
@@ -175,9 +181,11 @@ dev/psci/psci_arm64.S		optional	psci
 dev/uart/uart_cpu_arm64.c	optional	uart
 dev/uart/uart_dev_pl011.c	optional	uart pl011
 dev/usb/controller/dwc_otg_hisi.c optional	dwcotg fdt soc_hisi_hi6220
+dev/usb/controller/ehci_mv.c	optional	ehci_mv fdt
 dev/usb/controller/generic_ehci.c optional	ehci acpi
 dev/usb/controller/generic_ohci.c optional	ohci fdt
 dev/usb/controller/generic_usb_if.m optional	ohci fdt
+dev/usb/controller/xhci_mv.c	optional	xhci_mv fdt
 dev/vnic/mrml_bridge.c		optional	vnic fdt
 dev/vnic/nic_main.c		optional	vnic pci
 dev/vnic/nicvf_main.c		optional	vnic pci pci_iov

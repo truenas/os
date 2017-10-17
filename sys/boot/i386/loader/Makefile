@@ -13,6 +13,11 @@ LOADER_NET_SUPPORT?=	yes
 LOADER_NFS_SUPPORT?=	yes
 LOADER_TFTP_SUPPORT?=	yes
 
+LOADER_CD9660_SUPPORT?=	no
+LOADER_EXT2FS_SUPPORT?=	no
+LOADER_MSDOS_SUPPORT?=	no
+LOADER_UFS_SUPPORT?=	yes
+
 # architecture-specific loader code
 SRCS=		main.c conf.c vers.c chain.c
 
@@ -28,17 +33,6 @@ CFLAGS+=	-DLOADER_ZFS_SUPPORT
 LIBZFSBOOT=	${.OBJDIR}/../../zfs/libzfsboot.a
 .endif
 
-.if defined(LOADER_NET_SUPPORT)
-CFLAGS+=	-I${.CURDIR}/../../../../lib/libstand
-.endif
-
-.if defined(LOADER_TFTP_SUPPORT)
-CFLAGS+=	-DLOADER_TFTP_SUPPORT
-.endif
-.if defined(LOADER_NFS_SUPPORT)
-CFLAGS+=	-DLOADER_NFS_SUPPORT
-.endif
-
 # Include bcache code.
 HAVE_BCACHE=	yes
 
@@ -46,27 +40,7 @@ HAVE_BCACHE=	yes
 HAVE_PNP=	yes
 HAVE_ISABUS=	yes
 
-.if ${MK_FORTH} != "no"
-# Enable BootForth
-BOOT_FORTH=	yes
-CFLAGS+=	-DBOOT_FORTH -I${.CURDIR}/../../ficl -I${.CURDIR}/../../ficl/i386
-.if ${MACHINE_CPUARCH} == "amd64"
-LIBFICL=	${.OBJDIR}/../../ficl32/libficl.a
-.else
-LIBFICL=	${.OBJDIR}/../../ficl/libficl.a
-.endif
-.endif
-
-.if defined(LOADER_BZIP2_SUPPORT)
-CFLAGS+=	-DLOADER_BZIP2_SUPPORT
-.endif
-.if !defined(LOADER_NO_GZIP_SUPPORT)
-CFLAGS+=	-DLOADER_GZIP_SUPPORT
-.endif
-.if defined(LOADER_NANDFS_SUPPORT)
-CFLAGS+=	-DLOADER_NANDFS_SUPPORT
-.endif
-.if !defined(LOADER_NO_GELI_SUPPORT)
+.if ${LOADER_GELI_SUPPORT:Uyes} == "yes"
 CFLAGS+=	-DLOADER_GELI_SUPPORT
 CFLAGS+=	-I${.CURDIR}/../../geli
 LIBGELIBOOT=	${.OBJDIR}/../../geli/libgeliboot.a
@@ -76,9 +50,7 @@ CFLAGS+=	-I${.CURDIR}/../../.. -D_STAND
 .endif
 
 # Always add MI sources
-.PATH:		${.CURDIR}/../../common
-.include	"${.CURDIR}/../../common/Makefile.inc"
-CFLAGS+=	-I${.CURDIR}/../../common
+.include	"../../loader.mk"
 CFLAGS+=	-I.
 
 CLEANFILES=	${LOADER} ${LOADER}.bin loader.help
@@ -89,8 +61,6 @@ LDFLAGS=	-static -Ttext 0x0
 # i386 standalone support library
 LIBI386=	${.OBJDIR}/../libi386/libi386.a
 CFLAGS+=	-I${.CURDIR}/..
-
-LIBSTAND=	${.OBJDIR}/../../libstand32/libstand.a
 
 # BTX components
 CFLAGS+=	-I${.CURDIR}/../btx/lib
@@ -110,7 +80,7 @@ ${LOADER}.bin: ${LOADER}.sym
 	strip -R .comment -R .note -o ${.TARGET} ${.ALLSRC}
 
 loader.help: help.common help.i386
-	cat ${.ALLSRC} | awk -f ${.CURDIR}/../../common/merge_help.awk > ${.TARGET}
+	cat ${.ALLSRC} | awk -f ${LDR_MI}/merge_help.awk > ${.TARGET}
 
 FILES=	${LOADER}
 # XXX INSTALLFLAGS_loader= -b
@@ -127,8 +97,15 @@ FILES+=	loader.rc menu.rc
 # XXX crt0.o needs to be first for pxeboot(8) to work
 OBJS=	${BTXCRT}
 
-DPADD=	${LIBFICL} ${LIBFIREWIRE} ${LIBZFSBOOT} ${LIBI386} ${LIBGELIBOOT} ${LIBSTAND}
-LDADD=	${LIBFICL} ${LIBFIREWIRE} ${LIBZFSBOOT} ${LIBI386} ${LIBGELIBOOT} ${LIBSTAND}
+# XXX not happy with this construct, revisit
+.if ${MACHINE_CPUARCH} == "amd64"
+FICL=	${LIBFICL32}
+.else
+FICL=	${LIBFICL}
+.endif
+
+DPADD=	${FICL} ${LIBFIREWIRE} ${LIBZFSBOOT} ${LIBI386} ${LIBGELIBOOT} ${LIBSA32}
+LDADD=	${FICL} ${LIBFIREWIRE} ${LIBZFSBOOT} ${LIBI386} ${LIBGELIBOOT} ${LIBSA32}
 
 .include <bsd.prog.mk>
 

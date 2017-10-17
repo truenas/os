@@ -1,5 +1,7 @@
 # $FreeBSD$
 #
+.include "../../defs.mk"
+
 LIB=			i386
 INTERNALLIB=
 
@@ -11,13 +13,6 @@ SRCS=	biosacpi.c bioscd.c biosdisk.c biosmem.c biospnp.c \
 	smbios.c time.c vidconsole.c amd64_tramp.S spinconsole.c
 .PATH:	${.CURDIR}/../../zfs
 SRCS+=	devicename_stubs.c
-
-# Enable PXE TFTP or NFS support, not both.
-.if defined(LOADER_TFTP_SUPPORT)
-CFLAGS+=	-DLOADER_TFTP_SUPPORT
-.else
-CFLAGS+=	-DLOADER_NFS_SUPPORT
-.endif
 
 BOOT_COMCONSOLE_PORT?= 0x3f8
 CFLAGS+=	-DCOMPORT=${BOOT_COMCONSOLE_PORT}
@@ -59,8 +54,6 @@ CFLAGS+=	-I${.CURDIR}/../../ficl -I${.CURDIR}/../../ficl/i386 \
 		-I${.CURDIR}/../btx/lib \
 		-I${.CURDIR}/../../../contrib/dev/acpica/include \
 		-I${.CURDIR}/../../.. -I.
-# the location of libstand
-CFLAGS+=	-I${.CURDIR}/../../../../lib/libstand/
 
 # Handle FreeBSD specific %b and %D printf format specifiers
 CFLAGS+= ${FORMAT_EXTENSIONS}

@@ -5,6 +5,11 @@ MAN=
 .include <src.opts.mk>
 MK_SSP=		no
 
+LOADER_MSDOS_SUPPORT?=	yes
+LOADER_UFS_SUPPORT?=	yes
+LOADER_CD9660_SUPPORT?=	no
+LOADER_EXT2FS_SUPPORT?=	no
+
 SHLIB_NAME=	userboot.so
 MK_CTF=		no
 STRIP=
@@ -30,9 +35,7 @@ SRCS+=		vers.c
 
 CFLAGS+=	-Wall
 CFLAGS+=	-I${.CURDIR}/..
-CFLAGS+=	-I${.CURDIR}/../../common
 CFLAGS+=	-I${.CURDIR}/../../..
-CFLAGS+=	-I${.CURDIR}/../../../../lib/libstand
 CFLAGS+=	-ffreestanding -I.
 
 CWARNFLAGS.main.c += -Wno-implicit-function-declaration
@@ -41,27 +44,15 @@ LDFLAGS+=	-nostdlib -Wl,-Bsymbolic
 
 NEWVERSWHAT=	"User boot" ${MACHINE_CPUARCH}
 
-.if ${MK_FORTH} != "no"
-BOOT_FORTH=	yes
-CFLAGS+=        -DBOOT_FORTH -I${.CURDIR}/../../ficl
-CFLAGS+=        -I${.CURDIR}/../../ficl/i386
-CFLAGS+=	-DBF_DICTSIZE=15000
-LIBFICL=	${.OBJDIR}/../ficl/libficl.a
-.endif
-
-LIBSTAND=	${.OBJDIR}/../libstand/libstand.a
-
 .if ${MK_ZFS} != "no"
 CFLAGS+=	-DUSERBOOT_ZFS_SUPPORT
 LIBZFSBOOT=	${.OBJDIR}/../zfs/libzfsboot.a
 .endif
 
 # Always add MI sources 
-.PATH:		${.CURDIR}/../../common
-.include	"${.CURDIR}/../../common/Makefile.inc"
-CFLAGS+=	-I${.CURDIR}/../../common
+.include	"../../loader.mk"
 CFLAGS+=	-I.
-DPADD+=		${LIBFICL} ${LIBZFSBOOT} ${LIBSTAND} 
-LDADD+=		${LIBFICL} ${LIBZFSBOOT} ${LIBSTAND}
+DPADD+=		${LIBFICL} ${LIBZFSBOOT} ${LIBSA} 
+LDADD+=		${LIBFICL} ${LIBZFSBOOT} ${LIBSA}
 
 .include <bsd.lib.mk>

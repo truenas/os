@@ -1,7 +1,11 @@
 # $FreeBSD$
 
+LOADER_GELI_SUPPORT=no
+
+.include "../Makefile.inc"
+
 .PATH:		${.CURDIR}/../boot2 ${.CURDIR}/../common \
-		${.CURDIR}/../../common ${.CURDIR}/../../../crypto/skein
+		${.CURDIR}/../../../crypto/skein ${SASRC}
 
 FILES=		zfsboot
 MAN=		zfsboot.8
@@ -16,7 +20,7 @@ REL1=	0x700
 ORG1=	0x7c00
 ORG2=	0x2000
 
-CFLAGS=	-DBOOTPROG=\"zfsboot\" \
+CFLAGS+=-DBOOTPROG=\"zfsboot\" \
 	-O1 \
 	-DZFS -DBOOT2 \
 	-DSIOPRT=${BOOT_COMCONSOLE_PORT} \
@@ -39,8 +43,6 @@ CFLAGS.gcc+=	--param max-inline-insns-single=100
 CFLAGS+=	-DSKEIN_LOOP=111
 
 LD_FLAGS=${LD_FLAGS_BIN}
-
-LIBSTAND=	${.OBJDIR}/../../libstand32/libstand.a
 
 # Pick up ../Makefile.inc early.
 .include <bsd.init.mk>
@@ -83,7 +85,7 @@ zfsboot.bin: zfsboot.out
 	${OBJCOPY} -S -O binary zfsboot.out ${.TARGET}
 
 zfsboot.out: ${BTXCRT} zfsboot.o sio.o drv.o cons.o util.o skein.o skein_block.o
-	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBSTAND}
+	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBSA32}
 
 SRCS=	zfsboot.c
 

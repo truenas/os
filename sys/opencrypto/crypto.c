@@ -460,7 +460,7 @@ crypto_newsession(u_int64_t *sid, struct cryptoini *cri, int crid)
 			CRYPTDEB("dev newsession failed");
 	} else {
 		CRYPTDEB("no driver");
-		err = EINVAL;
+		err = EOPNOTSUPP;
 	}
 	CRYPTO_DRIVER_UNLOCK();
 	return err;
@@ -572,7 +572,7 @@ crypto_get_driverid(device_t dev, int flags)
 	crypto_drivers[i].cc_dev = dev;
 	crypto_drivers[i].cc_flags = flags;
 	if (bootverbose)
-		printf("crypto: assign %s driver id %u, flags %u\n",
+		printf("crypto: assign %s driver id %u, flags 0x%x\n",
 		    device_get_nameunit(dev), i, flags);
 
 	CRYPTO_DRIVER_UNLOCK();

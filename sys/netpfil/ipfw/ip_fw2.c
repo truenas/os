@@ -1609,10 +1609,7 @@ do {								\
 
 			case O_IP_SRC_ME:
 				if (is_ipv4) {
-					struct ifnet *tif;
-
-					INADDR_TO_IFP(src_ip, tif);
-					match = (tif != NULL);
+					match = in_localip(src_ip);
 					break;
 				}
 #ifdef INET6
@@ -1648,10 +1645,7 @@ do {								\
 
 			case O_IP_DST_ME:
 				if (is_ipv4) {
-					struct ifnet *tif;
-
-					INADDR_TO_IFP(dst_ip, tif);
-					match = (tif != NULL);
+					match = in_localip(dst_ip);
 					break;
 				}
 #ifdef INET6
@@ -1669,8 +1663,8 @@ do {								\
 				 * to guarantee that we have a
 				 * packet with port info.
 				 */
-				if ((proto==IPPROTO_UDP || proto==IPPROTO_TCP)
-				    && offset == 0) {
+				if ((proto==IPPROTO_UDP || proto==IPPROTO_TCP ||
+				    proto==IPPROTO_SCTP) && offset == 0) {
 					u_int16_t x =
 					    (cmd->opcode == O_IP_SRCPORT) ?
 						src_port : dst_port ;
@@ -2448,6 +2442,7 @@ do {								\
 						sa6->sin6_len = sizeof(*sa6);
 						sa6->sin6_addr = TARG_VAL(
 						    chain, tablearg, nh6);
+						sa6->sin6_port = sa->sin_port;
 						/*
 						 * Set sin6_scope_id only for
 						 * link-local unicast addresses.
@@ -2461,6 +2456,8 @@ do {								\
 					} else
 #endif
 					{
+						args->hopstore.sin_port =
+						    sa->sin_port;
 						sa = args->next_hop =
 						    &args->hopstore;
 						sa->sin_family = AF_INET;

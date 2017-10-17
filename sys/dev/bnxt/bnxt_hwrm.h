@@ -43,6 +43,7 @@ int bnxt_hwrm_queue_qportcfg(struct bnxt_softc *softc);
 int bnxt_hwrm_func_drv_rgtr(struct bnxt_softc *softc);
 int bnxt_hwrm_func_drv_unrgtr(struct bnxt_softc *softc, bool shutdown);
 int bnxt_hwrm_func_qcaps(struct bnxt_softc *softc);
+int bnxt_hwrm_func_qcfg(struct bnxt_softc *softc);
 int bnxt_hwrm_func_reset(struct bnxt_softc *softc);
 int bnxt_hwrm_set_link_setting(struct bnxt_softc *, bool set_pause,
     bool set_eee);
@@ -51,6 +52,7 @@ int bnxt_hwrm_vnic_ctx_alloc(struct bnxt_softc *softc, uint16_t *ctx_id);
 int bnxt_hwrm_vnic_cfg(struct bnxt_softc *softc, struct bnxt_vnic_info *vnic);
 int bnxt_hwrm_stat_ctx_alloc(struct bnxt_softc *softc, struct bnxt_cp_ring *cpr,
     uint64_t paddr);
+int bnxt_hwrm_port_qstats(struct bnxt_softc *softc);
 int bnxt_hwrm_ring_grp_alloc(struct bnxt_softc *softc,
     struct bnxt_grp_info *grp);
 int bnxt_hwrm_vnic_alloc(struct bnxt_softc *softc, struct bnxt_vnic_info *vnic);
@@ -59,9 +61,9 @@ int bnxt_hwrm_cfa_l2_set_rx_mask(struct bnxt_softc *softc,
 int bnxt_hwrm_set_filter(struct bnxt_softc *softc, struct bnxt_vnic_info *vnic);
 int bnxt_hwrm_rss_cfg(struct bnxt_softc *softc, struct bnxt_vnic_info *vnic,
     uint32_t hash_type);
-int bnxt_hwrm_func_cfg(struct bnxt_softc *softc);
-int bnxt_hwrm_vnic_tpa_cfg(struct bnxt_softc *softc,
-    struct bnxt_vnic_info *vnic, uint32_t flags);
+int bnxt_cfg_async_cr(struct bnxt_softc *softc);
+int bnxt_hwrm_vnic_tpa_cfg(struct bnxt_softc *softc);
+void bnxt_validate_hw_lro_settings(struct bnxt_softc *softc);
 int bnxt_hwrm_nvm_find_dir_entry(struct bnxt_softc *softc, uint16_t type,
     uint16_t *ordinal, uint16_t ext, uint16_t *index, bool use_index,
     uint8_t search_opt, uint32_t *data_length, uint32_t *item_length,

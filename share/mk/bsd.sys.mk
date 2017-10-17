@@ -131,11 +131,6 @@ CWARNFLAGS+=	-Wno-error=address			\
 		-Wno-error=unused-value
 .endif
 
-# GCC 5.3.0
-.if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 50300
-CWARNFLAGS+=	-Wno-error=strict-overflow
-.endif
-
 # GCC 6.1.0
 .if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 60100
 CWARNFLAGS+=	-Wno-error=misleading-indentation	\
@@ -211,6 +206,10 @@ SSP_CFLAGS?=	-fstack-protector
 .endif
 CFLAGS+=	${SSP_CFLAGS}
 .endif # SSP && !ARM && !MIPS
+
+# Additional flags passed in CFLAGS and CXXFLAGS when MK_DEBUG_FILES is
+# enabled.
+DEBUG_FILES_CFLAGS?= -g
 
 # Allow user-specified additional warning flags, plus compiler and file
 # specific flag overrides, unless we've overriden this...

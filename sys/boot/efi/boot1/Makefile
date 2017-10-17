@@ -2,44 +2,61 @@
 
 MAN=
 
-.include <src.opts.mk>
+.include "../Makefile.inc"
 
 MK_SSP=		no
+MK_FORTH=	no
 
 PROG=		boot1.sym
 INTERNALPROG=
-WARNS?=		6
+WARNS?=		3
 
-.if ${MK_ZFS} != "no"
+# Include bcache code.
+HAVE_BCACHE=    yes
+
+# We implement a slightly non-standard %S in that it always takes a
+# CHAR16 that's common in UEFI-land instead of a wchar_t. This only
+# seems to matter on arm64 where wchar_t defaults to an int instead
+# of a short. There's no good cast to use here so just ignore the
+# warnings for now.
+CWARNFLAGS.boot1.c+=	-Wno-format
+
 # Disable warnings that are currently incompatible with the zfs boot code
-CWARNFLAGS.zfs_module.c += -Wno-array-bounds
-CWARNFLAGS.zfs_module.c += -Wno-cast-align
-CWARNFLAGS.zfs_module.c += -Wno-cast-qual
-CWARNFLAGS.zfs_module.c += -Wno-missing-prototypes
-CWARNFLAGS.zfs_module.c += -Wno-sign-compare
-CWARNFLAGS.zfs_module.c += -Wno-unused-parameter
-CWARNFLAGS.zfs_module.c += -Wno-unused-function
+CWARNFLAGS.zfs.c += -Wno-incompatible-pointer-types-discards-qualifiers
+CWARNFLAGS.zfs.c += -Wno-missing-variable-declarations
+CWARNFLAGS.zfs.c += -Wno-array-bounds
+CWARNFLAGS.zfs.c += -Wno-cast-align
+CWARNFLAGS.zfs.c += -Wno-cast-qual
+CWARNFLAGS.zfs.c += -Wno-missing-prototypes
+CWARNFLAGS.zfs.c += -Wno-sign-compare
+CWARNFLAGS.zfs.c += -Wno-unused-parameter
+CWARNFLAGS.zfs.c += -Wno-unused-function
 CWARNFLAGS.skein.c += -Wno-cast-align
 .if ${COMPILER_TYPE} == "clang"
 CWARNFLAGS.skein.c += -Wno-missing-variable-declarations
 .else if ${COMPILER_TYPE} == "gcc"
 CWARNFLAGS.skein.c += -Wno-missing-declarations
 .endif
-.endif
 
 # architecture-specific loader code
-SRCS=	boot1.c self_reloc.c start.S ufs_module.c
+SRCS=	boot1.c self_reloc.c start.S
 .if ${MK_ZFS} != "no"
-SRCS+=		zfs_module.c
+.PATH:		${.CURDIR}/../../../crypto/skein
 SRCS+=		skein.c skein_block.c
 # Do not unroll skein loops, reduce code size
 CFLAGS+=	-DSKEIN_LOOP=111
-.PATH:		${.CURDIR}/../../../crypto/skein
+.PATH:		${.CURDIR}/../../zfs
+SRCS+=		zfs.c
 .endif
 
 .if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} > 40201
 CWARNFLAGS.self_reloc.c+=	-Wno-error=maybe-uninitialized
 .endif
+
+# Always add MI sources
+.include	"../../loader.mk"
+
+.PATH: ${.CURDIR}/arch/${MACHINE}
 
 CFLAGS+=	-I.
 CFLAGS+=	-I${.CURDIR}/../include
@@ -78,13 +95,15 @@ CFLAGS+=	-fPIC
 LDFLAGS+=	-Wl,-znocombreloc
 .endif
 
+LIBEFI=		${.OBJDIR}/../libefi/libefi.a
+
 #
 # Add libstand for the runtime functions used by the compiler - for example
 # __aeabi_* (arm) or __divdi3 (i386).
 # as well as required string and memory functions for all platforms.
 #
-DPADD+=		${LIBSTAND}
-LDADD+=		-lstand
+DPADD+=		${LIBEFI} ${LIBSA}
+LDADD+=		${LIBEFI} ${LIBSA}
 
 DPADD+=		${LDSCRIPT}
 
@@ -110,16 +129,15 @@ boot1.efi: ${PROG}
 	SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
 	${OBJCOPY} -j .peheader -j .text -j .sdata -j .data \
 		-j .dynamic -j .dynsym -j .rel.dyn \
-		-j .rela.dyn -j .reloc -j .eh_frame \
+		-j .rela.dyn -j .reloc -j .eh_frame -j set_Xcommand_set \
 		--output-target=${EFI_TARGET} ${.ALLSRC} ${.TARGET}
 
-boot1.o: ${.CURDIR}/../../common/ufsread.c
+boot1.o: ${SASRC}/ufsread.c
 
 # The following inserts our objects into a template FAT file system
 # created by generate-fat.sh
 
 .include "${.CURDIR}/Makefile.fat"
-BOOT1_MAXSIZE?=	131072
 
 boot1.efifat: boot1.efi
 	@set -- `ls -l ${.ALLSRC}`; \
@@ -129,9 +147,7 @@ boot1.efifat: boot1.efi
 	    exit 1; \
 	fi
 	echo ${.OBJDIR}
-	uudecode ${.CURDIR}/fat-${MACHINE}.tmpl.bz2.uu
-	mv fat-${MACHINE}.tmpl.bz2 ${.TARGET}.bz2
-	bzip2 -f -d ${.TARGET}.bz2
+	xz -d -c ${.CURDIR}/fat-${MACHINE}.tmpl.xz > ${.TARGET}
 	${DD} if=${.ALLSRC} of=${.TARGET} seek=${BOOT1_OFFSET} conv=notrunc
 
 CLEANFILES= boot1.efi boot1.efifat

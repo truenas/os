@@ -8,6 +8,8 @@
     bin
         cat
         ..
+        chflags
+        ..
         chmod
         ..
         date
@@ -22,6 +24,8 @@
         ..
         ls
         ..
+        mkdir
+        ..
         mv
         ..
         pax
@@ -29,6 +33,8 @@
         pkill
         ..
         pwait
+        ..
+        rmdir
         ..
         sh
             builtins
@@ -469,6 +475,10 @@
         mqueue
         ..
         netinet
+        ..
+        netpfil
+            pf
+            ..
         ..
         opencrypto
         ..

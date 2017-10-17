@@ -20,7 +20,7 @@
 
 ident		VIRT
 
-include 	"std.armv6"
+include 	"std.armv7"
 include 	"../qemu/std.virt"
 
 options 	SCHED_ULE		# ULE scheduler

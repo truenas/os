@@ -65,6 +65,7 @@ static void	acpi_handle_ecdt(ACPI_TABLE_HEADER *sdp);
 static void	acpi_handle_hpet(ACPI_TABLE_HEADER *sdp);
 static void	acpi_handle_mcfg(ACPI_TABLE_HEADER *sdp);
 static void	acpi_handle_slit(ACPI_TABLE_HEADER *sdp);
+static void	acpi_handle_wddt(ACPI_TABLE_HEADER *sdp);
 static void	acpi_print_srat_cpu(uint32_t apic_id, uint32_t proximity_domain,
 		    uint32_t flags);
 static void	acpi_print_srat_memory(ACPI_SRAT_MEM_AFFINITY *mp);
@@ -679,6 +680,40 @@ acpi_handle_slit(ACPI_TABLE_HEADER *sdp)
 }
 
 static void
+acpi_handle_wddt(ACPI_TABLE_HEADER *sdp)
+{
+	ACPI_TABLE_WDDT *wddt;
+
+	printf(BEGIN_COMMENT);
+	acpi_print_sdt(sdp);
+	wddt = (ACPI_TABLE_WDDT *)sdp;
+	printf("\tSpecVersion=0x%04x, TableVersion=0x%04x\n",
+	    wddt->SpecVersion, wddt->TableVersion);
+	printf("\tPciVendorId=0x%04x, Address=", wddt->PciVendorId);
+	acpi_print_gas(&wddt->Address);
+	printf("\n\tMaxCount=%u, MinCount=%u, Period=%ums\n",
+	    wddt->MaxCount, wddt->MinCount, wddt->Period);
+
+#define	PRINTFLAG(var, flag)	printflag((var), ACPI_WDDT_## flag, #flag)
+	printf("\tStatus=");
+	PRINTFLAG(wddt->Status, AVAILABLE);
+	PRINTFLAG(wddt->Status, ACTIVE);
+	PRINTFLAG(wddt->Status, TCO_OS_OWNED);
+	PRINTFLAG(wddt->Status, USER_RESET);
+	PRINTFLAG(wddt->Status, WDT_RESET);
+	PRINTFLAG(wddt->Status, POWER_FAIL);
+	PRINTFLAG(wddt->Status, UNKNOWN_RESET);
+	PRINTFLAG_END();
+	printf("\tCapability=");
+	PRINTFLAG(wddt->Capability, AUTO_RESET);
+	PRINTFLAG(wddt->Capability, ALERT_SUPPORT);
+	PRINTFLAG_END();
+#undef PRINTFLAG
+
+	printf(END_COMMENT);
+}
+
+static void
 acpi_print_srat_cpu(uint32_t apic_id, uint32_t proximity_domain,
     uint32_t flags)
 {
@@ -1277,7 +1312,7 @@ acpi_print_nfit(ACPI_NFIT_HEADER *nfit)
 		    (u_int)ctlreg->SubsystemDeviceId);
 		printf("\tSubsystemRevisionId=%u\n",
 		    (u_int)ctlreg->SubsystemRevisionId);
-		printf("\tValidFields=%u\n", (u_int)ctlreg->ValidFields);
+		printf("\tValidFields=0x%02x\n", (u_int)ctlreg->ValidFields);
 		printf("\tManufacturingLocation=%u\n",
 		    (u_int)ctlreg->ManufacturingLocation);
 		printf("\tManufacturingDate=%u\n",
@@ -1300,8 +1335,7 @@ acpi_print_nfit(ACPI_NFIT_HEADER *nfit)
 #define PRINTFLAG(var, flag)	printflag((var), ACPI_NFIT_## flag, #flag)
 
 		printf("\tFlags=");
-		PRINTFLAG(mmap->Flags, ADD_ONLINE_ONLY);
-		PRINTFLAG(mmap->Flags, PROXIMITY_VALID);
+		PRINTFLAG(ctlreg->Flags, CONTROL_BUFFERED);
 		PRINTFLAG_END();
 
 #undef PRINTFLAG
@@ -1655,6 +1689,8 @@ acpi_handle_rsdt(ACPI_TABLE_HEADER *rsdp)
 			acpi_handle_dmar(sdp);
 		else if (!memcmp(sdp->Signature, ACPI_SIG_NFIT, 4))
 			acpi_handle_nfit(sdp);
+		else if (!memcmp(sdp->Signature, ACPI_SIG_WDDT, 4))
+			acpi_handle_wddt(sdp);
 		else {
 			printf(BEGIN_COMMENT);
 			acpi_print_sdt(sdp);
