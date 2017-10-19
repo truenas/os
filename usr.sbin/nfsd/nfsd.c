@@ -1016,7 +1016,6 @@ static void
 start_server(int master, struct nfsd_nfsd_args *nfsdargp)
 {
 	char principal[MAXHOSTNAMELEN + 5];
-	struct nfsd_nfsd_args nfsdargs;
 	int status, error, vfd;
 	char hostname[MAXHOSTNAMELEN + 1], *cp;
 	char vhostname[MAXHOSTNAMELEN + 1];
