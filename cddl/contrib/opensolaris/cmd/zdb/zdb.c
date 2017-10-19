@@ -2078,14 +2078,14 @@ dump_dir(objset_t *os)
 		object_count++;
 	}
 
-	ASSERT3U(object_count, ==, usedobjs);
-
 	(void) printf("\n");
 
 	if (error != ESRCH) {
 		(void) fprintf(stderr, "dmu_object_next() = %d\n", error);
 		abort();
 	}
+
+	ASSERT3U(object_count, ==, usedobjs);
 }
 
 static void

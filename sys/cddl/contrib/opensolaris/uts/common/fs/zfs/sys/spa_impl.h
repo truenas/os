@@ -184,7 +184,6 @@ struct spa {
 	uberblock_t	spa_ubsync;		/* last synced uberblock */
 	uberblock_t	spa_uberblock;		/* current uberblock */
 	boolean_t	spa_extreme_rewind;	/* rewind past deferred frees */
-	uint64_t	spa_last_io;		/* lbolt of last non-scan I/O */
 	kmutex_t	spa_scrub_lock;		/* resilver/scrub lock */
 	uint64_t	spa_scrub_inflight;	/* in-flight scrub I/Os */
 	kcondvar_t	spa_scrub_io_cv;	/* scrub I/O completion */
@@ -197,6 +196,7 @@ struct spa {
 	uint64_t	spa_scan_pass_scrub_pause; /* scrub pause time */
 	uint64_t	spa_scan_pass_scrub_spent_paused; /* total paused */
 	uint64_t	spa_scan_pass_exam;	/* examined bytes per pass */
+	uint64_t	spa_scan_pass_issued;	/* issued bytes per pass */
 	kmutex_t	spa_async_lock;		/* protect async state */
 	kthread_t	*spa_async_thread;	/* thread doing async task */
 	kthread_t	*spa_async_thread_vd;	/* thread doing vd async task */

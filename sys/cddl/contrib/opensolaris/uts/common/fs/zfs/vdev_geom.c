@@ -1135,6 +1135,7 @@ vdev_ops_t vdev_geom_ops = {
 	vdev_geom_io_start,
 	vdev_geom_io_done,
 	NULL,
+	NULL,
 	vdev_geom_hold,
 	vdev_geom_rele,
 	VDEV_TYPE_DISK,		/* name of this vdev type */
