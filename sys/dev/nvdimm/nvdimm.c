@@ -145,33 +145,54 @@ nvdimm_close(struct disk *dp)
 	return (0);
 }
 
-void ntb_copy1(void *dst, void *srv, size_t len);
-void ntb_copy2(void *dst1, void *dst2, void *srv, size_t len);
+void ntb_copy1(void *dst, void *src, size_t len);
+void ntb_copy2(void *dst1, void *dst2, void *src, size_t len);
 
 static void
 nvdimm_strategy(struct bio *bp)
 {
 	struct nvdimm_disk *sc = bp->bio_disk->d_drv1;
-	uint8_t *nvaddr;
+	uint8_t *addr, *nvaddr;
+	vm_offset_t page;
+	off_t done, off, moff, size;
 
-	if (bp->bio_cmd == BIO_READ) {
-		memcpy(bp->bio_data, sc->vaddr + bp->bio_offset,
-		    bp->bio_length);
-	} else if (bp->bio_cmd == BIO_WRITE) {
-		sc->label->empty = 0;
-		if ((nvaddr = sc->rvaddr) != NULL) {
-			ntb_copy2(sc->vaddr + bp->bio_offset,
-			    nvaddr + bp->bio_offset,
-			    bp->bio_data, bp->bio_length);
-		} else {
-			ntb_copy1(sc->vaddr + bp->bio_offset,
-			    bp->bio_data, bp->bio_length);
-			sc->label->dirty = 1;
-		}
-	} else {
+	if (bp->bio_cmd != BIO_READ && bp->bio_cmd != BIO_WRITE) {
 		bp->bio_flags |= BIO_ERROR;
 		bp->bio_error = EOPNOTSUPP;
+		biodone(bp);
+		return;
 	}
+
+	for (done = 0; done < bp->bio_length; done += size) {
+		if (bp->bio_flags & BIO_UNMAPPED) {
+			moff = bp->bio_ma_offset + done;
+			page = pmap_quick_enter_page(bp->bio_ma[moff / PAGE_SIZE]);
+			moff %= PAGE_SIZE;
+			addr = (void *)(page + moff);
+			size = MIN(bp->bio_length - done, PAGE_SIZE - moff);
+		} else {
+			addr = bp->bio_data;
+			size = bp->bio_length;
+		}
+		off = bp->bio_offset + done;
+
+		if (bp->bio_cmd == BIO_READ) {
+			memcpy(addr, sc->vaddr + off, size);
+		} else if (bp->bio_cmd == BIO_WRITE) {
+			sc->label->empty = 0;
+			if ((nvaddr = sc->rvaddr) != NULL) {
+				ntb_copy2(sc->vaddr + off, nvaddr + off,
+				    addr, size);
+			} else {
+				ntb_copy1(sc->vaddr + off, addr, size);
+				sc->label->dirty = 1;
+			}
+		}
+
+		if (bp->bio_flags & BIO_UNMAPPED)
+			pmap_quick_remove_page(page);
+	}
+
 	biodone(bp);
 }
 
@@ -236,7 +257,8 @@ nvdimm_probe(device_t dev)
 	size = rman_get_size(res);
 	bus_release_resource(dev, SYS_RES_MEMORY, rid, res);
 
-	snprintf(buf, sizeof(buf), "NVDIMM region %juMB", size / (1024 * 1024));
+	snprintf(buf, sizeof(buf), "NVDIMM region %juGB",
+	    (uintmax_t)(size + 536870912) / 1073741824);
 	device_set_desc_copy(dev, buf);
 	return (0);
 }
@@ -254,6 +276,7 @@ nvdimm_attach(device_t dev)
 	sc->paddr = rman_get_start(sc->res);
 	sc->size = rman_get_size(sc->res);
 	sc->vaddr = pmap_mapdev_attr(sc->paddr, sc->size, VM_MEMATTR_DEFAULT);
+	sc->rvaddr = NULL;
 
 	sc->label = (struct nvdimm_label *)(sc->vaddr + sc->size - PAGE_SIZE);
 	sc->rlabel = NULL;
@@ -280,7 +303,12 @@ nvdimm_attach(device_t dev)
 	disk->d_maxsize = MAXPHYS;
 	disk->d_sectorsize = DEV_BSIZE;
 	disk->d_mediasize = sc->size - PAGE_SIZE;
-	disk->d_flags = DISKFLAG_DIRECT_COMPLETION;
+	disk->d_flags = DISKFLAG_UNMAPPED_BIO | DISKFLAG_DIRECT_COMPLETION;
+	snprintf(disk->d_ident, sizeof(disk->d_ident),
+	    "%016jX", (uintmax_t)sc->label->array);
+	snprintf(disk->d_descr, sizeof(disk->d_descr),
+	    "NVDIMM region %juGB", (uintmax_t)(sc->size + 536870912) /
+	    1073741824);
 	disk->d_rotation_rate = DISK_RR_NON_ROTATING;
 	disk_create(disk, DISK_VERSION);
 	return (0);
@@ -475,12 +503,33 @@ nvdimm_root_get_resource_list(device_t dev, device_t child)
 	return &ivar->resources;
 }
 
+static int
+nvdimm_root_print_child(device_t dev, device_t child)
+{
+	struct nvdimm_child *ivar;
+	struct resource_list *rl;
+	int	retval = 0;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	rl = &ivar->resources;
+
+	retval += bus_print_child_header(dev, child);
+	if (STAILQ_FIRST(rl))
+		retval += printf(" at");
+	retval += resource_list_print_type(rl, "iomem", SYS_RES_MEMORY, "%#jx");
+	retval += bus_print_child_domain(dev, child);
+	retval += bus_print_child_footer(dev, child);
+
+	return (retval);
+}
+
 static device_method_t nvdimm_root_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe,		nvdimm_root_probe),
 	DEVMETHOD(device_attach,	nvdimm_root_attach),
 	DEVMETHOD(device_detach,	nvdimm_root_detach),
 
+	DEVMETHOD(bus_print_child,	nvdimm_root_print_child),
 	DEVMETHOD(bus_get_domain,	nvdimm_root_get_domain),
 	DEVMETHOD(bus_get_resource_list,nvdimm_root_get_resource_list),
 	DEVMETHOD(bus_alloc_resource,	bus_generic_rl_alloc_resource),
@@ -508,9 +557,11 @@ ntb_nvdimm_start(void *data)
 	device_t dev = data;
 	struct ntb_nvdimm *sc = device_get_softc(dev);
 
-	device_printf(dev, "Releasing root mount\n");
-	root_mount_rel(sc->ntb_rootmount);
-	sc->ntb_rootmount = NULL;
+	if (sc->ntb_rootmount != NULL) {
+		device_printf(dev, "Releasing root mount\n");
+		root_mount_rel(sc->ntb_rootmount);
+		sc->ntb_rootmount = NULL;
+	}
 }
 
 static void
@@ -594,7 +645,7 @@ ntb_nvdimm_sync(void *data)
 		memcpy(sc->rvaddr, sc->vaddr, sc->size - PAGE_SIZE);
 		device_printf(dev, "Copied %juMB at %juMB/s\n",
 		    sc->size / 1024 / 1024,
-		    sc->size * hz / 1024 / 1024 / (ticks - b));
+		    sc->size * hz / 1024 / 1024 / imax(ticks - b, 1));
 		rl->array = ll->array;
 		rl->empty = 0;
 		rl->dirty = 0;
@@ -608,6 +659,8 @@ ntb_nvdimm_sync(void *data)
 		while (atomic_load_acq_32(&rl->state) == STATE_WAITING &&
 		    sc->rlabel != NULL)
 			cpu_spinwait();
+		snprintf(sc->disk->d_ident, sizeof(sc->disk->d_ident),
+		    "%016jX", (uintmax_t)ll->array);
 		disk_media_changed(sc->disk, M_NOWAIT);
 	} else {
 		device_printf(dev, "No need to copy.\n");
@@ -795,6 +848,7 @@ ntb_nvdimm_detach(device_t dev)
 	sc->ntb_rootmount = NULL;
 
 	scd->rvaddr = NULL;
+	scd->rlabel = NULL;
 	error = ntb_link_disable(dev);
 	if (error != 0)
 		device_printf(dev, "ntb_link_disable() error %d\n", error);

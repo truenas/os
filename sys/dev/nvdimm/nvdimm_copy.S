@@ -46,7 +46,24 @@ ENTRY(ntb_copy1)
 	addq	%rdx,%rdi
 	negq	%rdx
 1:
+	testq	$7,%rdx			/* Copy by byte (unlikely) */
+	jz	2f
+	movb	(%rsi,%rdx),%al
+	movb	%al,(%rdi,%rdx)		/* XXX: Should be non-temporal */
+	addq	$1,%rdx
+	jmp	1b
+2:
+	testq	$31,%rdx		/* Copy by qword (less likely) */
+	jz	3f
 	movq	(%rsi,%rdx),%rax
+	movnti	%rax,(%rdi,%rdx)
+	addq	$8,%rdx
+	jmp	2b
+3:
+	testq	%rdx, %rdx
+	jz	5f
+4:
+	movq	(%rsi,%rdx),%rax	/* Copy by 4 qwords */
 	movnti	%rax,(%rdi,%rdx)
 	movq	8(%rsi,%rdx),%rax
 	movnti	%rax,8(%rdi,%rdx)
@@ -55,7 +72,8 @@ ENTRY(ntb_copy1)
 	movq	24(%rsi,%rdx),%rax
 	movnti	%rax,24(%rdi,%rdx)
 	addq	$32,%rdx
-	jne	1b
+	js	4b
+5:
 	sfence
 	POP_FRAME_POINTER
 	ret
@@ -71,7 +89,26 @@ ENTRY(ntb_copy2)
 	addq	%rcx,%rdx
 	negq	%rcx
 1:
+	testq	$7,%rcx			/* Copy by byte (unlikely) */
+	jz	2f
+	movb	(%rdx,%rcx),%al
+	movb	%al,(%rdi,%rcx)		/* XXX: Should be non-temporal */
+	movb	%al,(%rsi,%rcx)		/* XXX: Should be non-temporal */
+	addq	$1,%rcx
+	jmp	1b
+2:
+	testq	$31,%rcx		/* Copy by qword (less likely) */
+	jz	3f
 	movq	(%rdx,%rcx),%rax
+	movnti	%rax,(%rdi,%rcx)
+	movnti	%rax,(%rsi,%rcx)
+	addq	$8,%rcx
+	jmp	2b
+3:
+	testq	%rcx, %rcx
+	jz	5f
+4:
+	movq	(%rdx,%rcx),%rax	/* Copy by 4 qwords */
 	movnti	%rax,(%rdi,%rcx)
 	movnti	%rax,(%rsi,%rcx)
 	movq	8(%rdx,%rcx),%rax
@@ -84,7 +121,8 @@ ENTRY(ntb_copy2)
 	movnti	%rax,24(%rdi,%rcx)
 	movnti	%rax,24(%rsi,%rcx)
 	addq	$32,%rcx
-	jne	1b
+	js	4b
+5:
 	sfence
 	POP_FRAME_POINTER
 	ret

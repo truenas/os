@@ -3048,13 +3048,11 @@ zfs_get_vfs(const char *resource)
 	mtx_lock(&mountlist_mtx);
 	TAILQ_FOREACH(vfsp, &mountlist, mnt_list) {
 		if (strcmp(refstr_value(vfsp->vfs_resource), resource) == 0) {
-			if (vfs_busy(vfsp, MBF_MNTLSTLOCK) != 0)
-				vfsp = NULL;
+			vfs_ref(vfsp);
 			break;
 		}
 	}
-	if (vfsp == NULL)
-		mtx_unlock(&mountlist_mtx);
+	mtx_unlock(&mountlist_mtx);
 	return (vfsp);
 }
 
@@ -3544,7 +3542,9 @@ zfs_unmount_snap(const char *snapname)
 {
 	vfs_t *vfsp;
 	zfsvfs_t *zfsvfs;
+#ifdef illumos
 	int err;
+#endif
 
 	if (strchr(snapname, '@') == NULL)
 		return (0);
@@ -3556,23 +3556,19 @@ zfs_unmount_snap(const char *snapname)
 	zfsvfs = vfsp->vfs_data;
 	ASSERT(!dsl_pool_config_held(dmu_objset_pool(zfsvfs->z_os)));
 
-	err = vn_vfswlock(vfsp->vfs_vnodecovered);
 #ifdef illumos
+	err = vn_vfswlock(vfsp->vfs_vnodecovered);
 	VFS_RELE(vfsp);
-#else
-	vfs_unbusy(vfsp);
-#endif
 	if (err != 0)
 		return (SET_ERROR(err));
+#endif
 
 	/*
 	 * Always force the unmount for snapshots.
 	 */
-
 #ifdef illumos
 	(void) dounmount(vfsp, MS_FORCE, kcred);
 #else
-	vfs_ref(vfsp);
 	(void) dounmount(vfsp, MS_FORCE, curthread);
 #endif
 	return (0);
@@ -3786,17 +3782,28 @@ zfs_ioc_destroy(zfs_cmd_t *zc)
 /*
  * fsname is name of dataset to rollback (to most recent snapshot)
  *
- * innvl is not used.
+ * innvl may contain name of expected target snapshot
  *
  * outnvl: "target" -> name of most recent snapshot
  * }
  */
 /* ARGSUSED */
 static int
-zfs_ioc_rollback(const char *fsname, nvlist_t *args, nvlist_t *outnvl)
+zfs_ioc_rollback(const char *fsname, nvlist_t *innvl, nvlist_t *outnvl)
 {
 	zfsvfs_t *zfsvfs;
+	char *target = NULL;
 	int error;
+
+	(void) nvlist_lookup_string(innvl, "target", &target);
+	if (target != NULL) {
+		int fslen = strlen(fsname);
+
+		if (strncmp(fsname, target, fslen) != 0)
+			return (SET_ERROR(EINVAL));
+		if (target[fslen] != '@')
+			return (SET_ERROR(EINVAL));
+	}
 
 	if (getzfsvfs(fsname, &zfsvfs) == 0) {
 		dsl_dataset_t *ds;
@@ -3806,7 +3813,8 @@ zfs_ioc_rollback(const char *fsname, nvlist_t *args, nvlist_t *outnvl)
 		if (error == 0) {
 			int resume_err;
 
-			error = dsl_dataset_rollback(fsname, zfsvfs, outnvl);
+			error = dsl_dataset_rollback(fsname, target, zfsvfs,
+			    outnvl);
 			resume_err = zfs_resume_fs(zfsvfs, ds);
 			error = error ? error : resume_err;
 		}
@@ -3816,7 +3824,7 @@ zfs_ioc_rollback(const char *fsname, nvlist_t *args, nvlist_t *outnvl)
 		vfs_unbusy(zfsvfs->z_vfs);
 #endif
 	} else {
-		error = dsl_dataset_rollback(fsname, NULL, outnvl);
+		error = dsl_dataset_rollback(fsname, target, NULL, outnvl);
 	}
 	return (error);
 }

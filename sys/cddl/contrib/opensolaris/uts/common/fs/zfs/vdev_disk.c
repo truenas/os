@@ -832,6 +832,7 @@ vdev_ops_t vdev_disk_ops = {
 	vdev_disk_io_start,
 	vdev_disk_io_done,
 	NULL,
+	NULL,
 	vdev_disk_hold,
 	vdev_disk_rele,
 	VDEV_TYPE_DISK,		/* name of this vdev type */
