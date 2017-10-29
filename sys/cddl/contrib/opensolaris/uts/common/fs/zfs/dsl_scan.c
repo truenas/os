@@ -3413,7 +3413,7 @@ scan_exec_io(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
 	vdev_t *rvd = spa->spa_root_vdev;
 	abd_t *data = abd_alloc_for_io(size, B_FALSE);
 	uint64_t maxinflight;
-	
+
 	if (queue == NULL) {
 		maxinflight = rvd->vdev_children * MAX(zfs_top_maxinflight, 1);
 
