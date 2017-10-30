@@ -76,6 +76,15 @@
 
 kmem_cache_t *range_seg_cache;
 
+/* Generic ops for managing an AVL tree alongside a range tree */
+struct range_tree_ops rt_avl_ops = {
+	.rtop_create = rt_avl_create,
+	.rtop_destroy = rt_avl_destroy,
+	.rtop_add = rt_avl_add,
+	.rtop_remove = rt_avl_remove,
+	.rtop_vacate = rt_avl_vacate,
+};
+
 void
 range_tree_init(void)
 {
@@ -181,8 +190,8 @@ range_tree_seg_compare(const void *x1, const void *x2)
 }
 
 range_tree_t *
-range_tree_create_impl(range_tree_ops_t *ops, void *arg, kmutex_t *lp,
-    uint64_t gap)
+range_tree_create_impl(range_tree_ops_t *ops, void *arg,
+    int (*avl_compare) (const void *, const void *), kmutex_t *lp, uint64_t gap)
 {
 	range_tree_t *rt = kmem_zalloc(sizeof (range_tree_t), KM_SLEEP);
 
@@ -191,8 +200,9 @@ range_tree_create_impl(range_tree_ops_t *ops, void *arg, kmutex_t *lp,
 
 	rt->rt_lock = lp;
 	rt->rt_ops = ops;
-	rt->rt_arg = arg;
 	rt->rt_gap = gap;
+	rt->rt_arg = arg;
+	rt->rt_avl_compare = avl_compare;
 
 	if (rt->rt_ops != NULL && rt->rt_ops->rtop_create != NULL)
 		rt->rt_ops->rtop_create(rt, rt->rt_arg);
@@ -203,7 +213,7 @@ range_tree_create_impl(range_tree_ops_t *ops, void *arg, kmutex_t *lp,
 range_tree_t *
 range_tree_create(range_tree_ops_t *ops, void *arg, kmutex_t *lp)
 {
-	return (range_tree_create_impl(ops, arg, lp, 0));
+	return (range_tree_create_impl(ops, arg, NULL, lp, 0));
 }
 
 void
@@ -216,6 +226,21 @@ range_tree_destroy(range_tree_t *rt)
 
 	avl_destroy(&rt->rt_root);
 	kmem_free(rt, sizeof (*rt));
+}
+
+void
+range_tree_adjust_fill(range_tree_t *rt, range_seg_t *rs, int64_t delta)
+{
+	ASSERT(MUTEX_HELD(rt->rt_lock));
+
+	ASSERT3U(rs->rs_fill + delta, !=, 0);
+	ASSERT3U(rs->rs_fill + delta, <=, rs->rs_end - rs->rs_start);
+
+	if (rt->rt_ops != NULL && rt->rt_ops->rtop_remove != NULL)
+		rt->rt_ops->rtop_remove(rt, rs, rt->rt_arg);
+	rs->rs_fill += delta;
+	if (rt->rt_ops != NULL && rt->rt_ops->rtop_add != NULL)
+		rt->rt_ops->rtop_add(rt, rs, rt->rt_arg);
 }
 
 static void
@@ -356,10 +381,10 @@ range_tree_add(void *arg, uint64_t start, uint64_t size)
 	range_tree_add_impl(arg, start, size, size);
 }
 
-void
-range_tree_remove(void *arg, uint64_t start, uint64_t size)
+static void
+range_tree_remove_impl(range_tree_t *rt, uint64_t start, uint64_t size,
+    boolean_t do_fill)
 {
-	range_tree_t *rt = arg;
 	avl_index_t where;
 	range_seg_t rsearch, *rs, *newseg;
 	uint64_t end = start + size;
@@ -382,17 +407,30 @@ range_tree_remove(void *arg, uint64_t start, uint64_t size)
 	}
 
 	/*
-	 * Range trees with gap support must only remove complete segments.
-	 * This allows us to maintain accurate fill accounting and to ensure
-	 * that bridged sections are not leaked.
+	 * Range trees with gap support must only remove complete segments
+	 * from the tree. This allows us to maintain accurate fill accounting
+	 * and to ensure that bridged sections are not leaked. If we need to
+	 * remove less than the full segment, we can only adjust the fill count.
 	 */
-	if (rt->rt_gap != 0 && (rs->rs_start != start || rs->rs_end != end)) {
-		zfs_panic_recover("zfs: freeing partial segment of gap tree "
-		    "(offset=%llu size=%llu) of (offset=%llu size=%llu)",
-		    (longlong_t)start, (longlong_t)size,
-		    (longlong_t)rs->rs_start,
-		    (longlong_t)rs->rs_end - rs->rs_start);
-		return;
+	if (rt->rt_gap != 0) {
+		if (do_fill) {
+			if (rs->rs_fill == size) {
+				start = rs->rs_start;
+				end = rs->rs_end;
+				size = end - start;
+			} else {
+				range_tree_adjust_fill(rt, rs, -size);
+				return;
+			}
+		} else if (rs->rs_start != start || rs->rs_end != end) {
+			zfs_panic_recover("zfs: freeing partial segment of "
+			    "gap tree (offset=%llu size=%llu) of "
+			    "(offset=%llu size=%llu)",
+			    (longlong_t)start, (longlong_t)size,
+			    (longlong_t)rs->rs_start,
+			    (longlong_t)rs->rs_end - rs->rs_start);
+			return;
+		}
 	}
 
 	VERIFY3U(rs->rs_start, <=, start);
@@ -445,17 +483,15 @@ range_tree_remove(void *arg, uint64_t start, uint64_t size)
 }
 
 void
-range_tree_adjust_fill(range_tree_t *rt, range_seg_t *rs, int64_t delta)
+range_tree_remove(void *arg, uint64_t start, uint64_t size)
 {
-	ASSERT(MUTEX_HELD(rt->rt_lock));
-	ASSERT3U(rs->rs_fill + delta, !=, 0);
-	ASSERT3U(rs->rs_fill + delta, <=, rs->rs_end - rs->rs_start);
+	range_tree_remove_impl(arg, start, size, B_FALSE);
+}
 
-	if (rt->rt_ops != NULL && rt->rt_ops->rtop_remove != NULL)
-		rt->rt_ops->rtop_remove(rt, rs, rt->rt_arg);
-	rs->rs_fill += delta;
-	if (rt->rt_ops != NULL && rt->rt_ops->rtop_add != NULL)
-		rt->rt_ops->rtop_add(rt, rs, rt->rt_arg);
+void
+range_tree_remove_fill(range_tree_t *rt, uint64_t start, uint64_t size)
+{
+	range_tree_remove_impl(rt, start, size, B_TRUE);
 }
 
 static range_seg_t *
@@ -573,4 +609,49 @@ uint64_t
 range_tree_space(range_tree_t *rt)
 {
 	return (rt->rt_space);
+}
+
+/* Generic range tree functions for maintaining segments in an AVL tree. */
+void
+rt_avl_create(range_tree_t *rt, void *arg)
+{
+	avl_tree_t *tree = arg;
+
+	avl_create(tree, rt->rt_avl_compare, sizeof (range_seg_t),
+	    offsetof(range_seg_t, rs_pp_node));
+}
+
+void
+rt_avl_destroy(range_tree_t *rt, void *arg)
+{
+	avl_tree_t *tree = arg;
+
+	ASSERT0(avl_numnodes(tree));
+	avl_destroy(tree);
+}
+
+void
+rt_avl_add(range_tree_t *rt, range_seg_t *rs, void *arg)
+{
+	avl_tree_t *tree = arg;
+	avl_add(tree, rs);
+}
+
+void
+rt_avl_remove(range_tree_t *rt, range_seg_t *rs, void *arg)
+{
+	avl_tree_t *tree = arg;
+	avl_remove(tree, rs);
+}
+
+void
+rt_avl_vacate(range_tree_t *rt, void *arg)
+{
+	/*
+	 * Normally one would walk the tree freeing nodes along the way.
+	 * Since the nodes are shared with the range trees we can avoid
+	 * walking all nodes and just reinitialize the avl tree. The nodes
+	 * will be freed by the range tree, so we don't want to free them here.
+	 */
+	rt_avl_create(rt, arg);
 }
