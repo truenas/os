@@ -127,11 +127,8 @@ typedef struct dsl_scan {
 	zio_t *scn_zio_root;		/* root zio for waiting on IO */
 	taskq_t *scn_taskq;		/* task queue for issuing extents */
 
-	/* for controlling scan prefetch */
+	/* for controlling scan prefetch, protected by spa_scrub_lock */
 	boolean_t scn_prefetch_stop;	/* prefetch should stop */
-	uint64_t scn_prefetch_inflight;	/* number of inflight prefetch zios */
-	kmutex_t scn_prefetch_lock;	/* lock for scn_prefetch_cv */
-	kcondvar_t scn_prefetch_cv;	/* cv for throttling prefetches */
 	zbookmark_phys_t scn_prefetch_bookmark;	/* prefetch start bookmark */
 	avl_tree_t scn_prefetch_queue;	/* priority queue of prefetch IOs */
 

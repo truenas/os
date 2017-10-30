@@ -4022,10 +4022,9 @@ print_scan_status(pool_scan_stat_t *ps)
 	zfs_nicenum(issue_rate, irate_buf, sizeof (irate_buf));
 
 	/*
-	 * do not print estimated time if hours_left is more than 30 days
-	 * or we have a paused scrub
+	 * Do not print estimated time if hours_left is more than 30 days
+	 * or we have a paused scrub.
 	 */
-
 	if (pause == 0) {
 		(void) printf(gettext("\t%s scanned at %s/s, "
 		    "%s issued at %s/s, %s total"),
