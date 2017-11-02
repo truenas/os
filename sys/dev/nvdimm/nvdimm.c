@@ -345,7 +345,7 @@ static devclass_t nvdimm_root_devclass;
 
 DRIVER_MODULE(nvdimm, nexus, nvdimm_driver, nvdimm_devclass, 0, 0);
 DRIVER_MODULE(nvdimm, nvdimm_root, nvdimm_driver, nvdimm_devclass, 0, 0);
-MODULE_VERSION(mvdimm, 1);
+MODULE_VERSION(nvdimm, 1);
 
 /* Hooks for the ACPI CA debugging infrastructure */
 #define _COMPONENT	ACPI_BUS
@@ -356,6 +356,8 @@ struct nvdimm_root {
 
 struct nvdimm_child {
 	struct resource_list resources;
+	ACPI_HANDLE handle;
+	int adr;
 	int domain;
 };
 
@@ -376,6 +378,90 @@ nvdimm_root_probe(device_t dev)
 	return (0);
 }
 
+struct nvdimm_root_walk_ctx {
+	device_t	dev;
+	ACPI_NFIT_SYSTEM_ADDRESS **sas;
+	ACPI_NFIT_MEMORY_MAP **mms;
+	u_int		san, mmn;
+};
+
+static ACPI_STATUS
+nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
+{
+	struct nvdimm_root_walk_ctx *wctx = ctx;
+	device_t dev = wctx->dev;
+	ACPI_STATUS status;
+	ACPI_NFIT_SYSTEM_ADDRESS **sas = wctx->sas;
+	ACPI_NFIT_MEMORY_MAP *mm;
+	struct nvdimm_child	*ivar;
+	device_t	child;
+	u_int adr, sai, mmi;
+
+	status = acpi_GetInteger(handle, "_ADR", &adr);
+	if (ACPI_FAILURE(status))
+		return_ACPI_STATUS(status);
+
+	for (mmi = 0; mmi < wctx->mmn; mmi++) {
+		if (wctx->mms[mmi]->DeviceHandle == adr)
+			break;
+	}
+	if (mmi >= wctx->mmn)
+		return_ACPI_STATUS(AE_OK);
+
+	mm = wctx->mms[mmi];
+	if (mm->RangeIndex == 0)
+		return_ACPI_STATUS(AE_OK);
+	for (sai = 0; sai < wctx->san; sai++) {
+		if (sas[sai]->RangeIndex == mm->RangeIndex)
+			break;
+	}
+	if (sai >= wctx->san) {
+		device_printf(dev, "Unknown SPA Range Structure Index: %u\n",
+		    mm->RangeIndex);
+		return_ACPI_STATUS(AE_OK);
+	}
+	if (mm->InterleaveWays > 1) {
+		device_printf(dev, "InterleaveWays %u is not supported\n",
+		    mm->InterleaveWays);
+		return_ACPI_STATUS(AE_OK);
+	}
+
+	if (device_find_child(dev, "nvdimm", mm->RegionId) != NULL)
+		return_ACPI_STATUS(AE_OK);
+
+	ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
+		M_WAITOK | M_ZERO);
+	resource_list_init(&ivar->resources);
+	resource_list_add(&ivar->resources, SYS_RES_MEMORY,
+	    0, sas[sai]->Address + mm->RegionOffset,
+	    sas[sai]->Address + mm->RegionOffset + mm->RegionSize - 1,
+	    mm->RegionSize);
+	ivar->handle = handle;
+	ivar->adr = adr;
+	if (sas[sai]->Flags & ACPI_NFIT_PROXIMITY_VALID)
+		ivar->domain = sas[sai]->ProximityDomain;
+	else
+		ivar->domain = -1;
+
+	child = device_add_child(dev, "nvdimm", mm->RegionId);
+	if (child) {
+		device_set_ivars(child, ivar);
+		if (mm->Flags & ~ACPI_NFIT_MEM_HEALTH_ENABLED) {
+			device_printf(child, "Flags: 0x%b\n",
+			    mm->Flags, "\020"
+			    "\001SAVE_FAILED\002RESTORE_FAILED"
+			    "\003FLUSH_FAILED\004NOT_ARMED"
+			    "\005HEALTH_OBSERVED\006HEALTH_ENABLED"
+			    "\007MAP_FAILED");
+		}
+	} else {
+		device_printf(dev, "Adding nvdimm%u failed\n",
+		    mm->RegionId);
+	}
+
+	return_ACPI_STATUS(AE_OK);
+}
+
 static int
 nvdimm_root_attach(device_t dev)
 {
@@ -383,11 +469,10 @@ nvdimm_root_attach(device_t dev)
 	ACPI_STATUS	status;
 	ACPI_NFIT_HEADER	*subtable;
 	uint8_t		*end;
-	ACPI_NFIT_SYSTEM_ADDRESS *sa[16];
-	ACPI_NFIT_MEMORY_MAP *mm;
-	struct nvdimm_child	*ivar;
-	device_t	child;
-	int		error, san = 0, sai;
+	ACPI_NFIT_SYSTEM_ADDRESS *sas[64];
+	ACPI_NFIT_MEMORY_MAP *mms[64];
+	struct nvdimm_root_walk_ctx wctx;
+	int		error, san = 0, mmn = 0;
 
 	/* Search for NFIT table. */
 	status = AcpiGetTable("NFIT", 0, (ACPI_TABLE_HEADER **)&nfit);
@@ -403,68 +488,22 @@ nvdimm_root_attach(device_t dev)
 			return (EIO);
 		}
 		if (subtable->Type == ACPI_NFIT_TYPE_SYSTEM_ADDRESS)
-			sa[san++] = (ACPI_NFIT_SYSTEM_ADDRESS *)subtable;
+			sas[san++] = (ACPI_NFIT_SYSTEM_ADDRESS *)subtable;
+		if (subtable->Type == ACPI_NFIT_TYPE_MEMORY_MAP)
+			mms[mmn++] = (ACPI_NFIT_MEMORY_MAP *)subtable;
 		subtable = (ACPI_NFIT_HEADER *)((char *)subtable +
 		    subtable->Length);
 	}
-	subtable = (ACPI_NFIT_HEADER *)(nfit + 1);
-	while ((uint8_t *)subtable < end) {
-		if (subtable->Type == ACPI_NFIT_TYPE_MEMORY_MAP) {
-			mm = (ACPI_NFIT_MEMORY_MAP *)subtable;
-			if (mm->RangeIndex == 0)
-				goto next;
-			for (sai = 0; sai < san; sai++) {
-				if (sa[sai]->RangeIndex == mm->RangeIndex)
-					break;
-			}
-			if (sai >= san) {
-				device_printf(dev,
-				    "Unknown SPA Range Structure Index: %u\n",
-				    mm->RangeIndex);
-				goto next;
-			}
-			if (mm->InterleaveWays > 1) {
-				device_printf(dev,
-				    "InterleaveWays %u is not supported\n",
-				    mm->InterleaveWays);
-				goto next;
-			}
 
-			if (device_find_child(dev, "nvdimm", mm->RegionId) != NULL)
-				continue;
+	wctx.dev = dev;
+	wctx.sas = sas;
+	wctx.mms = mms;
+	wctx.san = san;
+	wctx.mmn = mmn;
+	status = AcpiWalkNamespace(ACPI_TYPE_DEVICE, acpi_get_handle(dev), 100,
+	    nvdimm_root_walk_dev, NULL, &wctx, NULL);
 
-			ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
-				M_WAITOK | M_ZERO);
-			resource_list_init(&ivar->resources);
-			resource_list_add(&ivar->resources, SYS_RES_MEMORY,
-			    0, sa[sai]->Address + mm->RegionOffset,
-			    sa[sai]->Address + mm->RegionOffset + mm->RegionSize - 1,
-			    mm->RegionSize);
-			if (sa[sai]->Flags & ACPI_NFIT_PROXIMITY_VALID)
-				ivar->domain = sa[sai]->ProximityDomain;
-			else
-				ivar->domain = -1;
-
-			child = device_add_child(dev, "nvdimm", mm->RegionId);
-			if (child) {
-				device_set_ivars(child, ivar);
-				if (mm->Flags & ~ACPI_NFIT_MEM_HEALTH_ENABLED) {
-					device_printf(child, "Flags: 0x%b\n",
-					    mm->Flags, "\020"
-					    "\001SAVE_FAILED\002RESTORE_FAILED"
-					    "\003FLUSH_FAILED\004NOT_ARMED"
-					    "\005HEALTH_OBSERVED\006HEALTH_ENABLED"
-					    "\007MAP_FAILED");
-				}
-			} else {
-				device_printf(dev, "Adding nvdimm%u failed\n",
-				    mm->RegionId);
-			}
-		}
-next:
-		subtable = (ACPI_NFIT_HEADER *)((char *)subtable +
-		    subtable->Length);
-	}
+	AcpiPutTable((ACPI_TABLE_HEADER *)nfit);
 
 	error = bus_generic_attach(dev);
 	if (error != 0)
@@ -523,6 +562,18 @@ nvdimm_root_print_child(device_t dev, device_t child)
 	return (retval);
 }
 
+static int
+nvdimm_root_child_location_str(device_t dev, device_t child, char *buf,
+    size_t buflen)
+{
+	struct nvdimm_child *ivar;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	snprintf(buf, buflen, "handle=%s _ADR=%u",
+	    acpi_name(ivar->handle), ivar->adr);
+	return (0);
+}
+
 static device_method_t nvdimm_root_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe,		nvdimm_root_probe),
@@ -530,6 +581,7 @@ static device_method_t nvdimm_root_methods[] = {
 	DEVMETHOD(device_detach,	nvdimm_root_detach),
 
 	DEVMETHOD(bus_print_child,	nvdimm_root_print_child),
+	DEVMETHOD(bus_child_location_str, nvdimm_root_child_location_str),
 	DEVMETHOD(bus_get_domain,	nvdimm_root_get_domain),
 	DEVMETHOD(bus_get_resource_list,nvdimm_root_get_resource_list),
 	DEVMETHOD(bus_alloc_resource,	bus_generic_rl_alloc_resource),
