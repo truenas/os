@@ -74,32 +74,32 @@ enum {
 	STATE_READY,
 };
 
-/* NVDIMM label */
-struct nvdimm_label {
+/* PMEM label */
+struct pmem_label {
 	uint64_t	sign;	/* NTBN_SIGN_LONG signature */
 	uint64_t	array;	/* Unique array ID */
-	uint32_t	empty;	/* NVDIMM is empty and was never written */
-	uint32_t	dirty;	/* NVDIMM was written without NTB connection */
-	uint32_t	opened;	/* NVDIMM device is open now */
+	uint32_t	empty;	/* PMEM is empty and was never written */
+	uint32_t	dirty;	/* PMEM was written without NTB connection */
+	uint32_t	opened;	/* PMEM device is open now */
 	uint32_t	state;	/* Synchronization state */
 };
 
-/* NVDIMM device */
-struct nvdimm_disk {
+/* PMEM device */
+struct pmem_disk {
 	struct disk		*disk;
 	int			 rid;
 	struct resource		*res;
-	vm_paddr_t		 paddr;		/* Local NVDIMM phys address */
-	vm_paddr_t		 size;		/* Local NVDIMM size */
-	uint8_t			*vaddr;		/* Local NVDIMM KVA address */
-	struct nvdimm_label	*label;		/* Local NVDIMM label */
-	uint8_t			*rvaddr;	/* Remote NVDIMM KVA address */
-	struct nvdimm_label	*rlabel;	/* Remote NVDIMM label */
+	vm_paddr_t		 paddr;		/* Local PMEM phys address */
+	vm_paddr_t		 size;		/* Local PMEM size */
+	uint8_t			*vaddr;		/* Local PMEM KVA address */
+	struct pmem_label	*label;		/* Local PMEM label */
+	uint8_t			*rvaddr;	/* Remote PMEM KVA address */
+	struct pmem_label	*rlabel;	/* Remote PMEM label */
 };
 
-/* NTB NVDIMM device */
-struct ntb_nvdimm {
-	device_t		 nvd_dev;	/* NVDIMM device. */
+/* NTB PMEM device */
+struct ntb_pmem {
+	device_t		 nvd_dev;	/* PMEM device. */
 	struct callout		 ntb_link_work;
 	struct callout		 ntb_start;
 	vm_paddr_t		 ntb_paddr;	/* MW physical address */
@@ -121,25 +121,25 @@ enum {
 #define NTBN_SIGN_SHORT	0x4e564430
 #define NTBN_SIGN_LONG	0x4e5644494d4d3030
 
-SYSCTL_NODE(_hw, OID_AUTO, nvdimm, CTLFLAG_RW, 0, "NVDIMM stuff");
+SYSCTL_NODE(_hw, OID_AUTO, pmem, CTLFLAG_RW, 0, "PMEM stuff");
 
-static u_int ntb_nvdimm_start_timeout = 120;
-SYSCTL_UINT(_hw_nvdimm, OID_AUTO, start_timeout, CTLFLAG_RWTUN,
-    &ntb_nvdimm_start_timeout, 0, "Time to wait for NTB connection");
+static u_int ntb_pmem_start_timeout = 120;
+SYSCTL_UINT(_hw_pmem, OID_AUTO, start_timeout, CTLFLAG_RWTUN,
+    &ntb_pmem_start_timeout, 0, "Time to wait for NTB connection");
 
 static int
-nvdimm_open(struct disk *dp)
+pmem_open(struct disk *dp)
 {
-	struct nvdimm_disk *sc = dp->d_drv1;
+	struct pmem_disk *sc = dp->d_drv1;
 
 	sc->label->opened = 1;
 	return (0);
 }
 
 static int
-nvdimm_close(struct disk *dp)
+pmem_close(struct disk *dp)
 {
-	struct nvdimm_disk *sc = dp->d_drv1;
+	struct pmem_disk *sc = dp->d_drv1;
 
 	sc->label->opened = 0;
 	return (0);
@@ -149,9 +149,9 @@ void ntb_copy1(void *dst, void *src, size_t len);
 void ntb_copy2(void *dst1, void *dst2, void *src, size_t len);
 
 static void
-nvdimm_strategy(struct bio *bp)
+pmem_strategy(struct bio *bp)
 {
-	struct nvdimm_disk *sc = bp->bio_disk->d_drv1;
+	struct pmem_disk *sc = bp->bio_disk->d_drv1;
 	uint8_t *addr, *nvaddr;
 	vm_offset_t page;
 	off_t done, off, moff, size;
@@ -197,7 +197,7 @@ nvdimm_strategy(struct bio *bp)
 }
 
 static void
-nvdimm_identify(driver_t *driver, device_t parent)
+pmem_identify(driver_t *driver, device_t parent)
 {
 	device_t dev;
 	struct bios_smap *smapbase, *smap, *smapend;
@@ -205,7 +205,7 @@ nvdimm_identify(driver_t *driver, device_t parent)
 	uint32_t smapsize;
 	int error, n;
 
-	if (resource_disabled("nvdimm", 0))
+	if (resource_disabled("pmem", 0))
 		return;
 
 	/* Retrieve the system memory map from the loader. */
@@ -224,10 +224,10 @@ nvdimm_identify(driver_t *driver, device_t parent)
 		if (smap->type != 12 || smap->length == 0)
 			continue;
 
-		if (device_find_child(parent, "nvdimm", n) != NULL)
+		if (device_find_child(parent, "pmem", n) != NULL)
 			continue;
 
-		dev = BUS_ADD_CHILD(parent, 0, "nvdimm", n);
+		dev = BUS_ADD_CHILD(parent, 0, "pmem", n);
 		if (dev) {
 			error = bus_set_resource(dev, SYS_RES_MEMORY, 0,
 			    smap->base, smap->length);
@@ -236,14 +236,14 @@ nvdimm_identify(driver_t *driver, device_t parent)
 				device_delete_child(parent, dev);
 			}
 		} else {
-			device_printf(parent, "Adding nvdimm child failed");
+			device_printf(parent, "Adding pmem child failed");
 		}
 		n++;
 	}
 }
 
 static int
-nvdimm_probe(device_t dev)
+pmem_probe(device_t dev)
 {
 	struct resource *res;
 	int rid;
@@ -257,16 +257,16 @@ nvdimm_probe(device_t dev)
 	size = rman_get_size(res);
 	bus_release_resource(dev, SYS_RES_MEMORY, rid, res);
 
-	snprintf(buf, sizeof(buf), "NVDIMM region %juGB",
+	snprintf(buf, sizeof(buf), "PMEM region %juGB",
 	    (uintmax_t)(size + 536870912) / 1073741824);
 	device_set_desc_copy(dev, buf);
 	return (0);
 }
 
 static int
-nvdimm_attach(device_t dev)
+pmem_attach(device_t dev)
 {
-	struct nvdimm_disk *sc = device_get_softc(dev);
+	struct pmem_disk *sc = device_get_softc(dev);
 	struct disk *disk;
 
 	sc->rid = 0;
@@ -278,11 +278,11 @@ nvdimm_attach(device_t dev)
 	sc->vaddr = pmap_mapdev_attr(sc->paddr, sc->size, VM_MEMATTR_DEFAULT);
 	sc->rvaddr = NULL;
 
-	sc->label = (struct nvdimm_label *)(sc->vaddr + sc->size - PAGE_SIZE);
+	sc->label = (struct pmem_label *)(sc->vaddr + sc->size - PAGE_SIZE);
 	sc->rlabel = NULL;
 
 	if (sc->label->sign != NTBN_SIGN_LONG) {
-		device_printf(dev, "NVDIMM not labeled, new or data loss!\n");
+		device_printf(dev, "PMEM not labeled, new or data loss!\n");
 		memset(sc->label, 0, PAGE_SIZE);
 		sc->label->sign = NTBN_SIGN_LONG;
 		arc4rand(&sc->label->array, sizeof(sc->label->array), 0);
@@ -294,10 +294,10 @@ nvdimm_attach(device_t dev)
 	sc->label->state = MIN(sc->label->state, STATE_IDLE);
 
 	disk = sc->disk = disk_alloc();
-	disk->d_open = nvdimm_open;
-	disk->d_close = nvdimm_close;
-	disk->d_strategy = nvdimm_strategy;
-	disk->d_name = "nvdimm";
+	disk->d_open = pmem_open;
+	disk->d_close = pmem_close;
+	disk->d_strategy = pmem_strategy;
+	disk->d_name = "pmem";
 	disk->d_unit = device_get_unit(dev);
 	disk->d_drv1 = sc;
 	disk->d_maxsize = MAXPHYS;
@@ -307,7 +307,7 @@ nvdimm_attach(device_t dev)
 	snprintf(disk->d_ident, sizeof(disk->d_ident),
 	    "%016jX", (uintmax_t)sc->label->array);
 	snprintf(disk->d_descr, sizeof(disk->d_descr),
-	    "NVDIMM region %juGB", (uintmax_t)(sc->size + 536870912) /
+	    "PMEM region %juGB", (uintmax_t)(sc->size + 536870912) /
 	    1073741824);
 	disk->d_rotation_rate = DISK_RR_NON_ROTATING;
 	disk_create(disk, DISK_VERSION);
@@ -315,9 +315,9 @@ nvdimm_attach(device_t dev)
 }
 
 static int
-nvdimm_detach(device_t dev)
+pmem_detach(device_t dev)
 {
-	struct nvdimm_disk *sc = device_get_softc(dev);
+	struct pmem_disk *sc = device_get_softc(dev);
 
 	disk_destroy(sc->disk);
 	pmap_unmapdev((vm_offset_t)sc->vaddr, sc->size);
@@ -325,26 +325,26 @@ nvdimm_detach(device_t dev)
 	return (0);
 }
 
-static device_method_t nvdimm_methods[] = {
+static device_method_t pmem_methods[] = {
 	/* Device interface */
-	DEVMETHOD(device_identify,	nvdimm_identify),
-	DEVMETHOD(device_probe,		nvdimm_probe),
-	DEVMETHOD(device_attach,	nvdimm_attach),
-	DEVMETHOD(device_detach,	nvdimm_detach),
+	DEVMETHOD(device_identify,	pmem_identify),
+	DEVMETHOD(device_probe,		pmem_probe),
+	DEVMETHOD(device_attach,	pmem_attach),
+	DEVMETHOD(device_detach,	pmem_detach),
 	{ 0, 0 }
 };
 
-static driver_t nvdimm_driver = {
-	"nvdimm",
-	nvdimm_methods,
-	sizeof(struct nvdimm_disk),
+static driver_t pmem_driver = {
+	"pmem",
+	pmem_methods,
+	sizeof(struct pmem_disk),
 };
 
-static devclass_t nvdimm_devclass;
+static devclass_t pmem_devclass;
 static devclass_t nvdimm_root_devclass;
 
-DRIVER_MODULE(nvdimm, nexus, nvdimm_driver, nvdimm_devclass, 0, 0);
-DRIVER_MODULE(nvdimm, nvdimm_root, nvdimm_driver, nvdimm_devclass, 0, 0);
+DRIVER_MODULE(pmem, nexus, pmem_driver, pmem_devclass, 0, 0);
+DRIVER_MODULE(pmem, nvdimm_root, pmem_driver, pmem_devclass, 0, 0);
 MODULE_VERSION(nvdimm, 1);
 
 /* Hooks for the ACPI CA debugging infrastructure */
@@ -359,9 +359,64 @@ struct nvdimm_child {
 	ACPI_HANDLE handle;
 	int adr;
 	int domain;
+	int interleave;
+	uint64_t size;
 };
 
+static int
+nvdimm_probe(device_t dev)
+{
+	struct nvdimm_child *ivar;
+	char buf[32];
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+	ACPI_FUNCTION_TRACE((char *)(uintptr_t) __func__);
+
+	if (acpi_disabled("nvdimm"))
+		return (ENXIO);
+
+	snprintf(buf, sizeof(buf), "NVDIMM region %juGB interleave %d",
+	    (uintmax_t)(ivar->size + 536870912) / 1073741824, ivar->interleave);
+	device_set_desc_copy(dev, buf);
+	return (0);
+}
+
+static int
+nvdimm_attach(device_t dev)
+{
+
+	return (0);
+}
+
+static int
+nvdimm_detach(device_t dev)
+{
+
+	return (0);
+}
+
+static device_method_t nvdimm_methods[] = {
+	/* Device interface */
+	DEVMETHOD(device_probe,		nvdimm_probe),
+	DEVMETHOD(device_attach,	nvdimm_attach),
+	DEVMETHOD(device_detach,	nvdimm_detach),
+	{ 0, 0 }
+};
+
+static driver_t nvdimm_driver = {
+	"nvdimm",
+	nvdimm_methods,
+	0,
+};
+
+static devclass_t nvdimm_devclass;
+DRIVER_MODULE(nvdimm, nvdimm_root, nvdimm_driver, nvdimm_devclass, 0, 0);
+
 static char *nvdimm_root_ids[] = { "ACPI0012", NULL };
+static uint8_t pmem_uuid[ACPI_UUID_LENGTH] = {
+	0x79, 0xd3, 0xf0, 0x66, 0xf3, 0xb4, 0x74, 0x40,
+	0xac, 0x43, 0x0d, 0x33, 0x18, 0xb7, 0x8c, 0xdb
+};
 
 static int
 nvdimm_root_probe(device_t dev)
@@ -395,6 +450,7 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 	ACPI_NFIT_MEMORY_MAP *mm;
 	struct nvdimm_child	*ivar;
 	device_t	child;
+	uint64_t	size;
 	u_int adr, sai, mmi;
 
 	status = acpi_GetInteger(handle, "_ADR", &adr);
@@ -420,11 +476,6 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 		    mm->RangeIndex);
 		return_ACPI_STATUS(AE_OK);
 	}
-	if (mm->InterleaveWays > 1) {
-		device_printf(dev, "InterleaveWays %u is not supported\n",
-		    mm->InterleaveWays);
-		return_ACPI_STATUS(AE_OK);
-	}
 
 	if (device_find_child(dev, "nvdimm", mm->RegionId) != NULL)
 		return_ACPI_STATUS(AE_OK);
@@ -432,16 +483,18 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 	ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
 		M_WAITOK | M_ZERO);
 	resource_list_init(&ivar->resources);
+	size = mm->RegionSize * MAX(1, mm->InterleaveWays);
 	resource_list_add(&ivar->resources, SYS_RES_MEMORY,
 	    0, sas[sai]->Address + mm->RegionOffset,
-	    sas[sai]->Address + mm->RegionOffset + mm->RegionSize - 1,
-	    mm->RegionSize);
+	    sas[sai]->Address + mm->RegionOffset + size - 1, size);
 	ivar->handle = handle;
 	ivar->adr = adr;
 	if (sas[sai]->Flags & ACPI_NFIT_PROXIMITY_VALID)
 		ivar->domain = sas[sai]->ProximityDomain;
 	else
 		ivar->domain = -1;
+	ivar->size = mm->RegionSize;
+	ivar->interleave = mm->InterleaveWays;
 
 	child = device_add_child(dev, "nvdimm", mm->RegionId);
 	if (child) {
@@ -469,10 +522,12 @@ nvdimm_root_attach(device_t dev)
 	ACPI_STATUS	status;
 	ACPI_NFIT_HEADER	*subtable;
 	uint8_t		*end;
-	ACPI_NFIT_SYSTEM_ADDRESS *sas[64];
+	ACPI_NFIT_SYSTEM_ADDRESS *sas[64], *sa;
 	ACPI_NFIT_MEMORY_MAP *mms[64];
 	struct nvdimm_root_walk_ctx wctx;
-	int		error, san = 0, mmn = 0;
+	struct nvdimm_child	*ivar;
+	device_t	child;
+	int		error, sai, san = 0, mmn = 0;
 
 	/* Search for NFIT table. */
 	status = AcpiGetTable("NFIT", 0, (ACPI_TABLE_HEADER **)&nfit);
@@ -502,6 +557,33 @@ nvdimm_root_attach(device_t dev)
 	wctx.mmn = mmn;
 	status = AcpiWalkNamespace(ACPI_TYPE_DEVICE, acpi_get_handle(dev), 100,
 	    nvdimm_root_walk_dev, NULL, &wctx, NULL);
+
+	for (sai = 0; sai < san; sai++) {
+		sa = sas[sai];
+		if (memcmp(sa->RangeGuid, pmem_uuid, sizeof(pmem_uuid)) != 0)
+			continue;
+		if (device_find_child(dev, "pmem", sa->RangeIndex - 1) != NULL)
+			return_ACPI_STATUS(AE_OK);
+
+		ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
+		    M_WAITOK | M_ZERO);
+		resource_list_init(&ivar->resources);
+		resource_list_add(&ivar->resources, SYS_RES_MEMORY,
+		    0, sa->Address, sa->Address + sa->Length, sa->Length);
+		if (sa->Flags & ACPI_NFIT_PROXIMITY_VALID)
+			ivar->domain = sa->ProximityDomain;
+		else
+			ivar->domain = -1;
+		ivar->size = sa->Length;
+
+		child = device_add_child(dev, "pmem", sa->RangeIndex - 1);
+		if (child) {
+			device_set_ivars(child, ivar);
+		} else {
+			device_printf(dev, "Adding pmem%u failed\n",
+			    sa->RangeIndex - 1);
+		}
+	}
 
 	AcpiPutTable((ACPI_TABLE_HEADER *)nfit);
 
@@ -569,8 +651,10 @@ nvdimm_root_child_location_str(device_t dev, device_t child, char *buf,
 	struct nvdimm_child *ivar;
 
 	ivar = (struct nvdimm_child *)device_get_ivars(child);
-	snprintf(buf, buflen, "handle=%s _ADR=%u",
-	    acpi_name(ivar->handle), ivar->adr);
+	if (ivar->handle != NULL) {
+		snprintf(buf, buflen, "handle=%s _ADR=%u",
+		    acpi_name(ivar->handle), ivar->adr);
+	}
 	return (0);
 }
 
@@ -604,10 +688,10 @@ DRIVER_MODULE(nvdimm_root, acpi, nvdimm_root_driver, nvdimm_root_devclass, 0, 0)
 MODULE_DEPEND(nvdimm_root, acpi, 1, 1, 1);
 
 static void
-ntb_nvdimm_start(void *data)
+ntb_pmem_start(void *data)
 {
 	device_t dev = data;
-	struct ntb_nvdimm *sc = device_get_softc(dev);
+	struct ntb_pmem *sc = device_get_softc(dev);
 
 	if (sc->ntb_rootmount != NULL) {
 		device_printf(dev, "Releasing root mount\n");
@@ -617,13 +701,13 @@ ntb_nvdimm_start(void *data)
 }
 
 static void
-ntb_nvdimm_sync(void *data)
+ntb_pmem_sync(void *data)
 {
 	device_t dev = data;
-	struct ntb_nvdimm *scn = device_get_softc(dev);
-	struct nvdimm_disk *sc = device_get_softc(scn->nvd_dev);
-	struct nvdimm_label *ll = sc->label;
-	struct nvdimm_label *rl = sc->rlabel;
+	struct ntb_pmem *scn = device_get_softc(dev);
+	struct pmem_disk *sc = device_get_softc(scn->nvd_dev);
+	struct pmem_label *ll = sc->label;
+	struct pmem_label *rl = sc->rlabel;
 	uint32_t state;
 	int b, dir;
 
@@ -722,11 +806,11 @@ ntb_nvdimm_sync(void *data)
 }
 
 static void
-ntb_nvdimm_link_work(void *data)
+ntb_pmem_link_work(void *data)
 {
 	device_t dev = data;
-	struct ntb_nvdimm *sc = device_get_softc(dev);
-	struct nvdimm_disk *scd = device_get_softc(sc->nvd_dev);
+	struct ntb_pmem *sc = device_get_softc(dev);
+	struct pmem_disk *scd = device_get_softc(sc->nvd_dev);
 	vm_paddr_t off;
 	uint32_t val;
 
@@ -742,7 +826,7 @@ ntb_nvdimm_link_work(void *data)
 
 	ntb_spad_read(dev, NTBN_SIZE_HIGH, &val);
 	if (val != (scd->size >> 32)) {
-		device_printf(dev, "NVDIMM sizes don't match (%u != %u)\n",
+		device_printf(dev, "PMEM sizes don't match (%u != %u)\n",
 		    val << 2, (uint32_t)(scd->size >> 30));
 		return;
 	}
@@ -755,25 +839,25 @@ ntb_nvdimm_link_work(void *data)
 	callout_stop(&sc->ntb_start);
 	device_printf(dev, "Connection established\n");
 	scd->rvaddr = sc->ntb_caddr + off;
-	scd->rlabel = (struct nvdimm_label *)(scd->rvaddr + scd->size -
+	scd->rlabel = (struct pmem_label *)(scd->rvaddr + scd->size -
 	    PAGE_SIZE);
-	ntb_nvdimm_sync(dev);
-	ntb_nvdimm_start(dev);
+	ntb_pmem_sync(dev);
+	ntb_pmem_start(dev);
 	return;
 out:
 	if (ntb_link_is_up(dev, NULL, NULL))
-		callout_reset(&sc->ntb_link_work, hz/10, ntb_nvdimm_link_work, dev);
+		callout_reset(&sc->ntb_link_work, hz/10, ntb_pmem_link_work, dev);
 }
 
 static void
-ntb_nvdimm_link_event(void *data)
+ntb_pmem_link_event(void *data)
 {
 	device_t dev = data;
-	struct ntb_nvdimm *sc = device_get_softc(dev);
-	struct nvdimm_disk *scd = device_get_softc(sc->nvd_dev);
+	struct ntb_pmem *sc = device_get_softc(dev);
+	struct pmem_disk *scd = device_get_softc(sc->nvd_dev);
 
 	if (ntb_link_is_up(dev, NULL, NULL)) {
-		ntb_nvdimm_link_work(dev);
+		ntb_pmem_link_work(dev);
 	} else {
 		device_printf(dev, "Connection is down\n");
 		callout_stop(&sc->ntb_link_work);
@@ -791,37 +875,37 @@ ntb_nvdimm_link_event(void *data)
 	}
 }
 
-static const struct ntb_ctx_ops ntb_nvdimm_ops = {
-	.link_event = ntb_nvdimm_link_event,
+static const struct ntb_ctx_ops ntb_pmem_ops = {
+	.link_event = ntb_pmem_link_event,
 	.db_event = NULL,
 };
 
 static int
-ntb_nvdimm_probe(device_t dev)
+ntb_pmem_probe(device_t dev)
 {
 
-	device_set_desc(dev, "NTB NVDIMM syncer");
+	device_set_desc(dev, "NTB PMEM syncer");
 
 	/*
-	 * Use lower priority if we can't find nvdimmX device with equal
+	 * Use lower priority if we can't find pmemX device with equal
 	 * unit number.  User may not want us, just not specified exactly.
 	 */
-	if (devclass_get_device(nvdimm_devclass, device_get_unit(dev)) == NULL)
+	if (devclass_get_device(pmem_devclass, device_get_unit(dev)) == NULL)
 		return (BUS_PROBE_LOW_PRIORITY);
 	return (BUS_PROBE_DEFAULT);
 }
 
 static int
-ntb_nvdimm_attach(device_t dev)
+ntb_pmem_attach(device_t dev)
 {
-	struct ntb_nvdimm *sc = device_get_softc(dev);
-	struct nvdimm_disk *scd;
+	struct ntb_pmem *sc = device_get_softc(dev);
+	struct pmem_disk *scd;
 	int error;
 
-	/* Find nvdimmX device with equal unit number. */
-	sc->nvd_dev = devclass_get_device(nvdimm_devclass, device_get_unit(dev));
+	/* Find pmemX device with equal unit number. */
+	sc->nvd_dev = devclass_get_device(pmem_devclass, device_get_unit(dev));
 	if (sc->nvd_dev == NULL) {
-		device_printf(dev, "Can not find nvdimm%u device\n",
+		device_printf(dev, "Can not find pmem%u device\n",
 		    device_get_unit(dev));
 		return (ENXIO);
 	}
@@ -856,12 +940,12 @@ ntb_nvdimm_attach(device_t dev)
 	callout_init(&sc->ntb_link_work, 1);
 	callout_init(&sc->ntb_start, 1);
 
-	/* Delay boot if this NVDIMM ever saw NTB. */
+	/* Delay boot if this PMEM ever saw NTB. */
 	if (scd->label->state >= STATE_IDLE) {
-		device_printf(dev, "NVDIMM saw NTB, delaying root mount.\n");
-		sc->ntb_rootmount = root_mount_hold("ntb_nvdimm");
-		callout_reset(&sc->ntb_start, ntb_nvdimm_start_timeout * hz,
-		    ntb_nvdimm_start, dev);
+		device_printf(dev, "PMEM saw NTB, delaying root mount.\n");
+		sc->ntb_rootmount = root_mount_hold("ntb_pmem");
+		callout_reset(&sc->ntb_start, ntb_pmem_start_timeout * hz,
+		    ntb_pmem_start, dev);
 	} else
 		sc->ntb_rootmount = NULL;
 
@@ -878,7 +962,7 @@ ntb_nvdimm_attach(device_t dev)
 	}
 
 	/* Bring up the link. */
-	error = ntb_set_ctx(dev, dev, &ntb_nvdimm_ops);
+	error = ntb_set_ctx(dev, dev, &ntb_pmem_ops);
 	if (error != 0)
 		device_printf(dev, "ntb_set_ctx() error %d\n", error);
 	error = ntb_link_enable(dev, NTB_SPEED_AUTO, NTB_WIDTH_AUTO);
@@ -889,10 +973,10 @@ ntb_nvdimm_attach(device_t dev)
 }
 
 static int
-ntb_nvdimm_detach(device_t dev)
+ntb_pmem_detach(device_t dev)
 {
-	struct ntb_nvdimm *sc = device_get_softc(dev);
-	struct nvdimm_disk *scd = device_get_softc(sc->nvd_dev);
+	struct ntb_pmem *sc = device_get_softc(dev);
+	struct pmem_disk *scd = device_get_softc(sc->nvd_dev);
 	int error;
 
 	callout_drain(&sc->ntb_start);
@@ -912,22 +996,22 @@ ntb_nvdimm_detach(device_t dev)
 	return (0);
 }
 
-static device_method_t ntb_nvdimm_methods[] = {
+static device_method_t ntb_pmem_methods[] = {
 	/* Device interface */
-	DEVMETHOD(device_probe,		ntb_nvdimm_probe),
-	DEVMETHOD(device_attach,	ntb_nvdimm_attach),
-	DEVMETHOD(device_detach,	ntb_nvdimm_detach),
+	DEVMETHOD(device_probe,		ntb_pmem_probe),
+	DEVMETHOD(device_attach,	ntb_pmem_attach),
+	DEVMETHOD(device_detach,	ntb_pmem_detach),
 	{ 0, 0 }
 };
 
-static driver_t ntb_nvdimm_driver = {
-	"ntb_nvdimm",
-	ntb_nvdimm_methods,
-	sizeof(struct ntb_nvdimm),
+static driver_t ntb_pmem_driver = {
+	"ntb_pmem",
+	ntb_pmem_methods,
+	sizeof(struct ntb_pmem),
 };
 
-static devclass_t ntb_nvdimm_devclass;
+static devclass_t ntb_pmem_devclass;
 
-DRIVER_MODULE(ntb_nvdimm, ntb_hw, ntb_nvdimm_driver, ntb_nvdimm_devclass, 0, 0);
-MODULE_DEPEND(ntb_nvdimm, ntb, 1, 1, 1);
-MODULE_VERSION(ntb_mvdimm, 1);
+DRIVER_MODULE(ntb_pmem, ntb_hw, ntb_pmem_driver, ntb_pmem_devclass, 0, 0);
+MODULE_DEPEND(ntb_pmem, ntb, 1, 1, 1);
+MODULE_VERSION(ntb_pmem, 1);
