@@ -80,6 +80,7 @@ static int	debug = 0;
 
 #define	NFSD_STABLERESTART	"/var/db/nfs-stablerestart"
 #define	NFSD_STABLEBACKUP	"/var/db/nfs-stablerestart.bak"
+#define	NFSD_VIRTUALHOST    "/etc/nfsd.virtualhost"
 #define	MAXNFSDCNT	256
 #define	DEFNFSDCNT	 4
 #define	NFS_VER2	 2
@@ -994,13 +995,32 @@ start_server(int master)
 {
 	char principal[MAXHOSTNAMELEN + 5];
 	struct nfsd_nfsd_args nfsdargs;
-	int status, error;
+	int status, error, vfd;
 	char hostname[MAXHOSTNAMELEN + 1], *cp;
+	char vhostname[MAXHOSTNAMELEN + 1];
 	struct addrinfo *aip, hints;
+	struct stat st;
 
 	status = 0;
 	gethostname(hostname, sizeof (hostname));
 	snprintf(principal, sizeof (principal), "nfs@%s", hostname);
+
+	/*
+	 * If using a "virtualhost", also use this as the kerberos principal name. The
+	 * virtualhost must be the fully qualified hostname plus domain name, otherwise
+	 * the block below this code will set the principal name as the hostname which
+	 * is probably not what is wanted by using a virtual host name.
+	 */
+	if (access(NFSD_VIRTUALHOST, O_RDONLY) == 0 && stat(NFSD_VIRTUALHOST, &st) == 0 &&
+		st.st_size > 0 && st.st_size <= MAXHOSTNAMELEN) {
+		if ((vfd = open(NFSD_VIRTUALHOST, O_RDONLY)) > 0 &&
+			read(vfd, vhostname, sizeof(vhostname)) > 0) {
+			vhostname[strcspn(vhostname, "\r\n")] = '\0';
+			snprintf(principal, sizeof (principal), "nfs@%s", vhostname);
+			close(vfd);
+		}
+	}
+
 	if ((cp = strchr(hostname, '.')) == NULL ||
 	    *(cp + 1) == '\0') {
 		/* If not fully qualified, try getaddrinfo() */
