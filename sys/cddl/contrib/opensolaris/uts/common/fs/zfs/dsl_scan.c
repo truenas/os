@@ -689,9 +689,10 @@ dsl_scan(dsl_pool_t *dp, pool_scan_func_t func)
 		/* got scrub start cmd, resume paused scrub */
 		int err = dsl_scrub_set_pause_resume(scn->scn_dp,
 		    POOL_SCRUB_NORMAL);
-		if (err == 0)
+		if (err == 0) {
+			spa_event_notify(spa, NULL, ESC_ZFS_SCRUB_RESUME);
 			return (ECANCELED);
-
+		}
 		return (SET_ERROR(err));
 	}
 
@@ -858,6 +859,7 @@ dsl_scrub_pause_resume_sync(void *arg, dmu_tx_t *tx)
 		spa->spa_scan_pass_scrub_pause = gethrestime_sec();
 		scn->scn_phys.scn_flags |= DSF_SCRUB_PAUSED;
 		dsl_scan_sync_state(scn, tx, SYNC_CACHED);
+		spa_event_notify(spa, NULL, ESC_ZFS_SCRUB_PAUSED);
 	} else {
 		ASSERT3U(*cmd, ==, POOL_SCRUB_NORMAL);
 		if (dsl_scan_is_paused_scrub(scn)) {
