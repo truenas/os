@@ -140,6 +140,9 @@ int zfs_scan_strict_mem_lim = B_FALSE;
  * some firmware bugs and resets on certain SSDs.
  */
 int zfs_top_maxinflight = 32;
+unsigned int zfs_resilver_delay = 2;	/* number of ticks to delay resilver */
+unsigned int zfs_scrub_delay = 4;	/* number of ticks to delay scrub */
+unsigned int zfs_scan_idle = 50;	/* idle window in clock ticks */
 
 int zfs_scan_issue_strategy = 0;
 int zfs_scan_legacy = B_FALSE;	/* don't queue & sort zios, go direct */
@@ -172,6 +175,15 @@ boolean_t zfs_no_scrub_prefetch = B_FALSE; /* set to disable scrub prefetch */
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, top_maxinflight, CTLFLAG_RWTUN,
     &zfs_top_maxinflight, 0, "Maximum I/Os per top-level vdev");
+TUNABLE_INT("vfs.zfs.resilver_delay", &zfs_resilver_delay);
+SYSCTL_UINT(_vfs_zfs, OID_AUTO, resilver_delay, CTLFLAG_RW,
+    &zfs_resilver_delay, 0, "Number of ticks to delay resilver");
+TUNABLE_INT("vfs.zfs.scrub_delay", &zfs_scrub_delay);
+SYSCTL_UINT(_vfs_zfs, OID_AUTO, scrub_delay, CTLFLAG_RW,
+    &zfs_scrub_delay, 0, "Number of ticks to delay scrub");
+TUNABLE_INT("vfs.zfs.scan_idle", &zfs_scan_idle);
+SYSCTL_UINT(_vfs_zfs, OID_AUTO, scan_idle, CTLFLAG_RW,
+    &zfs_scan_idle, 0, "Idle scan window in clock ticks");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, scan_min_time_ms, CTLFLAG_RWTUN,
     &zfs_scrub_min_time_ms, 0, "Min millisecs to scrub per txg");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, free_min_time_ms, CTLFLAG_RWTUN,
@@ -3412,7 +3424,8 @@ scan_exec_io(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
 	vdev_t *rvd = spa->spa_root_vdev;
 	abd_t *data = abd_alloc_for_io(size, B_FALSE);
 	uint64_t maxinflight;
-
+	unsigned int scan_delay = 0;
+	
 	if (queue == NULL) {
 		maxinflight = rvd->vdev_children * MAX(zfs_top_maxinflight, 1);
 
@@ -3432,6 +3445,14 @@ scan_exec_io(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
 		mutex_exit(q_lock);
 	}
 
+	if (zio_flags & ZIO_FLAG_RESILVER)
+		scan_delay = zfs_resilver_delay;
+	else if (zio_flags & ZIO_FLAG_SCRUB)
+		scan_delay = zfs_scrub_delay;
+	
+	if (ddi_get_lbolt64() - spa->spa_last_io <= zfs_scan_idle)
+		delay(MAX((int)scan_delay, 0));
+	
 	count_block(dp->dp_scan, dp->dp_blkstats, bp);
 	zio_nowait(zio_read(dp->dp_scan->scn_zio_root, spa, bp, data, size,
 	    dsl_scan_scrub_done, queue, ZIO_PRIORITY_SCRUB, zio_flags, zb));
