@@ -118,8 +118,6 @@ quota_open(struct fstab *fs, int quotatype, int openflags)
 	struct stat st;
 	int qcmd, serrno;
 
-	if (strcmp(fs->fs_vfstype, "ufs"))
-		return (NULL);
 	if ((qf = calloc(1, sizeof(*qf))) == NULL)
 		return (NULL);
 	qf->fd = -1;

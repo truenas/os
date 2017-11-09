@@ -32,13 +32,17 @@ __FBSDID("$FreeBSD$");
 #include <syslog.h>
 #include <unistd.h>
 
-static void rquota_service(struct svc_req *request, SVCXPRT *transp);
+static void rquota_service_1(struct svc_req *request, SVCXPRT *transp);
+static void rquota_service_2(struct svc_req *request, SVCXPRT *transp);
 static void sendquota(struct svc_req *request, SVCXPRT *transp);
+static void sendquota_extended(struct svc_req *request, SVCXPRT *transp);
 static void initfs(void);
-static int getfsquota(long id, char *path, struct dqblk *dqblk);
+static int getfsquota(int type, long id, char *path, struct dqblk *dqblk);
 
+#if 0
 static struct quotafile **qfa;	/* array of qfs */
 static int nqf, szqf;		/* number of qfs and size of array */
+#endif
 static int from_inetd = 1;
 
 static void
@@ -57,7 +61,8 @@ main(void)
 	int ok;
 	struct sockaddr_storage from;
 	socklen_t fromlen;
-
+	int vers;
+	
 	fromlen = sizeof(from);
 	if (getsockname(0, (struct sockaddr *)&from, &fromlen) < 0)
 		from_inetd = 0;
@@ -79,16 +84,30 @@ main(void)
 			syslog(LOG_ERR, "couldn't create udp service.");
 			exit(1);
 		}
+		vers = RQUOTAVERS;
 		ok = svc_reg(transp, RQUOTAPROG, RQUOTAVERS,
-		    rquota_service, NULL);
+		    rquota_service_1, NULL);
+		if (ok) {
+			vers = EXT_RQUOTAVERS;
+			ok = svc_reg(transp, RQUOTAPROG, EXT_RQUOTAVERS,
+				     rquota_service_2, NULL);
+		}
 	} else {
-		ok = svc_create(rquota_service,
+		vers = RQUOTAVERS;
+		ok = svc_create(rquota_service_1,
 		    RQUOTAPROG, RQUOTAVERS, "udp");
+		if (ok) {
+			vers = EXT_RQUOTAVERS;
+			ok = svc_create(rquota_service_2,
+					RQUOTAPROG, EXT_RQUOTAVERS, "udp");
+
+		}
 	}
 	if (!ok) {
 		syslog(LOG_ERR,
-		    "unable to register (RQUOTAPROG, RQUOTAVERS, %s)",
-		    from_inetd ? "(inetd)" : "udp");
+		    "unable to register (RQUOTAPROG, %s, %s)",
+		       vers == RQUOTAVERS ? "RQUOTAVERS" : "EXT_RQUOTAVERS",
+		       from_inetd ? "(inetd)" : "udp");
 		exit(1);
 	}
 
@@ -99,7 +118,27 @@ main(void)
 }
 
 static void
-rquota_service(struct svc_req *request, SVCXPRT *transp)
+rquota_service_2(struct svc_req *request, SVCXPRT *transp)
+{
+
+	switch (request->rq_proc) {
+	case NULLPROC:
+		(void)svc_sendreply(transp, (xdrproc_t)xdr_void, (char *)NULL);
+		break;
+	case RQUOTAPROC_GETQUOTA:
+	case RQUOTAPROC_GETACTIVEQUOTA:
+		sendquota_extended(request, transp);
+		break;
+	default:
+		svcerr_noproc(transp);
+		break;
+	}
+	if (from_inetd)
+		exit(0);
+}
+
+static void
+rquota_service_1(struct svc_req *request, SVCXPRT *transp)
 {
 
 	switch (request->rq_proc) {
@@ -136,7 +175,59 @@ sendquota(struct svc_req *request, SVCXPRT *transp)
 	if (request->rq_cred.oa_flavor != AUTH_UNIX) {
 		/* bad auth */
 		getq_rslt.status = Q_EPERM;
-	} else if (!getfsquota(getq_args.gqa_uid, getq_args.gqa_pathp, &dqblk)) {
+	} else if (!getfsquota(USRQUOTA, getq_args.gqa_uid, getq_args.gqa_pathp, &dqblk)) {
+		/* failed, return noquota */
+		getq_rslt.status = Q_NOQUOTA;
+	} else {
+		gettimeofday(&timev, NULL);
+		getq_rslt.status = Q_OK;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_active = TRUE;
+		scale = 1 << flsll(dqblk.dqb_bhardlimit >> 32);
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_bsize =
+		    DEV_BSIZE * scale;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_bhardlimit =
+		    dqblk.dqb_bhardlimit / scale;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_bsoftlimit =
+		    dqblk.dqb_bsoftlimit / scale;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_curblocks =
+		    dqblk.dqb_curblocks / scale;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_fhardlimit =
+		    dqblk.dqb_ihardlimit;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_fsoftlimit =
+		    dqblk.dqb_isoftlimit;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_curfiles =
+		    dqblk.dqb_curinodes;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_btimeleft =
+		    dqblk.dqb_btime - timev.tv_sec;
+		getq_rslt.getquota_rslt_u.gqr_rquota.rq_ftimeleft =
+		    dqblk.dqb_itime - timev.tv_sec;
+	}
+	if (!svc_sendreply(transp, (xdrproc_t)xdr_getquota_rslt, &getq_rslt))
+		svcerr_systemerr(transp);
+	if (!svc_freeargs(transp, (xdrproc_t)xdr_getquota_args, &getq_args)) {
+		syslog(LOG_ERR, "unable to free arguments");
+		exit(1);
+	}
+}
+
+static void
+sendquota_extended(struct svc_req *request, SVCXPRT *transp)
+{
+	struct ext_getquota_args getq_args;
+	struct getquota_rslt getq_rslt;
+	struct dqblk dqblk;
+	struct timeval timev;
+	int scale;
+
+	bzero(&getq_args, sizeof(getq_args));
+	if (!svc_getargs(transp, (xdrproc_t)xdr_ext_getquota_args, &getq_args)) {
+		svcerr_decode(transp);
+		return;
+	}
+	if (request->rq_cred.oa_flavor != AUTH_UNIX) {
+		/* bad auth */
+		getq_rslt.status = Q_EPERM;
+	} else if (!getfsquota(getq_args.gqa_type, getq_args.gqa_id, getq_args.gqa_pathp, &dqblk)) {
 		/* failed, return noquota */
 		getq_rslt.status = Q_NOQUOTA;
 	} else {
@@ -174,6 +265,7 @@ sendquota(struct svc_req *request, SVCXPRT *transp)
 static void
 initfs(void)
 {
+#if 0
 	struct fstab *fs;
 
 	setfsent();
@@ -204,6 +296,9 @@ enomem:
 fserr:
 	syslog(LOG_ERR, "%s: %s", fs->fs_file, strerror(errno));
 	exit(1);
+#else
+	return;
+#endif
 }
 
 /*
@@ -211,12 +306,22 @@ fserr:
  * Return 0 if fail, 1 otherwise
  */
 static int
-getfsquota(long id, char *path, struct dqblk *dqblk)
+getfsquota(int type, long id, char *path, struct dqblk *dqblk)
 {
-	int i;
+	struct quotafile *qf;
+	// This is STUPID
+	static char userquota[] = "userquota";
+	struct fstab fst = { .fs_file = path, .fs_mntops=userquota };
+	int rv;
+	
+	if (type != USRQUOTA && type != GRPQUOTA)
+		return (0);
+	
+	qf = quota_open(&fst, type, O_RDONLY);
+	if (qf == NULL)
+		return (0);
 
-	for (i = 0; i < nqf; ++i)
-		if (quota_check_path(qfa[i], path) == 1)
-			return (quota_read(qfa[i], dqblk, id) == 0);
-	return (0);
+	rv = quota_read(qf, dqblk, id) == 0;
+	quota_close(qf);
+	return (rv);
 }
