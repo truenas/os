@@ -36,7 +36,6 @@ static void rquota_service_1(struct svc_req *request, SVCXPRT *transp);
 static void rquota_service_2(struct svc_req *request, SVCXPRT *transp);
 static void sendquota(struct svc_req *request, SVCXPRT *transp);
 static void sendquota_extended(struct svc_req *request, SVCXPRT *transp);
-static void initfs(void);
 static int getfsquota(int type, long id, char *path, struct dqblk *dqblk);
 
 static int from_inetd = 1;
@@ -107,7 +106,6 @@ main(void)
 		exit(1);
 	}
 
-	initfs();
 	svc_run();
 	syslog(LOG_ERR, "svc_run returned");
 	exit(1);
@@ -256,12 +254,6 @@ sendquota_extended(struct svc_req *request, SVCXPRT *transp)
 		syslog(LOG_ERR, "unable to free arguments");
 		exit(1);
 	}
-}
-
-static void
-initfs(void)
-{
-	return;
 }
 
 /*

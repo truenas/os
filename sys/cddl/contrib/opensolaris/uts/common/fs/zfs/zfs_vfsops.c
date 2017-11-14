@@ -145,7 +145,7 @@ zfs_getquota(zfsvfs_t *zfsvfs, uid_t id, int isgroup, struct dqblk64 *dqp)
 	(void)sprintf(buf, "%llx", (longlong_t)id);
 	if ((error = zap_lookup(zfsvfs->z_os, quotaobj,
 				buf, sizeof(quota), 1, &quota)) != 0) {
-		printf("%s(%d): quotaobj lookup failed\n", __FUNCTION__, __LINE__);
+		dprintf("%s(%d): quotaobj lookup failed\n", __FUNCTION__, __LINE__);
 		goto done;
 	}
 	/*
@@ -155,7 +155,7 @@ zfs_getquota(zfsvfs_t *zfsvfs, uid_t id, int isgroup, struct dqblk64 *dqp)
 	dqp->dqb_bsoftlimit = dqp->dqb_bhardlimit = btodb(quota);
 	error = zap_lookup(zfsvfs->z_os, usedobj, buf, sizeof(used), 1, &used);
 	if (error && error != ENOENT) {
-		printf("%s(%d):  usedobj failed; %d\n", __FUNCTION__, __LINE__, error);
+		dprintf("%s(%d):  usedobj failed; %d\n", __FUNCTION__, __LINE__, error);
 		goto done;
 	}
 	dqp->dqb_curblocks = btodb(used);
