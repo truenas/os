@@ -39,10 +39,6 @@ static void sendquota_extended(struct svc_req *request, SVCXPRT *transp);
 static void initfs(void);
 static int getfsquota(int type, long id, char *path, struct dqblk *dqblk);
 
-#if 0
-static struct quotafile **qfa;	/* array of qfs */
-static int nqf, szqf;		/* number of qfs and size of array */
-#endif
 static int from_inetd = 1;
 
 static void
@@ -62,7 +58,7 @@ main(void)
 	struct sockaddr_storage from;
 	socklen_t fromlen;
 	int vers;
-	
+
 	fromlen = sizeof(from);
 	if (getsockname(0, (struct sockaddr *)&from, &fromlen) < 0)
 		from_inetd = 0;
@@ -265,40 +261,7 @@ sendquota_extended(struct svc_req *request, SVCXPRT *transp)
 static void
 initfs(void)
 {
-#if 0
-	struct fstab *fs;
-
-	setfsent();
-	szqf = 8;
-	if ((qfa = malloc(szqf * sizeof *qfa)) == NULL)
-		goto enomem;
-	while ((fs = getfsent())) {
-		if (strcmp(fs->fs_vfstype, "ufs"))
-			continue;
-		if (nqf >= szqf) {
-			szqf *= 2;
-			if ((qfa = reallocf(qfa, szqf * sizeof *qfa)) == NULL)
-				goto enomem;
-		}
-		if ((qfa[nqf] = quota_open(fs, USRQUOTA, O_RDONLY)) == NULL) {
-			if (errno != EOPNOTSUPP)
-				goto fserr;
-			continue;
-		}
-		++nqf;
-		/* XXX */
-	}
-	endfsent();
 	return;
-enomem:
-	syslog(LOG_ERR, "out of memory");
-	exit(1);
-fserr:
-	syslog(LOG_ERR, "%s: %s", fs->fs_file, strerror(errno));
-	exit(1);
-#else
-	return;
-#endif
 }
 
 /*
@@ -309,7 +272,10 @@ static int
 getfsquota(int type, long id, char *path, struct dqblk *dqblk)
 {
 	struct quotafile *qf;
-	// This is STUPID
+	/*
+	 * This is STUPID, but otherwise when it
+	 * compiles with -Werrr,-Wcast-qual it fails.
+	 */
 	static char userquota[] = "userquota";
 	struct fstab fst = { .fs_file = path, .fs_mntops=userquota };
 	int rv;
