@@ -133,6 +133,7 @@ zfs_getquota(zfsvfs_t *zfsvfs, uid_t id, int isgroup, struct dqblk64 *dqp)
 	int err;
 	uint64_t usedobj, quotaobj;
 	uint64_t quota, used = 0;
+	timespec_t now;
 	
 	usedobj = isgroup ? DMU_GROUPUSED_OBJECT : DMU_USERUSED_OBJECT;
 	quotaobj = isgroup ? zfsvfs->z_groupquota_obj : zfsvfs->z_userquota_obj;
@@ -147,6 +148,10 @@ zfs_getquota(zfsvfs_t *zfsvfs, uid_t id, int isgroup, struct dqblk64 *dqp)
 		printf("%s(%d): quotaobj lookup failed\n", __FUNCTION__, __LINE__);
 		goto done;
 	}
+	/*
+	 * quota(8) uses bsoftlimit as "quoota", and hardlimit as "limit".
+	 * So we set them to be the same.
+	 */
 	dqp->dqb_bsoftlimit = dqp->dqb_bhardlimit = btodb(quota);
 	error = zap_lookup(zfsvfs->z_os, usedobj, buf, sizeof(used), 1, &used);
 	if (error && error != ENOENT) {
@@ -155,7 +160,13 @@ zfs_getquota(zfsvfs_t *zfsvfs, uid_t id, int isgroup, struct dqblk64 *dqp)
 	}
 	dqp->dqb_curblocks = btodb(used);
 	dqp->dqb_ihardlimit = dqp->dqb_isoftlimit = 0;
-	dqp->dqb_btime = dqp->dqb_itime = 0;
+	vfs_timestamp(&now);
+	/*
+	 * Setting this to 0 causes FreeBSD quota(8) to print
+	 * the number of days since the epoch, which isn't
+	 * particularly useful.
+	 */
+	dqp->dqb_btime = dqp->dqb_itime = now.tv_sec;
 done:
 	return (error);
 }
