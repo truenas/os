@@ -70,13 +70,13 @@ struct rquota {
 	unsigned int rq_ftimeleft;	/* time left for excessive files */
 };	
 
-enum qr_status {
-	Q_OK = 1,	/* quota returned */
-	Q_NOQUOTA = 2,  /* noquota for uid */
-	Q_EPERM = 3	/* no permission to access quota */
+enum gqr_status {
+	Q_OK = 1,		/* quota returned */
+	Q_NOQUOTA = 2, 		/* noquota for uid */
+	Q_EPERM = 3		/* no permission to access quota */
 };
 
-union getquota_rslt switch (qr_status status) {
+union getquota_rslt switch (gqr_status status) {
 case Q_OK:
 	rquota gqr_rquota;	/* valid if status == Q_OK */
 case Q_NOQUOTA:
@@ -85,7 +85,7 @@ case Q_EPERM:
 	void;
 };
 
-union setquota_rslt switch (qr_status status) {
+union setquota_rslt switch (gqr_status status) {
 case Q_OK:
 	rquota sqr_rquota;	/* valid if status == Q_OK */
 case Q_NOQUOTA:
