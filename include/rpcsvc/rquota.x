@@ -72,7 +72,7 @@ struct rquota {
 
 enum gqr_status {
 	Q_OK = 1,		/* quota returned */
-	Q_NOQUOTA = 2, 		/* noquota for uid */
+	Q_NOQUOTA = 2,		/* noquota for uid */
 	Q_EPERM = 3		/* no permission to access quota */
 };
 
