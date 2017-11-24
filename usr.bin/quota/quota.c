@@ -605,11 +605,16 @@ getnfsquota(struct statfs *fst, struct quotause *qup, long id, int quotatype)
 			      RQUOTAPROC_GETQUOTA, (xdrproc_t)xdr_ext_getquota_args, (char *)&gq_args,
 			      (xdrproc_t)xdr_getquota_rslt, (char *)&gq_rslt);
 	if (call_stat == RPC_PROGVERSMISMATCH) {
-		old_gq_args.gqa_pathp = cp + 1;
-		old_gq_args.gqa_uid = id;
-		call_stat = callaurpc(host, RQUOTAPROG, RQUOTAVERS,
-				      RQUOTAPROC_GETQUOTA, (xdrproc_t)xdr_getquota_args, (char *)&old_gq_args,
-				      (xdrproc_t)xdr_getquota_rslt, (char *)&gq_rslt);
+		if (quotatype == USRQUOTA) {
+			old_gq_args.gqa_pathp = cp + 1;
+			old_gq_args.gqa_uid = id;
+			call_stat = callaurpc(host, RQUOTAPROG, RQUOTAVERS,
+					      RQUOTAPROC_GETQUOTA, (xdrproc_t)xdr_getquota_args, (char *)&old_gq_args,
+					      (xdrproc_t)xdr_getquota_rslt, (char *)&gq_rslt);
+		} else {
+			/* Old rpc quota does not support group type */
+			return (0);
+		}
 	}
 	if (call_stat != 0)
 		return (call_stat);
