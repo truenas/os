@@ -573,7 +573,7 @@ getnfsquota(struct statfs *fst, struct quotause *qup, long id, int quotatype)
 	struct timeval tv;
 	char *cp, host[NI_MAXHOST];
 	enum clnt_stat call_stat;
-	
+
 	if (fst->f_flags & MNT_LOCAL)
 		return (0);
 
@@ -605,7 +605,6 @@ getnfsquota(struct statfs *fst, struct quotause *qup, long id, int quotatype)
 			      RQUOTAPROC_GETQUOTA, (xdrproc_t)xdr_ext_getquota_args, (char *)&gq_args,
 			      (xdrproc_t)xdr_getquota_rslt, (char *)&gq_rslt);
 	if (call_stat == RPC_PROGVERSMISMATCH) {
-		warnx("%s(%d): Oops, trying older version", __FUNCTION__, __LINE__);
 		old_gq_args.gqa_pathp = cp + 1;
 		old_gq_args.gqa_uid = id;
 		call_stat = callaurpc(host, RQUOTAPROG, RQUOTAVERS,
@@ -676,8 +675,6 @@ callaurpc(char *host, int prognum, int versnum, int procnum,
 	tottimeout.tv_usec = 0;
 	clnt_stat = clnt_call(client, procnum, inproc, in,
 	    outproc, out, tottimeout);
-	if (clnt_stat != 0)
-		warnx("%s(%d): clnt_stat = %d", __FUNCTION__, __LINE__, (int)clnt_stat);
 	return (clnt_stat);
 }
 
