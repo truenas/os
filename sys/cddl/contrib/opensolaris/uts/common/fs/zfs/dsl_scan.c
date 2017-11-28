@@ -3578,8 +3578,10 @@ scan_exec_io(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
 
 	if (zio_flags & ZIO_FLAG_RESILVER)
 		scan_delay = zfs_resilver_delay;
-	else if (zio_flags & ZIO_FLAG_SCRUB)
+	else {
+		ASSERT(zio_flags & ZIO_FLAG_SCRUB);
 		scan_delay = zfs_scrub_delay;
+	}
 
 	if (scan_delay && (ddi_get_lbolt64() - spa->spa_last_io <= zfs_scan_idle))
 		delay(MAX((int)scan_delay, 0));
