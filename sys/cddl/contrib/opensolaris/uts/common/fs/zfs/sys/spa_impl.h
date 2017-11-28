@@ -184,8 +184,10 @@ struct spa {
 	uberblock_t	spa_ubsync;		/* last synced uberblock */
 	uberblock_t	spa_uberblock;		/* current uberblock */
 	boolean_t	spa_extreme_rewind;	/* rewind past deferred frees */
+	uint64_t	spa_last_io;		/* lbolt of last non-scan I/O */
 	kmutex_t	spa_scrub_lock;		/* resilver/scrub lock */
-	uint64_t	spa_scrub_inflight;	/* in-flight scrub I/Os */
+	uint64_t	spa_scrub_inflight;	/* in-flight scrub bytes */
+	uint64_t	spa_load_verify_ios;	/* in-flight verifications IOs */
 	kcondvar_t	spa_scrub_io_cv;	/* scrub I/O completion */
 	uint8_t		spa_scrub_active;	/* active or suspended? */
 	uint8_t		spa_scrub_type;		/* type of scrub we're doing */
