@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (C) 2007-2009 Semihalf, Rafal Jaworowski <raj@semihalf.com>
  * Copyright (C) 2006 Semihalf, Marian Balakowicz <m8@semihalf.com>
  * All rights reserved.
@@ -2089,18 +2091,24 @@ static vm_paddr_t
 mmu_booke_kextract(mmu_t mmu, vm_offset_t va)
 {
 	tlb_entry_t e;
+	vm_paddr_t p = 0;
 	int i;
 
-	/* Check TLB1 mappings */
-	for (i = 0; i < TLB1_ENTRIES; i++) {
-		tlb1_read_entry(&e, i);
-		if (!(e.mas1 & MAS1_VALID))
-			continue;
-		if (va >= e.virt && va < e.virt + e.size)
-			return (e.phys + (va - e.virt));
+	if (va >= VM_MIN_KERNEL_ADDRESS && va <= VM_MAX_KERNEL_ADDRESS)
+		p = pte_vatopa(mmu, kernel_pmap, va);
+	
+	if (p == 0) {
+		/* Check TLB1 mappings */
+		for (i = 0; i < TLB1_ENTRIES; i++) {
+			tlb1_read_entry(&e, i);
+			if (!(e.mas1 & MAS1_VALID))
+				continue;
+			if (va >= e.virt && va < e.virt + e.size)
+				return (e.phys + (va - e.virt));
+		}
 	}
 
-	return (pte_vatopa(mmu, kernel_pmap, va));
+	return (p);
 }
 
 /*
@@ -2884,6 +2892,7 @@ static void
 mmu_booke_page_init(mmu_t mmu, vm_page_t m)
 {
 
+	m->md.pv_tracked = 0;
 	TAILQ_INIT(&m->md.pv_list);
 }
 
@@ -3471,16 +3480,17 @@ mmu_booke_mapdev_attr(mmu_t mmu, vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 	 * check whether a sequence of TLB1 entries exist that match the
 	 * requirement, but now only checks the easy case.
 	 */
-	if (ma == VM_MEMATTR_DEFAULT) {
-		for (i = 0; i < TLB1_ENTRIES; i++) {
-			tlb1_read_entry(&e, i);
-			if (!(e.mas1 & MAS1_VALID))
-				continue;
-			if (pa >= e.phys &&
-			    (pa + size) <= (e.phys + e.size))
-				return (void *)(e.virt +
-				    (vm_offset_t)(pa - e.phys));
-		}
+	for (i = 0; i < TLB1_ENTRIES; i++) {
+		tlb1_read_entry(&e, i);
+		if (!(e.mas1 & MAS1_VALID))
+			continue;
+		if (pa >= e.phys &&
+		    (pa + size) <= (e.phys + e.size) &&
+		    (ma == VM_MEMATTR_DEFAULT ||
+		     tlb_calc_wimg(pa, ma) ==
+		      (e.mas2 & (MAS2_WIMGE_MASK & ~_TLB_ENTRY_SHARED))))
+			return (void *)(e.virt +
+			    (vm_offset_t)(pa - e.phys));
 	}
 
 	size = roundup(size, PAGE_SIZE);
@@ -3494,10 +3504,19 @@ mmu_booke_mapdev_attr(mmu_t mmu, vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 	 * With a sparse mapdev, align to the largest starting region.  This
 	 * could feasibly be optimized for a 'best-fit' alignment, but that
 	 * calculation could be very costly.
+	 * Align to the smaller of:
+	 * - first set bit in overlap of (pa & size mask)
+	 * - largest size envelope
+	 *
+	 * It's possible the device mapping may start at a PA that's not larger
+	 * than the size mask, so we need to offset in to maximize the TLB entry
+	 * range and minimize the number of used TLB entries.
 	 */
 	do {
 	    tmpva = tlb1_map_base;
-	    va = roundup(tlb1_map_base, 1 << flsl(size));
+	    sz = ffsl(((1 << flsl(size-1)) - 1) & pa);
+	    sz = sz ? min(roundup(sz + 3, 4), flsl(size) - 1) : flsl(size) - 1;
+	    va = roundup(tlb1_map_base, 1 << sz) | (((1 << sz) - 1) & pa);
 #ifdef __powerpc64__
 	} while (!atomic_cmpset_long(&tlb1_map_base, tmpva, va + size));
 #else
@@ -3514,6 +3533,13 @@ mmu_booke_mapdev_attr(mmu_t mmu, vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 
 	do {
 		sz = 1 << (ilog2(size) & ~1);
+		/* Align size to PA */
+		if (pa % sz != 0) {
+			do {
+				sz >>= 2;
+			} while (pa % sz != 0);
+		}
+		/* Now align from there to VA */
 		if (va % sz != 0) {
 			do {
 				sz >>= 2;
@@ -3522,8 +3548,9 @@ mmu_booke_mapdev_attr(mmu_t mmu, vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 		if (bootverbose)
 			printf("Wiring VA=%lx to PA=%jx (size=%lx)\n",
 			    va, (uintmax_t)pa, sz);
-		tlb1_set_entry(va, pa, sz,
-		    _TLB_ENTRY_SHARED | tlb_calc_wimg(pa, ma));
+		if (tlb1_set_entry(va, pa, sz,
+		    _TLB_ENTRY_SHARED | tlb_calc_wimg(pa, ma)) < 0)
+			return (NULL);
 		size -= sz;
 		pa += sz;
 		va += sz;
@@ -3848,31 +3875,27 @@ tlb1_read_entry(tlb_entry_t *entry, unsigned int slot)
 	    tsize2size((entry->mas1 & MAS1_TSIZE_MASK) >> MAS1_TSIZE_SHIFT);
 }
 
-/*
- * Write given entry to TLB1 hardware.
- */
+struct tlbwrite_args {
+	tlb_entry_t *e;
+	unsigned int idx;
+};
+
 static void
-tlb1_write_entry(tlb_entry_t *e, unsigned int idx)
+tlb1_write_entry_int(void *arg)
 {
-	register_t msr;
+	struct tlbwrite_args *args = arg;
 	uint32_t mas0;
 
-	//debugf("tlb1_write_entry: s\n");
-
 	/* Select entry */
-	mas0 = MAS0_TLBSEL(1) | MAS0_ESEL(idx);
-	//debugf("tlb1_write_entry: mas0 = 0x%08x\n", mas0);
-
-	msr = mfmsr();
-	__asm __volatile("wrteei 0");
+	mas0 = MAS0_TLBSEL(1) | MAS0_ESEL(args->idx);
 
 	mtspr(SPR_MAS0, mas0);
 	__asm __volatile("isync");
-	mtspr(SPR_MAS1, e->mas1);
+	mtspr(SPR_MAS1, args->e->mas1);
 	__asm __volatile("isync");
-	mtspr(SPR_MAS2, e->mas2);
+	mtspr(SPR_MAS2, args->e->mas2);
 	__asm __volatile("isync");
-	mtspr(SPR_MAS3, e->mas3);
+	mtspr(SPR_MAS3, args->e->mas3);
 	__asm __volatile("isync");
 	switch ((mfpvr() >> 16) & 0xFFFF) {
 	case FSL_E500mc:
@@ -3882,7 +3905,7 @@ tlb1_write_entry(tlb_entry_t *e, unsigned int idx)
 		__asm __volatile("isync");
 		/* FALLTHROUGH */
 	case FSL_E500v2:
-		mtspr(SPR_MAS7, e->mas7);
+		mtspr(SPR_MAS7, args->e->mas7);
 		__asm __volatile("isync");
 		break;
 	default:
@@ -3890,9 +3913,42 @@ tlb1_write_entry(tlb_entry_t *e, unsigned int idx)
 	}
 
 	__asm __volatile("tlbwe; isync; msync");
-	mtmsr(msr);
 
-	//debugf("tlb1_write_entry: e\n");
+}
+
+static void
+tlb1_write_entry_sync(void *arg)
+{
+	/* Empty synchronization point for smp_rendezvous(). */
+}
+
+/*
+ * Write given entry to TLB1 hardware.
+ */
+static void
+tlb1_write_entry(tlb_entry_t *e, unsigned int idx)
+{
+	struct tlbwrite_args args;
+
+	args.e = e;
+	args.idx = idx;
+
+#ifdef SMP
+	if ((e->mas2 & _TLB_ENTRY_SHARED) && smp_started) {
+		mb();
+		smp_rendezvous(tlb1_write_entry_sync,
+		    tlb1_write_entry_int,
+		    tlb1_write_entry_sync, &args);
+	} else
+#endif
+	{
+		register_t msr;
+
+		msr = mfmsr();
+		__asm __volatile("wrteei 0");
+		tlb1_write_entry_int(&args);
+		mtmsr(msr);
+	}
 }
 
 /*

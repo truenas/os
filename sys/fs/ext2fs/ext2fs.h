@@ -7,6 +7,8 @@
  * $FreeBSD$
  */
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009 Aditya Sarawgi
  * All rights reserved.
  *
@@ -385,7 +387,6 @@ struct ext2_gd {
 /*
  * Macro-instructions used to manage several block sizes
  */
-#define	EXT2_MAX_BLOCK_SIZE		4096
 #define	EXT2_MIN_BLOCK_LOG_SIZE		  10
 #define	EXT2_BLOCK_SIZE(s)		((s)->e2fs_bsize)
 #define	EXT2_ADDR_PER_BLOCK(s)		(EXT2_BLOCK_SIZE(s) / sizeof(uint32_t))

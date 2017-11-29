@@ -1,6 +1,8 @@
 /*	$OpenBSD: dhclient.c,v 1.63 2005/02/06 17:10:13 krw Exp $	*/
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright 2004 Henning Brauer <henning@openbsd.org>
  * Copyright (c) 1995, 1996, 1997, 1998, 1999
  * The Internet Software Consortium.    All rights reserved.
@@ -83,6 +85,8 @@ __FBSDID("$FreeBSD$");
 #define	domainchar(c) ((c) > 0x20 && (c) < 0x7f)
 
 #define	CLIENT_PATH "PATH=/usr/bin:/usr/sbin:/bin:/sbin"
+
+cap_channel_t *capsyslog;
 
 time_t cur_time;
 time_t default_lease_time = 43200; /* 12 hours... */
@@ -345,6 +349,21 @@ die:
 	exit(1);
 }
 
+static void
+init_casper(void)
+{
+	cap_channel_t		*casper;
+
+	casper = cap_init();
+	if (casper == NULL)
+		error("unable to start casper");
+
+	capsyslog = cap_service_open(casper, "system.syslog");
+	cap_close(casper);
+	if (capsyslog == NULL)
+		error("unable to open system.syslog service");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -356,9 +375,11 @@ main(int argc, char *argv[])
 	pid_t			 otherpid;
 	cap_rights_t		 rights;
 
+	init_casper();
+
 	/* Initially, log errors to stderr as well as to syslogd. */
-	openlog(__progname, LOG_PID | LOG_NDELAY, DHCPD_LOG_FACILITY);
-	setlogmask(LOG_UPTO(LOG_DEBUG));
+	cap_openlog(capsyslog, __progname, LOG_PID | LOG_NDELAY, DHCPD_LOG_FACILITY);
+	cap_setlogmask(capsyslog, LOG_UPTO(LOG_DEBUG));
 
 	while ((ch = getopt(argc, argv, "bc:dl:p:qu")) != -1)
 		switch (ch) {
@@ -518,7 +539,7 @@ main(int argc, char *argv[])
 
 	setproctitle("%s", ifi->name);
 
-	if (cap_enter() < 0 && errno != ENOSYS)
+	if (CASPER_SUPPORT && cap_enter() < 0 && errno != ENOSYS)
 		error("can't enter capability mode: %m");
 
 	if (immediate_daemon)
@@ -2404,7 +2425,7 @@ go_daemon(void)
 	/* Stop logging to stderr... */
 	log_perror = 0;
 
-	if (daemon(1, 0) == -1)
+	if (daemon(1, 1) == -1)
 		error("daemon");
 
 	cap_rights_init(&rights);

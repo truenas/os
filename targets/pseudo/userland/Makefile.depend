@@ -48,7 +48,6 @@ DIRDEPS+= \
 	sbin/adjkerntz \
 	sbin/atacontrol \
 	sbin/atm/atmconfig \
-	sbin/badsect \
 	sbin/camcontrol \
 	sbin/ccdconfig \
 	sbin/clri \
@@ -100,11 +99,9 @@ DIRDEPS+= \
 	sbin/ipf/ipf \
 	sbin/ipf/ipfs \
 	sbin/ipf/ipfstat \
-	sbin/ipf/ipftest \
 	sbin/ipf/ipmon \
 	sbin/ipf/ipnat \
 	sbin/ipf/ippool \
-	sbin/ipf/ipresend \
 	sbin/ipf/libipf \
 	sbin/ipfw \
 	sbin/iscontrol \
@@ -199,7 +196,6 @@ DIRDEPS+= \
 	usr.bin/cpio \
 	usr.bin/cpuset \
 	usr.bin/csplit \
-	usr.bin/csup \
 	usr.bin/ctags \
 	usr.bin/ctlstat \
 	usr.bin/cut \
@@ -420,10 +416,6 @@ DIRDEPS+= \
 	usr.bin/write \
 	usr.bin/xargs \
 	usr.bin/xinstall \
-	usr.bin/xlint/lint1 \
-	usr.bin/xlint/lint2 \
-	usr.bin/xlint/llib \
-	usr.bin/xlint/xlint \
 	usr.bin/xo \
 	usr.bin/xstr \
 	usr.bin/xz \
@@ -689,13 +681,6 @@ DIRDEPS+= \
 	usr.sbin/pciconf \
 	usr.sbin/periodic \
 	usr.sbin/pkg \
-	usr.sbin/pkg_install/add \
-	usr.sbin/pkg_install/create \
-	usr.sbin/pkg_install/delete \
-	usr.sbin/pkg_install/info \
-	usr.sbin/pkg_install/lib \
-	usr.sbin/pkg_install/updating \
-	usr.sbin/pkg_install/version \
 	usr.sbin/pmcannotate \
 	usr.sbin/pmccontrol \
 	usr.sbin/pmcstat \

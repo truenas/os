@@ -38,6 +38,91 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20171118: Remove old etc casper files
+OLD_FILES+=etc/casper/system.dns
+OLD_FILES+=etc/casper/system.grp
+OLD_FILES+=etc/casper/system.pwd
+OLD_FILES+=etc/casper/system.random
+OLD_FILES+=etc/casper/system.sysctl
+OLD_DIRS+=etc/casper
+# 20171116: lint(1) removal
+OLD_FILES+=usr/bin/lint
+OLD_FILES+=usr/libexec/lint1
+OLD_FILES+=usr/libexec/lint2
+OLD_FILES+=usr/libdata/lint/llib-lposix.ln
+OLD_FILES+=usr/libdata/lint/llib-lstdc.ln
+OLD_FILES+=usr/share/man/man1/lint.1.gz
+OLD_FILES+=usr/share/man/man7/lint.7.gz
+OLD_DIRS+=usr/libdata/lint
+# 20171114: Removal of all fortune datfiles other than freebsd-tips
+OLD_FILES+=usr/share/games/fortune/fortunes
+OLD_FILES+=usr/share/games/fortune/fortunes.dat
+OLD_FILES+=usr/share/games/fortune/gerrold.limerick
+OLD_FILES+=usr/share/games/fortune/gerrold.limerick.dat
+OLD_FILES+=usr/share/games/fortune/limerick
+OLD_FILES+=usr/share/games/fortune/limerick.dat
+OLD_FILES+=usr/share/games/fortune/murphy
+OLD_FILES+=usr/share/games/fortune/murphy-o
+OLD_FILES+=usr/share/games/fortune/murphy-o.dat
+OLD_FILES+=usr/share/games/fortune/murphy.dat
+OLD_FILES+=usr/share/games/fortune/startrek
+OLD_FILES+=usr/share/games/fortune/startrek.dat
+OLD_FILES+=usr/share/games/fortune/zippy
+OLD_FILES+=usr/share/games/fortune/zippy.dat
+# 20171112: Removal of eqnchar definition
+OLD_FILES+=usr/share/misc/eqnchar
+# 20171110: Removal of mailaddr man page
+OLD_FILES+=usr/share/man/man7/mailaddr.7.gz
+# 20171108: badsect(8) removal
+OLD_FILES+=sbin/badsect
+OLD_FILES+=rescue/badsect
+OLD_FILES+=usr/share/man/man8/badsect.8.gz
+# 20171105: fixing lib/libclang_rt CRTARCH for arm:armv[67].
+.if ${MACHINE_ARCH:Marmv[67]*} != "" && \
+    (!defined(CPUTYPE) || ${CPUTYPE:M*soft*} == "")
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-preinit-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-arm.a
+OLD_LIBS+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-arm.so
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan_cxx-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.profile-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.safestack-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats_client-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone_cxx-arm.a
+.endif
+# 20171104: libcap_random should be in /lib not in /usr/lib
+OLD_LIBS+=usr/lib/libcap_random.so.0
+# 20171104: Casper can work only as shared library
+OLD_FILES+=usr/lib/libcasper.a
+OLD_FILES+=usr/lib/libcasper_p.a
+OLD_FILES+=usr/lib/libcap_dns.a
+OLD_FILES+=usr/lib/libcap_dns_p.a
+OLD_FILES+=usr/lib/libcap_grp.a
+OLD_FILES+=usr/lib/libcap_grp_p.a
+OLD_FILES+=usr/lib/libcap_pwd.a
+OLD_FILES+=usr/lib/libcap_pwd_p.a
+OLD_FILES+=usr/lib/libcap_random.a
+OLD_FILES+=usr/lib/libcap_random_p.a
+OLD_FILES+=usr/lib/libcap_sysctl.a
+OLD_FILES+=usr/lib/libcap_sysctl_p.a
+# 20171031: Removal of adding_user man page
+OLD_FILES+=usr/share/man/man7/adding_user.7.gz
+# 20171031: Disconnected libpathconv tests
+OLD_DIRS+=usr/tests/lib/libpathconv
+# 20171017: Removal of mbpool(9)
+OLD_FILES+=usr/include/sys/mbpool.h
+OLD_FILES+=usr/share/man/man9/mbpool.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_destroy.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_alloc.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_ext_free.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_count.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_card_free.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_get_keep.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_free.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_get.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_create.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_sync.9.gz
 # 20171010: Remove libstand
 OLD_FILES+=usr/lib/libstand.a
 OLD_FILES+=usr/lib/libstand_p.a

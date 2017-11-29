@@ -218,7 +218,6 @@ SUBDIR=	\
 	lge \
 	libalias \
 	libiconv \
-	libmbpool \
 	libmchain \
 	${_linprocfs} \
 	${_linsysfs} \
@@ -265,7 +264,6 @@ SUBDIR=	\
 	msdosfs_iconv \
 	${_mse} \
 	msk \
-	${_mthca} \
 	mvs \
 	mwl \
 	${_mwlfw} \
@@ -605,6 +603,9 @@ _ixv=		ixv
 _linprocfs=	linprocfs
 _linsysfs=	linsysfs
 _linux=		linux
+.if ${MK_SOURCELESS_UCODE} != "no"
+_lio=		lio
+.endif
 _nctgpio=	nctgpio
 _ndis=		ndis
 _pccard=	pccard
@@ -679,9 +680,6 @@ _mlx4ib=	mlx4ib
 _mlx5ib=	mlx5ib
 .endif
 _mly=		mly
-.if ${MK_OFED} != "no" || defined(ALL_MODULES)
-_mthca=		mthca
-.endif
 _nfe=		nfe
 _nvd=		nvd
 _nvme=		nvme
@@ -713,9 +711,6 @@ _ixl=		ixl
 _ixlv=		ixlv
 _linux64=	linux64
 _linux_common=	linux_common
-.if ${MK_SOURCELESS_UCODE} != "no"
-_lio=		lio
-.endif
 _ntb=		ntb
 _nvd=		nvd
 _nvdimm=	nvdimm

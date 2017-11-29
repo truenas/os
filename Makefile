@@ -34,12 +34,16 @@
 #                       for world and kernel targets.
 # toolchains          - Build a toolchain for all world and kernel targets.
 # xdev                - xdev-build + xdev-install for the architecture
-#                       specified with XDEV and XDEV_ARCH.
+#                       specified with TARGET and TARGET_ARCH.
 # xdev-build          - Build cross-development tools.
 # xdev-install        - Install cross-development tools.
 # xdev-links          - Create traditional links in /usr/bin for cc, etc
 # native-xtools       - Create host binaries that produce target objects
-#                       for use in qemu user-mode jails.
+#                       for use in qemu user-mode jails.  TARGET and
+#                       TARGET_ARCH should be defined.
+# native-xtools-install
+#                     - Install the files to the given DESTDIR/NXTP where
+#                       NXTP defaults to /nxb-bin.
 # 
 # "quick" way to test all kernel builds:
 # 	_jflag=`sysctl -n hw.ncpu`
@@ -118,22 +122,28 @@
 TGTS=	all all-man buildenv buildenvvars buildkernel buildworld \
 	check check-old check-old-dirs check-old-files check-old-libs \
 	checkdpadd checkworld clean cleandepend cleandir cleanworld \
+	cleanuniverse \
 	delete-old delete-old-dirs delete-old-files delete-old-libs \
 	depend distribute distributekernel distributekernel.debug \
 	distributeworld distrib-dirs distribution doxygen \
 	everything hier hierarchy install installcheck installkernel \
 	installkernel.debug packagekernel packageworld \
 	reinstallkernel reinstallkernel.debug \
-	installworld kernel-toolchain libraries lint maninstall \
-	obj objlink rerelease showconfig tags toolchain update \
+	installworld kernel-toolchain libraries maninstall \
+	obj objlink showconfig tags toolchain update \
 	_worldtmp _legacy _bootstrap-tools _cleanobj _obj \
 	_build-tools _build-metadata _cross-tools _includes _libraries \
 	build32 distribute32 install32 buildsoft distributesoft installsoft \
 	builddtb xdev xdev-build xdev-install \
-	xdev-links native-xtools stageworld stagekernel stage-packages \
+	xdev-links native-xtools native-xtools-install stageworld stagekernel \
+	stage-packages \
 	create-packages-world create-packages-kernel create-packages \
 	packages installconfig real-packages sign-packages package-pkg \
 	print-dir test-system-compiler
+
+# These targets require a TARGET and TARGET_ARCH be defined.
+XTGTS=	native-xtools native-xtools-install xdev xdev-build xdev-install \
+	xdev-links
 
 # XXX: r156740: This can't work since bsd.subdir.mk is not included ever.
 # It will only work for SUBDIR_TARGETS in make.conf.
@@ -179,12 +189,13 @@ META_TGT_WHITELIST+= \
 
 PATH=	/sbin:/bin:/usr/sbin:/usr/bin
 MAKEOBJDIRPREFIX?=	/usr/obj
-_MAKEOBJDIRPREFIX!= /usr/bin/env -i PATH=${PATH} MK_AUTO_OBJ=no ${MAKE} \
+_MAKEOBJDIRPREFIX!= /usr/bin/env -i PATH=${PATH} ${MAKE} MK_AUTO_OBJ=no \
     ${.MAKEFLAGS:MMAKEOBJDIRPREFIX=*} __MAKE_CONF=${__MAKE_CONF} \
+    SRCCONF=${SRCCONF} \
     -f /dev/null -V MAKEOBJDIRPREFIX dummy
 .if !empty(_MAKEOBJDIRPREFIX)
 .error MAKEOBJDIRPREFIX can only be set in environment, not as a global\
-	(in make.conf(5)) or command-line variable.
+	(in make.conf(5) or src.conf(5)) or command-line variable.
 .endif
 
 # We often need to use the tree's version of make to build it.
@@ -199,7 +210,7 @@ WANT_MAKE_VERSION= 20160604
 # 20160220 - support .dinclude for FAST_DEPEND.
 WANT_MAKE_VERSION= 20160220
 .endif
-MYMAKE=		${MAKEOBJDIRPREFIX}${.CURDIR}/make.${MACHINE}/${WANT_MAKE}
+MYMAKE=		${OBJROOT}make.${MACHINE}/${WANT_MAKE}
 .if defined(.PARSEDIR)
 HAVE_MAKE=	bmake
 .else
@@ -222,10 +233,13 @@ SUB_MAKE= ${MAKE} -m ${.CURDIR}/share/mk
 .endif
 
 _MAKE=	PATH=${PATH} MAKE_CMD="${MAKE}" ${SUB_MAKE} -f Makefile.inc1 \
-	TARGET=${_TARGET} TARGET_ARCH=${_TARGET_ARCH}
+	TARGET=${_TARGET} TARGET_ARCH=${_TARGET_ARCH} ${_MAKEARGS}
 
+.if defined(MK_META_MODE) && ${MK_META_MODE} == "yes"
 # Only allow meta mode for the whitelisted targets.  See META_TGT_WHITELIST
-# above.
+# above.  If overridden as a make argument then don't bother trying to
+# disable it.
+.if empty(.MAKEOVERRIDES:MMK_META_MODE)
 .for _tgt in ${META_TGT_WHITELIST}
 .if make(${_tgt})
 _CAN_USE_META_MODE?= yes
@@ -233,17 +247,22 @@ _CAN_USE_META_MODE?= yes
 .endfor
 .if !defined(_CAN_USE_META_MODE)
 _MAKE+=	MK_META_MODE=no
+MK_META_MODE= no
 .if defined(.PARSEDIR)
 .unexport META_MODE
 .endif
-.elif defined(MK_META_MODE) && ${MK_META_MODE} == "yes"
+.endif	# !defined(_CAN_USE_META_MODE)
+.endif	# empty(.MAKEOVERRIDES:MMK_META_MODE)
+
+.if ${MK_META_MODE} == "yes"
 .if !exists(/dev/filemon) && !defined(NO_FILEMON) && !make(showconfig)
 # Require filemon be loaded to provide a working incremental build
 .error ${.newline}ERROR: The filemon module (/dev/filemon) is not loaded. \
     ${.newline}ERROR: WITH_META_MODE is enabled but requires filemon for an incremental build. \
     ${.newline}ERROR: 'kldload filemon' or pass -DNO_FILEMON to suppress this error.
 .endif	# !exists(/dev/filemon) && !defined(NO_FILEMON)
-.endif	# !defined(_CAN_USE_META_MODE)
+.endif	# ${MK_META_MODE} == yes
+.endif	# defined(MK_META_MODE) && ${MK_META_MODE} == yes
 
 # Guess target architecture from target type, and vice versa, based on
 # historic FreeBSD practice of tending to have TARGET == TARGET_ARCH
@@ -251,7 +270,7 @@ _MAKE+=	MK_META_MODE=no
 # exceptions.
 .if !defined(TARGET_ARCH) && defined(TARGET)
 # T->TA mapping is usually TARGET with arm64 the odd man out
-_TARGET_ARCH=	${TARGET:S/arm64/aarch64/}
+_TARGET_ARCH=	${TARGET:S/arm64/aarch64/:S/riscv/riscv64/}
 .elif !defined(TARGET) && defined(TARGET_ARCH) && \
     ${TARGET_ARCH} != ${MACHINE_ARCH}
 # TA->T mapping is accidentally CPUARCH with aarch64 the odd man out
@@ -270,13 +289,35 @@ _TARGET=	${XDEV}
 .if defined(XDEV_ARCH)
 _TARGET_ARCH=	${XDEV_ARCH}
 .endif
+# Some targets require a set TARGET/TARGET_ARCH, check before the default
+# MACHINE and after the compatibility handling.
+.if !defined(_TARGET) || !defined(_TARGET_ARCH)
+${XTGTS}: _assert_target
+.endif
 # Otherwise, default to current machine type and architecture.
 _TARGET?=	${MACHINE}
 _TARGET_ARCH?=	${MACHINE_ARCH}
 
+.if make(native-xtools*)
+NXB_TARGET:=		${_TARGET}
+NXB_TARGET_ARCH:=	${_TARGET_ARCH}
+_TARGET=		${MACHINE}
+_TARGET_ARCH=		${MACHINE_ARCH}
+_MAKE+=			NXB_TARGET=${NXB_TARGET} \
+			NXB_TARGET_ARCH=${NXB_TARGET_ARCH}
+.endif
+
 .if make(print-dir)
 .SILENT:
 .endif
+
+_assert_target: .PHONY .MAKE
+.for _tgt in ${XTGTS}
+.if make(${_tgt})
+	@echo "*** Error: Both TARGET and TARGET_ARCH must be defined for \"${_tgt}\" target"
+	@false
+.endif
+.endfor
 
 #
 # Make sure we have an up-to-date make(1). Only world and buildworld
@@ -384,10 +425,13 @@ upgrade_checks: .PHONY
 # headers, libraries and tools.  Also, allow the location of
 # the system bsdmake-like utility to be overridden.
 #
-MMAKEENV=	MAKEOBJDIRPREFIX=${MYMAKE:H} \
+MMAKEENV=	\
 		DESTDIR= \
 		INSTALL="sh ${.CURDIR}/tools/install.sh"
 MMAKE=		${MMAKEENV} ${MAKE} \
+		OBJTOP=${MYMAKE:H}/obj \
+		OBJROOT='$${OBJTOP}/' \
+		MAKEOBJDIRPREFIX= \
 		MAN= -DNO_SHARED \
 		-DNO_CPU_CFLAGS -DNO_WERROR \
 		-DNO_SUBDIR \
@@ -527,12 +571,13 @@ universe_${target}_kernels: universe_${target}_worlds .PHONY
 universe_${target}_kernels: universe_${target}_prologue .MAKE .PHONY
 .if exists(${KERNSRCDIR}/${target}/conf/NOTES)
 	@(cd ${KERNSRCDIR}/${target}/conf && env __MAKE_CONF=/dev/null \
-	    ${SUB_MAKE} LINT > ${.CURDIR}/_.${target}.makeLINT 2>&1 || \
+	    ${SUB_MAKE} LINT \
+	    > ${.CURDIR}/_.${target}.makeLINT 2>&1 || \
 	    (echo "${target} 'make LINT' failed," \
 	    "check _.${target}.makeLINT for details"| ${MAKEFAIL}))
 .endif
 	@cd ${.CURDIR}; ${SUB_MAKE} ${.MAKEFLAGS} TARGET=${target} \
-	    universe_kernels
+	    universe_kernels MK_AUTO_OBJ=no
 .endif # !MAKE_JUST_WORLDS
 
 # Tell the user the worlds and kernels have completed

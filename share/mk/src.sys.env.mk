@@ -6,10 +6,14 @@
 SRCTOP:= ${.PARSEDIR:tA:H:H}
 
 .if ${.CURDIR} == ${SRCTOP}
-RELDIR = .
+RELDIR= .
+RELTOP= .
 .elif ${.CURDIR:M${SRCTOP}/*}
-RELDIR := ${.CURDIR:S,${SRCTOP}/,,}
+RELDIR:= ${.CURDIR:S,${SRCTOP}/,,}
 .endif
+RELTOP?= 	${RELDIR:C,[^/]+,..,g}
+RELOBJTOP?=	${RELTOP}
+RELSRCTOP?=	${RELTOP}
 
 # site customizations that do not depend on anything!
 SRC_ENV_CONF?= /etc/src-env.conf
@@ -17,6 +21,8 @@ SRC_ENV_CONF?= /etc/src-env.conf
 .-include "${SRC_ENV_CONF}"
 _src_env_conf_included_:	.NOTMAIN
 .endif
+
+.include <bsd.mkopt.mk>
 
 # Top-level installs should not use meta mode as it may prevent installing
 # based on cookies.
@@ -39,3 +45,8 @@ MAKESYSPATH:= ${MAKESYSPATH:S,.../share/mk,${.PARSEDIR:tA},}
 MAKESYSPATH:=	${.PARSEDIR:tA}
 .export MAKESYSPATH
 .endif
+
+.if ${RELDIR:U} == "." && ${.MAKE.LEVEL} == 0
+.sinclude "${.CURDIR}/Makefile.sys.inc"
+.endif
+.include <src.sys.obj.mk>

@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1983, 1988, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -790,14 +792,13 @@ socklist_recv_sock(struct socklist *sl)
 	} else {
 		hname = cvthname(sa);
 		unmapped(sa);
-		if (validate(sa, hname) == 0)
-			hname = NULL;
+		if (validate(sa, hname) == 0) {
+			dprintf("Message from %s was ignored.", hname);
+			return (-1);
+		}
 		date = RemoteAddDate ? ADDDATE : 0;
 	}
-	if (hname != NULL)
-		printline(hname, line, date);
-	else
-		dprintf("Invalid msg from %s was ignored.", hname);
+	printline(hname, line, date);
 
 	return (0);
 }

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2006 Bernd Walter.  All rights reserved.
  * Copyright (c) 2006 M. Warner Losh.  All rights reserved.
  * Copyright (c) 2017 Marius Strobl <marius@FreeBSD.org>
@@ -327,7 +329,7 @@ mmcsd_attach(device_t dev)
 			    (ext_csd[EXT_CSD_ENH_START_ADDR + 1] << 8) +
 			    (ext_csd[EXT_CSD_ENH_START_ADDR + 2] << 16) +
 			    (ext_csd[EXT_CSD_ENH_START_ADDR + 3] << 24)) *
-			    (sc->high_cap != 0 ? MMC_SECTOR_SIZE : 1);
+			    (sc->high_cap == 0 ? MMC_SECTOR_SIZE : 1);
 		} else if (bootverbose)
 			device_printf(dev,
 			    "enhanced user data area spans entire device\n");

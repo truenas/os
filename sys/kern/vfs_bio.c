@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2004 Poul-Henning Kamp
  * Copyright (c) 1994,1997 John S. Dyson
  * Copyright (c) 2013 The FreeBSD Foundation
@@ -2340,9 +2342,18 @@ brelse(struct buf *bp)
 	    !(bp->b_flags & B_INVAL)) {
 		/*
 		 * Failed write, redirty.  All errors except ENXIO (which
-		 * means the device is gone) are expected to be potentially
-		 * transient - underlying media might work if tried again
-		 * after EIO, and memory might be available after an ENOMEM.
+		 * means the device is gone) are treated as being
+		 * transient.
+		 *
+		 * XXX Treating EIO as transient is not correct; the
+		 * contract with the local storage device drivers is that
+		 * they will only return EIO once the I/O is no longer
+		 * retriable.  Network I/O also respects this through the
+		 * guarantees of TCP and/or the internal retries of NFS.
+		 * ENOMEM might be transient, but we also have no way of
+		 * knowing when its ok to retry/reschedule.  In general,
+		 * this entire case should be made obsolete through better
+		 * error handling/recovery and resource scheduling.
 		 *
 		 * Do this also for buffers that failed with ENXIO, but have
 		 * non-empty dependencies - the soft updates code might need
@@ -4515,18 +4526,14 @@ vm_hold_load_pages(struct buf *bp, vm_offset_t from, vm_offset_t to)
 	index = (from - trunc_page((vm_offset_t)bp->b_data)) >> PAGE_SHIFT;
 
 	for (pg = from; pg < to; pg += PAGE_SIZE, index++) {
-tryagain:
 		/*
 		 * note: must allocate system pages since blocking here
 		 * could interfere with paging I/O, no matter which
 		 * process we are.
 		 */
 		p = vm_page_alloc(NULL, 0, VM_ALLOC_SYSTEM | VM_ALLOC_NOOBJ |
-		    VM_ALLOC_WIRED | VM_ALLOC_COUNT((to - pg) >> PAGE_SHIFT));
-		if (p == NULL) {
-			VM_WAIT;
-			goto tryagain;
-		}
+		    VM_ALLOC_WIRED | VM_ALLOC_COUNT((to - pg) >> PAGE_SHIFT) |
+		    VM_ALLOC_WAITOK);
 		pmap_qenter(pg, &p, 1);
 		bp->b_pages[index] = p;
 	}

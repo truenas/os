@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2001, John Baldwin <jhb@FreeBSD.org>.
  * All rights reserved.
  *
@@ -84,8 +86,9 @@ SYSCTL_INT(_kern_smp, OID_AUTO, maxid, CTLFLAG_RD|CTLFLAG_CAPRD, &mp_maxid, 0,
 SYSCTL_INT(_kern_smp, OID_AUTO, maxcpus, CTLFLAG_RD|CTLFLAG_CAPRD, &mp_maxcpus,
     0, "Max number of CPUs that the system was compiled for.");
 
-SYSCTL_PROC(_kern_smp, OID_AUTO, active, CTLFLAG_RD | CTLTYPE_INT, NULL, 0,
-    sysctl_kern_smp_active, "I", "Indicates system is running in SMP mode");
+SYSCTL_PROC(_kern_smp, OID_AUTO, active, CTLFLAG_RD|CTLTYPE_INT|CTLFLAG_MPSAFE,
+    NULL, 0, sysctl_kern_smp_active, "I",
+    "Indicates system is running in SMP mode");
 
 int smp_disabled = 0;	/* has smp been disabled? */
 SYSCTL_INT(_kern_smp, OID_AUTO, disabled, CTLFLAG_RDTUN|CTLFLAG_CAPRD,

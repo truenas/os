@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993, 1994 Henry Spencer.
  * Copyright (c) 1992, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
@@ -1059,7 +1061,7 @@ p_b_coll_elem(struct parse *p,
 	}
 	len = p->next - sp;
 	for (cp = cnames; cp->name != NULL; cp++)
-		if (strncmp(cp->name, sp, len) == 0 && cp->name[len] == '\0')
+		if (strncmp(cp->name, sp, len) == 0 && strlen(cp->name) == len)
 			return(cp->code);	/* known name */
 	memset(&mbs, 0, sizeof(mbs));
 	if ((clen = mbrtowc(&wc, sp, len, &mbs)) == len)

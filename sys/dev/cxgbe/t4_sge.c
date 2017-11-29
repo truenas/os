@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2011 Chelsio Communications, Inc.
  * All rights reserved.
  * Written by: Navdeep Parhar <np@FreeBSD.org>
@@ -3085,7 +3087,7 @@ tnl_cong(struct port_info *pi, int drop)
 	else if (drop == 1)
 		return (0);
 	else
-		return (pi->rx_chan_map);
+		return (pi->rx_e_chan_map);
 }
 
 static int
@@ -3195,8 +3197,7 @@ alloc_ofld_rxq(struct vi_info *vi, struct sge_ofld_rxq *ofld_rxq,
 	struct sysctl_oid_list *children;
 	char name[16];
 
-	rc = alloc_iq_fl(vi, &ofld_rxq->iq, &ofld_rxq->fl, intr_idx,
-	    pi->rx_chan_map);
+	rc = alloc_iq_fl(vi, &ofld_rxq->iq, &ofld_rxq->fl, intr_idx, 0);
 	if (rc != 0)
 		return (rc);
 

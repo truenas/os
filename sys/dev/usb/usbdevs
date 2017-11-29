@@ -3679,6 +3679,7 @@ product PROLIFIC PL2305		0x2305	Parallel printer
 product PROLIFIC ATAPI4		0x2307	ATAPI-4 Controller
 product PROLIFIC PL2501		0x2501	PL2501 Host-Host interface
 product PROLIFIC PL2506		0x2506	PL2506 USB to IDE Bridge
+product PROLIFIC PL27A1		0x27A1	PL27A1 USB 3.0 Host-Host interface
 product PROLIFIC HCR331		0x331a	HCR331 Hybrid Card Reader
 product PROLIFIC PHAROS		0xaaa0	Prolific Pharos
 product PROLIFIC RSAQ3		0xaaa2	PL2303 Serial Adapter (IODATA USB-RSAQ3)
@@ -4536,6 +4537,9 @@ product TOSHIBA TRANSMEMORY	0x6545	USB ThumbDrive
 product TPLINK T4U		0x0101	Archer T4U
 product TPLINK WN822NV4		0x0108	TL-WN822N v4
 product TPLINK WN823NV2		0x0109	TL-WN823N v2
+product TPLINK T4UV2		0x010d	Archer T4U ver 2
+product TPLINK T4UHV2		0x010e	Archer T4UH ver 2
+product TPLINK RTL8153		0x0601	RTL8153 USB 10/100/1000 LAN
 
 /* Trek Technology products */
 product TREK THUMBDRIVE		0x1111	ThumbDrive
