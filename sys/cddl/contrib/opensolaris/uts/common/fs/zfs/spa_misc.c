@@ -2028,6 +2028,7 @@ spa_init(int mode)
 	zpool_feature_init();
 	spa_config_load();
 	l2arc_start();
+	scan_init();
 	dsl_scan_global_init();
 #ifndef illumos
 #ifdef _KERNEL
@@ -2053,7 +2054,8 @@ spa_fini(void)
 	range_tree_fini();
 	unique_fini();
 	refcount_fini();
-
+	scan_fini();
+	
 	avl_destroy(&spa_namespace_avl);
 	avl_destroy(&spa_spare_avl);
 	avl_destroy(&spa_l2cache_avl);
