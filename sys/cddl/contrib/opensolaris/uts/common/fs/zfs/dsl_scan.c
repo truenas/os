@@ -184,22 +184,11 @@ boolean_t zfs_no_scrub_prefetch = B_FALSE; /* set to disable scrub prefetch */
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, top_maxinflight, CTLFLAG_RWTUN,
     &zfs_top_maxinflight, 0, "Maximum I/Os per top-level vdev");
-<<<<<<< HEAD
-TUNABLE_INT("vfs.zfs.resilver_delay", &zfs_resilver_delay);
-SYSCTL_UINT(_vfs_zfs, OID_AUTO, resilver_delay, CTLFLAG_RW,
-    &zfs_resilver_delay, 0, "Number of ticks to delay resilver");
-TUNABLE_INT("vfs.zfs.scrub_delay", &zfs_scrub_delay);
-SYSCTL_UINT(_vfs_zfs, OID_AUTO, scrub_delay, CTLFLAG_RW,
-    &zfs_scrub_delay, 0, "Number of ticks to delay scrub");
-TUNABLE_INT("vfs.zfs.scan_idle", &zfs_scan_idle);
-SYSCTL_UINT(_vfs_zfs, OID_AUTO, scan_idle, CTLFLAG_RW,
-=======
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, resilver_delay, CTLFLAG_RWTUN,
     &zfs_resilver_delay, 0, "Number of ticks to delay resilver");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, scrub_delay, CTLFLAG_RWTUN,
     &zfs_scrub_delay, 0, "Number of ticks to delay scrub");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, scan_idle, CTLFLAG_RWTUN,
->>>>>>> sef-scanning-tunables-change
     &zfs_scan_idle, 0, "Idle scan window in clock ticks");
 SYSCTL_UINT(_vfs_zfs, OID_AUTO, scan_min_time_ms, CTLFLAG_RWTUN,
     &zfs_scrub_min_time_ms, 0, "Min millisecs to scrub per txg");
@@ -3571,14 +3560,8 @@ scan_exec_io(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
 	dsl_scan_t *scn = dp->dp_scan;
 	size_t size = BP_GET_PSIZE(bp);
 	abd_t *data = abd_alloc_for_io(size, B_FALSE);
-<<<<<<< HEAD
-	uint64_t maxinflight;
-	unsigned int scan_delay = 0;
-	
-=======
 	unsigned int scan_delay = 0;
 
->>>>>>> sef-scanning-tunables-change
 	if (queue == NULL) {
 		mutex_enter(&spa->spa_scrub_lock);
 		while (spa->spa_scrub_inflight >= scn->scn_maxinflight_bytes)
@@ -3597,19 +3580,12 @@ scan_exec_io(dsl_pool_t *dp, const blkptr_t *bp, int zio_flags,
 
 	if (zio_flags & ZIO_FLAG_RESILVER)
 		scan_delay = zfs_resilver_delay;
-<<<<<<< HEAD
-	else if (zio_flags & ZIO_FLAG_SCRUB)
-		scan_delay = zfs_scrub_delay;
-	
-	if (ddi_get_lbolt64() - spa->spa_last_io <= zfs_scan_idle)
-=======
 	else {
 		ASSERT(zio_flags & ZIO_FLAG_SCRUB);
 		scan_delay = zfs_scrub_delay;
 	}
 
 	if (scan_delay && (ddi_get_lbolt64() - spa->spa_last_io <= zfs_scan_idle))
->>>>>>> sef-scanning-tunables-change
 		delay(MAX((int)scan_delay, 0));
 	
 	count_block(dp->dp_scan, dp->dp_blkstats, bp);
