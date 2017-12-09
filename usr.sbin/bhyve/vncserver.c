@@ -80,6 +80,7 @@ struct vncserver_softc {
 
 	char			*desktopName;
 	bool			alwaysShared;
+        bool                    vncweb;
 	int			redShift;
 	int			greenShift;
 	int			blueShift;
@@ -107,7 +108,7 @@ struct vncserver_softc {
 #define LIB_HYVE_REMOTE "/usr/local/lib/libhyverem.so"
 
 /* prototype functions from shared library libhyve-remote */
-int (*vnc_init_server)(struct vncserver_softc *sc);
+int (*vnc_init_server)(struct vncserver_softc *sc, char *hostname);
 int (*vnc_event_loop)(int time, bool b);
 int (*vnc_enable_http)(char *webdir, bool enable);
 int (*vnc_enable_password)(char *vnc_password);
@@ -178,6 +179,8 @@ vncserver_send_screen(struct vncserver_softc *sc, int all)
 	int changes;
 
 	console_refresh();
+
+	pthread_mutex_unlock(&sc->vs_mtx);
 
 	pthread_mutex_lock(&sc->vs_mtx);
 	if (sc->vs_sending) {
@@ -382,7 +385,7 @@ sse42_supported()
 }
 
 int
-vncserver_init(char *hostname, int port, int wait, char *password)
+vncserver_init(char *hostname, int port, int wait, char *password, int webserver)
 {
 	struct vncserver_softc *sc;
 
@@ -425,11 +428,21 @@ vncserver_init(char *hostname, int port, int wait, char *password)
 	sc->kdb_handler = handle_keyboard;
 	sc->ptr_handler = handle_ptr;
 
-	vnc_init_server(sc);
-	vnc_event_loop(4000, true);
-	
+        sc->vncweb = 1;
+
+        /*
+        if (webserver)
+        {
+            DPRINTF(("===> HTTP ENABLED\n"));
+            vnc_enable_http("/z/github/libvncserver/webclients", true);
+        }
+        */
+
 	pthread_create(&sc->vs_tid, NULL, vncserver_thr, sc);
 	pthread_set_name_np(sc->vs_tid, "vncserver");
+
+	vnc_init_server(sc, hostname);
+	vnc_event_loop(-1, true);
 
 	if (wait) {
 		DPRINTF(("Waiting for vnc client...\n"));
@@ -438,5 +451,6 @@ vncserver_init(char *hostname, int port, int wait, char *password)
 		pthread_mutex_unlock(&sc->vs_mtx);
 	}
 
+	free(sc);
 	return (0);
 }
