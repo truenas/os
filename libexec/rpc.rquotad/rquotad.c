@@ -28,6 +28,7 @@ __FBSDID("$FreeBSD$");
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <err.h>
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
@@ -39,6 +40,7 @@ static void sendquota_extended(struct svc_req *request, SVCXPRT *transp);
 static int getfsquota(int type, long id, char *path, struct dqblk *dqblk);
 
 static int from_inetd = 1;
+static int debug = 0;
 
 static void
 cleanup(int sig)
@@ -50,20 +52,32 @@ cleanup(int sig)
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
 	SVCXPRT *transp;
 	int ok;
 	struct sockaddr_storage from;
 	socklen_t fromlen;
 	int vers;
+	int ch;
+
+	while ((ch = getopt(argc, argv, "d")) != -1) {
+		switch (ch) {
+		case 'd':
+			debug++;
+			break;
+		default:
+			break;
+		}
+	}
 
 	fromlen = sizeof(from);
 	if (getsockname(0, (struct sockaddr *)&from, &fromlen) < 0)
 		from_inetd = 0;
 
 	if (!from_inetd) {
-		daemon(0, 0);
+		if (!debug)
+			daemon(0, 0);
 		(void)rpcb_unset(RQUOTAPROG, RQUOTAVERS, NULL);
 		(void)signal(SIGINT, cleanup);
 		(void)signal(SIGTERM, cleanup);
@@ -265,21 +279,39 @@ getfsquota(int type, long id, char *path, struct dqblk *dqblk)
 {
 	struct quotafile *qf;
 	/*
-	 * This is STUPID, but otherwise when it
-	 * compiles with -Werrr,-Wcast-qual it fails.
+	 * Remote quota checking is limited to mounted filesystems.
+	 * Since UFS and ZFS support the quota system calls, we
+	 * only need to make an fstab object that has the path, and
+	 * a blank name for the filesystem type.
+	 * This allows the quota_open() call to work the way we
+	 * expect it to.
+	 *
+	 * The static char declaration is because compiler warnings
+	 * don't allow passing a const char * to a char *.
 	 */
-	static char userquota[] = "userquota";
-	struct fstab fst = { .fs_file = path, .fs_mntops=userquota };
 	int rv;
+	static char blank[] = "";
+	struct fstab fst;
+
+	fst.fs_file = path;
+	fst.fs_mntops = blank;
+	fst.fs_vfstype = blank;
 	
 	if (type != USRQUOTA && type != GRPQUOTA)
 		return (0);
 	
 	qf = quota_open(&fst, type, O_RDONLY);
+	if (debug)
+		warnx("quota_opoen(<%s, %s>, %d) returned %p",
+		      fst.fs_file, fst.fs_mntops, type,
+		      qf);
 	if (qf == NULL)
 		return (0);
 
 	rv = quota_read(qf, dqblk, id) == 0;
 	quota_close(qf);
+	if (debug)
+		warnx("getfsquota(%d, %ld, %s, %p) -> %d",
+		      type, id, path, dqblk, rv);
 	return (rv);
 }
