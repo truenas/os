@@ -1323,9 +1323,9 @@ int dtls1_read_bytes(SSL *s, int type, unsigned char *buf, int len, int peek)
         /* XDTLS: check that epoch is consistent */
         if ((rr->length != ccs_hdr_len) ||
             (rr->off != 0) || (rr->data[0] != SSL3_MT_CCS)) {
-            al = SSL_AD_ILLEGAL_PARAMETER;
+            i = SSL_AD_ILLEGAL_PARAMETER;
             SSLerr(SSL_F_DTLS1_READ_BYTES, SSL_R_BAD_CHANGE_CIPHER_SPEC);
-            goto f_err;
+            goto err;
         }
 
         rr->length = 0;

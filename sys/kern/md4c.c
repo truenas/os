@@ -90,8 +90,8 @@ static unsigned char PADDING[64] = {
 
 /* MD4 initialization. Begins an MD4 operation, writing a new context.
  */
-void
-MD4Init(MD4_CTX *context)
+void MD4Init (context)
+MD4_CTX *context;                                        /* context */
 {
   context->count[0] = context->count[1] = 0;
 
@@ -107,9 +107,10 @@ MD4Init(MD4_CTX *context)
      operation, processing another message block, and updating the
      context.
  */
-void
-MD4Update(MD4_CTX *context, const unsigned char *input,
-    unsigned int inputLen)
+void MD4Update (context, input, inputLen)
+MD4_CTX *context;                                        /* context */
+const unsigned char *input;                                /* input block */
+unsigned int inputLen;                     /* length of input block */
 {
   unsigned int i, index, partLen;
 
@@ -141,8 +142,8 @@ MD4Update(MD4_CTX *context, const unsigned char *input,
 }
 
 /* MD4 padding. */
-void
-MD4Pad(MD4_CTX *context)
+void MD4Pad (context)
+MD4_CTX *context;                                        /* context */
 {
   unsigned char bits[8];
   unsigned int index, padLen;
@@ -163,8 +164,7 @@ MD4Pad(MD4_CTX *context)
 /* MD4 finalization. Ends an MD4 message-digest operation, writing the
      the message digest and zeroizing the context.
  */
-void
-MD4Final(unsigned char digest[static 16], MD4_CTX *context)
+void MD4Final (unsigned char digest[static 16], MD4_CTX *context)
 {
   /* Do padding */
   MD4Pad (context);
@@ -179,8 +179,9 @@ MD4Final(unsigned char digest[static 16], MD4_CTX *context)
 
 /* MD4 basic transformation. Transforms state based on block.
  */
-static void
-MD4Transform(UINT4 state[4], const unsigned char block[64])
+static void MD4Transform (state, block)
+UINT4 state[4];
+const unsigned char block[64];
 {
   UINT4 a = state[0], b = state[1], c = state[2], d = state[3], x[16];
 
@@ -253,8 +254,10 @@ MD4Transform(UINT4 state[4], const unsigned char block[64])
 /* Encodes input (UINT4) into output (unsigned char). Assumes len is
      a multiple of 4.
  */
-static void
-Encode(unsigned char *output, UINT4 *input, unsigned int len)
+static void Encode (output, input, len)
+unsigned char *output;
+UINT4 *input;
+unsigned int len;
 {
   unsigned int i, j;
 
@@ -269,8 +272,11 @@ Encode(unsigned char *output, UINT4 *input, unsigned int len)
 /* Decodes input (unsigned char) into output (UINT4). Assumes len is
      a multiple of 4.
  */
-static void
-Decode(UINT4 *output, const unsigned char *input, unsigned int len)
+static void Decode (output, input, len)
+
+UINT4 *output;
+const unsigned char *input;
+unsigned int len;
 {
   unsigned int i, j;
 

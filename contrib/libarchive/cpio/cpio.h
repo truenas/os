@@ -111,8 +111,7 @@ enum {
 	OPTION_PRESERVE_OWNER,
 	OPTION_QUIET,
 	OPTION_UUENCODE,
-	OPTION_VERSION,
-	OPTION_ZSTD,
+	OPTION_VERSION
 };
 
 int	cpio_getopt(struct cpio *cpio);

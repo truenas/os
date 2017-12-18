@@ -397,9 +397,7 @@ main(int argc, char *argv[])
 					have_fstab = 1;
 					mntfromname = mntbuf->f_mntfromname;
 				} else if (argv[0][0] == '/' &&
-				    argv[0][1] == '\0' &&
-				    strcmp(fs->fs_vfstype,
-				    mntbuf->f_fstypename) == 0) {
+				    argv[0][1] == '\0') {
 					fs = getfsfile("/");
 					have_fstab = 1;
 					mntfromname = fs->fs_spec;

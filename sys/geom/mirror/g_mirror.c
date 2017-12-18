@@ -29,7 +29,6 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/fail.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
 #include <sys/limits.h>
@@ -666,7 +665,6 @@ g_mirror_write_metadata(struct g_mirror_disk *disk,
 		else
 			mirror_metadata_encode(md, sector);
 	}
-	KFAIL_POINT_ERROR(DEBUG_FP, g_mirror_metadata_write, error);
 	if (error == 0)
 		error = g_write_data(cp, offset, sector, length);
 	free(sector, M_MIRROR);
@@ -939,13 +937,6 @@ g_mirror_regular_request(struct bio *bp)
 		g_topology_unlock();
 	}
 
-	if (bp->bio_cmd == BIO_READ)
-		KFAIL_POINT_ERROR(DEBUG_FP, g_mirror_regular_request_read,
-		    bp->bio_error);
-	else if (bp->bio_cmd == BIO_WRITE)
-		KFAIL_POINT_ERROR(DEBUG_FP, g_mirror_regular_request_write,
-		    bp->bio_error);
-
 	pbp->bio_inbed++;
 	KASSERT(pbp->bio_inbed <= pbp->bio_children,
 	    ("bio_inbed (%u) is bigger than bio_children (%u).", pbp->bio_inbed,
@@ -982,13 +973,7 @@ g_mirror_regular_request(struct bio *bp)
 			if (g_mirror_disconnect_on_failure &&
 			    g_mirror_ndisks(sc, G_MIRROR_DISK_STATE_ACTIVE) > 1)
 			{
-				if (bp->bio_error == ENXIO &&
-				    bp->bio_cmd == BIO_READ)
-					sc->sc_bump_id |= G_MIRROR_BUMP_SYNCID;
-				else if (bp->bio_error == ENXIO)
-					sc->sc_bump_id |= G_MIRROR_BUMP_SYNCID_NOW;
-				else
-					sc->sc_bump_id |= G_MIRROR_BUMP_GENID;
+				sc->sc_bump_id |= G_MIRROR_BUMP_GENID;
 				g_mirror_event_send(disk,
 				    G_MIRROR_DISK_STATE_DISCONNECTED,
 				    G_MIRROR_EVENT_DONTWAIT);
@@ -1346,9 +1331,6 @@ g_mirror_sync_request(struct bio *bp)
 	    {
 		struct g_consumer *cp;
 
-		KFAIL_POINT_ERROR(DEBUG_FP, g_mirror_sync_request_read,
-		    bp->bio_error);
-
 		if (bp->bio_error != 0) {
 			G_MIRROR_LOGREQ(0, bp,
 			    "Synchronization request failed (error=%d).",
@@ -1374,9 +1356,6 @@ g_mirror_sync_request(struct bio *bp)
 		off_t offset;
 		void *data;
 		int i;
-
-		KFAIL_POINT_ERROR(DEBUG_FP, g_mirror_sync_request_write,
-		    bp->bio_error);
 
 		if (bp->bio_error != 0) {
 			G_MIRROR_LOGREQ(0, bp,
@@ -2216,9 +2195,7 @@ g_mirror_determine_state(struct g_mirror_disk *disk)
 	sc = disk->d_softc;
 	if (sc->sc_syncid == disk->d_sync.ds_syncid) {
 		if ((disk->d_flags &
-		    G_MIRROR_DISK_FLAG_SYNCHRONIZING) == 0 &&
-		    (g_mirror_ndisks(sc, G_MIRROR_DISK_STATE_ACTIVE) == 0 ||
-		     (disk->d_flags & G_MIRROR_DISK_FLAG_DIRTY) == 0)) {
+		    G_MIRROR_DISK_FLAG_SYNCHRONIZING) == 0) {
 			/* Disk does not need synchronization. */
 			state = G_MIRROR_DISK_STATE_ACTIVE;
 		} else {
@@ -2290,7 +2267,6 @@ g_mirror_update_device(struct g_mirror_softc *sc, bool force)
 	    {
 		struct g_mirror_disk *pdisk, *tdisk;
 		u_int dirty, ndisks, genid, syncid;
-		bool broken;
 
 		KASSERT(sc->sc_provider == NULL,
 		    ("Non-NULL provider in STARTING state (%s).", sc->sc_name));
@@ -2358,18 +2334,12 @@ g_mirror_update_device(struct g_mirror_softc *sc, bool force)
 		/*
 		 * Remove all disks without the biggest genid.
 		 */
-		broken = false;
 		LIST_FOREACH_SAFE(disk, &sc->sc_disks, d_next, tdisk) {
 			if (disk->d_genid < genid) {
 				G_MIRROR_DEBUG(0,
 				    "Component %s (device %s) broken, skipping.",
 				    g_mirror_get_diskname(disk), sc->sc_name);
 				g_mirror_destroy_disk(disk);
-				/*
-				 * Bump the syncid in case we discover a healthy
-				 * replacement disk after starting the mirror.
-				 */
-				broken = true;
 			}
 		}
 
@@ -2460,7 +2430,7 @@ g_mirror_update_device(struct g_mirror_softc *sc, bool force)
 		/* Reset hint. */
 		sc->sc_hint = NULL;
 		sc->sc_syncid = syncid;
-		if (force || broken) {
+		if (force) {
 			/* Remember to bump syncid on first write. */
 			sc->sc_bump_id |= G_MIRROR_BUMP_SYNCID;
 		}
@@ -2511,10 +2481,6 @@ g_mirror_update_device(struct g_mirror_softc *sc, bool force)
 		if ((sc->sc_bump_id & G_MIRROR_BUMP_GENID) != 0) {
 			sc->sc_bump_id &= ~G_MIRROR_BUMP_GENID;
 			g_mirror_bump_genid(sc);
-		}
-		if ((sc->sc_bump_id & G_MIRROR_BUMP_SYNCID_NOW) != 0) {
-			sc->sc_bump_id &= ~G_MIRROR_BUMP_SYNCID_NOW;
-			g_mirror_bump_syncid(sc);
 		}
 		break;
 	default:

@@ -310,8 +310,16 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* cloudabi_sys_mem_map */
+	/* cloudabi_sys_mem_lock */
 	case 33: {
+		struct cloudabi_sys_mem_lock_args *p = params;
+		uarg[0] = (intptr_t) p->mapping; /* const void * */
+		uarg[1] = p->mapping_len; /* size_t */
+		*n_args = 2;
+		break;
+	}
+	/* cloudabi_sys_mem_map */
+	case 34: {
 		struct cloudabi_sys_mem_map_args *p = params;
 		uarg[0] = (intptr_t) p->addr; /* void * */
 		uarg[1] = p->len; /* size_t */
@@ -323,7 +331,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi_sys_mem_protect */
-	case 34: {
+	case 35: {
 		struct cloudabi_sys_mem_protect_args *p = params;
 		uarg[0] = (intptr_t) p->mapping; /* void * */
 		uarg[1] = p->mapping_len; /* size_t */
@@ -332,7 +340,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi_sys_mem_sync */
-	case 35: {
+	case 36: {
 		struct cloudabi_sys_mem_sync_args *p = params;
 		uarg[0] = (intptr_t) p->mapping; /* void * */
 		uarg[1] = p->mapping_len; /* size_t */
@@ -340,8 +348,16 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
+	/* cloudabi_sys_mem_unlock */
+	case 37: {
+		struct cloudabi_sys_mem_unlock_args *p = params;
+		uarg[0] = (intptr_t) p->mapping; /* const void * */
+		uarg[1] = p->mapping_len; /* size_t */
+		*n_args = 2;
+		break;
+	}
 	/* cloudabi_sys_mem_unmap */
-	case 36: {
+	case 38: {
 		struct cloudabi_sys_mem_unmap_args *p = params;
 		uarg[0] = (intptr_t) p->mapping; /* void * */
 		uarg[1] = p->mapping_len; /* size_t */
@@ -349,16 +365,28 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi32_sys_poll */
-	case 37: {
+	case 39: {
 		struct cloudabi32_sys_poll_args *p = params;
 		uarg[0] = (intptr_t) p->in; /* const cloudabi32_subscription_t * */
-		uarg[1] = (intptr_t) p->out; /* cloudabi_event_t * */
+		uarg[1] = (intptr_t) p->out; /* cloudabi32_event_t * */
 		uarg[2] = p->nsubscriptions; /* size_t */
 		*n_args = 3;
 		break;
 	}
+	/* cloudabi32_sys_poll_fd */
+	case 40: {
+		struct cloudabi32_sys_poll_fd_args *p = params;
+		iarg[0] = p->fd; /* cloudabi_fd_t */
+		uarg[1] = (intptr_t) p->in; /* const cloudabi32_subscription_t * */
+		uarg[2] = p->in_len; /* size_t */
+		uarg[3] = (intptr_t) p->out; /* cloudabi32_event_t * */
+		uarg[4] = p->out_len; /* size_t */
+		uarg[5] = (intptr_t) p->timeout; /* const cloudabi32_subscription_t * */
+		*n_args = 6;
+		break;
+	}
 	/* cloudabi_sys_proc_exec */
-	case 38: {
+	case 41: {
 		struct cloudabi_sys_proc_exec_args *p = params;
 		iarg[0] = p->fd; /* cloudabi_fd_t */
 		uarg[1] = (intptr_t) p->data; /* const void * */
@@ -369,34 +397,70 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi_sys_proc_exit */
-	case 39: {
+	case 42: {
 		struct cloudabi_sys_proc_exit_args *p = params;
 		iarg[0] = p->rval; /* cloudabi_exitcode_t */
 		*n_args = 1;
 		break;
 	}
 	/* cloudabi_sys_proc_fork */
-	case 40: {
+	case 43: {
 		*n_args = 0;
 		break;
 	}
 	/* cloudabi_sys_proc_raise */
-	case 41: {
+	case 44: {
 		struct cloudabi_sys_proc_raise_args *p = params;
 		iarg[0] = p->sig; /* cloudabi_signal_t */
 		*n_args = 1;
 		break;
 	}
 	/* cloudabi_sys_random_get */
-	case 42: {
+	case 45: {
 		struct cloudabi_sys_random_get_args *p = params;
 		uarg[0] = (intptr_t) p->buf; /* void * */
 		uarg[1] = p->buf_len; /* size_t */
 		*n_args = 2;
 		break;
 	}
+	/* cloudabi_sys_sock_accept */
+	case 46: {
+		struct cloudabi_sys_sock_accept_args *p = params;
+		iarg[0] = p->sock; /* cloudabi_fd_t */
+		uarg[1] = (intptr_t) p->buf; /* cloudabi_sockstat_t * */
+		*n_args = 2;
+		break;
+	}
+	/* cloudabi_sys_sock_bind */
+	case 47: {
+		struct cloudabi_sys_sock_bind_args *p = params;
+		iarg[0] = p->sock; /* cloudabi_fd_t */
+		iarg[1] = p->fd; /* cloudabi_fd_t */
+		uarg[2] = (intptr_t) p->path; /* const char * */
+		uarg[3] = p->path_len; /* size_t */
+		*n_args = 4;
+		break;
+	}
+	/* cloudabi_sys_sock_connect */
+	case 48: {
+		struct cloudabi_sys_sock_connect_args *p = params;
+		iarg[0] = p->sock; /* cloudabi_fd_t */
+		iarg[1] = p->fd; /* cloudabi_fd_t */
+		uarg[2] = (intptr_t) p->path; /* const char * */
+		uarg[3] = p->path_len; /* size_t */
+		*n_args = 4;
+		break;
+	}
+	/* cloudabi_sys_sock_listen */
+	case 49: {
+		struct cloudabi_sys_sock_listen_args *p = params;
+		iarg[0] = p->sock; /* cloudabi_fd_t */
+		iarg[1] = p->backlog; /* cloudabi_backlog_t */
+		*n_args = 2;
+		break;
+	}
 	/* cloudabi32_sys_sock_recv */
-	case 43: {
+	case 50: {
 		struct cloudabi32_sys_sock_recv_args *p = params;
 		iarg[0] = p->sock; /* cloudabi_fd_t */
 		uarg[1] = (intptr_t) p->in; /* const cloudabi32_recv_in_t * */
@@ -405,7 +469,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi32_sys_sock_send */
-	case 44: {
+	case 51: {
 		struct cloudabi32_sys_sock_send_args *p = params;
 		iarg[0] = p->sock; /* cloudabi_fd_t */
 		uarg[1] = (intptr_t) p->in; /* const cloudabi32_send_in_t * */
@@ -414,22 +478,31 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi_sys_sock_shutdown */
-	case 45: {
+	case 52: {
 		struct cloudabi_sys_sock_shutdown_args *p = params;
 		iarg[0] = p->sock; /* cloudabi_fd_t */
 		iarg[1] = p->how; /* cloudabi_sdflags_t */
 		*n_args = 2;
 		break;
 	}
+	/* cloudabi_sys_sock_stat_get */
+	case 53: {
+		struct cloudabi_sys_sock_stat_get_args *p = params;
+		iarg[0] = p->sock; /* cloudabi_fd_t */
+		uarg[1] = (intptr_t) p->buf; /* cloudabi_sockstat_t * */
+		iarg[2] = p->flags; /* cloudabi_ssflags_t */
+		*n_args = 3;
+		break;
+	}
 	/* cloudabi32_sys_thread_create */
-	case 46: {
+	case 54: {
 		struct cloudabi32_sys_thread_create_args *p = params;
 		uarg[0] = (intptr_t) p->attr; /* cloudabi32_threadattr_t * */
 		*n_args = 1;
 		break;
 	}
 	/* cloudabi_sys_thread_exit */
-	case 47: {
+	case 55: {
 		struct cloudabi_sys_thread_exit_args *p = params;
 		uarg[0] = (intptr_t) p->lock; /* cloudabi_lock_t * */
 		iarg[1] = p->scope; /* cloudabi_scope_t */
@@ -437,7 +510,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* cloudabi_sys_thread_yield */
-	case 48: {
+	case 56: {
 		*n_args = 0;
 		break;
 	}
@@ -985,8 +1058,21 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* cloudabi_sys_mem_map */
+	/* cloudabi_sys_mem_lock */
 	case 33:
+		switch(ndx) {
+		case 0:
+			p = "const void *";
+			break;
+		case 1:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* cloudabi_sys_mem_map */
+	case 34:
 		switch(ndx) {
 		case 0:
 			p = "void *";
@@ -1011,7 +1097,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_mem_protect */
-	case 34:
+	case 35:
 		switch(ndx) {
 		case 0:
 			p = "void *";
@@ -1027,7 +1113,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_mem_sync */
-	case 35:
+	case 36:
 		switch(ndx) {
 		case 0:
 			p = "void *";
@@ -1042,8 +1128,21 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* cloudabi_sys_mem_unlock */
+	case 37:
+		switch(ndx) {
+		case 0:
+			p = "const void *";
+			break;
+		case 1:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* cloudabi_sys_mem_unmap */
-	case 36:
+	case 38:
 		switch(ndx) {
 		case 0:
 			p = "void *";
@@ -1056,13 +1155,13 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi32_sys_poll */
-	case 37:
+	case 39:
 		switch(ndx) {
 		case 0:
 			p = "const cloudabi32_subscription_t *";
 			break;
 		case 1:
-			p = "cloudabi_event_t *";
+			p = "cloudabi32_event_t *";
 			break;
 		case 2:
 			p = "size_t";
@@ -1071,8 +1170,33 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* cloudabi32_sys_poll_fd */
+	case 40:
+		switch(ndx) {
+		case 0:
+			p = "cloudabi_fd_t";
+			break;
+		case 1:
+			p = "const cloudabi32_subscription_t *";
+			break;
+		case 2:
+			p = "size_t";
+			break;
+		case 3:
+			p = "cloudabi32_event_t *";
+			break;
+		case 4:
+			p = "size_t";
+			break;
+		case 5:
+			p = "const cloudabi32_subscription_t *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* cloudabi_sys_proc_exec */
-	case 38:
+	case 41:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_fd_t";
@@ -1094,7 +1218,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_proc_exit */
-	case 39:
+	case 42:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_exitcode_t";
@@ -1104,10 +1228,10 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_proc_fork */
-	case 40:
+	case 43:
 		break;
 	/* cloudabi_sys_proc_raise */
-	case 41:
+	case 44:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_signal_t";
@@ -1117,7 +1241,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_random_get */
-	case 42:
+	case 45:
 		switch(ndx) {
 		case 0:
 			p = "void *";
@@ -1129,8 +1253,72 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* cloudabi_sys_sock_accept */
+	case 46:
+		switch(ndx) {
+		case 0:
+			p = "cloudabi_fd_t";
+			break;
+		case 1:
+			p = "cloudabi_sockstat_t *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* cloudabi_sys_sock_bind */
+	case 47:
+		switch(ndx) {
+		case 0:
+			p = "cloudabi_fd_t";
+			break;
+		case 1:
+			p = "cloudabi_fd_t";
+			break;
+		case 2:
+			p = "const char *";
+			break;
+		case 3:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* cloudabi_sys_sock_connect */
+	case 48:
+		switch(ndx) {
+		case 0:
+			p = "cloudabi_fd_t";
+			break;
+		case 1:
+			p = "cloudabi_fd_t";
+			break;
+		case 2:
+			p = "const char *";
+			break;
+		case 3:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* cloudabi_sys_sock_listen */
+	case 49:
+		switch(ndx) {
+		case 0:
+			p = "cloudabi_fd_t";
+			break;
+		case 1:
+			p = "cloudabi_backlog_t";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* cloudabi32_sys_sock_recv */
-	case 43:
+	case 50:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_fd_t";
@@ -1146,7 +1334,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi32_sys_sock_send */
-	case 44:
+	case 51:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_fd_t";
@@ -1162,7 +1350,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_sock_shutdown */
-	case 45:
+	case 52:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_fd_t";
@@ -1174,8 +1362,24 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* cloudabi_sys_sock_stat_get */
+	case 53:
+		switch(ndx) {
+		case 0:
+			p = "cloudabi_fd_t";
+			break;
+		case 1:
+			p = "cloudabi_sockstat_t *";
+			break;
+		case 2:
+			p = "cloudabi_ssflags_t";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* cloudabi32_sys_thread_create */
-	case 46:
+	case 54:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi32_threadattr_t *";
@@ -1185,7 +1389,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_thread_exit */
-	case 47:
+	case 55:
 		switch(ndx) {
 		case 0:
 			p = "cloudabi_lock_t *";
@@ -1198,7 +1402,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* cloudabi_sys_thread_yield */
-	case 48:
+	case 56:
 		break;
 	default:
 		break;
@@ -1376,80 +1580,120 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_mem_map */
+	/* cloudabi_sys_mem_lock */
 	case 33:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_mem_protect */
+	/* cloudabi_sys_mem_map */
 	case 34:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_mem_sync */
+	/* cloudabi_sys_mem_protect */
 	case 35:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_mem_unmap */
+	/* cloudabi_sys_mem_sync */
 	case 36:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi32_sys_poll */
+	/* cloudabi_sys_mem_unlock */
 	case 37:
 		if (ndx == 0 || ndx == 1)
-			p = "size_t";
+			p = "void";
 		break;
-	/* cloudabi_sys_proc_exec */
+	/* cloudabi_sys_mem_unmap */
 	case 38:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_proc_exit */
+	/* cloudabi32_sys_poll */
 	case 39:
 		if (ndx == 0 || ndx == 1)
-			p = "void";
+			p = "size_t";
 		break;
-	/* cloudabi_sys_proc_fork */
+	/* cloudabi32_sys_poll_fd */
 	case 40:
-	/* cloudabi_sys_proc_raise */
+		if (ndx == 0 || ndx == 1)
+			p = "size_t";
+		break;
+	/* cloudabi_sys_proc_exec */
 	case 41:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_random_get */
+	/* cloudabi_sys_proc_exit */
 	case 42:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi32_sys_sock_recv */
+	/* cloudabi_sys_proc_fork */
 	case 43:
-		if (ndx == 0 || ndx == 1)
-			p = "void";
-		break;
-	/* cloudabi32_sys_sock_send */
+	/* cloudabi_sys_proc_raise */
 	case 44:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_sock_shutdown */
+	/* cloudabi_sys_random_get */
 	case 45:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi32_sys_thread_create */
+	/* cloudabi_sys_sock_accept */
 	case 46:
 		if (ndx == 0 || ndx == 1)
-			p = "cloudabi_tid_t";
+			p = "cloudabi_fd_t";
 		break;
-	/* cloudabi_sys_thread_exit */
+	/* cloudabi_sys_sock_bind */
 	case 47:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
 		break;
-	/* cloudabi_sys_thread_yield */
+	/* cloudabi_sys_sock_connect */
 	case 48:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi_sys_sock_listen */
+	case 49:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi32_sys_sock_recv */
+	case 50:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi32_sys_sock_send */
+	case 51:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi_sys_sock_shutdown */
+	case 52:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi_sys_sock_stat_get */
+	case 53:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi32_sys_thread_create */
+	case 54:
+		if (ndx == 0 || ndx == 1)
+			p = "cloudabi_tid_t";
+		break;
+	/* cloudabi_sys_thread_exit */
+	case 55:
+		if (ndx == 0 || ndx == 1)
+			p = "void";
+		break;
+	/* cloudabi_sys_thread_yield */
+	case 56:
 	default:
 		break;
 	};

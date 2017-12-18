@@ -172,7 +172,7 @@ main(int argc, char *argv[])
 	au_id_t		 auid;
 #endif
 
-	p = shell = class = cleanenv = NULL;
+	shell = class = cleanenv = NULL;
 	asme = asthem = fastlogin = statusp = 0;
 	user = "root";
 	iscsh = UNSET;

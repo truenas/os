@@ -122,11 +122,7 @@ struct umtx_robust_lists_params {
 
 #ifndef _KERNEL
 
-__BEGIN_DECLS
-
 int _umtx_op(void *obj, int op, u_long val, void *uaddr, void *uaddr2);
-
-__END_DECLS
 
 #else
 

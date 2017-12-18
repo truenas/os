@@ -61,7 +61,9 @@
 #include <openssl/asn1.h>
 #include <openssl/asn1t.h>
 #include <openssl/objects.h>
-#include "asn1_int.h"
+
+static void asn1_item_combine_free(ASN1_VALUE **pval, const ASN1_ITEM *it,
+                                   int combine);
 
 /* Free up an ASN1 structure */
 
@@ -75,7 +77,8 @@ void ASN1_item_ex_free(ASN1_VALUE **pval, const ASN1_ITEM *it)
     asn1_item_combine_free(pval, it, 0);
 }
 
-void asn1_item_combine_free(ASN1_VALUE **pval, const ASN1_ITEM *it, int combine)
+static void asn1_item_combine_free(ASN1_VALUE **pval, const ASN1_ITEM *it,
+                                   int combine)
 {
     const ASN1_TEMPLATE *tt = NULL, *seqtt;
     const ASN1_EXTERN_FUNCS *ef;

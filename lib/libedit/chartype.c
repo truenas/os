@@ -223,7 +223,6 @@ ct_mbrtowc(wchar_t *wc, const char *s, size_t n)
 
 size_t
 ct_mbrtowc(wchar_t *wc, const char *s, size_t n)
-{
 	if (s == NULL)
 		return 0;
 	if (n == 0)

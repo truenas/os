@@ -100,7 +100,6 @@ __FBSDID("$FreeBSD$");
 #include "opt_cpu.h"
 #include "opt_pmap.h"
 #include "opt_smp.h"
-#include "opt_vm.h"
 #include "opt_xbox.h"
 
 #include <sys/param.h>
@@ -289,9 +288,7 @@ static void	free_pv_entry(pmap_t pmap, pv_entry_t pv);
 static pv_entry_t get_pv_entry(pmap_t pmap, boolean_t try);
 static void	pmap_pv_demote_pde(pmap_t pmap, vm_offset_t va, vm_paddr_t pa);
 static boolean_t pmap_pv_insert_pde(pmap_t pmap, vm_offset_t va, vm_paddr_t pa);
-#if VM_NRESERVLEVEL > 0
 static void	pmap_pv_promote_pde(pmap_t pmap, vm_offset_t va, vm_paddr_t pa);
-#endif
 static void	pmap_pvh_free(struct md_page *pvh, pmap_t pmap, vm_offset_t va);
 static pv_entry_t pmap_pvh_remove(struct md_page *pvh, pmap_t pmap,
 		    vm_offset_t va);
@@ -312,9 +309,7 @@ static boolean_t pmap_is_referenced_pvh(struct md_page *pvh);
 static void pmap_kenter_attr(vm_offset_t va, vm_paddr_t pa, int mode);
 static void pmap_kenter_pde(vm_offset_t va, pd_entry_t newpde);
 static void pmap_pde_attr(pd_entry_t *pde, int cache_bits);
-#if VM_NRESERVLEVEL > 0
 static void pmap_promote_pde(pmap_t pmap, pd_entry_t *pde, vm_offset_t va);
-#endif
 static boolean_t pmap_protect_pde(pmap_t pmap, pd_entry_t *pde, vm_offset_t sva,
     vm_prot_t prot);
 static void pmap_pte_attr(pt_entry_t *pte, int cache_bits);
@@ -2509,7 +2504,6 @@ pmap_pv_demote_pde(pmap_t pmap, vm_offset_t va, vm_paddr_t pa)
 	} while (va < va_last);
 }
 
-#if VM_NRESERVLEVEL > 0
 static void
 pmap_pv_promote_pde(pmap_t pmap, vm_offset_t va, vm_paddr_t pa)
 {
@@ -2543,7 +2537,6 @@ pmap_pv_promote_pde(pmap_t pmap, vm_offset_t va, vm_paddr_t pa)
 		pmap_pvh_free(&m->md, pmap, va);
 	} while (va < va_last);
 }
-#endif /* VM_NRESERVLEVEL > 0 */
 
 static void
 pmap_pvh_free(struct md_page *pvh, pmap_t pmap, vm_offset_t va)
@@ -3319,7 +3312,6 @@ retry:
 	PMAP_UNLOCK(pmap);
 }
 
-#if VM_NRESERVLEVEL > 0
 /*
  * Tries to promote the 512 or 1024, contiguous 4KB page mappings that are
  * within a single page table page (PTP) to a single 2- or 4MB page mapping.
@@ -3456,7 +3448,6 @@ setpte:
 	CTR2(KTR_PMAP, "pmap_promote_pde: success for va %#x"
 	    " in pmap %p", va, pmap);
 }
-#endif /* VM_NRESERVLEVEL > 0 */
 
 /*
  *	Insert the given physical page (p) at
@@ -3673,7 +3664,6 @@ validate:
 			pte_store(pte, newpte);
 	}
 
-#if VM_NRESERVLEVEL > 0
 	/*
 	 * If both the page table page and the reservation are fully
 	 * populated, then attempt promotion.
@@ -3682,7 +3672,6 @@ validate:
 	    pg_ps_enabled && (m->flags & PG_FICTITIOUS) == 0 &&
 	    vm_reserv_level_iffullpop(m) == 0)
 		pmap_promote_pde(pmap, pde, va);
-#endif
 
 	sched_unpin();
 	rw_wunlock(&pvh_global_lock);
@@ -4847,6 +4836,8 @@ retry:
 	rw_wunlock(&pvh_global_lock);
 }
 
+#define	PMAP_TS_REFERENCED_MAX	5
+
 /*
  *	pmap_ts_referenced:
  *
@@ -4854,6 +4845,10 @@ retry:
  *	It is not necessary for every reference bit to be cleared, but it
  *	is necessary that 0 only be returned when there are truly no
  *	reference bits set.
+ *
+ *	XXX: The exact number of bits to check and clear is a matter that
+ *	should be tested and standardized at some point in the future for
+ *	optimal aging of shared pages.
  *
  *	As an optimization, update the page's dirty field if a modified bit is
  *	found while counting reference bits.  This opportunistic update can be

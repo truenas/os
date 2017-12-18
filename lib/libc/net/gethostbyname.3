@@ -28,7 +28,7 @@
 .\"     From: @(#)gethostbyname.3	8.4 (Berkeley) 5/25/95
 .\" $FreeBSD$
 .\"
-.Dd October 4, 2017
+.Dd May 12, 2006
 .Dt GETHOSTBYNAME 3
 .Os
 .Sh NAME
@@ -189,20 +189,19 @@ function
 may be used to request the use of a connected
 .Tn TCP
 socket for queries.
-Queries will by default use
-.Tn UDP
-datagrams.
 If the
 .Fa stayopen
-flag is non-zero, a
+flag is non-zero,
+this sets the option to send all queries to the name server using
 .Tn TCP
-connection to the name server will be used.
-It will remain open after calls to
+and to retain the connection after each call to
 .Fn gethostbyname ,
 .Fn gethostbyname2
 or
-.Fn gethostbyaddr
-have completed.
+.Fn gethostbyaddr .
+Otherwise, queries are performed using
+.Tn UDP
+datagrams.
 .Pp
 The
 .Fn endhostent

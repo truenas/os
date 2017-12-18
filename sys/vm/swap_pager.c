@@ -91,7 +91,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/resource.h>
 #include <sys/resourcevar.h>
 #include <sys/rwlock.h>
-#include <sys/sbuf.h>
 #include <sys/sysctl.h>
 #include <sys/sysproto.h>
 #include <sys/blist.h>
@@ -156,7 +155,7 @@ static vm_ooffset_t swap_reserved;
 SYSCTL_QUAD(_vm, OID_AUTO, swap_reserved, CTLFLAG_RD, &swap_reserved, 0,
     "Amount of swap storage needed to back all allocated anonymous memory.");
 static int overcommit = 0;
-SYSCTL_INT(_vm, VM_OVERCOMMIT, overcommit, CTLFLAG_RW, &overcommit, 0,
+SYSCTL_INT(_vm, OID_AUTO, overcommit, CTLFLAG_RW, &overcommit, 0,
     "Configure virtual memory overcommit behavior. See tuning(7) "
     "for details.");
 static unsigned long swzone;
@@ -323,10 +322,6 @@ static int sysctl_swap_async_max(SYSCTL_HANDLER_ARGS);
 SYSCTL_PROC(_vm, OID_AUTO, swap_async_max, CTLTYPE_INT | CTLFLAG_RW |
     CTLFLAG_MPSAFE, NULL, 0, sysctl_swap_async_max, "I",
     "Maximum running async swap ops");
-static int sysctl_swap_fragmentation(SYSCTL_HANDLER_ARGS);
-SYSCTL_PROC(_vm, OID_AUTO, swap_fragmentation, CTLTYPE_STRING | CTLFLAG_RD |
-    CTLFLAG_MPSAFE, NULL, 0, sysctl_swap_fragmentation, "A",
-    "Swap Fragmentation Info");
 
 static struct sx sw_alloc_sx;
 
@@ -540,15 +535,7 @@ swap_pager_swap_init(void)
 		 */
 		n -= ((n + 2) / 3);
 	} while (n > 0);
-
-	/*
-	 * Often uma_zone_reserve_kva() cannot reserve exactly the
-	 * requested size.  Account for the difference when
-	 * calculating swap_maxpages.
-	 */
-	n = uma_zone_get_max(swblk_zone);
-
-	if (n < n2)
+	if (n2 != n)
 		printf("Swap blk zone entries reduced from %lu to %lu.\n",
 		    n2, n);
 	swap_maxpages = n * SWAP_META_PAGES;
@@ -789,36 +776,6 @@ swp_pager_freeswapspace(daddr_t blk, int npages)
 		}
 	}
 	panic("Swapdev not found");
-}
-
-/*
- * SYSCTL_SWAP_FRAGMENTATION() -	produce raw swap space stats
- */
-static int
-sysctl_swap_fragmentation(SYSCTL_HANDLER_ARGS)
-{
-	struct sbuf sbuf;
-	struct swdevt *sp;
-	const char *devname;
-	int error;
-
-	error = sysctl_wire_old_buffer(req, 0);
-	if (error != 0)
-		return (error);
-	sbuf_new_for_sysctl(&sbuf, NULL, 128, req);
-	mtx_lock(&sw_dev_mtx);
-	TAILQ_FOREACH(sp, &swtailq, sw_list) {
-		if (vn_isdisk(sp->sw_vp, NULL))
-			devname = devtoname(sp->sw_vp->v_rdev);
-		else
-			devname = "[file]";
-		sbuf_printf(&sbuf, "\nFree space on device %s:\n", devname);
-		blist_stats(sp->sw_blist, &sbuf);
-	}
-	mtx_unlock(&sw_dev_mtx);
-	error = sbuf_finish(&sbuf);
-	sbuf_delete(&sbuf);
-	return (error);
 }
 
 /*
@@ -1531,7 +1488,7 @@ swp_pager_async_iodone(struct buf *bp)
 				 * so it doesn't clog the inactive list,
 				 * then finish the I/O.
 				 */
-				MPASS(m->dirty == VM_PAGE_BITS_ALL);
+				vm_page_dirty(m);
 				vm_page_lock(m);
 				vm_page_activate(m);
 				vm_page_unlock(m);

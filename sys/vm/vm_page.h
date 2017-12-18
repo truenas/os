@@ -440,18 +440,6 @@ malloc2vm_flags(int malloc_flags)
 }
 #endif
 
-/*
- * Predicates supported by vm_page_ps_test():
- *
- *	PS_ALL_DIRTY is true only if the entire (super)page is dirty.
- *	However, it can be spuriously false when the (super)page has become
- *	dirty in the pmap but that information has not been propagated to the
- *	machine-independent layer.
- */
-#define	PS_ALL_DIRTY	0x1
-#define	PS_ALL_VALID	0x2
-#define	PS_NONE_BUSY	0x4
-
 void vm_page_busy_downgrade(vm_page_t m);
 void vm_page_busy_sleep(vm_page_t m, const char *msg, bool nonshared);
 void vm_page_flash(vm_page_t m);
@@ -471,6 +459,7 @@ void vm_page_change_lock(vm_page_t m, struct mtx **mtx);
 vm_page_t vm_page_grab (vm_object_t, vm_pindex_t, int);
 int vm_page_grab_pages(vm_object_t object, vm_pindex_t pindex, int allocflags,
     vm_page_t *ma, int count);
+int vm_page_try_to_free (vm_page_t);
 void vm_page_deactivate (vm_page_t);
 void vm_page_deactivate_noreuse(vm_page_t);
 void vm_page_dequeue(vm_page_t m);
@@ -487,7 +476,7 @@ vm_page_t vm_page_next(vm_page_t m);
 int vm_page_pa_tryrelock(pmap_t, vm_paddr_t, vm_paddr_t *);
 struct vm_pagequeue *vm_page_pagequeue(vm_page_t m);
 vm_page_t vm_page_prev(vm_page_t m);
-bool vm_page_ps_test(vm_page_t m, int flags, vm_page_t skip_m);
+boolean_t vm_page_ps_is_valid(vm_page_t m);
 void vm_page_putfake(vm_page_t m);
 void vm_page_readahead_finish(vm_page_t m);
 bool vm_page_reclaim_contig(int req, u_long npages, vm_paddr_t low,
@@ -506,7 +495,6 @@ void vm_page_set_valid_range(vm_page_t m, int base, int size);
 int vm_page_sleep_if_busy(vm_page_t m, const char *msg);
 vm_offset_t vm_page_startup(vm_offset_t vaddr);
 void vm_page_sunbusy(vm_page_t m);
-bool vm_page_try_to_free(vm_page_t m);
 int vm_page_trysbusy(vm_page_t m);
 void vm_page_unhold_pages(vm_page_t *ma, int count);
 boolean_t vm_page_unwire(vm_page_t m, uint8_t queue);

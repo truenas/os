@@ -50,7 +50,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/linker.h>
 #include <sys/module.h>
 #include <sys/mount.h>
-#include <sys/queue.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/syslog.h>
@@ -92,10 +91,9 @@ __FBSDID("$FreeBSD$");
  * Structures for keeping the mount list and export list
  */
 struct mountlist {
+	struct mountlist *ml_next;
 	char	ml_host[MNTNAMLEN+1];
 	char	ml_dirp[MNTPATHLEN+1];
-
-	SLIST_ENTRY(mountlist)	next;
 };
 
 struct dirlist {
@@ -103,13 +101,14 @@ struct dirlist {
 	struct dirlist	*dp_right;
 	int		dp_flag;
 	struct hostlist	*dp_hosts;	/* List of hosts this dir exported to */
-	char		*dp_dirp;
+	char		dp_dirp[1];	/* Actually malloc'd to size of dir */
 };
 /* dp_flag bits */
 #define	DP_DEFSET	0x1
 #define DP_HOSTSET	0x2
 
 struct exportlist {
+	struct exportlist *ex_next;
 	struct dirlist	*ex_dirl;
 	struct dirlist	*ex_defdir;
 	int		ex_flag;
@@ -120,8 +119,6 @@ struct exportlist {
 	int		ex_secflavors[MAXSECFLAVORS];
 	int		ex_defnumsecflavors;
 	int		ex_defsecflavors[MAXSECFLAVORS];
-
-	SLIST_ENTRY(exportlist) entries;
 };
 /* ex_flag bits */
 #define	EX_LINKED	0x1
@@ -225,8 +222,8 @@ static int	xdr_fhs(XDR *, caddr_t);
 static int	xdr_mlist(XDR *, caddr_t);
 static void	terminate(int);
 
-static SLIST_HEAD(, exportlist) exphead = SLIST_HEAD_INITIALIZER(exphead);
-static SLIST_HEAD(, mountlist) mlhead = SLIST_HEAD_INITIALIZER(mlhead);
+static struct exportlist *exphead;
+static struct mountlist *mlhead;
 static struct grouplist *grphead;
 static char *exnames_default[2] = { _PATH_EXPORTS, NULL };
 static char **exnames;
@@ -448,6 +445,8 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 	grphead = (struct grouplist *)NULL;
+	exphead = (struct exportlist *)NULL;
+	mlhead = (struct mountlist *)NULL;
 	if (argc > 0)
 		exnames = argv;
 	else
@@ -1254,7 +1253,8 @@ xdr_mlist(XDR *xdrsp, caddr_t cp __unused)
 	int false = 0;
 	char *strp;
 
-	SLIST_FOREACH(mlp, &mlhead, next) {
+	mlp = mlhead;
+	while (mlp) {
 		if (!xdr_bool(xdrsp, &true))
 			return (0);
 		strp = &mlp->ml_host[0];
@@ -1263,6 +1263,7 @@ xdr_mlist(XDR *xdrsp, caddr_t cp __unused)
 		strp = &mlp->ml_dirp[0];
 		if (!xdr_string(xdrsp, &strp, MNTPATHLEN))
 			return (0);
+		mlp = mlp->ml_next;
 	}
 	if (!xdr_bool(xdrsp, &false))
 		return (0);
@@ -1283,8 +1284,8 @@ xdr_explist_common(XDR *xdrsp, caddr_t cp __unused, int brief)
 	sigemptyset(&sighup_mask);
 	sigaddset(&sighup_mask, SIGHUP);
 	sigprocmask(SIG_BLOCK, &sighup_mask, NULL);
-
-	SLIST_FOREACH(ep, &exphead, entries) {
+	ep = exphead;
+	while (ep) {
 		putdef = 0;
 		if (put_exlist(ep->ex_dirl, xdrsp, ep->ex_defdir,
 			       &putdef, brief))
@@ -1293,6 +1294,7 @@ xdr_explist_common(XDR *xdrsp, caddr_t cp __unused, int brief)
 			put_exlist(ep->ex_defdir, xdrsp, (struct dirlist *)NULL,
 			&putdef, brief))
 			goto errout;
+		ep = ep->ex_next;
 	}
 	sigprocmask(SIG_UNBLOCK, &sighup_mask, NULL);
 	if (!xdr_bool(xdrsp, &false))
@@ -1395,8 +1397,9 @@ static FILE *exp_file;
 static void
 get_exportlist_one(void)
 {
-	struct exportlist *ep;
+	struct exportlist *ep, *ep2;
 	struct grouplist *grp, *tgrp;
+	struct exportlist **epp;
 	struct dirlist *dirhead;
 	struct statfs fsb;
 	struct xucred anon;
@@ -1522,8 +1525,12 @@ get_exportlist_one(void)
 					if (ep == (struct exportlist *)NULL) {
 					    ep = get_exp();
 					    ep->ex_fs = fsb.f_fsid;
-					    ep->ex_fsdir = strdup(fsb.f_mntonname);
-					    if (ep->ex_fsdir == NULL)
+					    ep->ex_fsdir = (char *)malloc
+					        (strlen(fsb.f_mntonname) + 1);
+					    if (ep->ex_fsdir)
+						strcpy(ep->ex_fsdir,
+						    fsb.f_mntonname);
+					    else
 						out_of_mem();
 					    if (debug)
 						warnx(
@@ -1673,8 +1680,19 @@ get_exportlist_one(void)
 		}
 		dirhead = (struct dirlist *)NULL;
 		if ((ep->ex_flag & EX_LINKED) == 0) {
-			SLIST_INSERT_HEAD(&exphead, ep, entries);
+			ep2 = exphead;
+			epp = &exphead;
 
+			/*
+			 * Insert in the list in alphabetical order.
+			 */
+			while (ep2 && strcmp(ep2->ex_fsdir, ep->ex_fsdir) < 0) {
+				epp = &ep2->ex_next;
+				ep2 = ep2->ex_next;
+			}
+			if (ep2)
+				ep->ex_next = ep2;
+			*epp = ep;
 			ep->ex_flag |= EX_LINKED;
 		}
 nextline:
@@ -1716,10 +1734,13 @@ get_exportlist(void)
 	/*
 	 * First, get rid of the old list
 	 */
-	SLIST_FOREACH_SAFE(ep, &exphead, entries, ep2) {
-		SLIST_REMOVE(&exphead, ep, exportlist, entries);
-		free_exp(ep);
+	ep = exphead;
+	while (ep) {
+		ep2 = ep;
+		ep = ep->ex_next;
+		free_exp(ep2);
 	}
+	exphead = (struct exportlist *)NULL;
 
 	grp = grphead;
 	while (grp) {
@@ -1901,12 +1922,13 @@ ex_search(fsid_t *fsid)
 {
 	struct exportlist *ep;
 
-	SLIST_FOREACH(ep, &exphead, entries) {
+	ep = exphead;
+	while (ep) {
 		if (ep->ex_fs.val[0] == fsid->val[0] &&
 		    ep->ex_fs.val[1] == fsid->val[1])
 			return (ep);
+		ep = ep->ex_next;
 	}
-
 	return (ep);
 }
 
@@ -1918,16 +1940,14 @@ add_expdir(struct dirlist **dpp, char *cp, int len)
 {
 	struct dirlist *dp;
 
-	dp = malloc(sizeof (struct dirlist));
+	dp = (struct dirlist *)malloc(sizeof (struct dirlist) + len);
 	if (dp == (struct dirlist *)NULL)
 		out_of_mem();
 	dp->dp_left = *dpp;
 	dp->dp_right = (struct dirlist *)NULL;
 	dp->dp_flag = 0;
 	dp->dp_hosts = (struct hostlist *)NULL;
-	dp->dp_dirp = strndup(cp, len);
-	if (dp->dp_dirp == NULL)
-		out_of_mem();
+	strcpy(dp->dp_dirp, cp);
 	*dpp = dp;
 	return (dp->dp_dirp);
 }
@@ -2141,8 +2161,7 @@ free_dir(struct dirlist *dp)
 		free_dir(dp->dp_left);
 		free_dir(dp->dp_right);
 		free_host(dp->dp_hosts);
-		free(dp->dp_dirp);
-		free(dp);
+		free((caddr_t)dp);
 	}
 }
 
@@ -2981,7 +3000,7 @@ parsecred(char *namelist, struct xucred *cr)
 static void
 get_mountlist(void)
 {
-	struct mountlist *mlp;
+	struct mountlist *mlp, **mlpp;
 	char *host, *dirp, *cp;
 	char str[STRSIZ];
 	FILE *mlfile;
@@ -2994,6 +3013,7 @@ get_mountlist(void)
 			return;
 		}
 	}
+	mlpp = &mlhead;
 	while (fgets(str, STRSIZ, mlfile) != NULL) {
 		cp = str;
 		host = strsep(&cp, " \t\n");
@@ -3007,8 +3027,9 @@ get_mountlist(void)
 		mlp->ml_host[MNTNAMLEN] = '\0';
 		strncpy(mlp->ml_dirp, dirp, MNTPATHLEN);
 		mlp->ml_dirp[MNTPATHLEN] = '\0';
-
-		SLIST_INSERT_HEAD(&mlhead, mlp, next);
+		mlp->ml_next = (struct mountlist *)NULL;
+		*mlpp = mlp;
+		mlpp = &mlp->ml_next;
 	}
 	fclose(mlfile);
 }
@@ -3016,16 +3037,23 @@ get_mountlist(void)
 static void
 del_mlist(char *hostp, char *dirp)
 {
-	struct mountlist *mlp, *mlp2;
+	struct mountlist *mlp, **mlpp;
+	struct mountlist *mlp2;
 	FILE *mlfile;
 	int fnd = 0;
 
-	SLIST_FOREACH_SAFE(mlp, &mlhead, next, mlp2) {
+	mlpp = &mlhead;
+	mlp = mlhead;
+	while (mlp) {
 		if (!strcmp(mlp->ml_host, hostp) &&
 		    (!dirp || !strcmp(mlp->ml_dirp, dirp))) {
 			fnd = 1;
-			SLIST_REMOVE(&mlhead, mlp, mountlist, next);
-			free((caddr_t)mlp);
+			mlp2 = mlp;
+			*mlpp = mlp = mlp->ml_next;
+			free((caddr_t)mlp2);
+		} else {
+			mlpp = &mlp->ml_next;
+			mlp = mlp->ml_next;
 		}
 	}
 	if (fnd) {
@@ -3033,8 +3061,10 @@ del_mlist(char *hostp, char *dirp)
 			syslog(LOG_ERR,"can't update %s", _PATH_RMOUNTLIST);
 			return;
 		}
-		SLIST_FOREACH(mlp, &mlhead, next) {
+		mlp = mlhead;
+		while (mlp) {
 			fprintf(mlfile, "%s %s\n", mlp->ml_host, mlp->ml_dirp);
+			mlp = mlp->ml_next;
 		}
 		fclose(mlfile);
 	}
@@ -3043,14 +3073,17 @@ del_mlist(char *hostp, char *dirp)
 static void
 add_mlist(char *hostp, char *dirp)
 {
-	struct mountlist *mlp;
+	struct mountlist *mlp, **mlpp;
 	FILE *mlfile;
 
-	SLIST_FOREACH(mlp, &mlhead, next) {
+	mlpp = &mlhead;
+	mlp = mlhead;
+	while (mlp) {
 		if (!strcmp(mlp->ml_host, hostp) && !strcmp(mlp->ml_dirp, dirp))
 			return;
+		mlpp = &mlp->ml_next;
+		mlp = mlp->ml_next;
 	}
-
 	mlp = (struct mountlist *)malloc(sizeof (*mlp));
 	if (mlp == (struct mountlist *)NULL)
 		out_of_mem();
@@ -3058,7 +3091,8 @@ add_mlist(char *hostp, char *dirp)
 	mlp->ml_host[MNTNAMLEN] = '\0';
 	strncpy(mlp->ml_dirp, dirp, MNTPATHLEN);
 	mlp->ml_dirp[MNTPATHLEN] = '\0';
-	SLIST_INSERT_HEAD(&mlhead, mlp, next);
+	mlp->ml_next = (struct mountlist *)NULL;
+	*mlpp = mlp;
 	if ((mlfile = fopen(_PATH_RMOUNTLIST, "a")) == NULL) {
 		syslog(LOG_ERR, "can't update %s", _PATH_RMOUNTLIST);
 		return;

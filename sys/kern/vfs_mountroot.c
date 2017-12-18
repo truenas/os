@@ -183,8 +183,7 @@ void
 root_mount_rel(struct root_hold_token *h)
 {
 
-	if (h == NULL)
-		return;
+	KASSERT(h != NULL, ("%s: NULL token", __func__));
 
 	mtx_lock(&root_holds_mtx);
 	LIST_REMOVE(h, list);

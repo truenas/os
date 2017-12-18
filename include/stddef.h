@@ -70,7 +70,7 @@ typedef	__max_align_t	max_align_t;
 #endif
 #endif
 
-#define	offsetof(type, field)	__offsetof(type, field)
+#define	offsetof(type, member)	__offsetof(type, member)
 
 #if __EXT1_VISIBLE
 /* ISO/IEC 9899:2011 K.3.3.2 */

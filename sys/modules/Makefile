@@ -221,7 +221,6 @@ SUBDIR=	\
 	${_linux_common} \
 	${_linux64} \
 	linuxkpi \
-	${_lio} \
 	lmc \
 	lpt \
 	mac_biba \
@@ -602,9 +601,6 @@ _ixv=		ixv
 _linprocfs=	linprocfs
 _linsysfs=	linsysfs
 _linux=		linux
-.if ${MK_SOURCELESS_UCODE} != "no"
-_lio=		lio
-.endif
 _nctgpio=	nctgpio
 _ndis=		ndis
 _pccard=	pccard

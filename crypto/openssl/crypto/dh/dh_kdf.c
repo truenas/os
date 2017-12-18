@@ -51,9 +51,6 @@
  * ====================================================================
  */
 
-#include <e_os.h>
-
-#ifndef OPENSSL_NO_CMS
 #include <string.h>
 #include <openssl/dh.h>
 #include <openssl/evp.h>
@@ -188,4 +185,3 @@ int DH_KDF_X9_42(unsigned char *out, size_t outlen,
     EVP_MD_CTX_cleanup(&mctx);
     return rv;
 }
-#endif

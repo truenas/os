@@ -1962,7 +1962,7 @@ vm_map_pmap_enter(vm_map_t map, vm_offset_t addr, vm_prot_t prot,
 			    (pagesizes[p->psind] - 1)) == 0) {
 				mask = atop(pagesizes[p->psind]) - 1;
 				if (tmpidx + mask < psize &&
-				    vm_page_ps_test(p, PS_ALL_VALID, NULL)) {
+				    vm_page_ps_is_valid(p)) {
 					p += mask;
 					threshold += mask;
 				}
@@ -3610,13 +3610,12 @@ vm_map_stack_locked(vm_map_t map, vm_offset_t addrbos, vm_size_t max_ssize,
 	KASSERT(orient != (MAP_STACK_GROWS_DOWN | MAP_STACK_GROWS_UP),
 	    ("bi-dir stack"));
 
-	if (addrbos < vm_map_min(map) ||
-	    addrbos + max_ssize > vm_map_max(map) ||
-	    addrbos + max_ssize <= addrbos)
-		return (KERN_INVALID_ADDRESS);
 	sgp = (vm_size_t)stack_guard_page * PAGE_SIZE;
-	if (sgp >= max_ssize)
-		return (KERN_INVALID_ARGUMENT);
+	if (addrbos < vm_map_min(map) ||
+	    addrbos > vm_map_max(map) ||
+	    addrbos + max_ssize < addrbos ||
+	    sgp >= max_ssize)
+		return (KERN_NO_SPACE);
 
 	init_ssize = growsize;
 	if (max_ssize < init_ssize + sgp)

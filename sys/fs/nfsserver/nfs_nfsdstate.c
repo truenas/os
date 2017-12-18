@@ -3891,11 +3891,11 @@ nfsrv_getclientipaddr(struct nfsrv_descript *nd, struct nfsclient *clp)
 	u_char protocol[5], addr[24];
 	int error = 0, cantparse = 0;
 	union {
-		in_addr_t ival;
+		u_long ival;
 		u_char cval[4];
 	} ip;
 	union {
-		in_port_t sval;
+		u_short sval;
 		u_char cval[2];
 	} port;
 
@@ -3989,10 +3989,8 @@ nfsrv_getclientipaddr(struct nfsrv_descript *nd, struct nfsclient *clp)
 	}
 	if (cantparse) {
 		sad = NFSSOCKADDR(nd->nd_nam, struct sockaddr_in *);
-		if (sad->sin_family == AF_INET) {
-			rad->sin_addr.s_addr = sad->sin_addr.s_addr;
-			rad->sin_port = 0x0;
-		}
+		rad->sin_addr.s_addr = sad->sin_addr.s_addr;
+		rad->sin_port = 0x0;
 		clp->lc_program = 0;
 	}
 nfsmout:

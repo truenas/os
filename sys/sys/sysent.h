@@ -129,8 +129,6 @@ struct sysentvec {
 	void		(*sv_schedtail)(struct thread *);
 	void		(*sv_thread_detach)(struct thread *);
 	int		(*sv_trap)(struct thread *);
-	u_long		*sv_hwcap;	/* Value passed in AT_HWCAP. */
-	u_long		*sv_hwcap2;	/* Value passed in AT_HWCAP2. */
 };
 
 #define	SV_ILP32	0x000100	/* 32-bit executable. */
@@ -140,7 +138,6 @@ struct sysentvec {
 #define	SV_SHP		0x010000	/* Shared page. */
 #define	SV_CAPSICUM	0x020000	/* Force cap_enter() on startup. */
 #define	SV_TIMEKEEP	0x040000	/* Shared page timehands. */
-#define	SV_HWCAP	0x080000	/* sv_hwcap field is valid. */
 
 #define	SV_ABI_MASK	0xff
 #define	SV_ABI_ERRNO(p, e)	((p)->p_sysent->sv_errsize <= 0 ? e :	\

@@ -1899,8 +1899,6 @@ tcp_attach(struct socket *so)
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6PROTO) {
 		inp->inp_vflag |= INP_IPV6;
-		if ((inp->inp_flags & IN6P_IPV6_V6ONLY) == 0)
-			inp->inp_vflag |= INP_IPV4;
 		inp->in6p_hops = -1;	/* use kernel default */
 	}
 	else

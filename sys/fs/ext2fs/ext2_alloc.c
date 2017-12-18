@@ -56,6 +56,7 @@
 static daddr_t	ext2_alloccg(struct inode *, int, daddr_t, int);
 static daddr_t	ext2_clusteralloc(struct inode *, int, daddr_t, int);
 static u_long	ext2_dirpref(struct inode *);
+static void	ext2_fserr(struct m_ext2fs *, uid_t, char *);
 static u_long	ext2_hashalloc(struct inode *, int, long, int,
 				daddr_t (*)(struct inode *, int, daddr_t, 
 						int));
@@ -172,7 +173,7 @@ static int doasyncfree = 1;
 SYSCTL_INT(_vfs_ext2fs, OID_AUTO, doasyncfree, CTLFLAG_RW, &doasyncfree, 0,
     "Use asychronous writes to update block pointers when freeing blocks");
 
-static int doreallocblks = 0;
+static int doreallocblks = 1;
 
 SYSCTL_INT(_vfs_ext2fs, OID_AUTO, doreallocblks, CTLFLAG_RW, &doreallocblks, 0, "");
 
@@ -1302,7 +1303,7 @@ ext2_mapsearch(struct m_ext2fs *fs, char *bbp, daddr_t bpref)
  * The form of the error message is:
  *	fs: error message
  */
-void
+static void
 ext2_fserr(struct m_ext2fs *fs, uid_t uid, char *cp)
 {
 

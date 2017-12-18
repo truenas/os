@@ -160,7 +160,6 @@ static const struct bsdtar_option {
 	{ "version",              0, OPTION_VERSION },
 	{ "xattrs",               0, OPTION_XATTRS },
 	{ "xz",                   0, 'J' },
-	{ "zstd",                 0, OPTION_ZSTD },
 	{ NULL, 0, 0 }
 };
 

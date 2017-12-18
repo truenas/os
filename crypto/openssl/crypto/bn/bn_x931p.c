@@ -217,8 +217,6 @@ int BN_X931_generate_Xpq(BIGNUM *Xp, BIGNUM *Xq, int nbits, BN_CTX *ctx)
 
     BN_CTX_start(ctx);
     t = BN_CTX_get(ctx);
-    if (t == NULL)
-        goto err;
 
     for (i = 0; i < 1000; i++) {
         if (!BN_rand(Xq, nbits, 1, 0))
@@ -257,12 +255,10 @@ int BN_X931_generate_prime_ex(BIGNUM *p, BIGNUM *p1, BIGNUM *p2,
     int ret = 0;
 
     BN_CTX_start(ctx);
-    if (Xp1 == NULL)
+    if (!Xp1)
         Xp1 = BN_CTX_get(ctx);
-    if (Xp2 == NULL)
+    if (!Xp2)
         Xp2 = BN_CTX_get(ctx);
-    if (Xp1 == NULL || Xp2 == NULL)
-        goto error;
 
     if (!BN_rand(Xp1, 101, 0, 0))
         goto error;

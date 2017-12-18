@@ -1083,8 +1083,8 @@ vm_object_sync(vm_object_t object, vm_ooffset_t offset, vm_size_t size,
 	 * I/O.
 	 */
 	if (object->type == OBJT_VNODE &&
-	    (object->flags & OBJ_MIGHTBEDIRTY) != 0 &&
-	    ((vp = object->handle)->v_vflag & VV_NOSYNC) == 0) {
+	    (object->flags & OBJ_MIGHTBEDIRTY) != 0) {
+		vp = object->handle;
 		VM_OBJECT_WUNLOCK(object);
 		(void) vn_start_write(vp, &mp, V_WAIT);
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
@@ -1997,8 +1997,7 @@ again:
 			goto again;
 		}
 		if (p->wire_count != 0) {
-			if ((options & OBJPR_NOTMAPPED) == 0 &&
-			    object->ref_count != 0)
+			if ((options & OBJPR_NOTMAPPED) == 0)
 				pmap_remove_all(p);
 			if ((options & OBJPR_CLEANONLY) == 0) {
 				p->valid = 0;
@@ -2015,13 +2014,12 @@ again:
 		KASSERT((p->flags & PG_FICTITIOUS) == 0,
 		    ("vm_object_page_remove: page %p is fictitious", p));
 		if ((options & OBJPR_CLEANONLY) != 0 && p->valid != 0) {
-			if ((options & OBJPR_NOTMAPPED) == 0 &&
-			    object->ref_count != 0)
+			if ((options & OBJPR_NOTMAPPED) == 0)
 				pmap_remove_write(p);
-			if (p->dirty != 0)
+			if (p->dirty)
 				continue;
 		}
-		if ((options & OBJPR_NOTMAPPED) == 0 && object->ref_count != 0)
+		if ((options & OBJPR_NOTMAPPED) == 0)
 			pmap_remove_all(p);
 		p->flags &= ~PG_ZERO;
 		if (vm_page_free_prep(p, false))

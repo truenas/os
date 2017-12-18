@@ -86,13 +86,10 @@ static int t_fromb64(unsigned char *a, size_t alen, const char *src)
     int i, j;
     int size;
 
-    if (alen == 0 || alen > INT_MAX)
-        return -1;
-
     while (*src && (*src == ' ' || *src == '\t' || *src == '\n'))
         ++src;
     size = strlen(src);
-    if (size < 0 || size >= (int)alen)
+    if (alen > INT_MAX || size > (int)alen)
         return -1;
 
     i = 0;
@@ -130,7 +127,7 @@ static int t_fromb64(unsigned char *a, size_t alen, const char *src)
         if (--i < 0)
             break;
     }
-    while (j <= size && a[j] == 0)
+    while (a[j] == 0 && j <= size)
         ++j;
     i = 0;
     while (j <= size)

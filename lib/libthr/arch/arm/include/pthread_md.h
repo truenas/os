@@ -40,8 +40,7 @@
 #define	DTV_OFFSET		offsetof(struct tcb, tcb_dtv)
 
 /*
- * Variant I tcb. The structure layout is fixed, don't blindly
- * change it.
+ * Variant II tcb, first two members are required by rtld.
  */
 struct tcb {
 	void			*tcb_dtv;	/* required by rtld */

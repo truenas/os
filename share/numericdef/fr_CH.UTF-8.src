@@ -3,15 +3,12 @@
 # CLDR project, obtained from http://cldr.unicode.org/
 # -----------------------------------------------------------------------------
 #
-# yesexpr
-^((כן)|(כ)|([yY]([eE][sS])?)|([yY]))
+# decimal_point
+.
 #
-# noexpr
-^((לא)|(ל)|([nN]([oO])?)|([nN]))
+# thousands_sep
+ 
 #
-# yesstr
-כן:כ:yes:y:YES:Y
-#
-# nostr
-לא:ל:no:n:NO:N
+# grouping
+3
 # EOF

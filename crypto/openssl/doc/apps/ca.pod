@@ -3,7 +3,6 @@
 
 =head1 NAME
 
-openssl-ca,
 ca - sample minimal CA application
 
 =head1 SYNOPSIS

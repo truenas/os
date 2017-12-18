@@ -41,6 +41,10 @@ ddi_strtol(const char *str, char **nptr, int base, long *result)
 {
 
 	*result = strtol(str, nptr, base);
+	if (*result == 0)
+		return (EINVAL);
+	else if (*result == LONG_MIN || *result == LONG_MAX)
+		return (ERANGE);
 	return (0);
 }
 
@@ -54,6 +58,10 @@ ddi_strtoul(const char *str, char **nptr, int base, unsigned long *result)
 	}
 
 	*result = strtoul(str, nptr, base);
+	if (*result == 0)
+		return (EINVAL);
+	else if (*result == ULONG_MAX)
+		return (ERANGE);
 	return (0);
 }
 
@@ -62,14 +70,10 @@ ddi_strtoull(const char *str, char **nptr, int base, unsigned long long *result)
 {
 
 	*result = (unsigned long long)strtouq(str, nptr, base);
-	return (0);
-}
-
-int
-ddi_strtoll(const char *str, char **nptr, int base, long long *result)
-{
-
-	*result = (long long)strtoq(str, nptr, base);
+	if (*result == 0)
+		return (EINVAL);
+	else if (*result == ULLONG_MAX)
+		return (ERANGE);
 	return (0);
 }
 

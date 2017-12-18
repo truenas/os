@@ -12,7 +12,7 @@ my @filelist;
 
 foreach my $arg (@ARGV) {
 	$arg =~ s|\\|/|g;	# compensate for bug/feature in cygwin glob...
-	foreach (glob qq("$arg"))
+	foreach (glob $arg)
 		{
 		push @filelist, $_;
 		}

@@ -159,10 +159,7 @@ int PKCS12_set_mac(PKCS12 *p12, const char *pass, int passlen,
 int PKCS12_setup_mac(PKCS12 *p12, int iter, unsigned char *salt, int saltlen,
                      const EVP_MD *md_type)
 {
-    PKCS12_MAC_DATA_free(p12->mac);
-    p12->mac = NULL;
-
-    if ((p12->mac = PKCS12_MAC_DATA_new()) == NULL)
+    if (!(p12->mac = PKCS12_MAC_DATA_new()))
         return PKCS12_ERROR;
     if (iter > 1) {
         if (!(p12->mac->iter = M_ASN1_INTEGER_new())) {

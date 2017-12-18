@@ -41,7 +41,6 @@
 #include <linux/module.h>
 #include <linux/string.h>
 #include <linux/slab.h>
-#include <linux/netdevice.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_cache.h>
@@ -208,18 +207,10 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num, struct ib_wc *wc,
 			memcpy(ah_attr->dmac, wc->smac, ETH_ALEN);
 			ah_attr->vlan_id = wc->vlan_id;
 		} else {
-			struct net_device *idev;
-			int if_index;
-
-			if (device->get_netdev != NULL &&
-			    (idev = device->get_netdev(device, port_num)) != NULL)
-				if_index = idev->if_index;
-			else
-				if_index = 0;
-
+			u32 scope_id = rdma_get_ipv6_scope_id(device, port_num);
 			ret = rdma_addr_find_dmac_by_grh(&grh->dgid, &grh->sgid,
 					 ah_attr->dmac, &ah_attr->vlan_id,
-					 &if_index);
+					 scope_id);
 			if (ret)
 				return ret;
 		}

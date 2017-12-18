@@ -6094,10 +6094,8 @@ enable_synaptics(struct psm_softc *sc, enum probearg arg)
 		if (get_mouse_status(kbdc, status, 0, 3) != 3)
 			return (FALSE);
 
-		if (status[0] != 0 && (status[1] & 0x80) && status[2] != 0) {
-			synhw.infoXupmm = status[0];
-			synhw.infoYupmm = status[2];
-		}
+		synhw.infoXupmm = status[0];
+		synhw.infoYupmm = status[2];
 
 		if (verbose >= 2) {
 			printf("  Extended capabilities:\n");
