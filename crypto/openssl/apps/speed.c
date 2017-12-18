@@ -307,8 +307,7 @@ static SIGRETTYPE sig_done(int sig)
 #  if !defined(SIGALRM)
 #   define SIGALRM
 #  endif
-static volatile unsigned int lapse;
-static volatile unsigned int schlock;
+static unsigned int lapse, schlock;
 static void alarm_win32(unsigned int secs)
 {
     lapse = secs * 1000;
@@ -726,7 +725,6 @@ int MAIN(int argc, char **argv)
                 BIO_printf(bio_err, "no EVP given\n");
                 goto end;
             }
-            evp_md = NULL;
             evp_cipher = EVP_get_cipherbyname(*argv);
             if (!evp_cipher) {
                 evp_md = EVP_get_digestbyname(*argv);

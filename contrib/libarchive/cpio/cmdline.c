@@ -92,7 +92,6 @@ static const struct option {
 	{ "verbose",			0, 'v' },
 	{ "version",			0, OPTION_VERSION },
 	{ "xz",				0, 'J' },
-	{ "zstd",			0, OPTION_ZSTD },
 	{ NULL, 0, 0 }
 };
 

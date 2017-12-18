@@ -2,9 +2,7 @@
 
 .include <src.opts.mk>
 
-# NOTE: BSD.debug.dist is unconditionally installed for developer ease-of-use.
-FILES=	\
-	BSD.debug.dist \
+FILES=	${_BSD.debug.dist} \
 	BSD.include.dist \
 	BSD.root.dist \
 	${_BSD.lib32.dist} \
@@ -14,6 +12,9 @@ FILES=	\
 	BSD.usr.dist \
 	BSD.var.dist
 
+.if ${MK_DEBUG_FILES} != "no"
+_BSD.debug.dist=	BSD.debug.dist
+.endif
 .if ${MK_GROFF} != "no"
 _BSD.groff.dist=	BSD.groff.dist
 .endif

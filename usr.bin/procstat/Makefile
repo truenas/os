@@ -13,7 +13,6 @@ SRCS=	procstat.c		\
 	procstat_cs.c		\
 	procstat_files.c	\
 	procstat_kstack.c	\
-	procstat_ptlwpinfo.c	\
 	procstat_rlimit.c	\
 	procstat_rusage.c	\
 	procstat_sigs.c		\

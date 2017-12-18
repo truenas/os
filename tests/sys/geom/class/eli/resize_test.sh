@@ -12,19 +12,6 @@ md=$(mdconfig -s40m) || exit 1
 unit=${md#md}
 i=1
 
-fsck_md()
-{
-	local is_clean
-
-	out=$(fsck_ffs -Ffy ${md}a.eli)
-	if [ $? -eq 0 -o $? -eq 7 ]; then
-		echo "ok $i - fsck says ${md}a.eli is clean"
-	else
-		echo "not ok $i - fsck says ${md}a.eli is dirty"
-	fi
-	i=$((i + 1))
-}
-
 setsize() {
     partszMB=$1 unitszMB=$2
 
@@ -51,7 +38,12 @@ i=$((i + 1))
 newfs -U ${md}a.eli >/dev/null || echo -n "not "
 echo ok $i - "Initialised the filesystem on ${md}a.eli"
 i=$((i + 1))
-fsck_md
+out=$(fsck -tufs -y ${md}a.eli)
+echo "$out" | fgrep -q MODIFIED && echo -n "not "
+echo ok $i - "fsck says ${md}a.eli is clean," $(echo $(echo "$out" | wc -l)) \
+    "lines of output"
+i=$((i + 1))
+
 
 # Doing a backup, resize & restore must be forced (with -f) as geli
 # verifies that the provider size in the metadata matches the consumer.
@@ -86,7 +78,12 @@ growfs -y ${md}a.eli >/dev/null || echo -n "not "
 echo ok $i - "Extended the filesystem on ${md}a.eli"
 i=$((i + 1))
 
-fsck_md
+out=$(fsck -tufs -y ${md}a.eli)
+echo "$out" | fgrep -q MODIFIED && echo -n "not "
+echo ok $i - "fsck says ${md}a.eli is clean," $(echo $(echo "$out" | wc -l)) \
+    "lines of output"
+i=$((i + 1))
+
 
 # Now do the resize properly
 
@@ -113,7 +110,11 @@ growfs -y ${md}a.eli >/dev/null || echo -n "not "
 echo ok $i - "Extended the filesystem on ${md}a.eli"
 i=$((i + 1))
 
-fsck_md
+out=$(fsck -tufs -y ${md}a.eli)
+echo "$out" | fgrep -q MODIFIED && echo -n "not "
+echo ok $i - "fsck says ${md}a.eli is clean," $(echo $(echo "$out" | wc -l)) \
+    "lines of output"
+i=$((i + 1))
 
 geli detach ${md}a.eli
 gpart destroy -F $md >/dev/null

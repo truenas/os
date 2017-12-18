@@ -1350,24 +1350,20 @@ packagekernel: .PHONY
 	    @${DESTDIR}/${DISTDIR}/kernel.meta | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/kernel.txz
 .endif
-.if ${MK_DEBUG_FILES} != "no"
 	cd ${DESTDIR}/${DISTDIR}/kernel; \
 	    tar cvf - --include '*/*/*.debug' \
 	    @${DESTDIR}/${DISTDIR}/kernel.meta | \
 	    ${XZ_CMD} > ${DESTDIR}/${DISTDIR}/kernel-dbg.txz
-.endif
 .if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 	cd ${DESTDIR}/${DISTDIR}/kernel.${_kernel}; \
 	    tar cvf - --exclude '*.debug' \
 	    @${DESTDIR}/${DISTDIR}/kernel.${_kernel}.meta | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/kernel.${_kernel}.txz
-.if ${MK_DEBUG_FILES} != "no"
 	cd ${DESTDIR}/${DISTDIR}/kernel.${_kernel}; \
 	    tar cvf - --include '*/*/*.debug' \
 	    @${DESTDIR}/${DISTDIR}/kernel.${_kernel}.meta | \
 	    ${XZ_CMD} > ${DESTDIR}/${DISTDIR}/kernel.${_kernel}-dbg.txz
-.endif
 .endfor
 .endif
 .else
@@ -1376,21 +1372,17 @@ packagekernel: .PHONY
 	    tar cvf - --exclude '*.debug' . | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/kernel.txz
 .endif
-.if ${MK_DEBUG_FILES} != "no"
 	cd ${DESTDIR}/${DISTDIR}/kernel; \
 	    tar cvf - --include '*/*/*.debug' $$(eval find .) | \
 	    ${XZ_CMD} > ${DESTDIR}/${DISTDIR}/kernel-dbg.txz
-.endif
 .if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 	cd ${DESTDIR}/${DISTDIR}/kernel.${_kernel}; \
 	    tar cvf - --exclude '*.debug' . | \
 	    ${XZ_CMD} > ${PACKAGEDIR}/kernel.${_kernel}.txz
-.if ${MK_DEBUG_FILES} != "no"
 	cd ${DESTDIR}/${DISTDIR}/kernel.${_kernel}; \
 	    tar cvf - --include '*/*/*.debug' $$(eval find .) | \
 	    ${XZ_CMD} > ${DESTDIR}/${DISTDIR}/kernel.${_kernel}-dbg.txz
-.endif
 .endfor
 .endif
 .endif
@@ -1468,10 +1460,7 @@ create-world-packages:	_pkgbootstrap .PHONY
 
 create-kernel-packages:	_pkgbootstrap .PHONY
 .if exists(${KSTAGEDIR}/kernel.meta)
-.if ${MK_DEBUG_FILES} != "no"
-_debug=-debug
-.endif
-.for flavor in "" ${_debug}
+.for flavor in "" -debug
 	@cd ${KSTAGEDIR}/${DISTDIR} ; \
 	awk -f ${SRCDIR}/release/scripts/mtree-to-plist.awk \
 		-v kernel=yes -v _kernconf=${INSTALLKERNEL} \
@@ -1500,10 +1489,7 @@ _debug=-debug
 .if ${BUILDKERNELS:[#]} > 1 && ${NO_INSTALLEXTRAKERNELS} != "yes"
 .for _kernel in ${BUILDKERNELS:[2..-1]}
 .if exists(${KSTAGEDIR}/kernel.${_kernel}.meta)
-.if ${MK_DEBUG_FILES} != "no"
-_debug=-debug
-.endif
-.for flavor in "" ${_debug}
+.for flavor in "" -debug
 	@cd ${KSTAGEDIR}/kernel.${_kernel} ; \
 	awk -f ${SRCDIR}/release/scripts/mtree-to-plist.awk \
 		-v kernel=yes -v _kernconf=${_kernel} \
@@ -1794,12 +1780,8 @@ _gcc_tools= gnu/usr.bin/cc/cc_tools
 _rescue=rescue/rescue
 .endif
 
-.if ${MK_TCSH} != "no"
-_tcsh=bin/csh
-.endif
-
 .for _tool in \
-    ${_tcsh} \
+    bin/csh \
     bin/sh \
     ${LOCAL_TOOL_DIRS} \
     lib/ncurses/ncurses \
@@ -1956,7 +1938,7 @@ native-xtools: .PHONY
     bin/cat \
     bin/chmod \
     bin/cp \
-    ${_tcsh} \
+    bin/csh \
     bin/echo \
     bin/expr \
     bin/hostname \

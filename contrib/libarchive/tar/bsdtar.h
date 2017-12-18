@@ -181,8 +181,7 @@ enum {
 	OPTION_USE_COMPRESS_PROGRAM,
 	OPTION_UUENCODE,
 	OPTION_VERSION,
-	OPTION_XATTRS,
-	OPTION_ZSTD,
+	OPTION_XATTRS
 };
 
 int	bsdtar_getopt(struct bsdtar *);

@@ -84,12 +84,6 @@ int PKCS12_parse(PKCS12 *p12, const char *pass, EVP_PKEY **pkey, X509 **cert,
 {
     STACK_OF(X509) *ocerts = NULL;
     X509 *x = NULL;
-
-    if (pkey)
-        *pkey = NULL;
-    if (cert)
-        *cert = NULL;
-
     /* Check for NULL PKCS12 structure */
 
     if (!p12) {
@@ -97,6 +91,11 @@ int PKCS12_parse(PKCS12 *p12, const char *pass, EVP_PKEY **pkey, X509 **cert,
                   PKCS12_R_INVALID_NULL_PKCS12_POINTER);
         return 0;
     }
+
+    if (pkey)
+        *pkey = NULL;
+    if (cert)
+        *cert = NULL;
 
     /* Check the mac */
 
@@ -126,7 +125,7 @@ int PKCS12_parse(PKCS12 *p12, const char *pass, EVP_PKEY **pkey, X509 **cert,
 
     if (!ocerts) {
         PKCS12err(PKCS12_F_PKCS12_PARSE, ERR_R_MALLOC_FAILURE);
-        goto err;
+        return 0;
     }
 
     if (!parse_pk12(p12, pass, -1, pkey, ocerts)) {
@@ -164,14 +163,10 @@ int PKCS12_parse(PKCS12 *p12, const char *pass, EVP_PKEY **pkey, X509 **cert,
 
  err:
 
-    if (pkey) {
+    if (pkey && *pkey)
         EVP_PKEY_free(*pkey);
-        *pkey = NULL;
-    }
-    if (cert) {
+    if (cert && *cert)
         X509_free(*cert);
-        *cert = NULL;
-    }
     if (x)
         X509_free(x);
     if (ocerts)

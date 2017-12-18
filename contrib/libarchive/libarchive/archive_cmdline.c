@@ -100,10 +100,10 @@ get_argument(struct archive_string *as, const char *p)
 
 /*
  * Set up command line arguments.
- * Returns ARCHIVE_OK if everything okey.
- * Returns ARCHIVE_FAILED if there is a lack of the `"' terminator or an
+ * Returns ARChIVE_OK if everything okey.
+ * Returns ARChIVE_FAILED if there is a lack of the `"' terminator or an
  * empty command line.
- * Returns ARCHIVE_FATAL if no memory.
+ * Returns ARChIVE_FATAL if no memory.
  */
 int
 __archive_cmdline_parse(struct archive_cmdline *data, const char *cmd)

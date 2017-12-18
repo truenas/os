@@ -190,11 +190,6 @@ g_mountver_start(struct bio *bp)
 	 * requests in order to maintain ordering.
 	 */
 	if (sc->sc_orphaned || !TAILQ_EMPTY(&sc->sc_queue)) {
-		if (sc->sc_shutting_down) {
-			G_MOUNTVER_LOGREQ(bp, "Discarding request due to shutdown.");
-			g_io_deliver(bp, ENXIO);
-			return;
-		}
 		G_MOUNTVER_LOGREQ(bp, "Queueing request.");
 		g_mountver_queue(bp);
 		if (!sc->sc_orphaned)
@@ -257,7 +252,7 @@ g_mountver_create(struct gctl_req *req, struct g_class *mp, struct g_provider *p
 	}
 	gp = g_new_geomf(mp, "%s", name);
 	sc = g_malloc(sizeof(*sc), M_WAITOK | M_ZERO);
-	mtx_init(&sc->sc_mtx, "gmountver", NULL, MTX_DEF | MTX_RECURSE);
+	mtx_init(&sc->sc_mtx, "gmountver", NULL, MTX_DEF);
 	TAILQ_INIT(&sc->sc_queue);
 	sc->sc_provider_name = strdup(pp->name, M_GEOM);
 	gp->softc = sc;
@@ -270,18 +265,8 @@ g_mountver_create(struct gctl_req *req, struct g_class *mp, struct g_provider *p
 	newpp = g_new_providerf(gp, "%s", gp->name);
 	newpp->mediasize = pp->mediasize;
 	newpp->sectorsize = pp->sectorsize;
-	newpp->flags |= G_PF_DIRECT_SEND | G_PF_DIRECT_RECEIVE;
-
-	if ((pp->flags & G_PF_ACCEPT_UNMAPPED) != 0) {
-		G_MOUNTVER_DEBUG(0, "Unmapped supported for %s.", gp->name);
-		newpp->flags |= G_PF_ACCEPT_UNMAPPED;
-	} else {
-		G_MOUNTVER_DEBUG(0, "Unmapped unsupported for %s.", gp->name);
-		newpp->flags &= ~G_PF_ACCEPT_UNMAPPED;
-	}
 
 	cp = g_new_consumer(gp);
-	cp->flags |= G_CF_DIRECT_SEND | G_CF_DIRECT_RECEIVE;
 	error = g_attach(cp, pp);
 	if (error != 0) {
 		gctl_error(req, "Cannot attach to provider %s.", pp->name);
@@ -622,20 +607,13 @@ g_mountver_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 static void
 g_mountver_shutdown_pre_sync(void *arg, int howto)
 {
-	struct g_mountver_softc *sc;
 	struct g_class *mp;
 	struct g_geom *gp, *gp2;
 
 	mp = arg;
 	g_topology_lock();
-	LIST_FOREACH_SAFE(gp, &mp->geom, geom, gp2) {
-		if (gp->softc == NULL)
-			continue;
-		sc = gp->softc;
-		sc->sc_shutting_down = 1;
-		if (sc->sc_orphaned)
-			g_mountver_destroy(gp, 1);
-	}
+	LIST_FOREACH_SAFE(gp, &mp->geom, geom, gp2)
+		g_mountver_destroy(gp, 1);
 	g_topology_unlock();
 }
 

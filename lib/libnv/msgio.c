@@ -299,6 +299,7 @@ fd_package_recv(int sock, int *fds, size_t nfds)
 	PJDLOG_ASSERT(nfds > 0);
 	PJDLOG_ASSERT(fds != NULL);
 
+	i = 0;
 	bzero(&msg, sizeof(msg));
 	bzero(&iov, sizeof(iov));
 

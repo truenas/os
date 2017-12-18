@@ -26,8 +26,6 @@
  * $FreeBSD$
  */
 
-#include <sys/types.h>
-#include <machine/atomic.h>
 #include <stdlib.h>
 #include <pthread.h>
 
@@ -62,7 +60,6 @@ at_quick_exit(void (*func)(void))
 	h->cleanup = func;
 	pthread_mutex_lock(&atexit_mutex);
 	h->next = handlers;
-	__compiler_membar();
 	handlers = h;
 	pthread_mutex_unlock(&atexit_mutex);
 	return (0);
@@ -77,9 +74,7 @@ quick_exit(int status)
 	 * XXX: The C++ spec requires us to call std::terminate if there is an
 	 * exception here.
 	 */
-	for (h = handlers; NULL != h; h = h->next) {
-		__compiler_membar();
+	for (h = handlers; NULL != h; h = h->next)
 		h->cleanup();
-	}
 	_Exit(status);
 }

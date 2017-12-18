@@ -154,7 +154,6 @@ ppt_attach(device_t dev)
 
 	ppt = device_get_softc(dev);
 
-	iommu_remove_device(iommu_host_domain(), pci_get_rid(dev));
 	num_pptdevs++;
 	TAILQ_INSERT_TAIL(&pptdev_list, ppt, next);
 	ppt->dev = dev;
@@ -176,8 +175,6 @@ ppt_detach(device_t dev)
 		return (EBUSY);
 	num_pptdevs--;
 	TAILQ_REMOVE(&pptdev_list, ppt, next);
-	pci_disable_busmaster(dev);
-	iommu_add_device(iommu_host_domain(), pci_get_rid(dev));
 
 	return (0);
 }
@@ -371,6 +368,7 @@ ppt_assign_device(struct vm *vm, int bus, int slot, int func)
 		    true);
 		pci_restore_state(ppt->dev);
 		ppt->vm = vm;
+		iommu_remove_device(iommu_host_domain(), pci_get_rid(ppt->dev));
 		iommu_add_device(vm_iommu_domain(vm), pci_get_rid(ppt->dev));
 		return (0);
 	}
@@ -399,6 +397,7 @@ ppt_unassign_device(struct vm *vm, int bus, int slot, int func)
 		ppt_teardown_msi(ppt);
 		ppt_teardown_msix(ppt);
 		iommu_remove_device(vm_iommu_domain(vm), pci_get_rid(ppt->dev));
+		iommu_add_device(iommu_host_domain(), pci_get_rid(ppt->dev));
 		ppt->vm = NULL;
 		return (0);
 	}

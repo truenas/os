@@ -2,7 +2,6 @@
 
 =head1 NAME
 
-openssl-nseq,
 nseq - create or examine a netscape certificate sequence
 
 =head1 SYNOPSIS

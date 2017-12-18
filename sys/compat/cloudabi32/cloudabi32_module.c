@@ -63,10 +63,10 @@ cloudabi32_copyout_strings(struct image_params *imgp)
 int
 cloudabi32_fixup(register_t **stack_base, struct image_params *imgp)
 {
-	char canarybuf[64], pidbuf[16];
+	char canarybuf[64];
 	Elf32_Auxargs *args;
 	struct thread *td;
-	void *argdata, *canary, *pid;
+	void *argdata, *canary;
 	size_t argdatalen;
 	int error;
 
@@ -79,27 +79,12 @@ cloudabi32_fixup(register_t **stack_base, struct image_params *imgp)
 	td = curthread;
 	td->td_proc->p_osrel = __FreeBSD_version;
 
-	argdata = *stack_base;
-
 	/* Store canary for stack smashing protection. */
+	argdata = *stack_base;
 	arc4rand(canarybuf, sizeof(canarybuf), 0);
 	*stack_base -= howmany(sizeof(canarybuf), sizeof(register_t));
 	canary = *stack_base;
 	error = copyout(canarybuf, canary, sizeof(canarybuf));
-	if (error != 0)
-		return (error);
-
-	/*
-	 * Generate a random UUID that identifies the process. Right now
-	 * we don't store this UUID in the kernel. Ideally, it should be
-	 * exposed through ps(1).
-	 */
-	arc4rand(pidbuf, sizeof(pidbuf), 0);
-	pidbuf[6] = (pidbuf[6] & 0x0f) | 0x40;
-	pidbuf[8] = (pidbuf[8] & 0x3f) | 0x80;
-	*stack_base -= howmany(sizeof(pidbuf), sizeof(register_t));
-	pid = *stack_base;
-	error = copyout(pidbuf, pid, sizeof(pidbuf));
 	if (error != 0)
 		return (error);
 
@@ -126,10 +111,9 @@ cloudabi32_fixup(register_t **stack_base, struct image_params *imgp)
 		VAL(CLOUDABI_AT_PAGESZ, args->pagesz),
 		PTR(CLOUDABI_AT_PHDR, args->phdr),
 		VAL(CLOUDABI_AT_PHNUM, args->phnum),
-		PTR(CLOUDABI_AT_PID, pid),
+		VAL(CLOUDABI_AT_TID, td->td_tid),
 		PTR(CLOUDABI_AT_SYSINFO_EHDR,
 		    imgp->proc->p_sysent->sv_shared_page_base),
-		VAL(CLOUDABI_AT_TID, td->td_tid),
 #undef VAL
 #undef PTR
 		{ .a_type = CLOUDABI_AT_NULL },

@@ -63,8 +63,13 @@ static clock_t
 cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim, hrtime_t res,
     int flag)
 {
+	sbintime_t sbt;
+	sbintime_t pr;
 
-	return (cv_timedwait_sbt(cvp, mp, nstosbt(tim), nstosbt(res), 0));
+	sbt = tim * SBT_1NS;
+	pr = res * SBT_1NS;
+
+	return (cv_timedwait_sbt(cvp, mp, sbt, pr, 0));
 }
 
 #endif	/* _KERNEL */

@@ -2,7 +2,6 @@
 
 =head1 NAME
 
-openssl-passwd,
 passwd - compute password hashes
 
 =head1 SYNOPSIS

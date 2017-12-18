@@ -85,7 +85,7 @@ static char rlogin[] = "rlogin";
 void	connect_timeout(int);
 char   *copyargs(char * const *);
 void	sendsig(int);
-void	talk(int, int, long, pid_t, int, int);
+void	talk(int, long, pid_t, int, int);
 void	usage(void);
 
 int
@@ -94,13 +94,13 @@ main(int argc, char *argv[])
 	struct passwd const *pw;
 	struct servent const *sp;
 	long omask;
-	int argoff, asrsh, ch, dflag, nflag, Nflag, one, rem;
+	int argoff, asrsh, ch, dflag, nflag, one, rem;
 	pid_t pid = 0;
 	uid_t uid;
 	char *args, *host, *p, *user;
 	int timeout = 0;
 
-	argoff = asrsh = dflag = nflag = Nflag = 0;
+	argoff = asrsh = dflag = nflag = 0;
 	one = 1;
 	host = user = NULL;
 
@@ -120,7 +120,7 @@ main(int argc, char *argv[])
 		argoff = 1;
 	}
 
-#define	OPTIONS	"468LNde:l:nt:w"
+#define	OPTIONS	"468Lde:l:nt:w"
 	while ((ch = getopt(argc - argoff, argv + argoff, OPTIONS)) != -1)
 		switch(ch) {
 		case '4':
@@ -131,10 +131,6 @@ main(int argc, char *argv[])
 			family = PF_INET6;
 			break;
 
-		case 'N':
-			Nflag = 1;
-			nflag = 0;
-			break;
 		case 'L':	/* -8Lew are ignored to allow rlogin aliases */
 		case 'e':
 		case 'w':
@@ -148,7 +144,6 @@ main(int argc, char *argv[])
 			break;
 		case 'n':
 			nflag = 1;
-			Nflag = 0;
 			break;
 		case 't':
 			timeout = atoi(optarg);
@@ -232,7 +227,7 @@ main(int argc, char *argv[])
 	(void)ioctl(rfd2, FIONBIO, &one);
 	(void)ioctl(rem, FIONBIO, &one);
 
-	talk(nflag, Nflag, omask, pid, rem, timeout);
+	talk(nflag, omask, pid, rem, timeout);
 
 	if (!nflag)
 		(void)kill(pid, SIGKILL);
@@ -240,7 +235,7 @@ main(int argc, char *argv[])
 }
 
 void
-talk(int nflag, int Nflag, long omask, pid_t pid, int rem, int timeout)
+talk(int nflag, long omask, pid_t pid, int rem, int timeout)
 {
 	int cc, wc;
 	fd_set readfrom, ready, rembits;
@@ -281,8 +276,8 @@ rewrite:
 		if (cc == 0)
 			goto reread;
 		goto rewrite;
-done:		if (!Nflag)
-			(void)shutdown(rem, SHUT_WR);
+done:
+		(void)shutdown(rem, SHUT_WR);
 		exit(0);
 	}
 
@@ -376,6 +371,6 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-	    "usage: rsh [-46Ndn] [-l username] [-t timeout] host [command]\n");
+	    "usage: rsh [-46dn] [-l username] [-t timeout] host [command]\n");
 	exit(1);
 }

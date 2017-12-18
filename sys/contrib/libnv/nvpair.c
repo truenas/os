@@ -614,7 +614,7 @@ nvpair_unpack_header(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
 	struct nvpair_header nvphdr;
 
 	if (*leftp < sizeof(nvphdr))
-		goto fail;
+		goto failed;
 
 	memcpy(&nvphdr, ptr, sizeof(nvphdr));
 	ptr += sizeof(nvphdr);
@@ -622,12 +622,12 @@ nvpair_unpack_header(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
 
 #if NV_TYPE_FIRST > 0
 	if (nvphdr.nvph_type < NV_TYPE_FIRST)
-		goto fail;
+		goto failed;
 #endif
 	if (nvphdr.nvph_type > NV_TYPE_LAST &&
 	    nvphdr.nvph_type != NV_TYPE_NVLIST_UP &&
 	    nvphdr.nvph_type != NV_TYPE_NVLIST_ARRAY_NEXT) {
-		goto fail;
+		goto failed;
 	}
 
 #if BYTE_ORDER == BIG_ENDIAN
@@ -643,14 +643,14 @@ nvpair_unpack_header(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
 #endif
 
 	if (nvphdr.nvph_namesize > NV_NAME_MAX)
-		goto fail;
+		goto failed;
 	if (*leftp < nvphdr.nvph_namesize)
-		goto fail;
+		goto failed;
 	if (nvphdr.nvph_namesize < 1)
-		goto fail;
+		goto failed;
 	if (strnlen((const char *)ptr, nvphdr.nvph_namesize) !=
 	    (size_t)(nvphdr.nvph_namesize - 1)) {
-		goto fail;
+		goto failed;
 	}
 
 	memcpy(nvp->nvp_name, ptr, nvphdr.nvph_namesize);
@@ -658,7 +658,7 @@ nvpair_unpack_header(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
 	*leftp -= nvphdr.nvph_namesize;
 
 	if (*leftp < nvphdr.nvph_datasize)
-		goto fail;
+		goto failed;
 
 	nvp->nvp_type = nvphdr.nvph_type;
 	nvp->nvp_data = 0;
@@ -666,7 +666,7 @@ nvpair_unpack_header(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
 	nvp->nvp_nitems = nvphdr.nvph_nitems;
 
 	return (ptr);
-fail:
+failed:
 	ERRNO_SET(EINVAL);
 	return (NULL);
 }
@@ -1087,7 +1087,7 @@ nvpair_unpack_nvlist_array(bool isbe __unused, nvpair_t *nvp,
 	return (ptr);
 fail:
 	ERRNO_SAVE();
-	for (j = 0; j <= ii; j++)
+	for (j = 0; j < ii; j++)
 		nvlist_destroy(value[j]);
 	nv_free(value);
 	ERRNO_RESTORE();
@@ -1108,10 +1108,10 @@ nvpair_unpack(bool isbe, const unsigned char *ptr, size_t *leftp,
 
 	ptr = nvpair_unpack_header(isbe, nvp, ptr, leftp);
 	if (ptr == NULL)
-		goto fail;
+		goto failed;
 	tmp = nv_realloc(nvp, sizeof(*nvp) + strlen(nvp->nvp_name) + 1);
 	if (tmp == NULL)
-		goto fail;
+		goto failed;
 	nvp = tmp;
 
 	/* Update nvp_name after realloc(). */
@@ -1120,7 +1120,7 @@ nvpair_unpack(bool isbe, const unsigned char *ptr, size_t *leftp,
 	nvp->nvp_magic = NVPAIR_MAGIC;
 	*nvpp = nvp;
 	return (ptr);
-fail:
+failed:
 	nv_free(nvp);
 	return (NULL);
 }
@@ -1407,10 +1407,12 @@ nvpair_create_nvlist_array(const char *name, const nvlist_t * const *value,
 {
 	unsigned int ii;
 	nvlist_t **nvls;
-	nvpair_t *parent;
+	nvpair_t *nvp;
 	int flags;
 
+	nvp = NULL;
 	nvls = NULL;
+	ii = 0;
 
 	if (value == NULL || nitems == 0) {
 		ERRNO_SET(EINVAL);
@@ -1432,40 +1434,33 @@ nvpair_create_nvlist_array(const char *name, const nvlist_t * const *value,
 			goto fail;
 
 		if (ii > 0) {
-			nvpair_t *nvp;
-
 			nvp = nvpair_allocv(" ", NV_TYPE_NVLIST,
 			    (uint64_t)(uintptr_t)nvls[ii], 0, 0);
-			if (nvp == NULL) {
-				ERRNO_SAVE();
-				nvlist_destroy(nvls[ii]);
-				ERRNO_RESTORE();
+			if (nvp == NULL)
 				goto fail;
-			}
 			nvlist_set_array_next(nvls[ii - 1], nvp);
 		}
 	}
 	flags = nvlist_flags(nvls[nitems - 1]) | NV_FLAG_IN_ARRAY;
 	nvlist_set_flags(nvls[nitems - 1], flags);
 
-	parent = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY,
+	nvp = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY,
 	    (uint64_t)(uintptr_t)nvls, 0, nitems);
-	if (parent == NULL)
-		goto fail;
-
-	for (ii = 0; ii < nitems; ii++)
-		nvlist_set_parent(nvls[ii], parent);
-
-	return (parent);
 
 fail:
-	ERRNO_SAVE();
-	for (; ii > 0; ii--)
-		nvlist_destroy(nvls[ii - 1]);
-	nv_free(nvls);
-	ERRNO_RESTORE();
+	if (nvp == NULL) {
+		ERRNO_SAVE();
+		for (; ii > 0; ii--)
+			nvlist_destroy(nvls[ii - 1]);
 
-	return (NULL);
+		nv_free(nvls);
+		ERRNO_RESTORE();
+	} else {
+		for (ii = 0; ii < nitems; ii++)
+			nvlist_set_parent(nvls[ii], nvp);
+	}
+
+	return (nvp);
 }
 
 #ifndef _KERNEL
@@ -1690,10 +1685,11 @@ nvpair_move_number_array(const char *name, uint64_t *value, size_t nitems)
 nvpair_t *
 nvpair_move_nvlist_array(const char *name, nvlist_t **value, size_t nitems)
 {
-	nvpair_t *parent;
 	unsigned int ii;
+	nvpair_t *nvp;
 	int flags;
 
+	nvp = NULL;
 	if (value == NULL || nitems == 0) {
 		ERRNO_SET(EINVAL);
 		return (NULL);
@@ -1706,8 +1702,6 @@ nvpair_move_nvlist_array(const char *name, nvlist_t **value, size_t nitems)
 			goto fail;
 		}
 		if (ii > 0) {
-			nvpair_t *nvp;
-
 			nvp = nvpair_allocv(" ", NV_TYPE_NVLIST,
 			    (uint64_t)(uintptr_t)value[ii], 0, 0);
 			if (nvp == NULL)
@@ -1718,27 +1712,25 @@ nvpair_move_nvlist_array(const char *name, nvlist_t **value, size_t nitems)
 	flags = nvlist_flags(value[nitems - 1]) | NV_FLAG_IN_ARRAY;
 	nvlist_set_flags(value[nitems - 1], flags);
 
-	parent = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY,
+	nvp = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY,
 	    (uint64_t)(uintptr_t)value, 0, nitems);
-	if (parent == NULL)
-		goto fail;
-
-	for (ii = 0; ii < nitems; ii++)
-		nvlist_set_parent(value[ii], parent);
-
-	return (parent);
 fail:
-	ERRNO_SAVE();
-	for (ii = 0; ii < nitems; ii++) {
-		if (value[ii] != NULL &&
-		    nvlist_get_pararr(value[ii], NULL) != NULL) {
-			nvlist_destroy(value[ii]);
+	if (nvp == NULL) {
+		ERRNO_SAVE();
+		for (ii = 0; ii < nitems; ii++) {
+			if (value[ii] != NULL &&
+			    nvlist_get_pararr(value[ii], NULL) != NULL) {
+				nvlist_destroy(value[ii]);
+			}
+			nv_free(value);
 		}
+		ERRNO_RESTORE();
+	} else {
+		for (ii = 0; ii < nitems; ii++)
+			nvlist_set_parent(value[ii], nvp);
 	}
-	nv_free(value);
-	ERRNO_RESTORE();
 
-	return (NULL);
+	return (nvp);
 }
 
 #ifndef _KERNEL
@@ -1748,6 +1740,7 @@ nvpair_move_descriptor_array(const char *name, int *value, size_t nitems)
 	nvpair_t *nvp;
 	size_t i;
 
+	nvp = NULL;
 	if (value == NULL || nitems == 0) {
 		ERRNO_SET(EINVAL);
 		return (NULL);
@@ -1762,20 +1755,19 @@ nvpair_move_descriptor_array(const char *name, int *value, size_t nitems)
 
 	nvp = nvpair_allocv(name, NV_TYPE_DESCRIPTOR_ARRAY,
 	    (uint64_t)(uintptr_t)value, sizeof(value[0]) * nitems, nitems);
-	if (nvp == NULL)
-		goto fail;
+
+fail:
+	if (nvp == NULL) {
+		ERRNO_SAVE();
+		for (i = 0; i < nitems; i++) {
+			if (fd_is_valid(value[i]))
+				close(value[i]);
+		}
+		nv_free(value);
+		ERRNO_RESTORE();
+	}
 
 	return (nvp);
-fail:
-	ERRNO_SAVE();
-	for (i = 0; i < nitems; i++) {
-		if (fd_is_valid(value[i]))
-			close(value[i]);
-	}
-	nv_free(value);
-	ERRNO_RESTORE();
-
-	return (NULL);
 }
 #endif
 

@@ -2,7 +2,6 @@
 
 =head1 NAME
 
-openssl-ciphers,
 ciphers - SSL cipher display and cipher list tool.
 
 =head1 SYNOPSIS
@@ -180,8 +179,7 @@ When in doubt, include B<!aNULL> in your cipherlist.
 
 =item B<kRSA>, B<RSA>
 
-cipher suites using RSA key exchange or authentication. B<RSA> is an alias for
-B<kRSA>.
+cipher suites using RSA key exchange.
 
 =item B<kDHr>, B<kDHd>, B<kDH>
 

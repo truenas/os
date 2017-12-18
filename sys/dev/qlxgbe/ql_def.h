@@ -201,6 +201,7 @@ struct qla_host {
 
 	qla_rx_buf_t		*rxb_free;
 	uint32_t		rxb_free_count;
+	volatile uint32_t	posting;
 
 	/* stats */
 	uint32_t		err_m_getcl;

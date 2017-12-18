@@ -194,8 +194,7 @@ set_regs(struct thread *td, struct reg *regs)
 	frame->tf_sp = regs->sp;
 	frame->tf_lr = regs->lr;
 	frame->tf_elr = regs->elr;
-	frame->tf_spsr &= ~PSR_FLAGS;
-	frame->tf_spsr |= regs->spsr & PSR_FLAGS;
+	frame->tf_spsr = regs->spsr;
 
 	memcpy(frame->tf_x, regs->x, sizeof(frame->tf_x));
 
@@ -333,12 +332,6 @@ int
 set_mcontext(struct thread *td, mcontext_t *mcp)
 {
 	struct trapframe *tf = td->td_frame;
-	uint32_t spsr;
-
-	spsr = mcp->mc_gpregs.gp_spsr;
-	if ((spsr & PSR_M_MASK) != PSR_M_EL0t ||
-	    (spsr & (PSR_F | PSR_I | PSR_A | PSR_D)) != 0)
-		return (EINVAL); 
 
 	memcpy(tf->tf_x, mcp->mc_gpregs.gp_x, sizeof(tf->tf_x));
 
@@ -509,16 +502,19 @@ int
 sys_sigreturn(struct thread *td, struct sigreturn_args *uap)
 {
 	ucontext_t uc;
-	int error;
+	uint32_t spsr;
 
 	if (uap == NULL)
 		return (EFAULT);
 	if (copyin(uap->sigcntxp, &uc, sizeof(uc)))
 		return (EFAULT);
 
-	error = set_mcontext(td, &uc.uc_mcontext);
-	if (error != 0)
-		return (error);
+	spsr = uc.uc_mcontext.mc_gpregs.gp_spsr;
+	if ((spsr & PSR_M_MASK) != PSR_M_EL0t ||
+	    (spsr & (PSR_F | PSR_I | PSR_A | PSR_D)) != 0)
+		return (EINVAL); 
+
+	set_mcontext(td, &uc.uc_mcontext);
 	set_fpcontext(td, &uc.uc_mcontext);
 
 	/* Restore signal mask. */

@@ -964,7 +964,6 @@ int SSL_CTX_use_serverinfo_file(SSL_CTX *ctx, const char *file)
     int ret = 0;
     BIO *bin = NULL;
     size_t num_extensions = 0;
-    unsigned char *new_serverinfo;
 
     if (ctx == NULL || file == NULL) {
         SSLerr(SSL_F_SSL_CTX_USE_SERVERINFO_FILE,
@@ -1015,13 +1014,12 @@ int SSL_CTX_use_serverinfo_file(SSL_CTX *ctx, const char *file)
             goto end;
         }
         /* Append the decoded extension to the serverinfo buffer */
-        new_serverinfo =
+        serverinfo =
             OPENSSL_realloc(serverinfo, serverinfo_length + extension_length);
-        if (new_serverinfo == NULL) {
+        if (serverinfo == NULL) {
             SSLerr(SSL_F_SSL_CTX_USE_SERVERINFO_FILE, ERR_R_MALLOC_FAILURE);
             goto end;
         }
-        serverinfo = new_serverinfo;
         memcpy(serverinfo + serverinfo_length, extension, extension_length);
         serverinfo_length += extension_length;
 

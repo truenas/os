@@ -357,7 +357,7 @@ ${_src}:
 .endif
 
 # Respect configuration-specific C flags.
-CFLAGS+=	${ARCH_FLAGS} ${CONF_CFLAGS}
+CFLAGS+=	${CONF_CFLAGS}
 
 .if !empty(SRCS:Mvnode_if.c)
 CLEANFILES+=	vnode_if.c

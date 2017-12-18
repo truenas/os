@@ -102,8 +102,7 @@ CaseFile::Find(Guid poolGUID, Guid vdevGUID)
 	for (CaseFileList::iterator curCase = s_activeCases.begin();
 	     curCase != s_activeCases.end(); curCase++) {
 
-		if (((*curCase)->PoolGUID() != poolGUID
-		  && Guid::InvalidGuid() != poolGUID)
+		if ((*curCase)->PoolGUID() != poolGUID
 		 || (*curCase)->VdevGUID() != vdevGUID)
 			continue;
 
@@ -269,8 +268,7 @@ CaseFile::ReEvaluate(const string &devPath, const string &physPath, Vdev *vdev)
 	}
 
 	if (vdev != NULL
-	 && ( vdev->PoolGUID() == m_poolGUID
-	   || vdev->PoolGUID() == Guid::InvalidGuid())
+	 && vdev->PoolGUID() == m_poolGUID
 	 && vdev->GUID() == m_vdevGUID) {
 
 		zpool_vdev_online(pool, vdev->GUIDString().c_str(),

@@ -521,11 +521,7 @@ main(int argc, char *argv[])
 	 */
 	nentries = -1;
 	kp = kvm_getprocs(kd, what, flag, &nentries);
-	/*
-	 * Ignore ESRCH to preserve behaviour of "ps -p nonexistent-pid"
-	 * not reporting an error.
-	 */
-	if ((kp == NULL && errno != ESRCH) || (kp != NULL && nentries < 0))
+	if ((kp == NULL && nentries > 0) || (kp != NULL && nentries < 0))
 		xo_errx(1, "%s", kvm_geterr(kd));
 	nkept = 0;
 	if (nentries > 0) {

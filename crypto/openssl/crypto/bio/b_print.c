@@ -502,7 +502,7 @@ fmtint(char **sbuffer,
     if (!(flags & DP_F_UNSIGNED)) {
         if (value < 0) {
             signvalue = '-';
-            uvalue = -(unsigned LLONG)value;
+            uvalue = -value;
         } else if (flags & DP_F_PLUS)
             signvalue = '+';
         else if (flags & DP_F_SPACE)

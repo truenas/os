@@ -231,7 +231,6 @@ int GENERAL_NAME_set0_othername(GENERAL_NAME *gen,
     oth = OTHERNAME_new();
     if (!oth)
         return 0;
-    ASN1_TYPE_free(oth->value);
     oth->type_id = oid;
     oth->value = value;
     GENERAL_NAME_set0_value(gen, GEN_OTHERNAME, oth);

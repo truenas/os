@@ -9,7 +9,7 @@ BEGIN {
     Zone = "\n"
 }
 
-/^Z/ {
+/^Zone/ {
     if (defined[$2]) {
 	if (defined[$2] == Zone) {
 	    printf "%s: Zone has duplicate definition\n", $2
@@ -21,7 +21,7 @@ BEGIN {
     defined[$2] = Zone
 }
 
-/^L/ {
+/^Link/ {
     if (defined[$3]) {
 	if (defined[$3] == Zone) {
 	    printf "%s: Link with same name as Zone\n", $3
