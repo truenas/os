@@ -151,14 +151,24 @@ struct compress_types {
 	const char *flag;	/* Flag in configuration file */
 	const char *suffix;	/* Compression suffix */
 	const char *path;	/* Path to compression program */
+	char **args;		/* Compression program arguments */
 };
 
+static char f_arg[] = "-f";
+static char q_arg[] = "-q";
+static char rm_arg[] = "--rm";
+static char *gz_args[] ={ NULL, f_arg, NULL, NULL };
+#define bzip2_args gz_args
+#define xz_args gz_args
+static char *zstd_args[] = { NULL, q_arg, rm_arg, NULL, NULL };
+
+#define ARGS_NUM 4
 static const struct compress_types compress_type[COMPRESS_TYPES] = {
-	{ "", "", "" },					/* no compression */
-	{ "Z", COMPRESS_SUFFIX_GZ, _PATH_GZIP },	/* gzip compression */
-	{ "J", COMPRESS_SUFFIX_BZ2, _PATH_BZIP2 },	/* bzip2 compression */
-	{ "X", COMPRESS_SUFFIX_XZ, _PATH_XZ },		/* xz compression */
-	{ "Y", COMPRESS_SUFFIX_ZST, _PATH_ZSTD }	/* zst compression */
+	{ "", "", "", NULL},					/* none */
+	{ "Z", COMPRESS_SUFFIX_GZ, _PATH_GZIP, gz_args},	/* gzip */
+	{ "J", COMPRESS_SUFFIX_BZ2, _PATH_BZIP2, bzip2_args},	/* bzip2 */
+	{ "X", COMPRESS_SUFFIX_XZ, _PATH_XZ, xz_args },		/* xz */
+	{ "Y", COMPRESS_SUFFIX_ZST, _PATH_ZSTD, zstd_args }	/* zst */
 };
 
 struct conf_entry {
@@ -2001,11 +2011,16 @@ do_zipwork(struct zipwork_entry *zwork)
 	int errsav, fcount, zstatus;
 	pid_t pidzip, wpid;
 	char zresult[MAXPATHLEN];
+	char command[BUFSIZ];
+	char **args;
 	int c;
 
 	assert(zwork != NULL);
 	pgm_path = NULL;
 	strlcpy(zresult, zwork->zw_fname, sizeof(zresult));
+	args = calloc(ARGS_NUM, sizeof(*args));
+	if (args == NULL)
+		err(1, "calloc()");
 	if (zwork->zw_conf != NULL &&
 	    zwork->zw_conf->compress > COMPRESS_NONE)
 		for (c = 1; c < COMPRESS_TYPES; c++) {
@@ -2013,6 +2028,12 @@ do_zipwork(struct zipwork_entry *zwork)
 				pgm_path = compress_type[c].path;
 				(void) strlcat(zresult,
 				    compress_type[c].suffix, sizeof(zresult));
+				/* the first argument is always NULL, skip it */
+				for (c = 1; c < ARGS_NUM; c++) {
+					if (compress_type[c].args[c] == NULL)
+						break;
+					args[c] = compress_type[c].args[c];
+				}
 				break;
 			}
 		}
@@ -2026,6 +2047,13 @@ do_zipwork(struct zipwork_entry *zwork)
 	else
 		pgm_name++;
 
+	args[0] = strdup(pgm_name);
+	if (args[0] == NULL)
+		err(1, "strdup()");
+	for (c = 0; args[c] != NULL; c++)
+		;
+	args[c] = zwork->zw_fname;
+
 	if (zwork->zw_swork != NULL && zwork->zw_swork->sw_runcmd == 0 &&
 	    zwork->zw_swork->sw_pidok <= 0) {
 		warnx(
@@ -2035,12 +2063,20 @@ do_zipwork(struct zipwork_entry *zwork)
 		return;
 	}
 
+	strlcpy(command, pgm_path, sizeof(command));
+	for (c = 1; args[c] != NULL; c++) {
+		strlcat(command, " ", sizeof(command));
+		strlcat(command, args[c], sizeof(command));
+	}
 	if (noaction) {
 		printf("\t%s %s\n", pgm_name, zwork->zw_fname);
 		change_attrs(zresult, zwork->zw_conf);
 		return;
 	}
 
+	if (verbose) {
+		printf("Executing: %s\n", command);
+	}
 	fcount = 1;
 	pidzip = fork();
 	while (pidzip < 0) {
@@ -2058,8 +2094,8 @@ do_zipwork(struct zipwork_entry *zwork)
 	}
 	if (!pidzip) {
 		/* The child process executes the compression command */
-		execl(pgm_path, pgm_path, "-f", zwork->zw_fname, (char *)0);
-		err(1, "execl(`%s -f %s')", pgm_path, zwork->zw_fname);
+		execv(pgm_path, (char *const*) args);
+		err(1, "execv(`%s')", command);
 	}
 
 	wpid = waitpid(pidzip, &zstatus, 0);
@@ -2069,16 +2105,21 @@ do_zipwork(struct zipwork_entry *zwork)
 		return;
 	}
 	if (!WIFEXITED(zstatus)) {
-		warnx("`%s -f %s' did not terminate normally", pgm_name,
-		    zwork->zw_fname);
+		warnx("`%s' did not terminate normally", command);
+		free(args[0]);
+		free(args);
 		return;
 	}
 	if (WEXITSTATUS(zstatus)) {
-		warnx("`%s -f %s' terminated with a non-zero status (%d)",
-		    pgm_name, zwork->zw_fname, WEXITSTATUS(zstatus));
+		warnx("`%s' terminated with a non-zero status (%d)", command,
+		    WEXITSTATUS(zstatus));
+		free(args[0]);
+		free(args);
 		return;
 	}
 
+	free(args[0]);
+	free(args);
 	/* Compression was successful, set file attributes on the result. */
 	change_attrs(zresult, zwork->zw_conf);
 }

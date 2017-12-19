@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: (Beerware AND BSD-3-Clause)
+ *
  * ----------------------------------------------------------------------------
  * "THE BEER-WARE LICENSE" (Revision 42):
  * <phk@FreeBSD.ORG> wrote this file.  As long as you retain this notice you

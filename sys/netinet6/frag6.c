@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
  *
@@ -225,6 +227,7 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 		IP6STAT_INC(ip6s_reassembled);
 		in6_ifstat_inc(dstifp, ifs6_reass_ok);
 		*offp = offset;
+		m->m_flags |= M_FRAGMENTED;
 		return (ip6f->ip6f_nxt);
 	}
 
@@ -825,5 +828,6 @@ ip6_deletefraghdr(struct mbuf *m, int offset, int wait)
 		m_cat(m, t);
 	}
 
+	m->m_flags |= M_FRAGMENTED;
 	return (0);
 }

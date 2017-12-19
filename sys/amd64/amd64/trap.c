@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (C) 1994, David Greenman
  * Copyright (c) 1990, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -162,9 +164,6 @@ SYSCTL_INT(_machdep, OID_AUTO, uprintf_signal, CTLFLAG_RWTUN,
 void
 trap(struct trapframe *frame)
 {
-#ifdef KDTRACE_HOOKS
-	struct reg regs;
-#endif
 	ksiginfo_t ksi;
 	struct thread *td;
 	struct proc *p;
@@ -276,9 +275,8 @@ trap(struct trapframe *frame)
 			enable_intr();
 #ifdef KDTRACE_HOOKS
 			if (type == T_BPTFLT) {
-				fill_frame_regs(frame, &regs);
 				if (dtrace_pid_probe_ptr != NULL &&
-				    dtrace_pid_probe_ptr(&regs) == 0)
+				    dtrace_pid_probe_ptr(frame) == 0)
 					return;
 			}
 #endif
@@ -404,9 +402,8 @@ trap(struct trapframe *frame)
 #ifdef KDTRACE_HOOKS
 		case T_DTRACE_RET:
 			enable_intr();
-			fill_frame_regs(frame, &regs);
 			if (dtrace_return_probe_ptr != NULL)
-				dtrace_return_probe_ptr(&regs);
+				dtrace_return_probe_ptr(frame);
 			return;
 #endif
 		}

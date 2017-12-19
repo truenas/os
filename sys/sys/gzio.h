@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2014 Mark Johnston <markj@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,6 +42,7 @@ typedef int (*gzio_cb)(void *, size_t, off_t, void *);
 struct gzio_stream;
 
 struct gzio_stream *gzio_init(gzio_cb cb, enum gzio_mode, size_t, int, void *);
+void		gzio_reset(struct gzio_stream *);
 int		gzio_write(struct gzio_stream *, void *, u_int);
 int		gzio_flush(struct gzio_stream *);
 void		gzio_fini(struct gzio_stream *);

@@ -1,6 +1,8 @@
 /*	$NetBSD: ffs.c,v 1.45 2011/10/09 22:49:26 christos Exp $	*/
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 2001 Wasabi Systems, Inc.
  * All rights reserved.
  *
@@ -1128,7 +1130,7 @@ ffs_write_inode(union dinode *dp, uint32_t ino, const fsinfo_t *fsopts)
 	 * Initialize inode blocks on the fly for UFS2.
 	 */
 	initediblk = ufs_rw32(cgp->cg_initediblk, fsopts->needswap);
-	if (ffs_opts->version == 2 && cgino + INOPB(fs) > initediblk &&
+	while (ffs_opts->version == 2 && cgino + INOPB(fs) > initediblk &&
 	    initediblk < ufs_rw32(cgp->cg_niblk, fsopts->needswap)) {
 		memset(buf, 0, fs->fs_bsize);
 		dip = (struct ufs2_dinode *)buf;

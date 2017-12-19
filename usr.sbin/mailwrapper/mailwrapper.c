@@ -1,7 +1,9 @@
 /*	$OpenBSD: mailwrapper.c,v 1.18 2007/11/06 14:39:19 otto Exp $	*/
 /*	$NetBSD: mailwrapper.c,v 1.9 2003/03/09 08:10:43 mjl Exp $	*/
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 1998
  * 	Perry E. Metzger.  All rights reserved.
  *
@@ -42,7 +44,6 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <libutil.h>
 #include <sysexits.h>
 #include <syslog.h>
 
@@ -87,13 +88,16 @@ int
 main(int argc, char *argv[], char *envp[])
 {
 	FILE *config;
-	char *line, *cp, *from, *to, *ap;
+	char *line, *cp, *from, *to, *ap, *walk;
 	const char *progname;
 	char localmailerconf[MAXPATHLEN];
 	const char *mailerconf;
-	size_t len, lineno = 0;
+	size_t linecap = 0, lineno = 0;
+	ssize_t linelen;
 	int i;
 	struct arglist al;
+
+	line = NULL;
 
 	/* change __progname to mailwrapper so we get sensible error messages */
 	progname = getprogname();
@@ -121,12 +125,16 @@ main(int argc, char *argv[], char *envp[])
 	}
 
 	for (;;) {
-		if ((line = fparseln(config, &len, &lineno, NULL, 0)) == NULL) {
-			if (feof(config))
+		if ((linelen = getline(&line, &linecap, config)) <= 0) {
+			if (feof(config)) {
 				errx(EX_CONFIG, "no mapping in %s", mailerconf);
+			}
 			err(EX_CONFIG, "cannot parse line %lu", (u_long)lineno);
 		}
-
+		lineno++;
+		walk = line;
+		/* strip comments */
+		strsep(&walk, "#");
 #define	WS	" \t\n"
 		cp = line;
 

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009 Yahoo! Inc.
  * Copyright (c) 2011-2015 LSI Corp.
  * Copyright (c) 2013-2015 Avago Technologies
@@ -665,7 +667,11 @@ mps_iocfacts_allocate(struct mps_softc *sc, uint8_t attaching)
 		return (error);
 	}
 
-	if ((error = mps_pci_setup_interrupts(sc)) != 0) {
+	/*
+	 * XXX If the number of MSI-X vectors changes during re-init, this
+	 * won't see it and adjust.
+	 */
+	if (attaching && (error = mps_pci_setup_interrupts(sc)) != 0) {
 		mps_dprint(sc, MPS_INIT|MPS_FAULT, "Failed to setup "
 		    "interrupts\n");
 		mps_free(sc);

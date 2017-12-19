@@ -1,6 +1,8 @@
 /*-
  * Implementation of SCSI Direct Access Peripheral driver for CAM.
  *
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997 Justin T. Gibbs.
  * All rights reserved.
  *
@@ -1311,6 +1313,14 @@ static struct da_quirk_entry da_quirk_table[] =
 	},
 	{
 		/*
+		 * Same as for SAMSUNG MZ7* but enable the quirks for SSD
+		 * starting with MZ7* too
+		 */
+		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "MZ7*", "*" },
+		/*quirks*/DA_Q_4K
+	},
+	{
+		/*
 		 * SuperTalent TeraDrive CT SSDs
 		 * 4k optimised & trim only works in 4k requests + 4k aligned
 		 */
@@ -1338,7 +1348,7 @@ static struct da_quirk_entry da_quirk_table[] =
 		 * Drive Managed SATA hard drive.  This drive doesn't report
 		 * in firmware that it is a drive managed SMR drive.
 		 */
-		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "ST8000AS0002*", "*" },
+		{ T_DIRECT, SIP_MEDIA_FIXED, "ATA", "ST8000AS000[23]*", "*" },
 		/*quirks*/DA_Q_SMR_DM
 	},
 	{
@@ -1663,13 +1673,8 @@ dadump(void *arg, void *virtual, vm_offset_t physical, off_t offset, size_t leng
 				/*dxfer_len*/length,
 				/*sense_len*/SSD_FULL_SIZE,
 				da_default_timeout * 1000);
-		xpt_polled_action((union ccb *)&csio);
-
-		error = cam_periph_error((union ccb *)&csio,
+		error = cam_periph_runccb((union ccb *)&csio, cam_periph_error,
 		    0, SF_NO_RECOVERY | SF_NO_RETRY, NULL);
-		if ((csio.ccb_h.status & CAM_DEV_QFRZN) != 0)
-			cam_release_devq(csio.ccb_h.path, /*relsim_flags*/0,
-			    /*reduction*/0, /*timeout*/0, /*getcount_only*/0);
 		if (error != 0)
 			printf("Aborting dump due to I/O error.\n");
 		cam_periph_unlock(periph);
@@ -1691,13 +1696,8 @@ dadump(void *arg, void *virtual, vm_offset_t physical, off_t offset, size_t leng
 				       /*lb_count*/0,
 				       SSD_FULL_SIZE,
 				       5 * 1000);
-		xpt_polled_action((union ccb *)&csio);
-
-		error = cam_periph_error((union ccb *)&csio,
-		    0, SF_NO_RECOVERY | SF_NO_RETRY | SF_QUIET_IR, NULL);
-		if ((csio.ccb_h.status & CAM_DEV_QFRZN) != 0)
-			cam_release_devq(csio.ccb_h.path, /*relsim_flags*/0,
-			    /*reduction*/0, /*timeout*/0, /*getcount_only*/0);
+		error = cam_periph_runccb((union ccb *)&csio, cam_periph_error,
+		    0, SF_NO_RECOVERY | SF_NO_RETRY, NULL);
 		if (error != 0)
 			xpt_print(periph->path, "Synchronize cache failed\n");
 	}
@@ -1909,7 +1909,6 @@ daasync(void *callback_arg, u_int32_t code,
 				dareprobe(periph);
 			}
 		}
-		cam_periph_async(periph, code, path, arg);
 		break;
 	}
 	case AC_SCSI_AEN:
@@ -1952,7 +1951,7 @@ dasysctlinit(void *context, int pending)
 {
 	struct cam_periph *periph;
 	struct da_softc *softc;
-	char tmpstr[80], tmpstr2[80];
+	char tmpstr[32], tmpstr2[16];
 	struct ccb_trans_settings cts;
 
 	periph = (struct cam_periph *)context;
@@ -2463,10 +2462,7 @@ daregister(struct cam_periph *periph, void *arg)
 		softc->quirks = DA_Q_NONE;
 
 	/* Check if the SIM does not want 6 byte commands */
-	bzero(&cpi, sizeof(cpi));
-	xpt_setup_ccb(&cpi.ccb_h, periph->path, CAM_PRIORITY_NORMAL);
-	cpi.ccb_h.func_code = XPT_PATH_INQ;
-	xpt_action((union ccb *)&cpi);
+	xpt_path_inq(&cpi, periph->path);
 	if (cpi.ccb_h.status == CAM_REQ_CMP && (cpi.hba_misc & PIM_NO_6_BYTE))
 		softc->quirks |= DA_Q_NO_6_BYTE;
 
@@ -3030,6 +3026,18 @@ more:
 		}
 		case BIO_FLUSH:
 			/*
+			 * If we don't support sync cache, or the disk
+			 * isn't dirty, FLUSH is a no-op.  Use the
+			 * allocated * CCB for the next bio if one is
+			 * available.
+			 */
+			if ((softc->quirks & DA_Q_NO_SYNC_CACHE) != 0 ||
+			    (softc->flags & DA_FLAG_DIRTY) == 0) {
+				biodone(bp);
+				goto skipstate;
+			}
+
+			/*
 			 * BIO_FLUSH doesn't currently communicate
 			 * range data, so we synchronize the cache
 			 * over the whole disk.  We also force
@@ -3044,6 +3052,15 @@ more:
 					       /*lb_count*/0,
 					       SSD_FULL_SIZE,
 					       da_default_timeout*1000);
+			/*
+			 * Clear the dirty flag before sending the command.
+			 * Either this sync cache will be successful, or it
+			 * will fail after a retry.  If it fails, it is
+			 * unlikely to be successful if retried later, so
+			 * we'll save ourselves time by just marking the
+			 * device clean.
+			 */
+			softc->flags &= ~DA_FLAG_DIRTY;
 			break;
 		case BIO_ZONE: {
 			int error, queue_ccb;
@@ -5420,8 +5437,7 @@ daerror(union ccb *ccb, u_int32_t cam_flags, u_int32_t sense_flags)
 
 	if (softc->quirks & DA_Q_RETRY_BUSY)
 		sense_flags |= SF_RETRY_BUSY;
-	return(cam_periph_error(ccb, cam_flags, sense_flags,
-				&softc->saved_ccb));
+	return(cam_periph_error(ccb, cam_flags, sense_flags));
 }
 
 static void

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2008-2015 Nathan Whitehorn
  * All rights reserved.
  *
@@ -572,8 +574,10 @@ moea64_probe_large_page(void)
 		
 		/* FALLTHROUGH */
 	default:
-		moea64_large_page_size = 0x1000000; /* 16 MB */
-		moea64_large_page_shift = 24;
+		if (moea64_large_page_size == 0) {
+			moea64_large_page_size = 0x1000000; /* 16 MB */
+			moea64_large_page_shift = 24;
+		}
 	}
 
 	moea64_large_page_mask = moea64_large_page_size - 1;
@@ -873,9 +877,9 @@ moea64_late_bootstrap(mmu_t mmup, vm_offset_t kernelstart, vm_offset_t kernelend
 	/*
 	 * Calculate the last available physical address.
 	 */
+	Maxmem = 0;
 	for (i = 0; phys_avail[i + 2] != 0; i += 2)
-		;
-	Maxmem = powerpc_btop(phys_avail[i + 1]);
+		Maxmem = max(Maxmem, powerpc_btop(phys_avail[i + 1]));
 
 	/*
 	 * Initialize MMU and remap early physical mappings
@@ -956,7 +960,7 @@ moea64_late_bootstrap(mmu_t mmup, vm_offset_t kernelstart, vm_offset_t kernelend
 		pa += PAGE_SIZE;
 		va += PAGE_SIZE;
 	}
-	dpcpu_init(dpcpu, 0);
+	dpcpu_init(dpcpu, curcpu);
 
 	/*
 	 * Allocate some things for page zeroing. We put this directly
@@ -1506,7 +1510,7 @@ moea64_uma_page_alloc(uma_zone_t zone, vm_size_t bytes, uint8_t *flags,
 	struct pvo_entry *pvo;
         vm_offset_t va;
         vm_page_t m;
-        int pflags, needed_lock;
+        int needed_lock;
 
 	/*
 	 * This entire routine is a horrible hack to avoid bothering kmem
@@ -1517,17 +1521,11 @@ moea64_uma_page_alloc(uma_zone_t zone, vm_size_t bytes, uint8_t *flags,
 
 	*flags = UMA_SLAB_PRIV;
 	needed_lock = !PMAP_LOCKED(kernel_pmap);
-	pflags = malloc2vm_flags(wait) | VM_ALLOC_WIRED;
 
-        for (;;) {
-                m = vm_page_alloc(NULL, 0, pflags | VM_ALLOC_NOOBJ);
-                if (m == NULL) {
-                        if (wait & M_NOWAIT)
-                                return (NULL);
-                        VM_WAIT;
-                } else
-                        break;
-        }
+	m = vm_page_alloc(NULL, 0,
+	    malloc2vm_flags(wait) | VM_ALLOC_WIRED | VM_ALLOC_NOOBJ);
+	if (m == NULL)
+		return (NULL);
 
 	va = VM_PAGE_TO_PHYS(m);
 

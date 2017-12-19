@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997, 1998, 2000 Justin T. Gibbs.
  * Copyright (c) 1997, 1998, 1999 Kenneth D. Merry.
  * All rights reserved.
@@ -586,10 +588,7 @@ passregister(struct cam_periph *periph, void *arg)
 	softc->io_zone_size = MAXPHYS;
 	knlist_init_mtx(&softc->read_select.si_note, cam_periph_mtx(periph));
 
-	bzero(&cpi, sizeof(cpi));
-	xpt_setup_ccb(&cpi.ccb_h, periph->path, CAM_PRIORITY_NORMAL);
-	cpi.ccb_h.func_code = XPT_PATH_INQ;
-	xpt_action((union ccb *)&cpi);
+	xpt_path_inq(&cpi, periph->path);
 
 	if (cpi.maxio == 0)
 		softc->maxio = DFLTPHYS;	/* traditional default */
@@ -2275,6 +2274,5 @@ passerror(union ccb *ccb, u_int32_t cam_flags, u_int32_t sense_flags)
 	periph = xpt_path_periph(ccb->ccb_h.path);
 	softc = (struct pass_softc *)periph->softc;
 	
-	return(cam_periph_error(ccb, cam_flags, sense_flags, 
-				 &softc->saved_ccb));
+	return(cam_periph_error(ccb, cam_flags, sense_flags));
 }

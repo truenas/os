@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2002 Networks Associates Technology, Inc.
  * All rights reserved.
  *
@@ -1956,6 +1958,16 @@ getinobuf(struct inode *ip, u_int cg, u_int32_t cginoblk, int gbflags)
 }
 
 /*
+ * Synchronous inode initialization is needed only when barrier writes do not
+ * work as advertised, and will impose a heavy cost on file creation in a newly
+ * created filesystem.
+ */
+static int doasyncinodeinit = 1;
+SYSCTL_INT(_vfs_ffs, OID_AUTO, doasyncinodeinit, CTLFLAG_RWTUN,
+    &doasyncinodeinit, 0,
+    "Perform inode block initialization using asynchronous writes");
+
+/*
  * Determine whether an inode can be allocated.
  *
  * Check to see if an inode is available, and if it is,
@@ -2063,6 +2075,7 @@ gotit:
 				dp2->di_gen = arc4random();
 			dp2++;
 		}
+
 		/*
 		 * Rather than adding a soft updates dependency to ensure
 		 * that the new inode block is written before it is claimed
@@ -2072,7 +2085,10 @@ gotit:
 		 * written. The barrier write should only slow down bulk
 		 * loading of newly created filesystems.
 		 */
-		babarrierwrite(ibp);
+		if (doasyncinodeinit)
+			babarrierwrite(ibp);
+		else
+			bwrite(ibp);
 
 		/*
 		 * After the inode block is written, try to update the
@@ -2584,6 +2600,15 @@ ffs_mapsearch(fs, cgp, bpref, allocsiz)
 	return (-1);
 }
 
+static const struct statfs *
+ffs_getmntstat(struct vnode *devvp)
+{
+
+	if (devvp->v_type == VCHR)
+		return (&devvp->v_rdev->si_mountpt->mnt_stat);
+	return (ffs_getmntstat(VFSTOUFS(devvp->v_mount)->um_devvp));
+}
+
 /*
  * Fetch and verify a cylinder group.
  */
@@ -2597,6 +2622,7 @@ ffs_getcg(fs, devvp, cg, bpp, cgpp)
 {
 	struct buf *bp;
 	struct cg *cgp;
+	const struct statfs *sfs;
 	int flags, error;
 
 	*bpp = NULL;
@@ -2615,7 +2641,11 @@ ffs_getcg(fs, devvp, cg, bpp, cgpp)
 	    (bp->b_flags & B_CKHASH) != 0 &&
 	    cgp->cg_ckhash != bp->b_ckhash) ||
 	    !cg_chkmagic(cgp) || cgp->cg_cgx != cg) {
-		printf("checksum failed: cg %u, cgp: 0x%x != bp: 0x%jx\n",
+		sfs = ffs_getmntstat(devvp);
+		printf("UFS %s%s (%s) cylinder checksum failed: cg %u, cgp: "
+		    "0x%x != bp: 0x%jx\n",
+		    devvp->v_type == VCHR ? "" : "snapshot of ",
+		    sfs->f_mntfromname, sfs->f_mntonname,
 		    cg, cgp->cg_ckhash, (uintmax_t)bp->b_ckhash);
 		bp->b_flags &= ~B_CKHASH;
 		bp->b_flags |= B_INVAL | B_NOCACHE;

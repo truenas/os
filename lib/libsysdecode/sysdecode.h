@@ -35,7 +35,8 @@ enum sysdecode_abi {
 	SYSDECODE_ABI_FREEBSD32,
 	SYSDECODE_ABI_LINUX,
 	SYSDECODE_ABI_LINUX32,
-	SYSDECODE_ABI_CLOUDABI64
+	SYSDECODE_ABI_CLOUDABI64,
+	SYSDECODE_ABI_CLOUDABI32
 };
 
 int	sysdecode_abi_to_freebsd_errno(enum sysdecode_abi _abi, int _error);
@@ -60,6 +61,10 @@ const char *sysdecode_getrusage_who(int _who);
 const char *sysdecode_idtype(int _idtype);
 const char *sysdecode_ioctlname(unsigned long _val);
 const char *sysdecode_ipproto(int _protocol);
+void	sysdecode_kevent_fflags(FILE *_fp, short _filter, int _fflags,
+	    int _base);
+const char *sysdecode_kevent_filter(int _filter);
+bool	sysdecode_kevent_flags(FILE *_fp, int _flags, int *_rem);
 const char *sysdecode_kldsym_cmd(int _cmd);
 const char *sysdecode_kldunload_flags(int _flags);
 const char *sysdecode_lio_listio_mode(int _mode);

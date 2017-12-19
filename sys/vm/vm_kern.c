@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: (BSD-3-Clause AND MIT-CMU)
+ *
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -162,16 +164,20 @@ vm_offset_t
 kmem_alloc_attr(vmem_t *vmem, vm_size_t size, int flags, vm_paddr_t low,
     vm_paddr_t high, vm_memattr_t memattr)
 {
-	vm_object_t object = vmem == kmem_arena ? kmem_object : kernel_object;
+	vm_object_t object = kernel_object;
 	vm_offset_t addr, i, offset;
 	vm_page_t m;
 	int pflags, tries;
 
+	KASSERT(vmem == kernel_arena,
+	    ("kmem_alloc_attr: Only kernel_arena is supported."));
 	size = round_page(size);
 	if (vmem_alloc(vmem, size, M_BESTFIT | flags, &addr))
 		return (0);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
+	pflags &= ~(VM_ALLOC_NOWAIT | VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	pflags |= VM_ALLOC_NOWAIT;
 	VM_OBJECT_WLOCK(object);
 	for (i = 0; i < size; i += PAGE_SIZE) {
 		tries = 0;
@@ -216,17 +222,21 @@ kmem_alloc_contig(struct vmem *vmem, vm_size_t size, int flags, vm_paddr_t low,
     vm_paddr_t high, u_long alignment, vm_paddr_t boundary,
     vm_memattr_t memattr)
 {
-	vm_object_t object = vmem == kmem_arena ? kmem_object : kernel_object;
+	vm_object_t object = kernel_object;
 	vm_offset_t addr, offset, tmp;
 	vm_page_t end_m, m;
 	u_long npages;
 	int pflags, tries;
  
+	KASSERT(vmem == kernel_arena,
+	    ("kmem_alloc_contig: Only kernel_arena is supported."));
 	size = round_page(size);
 	if (vmem_alloc(vmem, size, flags | M_BESTFIT, &addr))
 		return (0);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
+	pflags &= ~(VM_ALLOC_NOWAIT | VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	pflags |= VM_ALLOC_NOWAIT;
 	npages = atop(size);
 	VM_OBJECT_WLOCK(object);
 	tries = 0;
@@ -308,12 +318,13 @@ kmem_malloc(struct vmem *vmem, vm_size_t size, int flags)
 	vm_offset_t addr;
 	int rv;
 
+	KASSERT(vmem == kernel_arena,
+	    ("kmem_malloc: Only kernel_arena is supported."));
 	size = round_page(size);
 	if (vmem_alloc(vmem, size, flags | M_BESTFIT, &addr))
 		return (0);
 
-	rv = kmem_back((vmem == kmem_arena) ? kmem_object : kernel_object,
-	    addr, size, flags);
+	rv = kmem_back(kernel_object, addr, size, flags);
 	if (rv != KERN_SUCCESS) {
 		vmem_free(vmem, addr, size);
 		return (0);
@@ -333,15 +344,18 @@ kmem_back(vm_object_t object, vm_offset_t addr, vm_size_t size, int flags)
 	vm_page_t m, mpred;
 	int pflags;
 
-	KASSERT(object == kmem_object || object == kernel_object,
-	    ("kmem_back: only supports kernel objects."));
+	KASSERT(object == kernel_object,
+	    ("kmem_back: only supports kernel object."));
 
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
+	pflags &= ~(VM_ALLOC_NOWAIT | VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	if (flags & M_WAITOK)
+		pflags |= VM_ALLOC_WAITFAIL;
 
 	i = 0;
-retry:
 	VM_OBJECT_WLOCK(object);
+retry:
 	mpred = vm_radix_lookup_le(&object->rtree, atop(offset + i));
 	for (; i < size; i += PAGE_SIZE, mpred = m) {
 		m = vm_page_alloc_after(object, atop(offset + i), pflags,
@@ -353,11 +367,9 @@ retry:
 		 * aren't on any queues.
 		 */
 		if (m == NULL) {
-			VM_OBJECT_WUNLOCK(object);
-			if ((flags & M_NOWAIT) == 0) {
-				VM_WAIT;
+			if ((flags & M_NOWAIT) == 0)
 				goto retry;
-			}
+			VM_OBJECT_WUNLOCK(object);
 			kmem_unback(object, addr, i);
 			return (KERN_NO_SPACE);
 		}
@@ -389,8 +401,8 @@ kmem_unback(vm_object_t object, vm_offset_t addr, vm_size_t size)
 	vm_page_t m, next;
 	vm_offset_t end, offset;
 
-	KASSERT(object == kmem_object || object == kernel_object,
-	    ("kmem_unback: only supports kernel objects."));
+	KASSERT(object == kernel_object,
+	    ("kmem_unback: only supports kernel object."));
 
 	pmap_remove(kernel_pmap, addr, addr + size);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
@@ -415,9 +427,10 @@ void
 kmem_free(struct vmem *vmem, vm_offset_t addr, vm_size_t size)
 {
 
+	KASSERT(vmem == kernel_arena,
+	    ("kmem_free: Only kernel_arena is supported."));
 	size = round_page(size);
-	kmem_unback((vmem == kmem_arena) ? kmem_object : kernel_object,
-	    addr, size);
+	kmem_unback(kernel_object, addr, size);
 	vmem_free(vmem, addr, size);
 }
 

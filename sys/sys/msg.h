@@ -6,6 +6,8 @@
  *
  * Author:  Daniel Boulet
  *
+ * SPDX-License-Identifier: BSD-1-Clause
+ *
  * Copyright 1993 Daniel Boulet and RTMX Inc.
  *
  * This system call was implemented by Daniel Boulet under contract from RTMX.

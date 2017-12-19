@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2017, Fedor Uporov
  * All rights reserved.
  *
@@ -218,9 +220,10 @@ ext2_extattr_inode_list(struct inode *ip, int attrnamespace,
 			return (ENOTSUP);
 		}
 
-		if (uio == NULL)
+		if (size != NULL)
 			*size += name_len + 1;
-		else {
+
+		if (uio != NULL) {
 			char *name = malloc(name_len + 1, M_TEMP, M_WAITOK);
 			name[0] = name_len;
 			memcpy(&name[1], attr_name, name_len);
@@ -284,9 +287,10 @@ ext2_extattr_block_list(struct inode *ip, int attrnamespace,
 			return (ENOTSUP);
 		}
 
-		if (uio == NULL)
+		if (size != NULL)
 			*size += name_len + 1;
-		else {
+
+		if (uio != NULL) {
 			char *name = malloc(name_len + 1, M_TEMP, M_WAITOK);
 			name[0] = name_len;
 			memcpy(&name[1], attr_name, name_len);
@@ -359,12 +363,12 @@ ext2_extattr_inode_get(struct inode *ip, int attrnamespace,
 
 		if (strlen(name) == name_len &&
 		    0 == strncmp(attr_name, name, name_len)) {
-			if (uio == NULL)
+			if (size != NULL)
 				*size += entry->e_value_size;
-			else {
+
+			if (uio != NULL)
 				error = uiomove(((char *)EXT2_IFIRST(header)) +
 				    entry->e_value_offs, entry->e_value_size, uio);
-			}
 
 			brelse(bp);
 			return (error);
@@ -426,12 +430,12 @@ ext2_extattr_block_get(struct inode *ip, int attrnamespace,
 
 		if (strlen(name) == name_len &&
 		    0 == strncmp(attr_name, name, name_len)) {
-			if (uio == NULL)
+			if (size != NULL)
 				*size += entry->e_value_size;
-			else {
+
+			if (uio != NULL)
 				error = uiomove(bp->b_data + entry->e_value_offs,
 				    entry->e_value_size, uio);
-			}
 
 			brelse(bp);
 			return (error);
@@ -612,7 +616,7 @@ ext2_extattr_block_clone(struct inode *ip, struct buf **bpp)
 	if (header->h_magic != EXTATTR_MAGIC || header->h_refcount == 1)
 		return (EINVAL);
 
-	facl = ext2_allocfacl(ip);
+	facl = ext2_alloc_meta(ip);
 	if (!facl)
 		return (ENOSPC);
 
@@ -1137,7 +1141,7 @@ ext2_extattr_block_set(struct inode *ip, int attrnamespace,
 		return (ENOSPC);
 
 	/* Allocate block, fill EA header and insert entry */
-	ip->i_facl = ext2_allocfacl(ip);
+	ip->i_facl = ext2_alloc_meta(ip);
 	if (0 == ip->i_facl)
 		return (ENOSPC);
 

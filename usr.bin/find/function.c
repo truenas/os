@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1990, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -902,8 +904,13 @@ f_fstype(PLAN *plan, FTSENT *entry)
 		} else
 			p = NULL;
 
-		if (statfs(entry->fts_accpath, &sb))
-			err(1, "%s", entry->fts_accpath);
+		if (statfs(entry->fts_accpath, &sb)) {
+			if (!ignore_readdir_race || errno != ENOENT) {
+				warn("statfs: %s", entry->fts_accpath);
+				exitstatus = 1;
+			}
+			return 0;
+		}
 
 		if (p) {
 			p[0] = save[0];

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2004-2006 Pawel Jakub Dawidek <pjd@FreeBSD.org>
  * All rights reserved.
  *
@@ -72,7 +74,7 @@
 					 G_MIRROR_DEVICE_FLAG_NOFAILSYNC)
 
 #ifdef _KERNEL
-extern u_int g_mirror_debug;
+extern int g_mirror_debug;
 
 #define	G_MIRROR_DEBUG(lvl, ...)	do {				\
 	if (g_mirror_debug >= (lvl)) {					\
@@ -108,6 +110,7 @@ struct g_mirror_disk_sync {
 	off_t		  ds_offset;	/* Offset of next request to send. */
 	off_t		  ds_offset_done; /* Offset of already synchronized
 					   region. */
+	time_t		  ds_update_ts; /* Time of last metadata update. */
 	u_int		  ds_syncid;	/* Disk's synchronization ID. */
 	u_int		  ds_inflight;	/* Number of in-flight sync requests. */
 	struct bio	**ds_bios;	/* BIOs for synchronization I/O. */

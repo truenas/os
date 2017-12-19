@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2003 Alan L. Cox <alc@cs.rice.edu>
  * All rights reserved.
  *
@@ -51,6 +53,10 @@ uma_small_alloc(uma_zone_t zone, vm_size_t bytes, u_int8_t *flags, int wait)
 
 	*flags = UMA_SLAB_PRIV;
 	pflags = malloc2vm_flags(wait) | VM_ALLOC_WIRED;
+#ifndef __mips_n64
+	pflags &= ~(VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	pflags |= VM_ALLOC_NOWAIT;
+#endif
 
 	for (;;) {
 		m = vm_page_alloc_freelist(VM_FREELIST_DIRECT, pflags);

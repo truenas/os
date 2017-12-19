@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1991 Regents of the University of California.
  * All rights reserved.
  * Copyright (c) 1994 John S. Dyson
@@ -96,11 +98,6 @@ __FBSDID("$FreeBSD$");
 #include <machine/tte.h>
 #include <machine/tsb.h>
 #include <machine/ver.h>
-
-/*
- * Virtual address of message buffer
- */
-struct msgbuf *msgbufp;
 
 /*
  * Map of physical memory reagions

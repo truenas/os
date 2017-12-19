@@ -148,7 +148,7 @@ env_check() {
 		WITH_COMPRESSED_IMAGES=
 		NODOC=yes
 		case ${EMBEDDED_TARGET}:${EMBEDDED_TARGET_ARCH} in
-			arm:armv6|arm:armv7|arm64:aarch64)
+			arm:arm*|arm64:aarch64)
 				chroot_build_release_cmd="chroot_arm_build_release"
 				;;
 			*)
@@ -252,8 +252,8 @@ chroot_setup() {
 extra_chroot_setup() {
 	mkdir -p ${CHROOTDIR}/dev
 	mount -t devfs devfs ${CHROOTDIR}/dev
-	[ -e /etc/resolv.conf ] && cp /etc/resolv.conf \
-		${CHROOTDIR}/etc/resolv.conf
+	[ -e /etc/resolv.conf -a ! -e ${CHROOTDIR}/etc/resolv.conf ] && \
+		cp /etc/resolv.conf ${CHROOTDIR}/etc/resolv.conf
 	# Run ldconfig(8) in the chroot directory so /var/run/ld-elf*.so.hints
 	# is created.  This is needed by ports-mgmt/pkg.
 	eval chroot ${CHROOTDIR} /etc/rc.d/ldconfig forcerestart
@@ -280,8 +280,11 @@ extra_chroot_setup() {
 			PBUILD_FLAGS="OSVERSION=${_OSVERSION} BATCH=yes"
 			PBUILD_FLAGS="${PBUILD_FLAGS} UNAME_r=${UNAME_r}"
 			PBUILD_FLAGS="${PBUILD_FLAGS} OSREL=${REVISION}"
-			chroot ${CHROOTDIR} make -C /usr/ports/textproc/docproj \
-				${PBUILD_FLAGS} OPTIONS_UNSET="FOP IGOR" \
+			PBUILD_FLAGS="${PBUILD_FLAGS} WRKDIRPREFIX=/tmp/ports"
+			PBUILD_FLAGS="${PBUILD_FLAGS} DISTDIR=/tmp/distfiles"
+			chroot ${CHROOTDIR} env ${PBUILD_FLAGS} make -C \
+				/usr/ports/textproc/docproj \
+				OPTIONS_UNSET="FOP IGOR" \
 				FORCE_PKG_REGISTER=1 \
 				install clean distclean
 		fi
@@ -294,9 +297,12 @@ extra_chroot_setup() {
 		PBUILD_FLAGS="OSVERSION=${_OSVERSION} BATCH=yes"
 		PBUILD_FLAGS="${PBUILD_FLAGS} UNAME_r=${UNAME_r}"
 		PBUILD_FLAGS="${PBUILD_FLAGS} OSREL=${REVISION}"
+		PBUILD_FLAGS="${PBUILD_FLAGS} WRKDIRPREFIX=/tmp/ports"
+		PBUILD_FLAGS="${PBUILD_FLAGS} DISTDIR=/tmp/distfiles"
 		for _PORT in ${EMBEDDEDPORTS}; do
-			eval chroot ${CHROOTDIR} make -C /usr/ports/${_PORT} \
-				FORCE_PKG_REGISTER=1 ${PBUILD_FLAGS} install clean distclean
+			eval chroot ${CHROOTDIR} env ${PBUILD_FLAGS} make -C \
+				/usr/ports/${_PORT} \
+				FORCE_PKG_REGISTER=1 install clean distclean
 		done
 	fi
 
@@ -350,7 +356,6 @@ chroot_build_release() {
 # chroot_arm_build_release(): Create arm SD card image.
 chroot_arm_build_release() {
 	load_target_env
-	eval chroot ${CHROOTDIR} make -C /usr/src/release obj
 	case ${EMBEDDED_TARGET} in
 		arm|arm64)
 			if [ -e "${RELENGDIR}/tools/arm.subr" ]; then
@@ -361,11 +366,14 @@ chroot_arm_build_release() {
 			;;
 	esac
 	[ ! -z "${RELEASECONF}" ] && . "${RELEASECONF}"
-	WORLDDIR="$(eval chroot ${CHROOTDIR} make -C /usr/src/release -V WORLDDIR)"
-	OBJDIR="$(eval chroot ${CHROOTDIR} make -C /usr/src/release -V .OBJDIR)"
-	DESTDIR="${OBJDIR}/${KERNEL}"
-	IMGBASE="${CHROOTDIR}/${OBJDIR}/${KERNEL}.img"
-	OSRELEASE="$(eval chroot ${CHROOTDIR} make -C /usr/src/release \
+	export MAKE_FLAGS="${MAKE_FLAGS} TARGET=${EMBEDDED_TARGET}"
+	export MAKE_FLAGS="${MAKE_FLAGS} TARGET_ARCH=${EMBEDDED_TARGET_ARCH}"
+	eval chroot ${CHROOTDIR} env WITH_UNIFIED_OBJDIR=1 make ${MAKE_FLAGS} -C /usr/src/release obj
+	export WORLDDIR="$(eval chroot ${CHROOTDIR} make ${MAKE_FLAGS} -C /usr/src/release -V WORLDDIR)"
+	export OBJDIR="$(eval chroot ${CHROOTDIR} env WITH_UNIFIED_OBJDIR=1 make ${MAKE_FLAGS} -C /usr/src/release -V .OBJDIR)"
+	export DESTDIR="${OBJDIR}/${KERNEL}"
+	export IMGBASE="${CHROOTDIR}/${OBJDIR}/${KERNEL}.img"
+	export OSRELEASE="$(eval chroot ${CHROOTDIR} make ${MAKE_FLAGS} -C /usr/src/release \
 		TARGET=${EMBEDDED_TARGET} TARGET_ARCH=${EMBEDDED_TARGET_ARCH} \
 		-V OSRELEASE)"
 	chroot ${CHROOTDIR} mkdir -p ${DESTDIR}

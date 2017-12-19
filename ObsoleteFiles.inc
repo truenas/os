@@ -38,6 +38,215 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20171208: Remove basename_r(3)
+OLD_FILES+=usr/share/man/man3/basename_r.3.gz
+# 20171204: Move fdformat man page from volume 1 to volume 8.
+OLD_FILES+=usr/share/man/man1/fdformat.1.gz
+# 20171203: libproc version bump
+OLD_LIBS+=usr/lib/libproc.so.4
+OLD_LIBS+=usr/lib32/libproc.so.4
+# 20171203: new clang import which bumps version from 5.0.0 to 5.0.1.
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/allocator_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/asan_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/common_interface_defs.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/coverage_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/dfsan_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/esan_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/linux_syscall_hooks.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/lsan_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/msan_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/tsan_interface.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/sanitizer/tsan_interface_atomic.h
+OLD_DIRS+=usr/lib/clang/5.0.0/include/sanitizer
+OLD_FILES+=usr/lib/clang/5.0.0/include/__clang_cuda_builtin_vars.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__clang_cuda_cmath.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__clang_cuda_complex_builtins.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__clang_cuda_intrinsics.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__clang_cuda_math_forward_declares.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__clang_cuda_runtime_wrapper.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__stddef_max_align_t.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__wmmintrin_aes.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/__wmmintrin_pclmul.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/adxintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/altivec.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/ammintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/arm_acle.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/arm_neon.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/armintr.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx2intrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512bwintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512cdintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512dqintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512erintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512fintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512ifmaintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512ifmavlintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512pfintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vbmiintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vbmivlintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vlbwintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vlcdintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vldqintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vlintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avx512vpopcntdqintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/avxintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/bmi2intrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/bmiintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/clflushoptintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/clzerointrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/cpuid.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/emmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/f16cintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/fma4intrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/fmaintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/fxsrintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/htmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/htmxlintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/ia32intrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/immintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/lwpintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/lzcntintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/mm3dnow.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/mm_malloc.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/mmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/module.modulemap
+OLD_FILES+=usr/lib/clang/5.0.0/include/msa.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/mwaitxintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/nmmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/opencl-c.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/pkuintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/pmmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/popcntintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/prfchwintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/rdseedintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/rtmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/s390intrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/shaintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/smmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/tbmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/tmmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/vadefs.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/vecintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/wmmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/x86intrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xmmintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xopintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xsavecintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xsaveintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xsaveoptintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xsavesintrin.h
+OLD_FILES+=usr/lib/clang/5.0.0/include/xtestintrin.h
+OLD_DIRS+=usr/lib/clang/5.0.0/include
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-i386.so
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-preinit-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-preinit-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-x86_64.so
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan_cxx-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan_cxx-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.profile-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.profile-armhf.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.profile-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.profile-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.safestack-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.safestack-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats_client-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats_client-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone-x86_64.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone_cxx-i386.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone_cxx-x86_64.a
+OLD_DIRS+=usr/lib/clang/5.0.0/lib/freebsd
+OLD_DIRS+=usr/lib/clang/5.0.0/lib
+OLD_DIRS+=usr/lib/clang/5.0.0
+# 20171118: Remove old etc casper files
+OLD_FILES+=etc/casper/system.dns
+OLD_FILES+=etc/casper/system.grp
+OLD_FILES+=etc/casper/system.pwd
+OLD_FILES+=etc/casper/system.random
+OLD_FILES+=etc/casper/system.sysctl
+OLD_DIRS+=etc/casper
+# 20171116: lint(1) removal
+OLD_FILES+=usr/bin/lint
+OLD_FILES+=usr/libexec/lint1
+OLD_FILES+=usr/libexec/lint2
+OLD_FILES+=usr/libdata/lint/llib-lposix.ln
+OLD_FILES+=usr/libdata/lint/llib-lstdc.ln
+OLD_FILES+=usr/share/man/man1/lint.1.gz
+OLD_FILES+=usr/share/man/man7/lint.7.gz
+OLD_DIRS+=usr/libdata/lint
+# 20171114: Removal of all fortune datfiles other than freebsd-tips
+OLD_FILES+=usr/share/games/fortune/fortunes
+OLD_FILES+=usr/share/games/fortune/fortunes.dat
+OLD_FILES+=usr/share/games/fortune/gerrold.limerick
+OLD_FILES+=usr/share/games/fortune/gerrold.limerick.dat
+OLD_FILES+=usr/share/games/fortune/limerick
+OLD_FILES+=usr/share/games/fortune/limerick.dat
+OLD_FILES+=usr/share/games/fortune/murphy
+OLD_FILES+=usr/share/games/fortune/murphy-o
+OLD_FILES+=usr/share/games/fortune/murphy-o.dat
+OLD_FILES+=usr/share/games/fortune/murphy.dat
+OLD_FILES+=usr/share/games/fortune/startrek
+OLD_FILES+=usr/share/games/fortune/startrek.dat
+OLD_FILES+=usr/share/games/fortune/zippy
+OLD_FILES+=usr/share/games/fortune/zippy.dat
+# 20171112: Removal of eqnchar definition
+OLD_FILES+=usr/share/misc/eqnchar
+# 20171110: Removal of mailaddr man page
+OLD_FILES+=usr/share/man/man7/mailaddr.7.gz
+# 20171108: badsect(8) removal
+OLD_FILES+=sbin/badsect
+OLD_FILES+=rescue/badsect
+OLD_FILES+=usr/share/man/man8/badsect.8.gz
+# 20171105: fixing lib/libclang_rt CRTARCH for arm:armv[67].
+.if ${MACHINE_ARCH:Marmv[67]*} != "" && \
+    (!defined(CPUTYPE) || ${CPUTYPE:M*soft*} == "")
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-preinit-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-arm.a
+OLD_LIBS+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan-arm.so
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.asan_cxx-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.profile-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.safestack-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.stats_client-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone-arm.a
+OLD_FILES+=usr/lib/clang/5.0.0/lib/freebsd/libclang_rt.ubsan_standalone_cxx-arm.a
+.endif
+# 20171104: libcap_random should be in /lib not in /usr/lib
+OLD_LIBS+=usr/lib/libcap_random.so.0
+# 20171104: Casper can work only as shared library
+OLD_FILES+=usr/lib/libcasper.a
+OLD_FILES+=usr/lib/libcasper_p.a
+OLD_FILES+=usr/lib/libcap_dns.a
+OLD_FILES+=usr/lib/libcap_dns_p.a
+OLD_FILES+=usr/lib/libcap_grp.a
+OLD_FILES+=usr/lib/libcap_grp_p.a
+OLD_FILES+=usr/lib/libcap_pwd.a
+OLD_FILES+=usr/lib/libcap_pwd_p.a
+OLD_FILES+=usr/lib/libcap_random.a
+OLD_FILES+=usr/lib/libcap_random_p.a
+OLD_FILES+=usr/lib/libcap_sysctl.a
+OLD_FILES+=usr/lib/libcap_sysctl_p.a
+# 20171031: Removal of adding_user man page
+OLD_FILES+=usr/share/man/man7/adding_user.7.gz
+# 20171031: Disconnected libpathconv tests
+OLD_DIRS+=usr/tests/lib/libpathconv
+# 20171017: Removal of mbpool(9)
+OLD_FILES+=usr/include/sys/mbpool.h
+OLD_FILES+=usr/share/man/man9/mbpool.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_destroy.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_alloc.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_ext_free.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_count.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_card_free.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_get_keep.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_free.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_get.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_create.9.gz
+OLD_FILES+=usr/share/man/man9/mbp_sync.9.gz
 # 20171010: Remove libstand
 OLD_FILES+=usr/lib/libstand.a
 OLD_FILES+=usr/lib/libstand_p.a

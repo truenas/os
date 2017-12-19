@@ -65,6 +65,8 @@
         sbin
         ..
         usr.bin
+            ctfconvert
+            ..
         ..
         usr.sbin
             dtrace
@@ -98,6 +100,8 @@
                     dtraceUtil
                     ..
                     end
+                    ..
+                    env
                     ..
                     enum
                     ..
@@ -476,6 +480,10 @@
         ..
         netinet
         ..
+        netipsec
+            tunnel
+            ..
+        ..
         netpfil
             pf
             ..
@@ -646,6 +654,8 @@
         ..
         cut
         ..
+        dc
+        ..
         diff
         ..
         dirname
@@ -654,11 +664,15 @@
         ..
         file2c
         ..
+        fold
+        ..
         getconf
         ..
         grep
         ..
         gzip
+        ..
+        head
         ..
         hexdump
         ..
@@ -687,6 +701,8 @@
         printf
         ..
         procstat
+        ..
+        rs
         ..
         sdiff
         ..
