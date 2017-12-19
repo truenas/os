@@ -2036,8 +2036,10 @@ vm_page_scan_contig(u_long npages, vm_page_t m_start, vm_page_t m_end,
 	run_len = 0;
 	m_mtx = NULL;
 	for (m = m_start; m < m_end && run_len < npages; m += m_inc) {
-		KASSERT((m->flags & (PG_FICTITIOUS | PG_MARKER)) == 0,
-		    ("page %p is PG_FICTITIOUS or PG_MARKER", m));
+		KASSERT((m->flags & PG_MARKER) == 0,
+		    ("page %p is PG_MARKER", m));
+		KASSERT((m->flags & PG_FICTITIOUS) == 0 || m->wire_count == 1,
+		    ("fictitious page %p has invalid wire count", m));
 
 		/*
 		 * If the current page would be the start of a run, check its
@@ -2767,6 +2769,16 @@ bool
 vm_page_free_prep(vm_page_t m, bool pagequeue_locked)
 {
 
+#if defined(DIAGNOSTIC) && defined(PHYS_TO_DMAP)
+	if ((m->flags & PG_ZERO) != 0) {
+		uint64_t *p;
+		int i;
+		p = (uint64_t *)PHYS_TO_DMAP(VM_PAGE_TO_PHYS(m));
+		for (i = 0; i < PAGE_SIZE / sizeof(uint64_t); i++, p++)
+			KASSERT(*p == 0, ("vm_page_free_prep %p PG_ZERO %d %jx",
+			    m, i, (uintmax_t)*p));
+	}
+#endif
 	if ((m->oflags & VPO_UNMANAGED) == 0) {
 		vm_page_lock_assert(m, MA_OWNED);
 		KASSERT(!pmap_page_is_mapped(m),
@@ -2848,6 +2860,8 @@ vm_page_free_phys_pglist(struct pglist *tq)
 {
 	vm_page_t m;
 
+	if (TAILQ_EMPTY(tq))
+		return;
 	mtx_lock(&vm_page_queue_free_mtx);
 	TAILQ_FOREACH(m, tq, listq)
 		vm_page_free_phys(m);
@@ -3056,23 +3070,25 @@ vm_page_launder(vm_page_t m)
  * vm_page_try_to_free()
  *
  *	Attempt to free the page.  If we cannot free it, we do nothing.
- *	1 is returned on success, 0 on failure.
+ *	true is returned on success, false on failure.
  */
-int
+bool
 vm_page_try_to_free(vm_page_t m)
 {
 
-	vm_page_lock_assert(m, MA_OWNED);
+	vm_page_assert_locked(m);
 	if (m->object != NULL)
 		VM_OBJECT_ASSERT_WLOCKED(m->object);
-	if (m->dirty || m->hold_count || m->wire_count ||
+	if (m->dirty != 0 || m->hold_count != 0 || m->wire_count != 0 ||
 	    (m->oflags & VPO_UNMANAGED) != 0 || vm_page_busied(m))
-		return (0);
-	pmap_remove_all(m);
-	if (m->dirty)
-		return (0);
+		return (false);
+	if (m->object != NULL && m->object->ref_count != 0) {
+		pmap_remove_all(m);
+		if (m->dirty != 0)
+			return (false);
+	}
 	vm_page_free(m);
-	return (1);
+	return (true);
 }
 
 /*
@@ -3610,16 +3626,17 @@ vm_page_is_valid(vm_page_t m, int base, int size)
 }
 
 /*
- *	vm_page_ps_is_valid:
- *
- *	Returns TRUE if the entire (super)page is valid and FALSE otherwise.
+ * Returns true if all of the specified predicates are true for the entire
+ * (super)page and false otherwise.
  */
-boolean_t
-vm_page_ps_is_valid(vm_page_t m)
+bool
+vm_page_ps_test(vm_page_t m, int flags, vm_page_t skip_m)
 {
+	vm_object_t object;
 	int i, npages;
 
-	VM_OBJECT_ASSERT_LOCKED(m->object);
+	object = m->object;
+	VM_OBJECT_ASSERT_LOCKED(object);
 	npages = atop(pagesizes[m->psind]);
 
 	/*
@@ -3628,10 +3645,28 @@ vm_page_ps_is_valid(vm_page_t m)
 	 * occupy adjacent entries in vm_page_array[].
 	 */
 	for (i = 0; i < npages; i++) {
-		if (m[i].valid != VM_PAGE_BITS_ALL)
-			return (FALSE);
+		/* Always test object consistency, including "skip_m". */
+		if (m[i].object != object)
+			return (false);
+		if (&m[i] == skip_m)
+			continue;
+		if ((flags & PS_NONE_BUSY) != 0 && vm_page_busied(&m[i]))
+			return (false);
+		if ((flags & PS_ALL_DIRTY) != 0) {
+			/*
+			 * Calling vm_page_test_dirty() or pmap_is_modified()
+			 * might stop this case from spuriously returning
+			 * "false".  However, that would require a write lock
+			 * on the object containing "m[i]".
+			 */
+			if (m[i].dirty != VM_PAGE_BITS_ALL)
+				return (false);
+		}
+		if ((flags & PS_ALL_VALID) != 0 &&
+		    m[i].valid != VM_PAGE_BITS_ALL)
+			return (false);
 	}
-	return (TRUE);
+	return (true);
 }
 
 /*
