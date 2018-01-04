@@ -1,4 +1,4 @@
-/*
+4/*
  * CDDL HEADER START
  *
  * The contents of this file are subject to the terms of the
@@ -1536,7 +1536,7 @@ dsl_scan_prefetch_thread(void *arg)
 
 		/* remove the prefetch IO from the tree */
 		spic = avl_first(&scn->scn_prefetch_queue);
-		spa->spa_scrub_inflight = BP_GET_PSIZE(&spic->spic_bp);
+		spa->spa_scrub_inflight += BP_GET_PSIZE(&spic->spic_bp);
 		avl_remove(&scn->scn_prefetch_queue, spic);
 
 		mutex_exit(&spa->spa_scrub_lock);
