@@ -1448,8 +1448,8 @@ dsl_scan_prefetch_cb(zio_t *zio, const zbookmark_phys_t *zb, const blkptr_t *bp,
 
 	/* broadcast that the IO has completed for rate limitting purposes */
 	mutex_enter(&spa->spa_scrub_lock);
-	ASSERT3U(spa->spa_scrub_inflight, >, 0);
-	spa->spa_scrub_inflight--;
+	ASSERT3U(spa->spa_scrub_inflight, >=, BP_GET_PSIZE(bp));
+	spa->spa_scrub_inflight -= BP_GET_PSIZE(bp);
 	cv_broadcast(&spa->spa_scrub_io_cv);
 	mutex_exit(&spa->spa_scrub_lock);
 
@@ -1535,7 +1535,7 @@ dsl_scan_prefetch_thread(void *arg)
 
 		/* remove the prefetch IO from the tree */
 		spic = avl_first(&scn->scn_prefetch_queue);
-		spa->spa_scrub_inflight = BP_GET_PSIZE(&spic->spic_bp);
+		spa->spa_scrub_inflight += BP_GET_PSIZE(&spic->spic_bp);
 		avl_remove(&scn->scn_prefetch_queue, spic);
 
 		mutex_exit(&spa->spa_scrub_lock);
