@@ -2594,10 +2594,9 @@ scan_io_queue_gather(dsl_scan_io_queue_t *queue, range_seg_t *rs, list_t *list)
 	 */
 	sio = avl_find(&queue->q_sios_by_addr, &srch_sio, &idx);
 	if (sio == NULL)
-	
-	sio = avl_nearest(&queue->q_sios_by_addr, idx, AVL_AFTER);
+		sio = avl_nearest(&queue->q_sios_by_addr, idx, AVL_AFTER);
 
-	while (sio != NULL && sio->sio_offset < rs->rs_end) {
+	while (sio != NULL && sio->sio_offset < rs->rs_end && num_sios <= 32) {
 		ASSERT3U(sio->sio_offset, >=, rs->rs_start);
 		ASSERT3U(sio->sio_offset + sio->sio_asize, <=, rs->rs_end);
 
@@ -2607,7 +2606,6 @@ scan_io_queue_gather(dsl_scan_io_queue_t *queue, range_seg_t *rs, list_t *list)
 		bytes_issued += sio->sio_asize;
 		num_sios++;
 		list_insert_tail(list, sio);
-		num_sios++;
 		sio = next_sio;
 	}
 	/*
