@@ -173,20 +173,13 @@ range_tree_stat_decr(range_tree_t *rt, range_seg_t *rs)
 static int
 range_tree_seg_compare(const void *x1, const void *x2)
 {
-	const range_seg_t *r1 = x1;
-	const range_seg_t *r2 = x2;
+	const range_seg_t *r1 = (const range_seg_t *)x1;
+	const range_seg_t *r2 = (const range_seg_t *)x2;
 
-	if (r1->rs_start < r2->rs_start) {
-		if (r1->rs_end > r2->rs_start)
-			return (0);
-		return (-1);
-	}
-	if (r1->rs_start > r2->rs_start) {
-		if (r1->rs_start < r2->rs_end)
-			return (0);
-		return (1);
-	}
-	return (0);
+	ASSERT3U(r1->rs_start, <=, r1->rs_end);
+	ASSERT3U(r2->rs_start, <=, r2->rs_end);
+	
+	return ((r1->rs_start >= r2->rs_end) - (r1->rs_end <= r2->rs_start));
 }
 
 range_tree_t *
@@ -492,6 +485,28 @@ void
 range_tree_remove_fill(range_tree_t *rt, uint64_t start, uint64_t size)
 {
 	range_tree_remove_impl(rt, start, size, B_TRUE);
+}
+
+void
+range_tree_resize_segment(range_tree_t *rt, range_seg_t *rs,
+    uint64_t newstart, uint64_t newsize)
+{
+	int64_t delta = newsize - (rs->rs_end - rs->rs_start);
+
+	ASSERT(MUTEX_HELD(rt->rt_lock));
+
+	range_tree_stat_decr(rt, rs);
+	if (rt->rt_ops != NULL && rt->rt_ops->rtop_remove != NULL)
+		rt->rt_ops->rtop_remove(rt, rs, rt->rt_arg);
+
+	rs->rs_start = newstart;
+	rs->rs_end = newstart + newsize;
+
+	range_tree_stat_incr(rt, rs);
+	if (rt->rt_ops != NULL && rt->rt_ops->rtop_add != NULL)
+		rt->rt_ops->rtop_add(rt, rs, rt->rt_arg);
+
+	rt->rt_space += delta;
 }
 
 static range_seg_t *
