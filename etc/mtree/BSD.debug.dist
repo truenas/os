@@ -29,7 +29,7 @@
             ..
             lib
                 clang
-                    5.0.0
+                    5.0.1
                         lib
                             freebsd
                             ..
@@ -39,8 +39,6 @@
                 engines
                 ..
                 i18n
-                ..
-                private
                 ..
             ..
             libexec

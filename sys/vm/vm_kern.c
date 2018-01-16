@@ -84,6 +84,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
 #include <vm/vm_pageout.h>
+#include <vm/vm_radix.h>
 #include <vm/vm_extern.h>
 #include <vm/uma.h>
 
@@ -171,6 +172,8 @@ kmem_alloc_attr(vmem_t *vmem, vm_size_t size, int flags, vm_paddr_t low,
 		return (0);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
+	pflags &= ~(VM_ALLOC_NOWAIT | VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	pflags |= VM_ALLOC_NOWAIT;
 	VM_OBJECT_WLOCK(object);
 	for (i = 0; i < size; i += PAGE_SIZE) {
 		tries = 0;
@@ -226,6 +229,8 @@ kmem_alloc_contig(struct vmem *vmem, vm_size_t size, int flags, vm_paddr_t low,
 		return (0);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
+	pflags &= ~(VM_ALLOC_NOWAIT | VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	pflags |= VM_ALLOC_NOWAIT;
 	npages = atop(size);
 	VM_OBJECT_WLOCK(object);
 	tries = 0;
@@ -329,7 +334,7 @@ int
 kmem_back(vm_object_t object, vm_offset_t addr, vm_size_t size, int flags)
 {
 	vm_offset_t offset, i;
-	vm_page_t m;
+	vm_page_t m, mpred;
 	int pflags;
 
 	KASSERT(object == kmem_object || object == kernel_object,
@@ -337,11 +342,17 @@ kmem_back(vm_object_t object, vm_offset_t addr, vm_size_t size, int flags)
 
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
+	pflags &= ~(VM_ALLOC_NOWAIT | VM_ALLOC_WAITOK | VM_ALLOC_WAITFAIL);
+	if (flags & M_WAITOK)
+		pflags |= VM_ALLOC_WAITFAIL;
 
+	i = 0;
 	VM_OBJECT_WLOCK(object);
-	for (i = 0; i < size; i += PAGE_SIZE) {
 retry:
-		m = vm_page_alloc(object, atop(offset + i), pflags);
+	mpred = vm_radix_lookup_le(&object->rtree, atop(offset + i));
+	for (; i < size; i += PAGE_SIZE, mpred = m) {
+		m = vm_page_alloc_after(object, atop(offset + i), pflags,
+		    mpred);
 
 		/*
 		 * Ran out of space, free everything up and return. Don't need
@@ -349,12 +360,9 @@ retry:
 		 * aren't on any queues.
 		 */
 		if (m == NULL) {
-			VM_OBJECT_WUNLOCK(object);
-			if ((flags & M_NOWAIT) == 0) {
-				VM_WAIT;
-				VM_OBJECT_WLOCK(object);
+			if ((flags & M_NOWAIT) == 0)
 				goto retry;
-			}
+			VM_OBJECT_WUNLOCK(object);
 			kmem_unback(object, addr, i);
 			return (KERN_NO_SPACE);
 		}

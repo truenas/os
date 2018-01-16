@@ -65,6 +65,8 @@
         sbin
         ..
         usr.bin
+            ctfconvert
+            ..
         ..
         usr.sbin
             dtrace
@@ -640,11 +642,15 @@
         ..
         file2c
         ..
+        fold
+        ..
         getconf
         ..
         grep
         ..
         gzip
+        ..
+        head
         ..
         ident
         ..
@@ -669,6 +675,8 @@
         printf
         ..
         procstat
+        ..
+        rs
         ..
         sdiff
         ..
