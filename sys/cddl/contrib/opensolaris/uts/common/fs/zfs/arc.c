@@ -4210,8 +4210,6 @@ arc_shrink(int64_t to_free)
 	}
 }
 
-static long needfree = 0;
-
 typedef enum free_memory_reason_t {
 	FMR_UNKNOWN,
 	FMR_NEEDFREE,
@@ -4249,14 +4247,6 @@ arc_available_memory(void)
 	free_memory_reason_t r = FMR_UNKNOWN;
 
 #ifdef _KERNEL
-	if (needfree > 0) {
-		n = PAGESIZE * (-needfree);
-		if (n < lowest) {
-			lowest = n;
-			r = FMR_NEEDFREE;
-		}
-	}
-
 	/*
 	 * Cooperate with pagedaemon when it's time for it to scan
 	 * and reclaim some pages.
@@ -4521,9 +4511,6 @@ arc_reclaim_thread(void *dummy __unused)
 			int64_t to_free =
 			    (arc_c >> arc_shrink_shift) - free_memory;
 			if (to_free > 0) {
-#ifdef _KERNEL
-				to_free = MAX(to_free, ptob(needfree));
-#endif
 				arc_shrink(to_free);
 			}
 		} else if (free_memory < arc_c >> arc_no_grow_shift) {
@@ -4544,9 +4531,6 @@ arc_reclaim_thread(void *dummy __unused)
 		 * infinite loop.
 		 */
 		if (arc_size <= arc_c || evicted == 0) {
-#ifdef _KERNEL
-			needfree = 0;
-#endif
 			/*
 			 * We're either no longer overflowing, or we
 			 * can't evict anything more, so we should wake
@@ -6354,9 +6338,7 @@ arc_lowmem(void *arg __unused, int howto __unused)
 {
 
 	mutex_enter(&arc_reclaim_lock);
-	/* XXX: Memory deficit should be passed as argument. */
-	needfree = btoc(arc_c >> arc_shrink_shift);
-	DTRACE_PROBE(arc__needfree);
+	DTRACE_PROBE1(arc__needfree, int64_t, ((int64_t)freemem - zfs_arc_free_target) * PAGESIZE);
 	cv_signal(&arc_reclaim_thread_cv);
 
 	/*
@@ -6678,6 +6660,11 @@ arc_init(void)
 void
 arc_fini(void)
 {
+#ifdef _KERNEL
+	if (arc_event_lowmem != NULL)
+		EVENTHANDLER_DEREGISTER(vm_lowmem, arc_event_lowmem);
+#endif
+
 	mutex_enter(&arc_reclaim_lock);
 	arc_reclaim_thread_exit = B_TRUE;
 	/*
@@ -6723,11 +6710,6 @@ arc_fini(void)
 	buf_fini();
 
 	ASSERT0(arc_loaned_bytes);
-
-#ifdef _KERNEL
-	if (arc_event_lowmem != NULL)
-		EVENTHANDLER_DEREGISTER(vm_lowmem, arc_event_lowmem);
-#endif
 }
 
 /*

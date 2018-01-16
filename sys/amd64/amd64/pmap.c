@@ -537,14 +537,12 @@ pmap_delayed_invl_genp(vm_page_t m)
 static void
 pmap_delayed_invl_wait(vm_page_t m)
 {
-	struct thread *td;
 	struct turnstile *ts;
 	u_long *m_gen;
 #ifdef PV_STATS
 	bool accounted = false;
 #endif
 
-	td = curthread;
 	m_gen = pmap_delayed_invl_genp(m);
 	while (*m_gen > pmap_invl_gen) {
 #ifdef PV_STATS
@@ -2418,9 +2416,8 @@ pmap_pinit_type(pmap_t pmap, enum pmap_type pm_type, int flags)
 	/*
 	 * allocate the page directory page
 	 */
-	while ((pml4pg = vm_page_alloc(NULL, 0, VM_ALLOC_NORMAL |
-	    VM_ALLOC_NOOBJ | VM_ALLOC_WIRED | VM_ALLOC_ZERO)) == NULL)
-		VM_WAIT;
+	pml4pg = vm_page_alloc(NULL, 0, VM_ALLOC_NORMAL | VM_ALLOC_NOOBJ |
+	    VM_ALLOC_WIRED | VM_ALLOC_ZERO | VM_ALLOC_WAITOK);
 
 	pml4phys = VM_PAGE_TO_PHYS(pml4pg);
 	pmap->pm_pml4 = (pml4_entry_t *)PHYS_TO_DMAP(pml4phys);

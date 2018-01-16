@@ -214,7 +214,7 @@ END(fillw)
  */
 
 /*
- * copyout(from_kernel, to_user, len)  - MP SAFE
+ * copyout(from_kernel, to_user, len)
  *         %rdi,        %rsi,    %rdx
  */
 ENTRY(copyout)
@@ -225,12 +225,11 @@ ENTRY(copyout)
 	jz	done_copyout
 
 	/*
-	 * Check explicitly for non-user addresses.  If 486 write protection
-	 * is being used, this check is essential because we are in kernel
-	 * mode so the h/w does not provide any protection against writing
-	 * kernel addresses.
+	 * Check explicitly for non-user addresses.  This check is essential
+	 * because it prevents usermode from writing into the kernel.  We do
+	 * not verify anywhere else that the user did not specify a rogue
+	 * address.
 	 */
-
 	/*
 	 * First, prevent address wrapping.
 	 */
@@ -277,7 +276,7 @@ copyout_fault:
 END(copyout)
 
 /*
- * copyin(from_user, to_kernel, len) - MP SAFE
+ * copyin(from_user, to_kernel, len)
  *        %rdi,      %rsi,      %rdx
  */
 ENTRY(copyin)
@@ -494,7 +493,7 @@ fusufault:
 
 /*
  * Store a 64-bit word, a 32-bit word, a 16-bit word, or an 8-bit byte to
- * user memory.  All these functions are MPSAFE.
+ * user memory.
  * addr = %rdi, value = %rsi
  */
 ALTENTRY(suword64)
@@ -569,7 +568,7 @@ ENTRY(subyte)
 END(subyte)
 
 /*
- * copyinstr(from, to, maxlen, int *lencopied) - MP SAFE
+ * copyinstr(from, to, maxlen, int *lencopied)
  *           %rdi, %rsi, %rdx, %rcx
  *
  *	copy a string from from to to, stop when a 0 character is reached.
@@ -640,7 +639,7 @@ cpystrflt_x:
 END(copyinstr)
 
 /*
- * copystr(from, to, maxlen, int *lencopied) - MP SAFE
+ * copystr(from, to, maxlen, int *lencopied)
  *         %rdi, %rsi, %rdx, %rcx
  */
 ENTRY(copystr)
@@ -680,7 +679,6 @@ END(copystr)
 
 /*
  * Handling of special amd64 registers and descriptor tables etc
- * %rdi
  */
 /* void lgdt(struct region_descriptor *rdp); */
 ENTRY(lgdt)

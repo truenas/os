@@ -826,7 +826,10 @@ Sema::ActOnDecompositionDeclarator(Scope *S, Declarator &D,
   NamedDecl *New =
       ActOnVariableDeclarator(S, D, DC, TInfo, Previous,
                               MultiTemplateParamsArg(), AddToScope, Bindings);
-  CurContext->addHiddenDecl(New);
+  if (AddToScope) {
+    S->AddDecl(New);
+    CurContext->addHiddenDecl(New);
+  }
 
   if (isInOpenMPDeclareTargetContext())
     checkDeclIsAllowedInOpenMPTarget(nullptr, New);
@@ -12997,7 +13000,8 @@ bool Sema::CheckLiteralOperatorDeclaration(FunctionDecl *FnDecl) {
 
   StringRef LiteralName
     = FnDecl->getDeclName().getCXXLiteralIdentifier()->getName();
-  if (LiteralName[0] != '_') {
+  if (LiteralName[0] != '_' &&
+      !getSourceManager().isInSystemHeader(FnDecl->getLocation())) {
     // C++11 [usrlit.suffix]p1:
     //   Literal suffix identifiers that do not start with an underscore
     //   are reserved for future standardization.
