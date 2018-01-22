@@ -65,6 +65,7 @@ static const char rcsid[] =
 #include <nfsserver/nfs.h>
 #include <nfs/nfssvc.h>
 
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <signal.h>
@@ -996,7 +997,7 @@ start_server(int master)
 	char principal[MAXHOSTNAMELEN + 5];
 	struct nfsd_nfsd_args nfsdargs;
 	int status, error, vfd;
-	char hostname[MAXHOSTNAMELEN + 1], *cp;
+	char hostname[MAXHOSTNAMELEN + 1], *cp, *ptr;
 	char vhostname[MAXHOSTNAMELEN + 1];
 	struct addrinfo *aip, hints;
 	struct stat st;
@@ -1015,8 +1016,11 @@ start_server(int master)
 		st.st_size > 0 && st.st_size <= MAXHOSTNAMELEN) {
 		if ((vfd = open(NFSD_VIRTUALHOST, O_RDONLY)) > 0 &&
 			read(vfd, vhostname, sizeof(vhostname)) > 0) {
-			vhostname[strcspn(vhostname, "\r\n")] = '\0';
-			snprintf(principal, sizeof (principal), "nfs@%s", vhostname);
+			ptr = cp = vhostname;
+			while (isprint(*cp)) cp++;
+			*cp = '\0';
+			if ((*ptr - *cp) != 0)
+				snprintf(principal, sizeof (principal), "nfs@%s", vhostname);
 			close(vfd);
 		}
 	}
