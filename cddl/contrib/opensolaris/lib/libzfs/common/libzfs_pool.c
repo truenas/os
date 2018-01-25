@@ -1104,6 +1104,9 @@ zpool_create(libzfs_handle_t *hdl, const char *pool, nvlist_t *nvroot,
 	zfs_cmd_t zc = { 0 };
 	nvlist_t *zc_fsprops = NULL;
 	nvlist_t *zc_props = NULL;
+	nvlist_t *hidden_args = NULL;
+	uint8_t *wkeydata = NULL;
+	uint_t wkeylen = 0;
 	char msg[1024];
 	int ret = -1;
 
@@ -1134,16 +1137,33 @@ zpool_create(libzfs_handle_t *hdl, const char *pool, nvlist_t *nvroot,
 		    strcmp(zonestr, "on") == 0);
 
 		if ((zc_fsprops = zfs_valid_proplist(hdl, ZFS_TYPE_FILESYSTEM,
-		    fsprops, zoned, NULL, NULL, msg)) == NULL) {
+		    fsprops, zoned, NULL, NULL, B_TRUE, msg)) == NULL) {
 			goto create_failed;
 		}
 		if (!zc_props &&
 		    (nvlist_alloc(&zc_props, NV_UNIQUE_NAME, 0) != 0)) {
 			goto create_failed;
 		}
+		if (zfs_crypto_create(hdl, NULL, zc_fsprops, props,
+		    &wkeydata, &wkeylen) != 0) {
+			(void) zfs_error(hdl, EZFS_CRYPTOFAILED, msg);
+			goto create_failed;
+		}
 		if (nvlist_add_nvlist(zc_props,
 		    ZPOOL_ROOTFS_PROPS, zc_fsprops) != 0) {
 			goto create_failed;
+		}
+		if (wkeydata != NULL) {
+			if (nvlist_alloc(&hidden_args, NV_UNIQUE_NAME, 0) != 0)
+				goto create_failed;
+
+			if (nvlist_add_uint8_array(hidden_args, "wkeydata",
+			    wkeydata, wkeylen) != 0)
+				goto create_failed;
+
+			if (nvlist_add_nvlist(zc_props, ZPOOL_HIDDEN_ARGS,
+			    hidden_args) != 0)
+				goto create_failed;
 		}
 	}
 
@@ -1157,6 +1177,9 @@ zpool_create(libzfs_handle_t *hdl, const char *pool, nvlist_t *nvroot,
 		zcmd_free_nvlists(&zc);
 		nvlist_free(zc_props);
 		nvlist_free(zc_fsprops);
+		nvlist_free(hidden_args);
+		if (wkeydata != NULL)
+			free(wkeydata);
 
 		switch (errno) {
 		case EBUSY:
@@ -1222,6 +1245,9 @@ create_failed:
 	zcmd_free_nvlists(&zc);
 	nvlist_free(zc_props);
 	nvlist_free(zc_fsprops);
+	nvlist_free(hidden_args);
+	if (wkeydata != NULL)
+		free(wkeydata);
 	return (ret);
 }
 
