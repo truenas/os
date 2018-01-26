@@ -3916,7 +3916,8 @@ void
 print_scan_status(pool_scan_stat_t *ps)
 {
 	time_t start, end, pause;
-	uint64_t elapsed, mins_left, hours_left;
+	uint64_t total_secs_left;
+	uint64_t elapsed, secs_left, mins_left, hours_left, days_left;
 	uint64_t pass_scanned, scanned, pass_issued, issued, total;
 	uint_t scan_rate, issue_rate;
 	double fraction_done;
@@ -3943,22 +3944,29 @@ print_scan_status(pool_scan_stat_t *ps)
 
 	/* Scan is finished or canceled. */
 	if (ps->pss_state == DSS_FINISHED) {
-		uint64_t minutes_taken = (end - start) / 60;
-		char *fmt = NULL;
-
+		total_secs_left = end - start;
+		days_left = total_secs_left / 60 / 60 / 24;
+		hours_left = (total_secs_left / 60 / 60) % 24;
+		mins_left = (total_secs_left / 60) % 60;
+		secs_left = (total_secs_left % 60);
+		
 		if (ps->pss_func == POOL_SCAN_SCRUB) {
-			fmt = gettext("scrub repaired %s in %lluh%um with "
-			    "%llu errors on %s");
+			(void) printf(gettext("scrub repaired %s "
+                            "in %llu days %02llu:%02llu:%02llu "
+			    "with %llu errors on %s"), processed_buf,
+                            (u_longlong_t)days_left, (u_longlong_t)hours_left,
+                            (u_longlong_t)mins_left, (u_longlong_t)secs_left,
+                            (u_longlong_t)ps->pss_errors, ctime(&end));
 		} else if (ps->pss_func == POOL_SCAN_RESILVER) {
-			fmt = gettext("resilvered %s in %lluh%um with "
-			    "%llu errors on %s");
+                       (void) printf(gettext("resilvered %s "
+                           "in %llu days %02llu:%02llu:%02llu "
+                           "with %llu errors on %s"), processed_buf,
+                           (u_longlong_t)days_left, (u_longlong_t)hours_left,
+                           (u_longlong_t)mins_left, (u_longlong_t)secs_left,
+                           (u_longlong_t)ps->pss_errors, ctime(&end));
+
 		}
-		/* LINTED */
-		(void) printf(fmt, processed_buf,
-		    (u_longlong_t)(minutes_taken / 60),
-		    (uint_t)(minutes_taken % 60),
-		    (u_longlong_t)ps->pss_errors,
-		    ctime((time_t *)&end));
+
 		return;
 	} else if (ps->pss_state == DSS_CANCELED) {
 		if (ps->pss_func == POOL_SCAN_SCRUB) {
@@ -4005,14 +4013,13 @@ print_scan_status(pool_scan_stat_t *ps)
 
 	scan_rate = pass_scanned / elapsed;
 	issue_rate = pass_issued / elapsed;
+	total_secs_left = (issue_rate != 0) ?
+	    ((total - issued) / issue_rate) : UINT64_MAX;
 
-	if (issue_rate != 0) {
-		hours_left = ((total - issued) / issue_rate) / 60 / 60;
-		mins_left = (((total - issued) / issue_rate) / 60) % 60;
-	} else {
-		hours_left = UINT64_MAX;
-		mins_left = UINT64_MAX;
-	}
+	days_left = total_secs_left / 60 / 60 / 24;
+	hours_left = (total_secs_left / 60 / 60) % 24;
+	mins_left = (total_secs_left / 60) % 60;
+	secs_left = (total_secs_left % 60);
 
 	/* format all of the numbers we will be reporting */
 	zfs_nicenum(scanned, scanned_buf, sizeof (scanned_buf));
@@ -4021,32 +4028,36 @@ print_scan_status(pool_scan_stat_t *ps)
 	zfs_nicenum(scan_rate, srate_buf, sizeof (srate_buf));
 	zfs_nicenum(issue_rate, irate_buf, sizeof (irate_buf));
 
-	/*
-	 * Do not print estimated time if hours_left is more than 30 days
-	 * or we have a paused scrub.
-	 */
+	/* doo not print estimated time if we have a paused scrub */
 	if (pause == 0) {
 		(void) printf(gettext("\t%s scanned at %s/s, "
-		    "%s issued at %s/s, %s total"),
+		    "%s issued at %s/s, %s total\n"),
 		    scanned_buf, srate_buf, issued_buf, irate_buf, total_buf);
-		if (hours_left < (30 * 24)) {
-			(void) printf(gettext(", %lluh%um to go\n"),
-			    (u_longlong_t)hours_left, (uint_t)(mins_left % 60));
-		} else {
-			(void) printf(gettext(
-			    ", (scan is slow, no estimated time)\n"));
-		}
 	} else {
-		(void) printf(gettext("\t%s scanned out of %s\n"),
-		    issued_buf, total_buf);
+		(void) printf(gettext("\t%s scanned, %s issued, %s total\n"),
+                    scanned_buf, issued_buf, total_buf);
 	}
 
 	if (ps->pss_func == POOL_SCAN_RESILVER) {
-		(void) printf(gettext("        %s resilvered, %.2f%% done\n"),
+		(void) printf(gettext("\t%s resilvered, %.2f%% done"),
 		    processed_buf, 100 * fraction_done);
 	} else if (ps->pss_func == POOL_SCAN_SCRUB) {
-		(void) printf(gettext("        %s repaired, %.2f%% done\n"),
+		(void) printf(gettext("\t%s repaired, %.2f%% done"),
 		    processed_buf, 100 * fraction_done);
+	}
+
+	if (pause == 0) {
+		if (issue_rate >= 10 * 1024 * 1024) {
+			(void) printf(gettext(", %llu days "
+                            "%02llu:%02llu:%02llu to go\n"),
+                            (u_longlong_t)days_left, (u_longlong_t)hours_left,
+                            (u_longlong_t)mins_left, (u_longlong_t)secs_left);
+		} else {
+			(void) printf(gettext(", no estimated "
+                            "completion time\n"));
+		}
+	} else {
+		(void) printf(gettext("\n"));
 	}
 }
 
