@@ -2008,6 +2008,9 @@ arc_cksum_verify(arc_buf_t *buf)
 static boolean_t
 arc_cksum_is_equal(arc_buf_hdr_t *hdr, zio_t *zio)
 {
+	enum zio_compress compress = BP_GET_COMPRESS(zio->io_bp);
+	boolean_t valid_cksum;
+
 	ASSERT(!BP_IS_EMBEDDED(zio->io_bp));
 	VERIFY3U(BP_GET_PSIZE(zio->io_bp), ==, HDR_GET_PSIZE(hdr));
 
@@ -2024,9 +2027,11 @@ arc_cksum_is_equal(arc_buf_hdr_t *hdr, zio_t *zio)
 	 * generated using the correct checksum algorithm and accounts for the
 	 * logical I/O size and not just a gang fragment.
 	 */
-	return (zio_checksum_error_impl(zio->io_spa, zio->io_bp,
+	valid_cksum = (zio_checksum_error_impl(zio->io_spa, zio->io_bp,
 	    BP_GET_CHECKSUM(zio->io_bp), zio->io_abd, zio->io_size,
 	    zio->io_offset, NULL) == 0);
+	zio_pop_transforms(zio);
+	return (valid_cksum);
 }
 
 /*
