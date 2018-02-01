@@ -163,13 +163,14 @@ static struct xpt_xport nvme_xport = {
 struct xpt_xport *
 nvme_get_xport(void)
 {
+
 	return (&nvme_xport);
 }
 
 static void
 nvme_probe_periph_init()
 {
-	printf("nvme cam probe device init\n");
+
 }
 
 static cam_status
@@ -297,18 +298,15 @@ nvme_probe_start(struct cam_periph *periph, union ccb *start_ccb)
 		start_ccb->ccb_h.status = CAM_REQ_CMP;
 		xpt_done(start_ccb);
 	}
-// XXX not sure I need this
-// XXX unlike other XPTs, we never freeze the queue since we have a super-simple
-// XXX state machine
-	/* Drop freeze taken due to CAM_DEV_QFREEZE flag set. -- did we really do this? */
-//	cam_release_devq(path, 0, 0, 0, FALSE);
 	cam_periph_invalidate(periph);
-	cam_periph_release_locked(periph);
+	/* Can't release periph since we hit a (possibly bogus) assertion */
+//	cam_periph_release_locked(periph);
 }
 
 static void
 nvme_probe_cleanup(struct cam_periph *periph)
 {
+
 	free(periph->softc, M_CAMXPT);
 }
 
@@ -521,6 +519,24 @@ nvme_dev_advinfo(union ccb *start_ccb)
 			memcpy(cdai->buf, device->physpath, amt);
 		}
 		break;
+	case CDAI_TYPE_NVME_CNTRL:
+		if (cdai->flags & CDAI_FLAG_STORE)
+			return;
+		amt = sizeof(struct nvme_controller_data);
+		cdai->provsiz = amt;
+		if (amt > cdai->bufsiz)
+			amt = cdai->bufsiz;
+		memcpy(cdai->buf, device->nvme_cdata, amt);
+		break;
+	case CDAI_TYPE_NVME_NS:
+		if (cdai->flags & CDAI_FLAG_STORE)
+			return;
+		amt = sizeof(struct nvme_namespace_data);
+		cdai->provsiz = amt;
+		if (amt > cdai->bufsiz)
+			amt = cdai->bufsiz;
+		memcpy(cdai->buf, device->nvme_data, amt);
+		break;
 	default:
 		return;
 	}
@@ -540,13 +556,8 @@ nvme_action(union ccb *start_ccb)
 
 	switch (start_ccb->ccb_h.func_code) {
 	case XPT_SCAN_BUS:
-		printf("NVME scan BUS started -- ignored\n");
-//		break;
 	case XPT_SCAN_TGT:
-		printf("NVME scan TGT started -- ignored\n");
-//		break;
 	case XPT_SCAN_LUN:
-		printf("NVME scan started\n");
 		nvme_scan_lun(start_ccb->ccb_h.path->periph,
 			      start_ccb->ccb_h.path, start_ccb->crcn.flags,
 			      start_ccb);
