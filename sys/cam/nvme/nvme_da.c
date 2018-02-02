@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2015 Netflix, Inc
  * All rights reserved.
  *
@@ -388,15 +390,12 @@ ndadump(void *arg, void *virtual, vm_offset_t physical, off_t offset, size_t len
 	dp = arg;
 	periph = dp->d_drv1;
 	softc = (struct nda_softc *)periph->softc;
-	cam_periph_lock(periph);
 	secsize = softc->disk->d_sectorsize;
 	lba = offset / secsize;
 	count = length / secsize;
 	
-	if ((periph->flags & CAM_PERIPH_INVALID) != 0) {
-		cam_periph_unlock(periph);
+	if ((periph->flags & CAM_PERIPH_INVALID) != 0)
 		return (ENXIO);
-	}
 
 	/* xpt_get_ccb returns a zero'd allocation for the ccb, mimic that here */
 	memset(&nvmeio, 0, sizeof(nvmeio));
@@ -404,17 +403,11 @@ ndadump(void *arg, void *virtual, vm_offset_t physical, off_t offset, size_t len
 		xpt_setup_ccb(&nvmeio.ccb_h, periph->path, CAM_PRIORITY_NORMAL);
 		nvmeio.ccb_h.ccb_state = NDA_CCB_DUMP;
 		nda_nvme_write(softc, &nvmeio, virtual, lba, length, count);
-		xpt_polled_action((union ccb *)&nvmeio);
-
-		error = cam_periph_error((union ccb *)&nvmeio,
+		error = cam_periph_runccb((union ccb *)&nvmeio, cam_periph_error,
 		    0, SF_NO_RECOVERY | SF_NO_RETRY, NULL);
-		if ((nvmeio.ccb_h.status & CAM_DEV_QFRZN) != 0)
-			cam_release_devq(nvmeio.ccb_h.path, /*relsim_flags*/0,
-			    /*reduction*/0, /*timeout*/0, /*getcount_only*/0);
 		if (error != 0)
-			printf("Aborting dump due to I/O error.\n");
+			printf("Aborting dump due to I/O error %d.\n", error);
 
-		cam_periph_unlock(periph);
 		return (error);
 	}
 	
@@ -423,16 +416,10 @@ ndadump(void *arg, void *virtual, vm_offset_t physical, off_t offset, size_t len
 
 	nvmeio.ccb_h.ccb_state = NDA_CCB_DUMP;
 	nda_nvme_flush(softc, &nvmeio);
-	xpt_polled_action((union ccb *)&nvmeio);
-
-	error = cam_periph_error((union ccb *)&nvmeio,
+	error = cam_periph_runccb((union ccb *)&nvmeio, cam_periph_error,
 	    0, SF_NO_RECOVERY | SF_NO_RETRY, NULL);
-	if ((nvmeio.ccb_h.status & CAM_DEV_QFRZN) != 0)
-		cam_release_devq(nvmeio.ccb_h.path, /*relsim_flags*/0,
-		    /*reduction*/0, /*timeout*/0, /*getcount_only*/0);
 	if (error != 0)
 		xpt_print(periph->path, "flush cmd failed\n");
-	cam_periph_unlock(periph);
 	return (error);
 }
 
@@ -594,7 +581,7 @@ ndasysctlinit(void *context, int pending)
 {
 	struct cam_periph *periph;
 	struct nda_softc *softc;
-	char tmpstr[80], tmpstr2[80];
+	char tmpstr[32], tmpstr2[16];
 
 	periph = (struct cam_periph *)context;
 
@@ -716,10 +703,7 @@ ndaregister(struct cam_periph *periph, void *arg)
 
 	softc->quirks = NDA_Q_NONE;
 
-	bzero(&cpi, sizeof(cpi));
-	xpt_setup_ccb(&cpi.ccb_h, periph->path, CAM_PRIORITY_NONE);
-	cpi.ccb_h.func_code = XPT_PATH_INQ;
-	xpt_action((union ccb *)&cpi);
+	xpt_path_inq(&cpi, periph->path);
 
 	TASK_INIT(&softc->sysctl_task, 0, ndasysctlinit, periph);
 
@@ -794,7 +778,7 @@ ndaregister(struct cam_periph *periph, void *arg)
 	/*
 	 * Add alias for older nvd drives to ease transition.
 	 */
-	disk_add_alias(disk, "nvd");
+	/* disk_add_alias(disk, "nvd"); Have reports of this causing problems */
 
 	/*
 	 * Acquire a reference to the periph before we register with GEOM.
@@ -913,7 +897,13 @@ ndastart(struct cam_periph *periph, union ccb *start_ccb)
 			struct nvme_dsm_range *dsm_range;
 
 			dsm_range =
-			    malloc(sizeof(*dsm_range), M_NVMEDA, M_ZERO | M_WAITOK);
+			    malloc(sizeof(*dsm_range), M_NVMEDA, M_ZERO | M_NOWAIT);
+			if (dsm_range == NULL) {
+				biofinish(bp, NULL, ENOMEM);
+				xpt_release_ccb(start_ccb);
+				ndaschedule(periph);
+				return;
+			}
 			dsm_range->length =
 			    bp->bio_bcount / softc->disk->d_sectorsize;
 			dsm_range->starting_lba =
@@ -1087,7 +1077,7 @@ ndaerror(union ccb *ccb, u_int32_t cam_flags, u_int32_t sense_flags)
 		break;
 	}
 
-	return(cam_periph_error(ccb, cam_flags, sense_flags, NULL));
+	return(cam_periph_error(ccb, cam_flags, sense_flags));
 }
 
 /*

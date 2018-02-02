@@ -113,6 +113,7 @@ andreast [label="Andreas Tobler\nandreast@FreeBSD.org\n2010/09/05"]
 andrew [label="Andrew Turner\nandrew@FreeBSD.org\n2010/07/19"]
 antoine [label="Antoine Brodin\nantoine@FreeBSD.org\n2008/02/03"]
 araujo [label="Marcelo Araujo\naraujo@FreeBSD.org\n2015/08/04"]
+arichardson [label="Alex Richardson\narichardson@FreeBSD.org\n2017/10/30"]
 ariff [label="Ariff Abdullah\nariff@FreeBSD.org\n2005/11/14"]
 art [label="Artem Belevich\nart@FreeBSD.org\n2011/03/29"]
 arybchik [label="Andrew Rybchenko\narybchik@FreeBSD.org\n2014/10/12"]
@@ -135,6 +136,7 @@ bryanv [label="Bryan Venteicher\nbryanv@FreeBSD.org\n2012/11/03"]
 bschmidt [label="Bernhard Schmidt\nbschmidt@FreeBSD.org\n2010/02/06"]
 bz [label="Bjoern A. Zeeb\nbz@FreeBSD.org\n2004/07/27"]
 cem [label="Conrad Meyer\ncem@FreeBSD.org\n2015/07/05"]
+chuck [label="Chuck Tuffli\nchuck@FreeBSD.org\n2017/09/06"]
 cognet [label="Olivier Houchard\ncognet@FreeBSD.org\n2002/10/09"]
 cokane [label="Coleman Kane\ncokane@FreeBSD.org\n2000/06/19"]
 cperciva [label="Colin Percival\ncperciva@FreeBSD.org\n2004/01/20"]
@@ -416,6 +418,7 @@ brian -> joe
 brooks -> bushman
 brooks -> jamie
 brooks -> theraven
+brooks -> arichardson
 
 bz -> anchie
 bz -> jamie
@@ -523,6 +526,7 @@ imp -> ambrisko
 imp -> andrew
 imp -> bmah
 imp -> bruno
+imp -> chuck
 imp -> dmlb
 imp -> emax
 imp -> furuta
@@ -569,6 +573,7 @@ jhb -> peterj
 jhb -> pfg
 jhb -> rnoland
 jhb -> rpokala
+jhb -> arichardson
 
 jimharris -> carl
 
@@ -613,6 +618,7 @@ julian -> mp
 kan -> kib
 
 ken -> asomers
+ken -> chuck
 ken -> slm
 
 kib -> ae

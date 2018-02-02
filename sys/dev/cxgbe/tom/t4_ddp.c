@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2012 Chelsio Communications, Inc.
  * All rights reserved.
  * Written by: Navdeep Parhar <np@FreeBSD.org>
@@ -66,13 +68,6 @@ __FBSDID("$FreeBSD$");
 #include "common/t4_regs.h"
 #include "common/t4_tcb.h"
 #include "tom/t4_tom.h"
-
-VNET_DECLARE(int, tcp_do_autorcvbuf);
-#define V_tcp_do_autorcvbuf VNET(tcp_do_autorcvbuf)
-VNET_DECLARE(int, tcp_autorcvbuf_inc);
-#define V_tcp_autorcvbuf_inc VNET(tcp_autorcvbuf_inc)
-VNET_DECLARE(int, tcp_autorcvbuf_max);
-#define V_tcp_autorcvbuf_max VNET(tcp_autorcvbuf_max)
 
 /*
  * Use the 'backend3' field in AIO jobs to store the amount of data

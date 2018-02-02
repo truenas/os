@@ -130,7 +130,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/openfirm.h>
 
 #ifdef __powerpc64__
-extern int n_slbs;
+#include "mmu_oea64.h"
 #endif
 
 #ifndef __powerpc64__
@@ -150,7 +150,6 @@ extern Elf_Addr	_GLOBAL_OFFSET_TABLE_[];
 extern void	*rstcode, *rstcodeend;
 extern void	*trapcode, *trapcodeend;
 extern void	*generictrap, *generictrap64;
-extern void	*slbtrap, *slbtrapend;
 extern void	*alitrap, *aliend;
 extern void	*dsitrap, *dsiend;
 extern void	*decrint, *decrsize;
@@ -178,6 +177,27 @@ aim_cpu_init(vm_offset_t toc)
 
 	trap_offset = 0;
 	cacheline_warn = 0;
+
+	/* General setup for AIM CPUs */
+	psl_kernset = PSL_EE | PSL_ME | PSL_IR | PSL_DR | PSL_RI;
+
+#ifdef __powerpc64__
+	psl_kernset |= PSL_SF;
+	if (mfmsr() & PSL_HV)
+		psl_kernset |= PSL_HV;
+#endif
+	psl_userset = psl_kernset | PSL_PR;
+#ifdef __powerpc64__
+	psl_userset32 = psl_userset & ~PSL_SF;
+#endif
+
+	/* Bits that users aren't allowed to change */
+	psl_userstatic = ~(PSL_VEC | PSL_FP | PSL_FE0 | PSL_FE1);
+	/*
+	 * Mask bits from the SRR1 that aren't really the MSR:
+	 * Bits 1-4, 10-15 (ppc32), 33-36, 42-47 (ppc64)
+	 */
+	psl_userstatic &= ~0x783f0000UL;
 
 	/* Various very early CPU fix ups */
 	switch (mfpvr() >> 16) {
@@ -332,9 +352,6 @@ aim_cpu_init(vm_offset_t toc)
 	/* Set TOC base so that the interrupt code can get at it */
 	*((void **)TRAP_GENTRAP) = &generictrap;
 	*((register_t *)TRAP_TOCBASE) = toc;
-
-	bcopy(&slbtrap, (void *)EXC_DSE,(size_t)&slbtrapend - (size_t)&slbtrap);
-	bcopy(&slbtrap, (void *)EXC_ISE,(size_t)&slbtrapend - (size_t)&slbtrap);
 	#else
 	/* Set branch address for trap code */
 	if (cpu_features & PPC_FEATURE_64)
@@ -595,7 +612,7 @@ cpu_sleep()
 		while (1)
 			mtmsr(msr);
 	}
-	mttb(timebase);
+	platform_smp_timebase_sync(timebase, 0);
 	PCPU_SET(curthread, curthread);
 	PCPU_SET(curpcb, curthread->td_pcb);
 	pmap_activate(curthread);

@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -618,7 +618,7 @@ FlOpenAmlOutputFile (
     if (!Filename)
     {
         /* Create the output AML filename */
-        if (!Gbl_CaptureComments)
+        if (!AcpiGbl_CaptureComments)
         {
             Filename = FlGenerateFilename (FilenamePrefix, FILE_SUFFIX_AML_CODE);
         }

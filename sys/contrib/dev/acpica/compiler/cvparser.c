@@ -9,7 +9,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -254,7 +254,7 @@ CvInitFileTree (
     char                    *ChildFilename = NULL;
 
 
-    if (!Gbl_CaptureComments)
+    if (!AcpiGbl_CaptureComments)
     {
         return;
     }
@@ -720,7 +720,7 @@ CvCaptureCommentsOnly (
     ACPI_FILE_NODE          *FileNode;
 
 
-    if (!Gbl_CaptureComments ||
+    if (!AcpiGbl_CaptureComments ||
         Opcode != AML_COMMENT_OP)
     {
        return;
@@ -973,7 +973,7 @@ CvCaptureComments (
     const ACPI_OPCODE_INFO  *OpInfo;
 
 
-    if (!Gbl_CaptureComments)
+    if (!AcpiGbl_CaptureComments)
     {
         return;
     }

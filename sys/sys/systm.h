@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1982, 1988, 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  * (c) UNIX System Laboratories, Inc.
@@ -38,10 +40,10 @@
 #ifndef _SYS_SYSTM_H_
 #define	_SYS_SYSTM_H_
 
+#include <sys/cdefs.h>
 #include <machine/atomic.h>
 #include <machine/cpufunc.h>
 #include <sys/callout.h>
-#include <sys/cdefs.h>
 #include <sys/queue.h>
 #include <sys/stdint.h>		/* for people using printf mainly */
 
@@ -461,6 +463,22 @@ void free_unr(struct unrhdr *uh, u_int item);
 void	intr_prof_stack_use(struct thread *td, struct trapframe *frame);
 
 void counted_warning(unsigned *counter, const char *msg);
+
+/*
+ * APIs to manage deprecation and obsolescence.
+ */
+struct device;
+void _gone_in(int major, const char *msg);
+void _gone_in_dev(struct device *dev, int major, const char *msg);
+#ifdef NO_OBSOLETE_CODE
+#define __gone_ok(m, msg)					 \
+	_Static_assert(m < P_OSREL_MAJOR(__FreeBSD_version)),	 \
+	    "Obsolete code" msg);
+#else
+#define	__gone_ok(m, msg)
+#endif
+#define gone_in(major, msg)		__gone_ok(major, msg) _gone_in(major, msg)
+#define gone_in_dev(dev, major, msg)	__gone_ok(major, msg) _gone_in_dev(dev, major, msg)
 
 __NULLABILITY_PRAGMA_POP
 

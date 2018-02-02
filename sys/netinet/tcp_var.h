@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1982, 1986, 1993, 1994, 1995
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -882,6 +884,7 @@ void	 tcp_sack_partialack(struct tcpcb *, struct tcphdr *);
 void	 tcp_free_sackholes(struct tcpcb *tp);
 int	 tcp_newreno(struct tcpcb *, struct tcphdr *);
 int	 tcp_compute_pipe(struct tcpcb *);
+void	 tcp_sndbuf_autoscale(struct tcpcb *, struct socket *, uint32_t);
 
 static inline void
 tcp_fields_to_host(struct tcphdr *th)

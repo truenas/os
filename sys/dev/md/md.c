@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: (Beerware AND BSD-3-Clause)
+ *
  * ----------------------------------------------------------------------------
  * "THE BEER-WARE LICENSE" (Revision 42):
  * <phk@FreeBSD.ORG> wrote this file.  As long as you retain this notice you
@@ -1390,7 +1392,7 @@ mdcreate_vnode(struct md_s *sc, struct md_ioctl *mdio, struct thread *td)
 	 * set the FWRITE mask before trying to open the backing store.
 	 */
 	flags = FREAD | ((mdio->md_options & MD_READONLY) ? 0 : FWRITE) \
-	    | ((mdio->md_options & MD_VERIFY) ? 0 : O_VERIFY);
+	    | ((mdio->md_options & MD_VERIFY) ? O_VERIFY : 0);
 	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, sc->file, td);
 	error = vn_open(&nd, &flags, 0, NULL);
 	if (error != 0)
@@ -1789,9 +1791,15 @@ md_preloaded(u_char *image, size_t length, const char *name)
 	sc->start = mdstart_preload;
 	if (name != NULL)
 		strlcpy(sc->file, name, sizeof(sc->file));
-#if defined(MD_ROOT) && !defined(ROOTDEVNAME)
-	if (sc->unit == 0)
+#ifdef MD_ROOT
+	if (sc->unit == 0) {
+#ifndef ROOTDEVNAME
 		rootdevnames[0] = MD_ROOT_FSTYPE ":/dev/md0";
+#endif
+#ifdef MD_ROOT_READONLY
+		sc->flags |= MD_READONLY;
+#endif
+	}
 #endif
 	mdinit(sc);
 	if (name != NULL) {

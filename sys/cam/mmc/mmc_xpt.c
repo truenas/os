@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2013,2014 Ilya Bakulin <ilya@bakulin.de>
  * All rights reserved.
  *
@@ -239,9 +241,7 @@ mmc_scan_lun(struct cam_periph *periph, struct cam_path *path,
 
 	CAM_DEBUG(path, CAM_DEBUG_TRACE, ("mmc_scan_lun\n"));
 
-	xpt_setup_ccb(&cpi.ccb_h, path, CAM_PRIORITY_NONE);
-	cpi.ccb_h.func_code = XPT_PATH_INQ;
-	xpt_action((union ccb *)&cpi);
+	xpt_path_inq(&cpi, periph->path);
 
 	if (cpi.ccb_h.status != CAM_REQ_CMP) {
 		if (request_ccb != NULL) {
@@ -367,6 +367,11 @@ mmc_dev_advinfo(union ccb *start_ccb)
         case CDAI_TYPE_PHYS_PATH: /* pass(4) wants this */
                 cdai->provsiz = 0;
                 break;
+	case CDAI_TYPE_MMC_PARAMS:
+		cdai->provsiz = sizeof(struct mmc_params);
+		amt = MIN(cdai->provsiz, cdai->bufsiz);
+		memcpy(cdai->buf, &device->mmc_ident_data, amt);
+		break;
 	default:
                 panic("Unknown buftype");
 		return;
@@ -392,9 +397,7 @@ mmc_announce_periph(struct cam_periph *periph)
 	xpt_action((union ccb*)&cts);
 	if ((cts.ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP)
 		return;
-	xpt_setup_ccb(&cpi.ccb_h, path, CAM_PRIORITY_NORMAL);
-	cpi.ccb_h.func_code = XPT_PATH_INQ;
-	xpt_action((union ccb *)&cpi);
+	xpt_path_inq(&cpi, periph->path);
 	printf("XPT info: CLK %04X, ...\n", cts.proto_specific.mmc.ios.clock);
 }
 
@@ -570,8 +573,7 @@ mmcprobe_start(struct cam_periph *periph, union ccb *start_ccb)
 	case PROBE_RESET:
 		/* FALLTHROUGH */
 	case PROBE_IDENTIFY:
-		init_standard_ccb(start_ccb, XPT_PATH_INQ);
-		xpt_action(start_ccb);
+		xpt_path_inq(&start_ccb->cpi, periph->path);
 
 		CAM_DEBUG(start_ccb->ccb_h.path, CAM_DEBUG_PROBE, ("Start with PROBE_RESET\n"));
 		init_standard_ccb(start_ccb, XPT_SET_TRAN_SETTINGS);

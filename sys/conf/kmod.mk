@@ -292,7 +292,7 @@ ${_ILINKS}:
 	esac ; \
 	path=`(cd $$path && /bin/pwd)` ; \
 	${ECHO} ${.TARGET:T} "->" $$path ; \
-	ln -fhs $$path ${.TARGET:T}
+	ln -fns $$path ${.TARGET:T}
 
 CLEANFILES+= ${PROG} ${KMOD}.kld ${OBJS}
 
@@ -468,9 +468,6 @@ genassym.o: ${SRCS:Mopt_*.h}
 	${CC} -c ${CFLAGS:N-flto:N-fno-common} \
 	    ${SYSDIR}/${MACHINE}/${MACHINE}/genassym.c
 .endif
-
-lint: ${SRCS}
-	${LINT} ${LINTKERNFLAGS} ${CFLAGS:M-[DILU]*} ${.ALLSRC:M*.c}
 
 .if defined(KERNBUILDDIR)
 ${OBJS}: opt_global.h

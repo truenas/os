@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2011-2012 Stefan Bethke.
  * Copyright (c) 2014 Adrian Chadd.
  * All rights reserved.
@@ -1052,7 +1054,7 @@ ar8327_atu_flush(struct arswitch_softc *sc)
 	if (!ret)
 		arswitch_writereg(sc->sc_dev,
 		    AR8327_REG_ATU_FUNC,
-		    AR8327_ATU_FUNC_OP_FLUSH);
+		    AR8327_ATU_FUNC_OP_FLUSH | AR8327_ATU_FUNC_BUSY);
 	return (ret);
 }
 

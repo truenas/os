@@ -1,6 +1,8 @@
 /*-
  * CAM IO Scheduler Interface
  *
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2015 Netflix, Inc.
  * All rights reserved.
  *
@@ -457,9 +459,10 @@ cam_iosched_iops_caniop(struct iop_stats *ios, struct bio *bp)
 
 	/*
 	 * So if we have any more IOPs left, allow it,
-	 * otherwise wait.
+	 * otherwise wait. If current iops is 0, treat that
+	 * as unlimited as a failsafe.
 	 */
-	if (ios->l_value1 <= 0)
+	if (ios->current > 0 && ios->l_value1 <= 0)
 		return EAGAIN;
 	return 0;
 }
@@ -525,8 +528,11 @@ cam_iosched_bw_caniop(struct iop_stats *ios, struct bio *bp)
 	 * what we let through this quantum (to prevent the
 	 * starvation), at the cost of getting a little less
 	 * next quantum.
+	 *
+	 * Also note that if the current limit is <= 0,
+	 * we treat it as unlimited as a failsafe.
 	 */
-	if (ios->l_value1 <= 0)
+	if (ios->current > 0 && ios->l_value1 <= 0)
 		return EAGAIN;
 
 

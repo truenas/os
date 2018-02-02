@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -1048,6 +1048,7 @@ typedef struct acpi_iort_smmu_v3
     UINT8                   Pxm;
     UINT8                   Reserved1;
     UINT16                  Reserved2;
+    UINT32                  IdMappingIndex;
 
 } ACPI_IORT_SMMU_V3;
 

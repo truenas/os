@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -697,6 +697,11 @@ DtCompileNfit (
             InfoTable = AcpiDmTableInfoNfit6;
             break;
 
+        case ACPI_NFIT_TYPE_CAPABILITIES:
+
+            InfoTable = AcpiDmTableInfoNfit7;
+            break;
+
         default:
 
             DtFatal (ASL_MSG_UNKNOWN_SUBTABLE, SubtableStart, "NFIT");
@@ -740,7 +745,6 @@ DtCompileNfit (
             }
 
             Interleave->LineCount = Count;
-            DtPopSubtable ();
             break;
 
         case ACPI_NFIT_TYPE_SMBIOS:
@@ -786,7 +790,6 @@ DtCompileNfit (
             }
 
             Hint->HintCount = (UINT16) Count;
-            DtPopSubtable ();
             break;
 
         default:

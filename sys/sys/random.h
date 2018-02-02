@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2000-2015, 2017 Mark R. V. Murray
  * All rights reserved.
  *
@@ -92,6 +94,7 @@ enum random_entropy_source {
 	RANDOM_PURE_RNDTEST,
 	RANDOM_PURE_VIRTIO,
 	RANDOM_PURE_BROADCOM,
+	RANDOM_PURE_CCP,
 	ENTROPYSOURCE
 };
 

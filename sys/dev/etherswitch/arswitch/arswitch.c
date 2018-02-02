@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2011-2012 Stefan Bethke.
  * Copyright (c) 2012 Adrian Chadd.
  * All rights reserved.
@@ -175,6 +177,12 @@ arswitch_attach_phys(struct arswitch_softc *sc)
 	snprintf(name, IFNAMSIZ, "%sport", device_get_nameunit(sc->sc_dev));
 	for (phy = 0; phy < sc->numphys; phy++) {
 		sc->ifp[phy] = if_alloc(IFT_ETHER);
+		if (sc->ifp[phy] == NULL) {
+			device_printf(sc->sc_dev, "couldn't allocate ifnet structure\n");
+			err = ENOMEM;
+			break;
+		}
+
 		sc->ifp[phy]->if_softc = sc;
 		sc->ifp[phy]->if_flags |= IFF_UP | IFF_BROADCAST |
 		    IFF_DRV_RUNNING | IFF_SIMPLEX;
@@ -297,7 +305,7 @@ ar8xxx_atu_flush(struct arswitch_softc *sc)
 	if (!ret)
 		arswitch_writereg(sc->sc_dev,
 		    AR8216_REG_ATU,
-		    AR8216_ATU_OP_FLUSH);
+		    AR8216_ATU_OP_FLUSH | AR8216_ATU_ACTIVE);
 
 	return (ret);
 }
