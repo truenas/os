@@ -140,8 +140,8 @@ int zfs_scan_strict_mem_lim = B_FALSE;
  * some firmware bugs and resets on certain SSDs.
  */
 int zfs_top_maxinflight = 32;		/* maximum I/Os per top-level */
-unsigned int zfs_resilver_delay = 0;	/* number of ticks to delay resilver -- 2 is a good number */
-unsigned int zfs_scrub_delay = 0;	/* number of ticks to delay scrub -- 4 is a good number */
+unsigned int zfs_resilver_delay = 2;	/* number of ticks to delay resilver -- 2 is a good number */
+unsigned int zfs_scrub_delay = 4;	/* number of ticks to delay scrub -- 4 is a good number */
 unsigned int zfs_scan_idle = 50;	/* idle window in clock ticks */
 
 /*
