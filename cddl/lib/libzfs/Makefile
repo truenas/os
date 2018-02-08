@@ -5,9 +5,9 @@
 .PATH: ${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/fs/zfs
 .PATH: ${SRCTOP}/cddl/contrib/opensolaris/lib/libzfs/common
 .PATH: ${SRCTOP}/cddl/contrib/opensolaris/lib/libcmdutils/common
-
+.PATH: ${SRCTOP}/
 LIB=	zfs
-LIBADD=	md pthread umem util uutil m avl bsdxml geom nvpair z zfs_core
+LIBADD=	md pthread umem util uutil m avl bsdxml geom nvpair z zfs_core crypto
 SRCS=	deviceid.c \
 	fsshare.c \
 	mkdirp.c \
@@ -58,5 +58,47 @@ CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libuutil/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libzfs/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libzfs_core/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libcmdutils
+
+# OpenZFS crypto code
+ICP=	${SRCTOP}/sys/cddl/contrib/opensolaris/icp
+CFLAGS+=	-I${ICP}/include
+
+.PATH:	${ICP}/api
+SRCS+=	kcf_cipher.c \
+	kcf_digest.c \
+	kcf_mac.c \
+	kcf_miscapi.c \
+	kcf_ctxops.c
+#.PATH:	${ICP}/core
+#SRCS+=	kcf_callprov.c \
+#	kcf_prov_tabs.c \
+#	kcf_sched.c \
+#	kcf_mech_tabs.c \
+#	kcf_prov_lib.c
+.PATH:	${ICP}/spi
+SRCS+=	kcf_spi.c
+.PATH:	${ICP}/io
+SRCS+=	aes.c \
+	edonr_mod.c \
+	sha1_mod.c \
+	sha2_mod.c \
+	skein_mod.c
+.PATH:	${ICP}/os
+SRCS+=	modhash.c
+.PATH:	${ICP}/algs/modes
+SRCS+=	cbc.c \
+	ccm.c \
+	ctr.c \
+	gcm.c \
+	modes.c
+.PATH:	${ICP}/algs
+SRCS+=	aes/aes_impl.c \
+	aes/aes_modes.c \
+	edonr/edonr.c \
+	sha1/sha1.c \
+	sha2/sha2.c \
+	skein/skein.c \
+	skein/skein_block.c \
+	skein/skein_iv.c
 
 .include <bsd.lib.mk>
