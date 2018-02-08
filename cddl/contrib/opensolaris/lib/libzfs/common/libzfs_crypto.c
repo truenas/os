@@ -30,6 +30,7 @@
 #include <cryptoutil.h>
 #else
 #include <sys/crypto/icp.h>
+#include <openssl/evp.h>
 #endif
 #include <libintl.h>
 #include <termios.h>
@@ -72,7 +73,46 @@ typedef enum key_locator {
 
 static int caught_interrupt;
 
+static int random_fd = -1;
+
+static void
+random_init()
+{
+        VERIFY((random_fd = open("/dev/random", O_RDONLY)) != -1);
+
+}
+static void
+
+random_fini()
+{
+	return;
+}
+
+static int
+random_get_bytes_common(uint8_t *ptr, size_t len, int fd)
+{
+	size_t resid = len;
+	ssize_t bytes;
+
+	ASSERT(fd != -1);
+
+	while (resid != 0) {
+		bytes = read(fd, ptr, resid);
+		ASSERT3S(bytes, >=, 0);
+		ptr += bytes;
+		resid -= bytes;
+	}
+
+	return (0);
+}
+
+int
+random_get_bytes(uint8_t *ptr, size_t len)
+{
+	return (random_get_bytes_common(ptr, len, random_fd));
+}
 static zfs_keylocation_t
+
 zfs_prop_parse_keylocation(const char *str)
 {
 	if (strcmp("prompt", str) == 0)
@@ -436,6 +476,7 @@ pbkdf2(uint8_t *passphrase, size_t passphraselen, uint8_t *salt,
     size_t outputlen)
 {
 	int ret = 0;
+#if 0
 	CK_SESSION_HANDLE session;
 	char *tmpkeydata = NULL;
 	size_t tmpkeydatalen = 0;
@@ -473,7 +514,11 @@ pbkdf2(uint8_t *passphrase, size_t passphraselen, uint8_t *salt,
 	(void) memcpy(output, tmpkeydata, tmpkeydatalen);
 	(void) memset(tmpkeydata, 0, tmpkeydatalen);
 	free(tmpkeydata);
-
+#else
+	ret = PKCS5_PBKDF2_HMAC_SHA1((char *)passphrase, passphraselen,
+	    salt, saltlen, iterations,
+	    output, outputlen);
+#endif
 	return (ret);
 }
 

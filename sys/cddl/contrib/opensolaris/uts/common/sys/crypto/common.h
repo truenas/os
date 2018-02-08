@@ -36,9 +36,7 @@
 extern "C" {
 #endif
 
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/mbuf.h>
+#include <sys/zfs_context.h>
 
 /* Cryptographic Mechanisms */
 
@@ -63,13 +61,11 @@ typedef struct crypto_mechanism32 {
 
 #endif  /* _SYSCALL32 */
 
-#ifdef _KERNEL
 /* CK_AES_CTR_PARAMS provides parameters to the CKM_AES_CTR mechanism */
 typedef struct CK_AES_CTR_PARAMS {
 	ulong_t	ulCounterBits;
 	uint8_t cb[16];
 } CK_AES_CTR_PARAMS;
-#endif
 
 /* CK_AES_CCM_PARAMS provides parameters to the CKM_AES_CCM mechanism */
 typedef struct CK_AES_CCM_PARAMS {
@@ -98,7 +94,6 @@ typedef struct CK_AES_GMAC_PARAMS {
 	ulong_t ulAADLen;
 } CK_AES_GMAC_PARAMS;
 
-#ifdef _KERNEL
 /*
  * CK_ECDH1_DERIVE_PARAMS provides the parameters to the
  * CKM_ECDH1_KEY_DERIVE mechanism
@@ -110,9 +105,7 @@ typedef struct CK_ECDH1_DERIVE_PARAMS {
 	ulong_t		ulPublicDataLen;
 	uchar_t		*pPublicData;
 } CK_ECDH1_DERIVE_PARAMS;
-#endif
 
-#ifdef _KERNEL
 #ifdef  _SYSCALL32
 
 /* needed for 32-bit applications running on 64-bit kernels */
@@ -157,7 +150,6 @@ typedef struct CK_ECDH1_DERIVE_PARAMS32 {
 } CK_ECDH1_DERIVE_PARAMS32;
 
 #endif  /* _SYSCALL32 */
-#endif /* _KERNEL */
 
 /*
  * The measurement unit bit flag for a mechanism's minimum or maximum key size.
@@ -240,7 +232,6 @@ typedef struct {
 typedef enum crypto_data_format {
 	CRYPTO_DATA_RAW = 1,
 	CRYPTO_DATA_UIO,
-	CRYPTO_DATA_MBLK
 } crypto_data_format_t;
 
 typedef struct crypto_data {
@@ -254,9 +245,6 @@ typedef struct crypto_data {
 
 		/* uio scatter-gather format */
 		uio_t	*cdu_uio;
-
-		/* mblk scatter-gather format */
-		struct mbuf	*cdu_mp;		/* The mblk chain */
 
 	} cdu;	/* Crypto Data Union */
 } crypto_data_t;
@@ -303,22 +291,22 @@ typedef uint64_t crypto_attr_type_t;
 #define	SUN_CKA_SUBPRIME		0x00000131
 #define	SUN_CKA_BASE			0x00000132
 
-#define	CKK_EC			0x00000003UL
-#define	CKK_GENERIC_SECRET	0x00000010UL
-#define	CKK_RC4			0x00000012UL
-#define	CKK_AES			0x0000001FUL
-#define	CKK_DES			0x00000013UL
-#define	CKK_DES2		0x00000014UL
-#define	CKK_DES3		0x00000015UL
+#define	CKK_EC			0x00000003
+#define	CKK_GENERIC_SECRET	0x00000010
+#define	CKK_RC4			0x00000012
+#define	CKK_AES			0x0000001F
+#define	CKK_DES			0x00000013
+#define	CKK_DES2		0x00000014
+#define	CKK_DES3		0x00000015
 
-#define	CKO_PUBLIC_KEY		0x00000002UL
-#define	CKO_PRIVATE_KEY		0x00000003UL
-#define	CKA_CLASS		0x00000000UL
-#define	CKA_VALUE		0x00000011UL
-#define	CKA_KEY_TYPE		0x00000100UL
-#define	CKA_VALUE_LEN		0x00000161UL
-#define	CKA_EC_PARAMS		0x00000180UL
-#define	CKA_EC_POINT		0x00000181UL
+#define	CKO_PUBLIC_KEY		0x00000002
+#define	CKO_PRIVATE_KEY		0x00000003
+#define	CKA_CLASS		0x00000000
+#define	CKA_VALUE		0x00000011
+#define	CKA_KEY_TYPE		0x00000100
+#define	CKA_VALUE_LEN		0x00000161
+#define	CKA_EC_PARAMS		0x00000180
+#define	CKA_EC_POINT		0x00000181
 
 typedef uint32_t	crypto_object_id_t;
 

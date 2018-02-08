@@ -425,7 +425,7 @@ zio_do_crypt_uio(boolean_t encrypt, uint64_t crypt, crypto_key_t *key,
 
 		mech.cm_param = (char *)(&ccmp);
 		mech.cm_param_len = sizeof (CK_AES_CCM_PARAMS);
-	} else {
+	} else if (crypt_info.ci_crypt_type == ZC_TYPE_GCM) {
 		gcmp.ulIvLen = ZIO_DATA_IV_LEN;
 		gcmp.ulIvBits = CRYPTO_BYTES2BITS(ZIO_DATA_IV_LEN);
 		gcmp.ulAADLen = auth_len;
@@ -435,6 +435,9 @@ zio_do_crypt_uio(boolean_t encrypt, uint64_t crypt, crypto_key_t *key,
 
 		mech.cm_param = (char *)(&gcmp);
 		mech.cm_param_len = sizeof (CK_AES_GCM_PARAMS);
+	} else {
+		ret = SET_ERROR(ENOTSUP);
+		goto error;
 	}
 
 	/* populate the cipher and plain data structs. */
