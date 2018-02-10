@@ -1,4 +1,4 @@
-node() {
+node('FreeNAS-ISO') {
   properties([disableConcurrentBuilds()])
   stage('Checkout') {
     checkout scm
