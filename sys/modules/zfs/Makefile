@@ -105,23 +105,6 @@ CFLAGS+=-DDEBUG=1
 DEBUG_FLAGS=-g
 .endif
 
-.include <bsd.kmod.mk>
-
-CFLAGS+=	-include ${SYSDIR}/cddl/compat/opensolaris/sys/debug_compat.h
-
-CWARNFLAGS+=-Wno-missing-prototypes
-CWARNFLAGS+=-Wno-undef
-CWARNFLAGS+=-Wno-strict-prototypes
-CWARNFLAGS+=-Wno-cast-qual
-CWARNFLAGS+=-Wno-parentheses
-CWARNFLAGS+=-Wno-redundant-decls
-CWARNFLAGS+=-Wno-missing-braces
-CWARNFLAGS+=-Wno-uninitialized
-CWARNFLAGS+=-Wno-unused
-CWARNFLAGS+=-Wno-inline
-CWARNFLAGS+=-Wno-switch
-CWARNFLAGS+=-Wno-pointer-arith
-
 # OpenZFS crypto code
 ICP=	${SUNW}/icp
 CFLAGS+=	-I${ICP}/include
@@ -163,3 +146,21 @@ SRCS+=	aes/aes_impl.c \
 	skein/skein.c \
 	skein/skein_block.c \
 	skein/skein_iv.c
+
+.include <bsd.kmod.mk>
+
+CFLAGS+=	-include ${SYSDIR}/cddl/compat/opensolaris/sys/debug_compat.h
+
+CWARNFLAGS+=-Wno-missing-prototypes
+CWARNFLAGS+=-Wno-undef
+CWARNFLAGS+=-Wno-strict-prototypes
+CWARNFLAGS+=-Wno-cast-qual
+CWARNFLAGS+=-Wno-parentheses
+CWARNFLAGS+=-Wno-redundant-decls
+CWARNFLAGS+=-Wno-missing-braces
+CWARNFLAGS+=-Wno-uninitialized
+CWARNFLAGS+=-Wno-unused
+CWARNFLAGS+=-Wno-inline
+CWARNFLAGS+=-Wno-switch
+CWARNFLAGS+=-Wno-pointer-arith
+
