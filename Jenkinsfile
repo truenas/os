@@ -1,5 +1,5 @@
 throttle(['FreeNAS']) {
-  node('FreeNAS-ISO') {
+  node() {
     stage('Checkout') {
       checkout scm
     }
