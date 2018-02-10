@@ -323,7 +323,7 @@ _DP_ipf=	kvm
 _DP_zfs=	md pthread umem util uutil m nvpair avl bsdxml geom nvpair z \
 		zfs_core crypto
 _DP_zfs_core=	nvpair
-_DP_zpool=	md pthread z nvpair avl umem
+_DP_zpool=	md pthread z nvpair avl umem crypto
 .if ${MK_OFED} != "no"
 _DP_cxgb4=	ibverbs pthread
 _DP_ibcm=	ibverbs

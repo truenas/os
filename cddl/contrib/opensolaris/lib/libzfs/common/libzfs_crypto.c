@@ -17,6 +17,7 @@
  * Copyright (c) 2017, Datto, Inc. All rights reserved.
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
@@ -73,46 +74,7 @@ typedef enum key_locator {
 
 static int caught_interrupt;
 
-static int random_fd = -1;
-
-static void
-random_init()
-{
-        VERIFY((random_fd = open("/dev/random", O_RDONLY)) != -1);
-
-}
-static void
-
-random_fini()
-{
-	return;
-}
-
-static int
-random_get_bytes_common(uint8_t *ptr, size_t len, int fd)
-{
-	size_t resid = len;
-	ssize_t bytes;
-
-	ASSERT(fd != -1);
-
-	while (resid != 0) {
-		bytes = read(fd, ptr, resid);
-		ASSERT3S(bytes, >=, 0);
-		ptr += bytes;
-		resid -= bytes;
-	}
-
-	return (0);
-}
-
-int
-random_get_bytes(uint8_t *ptr, size_t len)
-{
-	return (random_get_bytes_common(ptr, len, random_fd));
-}
 static zfs_keylocation_t
-
 zfs_prop_parse_keylocation(const char *str)
 {
 	if (strcmp("prompt", str) == 0)
@@ -156,6 +118,53 @@ catch_signal(int sig)
 {
 	caught_interrupt = sig;
 }
+
+#ifndef _KERNEL
+static int random_fd = -1;
+
+void
+random_init()
+{
+        VERIFY((random_fd = open("/dev/random", O_RDONLY)) != -1);
+
+}
+
+void
+random_fini()
+{
+	close(random_fd); random_fd = -1;
+	return;
+}
+
+static int
+random_get_bytes_common(uint8_t *ptr, size_t len, int fd)
+{
+	size_t resid = len;
+	ssize_t bytes;
+
+	ASSERT(fd != -1);
+
+	while (resid != 0) {
+		bytes = read(fd, ptr, resid);
+		ASSERT3S(bytes, >=, 0);
+		ptr += bytes;
+		resid -= bytes;
+	}
+
+	return (0);
+}
+
+int
+random_get_bytes(uint8_t *ptr, size_t len)
+{
+	return (random_get_bytes_common(ptr, len, random_fd));
+}
+int
+random_get_pseudo_bytes(uint8_t *ptr, size_t len)
+{
+	return (random_get_bytes_common(ptr, len, random_fd));
+}
+#endif /* !_KERNEL */
 
 static char *
 get_format_prompt_string(zfs_keyformat_t format)

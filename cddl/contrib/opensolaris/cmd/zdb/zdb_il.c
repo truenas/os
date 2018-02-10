@@ -310,7 +310,7 @@ print_log_record(zilog_t *zilog, lr_t *lr, void *arg, uint64_t claim_txg)
 		if (!zilog->zl_os->os_encrypted) {
 			zil_rec_info[txtype].zri_print(zilog, txtype, lr);
 		} else {
-			(void) printf("%s(encrypted)\n", tab_prefix);
+			(void) printf("%s(encrypted)\n", prefix);
 		}
 	}
 

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#ifdef KERNEL
+#ifdef _KERNEL
 
 
 #define	KCF_MODULE "kcf"
