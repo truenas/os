@@ -494,10 +494,14 @@ zio_crypt_key_wrap(crypto_key_t *cwkey, zio_crypt_key_t *key, uint8_t *iv,
 	keydata_len = zio_crypt_table[crypt].ci_keylen;
 
 	/* generate iv for wrapping the master and hmac key */
+#ifdef __FreeBSD__
+	/* random_get_pseudo_bytes is defined as arc4rand, which doesn't fail */
+	random_get_pseudo_bytes(iv, WRAPPING_IV_LEN);
+#else
 	ret = random_get_pseudo_bytes(iv, WRAPPING_IV_LEN);
 	if (ret != 0)
 		goto error;
-
+#endif
 	/* initialize uio_ts */
 	plain_iovecs[0].iov_base = (char *)key->zk_master_keydata;
 	plain_iovecs[0].iov_len = keydata_len;
@@ -658,9 +662,14 @@ zio_crypt_generate_iv(uint8_t *ivbuf)
 	int ret;
 
 	/* randomly generate the IV */
+#ifdef __FreeBSD__
+	/* random_get_pseudo_bytes is defined as arc4rand, which doesn't fail */
+	random_get_pseudo_bytes(ivbuf, ZIO_DATA_IV_LEN);
+#else
 	ret = random_get_pseudo_bytes(ivbuf, ZIO_DATA_IV_LEN);
 	if (ret != 0)
 		goto error;
+#endif
 
 	return (0);
 

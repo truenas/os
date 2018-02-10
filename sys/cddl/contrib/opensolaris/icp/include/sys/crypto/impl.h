@@ -31,6 +31,7 @@
  */
 
 #include <sys/zfs_context.h>
+#include <sys/kstat.h>
 #include <sys/crypto/common.h>
 #include <sys/crypto/api.h>
 #include <sys/crypto/spi.h>
