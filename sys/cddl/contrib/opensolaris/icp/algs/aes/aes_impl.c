@@ -22,6 +22,10 @@
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  */
 
+#ifdef __FreeBSD__
+# undef __amd64
+#endif
+
 #if defined(_KERNEL) && defined(__amd64)
 #include <linux/simd_x86.h>
 

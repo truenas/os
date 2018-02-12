@@ -22,7 +22,11 @@
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  */
 
-#if defined(_KERNEL) && defined(__amd64)
+#ifdef __FreeBSD__
+# undef __amd64
+#endif
+
+#if defined(_KERNEL) && defined(__amd64) && defined(__linux__)
 #include <linux/simd_x86.h>
 
 #define	KPREEMPT_DISABLE	kfpu_begin()
@@ -368,9 +372,9 @@ gcm_mode_decrypt_contiguous_blocks(gcm_ctx_t *ctx, char *data, size_t length,
 	 */
 	if (length > 0) {
 		new_len = ctx->gcm_pt_buf_len + length;
-		new = vmem_alloc(new_len, ctx->gcm_kmflag);
+		new = kmem_alloc(new_len, ctx->gcm_kmflag);
 		bcopy(ctx->gcm_pt_buf, new, ctx->gcm_pt_buf_len);
-		vmem_free(ctx->gcm_pt_buf, ctx->gcm_pt_buf_len);
+		kmem_free(ctx->gcm_pt_buf, ctx->gcm_pt_buf_len);
 		if (new == NULL)
 			return (CRYPTO_HOST_MEMORY);
 

@@ -913,9 +913,3 @@ Skein1024_Output(Skein1024_Ctxt_t *ctx, uint8_t *hashVal)
 }
 #endif
 
-#ifdef _KERNEL
-EXPORT_SYMBOL(Skein_512_Init);
-EXPORT_SYMBOL(Skein_512_InitExt);
-EXPORT_SYMBOL(Skein_512_Update);
-EXPORT_SYMBOL(Skein_512_Final);
-#endif
