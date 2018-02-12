@@ -25,31 +25,11 @@
  */
 
 #include <sys/zfs_context.h>
-#include <sys/modctl.h>
 #include <sys/crypto/common.h>
 #include <sys/crypto/spi.h>
 
 #include <sha1/sha1.h>
 #include <sha1/sha1_impl.h>
-
-/*
- * The sha1 module is created with two modlinkages:
- * - a modlmisc that allows consumers to directly call the entry points
- *   SHA1Init, SHA1Update, and SHA1Final.
- * - a modlcrypto that allows the module to register with the Kernel
- *   Cryptographic Framework (KCF) as a software provider for the SHA1
- *   mechanisms.
- */
-
-static struct modlcrypto modlcrypto = {
-	&mod_cryptoops,
-	"SHA1 Kernel SW Provider 1.1"
-};
-
-static struct modlinkage modlinkage = {
-	MODREV_1, { &modlcrypto, NULL }
-};
-
 
 /*
  * Macros to access the SHA1 or SHA1-HMAC contexts from a context passed
@@ -188,9 +168,6 @@ sha1_mod_init(void)
 {
 	int ret;
 
-	if ((ret = mod_install(&modlinkage)) != 0)
-		return (ret);
-
 	/*
 	 * Register with KCF. If the registration fails, log an
 	 * error but do not uninstall the module, since the functionality
@@ -220,7 +197,7 @@ sha1_mod_fini(void)
 		sha1_prov_handle = 0;
 	}
 
-	return (mod_remove(&modlinkage));
+	return (0);
 }
 
 /*

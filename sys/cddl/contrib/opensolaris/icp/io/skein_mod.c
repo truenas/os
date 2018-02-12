@@ -31,25 +31,6 @@
 #define	SKEIN_MODULE_IMPL
 #include <sys/skein.h>
 
-/*
- * Like the sha2 module, we create the skein module with two modlinkages:
- * - modlmisc to allow direct calls to Skein_* API functions.
- * - modlcrypto to integrate well into the Kernel Crypto Framework (KCF).
- */
-static struct modlmisc modlmisc = {
-	&mod_cryptoops,
-	"Skein Message-Digest Algorithm"
-};
-
-static struct modlcrypto modlcrypto = {
-	&mod_cryptoops,
-	"Skein Kernel SW Provider"
-};
-
-static struct modlinkage modlinkage = {
-	MODREV_1, {&modlmisc, &modlcrypto, NULL}
-};
-
 static crypto_mech_info_t skein_mech_info_tab[] = {
 	{CKM_SKEIN_256, SKEIN_256_MECH_INFO_TYPE,
 	    CRYPTO_FG_DIGEST | CRYPTO_FG_DIGEST_ATOMIC,
@@ -217,9 +198,6 @@ skein_mod_init(void)
 {
 	int error;
 
-	if ((error = mod_install(&modlinkage)) != 0)
-		return (error);
-
 	/*
 	 * Try to register with KCF - failure shouldn't unload us, since we
 	 * still may want to continue providing misc/skein functionality.
@@ -245,7 +223,7 @@ skein_mod_fini(void)
 		skein_prov_handle = 0;
 	}
 
-	return (mod_remove(&modlinkage));
+	return (0);
 }
 
 /*

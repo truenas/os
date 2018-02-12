@@ -142,7 +142,7 @@ crypto_free_mode_ctx(void *ctx)
 
 	case CCM_MODE:
 		if (((ccm_ctx_t *)ctx)->ccm_pt_buf != NULL)
-			vmem_free(((ccm_ctx_t *)ctx)->ccm_pt_buf,
+			kmem_free(((ccm_ctx_t *)ctx)->ccm_pt_buf,
 			    ((ccm_ctx_t *)ctx)->ccm_data_len);
 
 		kmem_free(ctx, sizeof (ccm_ctx_t));
@@ -151,7 +151,7 @@ crypto_free_mode_ctx(void *ctx)
 	case GCM_MODE:
 	case GMAC_MODE:
 		if (((gcm_ctx_t *)ctx)->gcm_pt_buf != NULL)
-			vmem_free(((gcm_ctx_t *)ctx)->gcm_pt_buf,
+			kmem_free(((gcm_ctx_t *)ctx)->gcm_pt_buf,
 			    ((gcm_ctx_t *)ctx)->gcm_pt_buf_len);
 
 		kmem_free(ctx, sizeof (gcm_ctx_t));

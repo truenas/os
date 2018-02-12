@@ -949,8 +949,3 @@ SHA2Final(void *digest, SHA2_CTX *ctx)
 	bzero(ctx, sizeof (*ctx));
 }
 
-#ifdef _KERNEL
-EXPORT_SYMBOL(SHA2Init);
-EXPORT_SYMBOL(SHA2Update);
-EXPORT_SYMBOL(SHA2Final);
-#endif

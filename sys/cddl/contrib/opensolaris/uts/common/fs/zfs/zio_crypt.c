@@ -1822,6 +1822,13 @@ zio_crypt_init_uios(boolean_t encrypt, uint64_t version, dmu_object_type_t ot,
 
 	ASSERT(DMU_OT_IS_ENCRYPTED(ot) || ot == DMU_OT_NONE);
 
+#ifdef __FreeBSD__
+	// I think we need to do this for opencrypto
+	if (encrypt)
+		bcopy(plainbuf, cipherbuf, datalen);
+	else
+		bcopy(cipherbuf, plainbuf, datalen);
+#endif /* __FreeBSD__ */
 	/* route to handler */
 	switch (ot) {
 	case DMU_OT_INTENT_LOG:
