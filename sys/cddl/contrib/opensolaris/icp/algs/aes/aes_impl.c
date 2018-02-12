@@ -22,11 +22,7 @@
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  */
 
-#ifdef __FreeBSD__
-# undef __amd64
-#endif
-
-#if defined(_KERNEL) && defined(__amd64)
+#if defined(_KERNEL) && defined(__amd64) && defined(__linux__)
 #include <linux/simd_x86.h>
 
 #define	KPREEMPT_DISABLE	kfpu_begin()
@@ -79,7 +75,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#if defined(__amd64)
+#if defined(__amd64) && !defined(__FreeBSD__)
 
 /* These functions are used to execute amd64 instructions for AMD or Intel: */
 extern int rijndael_key_setup_enc_amd64(uint32_t rk[],
@@ -113,12 +109,12 @@ static int intel_aes_instructions_present(void);
 #define	rijndael_key_setup_enc_raw	rijndael_key_setup_enc
 #endif	/* __amd64 */
 
-#if defined(_LITTLE_ENDIAN) && !defined(__amd64)
+#if defined(_LITTLE_ENDIAN) && (!defined(__amd64) || defined(__FreeBSD__))
 #define	AES_BYTE_SWAP
 #endif
 
 
-#if !defined(__amd64)
+#if !defined(__amd64) || defined(__FreeBSD__)
 /*
  *  Constant tables
  */
@@ -941,7 +937,7 @@ rijndael_key_setup_enc_raw(uint32_t rk[], const uint32_t cipherKey[],
 }
 #endif	/* !__amd64 */
 
-#if defined(__amd64)
+#if defined(__amd64) && !defined(__FreeBSD__)
 
 /*
  * Expand the 32-bit AES cipher key array into the encryption and decryption
@@ -1572,7 +1568,7 @@ aes_alloc_keysched(size_t *size, int kmflag)
 }
 
 
-#ifdef __amd64
+#if defined(__amd64) && !defined(__FreeBSD__)
 
 #define	INTEL_AESNI_FLAG (1 << 25)
 
