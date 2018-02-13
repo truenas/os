@@ -189,11 +189,16 @@ kcf_get_hardware_provider(crypto_mech_type_t mech_type_1,
 				continue;
 			}
 
+#ifdef __FreeBSD__
+			gpd = provider;
+			break;
+#else
 			len = KCF_PROV_LOAD(provider);
 			if (len < gqlen) {
 				gqlen = len;
 				gpd = provider;
 			}
+#endif
 
 			p = p->pl_next;
 		}
@@ -311,11 +316,15 @@ kcf_get_mech_provider(crypto_mech_type_t mech_type, kcf_mech_entry_t **mepp,
 				continue;
 			}
 
+#ifdef __FreeBSD__
+			gpd = pd;
+			break;
+#else
 			if ((len = KCF_PROV_LOAD(pd)) < gqlen) {
 				gqlen = len;
 				gpd = pd;
 			}
-
+#endif
 			prov_chain = prov_chain->pm_next;
 		}
 
@@ -405,7 +414,6 @@ kcf_get_dual_provider(crypto_mechanism_t *mech1, crypto_mechanism_t *mech2,
 		 */
 		while (prov_chain != NULL) {
 			pd = prov_chain->pm_prov_desc;
-			len = KCF_PROV_LOAD(pd);
 
 			if (!IS_FG_SUPPORTED(prov_chain, fg1) ||
 			    !KCF_IS_PROV_USABLE(pd) ||
@@ -417,13 +425,20 @@ kcf_get_dual_provider(crypto_mechanism_t *mech1, crypto_mechanism_t *mech2,
 			}
 
 			/* Save the best provider capable of m1 */
+#ifdef __FreeBSD__
+			len = 1;
+			pdm1 = pd;
+			*prov_mt1 = prov_chain->pm_mech_info.cm_mech_number;
+#else
+			len = KCF_PROV_LOAD(pd);
 			if (len < gqlen) {
 				*prov_mt1 =
 				    prov_chain->pm_mech_info.cm_mech_number;
 				gqlen = len;
 				pdm1 = pd;
 			}
-
+#endif
+			
 			/* See if pd can do me2 too */
 			for (mil = prov_chain->pm_mi_list;
 			    mil != NULL; mil = mil->ml_next) {

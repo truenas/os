@@ -69,8 +69,10 @@ static kcf_stats_t kcf_ksdata = {
 static kstat_t *kcf_misc_kstat = NULL;
 ulong_t kcf_swprov_hndl = 0;
 
+#ifndef __FreeBSD__
 static kcf_areq_node_t *kcf_areqnode_alloc(kcf_provider_desc_t *,
     kcf_context_t *, crypto_call_req_t *, kcf_req_params_t *, boolean_t);
+#endif
 static int kcf_disp_sw_request(kcf_areq_node_t *);
 static void process_req_hwp(void *);
 static int kcf_enqueue(kcf_areq_node_t *);
@@ -79,6 +81,19 @@ static void kcf_reqid_delete(kcf_areq_node_t *areq);
 static crypto_req_id_t kcf_reqid_insert(kcf_areq_node_t *areq);
 static int kcf_misc_kstat_update(kstat_t *ksp, int rw);
 
+#ifdef __FreeBSD__
+// Come one, you can at least do some *locking* for crying out loud!
+static void
+kpreempt_enable(void)
+{
+	return;
+}
+static void
+kpreempt_disable(void)
+{
+	return;
+}
+#endif
 /*
  * Create a new context.
  */
@@ -115,6 +130,7 @@ kcf_new_ctx(crypto_call_req_t *crq, kcf_provider_desc_t *pd,
 	return (ctx);
 }
 
+#ifndef __FreeBSD__
 /*
  * Allocate a new async request node.
  *
@@ -174,6 +190,7 @@ kcf_areqnode_alloc(kcf_provider_desc_t *pd, kcf_context_t *ictx,
 
 	return (arptr);
 }
+#endif /* __FreeBSD__ */
 
 /*
  * Queue the request node and do one of the following:
@@ -578,11 +595,15 @@ kcf_resubmit_request(kcf_areq_node_t *areq)
 
 static inline int EMPTY_TASKQ(taskq_t *tq)
 {
-#ifdef _KERNEL
-	return (tq->tq_lowest_id == tq->tq_next_id);
+#ifdef __FreeBSD__
+	return (1);
 #else
+# ifdef _KERNEL
+	return (tq->tq_lowest_id == tq->tq_next_id);
+# else
 	return (tq->tq_task.tqent_next == &tq->tq_task || tq->tq_active == 0);
-#endif
+# endif
+#endif /* __FreeBSD__ */
 }
 
 /*
@@ -671,10 +692,11 @@ kcf_submit_request(kcf_provider_desc_t *pd, crypto_ctx_t *ctx,
 				 * the synchronous case, we wait for the taskq
 				 * to become empty.
 				 */
+#ifndef __FreeBSD__
 				if (taskq->tq_nalloc >= crypto_taskq_maxalloc) {
 					taskq_wait(taskq);
 				}
-
+#endif
 				(void) taskq_dispatch(taskq, process_req_hwp,
 				    sreq, TQ_SLEEP);
 			}
@@ -699,7 +721,9 @@ kcf_submit_request(kcf_provider_desc_t *pd, crypto_ctx_t *ctx,
 			break;
 		}
 
-	} else {	/* Asynchronous cases */
+	}
+#ifndef __FreeBSD__
+	else {	/* Asynchronous cases */
 		switch (pd->pd_prov_type) {
 		case CRYPTO_SW_PROVIDER:
 			if (!(crq->cr_flag & CRYPTO_ALWAYS_QUEUE)) {
@@ -764,12 +788,13 @@ kcf_submit_request(kcf_provider_desc_t *pd, crypto_ctx_t *ctx,
 			 * value if we exceeded maxalloc. Hence the check
 			 * here.
 			 */
+#ifndef __FreeBSD__
 			if (taskq->tq_nalloc >= crypto_taskq_maxalloc) {
 				error = CRYPTO_BUSY;
 				KCF_AREQ_REFRELE(areq);
 				goto done;
 			}
-
+#endif
 			if (!(crq->cr_flag & CRYPTO_SKIP_REQID)) {
 			/*
 			 * Set the request handle. This handle is used
@@ -797,6 +822,7 @@ kcf_submit_request(kcf_provider_desc_t *pd, crypto_ctx_t *ctx,
 			break;
 		}
 	}
+#endif /* __FreeBSD__ */
 
 done:
 	return (error);
@@ -1514,7 +1540,7 @@ kcf_misc_kstat_update(kstat_t *ksp, int rw)
 
 	ks_data = ksp->ks_data;
 
-	ks_data->ks_thrs_in_pool.value.ui32 = kcfpool->kp_threads;
+	ks_data->ks_thrs_in_pool.value.ui64 = kcfpool->kp_threads;
 	/*
 	 * The failover thread is counted in kp_idlethreads in
 	 * some corner cases. This is done to avoid doing more checks
@@ -1522,14 +1548,14 @@ kcf_misc_kstat_update(kstat_t *ksp, int rw)
 	 */
 	if ((tcnt = kcfpool->kp_idlethreads) == (kcfpool->kp_threads + 1))
 		tcnt--;
-	ks_data->ks_idle_thrs.value.ui32 = tcnt;
-	ks_data->ks_minthrs.value.ui32 = kcf_minthreads;
-	ks_data->ks_maxthrs.value.ui32 = kcf_maxthreads;
-	ks_data->ks_swq_njobs.value.ui32 = gswq->gs_njobs;
-	ks_data->ks_swq_maxjobs.value.ui32 = gswq->gs_maxjobs;
-	ks_data->ks_taskq_threads.value.ui32 = crypto_taskq_threads;
-	ks_data->ks_taskq_minalloc.value.ui32 = crypto_taskq_minalloc;
-	ks_data->ks_taskq_maxalloc.value.ui32 = crypto_taskq_maxalloc;
+	ks_data->ks_idle_thrs.value.ui64 = tcnt;
+	ks_data->ks_minthrs.value.ui64 = kcf_minthreads;
+	ks_data->ks_maxthrs.value.ui64 = kcf_maxthreads;
+	ks_data->ks_swq_njobs.value.ui64 = gswq->gs_njobs;
+	ks_data->ks_swq_maxjobs.value.ui64 = gswq->gs_maxjobs;
+	ks_data->ks_taskq_threads.value.ui64 = crypto_taskq_threads;
+	ks_data->ks_taskq_minalloc.value.ui64 = crypto_taskq_minalloc;
+	ks_data->ks_taskq_maxalloc.value.ui64 = crypto_taskq_maxalloc;
 
 	return (0);
 }
@@ -1548,6 +1574,9 @@ kcf_alloc_req(crypto_call_req_t *crq)
 
 	kcr = kmem_alloc(sizeof (kcf_dual_req_t), KCF_KMFLAG(crq));
 
+#ifdef __FreeBSD__
+	ASSERT(crq == NULL);
+#endif
 	if (kcr == NULL)
 		return (NULL);
 

@@ -112,11 +112,12 @@ SRCS+=	kcf_cipher.c \
 	kcf_mac.c \
 	kcf_miscapi.c \
 	kcf_ctxops.c
-#.PATH:	${ICP}/core
-#SRCS+=	kcf_prov_tabs.c \
-#	kcf_sched.c \
-#	kcf_mech_tabs.c \
-#	kcf_prov_lib.c
+.PATH:	${ICP}/core
+SRCS+=	kcf_prov_lib.c \
+	kcf_mech_tabs.c \
+	kcf_prov_tabs.c \
+	kcf_sched.c \
+	kcf_callprov.c
 .PATH:	${ICP}/spi
 SRCS+=	kcf_spi.c
 .PATH:	${ICP}/io
