@@ -26,6 +26,9 @@
 #ifndef _SYS_SHA1_H
 #define	_SYS_SHA1_H
 
+#include <crypto/sha1.h>
+
+#if 0
 #include <sys/types.h>		/* for uint_* */
 
 #ifdef	__cplusplus
@@ -56,6 +59,8 @@ void SHA1Final(void *, SHA1_CTX *);
 
 #ifdef	__cplusplus
 }
+#endif
+
 #endif
 
 #endif /* _SYS_SHA1_H */

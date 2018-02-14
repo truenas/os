@@ -22,10 +22,6 @@
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  */
 
-#ifdef __FreeBSD__
-# undef __amd64
-#endif
-
 #if defined(_KERNEL) && defined(__amd64) && defined(__linux__)
 #include <linux/simd_x86.h>
 
@@ -43,7 +39,7 @@
 #include <sys/crypto/impl.h>
 #include <sys/byteorder.h>
 
-#ifdef __amd64
+#if defined(__amd64) && !defined(__FreeBSD__)
 
 extern void gcm_mul_pclmulqdq(uint64_t *x_in, uint64_t *y, uint64_t *res);
 static int intel_pclmulqdq_instruction_present(void);
@@ -68,7 +64,7 @@ struct aes_block {
 void
 gcm_mul(uint64_t *x_in, uint64_t *y, uint64_t *res)
 {
-#ifdef __amd64
+#if defined(__amd64) && !defined(__FreeBSD__)
 	if (intel_pclmulqdq_instruction_present()) {
 		KPREEMPT_DISABLE;
 		gcm_mul_pclmulqdq(x_in, y, res);
@@ -699,7 +695,7 @@ gcm_set_kmflag(gcm_ctx_t *ctx, int kmflag)
 }
 
 
-#ifdef __amd64
+#if defined(__amd64) && !defined(__FreeBSD__)
 
 #define	INTEL_PCLMULQDQ_FLAG (1 << 1)
 
