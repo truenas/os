@@ -29,10 +29,6 @@
 
 #ifdef  _KERNEL
 #include <sys/types.h>		/* for uint_* */
-#else
-#include <stdint.h>
-#endif
-
 #ifdef __FreeBSD__
 /*
  * FreeBSD has a bunch of SHA code in via opencrypto.  With
@@ -42,6 +38,10 @@
 # include <crypto/sha2/sha384.h>
 # include <crypto/sha2/sha512.h>
 #endif
+#else
+#include <stdint.h>
+#endif
+
 
 #ifdef	__cplusplus
 extern "C" {
@@ -73,15 +73,21 @@ extern "C" {
 #define	SHA512_224		9
 #define	SHA512_256		10
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__)
 
 /*
  * FreeBSD has a bunch of SHA code in via opencrypto.  With
  * some, but not all, of the same symbols.
  */
-# include <crypto/sha2/sha256.h>
-# include <crypto/sha2/sha384.h>
-# include <crypto/sha2/sha512.h>
+# ifdef _KERNEL
+#  include <crypto/sha2/sha256.h>
+#  include <crypto/sha2/sha384.h>
+#  include <crypto/sha2/sha512.h>
+# else
+#  include <sha256.h>
+#  include <sha384.h>
+#  include <sha512.h>
+# endif
 
 typedef struct {
 	uint32_t		algotype;	/* Which algorithm */
