@@ -33,6 +33,16 @@
 #include <stdint.h>
 #endif
 
+#ifdef __FreeBSD__
+/*
+ * FreeBSD has a bunch of SHA code in via opencrypto.  With
+ * some, but not all, of the same symbols.
+ */
+# include <crypto/sha2/sha256.h>
+# include <crypto/sha2/sha384.h>
+# include <crypto/sha2/sha512.h>
+#endif
+
 #ifdef	__cplusplus
 extern "C" {
 #endif
@@ -63,6 +73,27 @@ extern "C" {
 #define	SHA512_224		9
 #define	SHA512_256		10
 
+#ifdef __FreeBSD__
+
+/*
+ * FreeBSD has a bunch of SHA code in via opencrypto.  With
+ * some, but not all, of the same symbols.
+ */
+# include <crypto/sha2/sha256.h>
+# include <crypto/sha2/sha384.h>
+# include <crypto/sha2/sha512.h>
+
+typedef struct {
+	uint32_t		algotype;	/* Which algorithm */
+	union {
+		SHA256_CTX	sha256;
+		SHA384_CTX	sha384;
+		SHA512_CTX	sha512;
+	} sha;
+} SHA2_CTX;
+
+#else
+	
 /*
  * SHA2 context.
  * The contents of this structure are a private interface between the
@@ -93,6 +124,8 @@ typedef struct 	{
 typedef SHA2_CTX SHA256_CTX;
 typedef SHA2_CTX SHA384_CTX;
 typedef SHA2_CTX SHA512_CTX;
+
+#endif /* __FreeBSD__ */
 
 extern void SHA2Init(uint64_t mech, SHA2_CTX *);
 

@@ -131,12 +131,13 @@ SRCS+=	cbc.c \
 	ccm.c \
 	ctr.c \
 	gcm.c \
+	ecb.c \
 	modes.c
 .PATH:	${ICP}/algs
 SRCS+=	aes/aes_impl.c \
 	aes/aes_modes.c \
-	sha1/sha1.c \
-	sha2/sha2.c
+	sha2/sha2-freebsd.c
+#	sha2/sha2.c
 
 .include <bsd.kmod.mk>
 
