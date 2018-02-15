@@ -1278,9 +1278,15 @@ carp_master_down_locked(struct carp_softc *sc, const char *reason)
 
 	CARP_LOCK_ASSERT(sc);
 
+	if (V_carp_allow == 2) {
+		carp_set_state(sc, BACKUP, reason);
+		carp_setrun(sc, 0);
+		return;
+	}
+
 	switch (sc->sc_state) {
 	case BACKUP:
-		carp_set_state(sc, (V_carp_allow != 2) ? MASTER : BACKUP, reason);
+		carp_set_state(sc, MASTER, reason);
 		carp_send_ad_locked(sc);
 #ifdef INET
 		carp_send_arp(sc);
@@ -2127,7 +2133,7 @@ carp_allow_sysctl(SYSCTL_HANDLER_ARGS)
 	if (error || !req->newptr)
 		return (error);
 
-	atomic_swap_int(&V_carp_allow, new);
+	V_carp_allow = new;
 	taskqueue_enqueue(taskqueue_swi, &carp_resetall_task);
 
 	return (0);
