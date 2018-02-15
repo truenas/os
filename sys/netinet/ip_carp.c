@@ -811,12 +811,14 @@ carp_reset(void *ctx __unused, int pending __unused)
 
 	mtx_lock(&carp_mtx);
 	LIST_FOREACH(sc, &carp_list, sc_next)
-		if (sc->sc_state == MASTER && V_carp_allow == 2) {
+		if (sc->sc_state == MASTER) {
 			CARP_LOCK(sc);
 			CURVNET_SET(sc->sc_carpdev->if_vnet);
-			carp_set_state(sc, BACKUP, "resetting state");
-			carp_setrun(sc, 0);
-			carp_delroute(sc);
+			if (V_carp_allow == 2) {
+				carp_set_state(sc, BACKUP, "resetting state");
+				carp_setrun(sc, 0);
+				carp_delroute(sc);
+			}
 			CURVNET_RESTORE();
 			CARP_UNLOCK(sc);
 		}
