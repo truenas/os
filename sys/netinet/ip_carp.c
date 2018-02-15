@@ -210,11 +210,14 @@ static VNET_DEFINE(int, carp_senderr_adj) = CARP_MAXSKEW;
 static VNET_DEFINE(int, carp_ifdown_adj) = CARP_MAXSKEW;
 #define	V_carp_ifdown_adj	VNET(carp_ifdown_adj)
 
+static int carp_allow_sysctl(SYSCTL_HANDLER_ARGS);
 static int carp_demote_adj_sysctl(SYSCTL_HANDLER_ARGS);
 
 SYSCTL_NODE(_net_inet, IPPROTO_CARP,	carp,	CTLFLAG_RW, 0,	"CARP");
-SYSCTL_INT(_net_inet_carp, OID_AUTO, allow, CTLFLAG_VNET | CTLFLAG_RW,
-    &VNET_NAME(carp_allow), 0, "Accept incoming CARP packets");
+SYSCTL_PROC(_net_inet_carp, OID_AUTO, allow,
+CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+    0, 0, carp_allow_sysctl, "I",
+    "Accept incoming CARP packets");
 SYSCTL_INT(_net_inet_carp, OID_AUTO, preempt, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(carp_preempt), 0, "High-priority backup preemption mode");
 SYSCTL_INT(_net_inet_carp, OID_AUTO, log, CTLFLAG_VNET | CTLFLAG_RW,
@@ -312,6 +315,7 @@ static void	carp_addroute(struct carp_softc *);
 static void	carp_ifa_addroute(struct ifaddr *);
 static void	carp_delroute(struct carp_softc *);
 static void	carp_ifa_delroute(struct ifaddr *);
+static void	carp_reset_all(void *, int);
 static void	carp_send_ad_all(void *, int);
 static void	carp_demote_adj(int, char *);
 
@@ -320,6 +324,9 @@ static struct mtx carp_mtx;
 static struct sx carp_sx;
 static struct task carp_sendall_task =
     TASK_INITIALIZER(0, carp_send_ad_all, NULL);
+static struct task carp_resetall_task =
+    TASK_INITIALIZER(0, carp_reset_all, NULL);
+
 
 static void
 carp_hmac_prepare(struct carp_softc *sc)
@@ -798,6 +805,25 @@ carp_prepare_ad(struct mbuf *m, struct carp_softc *sc, struct carp_header *ch)
  * be called directly, but scheduled via taskqueue.
  */
 static void
+carp_reset_all(void *ctx __unused, int pending __unused)
+{
+	struct carp_softc *sc;
+
+	mtx_lock(&carp_mtx);
+	LIST_FOREACH(sc, &carp_list, sc_next)
+		if (sc->sc_state == MASTER) {
+			CARP_LOCK(sc);
+			CURVNET_SET(sc->sc_carpdev->if_vnet);
+			carp_set_state(sc, BACKUP, "resetting state");
+			carp_setrun(sc, 0);
+			carp_delroute(sc);
+			CURVNET_RESTORE();
+			CARP_UNLOCK(sc);
+		}
+	mtx_unlock(&carp_mtx);
+}
+
+static void
 carp_send_ad_all(void *ctx __unused, int pending __unused)
 {
 	struct carp_softc *sc;
@@ -1254,7 +1280,7 @@ carp_master_down_locked(struct carp_softc *sc, const char *reason)
 
 	switch (sc->sc_state) {
 	case BACKUP:
-		carp_set_state(sc, MASTER, reason);
+		carp_set_state(sc, (V_carp_allow != 2) ? MASTER : BACKUP, reason);
 		carp_send_ad_locked(sc);
 #ifdef INET
 		carp_send_arp(sc);
@@ -2091,6 +2117,22 @@ carp_sc_state(struct carp_softc *sc)
 	}
 }
 
+static int
+carp_allow_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	int new, error;
+
+	new = V_carp_allow;
+	error = sysctl_handle_int(oidp, &new, 0, req);
+	if (error || !req->newptr)
+		return (error);
+
+	atomic_swap_int(&V_carp_allow, new);
+	taskqueue_enqueue(taskqueue_swi, &carp_resetall_task);
+
+	return (0);
+}
+
 static void
 carp_demote_adj(int adj, char *reason)
 {
@@ -2174,6 +2216,7 @@ carp_mod_cleanup(void)
 	carp_master_p = NULL;
 	mtx_unlock(&carp_mtx);
 	taskqueue_drain(taskqueue_swi, &carp_sendall_task);
+	taskqueue_drain(taskqueue_swi, &carp_resetall_task);
 	mtx_destroy(&carp_mtx);
 	sx_destroy(&carp_sx);
 }
