@@ -315,7 +315,7 @@ static void	carp_addroute(struct carp_softc *);
 static void	carp_ifa_addroute(struct ifaddr *);
 static void	carp_delroute(struct carp_softc *);
 static void	carp_ifa_delroute(struct ifaddr *);
-static void	carp_reset_all(void *, int);
+static void	carp_reset(void *, int);
 static void	carp_send_ad_all(void *, int);
 static void	carp_demote_adj(int, char *);
 
@@ -324,8 +324,8 @@ static struct mtx carp_mtx;
 static struct sx carp_sx;
 static struct task carp_sendall_task =
     TASK_INITIALIZER(0, carp_send_ad_all, NULL);
-static struct task carp_resetall_task =
-    TASK_INITIALIZER(0, carp_reset_all, NULL);
+static struct task carp_reset_task =
+    TASK_INITIALIZER(0, carp_reset, NULL);
 
 
 static void
@@ -805,13 +805,13 @@ carp_prepare_ad(struct mbuf *m, struct carp_softc *sc, struct carp_header *ch)
  * be called directly, but scheduled via taskqueue.
  */
 static void
-carp_reset_all(void *ctx __unused, int pending __unused)
+carp_reset(void *ctx __unused, int pending __unused)
 {
 	struct carp_softc *sc;
 
 	mtx_lock(&carp_mtx);
 	LIST_FOREACH(sc, &carp_list, sc_next)
-		if (sc->sc_state == MASTER) {
+		if (sc->sc_state == MASTER && V_carp_allow == 2) {
 			CARP_LOCK(sc);
 			CURVNET_SET(sc->sc_carpdev->if_vnet);
 			carp_set_state(sc, BACKUP, "resetting state");
@@ -2134,7 +2134,7 @@ carp_allow_sysctl(SYSCTL_HANDLER_ARGS)
 		return (error);
 
 	V_carp_allow = new;
-	taskqueue_enqueue(taskqueue_swi, &carp_resetall_task);
+	taskqueue_enqueue(taskqueue_swi, &carp_reset_task);
 
 	return (0);
 }
@@ -2222,7 +2222,7 @@ carp_mod_cleanup(void)
 	carp_master_p = NULL;
 	mtx_unlock(&carp_mtx);
 	taskqueue_drain(taskqueue_swi, &carp_sendall_task);
-	taskqueue_drain(taskqueue_swi, &carp_resetall_task);
+	taskqueue_drain(taskqueue_swi, &carp_reset_task);
 	mtx_destroy(&carp_mtx);
 	sx_destroy(&carp_sx);
 }
