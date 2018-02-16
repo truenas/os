@@ -102,6 +102,12 @@ Allow virtual hosts to preempt each other.
 When enabled, a vhid in a backup state would preempt a master that
 is announcing itself with a lower advskew.
 Disabled by default.
+.It Va net.inet.carp.dscp
+Set DSCP value in carp packet
+When enabled, it sets DSCP value CS7 for network control in outgoing
+carp packets instead of TOS. TOS values were deprecated and replaced
+by DSCP in 1998.
+Disabled by default.
 .It Va net.inet.carp.log
 Determines what events relating to
 .Nm
