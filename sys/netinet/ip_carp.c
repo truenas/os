@@ -190,6 +190,10 @@ static int proto_reg[] = {-1, -1};
 static VNET_DEFINE(int, carp_allow) = 1;
 #define	V_carp_allow	VNET(carp_allow)
 
+/* Set DSCP in outgoing CARP packets. */
+static VNET_DEFINE(int, carp_dscp) = 0;
+#define	V_carp_dscp	VNET(carp_dscp)
+
 /* Preempt slower nodes. */
 static VNET_DEFINE(int, carp_preempt) = 0;
 #define	V_carp_preempt	VNET(carp_preempt)
@@ -217,6 +221,8 @@ SYSCTL_NODE(_net_inet, IPPROTO_CARP,	carp,	CTLFLAG_RW, 0,	"CARP");
 SYSCTL_PROC(_net_inet_carp, OID_AUTO, allow,
     CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW, 0, 0, carp_allow_sysctl, "I",
     "Accept incoming CARP packets");
+SYSCTL_INT(_net_inet_carp, OID_AUTO, dscp, CTLFLAG_VNET | CTLFLAG_RW,
+    &VNET_NAME(carp_dscp), 0, "Use DSCP CS7 for carp packets");
 SYSCTL_INT(_net_inet_carp, OID_AUTO, preempt, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(carp_preempt), 0, "High-priority backup preemption mode");
 SYSCTL_INT(_net_inet_carp, OID_AUTO, log, CTLFLAG_VNET | CTLFLAG_RW,
@@ -821,11 +827,16 @@ carp_send_ad_locked(struct carp_softc *sc)
 #ifdef INET
 	if (sc->sc_naddrs) {
 		struct ip *ip;
-
+		uint8_t ip_tos = IPTOS_DSCP_CS7;
+		
+		
 		m = m_gethdr(M_NOWAIT, MT_DATA);
 		if (m == NULL) {
 			CARPSTATS_INC(carps_onomem);
 			goto resched;
+		}
+                if (!V_carp_dscp) {
+			ip_tos = IPTOS_LOWDELAY;
 		}
 		len = sizeof(*ip) + sizeof(ch);
 		m->m_pkthdr.len = len;
@@ -836,7 +847,7 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip = mtod(m, struct ip *);
 		ip->ip_v = IPVERSION;
 		ip->ip_hl = sizeof(*ip) >> 2;
-		ip->ip_tos = IPTOS_LOWDELAY;
+		ip->ip_tos = ip_tos;
 		ip->ip_len = htons(len);
 		ip->ip_off = htons(IP_DF);
 		ip->ip_ttl = CARP_DFLTTL;
@@ -888,6 +899,13 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip6 = mtod(m, struct ip6_hdr *);
 		bzero(ip6, sizeof(*ip6));
 		ip6->ip6_vfc |= IPV6_VERSION;
+                if (!V_carp_dscp) {
+			uint8_t LEN_FLOW_LABEL = 20;
+			/* Traffic class isn't defined in ip6 struct instead  
+			 * it gets offset into flowid field */
+			uint8_t ip_tos = IPTOS_LOWDELAY << LEN_FLOW_LABEL;
+                	ip6->ip6_flow |= ip_tos;
+		}
 		ip6->ip6_hlim = CARP_DFLTTL;
 		ip6->ip6_nxt = IPPROTO_CARP;
 		bzero(&sa, sizeof(sa));
