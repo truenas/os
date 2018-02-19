@@ -903,7 +903,7 @@ carp_send_ad_locked(struct carp_softc *sc)
 			uint8_t LEN_FLOW_LABEL = 20;
 			/* Traffic class isn't defined in ip6 struct instead  
 			 * it gets offset into flowid field */
-			uint8_t ip_tos = IPTOS_LOWDELAY << LEN_FLOW_LABEL;
+			uint8_t ip_tos = IPTOS_DSCP_CS7 << LEN_FLOW_LABEL;
                 	ip6->ip6_flow |= ip_tos;
 		}
 		ip6->ip6_hlim = CARP_DFLTTL;
