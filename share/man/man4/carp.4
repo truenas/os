@@ -26,7 +26,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd February 21, 2013
+.Dd February 23, 2018
 .Dt CARP 4
 .Os
 .Sh NAME
@@ -104,9 +104,10 @@ is announcing itself with a lower advskew.
 Disabled by default.
 .It Va net.inet.carp.dscp
 Set DSCP value in carp packet
-When enabled, it sets DSCP value CS7 for network control in outgoing
-carp packets instead of TOS. TOS values were deprecated and replaced
-by DSCP in 1998.
+When enabled, set Class of Service to CS7 (network control) in outgoing
+carp packets.
+When disabled, Class of Service is set to TOS LOW_DELAY.
+TOS values were deprecated and replaced by DSCP in 1998.
 Disabled by default.
 .It Va net.inet.carp.log
 Determines what events relating to
