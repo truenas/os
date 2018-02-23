@@ -897,7 +897,7 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip6 = mtod(m, struct ip6_hdr *);
 		bzero(ip6, sizeof(*ip6));
 		ip6->ip6_vfc |= IPV6_VERSION;
-                if (!V_carp_dscp) {
+                if (V_carp_dscp) {
 			uint8_t LEN_FLOW_LABEL = 20;
 			/* Traffic class isn't defined in ip6 struct instead  
 			 * it gets offset into flowid field */
