@@ -4452,6 +4452,45 @@ vfs_bio_bzero_buf(struct buf *bp, int base, int size)
 }
 
 /*
+ * Update buffer flags based on I/O request parameters, optionally releasing the
+ * buffer.  If it's VMIO or direct I/O, the buffer pages are released to the VM,
+ * where they may be placed on a page queue (VMIO) or freed immediately (direct
+ * I/O).  Otherwise the buffer is released to the cache.
+ */
+static void
+b_io_dismiss(struct buf *bp, int ioflag, bool release)
+{
+
+	KASSERT((ioflag & IO_NOREUSE) == 0 || (ioflag & IO_VMIO) != 0,
+	    ("buf %p non-VMIO noreuse", bp));
+
+	if ((ioflag & IO_DIRECT) != 0)
+		bp->b_flags |= B_DIRECT;
+	if ((ioflag & (IO_VMIO | IO_DIRECT)) != 0 && LIST_EMPTY(&bp->b_dep)) {
+		bp->b_flags |= B_RELBUF;
+		if ((ioflag & IO_NOREUSE) != 0)
+			bp->b_flags |= B_NOREUSE;
+		if (release)
+			brelse(bp);
+	} else if (release)
+		bqrelse(bp);
+}
+
+void
+vfs_bio_brelse(struct buf *bp, int ioflag)
+{
+
+	b_io_dismiss(bp, ioflag, true);
+}
+
+void
+vfs_bio_set_flags(struct buf *bp, int ioflag)
+{
+
+	b_io_dismiss(bp, ioflag, false);
+}
+
+/*
  * vm_hold_load_pages and vm_hold_free_pages get pages into
  * a buffers address space.  The pages are anonymous and are
  * not associated with a file object.
@@ -4764,7 +4803,14 @@ vfs_bio_getpages(struct vnode *vp, vm_page_t *ma, int count,
 	la = IDX_TO_OFF(ma[count - 1]->pindex);
 	if (la >= object->un_pager.vnp.vnp_size)
 		return (VM_PAGER_BAD);
-	lpart = la + PAGE_SIZE > object->un_pager.vnp.vnp_size;
+
+	/*
+	 * Change the meaning of la from where the last requested page starts
+	 * to where it ends, because that's the end of the requested region
+	 * and the start of the potential read-ahead region.
+	 */
+	la += PAGE_SIZE;
+	lpart = la > object->un_pager.vnp.vnp_size;
 	bo_bs = get_blksize(vp, get_lblkno(vp, IDX_TO_OFF(ma[0]->pindex)));
 
 	/*
