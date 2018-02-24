@@ -5859,7 +5859,7 @@ arc_read_done(zio_t *zio)
 
 		int error = arc_buf_alloc_impl(hdr, zio->io_spa,
 		    acb->acb_dsobj, acb->acb_private, acb->acb_encrypted,
-		    acb->acb_compressed, acb->acb_noauth, zio->io_error,
+		    acb->acb_compressed, acb->acb_noauth, B_TRUE,
 		    &acb->acb_buf);
 
 		/*
