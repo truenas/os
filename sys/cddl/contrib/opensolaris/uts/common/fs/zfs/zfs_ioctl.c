@@ -207,6 +207,9 @@
 CTASSERT(sizeof(zfs_cmd_t) < IOCPARM_MAX);
 static struct cdev *zfsdev;
 
+static void icp_init(void);
+static void icp_fini(void);
+
 extern void zfs_init(void);
 extern void zfs_fini(void);
 
@@ -7052,6 +7055,7 @@ _init(void)
 		zvol_fini();
 		zfs_fini();
 		spa_fini();
+		icp_fini();
 		return (error);
 	}
 
@@ -7128,6 +7132,9 @@ zfs__init(void)
 
 	mutex_init(&zfs_share_lock, NULL, MUTEX_DEFAULT, NULL);
 
+	// Crypto moodule initialization
+	(void)icp_init();
+	
 	spa_init(FREAD | FWRITE);
 	zfs_init();
 	zvol_init();
@@ -7205,6 +7212,69 @@ zfs_modevent(module_t mod, int type, void *unused __unused)
 		break;
 	}
 	return (EOPNOTSUPP);
+}
+
+extern void mod_hash_init(void);
+extern void kcf_init_mech_tabs(void);
+extern void kcf_prov_tab_init(void);
+extern void kcf_sched_init(void);
+extern void aes_mod_init(void);
+//extern void edonr_mod_init(void);
+extern void sha1_mod_init(void);
+extern void sha2_mod_init(void);
+//extern void skein_mod_init(void);
+
+//extern void skein_mod_fini(void);
+extern void sha2_mod_fini(void);
+extern void sha1_mod_fini(void);
+//extern void edonr_mod_fini(voiod);
+extern void aes_mod_fini(void);
+extern void kcf_sched_destroy(void);
+extern void kcf_prov_tab_destroy(void);
+extern void kcf_destroy_mech_tabs(void);
+extern void mod_hash_fini(void);
+
+static void
+icp_fini(void)
+{
+//	skein_mod_fini();
+	sha2_mod_fini();
+	sha1_mod_fini();
+//	edonr_mod_fini();
+	aes_mod_fini();
+	kcf_sched_destroy();
+	kcf_prov_tab_destroy();
+	kcf_destroy_mech_tabs();
+	mod_hash_fini();
+}
+
+/* roughly equivalent to kcf.c: _init() */
+static void
+icp_init(void)
+{
+	/* initialize the mod hash module */
+	mod_hash_init();
+
+	/* initialize the mechanisms tables supported out-of-the-box */
+	kcf_init_mech_tabs();
+
+	/* initialize the providers tables */
+	kcf_prov_tab_init();
+
+	/*
+	 * Initialize scheduling structures. Note that this does NOT
+	 * start any threads since it might not be safe to do so.
+	 */
+	kcf_sched_init();
+
+	/* initialize algorithms */
+	aes_mod_init();
+//	edonr_mod_init();
+	sha1_mod_init();
+	sha2_mod_init();
+//	skein_mod_init();
+
+	return;
 }
 
 static moduledata_t zfs_mod = {
