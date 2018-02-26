@@ -191,7 +191,7 @@ static VNET_DEFINE(int, carp_allow) = 1;
 #define	V_carp_allow	VNET(carp_allow)
 
 /* Set DSCP in outgoing CARP packets. */
-static VNET_DEFINE(int, carp_dscp) = 0;
+static VNET_DEFINE(int, carp_dscp) = 1;
 #define	V_carp_dscp	VNET(carp_dscp)
 
 /* Preempt slower nodes. */
@@ -825,16 +825,11 @@ carp_send_ad_locked(struct carp_softc *sc)
 #ifdef INET
 	if (sc->sc_naddrs) {
 		struct ip *ip;
-		uint8_t ip_tos = IPTOS_DSCP_CS7;
-		
-		
+
 		m = m_gethdr(M_NOWAIT, MT_DATA);
 		if (m == NULL) {
 			CARPSTATS_INC(carps_onomem);
 			goto resched;
-		}
-                if (!V_carp_dscp) {
-			ip_tos = IPTOS_LOWDELAY;
 		}
 		len = sizeof(*ip) + sizeof(ch);
 		m->m_pkthdr.len = len;
@@ -845,7 +840,12 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip = mtod(m, struct ip *);
 		ip->ip_v = IPVERSION;
 		ip->ip_hl = sizeof(*ip) >> 2;
-		ip->ip_tos = ip_tos;
+		if (V_carp_dscp) {
+			ip->ip_tos = IPTOS_DSCP_CS7;
+		}
+		else {
+			ip->ip_tos = IPTOS_LOWDELAY;
+		}	
 		ip->ip_len = htons(len);
 		ip->ip_off = htons(IP_DF);
 		ip->ip_ttl = CARP_DFLTTL;
@@ -898,11 +898,10 @@ carp_send_ad_locked(struct carp_softc *sc)
 		bzero(ip6, sizeof(*ip6));
 		ip6->ip6_vfc |= IPV6_VERSION;
                 if (V_carp_dscp) {
-			uint8_t LEN_FLOW_LABEL = 20;
 			/* Traffic class isn't defined in ip6 struct instead  
 			 * it gets offset into flowid field */
-			uint32_t ip_tos = IPTOS_DSCP_CS7 << LEN_FLOW_LABEL;
-                	ip6->ip6_flow |= ip_tos;
+			uint8_t LEN_FLOW_LABEL = 20;
+                	ip6->ip6_flow |= IPTOS_DSCP_CS7 << LEN_FLOW_LABEL;
 		}
 		ip6->ip6_hlim = CARP_DFLTTL;
 		ip6->ip6_nxt = IPPROTO_CARP;
