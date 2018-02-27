@@ -842,8 +842,7 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip->ip_hl = sizeof(*ip) >> 2;
 		if (V_carp_dscp) {
 			ip->ip_tos = IPTOS_DSCP_CS7;
-		}
-		else {
+		} else {
 			ip->ip_tos = IPTOS_LOWDELAY;
 		}	
 		ip->ip_len = htons(len);
@@ -900,8 +899,7 @@ carp_send_ad_locked(struct carp_softc *sc)
                 if (V_carp_dscp) {
 			/* Traffic class isn't defined in ip6 struct instead  
 			 * it gets offset into flowid field */
-			uint8_t LEN_FLOW_LABEL = 20;
-                	ip6->ip6_flow |= IPTOS_DSCP_CS7 << LEN_FLOW_LABEL;
+                	ip6->ip6_flow |= htonl(IPTOS_DSCP_CS7 << IPV6_FLOWLABEL_LEN);
 		}
 		ip6->ip6_hlim = CARP_DFLTTL;
 		ip6->ip6_nxt = IPPROTO_CARP;
