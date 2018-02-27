@@ -40,7 +40,11 @@
 #include <sys/zmod.h>
 #include <sys/utsname.h>
 #include <sys/systeminfo.h>
-
+#include <sys/crypto/common.h>
+#include <sys/crypto/impl.h>
+#include <sys/crypto/api.h>
+#include <sys/sha2.h>
+#include <crypto/aes/aes_impl.h>
 /*
  * Emulation of kernel services in userland.
  */
@@ -873,37 +877,6 @@ highbit64(uint64_t i)
 }
 #endif
 
-static int random_fd = -1, urandom_fd = -1;
-
-static int
-random_get_bytes_common(uint8_t *ptr, size_t len, int fd)
-{
-	size_t resid = len;
-	ssize_t bytes;
-
-	ASSERT(fd != -1);
-
-	while (resid != 0) {
-		bytes = read(fd, ptr, resid);
-		ASSERT3S(bytes, >=, 0);
-		ptr += bytes;
-		resid -= bytes;
-	}
-
-	return (0);
-}
-
-int
-random_get_bytes(uint8_t *ptr, size_t len)
-{
-	return (random_get_bytes_common(ptr, len, random_fd));
-}
-
-int
-random_get_pseudo_bytes(uint8_t *ptr, size_t len)
-{
-	return (random_get_bytes_common(ptr, len, urandom_fd));
-}
 
 int
 ddi_strtoul(const char *hw_serial, char **nptr, int base, unsigned long *result)
@@ -979,9 +952,6 @@ kernel_init(int mode)
 	(void) snprintf(hw_serial, sizeof (hw_serial), "%lu",
 	    (mode & FWRITE) ? (unsigned long)gethostid() : 0);
 
-	VERIFY((random_fd = open("/dev/random", O_RDONLY)) != -1);
-	VERIFY((urandom_fd = open("/dev/urandom", O_RDONLY)) != -1);
-
 	system_taskq_init();
 
 #ifdef illumos
@@ -1000,11 +970,6 @@ kernel_fini(void)
 
 	system_taskq_fini();
 
-	close(random_fd);
-	close(urandom_fd);
-
-	random_fd = -1;
-	urandom_fd = -1;
 }
 
 int
@@ -1211,4 +1176,108 @@ geterror(struct buf *bp)
 	}
 	return (error);
 }
-#endif
+#endif /* illumos */
+
+int
+crypto_create_ctx_template(crypto_mechanism_t *mech,
+    crypto_key_t *key, crypto_ctx_template_t *tmpl, int kmflag)
+{
+	return (NULL);
+}
+
+crypto_mech_type_t
+crypto_mech2id(crypto_mech_name_t name)
+{
+	return (CRYPTO_MECH_INVALID);
+}
+
+int
+crypto_mac(crypto_mechanism_t *mech, crypto_data_t *data,
+    crypto_key_t *key, crypto_ctx_template_t impl,
+    crypto_data_t *mac, crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+int
+crypto_encrypt(crypto_mechanism_t *mech, crypto_data_t *plaintext,
+    crypto_key_t *key, crypto_ctx_template_t tmpl,
+    crypto_data_t *ciphertext, crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+/* This could probably be a weak reference */
+int
+crypto_decrypt(crypto_mechanism_t *mech, crypto_data_t *plaintext,
+    crypto_key_t *key, crypto_ctx_template_t tmpl,
+    crypto_data_t *ciphertext, crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+
+int
+crypto_digest_final(crypto_context_t context, crypto_data_t *digest,
+    crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+int
+crypto_digest_update(crypto_context_t context, crypto_data_t *data,
+    crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+int
+crypto_digest_init(crypto_mechanism_t *mech, crypto_context_t *ctxp,
+    crypto_call_req_t  *crq)
+{
+	return (0);
+}
+
+void
+crypto_destroy_ctx_template(crypto_ctx_template_t tmpl)
+{
+}
+
+extern int crypto_mac_init(crypto_mechanism_t *mech, crypto_key_t *key,
+	crypto_ctx_template_t tmpl, crypto_context_t *ctxp,
+    crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+extern int crypto_mac_update(crypto_context_t ctx, crypto_data_t *data,
+	crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+extern int crypto_mac_final(crypto_context_t ctx, crypto_data_t *data,
+	crypto_call_req_t *cr)
+{
+	return (0);
+}
+
+#ifdef __FreeBSD__
+void
+SHA2Init(uint64_t mech, SHA2_CTX *ctx)
+{
+	abort();
+}
+
+void
+SHA2Final(void *buf, SHA2_CTX *ctx)
+{
+	abort();
+}
+
+void
+SHA2Update(SHA2_CTX *ctx, const void *bytes, size_t len)
+{
+	abort();
+}
+#endif /* __FreeBSD__ */
