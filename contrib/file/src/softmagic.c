@@ -32,7 +32,7 @@
 #include "file.h"
 
 #ifndef	lint
-FILE_RCSID("@(#)$File: softmagic.c,v 1.249 2017/06/19 18:30:25 christos Exp $")
+FILE_RCSID("@(#)$File: softmagic.c,v 1.238 2016/10/24 18:02:17 christos Exp $")
 #endif	/* lint */
 
 #include "magic.h"
@@ -192,7 +192,6 @@ flush:
 			while (magindex < nmagic - 1 &&
 			    magic[magindex + 1].cont_level != 0)
 				magindex++;
-			cont_level = 0;
 			continue; /* Skip to next top-level test*/
 		}
 
@@ -371,7 +370,6 @@ flush:
 				case -1:
 				case 0:
 					flush = 1;
-					cont_level--;
 					break;
 				default:
 					break;
@@ -1019,8 +1017,9 @@ private int
 mconvert(struct magic_set *ms, struct magic *m, int flip)
 {
 	union VALUETYPE *p = &ms->ms_value;
+	uint8_t type;
 
-	switch (cvt_flip(m->type, flip)) {
+	switch (type = cvt_flip(m->type, flip)) {
 	case FILE_BYTE:
 		if (cvt_8(p, m) == -1)
 			goto out;
@@ -1185,7 +1184,7 @@ mcopy(struct magic_set *ms, union VALUETYPE *p, int type, int indir,
 		case FILE_DER:
 		case FILE_SEARCH:
 			if (offset > nbytes)
-				offset = CAST(uint32_t, nbytes);
+				offset = nbytes;
 			ms->search.s = RCAST(const char *, s) + offset;
 			ms->search.s_len = nbytes - offset;
 			ms->search.offset = offset;
@@ -1199,7 +1198,7 @@ mcopy(struct magic_set *ms, union VALUETYPE *p, int type, int indir,
 			const char *end;
 			size_t lines, linecnt, bytecnt;
 
-			if (s == NULL || nbytes < offset) {
+			if (s == NULL) {
 				ms->search.s_len = 0;
 				ms->search.s = NULL;
 				return 0;
@@ -1261,8 +1260,7 @@ mcopy(struct magic_set *ms, union VALUETYPE *p, int type, int indir,
 				if (*dst == '\0') {
 					if (type == FILE_BESTRING16 ?
 					    *(src - 1) != '\0' :
-					    ((src + 1 < esrc) &&
-					    *(src + 1) != '\0'))
+					    *(src + 1) != '\0')
 						*dst = ' ';
 				}
 			}
@@ -1367,7 +1365,7 @@ mget(struct magic_set *ms, const unsigned char *s, struct magic *m,
 		return -1;
 
 	if ((ms->flags & MAGIC_DEBUG) != 0) {
-		fprintf(stderr, "mget(type=%d, flag=%#x, offset=%u, o=%"
+		fprintf(stderr, "mget(type=%d, flag=%x, offset=%u, o=%"
 		    SIZE_T_FORMAT "u, " "nbytes=%" SIZE_T_FORMAT
 		    "u, il=%hu, nc=%hu)\n",
 		    m->type, m->flag, offset, o, nbytes,
@@ -1634,7 +1632,6 @@ file_strncmp(const char *s1, const char *s2, size_t len, uint32_t flags)
 	 */
 	const unsigned char *a = (const unsigned char *)s1;
 	const unsigned char *b = (const unsigned char *)s2;
-	const unsigned char *eb = b + len;
 	uint64_t v;
 
 	/*
@@ -1649,10 +1646,6 @@ file_strncmp(const char *s1, const char *s2, size_t len, uint32_t flags)
 	}
 	else { /* combine the others */
 		while (len-- > 0) {
-			if (b >= eb) {
-				v = 1;
-				break;
-			}
 			if ((flags & STRING_IGNORE_LOWERCASE) &&
 			    islower(*a)) {
 				if ((v = tolower(*b++) - *a++) != '\0')
@@ -1668,7 +1661,7 @@ file_strncmp(const char *s1, const char *s2, size_t len, uint32_t flags)
 				a++;
 				if (isspace(*b++)) {
 					if (!isspace(*a))
-						while (b < eb && isspace(*b))
+						while (isspace(*b))
 							b++;
 				}
 				else {
@@ -1679,7 +1672,7 @@ file_strncmp(const char *s1, const char *s2, size_t len, uint32_t flags)
 			else if ((flags & STRING_COMPACT_OPTIONAL_WHITESPACE) &&
 			    isspace(*a)) {
 				a++;
-				while (b < eb && isspace(*b))
+				while (isspace(*b))
 					b++;
 			}
 			else {
@@ -1850,13 +1843,13 @@ magiccheck(struct magic_set *ms, struct magic *m)
 
 		for (idx = 0; m->str_range == 0 || idx < m->str_range; idx++) {
 			if (slen + idx > ms->search.s_len)
-				return 0;
+				break;
 
 			v = file_strncmp(m->value.s, ms->search.s + idx, slen,
 			    m->str_flags);
 			if (v == 0) {	/* found match */
 				ms->search.offset += idx;
-				ms->search.rm_len = ms->search.s_len - idx;
+				ms->search.rm_len = m->str_range - idx;
 				break;
 			}
 		}
@@ -1894,7 +1887,7 @@ magiccheck(struct magic_set *ms, struct magic *m)
 			    copy[--slen] = '\0';
 			    search = copy;
 			} else {
-			    search = CCAST(char *, "");
+			    search = ms->search.s;
 			    copy = NULL;
 			}
 			rc = file_regexec(&rx, (const char *)search,

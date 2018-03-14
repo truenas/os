@@ -328,9 +328,9 @@ if (*dst == old) {
 .Ed
 .El
 .Pp
-Some architectures do not implement the
+The
 .Fn atomic_cmpset
-functions for the types
+functions are not implemented for the types
 .Dq Li char ,
 .Dq Li short ,
 .Dq Li 8 ,
@@ -367,9 +367,9 @@ function also returns
 despite
 .Dl *old == *dst .
 .Pp
-Some architectures do not implement the
+The
 .Fn atomic_fcmpset
-functions for the types
+functions are not implemented for the types
 .Dq Li char ,
 .Dq Li short ,
 .Dq Li 8 ,

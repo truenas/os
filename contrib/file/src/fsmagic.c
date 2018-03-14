@@ -32,7 +32,7 @@
 #include "file.h"
 
 #ifndef	lint
-FILE_RCSID("@(#)$File: fsmagic.c,v 1.77 2017/05/24 19:17:50 christos Exp $")
+FILE_RCSID("@(#)$File: fsmagic.c,v 1.76 2015/04/09 20:01:41 christos Exp $")
 #endif	/* lint */
 
 #include "magic.h"
@@ -104,13 +104,14 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 {
 	int ret, did = 0;
 	int mime = ms->flags & MAGIC_MIME;
-	int silent = ms->flags & (MAGIC_APPLE|MAGIC_EXTENSION);
 #ifdef	S_IFLNK
 	char buf[BUFSIZ+4];
 	ssize_t nch;
 	struct stat tstatbuf;
 #endif
 
+	if (ms->flags & (MAGIC_APPLE|MAGIC_EXTENSION))
+		return 0;
 	if (fn == NULL)
 		return 0;
 
@@ -167,7 +168,7 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 	}
 
 	ret = 1;
-	if (!mime && !silent) {
+	if (!mime) {
 #ifdef S_ISUID
 		if (sb->st_mode & S_ISUID)
 			if (file_printf(ms, "%ssetuid", COMMA) == -1)
@@ -190,7 +191,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		if (mime) {
 			if (handle_mime(ms, mime, "directory") == -1)
 				return -1;
-		} else if (silent) {
 		} else if (file_printf(ms, "%sdirectory", COMMA) == -1)
 			return -1;
 		break;
@@ -208,7 +208,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		if (mime) {
 			if (handle_mime(ms, mime, "chardevice") == -1)
 				return -1;
-		} else if (silent) {
 		} else {
 #ifdef HAVE_STRUCT_STAT_ST_RDEV
 # ifdef dv_unit
@@ -243,7 +242,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		if (mime) {
 			if (handle_mime(ms, mime, "blockdevice") == -1)
 				return -1;
-		} else if (silent) {
 		} else {
 #ifdef HAVE_STRUCT_STAT_ST_RDEV
 # ifdef dv_unit
@@ -272,7 +270,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		if (mime) {
 			if (handle_mime(ms, mime, "fifo") == -1)
 				return -1;
-		} else if (silent) {
 		} else if (file_printf(ms, "%sfifo (named pipe)", COMMA) == -1)
 			return -1;
 		break;
@@ -282,7 +279,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		if (mime) {
 			if (handle_mime(ms, mime, "door") == -1)
 				return -1;
-		} else if (silent) {
 		} else if (file_printf(ms, "%sdoor", COMMA) == -1)
 			return -1;
 		break;
@@ -298,7 +294,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 			if (mime) {
 				if (handle_mime(ms, mime, "symlink") == -1)
 					return -1;
-			} else if (silent) {
 			} else if (file_printf(ms,
 			    "%sunreadable symlink `%s' (%s)", COMMA, fn,
 			    strerror(errno)) == -1)
@@ -328,7 +323,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 						if (handle_mime(ms, mime,
 						    "x-path-too-long") == -1)
 							return -1;
-					} else if (silent) {
 					} else if (file_printf(ms,
 					    "%spath too long: `%s'", COMMA,
 					    fn) == -1)
@@ -358,7 +352,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 			if (mime) {
 				if (handle_mime(ms, mime, "symlink") == -1)
 					return -1;
-			} else if (silent) {
 			} else if (file_printf(ms, "%ssymbolic link to %s",
 			    COMMA, buf) == -1)
 				return -1;
@@ -371,7 +364,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		if (mime) {
 			if (handle_mime(ms, mime, "socket") == -1)
 				return -1;
-		} else if (silent) {
 		} else if (file_printf(ms, "%ssocket", COMMA) == -1)
 			return -1;
 		break;
@@ -394,7 +386,6 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 			if (mime) {
 				if (handle_mime(ms, mime, "x-empty") == -1)
 					return -1;
-			} else if (silent) {
 			} else if (file_printf(ms, "%sempty", COMMA) == -1)
 				return -1;
 			break;
@@ -408,7 +399,7 @@ file_fsmagic(struct magic_set *ms, const char *fn, struct stat *sb)
 		/*NOTREACHED*/
 	}
 
-	if (!silent && !mime && did && ret == 0) {
+	if (!mime && did && ret == 0) {
 	    if (file_printf(ms, " ") == -1)
 		    return -1;
 	}

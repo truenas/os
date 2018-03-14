@@ -1,14 +1,12 @@
 check_PROGRAMS = test
 test_LDADD = $(top_builddir)/src/libmagic.la
-test_CPPFLAGS = -I$(top_builddir)/src
+test_CPPFLAGS = -I$(top_srcdir)/src
 
 EXTRA_DIST = \
 escapevel.result \
 escapevel.testfile \
 gedcom.result \
 gedcom.testfile \
-hddrawcopytool.result \
-hddrawcopytool.testfile \
 issue311docx.result \
 issue311docx.testfile
 

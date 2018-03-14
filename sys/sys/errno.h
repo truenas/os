@@ -38,7 +38,7 @@
 #ifndef _SYS_ERRNO_H_
 #define _SYS_ERRNO_H_
 
-#if !defined(_KERNEL) && !defined(_STANDALONE)
+#ifndef _KERNEL
 #include <sys/cdefs.h>
 __BEGIN_DECLS
 int *	__error(void);

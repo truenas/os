@@ -175,10 +175,10 @@ vm_paging_target(void)
  * Returns TRUE if the pagedaemon needs to be woken up.
  */
 static inline int
-vm_paging_needed(u_int free_count)
+vm_paging_needed(void)
 {
 
-	return (free_count < vm_pageout_wakeup_thresh);
+	return (vm_cnt.v_free_count < vm_pageout_wakeup_thresh);
 }
 
 /*

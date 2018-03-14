@@ -136,7 +136,7 @@ struct trapframe;
 
 /*
  * The following data structure holds per-cpu data, and is placed just
- * above the top of the space used for the NMI and MC# stacks.
+ * above the top of the space used for the NMI stack.
  */
 struct nmi_pcpu {
 	register_t	np_pcpu;

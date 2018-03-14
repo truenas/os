@@ -216,7 +216,7 @@ crlookup(const char *devname)
 const char *
 crfind(int crid)
 {
-	static struct crypt_find_op find;
+	struct crypt_find_op find;
 
 	bzero(&find, sizeof(find));
 	find.crid = crid;
@@ -252,7 +252,7 @@ runtest(struct alg *alg, int count, int size, u_long cmd, struct timeval *tv)
 {
 	int i, fd = crget();
 	struct timeval start, stop, dt;
-	char *cleartext, *ciphertext, *originaltext, *key;
+	char *cleartext, *ciphertext, *originaltext;
 	struct session2_op sop;
 	struct crypt_op cop;
 	char iv[EALG_MAX_BLOCK_LEN];
@@ -260,21 +260,19 @@ runtest(struct alg *alg, int count, int size, u_long cmd, struct timeval *tv)
 	bzero(&sop, sizeof(sop));
 	if (!alg->ishash) {
 		sop.keylen = (alg->minkeylen + alg->maxkeylen)/2;
-		key = (char *) malloc(sop.keylen);
-		if (key == NULL)
+		sop.key = (char *) malloc(sop.keylen);
+		if (sop.key == NULL)
 			err(1, "malloc (key)");
 		for (i = 0; i < sop.keylen; i++)
-			key[i] = rdigit();
-		sop.key = key;
+			sop.key[i] = rdigit();
 		sop.cipher = alg->code;
 	} else {
 		sop.mackeylen = (alg->minkeylen + alg->maxkeylen)/2;
-		key = (char *) malloc(sop.mackeylen);
-		if (key == NULL)
+		sop.mackey = (char *) malloc(sop.mackeylen);
+		if (sop.mackey == NULL)
 			err(1, "malloc (mac)");
 		for (i = 0; i < sop.mackeylen; i++)
-			key[i] = rdigit();
-		sop.mackey = key;
+			sop.mackey[i] = rdigit();
 		sop.mac = alg->code;
 	}
 	sop.crid = crid;
