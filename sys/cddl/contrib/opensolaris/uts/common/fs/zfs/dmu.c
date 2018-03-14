@@ -830,8 +830,11 @@ dmu_free_long_range_impl(objset_t *os, dnode_t *dn, uint64_t offset,
 
 			while (dr != NULL && dr->dr_txg > tx->tx_txg)
 				dr = dr->dr_next;
-			if (dr != NULL && dr->dr_txg == tx->tx_txg)
+			if (dr != NULL && dr->dr_txg == tx->tx_txg) {
 				dr->dt.dl.dr_raw = B_TRUE;
+				dn->dn_objset->os_next_write_raw
+				    [tx->tx_txg & TXG_MASK] = B_TRUE;
+			}
 		}
 
 		dmu_tx_commit(tx);
@@ -1622,29 +1625,39 @@ dmu_return_arcbuf(arc_buf_t *buf)
 	arc_buf_destroy(buf, FTAG);
 }
 
-void
-dmu_convert_to_raw(dmu_buf_t *handle, boolean_t byteorder, const uint8_t *salt,
-    const uint8_t *iv, const uint8_t *mac, dmu_tx_t *tx)
+int
+dmu_convert_mdn_block_to_raw(objset_t *os, uint64_t firstobj,
+    boolean_t byteorder, const uint8_t *salt, const uint8_t *iv,
+    const uint8_t *mac, dmu_tx_t *tx)
 {
-	dmu_object_type_t type;
-	dmu_buf_impl_t *db = (dmu_buf_impl_t *)handle;
-	uint64_t dsobj = dmu_objset_id(db->db_objset);
+	int ret;
+	dmu_buf_t *handle = NULL;
+	dmu_buf_impl_t *db = NULL;
+	uint64_t offset = firstobj * DNODE_SIZE;
+	uint64_t dsobj = dmu_objset_id(os);
 
-	ASSERT3P(db->db_buf, !=, NULL);
-	ASSERT3U(dsobj, !=, 0);
+	ret = dmu_buf_hold_by_dnode(DMU_META_DNODE(os), offset, FTAG, &handle,
+	    DMU_READ_PREFETCH | DMU_READ_NO_DECRYPT);
+	if (ret != 0)
+		return (ret);
 
 	dmu_buf_will_change_crypt_params(handle, tx);
 
-	DB_DNODE_ENTER(db);
-	type = DB_DNODE(db)->dn_type;
-	DB_DNODE_EXIT(db);
+	db = (dmu_buf_impl_t *)handle;
+	ASSERT3P(db->db_buf, !=, NULL);
+	ASSERT3U(dsobj, !=, 0);
 
 	/*
 	 * This technically violates the assumption the dmu code makes
 	 * that dnode blocks are only released in syncing context.
 	 */
 	(void) arc_release(db->db_buf, db);
-	arc_convert_to_raw(db->db_buf, dsobj, byteorder, type, salt, iv, mac);
+	arc_convert_to_raw(db->db_buf, dsobj, byteorder, DMU_OT_DNODE,
+	    salt, iv, mac);
+
+	dmu_buf_rele(handle, FTAG);
+
+	return (0);
 }
 
 void
@@ -2193,10 +2206,6 @@ dmu_object_dirty_raw(objset_t *os, uint64_t object, dmu_tx_t *tx)
 	return (err);
 }
 
-int zfs_mdcomp_disable = 0;
-SYSCTL_INT(_vfs_zfs, OID_AUTO, mdcomp_disable, CTLFLAG_RWTUN,
-    &zfs_mdcomp_disable, 0, "Disable metadata compression");
-
 /*
  * When the "redundant_metadata" property is set to "most", only indirect
  * blocks of this level and higher will have an additional ditto block.
@@ -2226,16 +2235,12 @@ dmu_write_policy(objset_t *os, dnode_t *dn, int level, int wp, zio_prop_t *zp)
 	 *	 3. all other level 0 blocks
 	 */
 	if (ismd) {
-		if (zfs_mdcomp_disable) {
-			compress = ZIO_COMPRESS_EMPTY;
-		} else {
-			/*
-			 * XXX -- we should design a compression algorithm
-			 * that specializes in arrays of bps.
-			 */
-			compress = zio_compress_select(os->os_spa,
-			    ZIO_COMPRESS_ON, ZIO_COMPRESS_ON);
-		}
+		/*
+		 * XXX -- we should design a compression algorithm
+		 * that specializes in arrays of bps.
+		 */
+		compress = zio_compress_select(os->os_spa,
+		    ZIO_COMPRESS_ON, ZIO_COMPRESS_ON);
 
 		/*
 		 * Metadata always gets checksummed.  If the data

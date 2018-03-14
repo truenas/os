@@ -6774,6 +6774,9 @@ arc_write_ready(zio_t *zio)
 		buf->b_flags &= ~ARC_BUF_FLAG_ENCRYPTED;
 		if (BP_GET_COMPRESS(zio->io_bp) == ZIO_COMPRESS_OFF)
 			buf->b_flags &= ~ARC_BUF_FLAG_COMPRESSED;
+	} else if (BP_IS_HOLE(zio->io_bp) && ARC_BUF_ENCRYPTED(buf)) {
+		buf->b_flags &= ~ARC_BUF_FLAG_ENCRYPTED;
+		buf->b_flags &= ~ARC_BUF_FLAG_COMPRESSED;
 	}
 
 	/* this must be done after the buffer flags are adjusted */
