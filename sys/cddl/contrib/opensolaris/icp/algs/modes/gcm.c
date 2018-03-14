@@ -39,7 +39,7 @@
 #include <sys/crypto/impl.h>
 #include <sys/byteorder.h>
 
-#if defined(__amd64) && !defined(__FreeBSD__)
+#if defined(__amd64)
 
 extern void gcm_mul_pclmulqdq(uint64_t *x_in, uint64_t *y, uint64_t *res);
 static int intel_pclmulqdq_instruction_present(void);
@@ -64,7 +64,7 @@ struct aes_block {
 void
 gcm_mul(uint64_t *x_in, uint64_t *y, uint64_t *res)
 {
-#if defined(__amd64) && !defined(__FreeBSD__)
+#if defined(__amd64)
 	if (intel_pclmulqdq_instruction_present()) {
 		KPREEMPT_DISABLE;
 		gcm_mul_pclmulqdq(x_in, y, res);
@@ -695,7 +695,7 @@ gcm_set_kmflag(gcm_ctx_t *ctx, int kmflag)
 }
 
 
-#if defined(__amd64) && !defined(__FreeBSD__)
+#if defined(__amd64)
 
 #define	INTEL_PCLMULQDQ_FLAG (1 << 1)
 

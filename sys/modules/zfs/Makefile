@@ -106,6 +106,13 @@ DEBUG_FLAGS=-g
 ICP=	${SUNW}/icp
 CFLAGS+=	-I${ICP}/include -I${ICP}/include/crypto
 
+.PATH:	${ICP}/asm-x86_64/aes
+SRCS+=	aes_amd64-freebsd.S \
+	aes_intel-freebsd.S \
+	aeskey.c
+.PATH:	${ICP}/asm-x86_64/modes
+SRCS+=	gcm_intel-freebsd.S
+
 .PATH:	${ICP}/api
 SRCS+=	kcf_cipher.c \
 	kcf_digest.c \

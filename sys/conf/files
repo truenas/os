@@ -302,6 +302,10 @@ cddl/contrib/opensolaris/uts/common/fs/zfs/lua/lundump.c		optional zfs compile-w
 cddl/contrib/opensolaris/uts/common/fs/zfs/lua/lvm.c			optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/uts/common/fs/zfs/lua/lzio.c			optional zfs compile-with "${ZFS_C}"
 # zfs crypto
+cddl/contrib/opensolaris/icp/asm-x86_64/aes/aeskey.c			optional zfs compile-with "${ZFS_C}"
+cddl/contrib/opensolaris/icp/asm-x86_64/aes/aes_amd64-freebsd.S		optional zfs compile-with "${ZFS_C}"
+cddl/contrib/opensolaris/icp/asm-x86_64/aes/aes_intel-freebsd.S		optional zfs compile-with "${ZFS_C}"
+cddl/contrib/opensolaris/icp/asm-x86_64/modes/gcm_intel-freebsd.S	optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/icp/api/kcf_cipher.c				optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/icp/api/kcf_digest.c				optional zfs compile-with "${ZFS_C}"
 cddl/contrib/opensolaris/icp/api/kcf_mac.c				optional zfs compile-with "${ZFS_C}"
