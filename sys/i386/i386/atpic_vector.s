@@ -46,7 +46,6 @@
 #define	INTR(irq_num, vec_name) \
 	.text ;								\
 	SUPERALIGN_TEXT ;						\
-IDTVEC(vec_name ##_pti) ;						\
 IDTVEC(vec_name) ;							\
 	PUSH_FRAME ;							\
 	SET_KERNEL_SREGS ;						\

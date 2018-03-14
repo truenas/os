@@ -249,11 +249,9 @@ main(int argc, char *argv[])
 				rv = 1;
 				continue;
 			}
+#ifdef MOUNT_CHAR_DEVS
 		} else if (S_ISCHR(stbuf.st_mode)) {
 			if ((mntpt = getmntpt(*argv)) == NULL) {
-#ifdef MOUNT_CHAR_DEVS
-				xo_warnx(
-				    "df on unmounted devices is deprecated");
 				mdev.fspec = *argv;
 				mntpath = strdup("/tmp/df.XXXXXX");
 				if (mntpath == NULL) {
@@ -302,12 +300,8 @@ main(int argc, char *argv[])
 				(void)rmdir(mntpt);
 				free(mntpath);
 				continue;
-#else
-				xo_warnx("%s: not mounted", *argv);
-				rv = 1;
-				continue;
-#endif
 			}
+#endif
 		} else
 			mntpt = *argv;
 

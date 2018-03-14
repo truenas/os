@@ -297,20 +297,19 @@ ffs_alloccg(struct inode *ip, int cg, daddr_t bpref, int size)
 	int error, frags, allocsiz, i;
 	struct fs *fs = ip->i_fs;
 	const int needswap = UFS_FSNEEDSWAP(fs);
-	struct vnode vp = { ip->i_fd, ip->i_fs, NULL, 0 };
 
 	if (fs->fs_cs(fs, cg).cs_nbfree == 0 && size == fs->fs_bsize)
 		return (0);
-	error = bread(&vp, fsbtodb(fs, cgtod(fs, cg)), (int)fs->fs_cgsize,
-	    NULL, &bp);
+	error = bread(ip->i_fd, ip->i_fs, fsbtodb(fs, cgtod(fs, cg)),
+		(int)fs->fs_cgsize, &bp);
 	if (error) {
-		brelse(bp, 0);
+		brelse(bp);
 		return (0);
 	}
 	cgp = (struct cg *)bp->b_data;
 	if (!cg_chkmagic_swap(cgp, needswap) ||
 	    (cgp->cg_cs.cs_nbfree == 0 && size == fs->fs_bsize)) {
-		brelse(bp, 0);
+		brelse(bp);
 		return (0);
 	}
 	if (size == fs->fs_bsize) {
@@ -333,7 +332,7 @@ ffs_alloccg(struct inode *ip, int cg, daddr_t bpref, int size)
 		 * allocated, and hacked up
 		 */
 		if (cgp->cg_cs.cs_nbfree == 0) {
-			brelse(bp, 0);
+			brelse(bp);
 			return (0);
 		}
 		bno = ffs_alloccgblk(ip, bp, bpref);
@@ -433,7 +432,6 @@ ffs_blkfree(struct inode *ip, daddr_t bno, long size)
 	int i, error, cg, blk, frags, bbase;
 	struct fs *fs = ip->i_fs;
 	const int needswap = UFS_FSNEEDSWAP(fs);
-	struct vnode vp = { ip->i_fd, ip->i_fs, NULL, 0 };
 
 	if (size > fs->fs_bsize || fragoff(fs, size) != 0 ||
 	    fragnum(fs, bno) + numfrags(fs, size) > fs->fs_frag) {
@@ -446,15 +444,15 @@ ffs_blkfree(struct inode *ip, daddr_t bno, long size)
 		    (uintmax_t)ip->i_number);
 		return;
 	}
-	error = bread(&vp, fsbtodb(fs, cgtod(fs, cg)), (int)fs->fs_cgsize,
-	    NULL, &bp);
+	error = bread(ip->i_fd, ip->i_fs, fsbtodb(fs, cgtod(fs, cg)),
+		(int)fs->fs_cgsize, &bp);
 	if (error) {
-		brelse(bp, 0);
+		brelse(bp);
 		return;
 	}
 	cgp = (struct cg *)bp->b_data;
 	if (!cg_chkmagic_swap(cgp, needswap)) {
-		brelse(bp, 0);
+		brelse(bp);
 		return;
 	}
 	cgbno = dtogd(fs, bno);

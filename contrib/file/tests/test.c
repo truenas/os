@@ -80,8 +80,7 @@ main(int argc, char **argv)
 		return 10;
 	}
 	if (magic_load(ms, NULL) == -1) {
-		(void)fprintf(stderr, "ERROR loading with NULL file: %s\n",
-		    magic_error(ms));
+		(void)fprintf(stderr, "ERROR loading with NULL file: %s\n", magic_error(ms));
 		return 11;
 	}
 

@@ -323,10 +323,12 @@ rip6_input(struct mbuf **mp, int *offp, int proto)
 			RIP6STAT_INC(rip6s_nosockmcast);
 		if (proto == IPPROTO_NONE)
 			m_freem(m);
-		else
+		else {
+			char *prvnxtp = ip6_get_prevhdr(m, *offp); /* XXX */
 			icmp6_error(m, ICMP6_PARAM_PROB,
 			    ICMP6_PARAMPROB_NEXTHEADER,
-			    ip6_get_prevhdr(m, *offp));
+			    prvnxtp - mtod(m, char *));
+		}
 		IP6STAT_DEC(ip6s_delivered);
 	}
 	return (IPPROTO_DONE);

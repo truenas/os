@@ -61,7 +61,9 @@
 #else
 #include <stddef.h>
 #include <stdint.h>
+#ifndef _STANDALONE
 #include <stdlib.h>
+#endif
 #include <string.h>
 #endif
 

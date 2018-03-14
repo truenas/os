@@ -26,7 +26,7 @@
 
 .include <src.opts.mk>
 
-EFIBOOT=${SRCTOP}/stand/efi
+EFIBOOT=${SRCTOP}/sys/boot/efi
 EDK2INC=${SRCTOP}/sys/contrib/edk2/Include
 
 .PATH:	${EFIBOOT}/libefi

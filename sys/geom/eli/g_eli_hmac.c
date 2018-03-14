@@ -32,8 +32,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/malloc.h>
-#elif defined(_STANDALONE)
-#include "stand.h"
 #else
 #include <stdint.h>
 #include <string.h>

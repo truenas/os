@@ -51,10 +51,10 @@
 #define _FX(s...) #s
 
 #define _RF0(fname, aname...)						\
-static __inline uint32_t						\
+static __inline register_t						\
 fname(void)								\
 {									\
-	uint32_t reg;							\
+	register_t reg;							\
 	__asm __volatile("mrc\t" _FX(aname): "=r" (reg));		\
 	return(reg);							\
 }
@@ -77,7 +77,7 @@ fname(void)								\
 
 #define _WF1(fname, aname...)						\
 static __inline void							\
-fname(uint32_t reg)							\
+fname(register_t reg)							\
 {									\
 	__asm __volatile("mcr\t" _FX(aname):: "r" (reg));		\
 }

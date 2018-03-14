@@ -98,6 +98,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	${_libsmdb} \
 	${_libsmutil} \
 	libsqlite3 \
+	libstand \
 	libstdbuf \
 	libstdthreads \
 	libsysdecode \

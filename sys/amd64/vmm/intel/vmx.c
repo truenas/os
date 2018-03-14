@@ -693,8 +693,7 @@ vmx_init(int ipinum)
 		    MSR_VMX_TRUE_PINBASED_CTLS, PINBASED_POSTED_INTERRUPT, 0,
 		    &tmp);
 		if (error == 0) {
-			pirvec = lapic_ipi_alloc(pti ? &IDTVEC(justreturn1_pti) :
-			    &IDTVEC(justreturn));
+			pirvec = lapic_ipi_alloc(&IDTVEC(justreturn));
 			if (pirvec < 0) {
 				if (bootverbose) {
 					printf("vmx_init: unable to allocate "

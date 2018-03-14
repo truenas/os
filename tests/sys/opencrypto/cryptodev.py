@@ -173,7 +173,10 @@ class Crypto:
 
 		if not cipher and not mac:
 			raise ValueError('one of cipher or mac MUST be specified.')
-		ses.crid = crid
+		ses.crid = CRYPTOCAP_F_SOFTWARE | CRYPTOCAP_F_HARDWARE
+		#ses.crid = CRYPTOCAP_F_HARDWARE
+		#ses.crid = CRYPTOCAP_F_SOFTWARE
+		#ses.crid = 0
 		#print `ses`
 		s = array.array('B', ses.pack_hdr())
 		#print `s`

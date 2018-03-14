@@ -83,12 +83,12 @@ static struct level_stack *g_ls;
 
 #if defined(SORT_THREADS)
 /* stack guarding mutex */
-static pthread_cond_t g_ls_cond;
 static pthread_mutex_t g_ls_mutex;
 
 /* counter: how many items are left */
 static size_t sort_left;
 /* guarding mutex */
+static pthread_mutex_t sort_left_mutex;
 
 /* semaphore to count threads */
 static sem_t mtsem;
@@ -99,25 +99,23 @@ static sem_t mtsem;
 static inline void
 sort_left_dec(size_t n)
 {
-	pthread_mutex_lock(&g_ls_mutex);
+
+	pthread_mutex_lock(&sort_left_mutex);
 	sort_left -= n;
-	if (sort_left == 0 && nthreads > 1)
-		pthread_cond_broadcast(&g_ls_cond);
-	pthread_mutex_unlock(&g_ls_mutex);
+	pthread_mutex_unlock(&sort_left_mutex);
 }
 
 /*
  * Do we have something to sort ?
- *
- * This routine does not need to be locked.
  */
 static inline bool
 have_sort_left(void)
 {
 	bool ret;
 
+	pthread_mutex_lock(&sort_left_mutex);
 	ret = (sort_left > 0);
-
+	pthread_mutex_unlock(&sort_left_mutex);
 	return (ret);
 }
 
@@ -126,14 +124,6 @@ have_sort_left(void)
 #define sort_left_dec(n)
 
 #endif /* SORT_THREADS */
-
-static void
-_push_ls(struct level_stack *ls)
-{
-
-	ls->next = g_ls;
-	g_ls = ls;
-}
 
 /*
  * Push sort level to the stack
@@ -147,14 +137,17 @@ push_ls(struct sort_level *sl)
 	new_ls->sl = sl;
 
 #if defined(SORT_THREADS)
-	if (nthreads > 1) {
+	if (nthreads > 1)
 		pthread_mutex_lock(&g_ls_mutex);
-		_push_ls(new_ls);
-		pthread_cond_signal(&g_ls_cond);
-		pthread_mutex_unlock(&g_ls_mutex);
-	} else
 #endif
-		_push_ls(new_ls);
+
+	new_ls->next = g_ls;
+	g_ls = new_ls;
+
+#if defined(SORT_THREADS)
+	if (nthreads > 1)
+		pthread_mutex_unlock(&g_ls_mutex);
+#endif
 }
 
 /*
@@ -191,19 +184,13 @@ pop_ls_mt(void)
 
 	pthread_mutex_lock(&g_ls_mutex);
 
-	for (;;) {
-		if (g_ls) {
-			sl = g_ls->sl;
-			saved_ls = g_ls;
-			g_ls = g_ls->next;
-			break;
-		}
+	if (g_ls) {
+		sl = g_ls->sl;
+		saved_ls = g_ls;
+		g_ls = g_ls->next;
+	} else {
 		sl = NULL;
 		saved_ls = NULL;
-
-		if (have_sort_left() == 0)
-			break;
-		pthread_cond_wait(&g_ls_cond, &g_ls_mutex);
 	}
 
 	pthread_mutex_unlock(&g_ls_mutex);
@@ -508,8 +495,13 @@ run_sort_cycle_mt(void)
 
 	for (;;) {
 		slc = pop_ls_mt();
-		if (slc == NULL)
+		if (slc == NULL) {
+			if (have_sort_left()) {
+				pthread_yield();
+				continue;
+			}
 			break;
+		}
 		run_sort_level_next(slc);
 	}
 }
@@ -520,7 +512,9 @@ run_sort_cycle_mt(void)
 static void*
 sort_thread(void* arg)
 {
+
 	run_sort_cycle_mt();
+
 	sem_post(&mtsem);
 
 	return (arg);
@@ -616,7 +610,8 @@ run_top_sort_level(struct sort_level *sl)
 			pthread_t pth;
 
 			pthread_attr_init(&attr);
-			pthread_attr_setdetachstate(&attr, PTHREAD_DETACHED);
+			pthread_attr_setdetachstate(&attr,
+			    PTHREAD_DETACHED);
 
 			for (;;) {
 				int res = pthread_create(&pth, &attr,
@@ -633,7 +628,7 @@ run_top_sort_level(struct sort_level *sl)
 			pthread_attr_destroy(&attr);
 		}
 
-		for (i = 0; i < nthreads; ++i)
+		for(i = 0; i < nthreads; ++i)
 			sem_wait(&mtsem);
 	}
 #endif /* defined(SORT_THREADS) */
@@ -656,7 +651,7 @@ run_sort(struct sort_list_item **base, size_t nmemb)
 		pthread_mutexattr_settype(&mattr, PTHREAD_MUTEX_ADAPTIVE_NP);
 
 		pthread_mutex_init(&g_ls_mutex, &mattr);
-		pthread_cond_init(&g_ls_cond, NULL);
+		pthread_mutex_init(&sort_left_mutex, &mattr);
 
 		pthread_mutexattr_destroy(&mattr);
 
@@ -684,6 +679,7 @@ run_sort(struct sort_list_item **base, size_t nmemb)
 	if (nthreads > 1) {
 		sem_destroy(&mtsem);
 		pthread_mutex_destroy(&g_ls_mutex);
+		pthread_mutex_destroy(&sort_left_mutex);
 	}
 	nthreads = nthreads_save;
 #endif

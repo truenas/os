@@ -1,6 +1,6 @@
 # $FreeBSD$
 
-.PATH:		${SRCTOP}/stand/common
+.PATH:		${.CURDIR}/../../../sys/boot/common
 
 BINDIR?=	/usr/bin
 
@@ -9,7 +9,7 @@ MAN=
 
 SRCS=		bootparttest.c crc32.c stub.c part.c disk.c
 
-CFLAGS=		-I${SRCTOP}/stand/common \
+CFLAGS=		-I${.CURDIR}/../../../sys/boot/common \
 		-DLOADER_GPT_SUPPORT -DLOADER_MBR_SUPPORT -DPART_DEBUG \
 		-DDISK_DEBUG
 

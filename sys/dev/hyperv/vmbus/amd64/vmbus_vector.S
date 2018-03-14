@@ -26,10 +26,10 @@
  * $FreeBSD$
  */
 
-#include "assym.s"
-
 #include <machine/asmacros.h>
 #include <machine/specialreg.h>
+
+#include "assym.s"
 
 /*
  * This is the Hyper-V vmbus channel direct callback interrupt.
@@ -37,7 +37,8 @@
  */
 	.text
 	SUPERALIGN_TEXT
-	INTR_HANDLER	vmbus_isr
+IDTVEC(vmbus_isr)
+	PUSH_FRAME
 	FAKE_MCOUNT(TF_RIP(%rsp))
 	movq	%rsp, %rdi
 	call	vmbus_handle_intr
