@@ -38,6 +38,9 @@
 #include <modes/modes.h>
 #include <aes/aes_impl.h>
 
+#ifdef __FreeBSD__
+# include <machine/fpu.h>
+#endif
 
 
 /*
@@ -954,6 +957,10 @@ aes_setupkeys(aes_key_t *key, const uint32_t *keyarr32, int keybits)
 	if (intel_aes_instructions_present()) {
 		key->flags = INTEL_AES_NI_CAPABLE;
 		KPREEMPT_DISABLE;
+#ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+#endif
 		key->nr = rijndael_key_setup_enc_intel(&(key->encr_ks.ks32[0]),
 		    keyarr32, keybits);
 		key->nr = rijndael_key_setup_dec_intel(&(key->decr_ks.ks32[0]),
@@ -961,6 +968,10 @@ aes_setupkeys(aes_key_t *key, const uint32_t *keyarr32, int keybits)
 		KPREEMPT_ENABLE;
 	} else {
 		key->flags = 0;
+#ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+#endif
 		key->nr = rijndael_key_setup_enc_amd64(&(key->encr_ks.ks32[0]),
 		    keyarr32, keybits);
 		key->nr = rijndael_key_setup_dec_amd64(&(key->decr_ks.ks32[0]),
@@ -991,9 +1002,17 @@ rijndael_encrypt(const uint32_t rk[], int Nr, const uint32_t pt[4],
 {
 	if (flags & INTEL_AES_NI_CAPABLE) {
 		KPREEMPT_DISABLE;
+#ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+#endif
 		aes_encrypt_intel(rk, Nr, pt, ct);
 		KPREEMPT_ENABLE;
 	} else {
+#ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+#endif
 		aes_encrypt_amd64(rk, Nr, pt, ct);
 	}
 }
@@ -1019,9 +1038,17 @@ rijndael_decrypt(const uint32_t rk[], int Nr, const uint32_t ct[4],
 {
 	if (flags & INTEL_AES_NI_CAPABLE) {
 		KPREEMPT_DISABLE;
+#ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+#endif
 		aes_decrypt_intel(rk, Nr, ct, pt);
 		KPREEMPT_ENABLE;
 	} else {
+#ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+#endif
 		aes_decrypt_amd64(rk, Nr, ct, pt);
 	}
 }

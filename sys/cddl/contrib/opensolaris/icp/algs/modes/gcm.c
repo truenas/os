@@ -39,6 +39,10 @@
 #include <sys/crypto/impl.h>
 #include <sys/byteorder.h>
 
+#ifdef __FreeBSD__
+# include <machine/fpu.h>
+#endif
+
 #if defined(__amd64)
 
 extern void gcm_mul_pclmulqdq(uint64_t *x_in, uint64_t *y, uint64_t *res);
@@ -67,6 +71,11 @@ gcm_mul(uint64_t *x_in, uint64_t *y, uint64_t *res)
 #if defined(__amd64)
 	if (intel_pclmulqdq_instruction_present()) {
 		KPREEMPT_DISABLE;
+# ifdef __FreeBSD__
+		if (!is_fpu_kern_thread(0))
+			fpu_kern_thread(0);
+# endif
+
 		gcm_mul_pclmulqdq(x_in, y, res);
 		KPREEMPT_ENABLE;
 	} else
