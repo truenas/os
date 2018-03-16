@@ -17,7 +17,7 @@ CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/sys
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/head
 
-LIBADD=	m nvpair umem zpool pthread z avl
+LIBADD=	m nvpair umem zfs zpool pthread z avl
 
 CSTD=	c99
 

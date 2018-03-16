@@ -57,6 +57,7 @@ typedef enum spa_feature {
 #ifdef illumos
 	SPA_FEATURE_EDONR,
 #endif
+	SPA_FEATURE_ENCRYPTION,
 	SPA_FEATURES
 } spa_feature_t;
 

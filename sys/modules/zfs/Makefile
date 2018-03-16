@@ -69,9 +69,6 @@ SRCS+=	zutil.c
 .PATH:	${SYSDIR}/crypto/sha2
 SRCS+=	sha256c.c sha512c.c
 
-.PATH:	${SYSDIR}/crypto/skein
-SRCS+=	skein.c skein_block.c
-
 .PATH:	${SUNW}/common/zfs
 .include "${SUNW}/uts/common/Makefile.files"
 .PATH:	${SUNW}/uts/common/fs/zfs
@@ -105,6 +102,43 @@ CFLAGS+=-DDEBUG=1
 DEBUG_FLAGS=-g
 .endif
 
+# OpenZFS crypto code
+ICP=	${SUNW}/icp
+CFLAGS+=	-I${ICP}/include -I${ICP}/include/crypto
+
+.PATH:	${ICP}/api
+SRCS+=	kcf_cipher.c \
+	kcf_digest.c \
+	kcf_mac.c \
+	kcf_miscapi.c \
+	kcf_ctxops.c
+.PATH:	${ICP}/core
+SRCS+=	kcf_prov_lib.c \
+	kcf_mech_tabs.c \
+	kcf_prov_tabs.c \
+	kcf_sched.c \
+	kcf_callprov.c
+.PATH:	${ICP}/spi
+SRCS+=	kcf_spi.c
+.PATH:	${ICP}/io
+SRCS+=	aes.c \
+	sha1_mod.c \
+	sha2_mod.c
+.PATH:	${ICP}/os
+SRCS+=	modhash.c
+.PATH:	${ICP}/algs/modes
+SRCS+=	cbc.c \
+	ccm.c \
+	ctr.c \
+	gcm.c \
+	ecb.c \
+	modes.c
+.PATH:	${ICP}/algs
+SRCS+=	aes/aes_impl.c \
+	aes/aes_modes.c \
+	sha2/sha2-freebsd.c
+#	sha2/sha2.c
+
 .include <bsd.kmod.mk>
 
 CFLAGS+=	-include ${SYSDIR}/cddl/compat/opensolaris/sys/debug_compat.h
@@ -121,3 +155,4 @@ CWARNFLAGS+=-Wno-unused
 CWARNFLAGS+=-Wno-inline
 CWARNFLAGS+=-Wno-switch
 CWARNFLAGS+=-Wno-pointer-arith
+
