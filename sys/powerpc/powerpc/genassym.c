@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1982, 1990 The Regents of the University of California.
  * All rights reserved.
  *
@@ -225,6 +227,7 @@ ASSYM(MAXCOMLEN, MAXCOMLEN);
 #ifdef __powerpc64__
 ASSYM(PSL_CM, PSL_CM);
 #endif
+ASSYM(PSL_GS, PSL_GS);
 ASSYM(PSL_DE, PSL_DE);
 ASSYM(PSL_DS, PSL_DS);
 ASSYM(PSL_IS, PSL_IS);
@@ -232,10 +235,6 @@ ASSYM(PSL_CE, PSL_CE);
 ASSYM(PSL_UCLE, PSL_UCLE);
 ASSYM(PSL_WE, PSL_WE);
 ASSYM(PSL_UBLE, PSL_UBLE);
-
-#if defined(BOOKE_E500)
-ASSYM(PSL_KERNSET_INIT, PSL_KERNSET_INIT);
-#endif
 
 #if defined(AIM) && defined(__powerpc64__)
 ASSYM(PSL_SF, PSL_SF);
@@ -265,7 +264,4 @@ ASSYM(PSL_FP, PSL_FP);
 ASSYM(PSL_ME, PSL_ME);
 ASSYM(PSL_PR, PSL_PR);
 ASSYM(PSL_PMM, PSL_PMM);
-ASSYM(PSL_KERNSET, PSL_KERNSET);
-ASSYM(PSL_USERSET, PSL_USERSET);
-ASSYM(PSL_USERSTATIC, PSL_USERSTATIC);
 

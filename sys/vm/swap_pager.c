@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 1998 Matthew Dillon,
  * Copyright (c) 1994 John S. Dyson
  * Copyright (c) 1990 University of Utah.
@@ -157,7 +159,7 @@ static vm_ooffset_t swap_reserved;
 SYSCTL_QUAD(_vm, OID_AUTO, swap_reserved, CTLFLAG_RD, &swap_reserved, 0,
     "Amount of swap storage needed to back all allocated anonymous memory.");
 static int overcommit = 0;
-SYSCTL_INT(_vm, OID_AUTO, overcommit, CTLFLAG_RW, &overcommit, 0,
+SYSCTL_INT(_vm, VM_OVERCOMMIT, overcommit, CTLFLAG_RW, &overcommit, 0,
     "Configure virtual memory overcommit behavior. See tuning(7) "
     "for details.");
 static unsigned long swzone;
@@ -309,8 +311,7 @@ swap_release_by_cred(vm_ooffset_t decr, struct ucred *cred)
 	racct_sub_cred(cred, RACCT_SWAP, decr);
 }
 
-#define SWM_FREE	0x02	/* free, period			*/
-#define SWM_POP		0x04	/* pop out			*/
+#define SWM_POP		0x01	/* pop out			*/
 
 static int swap_pager_full = 2;	/* swap space exhaustion (task killing) */
 static int swap_pager_almost_full = 1; /* swap space exhaustion (w/hysteresis)*/
@@ -388,6 +389,7 @@ SYSCTL_INT(_vm, OID_AUTO, dmmax, CTLFLAG_RD, &nsw_cluster_max, 0,
 
 static void	swp_sizecheck(void);
 static void	swp_pager_async_iodone(struct buf *bp);
+static bool	swp_pager_swblk_empty(struct swblk *sb, int start, int limit);
 static int	swapongeom(struct vnode *);
 static int	swaponvp(struct thread *, struct vnode *, u_long);
 static int	swapoff_one(struct swdevt *sp, struct ucred *cred);
@@ -395,7 +397,7 @@ static int	swapoff_one(struct swdevt *sp, struct ucred *cred);
 /*
  * Swap bitmap functions
  */
-static void	swp_pager_freeswapspace(daddr_t blk, int npages);
+static void	swp_pager_freeswapspace(daddr_t blk, daddr_t npages);
 static daddr_t	swp_pager_getswapspace(int npages);
 
 /*
@@ -549,7 +551,7 @@ swap_pager_swap_init(void)
 	 */
 	n = uma_zone_get_max(swblk_zone);
 
-	if (n2 != n)
+	if (n < n2)
 		printf("Swap blk zone entries reduced from %lu to %lu.\n",
 		    n2, n);
 	swap_maxpages = n * SWAP_META_PAGES;
@@ -766,10 +768,12 @@ swp_pager_strategy(struct buf *bp)
  *	This routine may not sleep.
  */
 static void
-swp_pager_freeswapspace(daddr_t blk, int npages)
+swp_pager_freeswapspace(daddr_t blk, daddr_t npages)
 {
 	struct swdevt *sp;
 
+	if (npages == 0)
+		return;
 	mtx_lock(&sw_dev_mtx);
 	TAILQ_FOREACH(sp, &swtailq, sw_list) {
 		if (blk >= sp->sw_first && blk < sp->sw_end) {
@@ -906,6 +910,7 @@ swap_pager_copy(vm_object_t srcobject, vm_object_t dstobject,
     vm_pindex_t offset, int destroysource)
 {
 	vm_pindex_t i;
+	daddr_t dstaddr, first_free, num_free, srcaddr;
 
 	VM_OBJECT_ASSERT_WLOCKED(srcobject);
 	VM_OBJECT_ASSERT_WLOCKED(dstobject);
@@ -930,53 +935,44 @@ swap_pager_copy(vm_object_t srcobject, vm_object_t dstobject,
 	}
 
 	/*
-	 * transfer source to destination.
+	 * Transfer source to destination.
 	 */
+	first_free = SWAPBLK_NONE;
+	num_free = 0;
 	for (i = 0; i < dstobject->size; ++i) {
-		daddr_t dstaddr;
-
-		/*
-		 * Locate (without changing) the swapblk on the destination,
-		 * unless it is invalid in which case free it silently, or
-		 * if the destination is a resident page, in which case the
-		 * source is thrown away.
-		 */
+		srcaddr = swp_pager_meta_ctl(srcobject, i + offset, SWM_POP);
+		if (srcaddr == SWAPBLK_NONE)
+			continue;
 		dstaddr = swp_pager_meta_ctl(dstobject, i, 0);
-
 		if (dstaddr == SWAPBLK_NONE) {
 			/*
 			 * Destination has no swapblk and is not resident,
 			 * copy source.
+			 *
+			 * swp_pager_meta_build() can sleep.
 			 */
-			daddr_t srcaddr;
-
-			srcaddr = swp_pager_meta_ctl(
-			    srcobject,
-			    i + offset,
-			    SWM_POP
-			);
-
-			if (srcaddr != SWAPBLK_NONE) {
-				/*
-				 * swp_pager_meta_build() can sleep.
-				 */
-				vm_object_pip_add(srcobject, 1);
-				VM_OBJECT_WUNLOCK(srcobject);
-				vm_object_pip_add(dstobject, 1);
-				swp_pager_meta_build(dstobject, i, srcaddr);
-				vm_object_pip_wakeup(dstobject);
-				VM_OBJECT_WLOCK(srcobject);
-				vm_object_pip_wakeup(srcobject);
-			}
+			vm_object_pip_add(srcobject, 1);
+			VM_OBJECT_WUNLOCK(srcobject);
+			vm_object_pip_add(dstobject, 1);
+			swp_pager_meta_build(dstobject, i, srcaddr);
+			vm_object_pip_wakeup(dstobject);
+			VM_OBJECT_WLOCK(srcobject);
+			vm_object_pip_wakeup(srcobject);
 		} else {
 			/*
 			 * Destination has valid swapblk or it is represented
 			 * by a resident page.  We destroy the sourceblock.
 			 */
-
-			swp_pager_meta_ctl(srcobject, i + offset, SWM_FREE);
+			if (first_free + num_free == srcaddr)
+				num_free++;
+			else {
+				swp_pager_freeswapspace(first_free, num_free);
+				first_free = srcaddr;
+				num_free = 1;
+			}
 		}
 	}
+	swp_pager_freeswapspace(first_free, num_free);
 
 	/*
 	 * Free left over swap blocks in source.
@@ -1077,8 +1073,11 @@ swap_pager_haspage(vm_object_t object, vm_pindex_t pindex, int *before,
 static void
 swap_pager_unswapped(vm_page_t m)
 {
+	daddr_t srcaddr;
 
-	swp_pager_meta_ctl(m->object, m->pindex, SWM_FREE);
+	srcaddr = swp_pager_meta_ctl(m->object, m->pindex, SWM_POP);
+	if (srcaddr != SWAPBLK_NONE)
+		swp_pager_freeswapspace(srcaddr, 1);
 }
 
 /*
@@ -1759,6 +1758,22 @@ next_obj:
  */
 
 /*
+ * SWP_PAGER_SWBLK_EMPTY() - is a range of blocks free?
+ */
+static bool
+swp_pager_swblk_empty(struct swblk *sb, int start, int limit)
+{
+	int i;
+
+	MPASS(0 <= start && start <= limit && limit <= SWAP_META_PAGES);
+	for (i = start; i < limit; i++) {
+		if (sb->d[i] != SWAPBLK_NONE)
+			return (false);
+	}
+	return (true);
+}
+   
+/*
  * SWP_PAGER_META_BUILD() -	add swap block to swap meta data for object
  *
  *	We first convert the object to a swap object if it is a default
@@ -1820,7 +1835,7 @@ swp_pager_meta_build(vm_object_t object, vm_pindex_t pindex, daddr_t swapblk)
 				vm_pageout_oom(VM_OOM_SWAPZ);
 				pause("swzonxb", 10);
 			} else
-				VM_WAIT;
+				uma_zwait(swblk_zone);
 			VM_OBJECT_WLOCK(object);
 			sb = SWAP_PCTRIE_LOOKUP(&object->un_pager.swp.swp_blks,
 			    rdpi);
@@ -1850,7 +1865,7 @@ swp_pager_meta_build(vm_object_t object, vm_pindex_t pindex, daddr_t swapblk)
 				vm_pageout_oom(VM_OOM_SWAPZ);
 				pause("swzonxp", 10);
 			} else
-				VM_WAIT;
+				uma_zwait(swpctrie_zone);
 			VM_OBJECT_WLOCK(object);
 			sb1 = SWAP_PCTRIE_LOOKUP(&object->un_pager.swp.swp_blks,
 			    rdpi);
@@ -1874,16 +1889,10 @@ allocated:
 	/*
 	 * Free the swblk if we end up with the empty page run.
 	 */
-	if (swapblk == SWAPBLK_NONE) {
-		for (i = 0; i < SWAP_META_PAGES; i++) {
-			if (sb->d[i] != SWAPBLK_NONE)
-				break;
-		}
-		if (i == SWAP_META_PAGES) {
-			SWAP_PCTRIE_REMOVE(&object->un_pager.swp.swp_blks,
-			    rdpi);
-			uma_zfree(swblk_zone, sb);
-		}
+	if (swapblk == SWAPBLK_NONE &&
+	    swp_pager_swblk_empty(sb, 0, SWAP_META_PAGES)) {
+		SWAP_PCTRIE_REMOVE(&object->un_pager.swp.swp_blks, rdpi);
+		uma_zfree(swblk_zone, sb);
 	}
 }
 
@@ -1901,37 +1910,46 @@ static void
 swp_pager_meta_free(vm_object_t object, vm_pindex_t pindex, vm_pindex_t count)
 {
 	struct swblk *sb;
+	daddr_t first_free, num_free;
 	vm_pindex_t last;
-	int i;
-	bool empty;
+	int i, limit, start;
 
 	VM_OBJECT_ASSERT_WLOCKED(object);
 	if (object->type != OBJT_SWAP || count == 0)
 		return;
 
-	last = pindex + count - 1;
+	first_free = SWAPBLK_NONE;
+	num_free = 0;
+	last = pindex + count;
 	for (;;) {
 		sb = SWAP_PCTRIE_LOOKUP_GE(&object->un_pager.swp.swp_blks,
 		    rounddown(pindex, SWAP_META_PAGES));
-		if (sb == NULL || sb->p > last)
+		if (sb == NULL || sb->p >= last)
 			break;
-		empty = true;
-		for (i = 0; i < SWAP_META_PAGES; i++) {
+		start = pindex > sb->p ? pindex - sb->p : 0;
+		limit = last - sb->p < SWAP_META_PAGES ? last - sb->p :
+		    SWAP_META_PAGES;
+		for (i = start; i < limit; i++) {
 			if (sb->d[i] == SWAPBLK_NONE)
 				continue;
-			if (pindex <= sb->p + i && sb->p + i <= last) {
-				swp_pager_freeswapspace(sb->d[i], 1);
-				sb->d[i] = SWAPBLK_NONE;
-			} else
-				empty = false;
+			if (first_free + num_free == sb->d[i])
+				num_free++;
+			else {
+				swp_pager_freeswapspace(first_free, num_free);
+				first_free = sb->d[i];
+				num_free = 1;
+			}
+			sb->d[i] = SWAPBLK_NONE;
 		}
-		pindex = sb->p + SWAP_META_PAGES;
-		if (empty) {
+		if (swp_pager_swblk_empty(sb, 0, start) &&
+		    swp_pager_swblk_empty(sb, limit, SWAP_META_PAGES)) {
 			SWAP_PCTRIE_REMOVE(&object->un_pager.swp.swp_blks,
 			    sb->p);
 			uma_zfree(swblk_zone, sb);
 		}
+		pindex = sb->p + SWAP_META_PAGES;
 	}
+	swp_pager_freeswapspace(first_free, num_free);
 }
 
 /*
@@ -1944,6 +1962,7 @@ static void
 swp_pager_meta_free_all(vm_object_t object)
 {
 	struct swblk *sb;
+	daddr_t first_free, num_free;
 	vm_pindex_t pindex;
 	int i;
 
@@ -1951,43 +1970,48 @@ swp_pager_meta_free_all(vm_object_t object)
 	if (object->type != OBJT_SWAP)
 		return;
 
+	first_free = SWAPBLK_NONE;
+	num_free = 0;
 	for (pindex = 0; (sb = SWAP_PCTRIE_LOOKUP_GE(
 	    &object->un_pager.swp.swp_blks, pindex)) != NULL;) {
 		pindex = sb->p + SWAP_META_PAGES;
 		for (i = 0; i < SWAP_META_PAGES; i++) {
-			if (sb->d[i] != SWAPBLK_NONE)
-				swp_pager_freeswapspace(sb->d[i], 1);
+			if (sb->d[i] == SWAPBLK_NONE)
+				continue;
+			if (first_free + num_free == sb->d[i])
+				num_free++;
+			else {
+				swp_pager_freeswapspace(first_free, num_free);
+				first_free = sb->d[i];
+				num_free = 1;
+			}
 		}
 		SWAP_PCTRIE_REMOVE(&object->un_pager.swp.swp_blks, sb->p);
 		uma_zfree(swblk_zone, sb);
 	}
+	swp_pager_freeswapspace(first_free, num_free);
 }
 
 /*
- * SWP_PAGER_METACTL() -  misc control of swap and vm_page_t meta data.
+ * SWP_PAGER_METACTL() -  misc control of swap meta data.
  *
- *	This routine is capable of looking up, popping, or freeing
- *	swapblk assignments in the swap meta data or in the vm_page_t.
- *	The routine typically returns the swapblk being looked-up, or popped,
- *	or SWAPBLK_NONE if the block was freed, or SWAPBLK_NONE if the block
- *	was invalid.  This routine will automatically free any invalid
- *	meta-data swapblks.
+ *	This routine is capable of looking up, or removing swapblk
+ *	assignments in the swap meta data.  It returns the swapblk being
+ *	looked-up, popped, or SWAPBLK_NONE if the block was invalid.
  *
  *	When acting on a busy resident page and paging is in progress, we
  *	have to wait until paging is complete but otherwise can act on the
  *	busy page.
  *
- *	SWM_FREE	remove and free swap block from metadata
- *	SWM_POP		remove from meta data but do not free.. pop it out
+ *	SWM_POP		remove from meta data but do not free it
  */
 static daddr_t
 swp_pager_meta_ctl(vm_object_t object, vm_pindex_t pindex, int flags)
 {
 	struct swblk *sb;
 	daddr_t r1;
-	int i;
 
-	if ((flags & (SWM_FREE | SWM_POP)) != 0)
+	if ((flags & SWM_POP) != 0)
 		VM_OBJECT_ASSERT_WLOCKED(object);
 	else
 		VM_OBJECT_ASSERT_LOCKED(object);
@@ -2006,21 +2030,13 @@ swp_pager_meta_ctl(vm_object_t object, vm_pindex_t pindex, int flags)
 	r1 = sb->d[pindex % SWAP_META_PAGES];
 	if (r1 == SWAPBLK_NONE)
 		return (SWAPBLK_NONE);
-	if ((flags & (SWM_FREE | SWM_POP)) != 0) {
+	if ((flags & SWM_POP) != 0) {
 		sb->d[pindex % SWAP_META_PAGES] = SWAPBLK_NONE;
-		for (i = 0; i < SWAP_META_PAGES; i++) {
-			if (sb->d[i] != SWAPBLK_NONE)
-				break;
-		}
-		if (i == SWAP_META_PAGES) {
+		if (swp_pager_swblk_empty(sb, 0, SWAP_META_PAGES)) {
 			SWAP_PCTRIE_REMOVE(&object->un_pager.swp.swp_blks,
 			    rounddown(pindex, SWAP_META_PAGES));
 			uma_zfree(swblk_zone, sb);
 		}
-	}
-	if ((flags & SWM_FREE) != 0) {
-		swp_pager_freeswapspace(r1, 1);
-		r1 = SWAPBLK_NONE;
 	}
 	return (r1);
 }
@@ -2311,7 +2327,7 @@ swapoff_one(struct swdevt *sp, struct ucred *cred)
 	 * of data we will have to page back in, plus an epsilon so
 	 * the system doesn't become critically low on swap space.
 	 */
-	if (vm_cnt.v_free_count + swap_pager_avail < nblks + nswap_lowat)
+	if (vm_free_count() + swap_pager_avail < nblks + nswap_lowat)
 		return (ENOMEM);
 
 	/*

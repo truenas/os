@@ -265,8 +265,6 @@ void		(*pmap_copy_page_offs_func)(vm_paddr_t a_phys,
 		    int cnt);
 void		(*pmap_zero_page_func)(vm_paddr_t, int, int);
 
-struct msgbuf *msgbufp = NULL;
-
 /*
  * Crashdump maps.
  */
@@ -3819,7 +3817,7 @@ pmap_get_pv_entry(void)
 
 	pv_entry_count++;
 	if (pv_entry_count > pv_entry_high_water)
-		pagedaemon_wakeup();
+		pagedaemon_wakeup(0); /* XXX ARM NUMA */
 	ret_value = uma_zalloc(pvzone, M_NOWAIT);
 	return ret_value;
 }

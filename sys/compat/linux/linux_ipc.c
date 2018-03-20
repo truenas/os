@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1994-1995 Søren Schmidt
  * All rights reserved.
  *
@@ -729,8 +731,8 @@ linux_msgctl(struct thread *td, struct linux_msgctl_args *args)
 		return (error);
 	}
 
-	/* 
-	 * TODO: implement this 
+	/*
+	 * TODO: implement this
 	 * case LINUX_MSG_STAT:
 	 */
 	case LINUX_IPC_STAT:

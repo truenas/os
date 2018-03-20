@@ -204,7 +204,6 @@
 #include "lua.h"
 #include "lauxlib.h"
 
-CTASSERT(sizeof(zfs_cmd_t) < IOCPARM_MAX);
 static struct cdev *zfsdev;
 
 extern void zfs_init(void);
@@ -3778,10 +3777,14 @@ zfs_ioc_channel_program(const char *poolname, nvlist_t *innvl,
 {
 	char *program;
 	uint64_t instrlimit, memlimit;
+	boolean_t sync_flag;
 	nvpair_t *nvarg = NULL;
 
 	if (0 != nvlist_lookup_string(innvl, ZCP_ARG_PROGRAM, &program)) {
 		return (EINVAL);
+	}
+	if (0 != nvlist_lookup_boolean_value(innvl, ZCP_ARG_SYNC, &sync_flag)) {
+		sync_flag = B_TRUE;
 	}
 	if (0 != nvlist_lookup_uint64(innvl, ZCP_ARG_INSTRLIMIT, &instrlimit)) {
 		instrlimit = ZCP_DEFAULT_INSTRLIMIT;
@@ -3798,7 +3801,7 @@ zfs_ioc_channel_program(const char *poolname, nvlist_t *innvl,
 	if (memlimit == 0 || memlimit > zfs_lua_max_memlimit)
 		return (EINVAL);
 
-	return (zcp_eval(poolname, program, instrlimit, memlimit,
+	return (zcp_eval(poolname, program, sync_flag, instrlimit, memlimit,
 	    nvarg, outnvl));
 }
 
@@ -5827,10 +5830,6 @@ zfs_ioc_send_space(const char *snapname, nvlist_t *innvl, nvlist_t *outnvl)
 	dsl_dataset_t *tosnap;
 	int error;
 	char *fromname;
-	/* LINTED E_FUNC_SET_NOT_USED */
-	boolean_t largeblockok;
-	/* LINTED E_FUNC_SET_NOT_USED */
-	boolean_t embedok;
 	boolean_t compressok;
 	uint64_t space;
 
@@ -5844,8 +5843,6 @@ zfs_ioc_send_space(const char *snapname, nvlist_t *innvl, nvlist_t *outnvl)
 		return (error);
 	}
 
-	largeblockok = nvlist_exists(innvl, "largeblockok");
-	embedok = nvlist_exists(innvl, "embedok");
 	compressok = nvlist_exists(innvl, "compressok");
 
 	error = nvlist_lookup_string(innvl, "from", &fromname);
@@ -5886,7 +5883,9 @@ zfs_ioc_send_space(const char *snapname, nvlist_t *innvl, nvlist_t *outnvl)
 			goto out;
 		}
 	} else {
-		// If estimating the size of a full send, use dmu_send_estimate
+		/*
+		 * If estimating the size of a full send, use dmu_send_estimate.
+		 */
 		error = dmu_send_estimate(tosnap, NULL, compressok, &space);
 	}
 

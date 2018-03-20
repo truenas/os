@@ -200,6 +200,7 @@ db_nextframe(struct amd64_frame **fp, db_addr_t *ip, struct thread *td)
 	if (name != NULL) {
 		if (strcmp(name, "calltrap") == 0 ||
 		    strcmp(name, "fork_trampoline") == 0 ||
+		    strcmp(name, "mchk_calltrap") == 0 ||
 		    strcmp(name, "nmi_calltrap") == 0 ||
 		    strcmp(name, "Xdblfault") == 0)
 			frame_type = TRAP;
@@ -335,7 +336,8 @@ db_backtrace(struct thread *td, struct trapframe *tf, struct amd64_frame *frame,
 					/* Probably an assembler symbol. */
 					actframe = (void *)(tf->tf_rsp - 8);
 				}
-			} else if (strcmp(name, "fork_trampoline") == 0) {
+			} else if (name != NULL &&
+			    strcmp(name, "fork_trampoline") == 0) {
 				/*
 				 * Don't try to walk back on a stack for a
 				 * process that hasn't actually been run yet.

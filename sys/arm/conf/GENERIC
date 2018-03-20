@@ -4,11 +4,11 @@
 # For more information on this file, please read the config(5) manual page,
 # and/or the handbook section on Kernel Configuration Files:
 #
-#    http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/handbook/kernelconfig-config.html
+#    https://www.FreeBSD.org/doc/en_US.ISO8859-1/books/handbook/kernelconfig-config.html
 #
 # The handbook is also available locally in /usr/share/doc/handbook
 # if you've installed the doc distribution, otherwise always see the
-# FreeBSD World Wide Web server (http://www.FreeBSD.org/) for the
+# FreeBSD World Wide Web server (https://www.FreeBSD.org/) for the
 # latest information.
 #
 # An exhaustive list of options and more detailed explanations of the
@@ -24,9 +24,6 @@ cpu		CPU_CORTEXA
 options 	SMP_ON_UP
 machine 	arm armv7
 makeoptions	CONF_CFLAGS="-march=armv7a"
-
-makeoptions	KERNVIRTADDR=0xc0000000
-options 	KERNVIRTADDR=0xc0000000
 
 include 	"std.armv7"
 files		"../allwinner/files.allwinner"
@@ -72,6 +69,7 @@ device		clk
 device		phy
 device		hwreset
 device		regulator
+device		syscon
 
 # CPU frequency control
 device		cpufreq

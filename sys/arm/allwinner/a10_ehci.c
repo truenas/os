@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2012 Ganbold Tsagaankhuu <ganbold@freebsd.org>
  * All rights reserved.
  *
@@ -240,7 +242,7 @@ a10_ehci_attach(device_t self)
 
 	/* Enable USB PHY */
 	if (phy_get_by_ofw_name(self, 0, "usb", &aw_sc->phy) == 0) {
-		err = phy_enable(self, aw_sc->phy);
+		err = phy_enable(aw_sc->phy);
 		if (err != 0) {
 			device_printf(self, "Could not enable phy\n");
 			goto error;

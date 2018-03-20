@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2015 Netflix, Inc
  * All rights reserved.
  *
@@ -87,9 +89,16 @@ nvme_identify_match(caddr_t identbuffer, caddr_t table_entry)
 
 void
 nvme_print_ident(const struct nvme_controller_data *cdata,
-    const struct nvme_namespace_data *data)
+    const struct nvme_namespace_data *data, struct sbuf *sb)
 {
-	printf("I'm a pretty NVME drive\n");
+
+	sbuf_printf(sb, "<");
+	cam_strvis_sbuf(sb, cdata->mn, sizeof(cdata->mn), 0);
+	sbuf_printf(sb, " ");
+	cam_strvis_sbuf(sb, cdata->fr, sizeof(cdata->fr), 0);
+	sbuf_printf(sb, " ");
+	cam_strvis_sbuf(sb, cdata->sn, sizeof(cdata->sn), 0);
+	sbuf_printf(sb, ">\n");
 }
 
 /* XXX need to do nvme admin opcodes too, but those aren't used yet by nda */

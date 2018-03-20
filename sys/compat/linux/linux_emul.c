@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2006 Roman Divacky
  * Copyright (c) 2013 Dmitry Chagin
  * All rights reserved.
@@ -138,7 +140,7 @@ linux_proc_init(struct thread *td, struct thread *newtd, int flags)
 
 }
 
-void 
+void
 linux_proc_exit(void *arg __unused, struct proc *p)
 {
 	struct linux_pemuldata *pem;
@@ -153,7 +155,7 @@ linux_proc_exit(void *arg __unused, struct proc *p)
 
 	pem = pem_find(p);
 	if (pem == NULL)
-		return;	
+		return;
 	(p->p_sysent->sv_thread_detach)(td);
 
 	p->p_emuldata = NULL;
@@ -168,7 +170,7 @@ linux_proc_exit(void *arg __unused, struct proc *p)
 	free(pem, M_LINUX);
 }
 
-int 
+int
 linux_common_execve(struct thread *td, struct image_args *eargs)
 {
 	struct linux_pemuldata *pem;
@@ -186,7 +188,7 @@ linux_common_execve(struct thread *td, struct image_args *eargs)
 
 	error = kern_execve(td, eargs, NULL);
 	post_execve(td, error, oldvmspace);
-	if (error != 0)
+	if (error != EJUSTRETURN)
 		return (error);
 
 	/*
@@ -213,10 +215,10 @@ linux_common_execve(struct thread *td, struct image_args *eargs)
 		free(em, M_TEMP);
 		free(pem, M_LINUX);
 	}
-	return (0);
+	return (EJUSTRETURN);
 }
 
-void 
+void
 linux_proc_exec(void *arg __unused, struct proc *p, struct image_params *imgp)
 {
 	struct thread *td = curthread;

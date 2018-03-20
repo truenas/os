@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1994-1995 Søren Schmidt
  * All rights reserved.
  *
@@ -434,7 +436,7 @@ linux_rt_sigtimedwait(struct thread *td,
 		tv.tv_sec = (long)ltv.tv_sec;
 		tv.tv_usec = (suseconds_t)ltv.tv_usec;
 		if (itimerfix(&tv)) {
-			/* 
+			/*
 			 * The timeout was invalid. Convert it to something
 			 * valid that will act as it does under Linux.
 			 */
@@ -473,7 +475,7 @@ linux_rt_sigtimedwait(struct thread *td,
 		error = copyout(&linfo, args->ptr, sizeof(linfo));
 	}
 	if (error == 0)
-		td->td_retval[0] = sig; 
+		td->td_retval[0] = sig;
 
 	return (error);
 }
@@ -748,8 +750,7 @@ linux_rt_sigqueueinfo(struct thread *td, struct linux_rt_sigqueueinfo_args *args
 	sig = linux_to_bsd_signal(args->sig);
 
 	error = ESRCH;
-	if ((p = pfind(args->pid)) != NULL ||
-	    (p = zpfind(args->pid)) != NULL) {
+	if ((p = pfind_any(args->pid)) != NULL) {
 		error = p_cansignal(td, p, sig);
 		if (error != 0) {
 			PROC_UNLOCK(p);
