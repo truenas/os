@@ -5715,7 +5715,7 @@ arc_access(arc_buf_hdr_t *hdr, kmutex_t *hash_lock)
 /* ARGSUSED */
 void
 arc_bcopy_func(zio_t *zio, const zbookmark_phys_t *zb, int error,
-    arc_buf_t *buf, void *arg)
+    const blkptr_t *bp, arc_buf_t *buf, void *arg)
 {
 	if (buf == NULL)
 		return;
@@ -5729,7 +5729,7 @@ arc_bcopy_func(zio_t *zio, const zbookmark_phys_t *zb, int error,
 /* ARGSUSED */
 void
 arc_getbuf_func(zio_t *zio, const zbookmark_phys_t *zb, int error,
-    arc_buf_t *buf, void *arg)
+    const blkptr_t *bp, arc_buf_t *buf, void *arg)
 {
 	arc_buf_t **bufp = arg;
 
@@ -5933,7 +5933,7 @@ arc_read_done(zio_t *zio)
 	/* execute each callback and free its structure */
 	while ((acb = callback_list) != NULL) {
 		if (acb->acb_done) {
-			acb->acb_done(zio, &zio->io_bookmark, zio->io_error, acb->acb_buf,
+			acb->acb_done(zio, &zio->io_bookmark, zio->io_error, zio->io_bp, acb->acb_buf,
 			    acb->acb_private);
 		}
 
@@ -6128,7 +6128,7 @@ top:
 		    data, metadata, hits);
 
 		if (done)
-			done(NULL, zb, rc, buf, private);
+			done(NULL, zb, rc, bp, buf, private);
 	} else {
 		uint64_t lsize = BP_GET_LSIZE(bp);
 		uint64_t psize = BP_GET_PSIZE(bp);

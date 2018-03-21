@@ -68,7 +68,7 @@ typedef struct arc_buf arc_buf_t;
  * nonzero in this case, even if there is no associated zio.
  */
 typedef void arc_read_done_func_t(zio_t *zio, const zbookmark_phys_t *zb,
-    int error, arc_buf_t *buf, void *priv);
+    int error, const blkptr_t *bp, arc_buf_t *buf, void *priv);
 typedef void arc_write_done_func_t(zio_t *zio, arc_buf_t *buf, void *priv);
 
 /* generic arc_done_func_t's which you can use */
