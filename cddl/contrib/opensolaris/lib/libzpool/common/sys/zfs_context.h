@@ -95,7 +95,6 @@ extern "C" {
 #ifdef illumos
 #include "zfs.h"
 #endif
-
 #define	ZFS_EXPORTS_PATH	"/etc/zfs/exports"
 
 /*

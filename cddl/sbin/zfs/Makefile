@@ -22,6 +22,6 @@ CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/fs/zfs
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/sys
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/common/zfs
 
-LIBADD=	jail nvpair uutil zfs_core zfs
+LIBADD=	jail nvpair uutil zfs_core zfs crypto
 
 .include <bsd.prog.mk>

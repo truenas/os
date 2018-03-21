@@ -20,6 +20,6 @@ CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/common/zfs/
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/head
 
-LIBADD=	geom m nvpair umem uutil zfs_core zfs zpool
+LIBADD=	geom m nvpair umem uutil zfs_core zfs zpool crypto
 
 .include <bsd.prog.mk>
