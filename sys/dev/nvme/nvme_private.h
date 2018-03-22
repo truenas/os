@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (C) 2012-2014 Intel Corporation
  * All rights reserved.
  *
@@ -126,7 +128,7 @@ extern int32_t		nvme_retry_count;
 struct nvme_completion_poll_status {
 
 	struct nvme_completion	cpl;
-	boolean_t		done;
+	int			done;
 };
 
 #define NVME_REQUEST_VADDR	1

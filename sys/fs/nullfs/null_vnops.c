@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -869,9 +871,6 @@ null_vptocnp(struct vop_vptocnp_args *ap)
 	struct vnode *lvp, *ldvp;
 	struct ucred *cred = ap->a_cred;
 	int error, locked;
-
-	if (vp->v_type == VDIR)
-		return (vop_stdvptocnp(ap));
 
 	locked = VOP_ISLOCKED(vp);
 	lvp = NULLVPTOLOWERVP(vp);

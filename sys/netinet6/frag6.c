@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
  *
@@ -539,6 +541,7 @@ insert:
 		while (t->m_next)
 			t = t->m_next;
 		m_adj(IP6_REASS_MBUF(af6), af6->ip6af_offset);
+		m_demote_pkthdr(IP6_REASS_MBUF(af6));
 		m_cat(t, IP6_REASS_MBUF(af6));
 		free(af6, M_FTABLE);
 		af6 = af6dwn;

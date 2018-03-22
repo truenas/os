@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (C) 2012-2014 Intel Corporation
  * All rights reserved.
  *
@@ -467,6 +469,5 @@ nvme_completion_poll_cb(void *arg, const struct nvme_completion *cpl)
 	 *  the request passed or failed.
 	 */
 	memcpy(&status->cpl, cpl, sizeof(*cpl));
-	wmb();
-	status->done = TRUE;
+	atomic_store_rel_int(&status->done, 1);
 }

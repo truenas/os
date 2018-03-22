@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -63,6 +65,8 @@
 #ifndef _VM_VM_PAGEOUT_H_
 #define _VM_VM_PAGEOUT_H_
 
+#ifdef _KERNEL
+
 /*
  *	Header file for pageout daemon.
  */
@@ -101,11 +105,10 @@ void pagedaemon_wakeup(void);
 void vm_wait(void);
 void vm_waitpfault(void);
 
-#ifdef _KERNEL
 int vm_pageout_flush(vm_page_t *, int, int, int, int *, boolean_t *);
 void vm_pageout_oom(int shortage);
 
 void vm_swapout_run(void);
 void vm_swapout_run_idle(void);
-#endif
+#endif /* _KERNEL */
 #endif	/* _VM_VM_PAGEOUT_H_ */

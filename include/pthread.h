@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 1993, 1994 by Chris Provenzano, proven@mit.edu
  * Copyright (c) 1995-1998 by John Birrell <jb@cimlogic.com.au>
  * All rights reserved.
@@ -347,4 +349,4 @@ void		__pthread_cleanup_pop_imp(int);
 __END_DECLS
 __NULLABILITY_PRAGMA_POP
 
-#endif	/* _PTHREAD_H_ */
+#endif	/* !_PTHREAD_H_ */

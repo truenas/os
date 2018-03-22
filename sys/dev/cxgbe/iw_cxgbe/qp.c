@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009-2013 Chelsio, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -428,7 +430,7 @@ static int build_rdma_write(struct t4_sq *sq, union t4_wr *wqe,
 
 	if (wr->num_sge > T4_MAX_SEND_SGE)
 		return -EINVAL;
-	wqe->write.r2 = 0;
+	wqe->write.immd_data = 0;
 	wqe->write.stag_sink = cpu_to_be32(wr->wr.rdma.rkey);
 	wqe->write.to_sink = cpu_to_be64(wr->wr.rdma.remote_addr);
 	if (wr->num_sge) {

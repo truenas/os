@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2006 Bernd Walter.  All rights reserved.
  * Copyright (c) 2006 M. Warner Losh.  All rights reserved.
  * Copyright (c) 2017 Marius Strobl <marius@FreeBSD.org>
@@ -1869,7 +1871,7 @@ mmc_discover_cards(struct mmc_softc *sc)
 			 * units of 10 ms), defaulting to 500 ms.
 			 */
 			ivar->cmd6_time = 500 * 1000;
-			if (ivar->csd.spec_vers >= 6)
+			if (ivar->raw_ext_csd[EXT_CSD_REV] >= 6)
 				ivar->cmd6_time = 10 *
 				    ivar->raw_ext_csd[EXT_CSD_GEN_CMD6_TIME];
 			/* Handle HC erase sector size. */

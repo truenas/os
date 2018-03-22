@@ -1,6 +1,8 @@
 /*	$NetBSD: intr.c,v 1.12 2003/07/15 00:24:41 lukem Exp $	*/
 
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 2004 Olivier Houchard.
  * Copyright (c) 1994-1998 Mark Brinicombe.
  * All rights reserved.
@@ -53,6 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/conf.h>
 #include <sys/pmc.h>
 #include <sys/pmckern.h>
+#include <sys/vmmeter.h>
 
 #include <machine/atomic.h>
 #include <machine/bus.h>

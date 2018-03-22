@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -413,6 +415,8 @@ fdesc_pathconf(struct vop_pathconf_args *ap)
 			*ap->a_retval = 1;
 		return (0);
 	default:
+		if (VTOFDESC(vp)->fd_type == Froot)
+			return (vop_stdpathconf(ap));
 		vref(vp);
 		VOP_UNLOCK(vp, 0);
 		error = kern_fpathconf(curthread, VTOFDESC(vp)->fd_fd,

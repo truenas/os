@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1980, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -1062,7 +1064,7 @@ main(int argc, char *argv[])
 			j += strlen(argv[i]) + 1;
 		if ((message = malloc((size_t)j)) == NULL) 
 			err(1, "malloc");
-		strcpy(message, *argv);
+		strlcpy(message, *argv, j);
 		while (*++argv) {
 			strlcat(message, " ", j);
 			strlcat(message, *argv, j);

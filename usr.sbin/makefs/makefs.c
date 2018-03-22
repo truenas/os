@@ -1,6 +1,8 @@
 /*	$NetBSD: makefs.c,v 1.26 2006/10/22 21:11:56 christos Exp $	*/
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 2001-2003 Wasabi Systems, Inc.
  * All rights reserved.
  *
@@ -403,10 +405,10 @@ usage(void)
 
 	prog = getprogname();
 	fprintf(stderr,
-"usage: %s [-t fs-type] [-o fs-options] [-d debug-mask] [-B endian]\n"
-"\t[-S sector-size] [-M minimum-size] [-m maximum-size] [-R roundup-size]\n"
-"\t[-s image-size] [-b free-blocks] [-f free-files] [-F mtree-specfile]\n"
-"\t[-xZ] [-N userdb-dir] [-T <timestamp/file>]\n"
+"usage: %s [-xZ] [-B endian] [-b free-blocks] [-d debug-mask]\n"
+"\t[-F mtree-specfile] [-f free-files] [-M minimum-size] [-m maximum-size]\n"
+"\t[-N userdb-dir] [-o fs-options] [-R roundup-size] [-S sector-size]\n"
+"\t[-s image-size] [-T <timestamp/file>] [-t fs-type]\n"
 "\timage-file directory | manifest [extra-directory ...]\n",
 	    prog);
 	exit(1);

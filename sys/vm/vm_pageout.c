@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 1991 Regents of the University of California.
  * All rights reserved.
  * Copyright (c) 1994 John S. Dyson
@@ -1863,6 +1865,7 @@ vm_pageout(void)
 #endif
 
 	swap_pager_swap_init();
+	snprintf(curthread->td_name, sizeof(curthread->td_name), "dom0");
 	error = kthread_add(vm_pageout_laundry_worker, NULL, curproc, NULL,
 	    0, 0, "laundry: dom0");
 	if (error != 0)

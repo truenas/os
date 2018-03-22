@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2001 - 2003 by Thomas Moestl <tmm@FreeBSD.org>.
  * Copyright (c) 2005 Marius Strobl <marius@FreeBSD.org>
  * All rights reserved.
@@ -701,22 +703,14 @@ phandle_t
 ofw_bus_find_compatible(phandle_t node, const char *onecompat)
 {
 	phandle_t child, ret;
-	void *compat;
-	int len;
 
 	/*
 	 * Traverse all children of 'start' node, and find first with
 	 * matching 'compatible' property.
 	 */
 	for (child = OF_child(node); child != 0; child = OF_peer(child)) {
-		len = OF_getprop_alloc(child, "compatible", 1, &compat);
-		if (len >= 0) {
-			ret = ofw_bus_node_is_compatible_int(compat, len,
-			    onecompat);
-			free(compat, M_OFWPROP);
-			if (ret != 0)
-				return (child);
-		}
+		if (ofw_bus_node_is_compatible(child, onecompat) != 0)
+			return (child);
 
 		ret = ofw_bus_find_compatible(child, onecompat);
 		if (ret != 0)

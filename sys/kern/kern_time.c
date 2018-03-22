@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1982, 1986, 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -554,7 +556,8 @@ kern_clock_nanosleep(struct thread *td, clockid_t clock_id, int flags,
 	} while (error == 0 && is_abs_real && td->td_rtcgen == 0);
 	td->td_rtcgen = 0;
 	if (error != EWOULDBLOCK) {
-		TIMESEL(&sbtt, tmp);
+		if (TIMESEL(&sbtt, tmp))
+			sbtt += tc_tick_sbt;
 		if (sbtt >= sbt)
 			return (0);
 		if (error == ERESTART)

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2003-2008 Joseph Koshy
  * Copyright (c) 2007 The FreeBSD Foundation
  * All rights reserved.
@@ -2926,7 +2928,6 @@ pmc_syscall_handler(struct thread *td, void *syscall_args)
 			    po : NULL);
 		} else if (po->po_flags & PMC_PO_OWNS_LOGFILE) {
 			pmclog_proc_ignite(pmclog_proc_handle, NULL);
-			pmclog_process_closelog(po);
 			error = pmclog_close(po);
 			if (error == 0) {
 				LIST_FOREACH(pm, &po->po_pmcs, pm_next)

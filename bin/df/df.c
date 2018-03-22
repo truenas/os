@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1980, 1990, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  * (c) UNIX System Laboratories, Inc.
@@ -191,6 +193,9 @@ main(int argc, char *argv[])
 			hflag = 0;
 			break;
 		case 'l':
+			/* Ignore duplicate -l */
+			if (lflag)
+				break;
 			if (vfslist != NULL)
 				xo_errx(1, "-l and -t are mutually exclusive.");
 			vfslist = makevfslist(makenetvfslist());

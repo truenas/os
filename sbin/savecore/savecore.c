@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2002 Poul-Henning Kamp
  * Copyright (c) 2002 Networks Associates Technology, Inc.
  * All rights reserved.
@@ -154,6 +156,13 @@ getbounds(void)
 	FILE *fp;
 	char buf[6];
 	int ret;
+
+	/*
+	 * If we are just checking, then we haven't done a chdir to the dump
+	 * directory and we should not try to read a bounds file.
+	 */
+	if (checkfor)
+		return (0);
 
 	ret = 0;
 

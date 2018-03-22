@@ -2,7 +2,9 @@
 
 /* Parser for dhclient config and lease files... */
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1997 The Internet Software Consortium.
  * All rights reserved.
  *
@@ -102,6 +104,8 @@ read_client_conf(void)
 	    [top_level_config.requested_option_count++] = DHO_HOST_NAME;
 	top_level_config.requested_options
 	    [top_level_config.requested_option_count++] = DHO_DOMAIN_SEARCH;
+	top_level_config.requested_options
+	    [top_level_config.requested_option_count++] = DHO_INTERFACE_MTU;
 
 	if ((cfile = fopen(path_dhclient_conf, "r")) != NULL) {
 		do {

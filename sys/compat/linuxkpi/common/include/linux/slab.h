@@ -65,6 +65,10 @@ MALLOC_DECLARE(M_KMALLOC);
 #define	kmem_cache_free(...) 	linux_kmem_cache_free(__VA_ARGS__)
 #define	kmem_cache_destroy(...) linux_kmem_cache_destroy(__VA_ARGS__)
 
+#define	KMEM_CACHE(__struct, flags)					\
+	linux_kmem_cache_create(#__struct, sizeof(struct __struct),	\
+	__alignof(struct __struct), (flags), NULL)
+
 typedef void linux_kmem_ctor_t (void *);
 
 struct linux_kmem_cache {
@@ -75,8 +79,11 @@ struct linux_kmem_cache {
 };
 
 #define	SLAB_HWCACHE_ALIGN	(1 << 0)
-#define	SLAB_DESTROY_BY_RCU     (1 << 1)
+#define	SLAB_TYPESAFE_BY_RCU    (1 << 1)
 #define	SLAB_RECLAIM_ACCOUNT	(1 << 2)
+
+#define	SLAB_DESTROY_BY_RCU \
+	SLAB_TYPESAFE_BY_RCU
 
 static inline gfp_t
 linux_check_m_flags(gfp_t flags)
@@ -158,7 +165,7 @@ extern void linux_kmem_cache_free_rcu(struct linux_kmem_cache *, void *);
 static inline void
 linux_kmem_cache_free(struct linux_kmem_cache *c, void *m)
 {
-	if (unlikely(c->cache_flags & SLAB_DESTROY_BY_RCU))
+	if (unlikely(c->cache_flags & SLAB_TYPESAFE_BY_RCU))
 		linux_kmem_cache_free_rcu(c, m);
 	else
 		uma_zfree(c->cache_zone, m);

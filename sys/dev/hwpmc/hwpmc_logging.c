@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2005-2007 Joseph Koshy
  * Copyright (c) 2007 The FreeBSD Foundation
  * All rights reserved.
@@ -800,6 +802,8 @@ pmclog_close(struct pmc_owner *po)
 {
 
 	PMCDBG1(LOG,CLO,1, "po=%p", po);
+
+	pmclog_process_closelog(po);
 
 	mtx_lock(&pmc_kthread_mtx);
 

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2002 Networks Associates Technology, Inc.
  * All rights reserved.
  *
@@ -69,6 +71,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/mount.h>
 #include <sys/vnode.h>
+#include <sys/vmmeter.h>
 
 #include <ufs/ufs/quota.h>
 #include <ufs/ufs/inode.h>

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1990, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -120,7 +122,7 @@ static VAR var[] = {
 	{"logname", "", "login", NULL, 0, NULL, 0, CHAR, NULL, 0},
 	{"lstart", "STARTED", NULL, "start-time", LJUST|USER, lstarted, 0,
 	    CHAR, NULL, 0},
-	{"lwp", "LWP", NULL, "process-thread-id", 0, kvar, KOFF(ki_tid), UINT,
+	{"lwp", "LWP", NULL, "thread-id", 0, kvar, KOFF(ki_tid), UINT,
 	    LWPFMT, 0},
 	{"majflt", "MAJFLT", NULL, "major-faults", USER, rvar, ROFF(ru_majflt),
 	    LONG, "ld", 0},
@@ -202,6 +204,7 @@ static VAR var[] = {
 	{"tdnam", "", "tdname", NULL, 0, NULL, 0, CHAR, NULL, 0},
 	{"tdname", "TDNAME", NULL, "thread-name", LJUST, tdnam, 0, CHAR,
 	    NULL, 0},
+	{"tid", "", "lwp", NULL, 0, NULL, 0, CHAR, NULL, 0},
 	{"time", "TIME", NULL, "cpu-time", USER, cputime, 0, CHAR, NULL, 0},
 	{"tpgid", "TPGID", NULL, "terminal-process-gid", 0, kvar,
 	    KOFF(ki_tpgid), UINT, PIDFMT, 0},

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997, Stefan Esser <se@freebsd.org>
  * All rights reserved.
  *
@@ -477,6 +479,11 @@
 #define	PCIS_DASP_COMM_SYNC	0x10
 #define	PCIS_DASP_MGMT_CARD	0x20
 #define	PCIS_DASP_OTHER		0x80
+
+#define	PCIC_ACCEL	0x12
+#define	PCIS_ACCEL_PROCESSING	0x00
+
+#define	PCIC_INSTRUMENT	0x13
 
 #define	PCIC_OTHER	0xff
 

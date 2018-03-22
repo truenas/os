@@ -440,6 +440,8 @@
                 ..
                 nop
                 ..
+                part
+                ..
                 raid3
                 ..
                 shsec
@@ -655,6 +657,8 @@
         hexdump
         ..
         ident
+        ..
+        indent
         ..
         join
         ..

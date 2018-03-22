@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1991, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -467,9 +469,15 @@ outoneline(INPUT *F, LINE *lp)
 			else
 				outfield(lp, 0, 1);
 		}
-	else
+	else {
+		/*
+		 * Output the join field, then the remaining fields.
+		 */
+		outfield(lp, F->joinf, 0);
 		for (cnt = 0; cnt < lp->fieldcnt; ++cnt)
-			outfield(lp, cnt, 0);
+			if (F->joinf != cnt)
+				outfield(lp, cnt, 0);
+	}
 	(void)printf("\n");
 	if (ferror(stdout))
 		err(1, "stdout");

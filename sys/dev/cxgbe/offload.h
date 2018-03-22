@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2010 Chelsio Communications, Inc.
  * All rights reserved.
  * Written by: Navdeep Parhar <np@FreeBSD.org>
@@ -144,6 +146,7 @@ struct uld_info {
 };
 
 struct tom_tunables {
+	int cong_algorithm;
 	int sndbuf;
 	int ddp;
 	int rx_coalesce;

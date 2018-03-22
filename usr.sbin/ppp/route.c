@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1996 - 2001 Brian Somers <brian@Awfulhak.org>
  *          based on work by Toshiharu OHNO <tony-o@iij.ad.jp>
  *                           Internet Initiative Japan, Inc (IIJ)
@@ -435,7 +437,7 @@ route_IfDelete(struct bundle *bundle, int all)
            ) &&
           (all || (rtm->rtm_flags & RTF_GATEWAY))) {
         if (log_IsKept(LogDEBUG)) {
-          char gwstr[41];
+          char gwstr[NCP_ASCIIBUFFERSIZE];
           struct ncpaddr gw;
           ncprange_setsa(&range, sa[RTAX_DST], sa[RTAX_NETMASK]);
           ncpaddr_setsa(&gw, sa[RTAX_GATEWAY]);
@@ -841,7 +843,7 @@ failed:
   }
 
   if (log_IsKept(LogDEBUG)) {
-    char gwstr[40];
+    char gwstr[NCP_ASCIIBUFFERSIZE];
 
     if (gw)
       snprintf(gwstr, sizeof gwstr, "%s", ncpaddr_ntoa(gw));

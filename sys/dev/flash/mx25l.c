@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2006 M. Warner Losh.  All rights reserved.
  * Copyright (c) 2009 Oleksandr Tymoshenko.  All rights reserved.
  *
@@ -110,7 +112,9 @@ struct mx25l_flash_ident flash_devices[] = {
 	{ "en25f32",	0x1c, 0x3116, 64 * 1024, 64, FL_NONE },
 	{ "en25p32",	0x1c, 0x2016, 64 * 1024, 64, FL_NONE },
 	{ "en25p64",	0x1c, 0x2017, 64 * 1024, 128, FL_NONE },
+	{ "en25q32",	0x1c, 0x3016, 64 * 1024, 64, FL_NONE },
 	{ "en25q64",	0x1c, 0x3017, 64 * 1024, 128, FL_ERASE_4K },
+	{ "m25p32",	0x20, 0x2016, 64 * 1024, 64, FL_NONE },
 	{ "m25p64",	0x20, 0x2017, 64 * 1024, 128, FL_NONE },
 	{ "mx25ll32",	0xc2, 0x2016, 64 * 1024, 64, FL_NONE },
 	{ "mx25ll64",	0xc2, 0x2017, 64 * 1024, 128, FL_NONE },
@@ -120,6 +124,7 @@ struct mx25l_flash_ident flash_devices[] = {
 	{ "s25fl064",	0x01, 0x0216, 64 * 1024, 128, FL_NONE },
 	{ "s25fl128",	0x01, 0x2018, 64 * 1024, 256, FL_NONE },
 	{ "s25fl256s",	0x01, 0x0219, 64 * 1024, 512, FL_NONE },
+	{ "SST25VF010A", 0xbf, 0x2549, 4 * 1024, 32, FL_ERASE_4K | FL_ERASE_32K },
 	{ "SST25VF032B", 0xbf, 0x254a, 64 * 1024, 64, FL_ERASE_4K | FL_ERASE_32K },
 
 	/* Winbond -- w25x "blocks" are 64K, "sectors" are 4KiB */
@@ -133,6 +138,9 @@ struct mx25l_flash_ident flash_devices[] = {
 
 	 /* Atmel */
 	{ "at25df641",  0x1f, 0x4800, 64 * 1024, 128, FL_ERASE_4K },
+
+	/* GigaDevice */
+	{ "gd25q64",	0xc8, 0x4017, 64 * 1024, 128, FL_ERASE_4K },
 };
 
 static uint8_t
