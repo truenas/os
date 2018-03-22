@@ -76,6 +76,12 @@ XFILES=	BSD_daemon/FreeBSD.pfa \
 	indent/indent.pro \
 	ipfw/change_rules.sh \
 	jails/README \
+	jails/VIMAGE \
+	jails/jail.xxx.conf \
+	jails/jib \
+	jails/jng \
+	jails/rc.conf.jails \
+	jails/rcjail.xxx.conf \
 	kld/Makefile \
 	kld/cdev/Makefile \
 	kld/cdev/README \
@@ -136,7 +142,6 @@ XFILES=	BSD_daemon/FreeBSD.pfa \
 	ppp/ppp.secret.sample \
 	ppp/ppp.secret.span-isp \
 	ppp/ppp.secret.span-isp.working \
-	printing/README \
 	printing/diablo-if-net \
 	printing/hpdf \
 	printing/hpif \

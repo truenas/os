@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1999-2009 Apple Inc.
  * Copyright (c) 2005, 2016-2017 Robert N. M. Watson
  * All rights reserved.
@@ -117,7 +119,7 @@ static const int aue_shmsys[] = {
 static const int aue_shmsys_count = sizeof(aue_shmsys) / sizeof(int);
 
 /*
- * Check whether an event is aditable by comparing the mask of classes this
+ * Check whether an event is auditable by comparing the mask of classes this
  * event is part of against the given mask.
  */
 int

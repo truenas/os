@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2004 Luigi Rizzo, Alessandro Cerri. All rights reserved.
  * Copyright (c) 2004-2008 Qing Li. All rights reserved.
  * Copyright (c) 2008 Kip Macy. All rights reserved.
@@ -147,6 +149,7 @@ typedef void (llt_fill_sa_entry_t)(const struct llentry *, struct sockaddr *);
 typedef void (llt_free_tbl_t)(struct lltable *);
 typedef void (llt_link_entry_t)(struct lltable *, struct llentry *);
 typedef void (llt_unlink_entry_t)(struct llentry *);
+typedef void (llt_mark_used_t)(struct llentry *);
 
 typedef int (llt_foreach_cb_t)(struct lltable *, struct llentry *, void *);
 typedef int (llt_foreach_entry_t)(struct lltable *, llt_foreach_cb_t *, void *);
@@ -171,6 +174,7 @@ struct lltable {
 	llt_unlink_entry_t	*llt_unlink_entry;
 	llt_fill_sa_entry_t	*llt_fill_sa_entry;
 	llt_free_tbl_t		*llt_free_tbl;
+	llt_mark_used_t		*llt_mark_used;
 };
 
 MALLOC_DECLARE(M_LLTABLE);
@@ -243,6 +247,19 @@ lla_lookup(struct lltable *llt, u_int flags, const struct sockaddr *l3addr)
 {
 
 	return (llt->llt_lookup(llt, flags, l3addr));
+}
+
+/*
+ * Notify the LLE code that the entry was used by datapath.
+ */
+static __inline void
+llentry_mark_used(struct llentry *lle)
+{
+
+	if (lle->r_skip_req == 0)
+		return;
+	if ((lle->r_flags & RLLE_VALID) != 0)
+		lle->lle_tbl->llt_mark_used(lle);
 }
 
 int		lla_rt_output(struct rt_msghdr *, struct rt_addrinfo *);

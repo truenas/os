@@ -327,8 +327,8 @@ unhandled:
 		return (EINVAL);
 	}
 	/*
-	 * Free sessions goes first, so if first session is used, we need to
-	 * allocate one.
+	 * Free sessions are inserted at the head of the list.  So if the first
+	 * session is used, none are free and we must allocate a new one.
 	 */
 	ses = TAILQ_FIRST(&sc->sessions);
 	if (ses == NULL || ses->used) {
@@ -403,11 +403,13 @@ aesni_freesession(device_t dev, uint64_t tid)
 static int
 aesni_process(device_t dev, struct cryptop *crp, int hint __unused)
 {
-	struct aesni_softc *sc = device_get_softc(dev);
-	struct aesni_session *ses = NULL;
+	struct aesni_softc *sc;
+	struct aesni_session *ses;
 	struct cryptodesc *crd, *enccrd, *authcrd;
 	int error, needauth;
 
+	sc = device_get_softc(dev);
+	ses = NULL;
 	error = 0;
 	enccrd = NULL;
 	authcrd = NULL;
@@ -538,7 +540,7 @@ static device_method_t aesni_methods[] = {
 	DEVMETHOD(cryptodev_freesession, aesni_freesession),
 	DEVMETHOD(cryptodev_process, aesni_process),
 
-	{0, 0},
+	DEVMETHOD_END
 };
 
 static driver_t aesni_driver = {
@@ -577,10 +579,8 @@ aesni_cipher_setup(struct aesni_session *ses, struct cryptoini *encini,
 	kt = is_fpu_kern_thread(0) || (encini == NULL);
 	if (!kt) {
 		ACQUIRE_CTX(ctxidx, ctx);
-		error = fpu_kern_enter(curthread, ctx,
+		fpu_kern_enter(curthread, ctx,
 		    FPU_KERN_NORMAL | FPU_KERN_KTHR);
-		if (error != 0)
-			goto out;
 	}
 
 	error = 0;
@@ -590,7 +590,6 @@ aesni_cipher_setup(struct aesni_session *ses, struct cryptoini *encini,
 
 	if (!kt) {
 		fpu_kern_leave(curthread, ctx);
-out:
 		RELEASE_CTX(ctxidx, ctx);
 	}
 	return (error);
@@ -724,14 +723,14 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 			return (EINVAL);
 	}
 
+	ctx = NULL;
+	ctxidx = 0;
 	error = 0;
 	kt = is_fpu_kern_thread(0);
 	if (!kt) {
 		ACQUIRE_CTX(ctxidx, ctx);
-		error = fpu_kern_enter(curthread, ctx,
+		fpu_kern_enter(curthread, ctx,
 		    FPU_KERN_NORMAL | FPU_KERN_KTHR);
-		if (error != 0)
-			goto out2;
 	}
 
 	/* Do work */
@@ -759,7 +758,6 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 out:
 	if (!kt) {
 		fpu_kern_leave(curthread, ctx);
-out2:
 		RELEASE_CTX(ctxidx, ctx);
 	}
 	return (error);
@@ -775,6 +773,9 @@ aesni_cipher_crypt(struct aesni_session *ses, struct cryptodesc *enccrd,
 
 	KASSERT(ses->algo != CRYPTO_AES_NIST_GCM_16 || authcrd != NULL,
 	    ("AES_NIST_GCM_16 must include MAC descriptor"));
+
+	ivlen = 0;
+	authbuf = NULL;
 
 	buf = aesni_cipher_alloc(enccrd, crp, &allocated);
 	if (buf == NULL)

@@ -36,7 +36,7 @@
 
 #include <machine/asmacros.h>
 
-#include "assym.s"
+#include "assym.inc"
 
 #if defined(SMP) && defined(SCHED_ULE)
 #define	SETOP		xchgl
@@ -258,7 +258,6 @@ sw1:
 	movl	%eax,(%esp)
 
 	movl	%edx, PCPU(CURPCB)
-	movl	TD_TID(%ecx),%eax
 	movl	%ecx, PCPU(CURTHREAD)		/* into next thread */
 
 	/*

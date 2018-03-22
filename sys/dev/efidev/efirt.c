@@ -99,6 +99,25 @@ efi_status_to_errno(efi_status status)
 
 static struct mtx efi_lock;
 
+static bool
+efi_is_in_map(struct efi_md *map, int ndesc, int descsz, vm_offset_t addr)
+{
+	struct efi_md *p;
+	int i;
+
+	for (i = 0, p = map; i < ndesc; i++, p = efi_next_descriptor(p,
+	    descsz)) {
+		if ((p->md_attr & EFI_MD_ATTR_RT) == 0)
+			continue;
+
+		if (addr >= (uintptr_t)p->md_virt &&
+		    addr < (uintptr_t)p->md_virt + p->md_pages * PAGE_SIZE)
+			return (true);
+	}
+
+	return (false);
+}
+
 static int
 efi_init(void)
 {
@@ -112,6 +131,11 @@ efi_init(void)
 	if (efi_systbl_phys == 0) {
 		if (bootverbose)
 			printf("EFI systbl not available\n");
+		return (0);
+	}
+	if (!PMAP_HAS_DMAP) {
+		if (bootverbose)
+			printf("EFI systbl requires direct map\n");
 		return (0);
 	}
 	efi_systbl = (struct efi_systbl *)PHYS_TO_DMAP(efi_systbl_phys);
@@ -159,6 +183,24 @@ efi_init(void)
 		return (ENXIO);
 	}
 
+	/*
+	 * Some UEFI implementations have multiple implementations of the
+	 * RS->GetTime function. They switch from one we can only use early
+	 * in the boot process to one valid as a RunTime service only when we
+	 * call RS->SetVirtualAddressMap. As this is not always the case, e.g.
+	 * with an old loader.efi, check if the RS->GetTime function is within
+	 * the EFI map, and fail to attach if not.
+	 */
+	if (!efi_is_in_map(map, efihdr->memory_size / efihdr->descriptor_size,
+	    efihdr->descriptor_size, (vm_offset_t)efi_runtime->rt_gettime)) {
+		if (bootverbose)
+			printf(
+			 "EFI runtime services table has an invalid pointer\n");
+		efi_runtime = NULL;
+		efi_destroy_1t1_map();
+		return (ENXIO);
+	}
+
 	return (0);
 }
 
@@ -189,7 +231,6 @@ efi_enter(void)
 {
 	struct thread *td;
 	pmap_t curpmap;
-	int error;
 
 	if (efi_runtime == NULL)
 		return (ENXIO);
@@ -197,12 +238,7 @@ efi_enter(void)
 	curpmap = &td->td_proc->p_vmspace->vm_pmap;
 	PMAP_LOCK(curpmap);
 	mtx_lock(&efi_lock);
-	error = fpu_kern_enter(td, NULL, FPU_KERN_NOCTX);
-	if (error != 0) {
-		PMAP_UNLOCK(curpmap);
-		return (error);
-	}
-
+	fpu_kern_enter(td, NULL, FPU_KERN_NOCTX);
 	return (efi_arch_enter());
 }
 
@@ -242,7 +278,7 @@ efi_get_table(struct uuid *uuid, void **ptr)
 }
 
 static int
-efi_get_time_locked(struct efi_tm *tm)
+efi_get_time_locked(struct efi_tm *tm, struct efi_tmcap *tmcap)
 {
 	efi_status status;
 	int error;
@@ -251,7 +287,7 @@ efi_get_time_locked(struct efi_tm *tm)
 	error = efi_enter();
 	if (error != 0)
 		return (error);
-	status = efi_runtime->rt_gettime(tm, NULL);
+	status = efi_runtime->rt_gettime(tm, tmcap);
 	efi_leave();
 	error = efi_status_to_errno(status);
 	return (error);
@@ -260,12 +296,33 @@ efi_get_time_locked(struct efi_tm *tm)
 int
 efi_get_time(struct efi_tm *tm)
 {
+	struct efi_tmcap dummy;
 	int error;
 
 	if (efi_runtime == NULL)
 		return (ENXIO);
 	EFI_TIME_LOCK()
-	error = efi_get_time_locked(tm);
+	/*
+	 * UEFI spec states that the Capabilities argument to GetTime is
+	 * optional, but some UEFI implementations choke when passed a NULL
+	 * pointer. Pass a dummy efi_tmcap, even though we won't use it,
+	 * to workaround such implementations.
+	 */
+	error = efi_get_time_locked(tm, &dummy);
+	EFI_TIME_UNLOCK()
+	return (error);
+}
+
+int
+efi_get_time_capabilities(struct efi_tmcap *tmcap)
+{
+	struct efi_tm dummy;
+	int error;
+
+	if (efi_runtime == NULL)
+		return (ENXIO);
+	EFI_TIME_LOCK()
+	error = efi_get_time_locked(&dummy, tmcap);
 	EFI_TIME_UNLOCK()
 	return (error);
 }

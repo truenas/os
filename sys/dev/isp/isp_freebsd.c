@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009-2017 Alexander Motin <mav@FreeBSD.org>
  * Copyright (c) 1997-2009 by Matthew Jacob
  * All rights reserved.
@@ -442,7 +444,7 @@ ispioctl(struct cdev *dev, u_long c, caddr_t addr, int flags, struct thread *td)
 
 	case ISP_RESCAN:
 		if (IS_FC(isp)) {
-			chan = *(int *)addr;
+			chan = *(intptr_t *)addr;
 			if (chan < 0 || chan >= isp->isp_nchan) {
 				retval = -ENXIO;
 				break;
@@ -459,7 +461,7 @@ ispioctl(struct cdev *dev, u_long c, caddr_t addr, int flags, struct thread *td)
 
 	case ISP_FC_LIP:
 		if (IS_FC(isp)) {
-			chan = *(int *)addr;
+			chan = *(intptr_t *)addr;
 			if (chan < 0 || chan >= isp->isp_nchan) {
 				retval = -ENXIO;
 				break;

@@ -385,6 +385,8 @@ esp_input(struct mbuf *m, struct secasvar *sav, int skip, int protoff)
 	/* Crypto operation descriptor */
 	crp->crp_ilen = m->m_pkthdr.len; /* Total input length */
 	crp->crp_flags = CRYPTO_F_IMBUF | CRYPTO_F_CBIFSYNC;
+	if (V_async_crypto)
+		crp->crp_flags |= CRYPTO_F_ASYNC | CRYPTO_F_ASYNC_KEEPORDER;
 	crp->crp_buf = (caddr_t) m;
 	crp->crp_callback = esp_input_cb;
 	crp->crp_sid = cryptoid;
@@ -395,6 +397,7 @@ esp_input(struct mbuf *m, struct secasvar *sav, int skip, int protoff)
 	xd->protoff = protoff;
 	xd->skip = skip;
 	xd->cryptoid = cryptoid;
+	xd->vnet = curvnet;
 
 	/* Decryption descriptor */
 	IPSEC_ASSERT(crde != NULL, ("null esp crypto descriptor"));
@@ -439,7 +442,6 @@ esp_input_cb(struct cryptop *crp)
 	IPSEC_DEBUG_DECLARE(char buf[128]);
 	u_int8_t lastthree[3], aalg[AH_HMAC_MAXHASHLEN];
 	const struct auth_hash *esph;
-	const struct enc_xform *espx;
 	struct mbuf *m;
 	struct cryptodesc *crd;
 	struct xform_data *xd;
@@ -454,13 +456,13 @@ esp_input_cb(struct cryptop *crp)
 
 	m = (struct mbuf *) crp->crp_buf;
 	xd = (struct xform_data *) crp->crp_opaque;
+	CURVNET_SET(xd->vnet);
 	sav = xd->sav;
 	skip = xd->skip;
 	protoff = xd->protoff;
 	cryptoid = xd->cryptoid;
 	saidx = &sav->sah->saidx;
 	esph = sav->tdb_authalgxform;
-	espx = sav->tdb_encalgxform;
 
 	/* Check for crypto errors */
 	if (crp->crp_etype) {
@@ -469,6 +471,7 @@ esp_input_cb(struct cryptop *crp)
 			if (ipsec_updateid(sav, &crp->crp_sid, &cryptoid) != 0)
 				crypto_freesession(cryptoid);
 			xd->cryptoid = crp->crp_sid;
+			CURVNET_RESTORE();
 			return (crypto_dispatch(crp));
 		}
 		ESPSTAT_INC(esps_noxform);
@@ -603,8 +606,10 @@ esp_input_cb(struct cryptop *crp)
 		panic("%s: Unexpected address family: %d saidx=%p", __func__,
 		    saidx->dst.sa.sa_family, saidx);
 	}
+	CURVNET_RESTORE();
 	return error;
 bad:
+	CURVNET_RESTORE();
 	if (sav != NULL)
 		key_freesav(&sav);
 	if (m != NULL)
@@ -837,10 +842,13 @@ esp_output(struct mbuf *m, struct secpolicy *sp, struct secasvar *sav,
 	xd->sav = sav;
 	xd->idx = idx;
 	xd->cryptoid = cryptoid;
+	xd->vnet = curvnet;
 
 	/* Crypto operation descriptor. */
 	crp->crp_ilen = m->m_pkthdr.len; /* Total input length. */
 	crp->crp_flags = CRYPTO_F_IMBUF | CRYPTO_F_CBIFSYNC;
+	if (V_async_crypto)
+		crp->crp_flags |= CRYPTO_F_ASYNC | CRYPTO_F_ASYNC_KEEPORDER;
 	crp->crp_buf = (caddr_t) m;
 	crp->crp_callback = esp_output_cb;
 	crp->crp_opaque = (caddr_t) xd;
@@ -880,6 +888,7 @@ esp_output_cb(struct cryptop *crp)
 	int error;
 
 	xd = (struct xform_data *) crp->crp_opaque;
+	CURVNET_SET(xd->vnet);
 	m = (struct mbuf *) crp->crp_buf;
 	sp = xd->sp;
 	sav = xd->sav;
@@ -893,6 +902,7 @@ esp_output_cb(struct cryptop *crp)
 			if (ipsec_updateid(sav, &crp->crp_sid, &cryptoid) != 0)
 				crypto_freesession(cryptoid);
 			xd->cryptoid = crp->crp_sid;
+			CURVNET_RESTORE();
 			return (crypto_dispatch(crp));
 		}
 		ESPSTAT_INC(esps_noxform);
@@ -938,8 +948,10 @@ esp_output_cb(struct cryptop *crp)
 
 	/* NB: m is reclaimed by ipsec_process_done. */
 	error = ipsec_process_done(m, sp, sav, idx);
+	CURVNET_RESTORE();
 	return (error);
 bad:
+	CURVNET_RESTORE();
 	free(xd, M_XDATA);
 	crypto_freereq(crp);
 	key_freesav(&sav);

@@ -4,6 +4,8 @@
 __FBSDID("$FreeBSD$");
 
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -245,7 +247,7 @@ openfirm_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flags,
 		if (error)
 			break;
 		node = OF_finddevice(name);
-		if (node == 0 || node == -1) {
+		if (node == -1) {
 			error = ENOENT;
 			break;
 		}

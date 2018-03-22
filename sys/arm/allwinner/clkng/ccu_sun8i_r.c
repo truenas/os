@@ -33,6 +33,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/bus.h>
 
+#if defined(__aarch64__)
+#include "opt_soc.h"
+#endif
+
 #include <dev/extres/clk/clk_div.h>
 #include <dev/extres/clk/clk_fixed.h>
 #include <dev/extres/clk/clk_mux.h>
@@ -70,8 +74,16 @@ static struct aw_ccung_gate ccu_sun8i_r_gates[] = {
 };
 
 static const char *ar100_parents[] = {"osc32k", "osc24M", "pll_periph0", "iosc"};
+static const char *a83t_ar100_parents[] = {"osc16M-d512", "osc24M", "pll_periph", "osc16M"};
 PREDIV_CLK(ar100_clk, CLK_AR100,				/* id */
     "ar100", ar100_parents,					/* name, parents */
+    0x00,							/* offset */
+    16, 2,							/* mux */
+    4, 2, 0, AW_CLK_FACTOR_POWER_OF_TWO,			/* div */
+    8, 5, 0, AW_CLK_FACTOR_HAS_COND,				/* prediv */
+    16, 2, 2);							/* prediv condition */
+PREDIV_CLK(a83t_ar100_clk, CLK_AR100,				/* id */
+    "ar100", a83t_ar100_parents,				/* name, parents */
     0x00,							/* offset */
     16, 2,							/* mux */
     4, 2, 0, AW_CLK_FACTOR_POWER_OF_TWO,			/* div */
@@ -96,8 +108,23 @@ DIV_CLK(apb0_clk,
     0, 2,			/* shift, width */
     0, NULL);			/* flags, div table */
 
-static struct aw_clk_prediv_mux_def *prediv_mux_clks[] = {
+static const char *ir_parents[] = {"osc32k", "osc24M"};
+NM_CLK(ir_clk,
+    CLK_IR,				/* id */
+    "ir", ir_parents,			/* names, parents */
+    0x54,				/* offset */
+    0, 4, 0, 0,				/* N factor */
+    16, 2, 0, 0,			/* M flags */
+    24, 2,				/* mux */
+    31,					/* gate */
+    AW_CLK_HAS_MUX | AW_CLK_REPARENT);	/* flags */
+
+static struct aw_clk_prediv_mux_def *r_ccu_prediv_mux_clks[] = {
 	&ar100_clk,
+};
+
+static struct aw_clk_prediv_mux_def *a83t_r_ccu_prediv_mux_clks[] = {
+	&a83t_ar100_clk,
 };
 
 static struct clk_div_def *div_clks[] = {
@@ -108,15 +135,26 @@ static struct clk_fixed_def *fixed_factor_clks[] = {
 	&ahb0_clk,
 };
 
+static struct aw_clk_nm_def *nm_clks[] = {
+	&ir_clk,
+};
+
 void
 ccu_sun8i_r_register_clocks(struct aw_ccung_softc *sc)
 {
 	int i;
+	struct aw_clk_prediv_mux_def **prediv_mux_clks;
 
 	sc->resets = ccu_sun8i_r_resets;
 	sc->nresets = nitems(ccu_sun8i_r_resets);
 	sc->gates = ccu_sun8i_r_gates;
 	sc->ngates = nitems(ccu_sun8i_r_gates);
+
+	/* a83t names the parents differently than the others */
+	if (sc->type == A83T_R_CCU)
+		prediv_mux_clks = a83t_r_ccu_prediv_mux_clks;
+	else
+		prediv_mux_clks = r_ccu_prediv_mux_clks;
 
 	for (i = 0; i < nitems(prediv_mux_clks); i++)
 		aw_clk_prediv_mux_register(sc->clkdom, prediv_mux_clks[i]);
@@ -124,4 +162,6 @@ ccu_sun8i_r_register_clocks(struct aw_ccung_softc *sc)
 		clknode_div_register(sc->clkdom, div_clks[i]);
 	for (i = 0; i < nitems(fixed_factor_clks); i++)
 		clknode_fixed_register(sc->clkdom, fixed_factor_clks[i]);
+	for (i = 0; i < nitems(nm_clks); i++)
+		aw_clk_nm_register(sc->clkdom, nm_clks[i]);
 }

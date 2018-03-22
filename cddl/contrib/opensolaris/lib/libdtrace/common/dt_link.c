@@ -22,6 +22,7 @@
 /*
  * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
+ * Copyright 2017-2018 Mark Johnston <markj@FreeBSD.org>
  */
 
 #pragma ident	"%Z%%M%	%I%	%E% SMI"
@@ -229,10 +230,12 @@ prepare_elf32(dtrace_hdl_t *dtp, const dof_hdr_t *dof, dof_elf32_t *dep)
 		for (j = 0; j < nrel; j++) {
 #if defined(__aarch64__)
 /* XXX */
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
+			printf("%s:%s(%d): aarch64 not implemented\n",
+			    __FUNCTION__, __FILE__, __LINE__);
 #elif defined(__arm__)
 /* XXX */
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
+			printf("%s:%s(%d): arm not implemented\n",
+			    __FUNCTION__, __FILE__, __LINE__);
 #elif defined(__i386) || defined(__amd64)
 			rel->r_offset = s->dofs_offset +
 			    dofr[j].dofr_offset;
@@ -240,7 +243,8 @@ printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
 			    R_386_PC32);
 #elif defined(__mips__)
 /* XXX */
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
+			printf("%s:%s(%d): MIPS not implemented\n",
+			    __FUNCTION__, __FILE__, __LINE__);
 #elif defined(__powerpc__)
 			/*
 			 * Add 4 bytes to hit the low half of this 64-bit
@@ -252,7 +256,8 @@ printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
 			    R_PPC_REL32);
 #elif defined(__riscv)
 /* XXX */
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
+			printf("%s:%s(%d): RISC-V not implemented\n",
+			    __FUNCTION__, __FILE__, __LINE__);
 #else
 #error unknown ISA
 #endif
@@ -261,7 +266,7 @@ printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
 			sym->st_value = 0;
 			sym->st_size = 0;
 			sym->st_info = ELF32_ST_INFO(STB_GLOBAL, STT_FUNC);
-			sym->st_other = 0;
+			sym->st_other = ELF32_ST_VISIBILITY(STV_HIDDEN);
 			sym->st_shndx = SHN_UNDEF;
 
 			rel++;
@@ -445,7 +450,7 @@ prepare_elf64(dtrace_hdl_t *dtp, const dof_hdr_t *dof, dof_elf64_t *dep)
 			sym->st_value = 0;
 			sym->st_size = 0;
 			sym->st_info = GELF_ST_INFO(STB_GLOBAL, STT_FUNC);
-			sym->st_other = 0;
+			sym->st_other = ELF64_ST_VISIBILITY(STV_HIDDEN);
 			sym->st_shndx = SHN_UNDEF;
 
 			rel++;
@@ -802,8 +807,9 @@ static int
 dt_modtext(dtrace_hdl_t *dtp, char *p, int isenabled, GElf_Rela *rela,
     uint32_t *off)
 {
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
-	return (0);
+	printf("%s:%s(%d): aarch64 not implemented\n", __FUNCTION__, __FILE__,
+	    __LINE__);
+	return (-1);
 }
 #elif defined(__arm__)
 /* XXX */
@@ -811,8 +817,9 @@ static int
 dt_modtext(dtrace_hdl_t *dtp, char *p, int isenabled, GElf_Rela *rela,
     uint32_t *off)
 {
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
-	return (0);
+	printf("%s:%s(%d): arm not implemented\n", __FUNCTION__, __FILE__,
+	    __LINE__);
+	return (-1);
 }
 #elif defined(__mips__)
 /* XXX */
@@ -820,8 +827,9 @@ static int
 dt_modtext(dtrace_hdl_t *dtp, char *p, int isenabled, GElf_Rela *rela,
     uint32_t *off)
 {
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
-	return (0);
+	printf("%s:%s(%d): MIPS not implemented\n", __FUNCTION__, __FILE__,
+	    __LINE__);
+	return (-1);
 }
 #elif defined(__powerpc__)
 /* The sentinel is 'xor r3,r3,r3'. */
@@ -910,8 +918,9 @@ static int
 dt_modtext(dtrace_hdl_t *dtp, char *p, int isenabled, GElf_Rela *rela,
     uint32_t *off)
 {
-printf("%s:%s(%d): DOODAD\n",__FUNCTION__,__FILE__,__LINE__);
-	return (0);
+	printf("%s:%s(%d): RISC-V implementation required\n", __FUNCTION__,
+	    __FILE__, __LINE__);
+	return (-1);
 }
 #elif defined(__sparc)
 
@@ -1408,8 +1417,15 @@ process_obj(dtrace_hdl_t *dtp, const char *obj, int *eprobesp)
 				    "expected %s to be of type function", s));
 			}
 
-			len = snprintf(NULL, 0, dt_symfmt, dt_symprefix,
-			    objkey, s) + 1;
+			/*
+			 * Aliases of weak symbols don't get a uniquifier.
+			 */
+			if (GELF_ST_BIND(fsym.st_info) == STB_WEAK)
+				len = snprintf(NULL, 0, dt_weaksymfmt,
+				    dt_symprefix, s) + 1;
+			else
+				len = snprintf(NULL, 0, dt_symfmt, dt_symprefix,
+				    objkey, s) + 1;
 			if ((p = dt_alloc(dtp, len)) == NULL) {
 				dt_strtab_destroy(strtab);
 				goto err;

@@ -42,7 +42,7 @@
 #include <machine/psl.h>
 #include <machine/trap.h>
 
-#include "assym.s"
+#include "assym.inc"
 
 #define	SEL_RPL_MASK	0x0003
 #define	GSEL_KPL	0x0020	/* GSEL(GCODE_SEL, SEL_KPL) */
@@ -133,6 +133,7 @@ IDTVEC(page)
 	TRAP(T_PAGEFLT)
 IDTVEC(mchk)
 	pushl $0; TRAP(T_MCHK)
+IDTVEC(rsvd_pti)
 IDTVEC(rsvd)
 	pushl $0; TRAP(T_RESERVED)
 IDTVEC(fpu)
