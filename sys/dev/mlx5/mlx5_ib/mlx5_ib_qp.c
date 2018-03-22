@@ -59,13 +59,6 @@ enum {
 	MLX5_IB_CACHE_LINE_SIZE	= 64,
 };
 
-enum {
-	MLX5_RQ_NUM_STATE	= MLX5_RQC_STATE_ERR + 1,
-	MLX5_SQ_NUM_STATE	= MLX5_SQC_STATE_ERR + 1,
-	MLX5_QP_STATE		= MLX5_QP_NUM_STATE + 1,
-	MLX5_QP_STATE_BAD	= MLX5_QP_STATE + 1,
-};
-
 static const u32 mlx5_ib_opcode[] = {
 	[IB_WR_SEND]				= MLX5_OPCODE_SEND,
 	[IB_WR_SEND_WITH_IMM]			= MLX5_OPCODE_SEND_IMM,
@@ -2504,7 +2497,7 @@ int mlx5_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 	}
 
 	for (nreq = 0; wr; nreq++, wr = wr->next) {
-		if (unlikely(wr->opcode >= ARRAY_SIZE(mlx5_ib_opcode))) {
+		if (unlikely(wr->opcode < 0 || wr->opcode >= ARRAY_SIZE(mlx5_ib_opcode))) {
 			mlx5_ib_warn(dev, "Invalid opcode 0x%x\n", wr->opcode);
 			err = -EINVAL;
 			*bad_wr = wr;

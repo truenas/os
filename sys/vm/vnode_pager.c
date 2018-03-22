@@ -1223,6 +1223,8 @@ vnode_pager_generic_putpages(struct vnode *vp, vm_page_t *ma, int bytecount,
 			maxsize = object->un_pager.vnp.vnp_size - poffset;
 			ncount = btoc(maxsize);
 			if ((pgoff = (int)maxsize & PAGE_MASK) != 0) {
+				pgoff = roundup2(pgoff, DEV_BSIZE);
+
 				/*
 				 * If the object is locked and the following
 				 * conditions hold, then the page's dirty
@@ -1364,9 +1366,7 @@ vnode_pager_putpages_ioflags(int pager_flags)
 	else if ((pager_flags & VM_PAGER_CLUSTER_OK) == 0)
 		ioflags |= IO_ASYNC;
 	ioflags |= (pager_flags & VM_PAGER_PUT_INVAL) != 0 ? IO_INVAL: 0;
-#ifdef notyet
 	ioflags |= (pager_flags & VM_PAGER_PUT_NOREUSE) != 0 ? IO_NOREUSE : 0;
-#endif
 	ioflags |= IO_SEQMAX << IO_SEQSHIFT;
 	return (ioflags);
 }
