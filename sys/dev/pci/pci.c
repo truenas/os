@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997, Stefan Esser <se@freebsd.org>
  * Copyright (c) 2000, Michael Smith <msmith@freebsd.org>
  * Copyright (c) 2000, BSDi
@@ -121,6 +123,8 @@ static void		pci_resume_msi(device_t dev);
 static void		pci_resume_msix(device_t dev);
 static int		pci_remap_intr_method(device_t bus, device_t dev,
 			    u_int irq);
+static void		pci_hint_device_unit(device_t acdev, device_t child,
+			    const char *name, int *unitp);
 
 static int		pci_get_id_method(device_t dev, device_t child,
 			    enum pci_id_type type, uintptr_t *rid);
@@ -160,6 +164,7 @@ static device_method_t pci_methods[] = {
 	DEVMETHOD(bus_child_detached,	pci_child_detached),
 	DEVMETHOD(bus_child_pnpinfo_str, pci_child_pnpinfo_str_method),
 	DEVMETHOD(bus_child_location_str, pci_child_location_str_method),
+	DEVMETHOD(bus_hint_device_unit,	pci_hint_device_unit),
 	DEVMETHOD(bus_remap_intr,	pci_remap_intr_method),
 	DEVMETHOD(bus_suspend_child,	pci_suspend_child),
 	DEVMETHOD(bus_resume_child,	pci_resume_child),
@@ -178,8 +183,11 @@ static device_method_t pci_methods[] = {
 	DEVMETHOD(pci_set_powerstate,	pci_set_powerstate_method),
 	DEVMETHOD(pci_assign_interrupt,	pci_assign_interrupt_method),
 	DEVMETHOD(pci_find_cap,		pci_find_cap_method),
+	DEVMETHOD(pci_find_next_cap,	pci_find_next_cap_method),
 	DEVMETHOD(pci_find_extcap,	pci_find_extcap_method),
+	DEVMETHOD(pci_find_next_extcap,	pci_find_next_extcap_method),
 	DEVMETHOD(pci_find_htcap,	pci_find_htcap_method),
+	DEVMETHOD(pci_find_next_htcap,	pci_find_next_htcap_method),
 	DEVMETHOD(pci_alloc_msi,	pci_alloc_msi_method),
 	DEVMETHOD(pci_alloc_msix,	pci_alloc_msix_method),
 	DEVMETHOD(pci_enable_msi,	pci_enable_msi_method),
@@ -1372,7 +1380,7 @@ pci_find_htcap_method(device_t dev, device_t child, int capability, int *capreg)
 	 * Traverse the capabilities list checking each HT capability
 	 * to see if it matches the requested HT capability.
 	 */
-	while (ptr != 0) {
+	for (;;) {
 		val = pci_read_config(child, ptr + PCIR_HT_COMMAND, 2);
 		if (capability == PCIM_HTCAP_SLAVE ||
 		    capability == PCIM_HTCAP_HOST)
@@ -1386,13 +1394,51 @@ pci_find_htcap_method(device_t dev, device_t child, int capability, int *capreg)
 		}
 
 		/* Skip to the next HT capability. */
-		while (ptr != 0) {
-			ptr = pci_read_config(child, ptr + PCICAP_NEXTPTR, 1);
-			if (pci_read_config(child, ptr + PCICAP_ID, 1) ==
-			    PCIY_HT)
-				break;
+		if (pci_find_next_cap(child, PCIY_HT, ptr, &ptr) != 0)
+			break;
+	}
+
+	return (ENOENT);
+}
+
+/*
+ * Find the next requested HyperTransport capability after start and return
+ * the offset in configuration space via the pointer provided.  The function
+ * returns 0 on success and an error code otherwise.
+ */
+int
+pci_find_next_htcap_method(device_t dev, device_t child, int capability,
+    int start, int *capreg)
+{
+	int ptr;
+	uint16_t val;
+
+	KASSERT(pci_read_config(child, start + PCICAP_ID, 1) == PCIY_HT,
+	    ("start capability is not HyperTransport capability"));
+	ptr = start;
+
+	/*
+	 * Traverse the capabilities list checking each HT capability
+	 * to see if it matches the requested HT capability.
+	 */
+	for (;;) {
+		/* Skip to the next HT capability. */
+		if (pci_find_next_cap(child, PCIY_HT, ptr, &ptr) != 0)
+			break;
+
+		val = pci_read_config(child, ptr + PCIR_HT_COMMAND, 2);
+		if (capability == PCIM_HTCAP_SLAVE ||
+		    capability == PCIM_HTCAP_HOST)
+			val &= 0xe000;
+		else
+			val &= PCIM_HTCMD_CAP_MASK;
+		if (val == capability) {
+			if (capreg != NULL)
+				*capreg = ptr;
+			return (0);
 		}
 	}
+
 	return (ENOENT);
 }
 
@@ -1407,8 +1453,8 @@ pci_find_cap_method(device_t dev, device_t child, int capability,
 {
 	struct pci_devinfo *dinfo = device_get_ivars(child);
 	pcicfgregs *cfg = &dinfo->cfg;
-	u_int32_t status;
-	u_int8_t ptr;
+	uint32_t status;
+	uint8_t ptr;
 
 	/*
 	 * Check the CAP_LIST bit of the PCI status register first.
@@ -1437,6 +1483,33 @@ pci_find_cap_method(device_t dev, device_t child, int capability,
 	/*
 	 * Traverse the capabilities list.
 	 */
+	while (ptr != 0) {
+		if (pci_read_config(child, ptr + PCICAP_ID, 1) == capability) {
+			if (capreg != NULL)
+				*capreg = ptr;
+			return (0);
+		}
+		ptr = pci_read_config(child, ptr + PCICAP_NEXTPTR, 1);
+	}
+
+	return (ENOENT);
+}
+
+/*
+ * Find the next requested capability after start and return the offset in
+ * configuration space via the pointer provided.  The function returns
+ * 0 on success and an error code otherwise.
+ */
+int
+pci_find_next_cap_method(device_t dev, device_t child, int capability,
+    int start, int *capreg)
+{
+	uint8_t ptr;
+
+	KASSERT(pci_read_config(child, start + PCICAP_ID, 1) == capability,
+	    ("start capability is not expected capability"));
+
+	ptr = pci_read_config(child, start + PCICAP_NEXTPTR, 1);
 	while (ptr != 0) {
 		if (pci_read_config(child, ptr + PCICAP_ID, 1) == capability) {
 			if (capreg != NULL)
@@ -1481,6 +1554,41 @@ pci_find_extcap_method(device_t dev, device_t child, int capability,
 		if (ptr == 0)
 			break;
 		ecap = pci_read_config(child, ptr, 4);
+	}
+
+	return (ENOENT);
+}
+
+/*
+ * Find the next requested extended capability after start and return the
+ * offset in configuration space via the pointer provided.  The function
+ * returns 0 on success and an error code otherwise.
+ */
+int
+pci_find_next_extcap_method(device_t dev, device_t child, int capability,
+    int start, int *capreg)
+{
+	struct pci_devinfo *dinfo = device_get_ivars(child);
+	pcicfgregs *cfg = &dinfo->cfg;
+	uint32_t ecap;
+	uint16_t ptr;
+
+	/* Only supported for PCI-express devices. */
+	if (cfg->pcie.pcie_location == 0)
+		return (ENXIO);
+
+	ecap = pci_read_config(child, start, 4);
+	KASSERT(PCI_EXTCAP_ID(ecap) == capability,
+	    ("start extended capability is not expected capability"));
+	ptr = PCI_EXTCAP_NEXTPTR(ecap);
+	while (ptr != 0) {
+		ecap = pci_read_config(child, ptr, 4);
+		if (PCI_EXTCAP_ID(ecap) == capability) {
+			if (capreg != NULL)
+				*capreg = ptr;
+			return (0);
+		}
+		ptr = PCI_EXTCAP_NEXTPTR(ecap);
 	}
 
 	return (ENOENT);
@@ -3975,7 +4083,6 @@ pci_rescan_method(device_t dev)
 {
 #define	REG(n, w)	PCIB_READ_CONFIG(pcib, busno, s, f, n, w)
 	device_t pcib = device_get_parent(dev);
-	struct pci_softc *sc;
 	device_t child, *devlist, *unchanged;
 	int devcount, error, i, j, maxslots, oldcount;
 	int busno, domain, s, f, pcifunchigh;
@@ -3995,7 +4102,6 @@ pci_rescan_method(device_t dev)
 	} else
 		unchanged = NULL;
 
-	sc = device_get_softc(dev);
 	domain = pcib_get_domain(dev);
 	busno = pcib_get_bus(dev);
 	maxslots = PCIB_MAXSLOTS(pcib);
@@ -4072,11 +4178,9 @@ device_t
 pci_add_iov_child(device_t bus, device_t pf, uint16_t rid, uint16_t vid,
     uint16_t did)
 {
-	struct pci_devinfo *pf_dinfo, *vf_dinfo;
+	struct pci_devinfo *vf_dinfo;
 	device_t pcib;
 	int busno, slot, func;
-
-	pf_dinfo = device_get_ivars(pf);
 
 	pcib = device_get_parent(bus);
 
@@ -4216,6 +4320,31 @@ pci_detach(device_t dev)
 		return (error);
 #endif
 	return (device_delete_children(dev));
+}
+
+static void
+pci_hint_device_unit(device_t dev, device_t child, const char *name, int *unitp)
+{
+	int line, unit;
+	const char *at;
+	char me1[24], me2[32];
+	uint8_t b, s, f;
+	uint32_t d;
+
+	d = pci_get_domain(child);
+	b = pci_get_bus(child);
+	s = pci_get_slot(child);
+	f = pci_get_function(child);
+	snprintf(me1, sizeof(me1), "pci%u:%u:%u", b, s, f);
+	snprintf(me2, sizeof(me2), "pci%u:%u:%u:%u", d, b, s, f);
+	line = 0;
+	while (resource_find_dev(&line, name, &unit, "at", NULL) == 0) {
+		resource_string_value(name, unit, "at", &at);
+		if (strcmp(at, me1) != 0 && strcmp(at, me2) != 0)
+			continue; /* No match, try next candidate */
+		*unitp = unit;
+		return;
+	}
 }
 
 static void

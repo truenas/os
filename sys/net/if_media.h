@@ -2,6 +2,8 @@
 /* $FreeBSD$ */
 
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 1997
  *	Jonathan Stone and Jason R. Thorpe.  All rights reserved.
  *
@@ -268,7 +270,7 @@ uint64_t	ifmedia_baudrate(int);
 #define	IFM_IEEE80211_OFDM27	23	/* OFDM 27Mbps */
 /* NB: not enough bits to express MCS fully */
 #define	IFM_IEEE80211_MCS	24	/* HT MCS rate */
-#define	IFM_IEEE80211_VHT	25	/* HT MCS rate */
+#define	IFM_IEEE80211_VHT	25	/* VHT MCS rate */
 
 #define	IFM_IEEE80211_ADHOC	0x00000100	/* Operate in Adhoc mode */
 #define	IFM_IEEE80211_HOSTAP	0x00000200	/* Operate in Host AP mode */

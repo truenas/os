@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2002 Michael Shalayeff.
  * Copyright (c) 2003 Ryan McBride.
  * Copyright (c) 2011 Gleb Smirnoff <glebius@FreeBSD.org>
@@ -175,8 +177,8 @@ static int proto_reg[] = {-1, -1};
  * Each softc has a lock sc_mtx. It is used to synchronise carp_input_c(),
  * callout-driven events and ioctl()s.
  *
- * To traverse the list of softcs on an ifnet we use CIF_LOCK(), to
- * traverse the global list we use the mutex carp_mtx.
+ * To traverse the list of softcs on an ifnet we use CIF_LOCK() or carp_sx.
+ * To traverse the global list we use the mutex carp_mtx.
  *
  * Known issues with locking:
  *
@@ -189,6 +191,10 @@ static int proto_reg[] = {-1, -1};
 /* Accept incoming CARP packets. */
 static VNET_DEFINE(int, carp_allow) = 1;
 #define	V_carp_allow	VNET(carp_allow)
+
+/* Set DSCP in outgoing CARP packets. */
+static VNET_DEFINE(int, carp_dscp) = 1;
+#define	V_carp_dscp	VNET(carp_dscp)
 
 /* Preempt slower nodes. */
 static VNET_DEFINE(int, carp_preempt) = 0;
@@ -217,6 +223,8 @@ SYSCTL_NODE(_net_inet, IPPROTO_CARP,	carp,	CTLFLAG_RW, 0,	"CARP");
 SYSCTL_PROC(_net_inet_carp, OID_AUTO, allow,
     CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW, 0, 0, carp_allow_sysctl, "I",
     "Accept incoming CARP packets");
+SYSCTL_INT(_net_inet_carp, OID_AUTO, dscp, CTLFLAG_VNET | CTLFLAG_RW,
+    &VNET_NAME(carp_dscp), 0, "Use DSCP CS7 for carp packets");
 SYSCTL_INT(_net_inet_carp, OID_AUTO, preempt, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(carp_preempt), 0, "High-priority backup preemption mode");
 SYSCTL_INT(_net_inet_carp, OID_AUTO, log, CTLFLAG_VNET | CTLFLAG_RW,
@@ -288,7 +296,8 @@ SYSCTL_VNET_PCPUSTAT(_net_inet_carp, OID_AUTO, stats, struct carpstats,
 		++_i)
 
 #define	IFNET_FOREACH_CARP(ifp, sc)					\
-	CIF_LOCK_ASSERT(ifp->if_carp);					\
+	KASSERT(mtx_owned(&ifp->if_carp->cif_mtx) ||			\
+	    sx_xlocked(&carp_sx), ("cif_vrs not locked"));		\
 	TAILQ_FOREACH((sc), &(ifp)->if_carp->cif_vrs, sc_list)
 
 #define	DEMOTE_ADVSKEW(sc)					\
@@ -933,7 +942,11 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip = mtod(m, struct ip *);
 		ip->ip_v = IPVERSION;
 		ip->ip_hl = sizeof(*ip) >> 2;
-		ip->ip_tos = IPTOS_LOWDELAY;
+		if (V_carp_dscp) {
+			ip->ip_tos = IPTOS_DSCP_CS7;
+		} else {
+			ip->ip_tos = IPTOS_LOWDELAY;
+		}	
 		ip->ip_len = htons(len);
 		ip->ip_off = htons(IP_DF);
 		ip->ip_ttl = CARP_DFLTTL;
@@ -983,6 +996,11 @@ carp_send_ad_locked(struct carp_softc *sc)
 		ip6 = mtod(m, struct ip6_hdr *);
 		bzero(ip6, sizeof(*ip6));
 		ip6->ip6_vfc |= IPV6_VERSION;
+                if (V_carp_dscp) {
+			/* Traffic class isn't defined in ip6 struct instead  
+			 * it gets offset into flowid field */
+                	ip6->ip6_flow |= htonl(IPTOS_DSCP_CS7 << IPV6_FLOWLABEL_LEN);
+		}
 		ip6->ip6_hlim = CARP_DFLTTL;
 		ip6->ip6_nxt = IPPROTO_CARP;
 
@@ -1565,6 +1583,8 @@ carp_alloc(struct ifnet *ifp)
 	struct carp_softc *sc;
 	struct carp_if *cif;
 
+	sx_assert(&carp_sx, SA_XLOCKED);
+
 	if ((cif = ifp->if_carp) == NULL)
 		cif = carp_alloc_if(ifp);
 
@@ -1754,11 +1774,9 @@ carp_ioctl(struct ifreq *ifr, u_long cmd, struct thread *td)
 		}
 
 		if (ifp->if_carp) {
-			CIF_LOCK(ifp->if_carp);
 			IFNET_FOREACH_CARP(ifp, sc)
 				if (sc->sc_vhid == carpr.carpr_vhid)
 					break;
-			CIF_UNLOCK(ifp->if_carp);
 		}
 		if (sc == NULL) {
 			sc = carp_alloc(ifp);
@@ -1829,11 +1847,9 @@ carp_ioctl(struct ifreq *ifr, u_long cmd, struct thread *td)
 
 		priveleged = (priv_check(td, PRIV_NETINET_CARP) == 0);
 		if (carpr.carpr_vhid != 0) {
-			CIF_LOCK(ifp->if_carp);
 			IFNET_FOREACH_CARP(ifp, sc)
 				if (sc->sc_vhid == carpr.carpr_vhid)
 					break;
-			CIF_UNLOCK(ifp->if_carp);
 			if (sc == NULL) {
 				error = ENOENT;
 				break;
@@ -1844,7 +1860,6 @@ carp_ioctl(struct ifreq *ifr, u_long cmd, struct thread *td)
 			int i, count;
 
 			count = 0;
-			CIF_LOCK(ifp->if_carp);
 			IFNET_FOREACH_CARP(ifp, sc)
 				count++;
 
@@ -1866,7 +1881,6 @@ carp_ioctl(struct ifreq *ifr, u_long cmd, struct thread *td)
 				}
 				i++;
 			}
-			CIF_UNLOCK(ifp->if_carp);
 		}
 		break;
 	    }
@@ -1921,11 +1935,9 @@ carp_attach(struct ifaddr *ifa, int vhid)
 		return (ENOPROTOOPT);
 	}
 
-	CIF_LOCK(cif);
 	IFNET_FOREACH_CARP(ifp, sc)
 		if (sc->sc_vhid == vhid)
 			break;
-	CIF_UNLOCK(cif);
 	if (sc == NULL) {
 		sx_xunlock(&carp_sx);
 		return (ENOENT);

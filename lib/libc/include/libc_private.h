@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1998 John Birrell <jb@cimlogic.com.au>.
  * All rights reserved.
  *
@@ -402,6 +404,8 @@ int		__fcntl_compat(int fd, int cmd, ...);
 int		__sys_futimens(int fd, const struct timespec *times) __hidden;
 int		__sys_utimensat(int fd, const char *path,
 		    const struct timespec *times, int flag) __hidden;
+
+__size_t __arc4_sysctl(unsigned char *, __size_t);
 
 /* execve() with PATH processing to implement posix_spawnp() */
 int _execvpe(const char *, char * const *, char * const *);

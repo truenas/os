@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1982, 1986, 1991, 1993, 1995
  *	The Regents of the University of California.
  * Copyright (c) 2007-2009 Robert N. M. Watson
@@ -1317,9 +1319,7 @@ in_pcbfree(struct inpcb *inp)
 	if (inp->inp_moptions != NULL)
 		inp_freemoptions(inp->inp_moptions);
 #endif
-	RO_RTFREE(&inp->inp_route);
-	if (inp->inp_route.ro_lle)
-		LLE_FREE(inp->inp_route.ro_lle);	/* zeros ro_lle */
+	RO_INVALIDATE_CACHE(&inp->inp_route);
 
 	inp->inp_vflag = 0;
 	inp->inp_flags2 |= INP_FREED;
@@ -1632,6 +1632,7 @@ in_pcblookup_group(struct inpcbinfo *pcbinfo, struct inpcbgroup *pcbgroup,
 	struct inpcbhead *head;
 	struct inpcb *inp, *tmpinp;
 	u_short fport = fport_arg, lport = lport_arg;
+	bool locked;
 
 	/*
 	 * First look for an exact match.
@@ -1818,18 +1819,32 @@ in_pcblookup_group(struct inpcbinfo *pcbinfo, struct inpcbgroup *pcbgroup,
 	return (NULL);
 
 found:
-	in_pcbref(inp);
-	INP_GROUP_UNLOCK(pcbgroup);
-	if (lookupflags & INPLOOKUP_WLOCKPCB) {
-		INP_WLOCK(inp);
-		if (in_pcbrele_wlocked(inp))
-			return (NULL);
-	} else if (lookupflags & INPLOOKUP_RLOCKPCB) {
-		INP_RLOCK(inp);
-		if (in_pcbrele_rlocked(inp))
-			return (NULL);
-	} else
+	if (lookupflags & INPLOOKUP_WLOCKPCB)
+		locked = TRY_INP_WLOCK(inp);
+	else if (lookupflags & INPLOOKUP_RLOCKPCB)
+		locked = TRY_INP_RLOCK(inp);
+	else
 		panic("%s: locking bug", __func__);
+	if (!locked)
+		in_pcbref(inp);
+	INP_GROUP_UNLOCK(pcbgroup);
+	if (!locked) {
+		if (lookupflags & INPLOOKUP_WLOCKPCB) {
+			INP_WLOCK(inp);
+			if (in_pcbrele_wlocked(inp))
+				return (NULL);
+		} else {
+			INP_RLOCK(inp);
+			if (in_pcbrele_rlocked(inp))
+				return (NULL);
+		}
+	}
+#ifdef INVARIANTS
+	if (lookupflags & INPLOOKUP_WLOCKPCB)
+		INP_WLOCK_ASSERT(inp);
+	else
+		INP_RLOCK_ASSERT(inp);
+#endif
 	return (inp);
 }
 #endif /* PCBGROUP */
@@ -1968,23 +1983,38 @@ in_pcblookup_hash(struct inpcbinfo *pcbinfo, struct in_addr faddr,
     struct ifnet *ifp)
 {
 	struct inpcb *inp;
+	bool locked;
 
 	INP_HASH_RLOCK(pcbinfo);
 	inp = in_pcblookup_hash_locked(pcbinfo, faddr, fport, laddr, lport,
 	    (lookupflags & ~(INPLOOKUP_RLOCKPCB | INPLOOKUP_WLOCKPCB)), ifp);
 	if (inp != NULL) {
-		in_pcbref(inp);
-		INP_HASH_RUNLOCK(pcbinfo);
-		if (lookupflags & INPLOOKUP_WLOCKPCB) {
-			INP_WLOCK(inp);
-			if (in_pcbrele_wlocked(inp))
-				return (NULL);
-		} else if (lookupflags & INPLOOKUP_RLOCKPCB) {
-			INP_RLOCK(inp);
-			if (in_pcbrele_rlocked(inp))
-				return (NULL);
-		} else
+		if (lookupflags & INPLOOKUP_WLOCKPCB)
+			locked = INP_TRY_WLOCK(inp);
+		else if (lookupflags & INPLOOKUP_RLOCKPCB)
+			locked = INP_TRY_RLOCK(inp);
+		else
 			panic("%s: locking bug", __func__);
+		if (!locked)
+			in_pcbref(inp);
+		INP_HASH_RUNLOCK(pcbinfo);
+		if (!locked) {
+			if (lookupflags & INPLOOKUP_WLOCKPCB) {
+				INP_WLOCK(inp);
+				if (in_pcbrele_wlocked(inp))
+					return (NULL);
+			} else {
+				INP_RLOCK(inp);
+				if (in_pcbrele_rlocked(inp))
+					return (NULL);
+			}
+		}
+#ifdef INVARIANTS
+		if (lookupflags & INPLOOKUP_WLOCKPCB)
+			INP_WLOCK_ASSERT(inp);
+		else
+			INP_RLOCK_ASSERT(inp);
+#endif
 	} else
 		INP_HASH_RUNLOCK(pcbinfo);
 	return (inp);
@@ -2257,9 +2287,7 @@ void
 in_losing(struct inpcb *inp)
 {
 
-	RO_RTFREE(&inp->inp_route);
-	if (inp->inp_route.ro_lle)
-		LLE_FREE(inp->inp_route.ro_lle);	/* zeros ro_lle */
+	RO_INVALIDATE_CACHE(&inp->inp_route);
 	return;
 }
 

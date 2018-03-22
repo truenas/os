@@ -132,7 +132,8 @@ base.txz:
 	cd ${WORLDDIR} && ${IMAKE} distributeworld DISTDIR=${.OBJDIR}/${DISTDIR}
 # Set up mergemaster root database
 	sh ${.CURDIR}/scripts/mm-mtree.sh -m ${WORLDDIR} -F \
-	    "TARGET_ARCH=${TARGET_ARCH} TARGET=${TARGET}" -D "${.OBJDIR}/${DISTDIR}/base"
+	    "TARGET_ARCH=${TARGET_ARCH} TARGET=${TARGET} ${.MAKE.JOBS:D-j${.MAKE.JOBS}}" \
+	    -D "${.OBJDIR}/${DISTDIR}/base"
 	etcupdate extract -B -M "TARGET_ARCH=${TARGET_ARCH} TARGET=${TARGET}" \
 	    -s ${WORLDDIR} -d "${.OBJDIR}/${DISTDIR}/base/var/db/etcupdate"
 # Package all components
@@ -162,17 +163,19 @@ ports.txz:
 
 reldoc:
 	cd ${DOCDIR}/en_US.ISO8859-1/htdocs/releases/${REVISION}R && \
-	    ${MAKE} all install clean 'FORMATS=html txt' \
-	    INSTALL_COMPRESSED='' URLS_ABSOLUTE=YES DOCDIR=${.OBJDIR}/rdoc
+	    env MAN4DIR=${WORLDDIR}/share/man/man4 \
+	    ${MAKE} all install clean "FORMATS=html txt" \
+	    INSTALL_COMPRESSED='' URLS_ABSOLUTE=YES DOCDIR=${.OBJDIR}/rdoc \
+	    WEBDIR=${DOCDIR} DESTDIR=${.OBJDIR}/rdoc
 	mkdir -p reldoc
 .for i in hardware readme relnotes errata
-	ln -f ${DOCDIR}/${RELNOTES_LANG}/htdocs/releases/${REVISION}R/${i}/${i:tl}.txt \
-	    reldoc/${i:tu}.TXT
-	ln -f ${DOCDIR}/${RELNOTES_LANG}/htdocs/releases/${REVISION}R/${i}/${i:tl}.html \
-	    reldoc/${i:tu}.HTM
+	ln -f ${.OBJDIR}/rdoc/${i:tl}.txt \
+		reldoc/${i:tu}.TXT
+	ln -f ${.OBJDIR}/rdoc/${i:tl}.html \
+		reldoc/${i:tu}.HTML
 .endfor
-	cp ${DOCDIR}/${RELNOTES_LANG}/htdocs/releases/${REVISION}R/readme/docbook.css \
-	    reldoc
+	cp ${.OBJDIR}/rdoc/docbook.css \
+		reldoc/
 
 disc1: packagesystem
 # Install system

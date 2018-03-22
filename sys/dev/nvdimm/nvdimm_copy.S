@@ -33,7 +33,7 @@
 
 #include <machine/asmacros.h>
 
-#include "assym.s"
+#include "assym.inc"
 
 	.text
 

@@ -1,9 +1,0 @@
-# $FreeBSD$
-
-.if ${MK_FDT} != "no"
-SUBDIR+=		fdt
-.endif
-
-SUBDIR+=		libsa32
-SUBDIR+=		ofw
-SUBDIR+=		uboot

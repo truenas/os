@@ -26,7 +26,7 @@
 .\"	From: @(#)style	1.14 (Berkeley) 4/28/95
 .\" $FreeBSD$
 .\"
-.Dd October 5, 2016
+.Dd January 25, 2018
 .Dt STYLE 9
 .Os
 .Sh NAME
@@ -65,6 +65,8 @@ The copyright header should be a multi-line comment, with the first
 line of the comment having a dash after the star like so:
 .Bd -literal
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1984-2025 John Q. Public
  * All rights reserved.
  *
@@ -82,6 +84,7 @@ license or copyright notice, change the dash to a star for those
 comments.
 Comments starting in columns other than the first are never
 considered license statements.
+Use the appropriate SPDX-License-Identifier line before the copyright.
 .Pp
 After any copyright header, there is a blank line, and the
 .Li $\&FreeBSD$
@@ -104,11 +107,7 @@ Only add
 .Dq Li "From: "
 in front of foreign VCS IDs if the file is renamed.
 .Bd -literal
-#if 0
-#ifndef lint
-static char sccsid[] = "@(#)style	1.14 (Berkeley) 4/28/95";
-#endif /* not lint */
-#endif
+/* From: @(#)style	1.14 (Berkeley) 4/28/95 */
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -231,10 +230,6 @@ This comment should be used only for (subjectively) long regions, regions
 greater than 20 lines, or where a series of nested
 .Ic #ifdef 's
 may be confusing to the reader.
-Exceptions may be made for cases where code is conditionally not compiled for
-the purposes of
-.Xr lint 1 ,
-even though the uncompiled region may be small.
 The comment should be separated from the
 .Ic #endif
 or
@@ -324,6 +319,10 @@ Userspace code should include
 while kernel code should include
 .In sys/types.h .
 .Pp
+Likewise, the project is moving to using the
+.St -isoC-99
+designated initializers when it makes sense to do so.
+.Pp
 Enumeration values are all uppercase.
 .Bd -literal
 enum enumtype { ONE, TWO } et;
@@ -365,7 +364,7 @@ struct foo {
 	struct foo	*next;		/* List of active foo. */
 	struct mumble	amumble;	/* Comment for mumble. */
 	int		bar;		/* Try to align the comments. */
-	struct verylongtypename *baz;	/* Won't fit in 2 tabs. */
+	struct verylongtypename *baz;	/* Does not fit in 2 tabs. */
 };
 struct foo *foohead;			/* Head of global foo list. */
 .Ed
@@ -382,7 +381,7 @@ struct foo {
 	LIST_ENTRY(foo)	link;		/* Use queue macros for foo lists. */
 	struct mumble	amumble;	/* Comment for mumble. */
 	int		bar;		/* Try to align the comments. */
-	struct verylongtypename *baz;	/* Won't fit in 2 tabs. */
+	struct verylongtypename *baz;	/* Does not fit in 2 tabs. */
 };
 LIST_HEAD(, foo) foohead;		/* Head of global foo list. */
 .Ed
@@ -431,7 +430,7 @@ alphabetical unless there is a compelling reason to use a different
 ordering.
 .Pp
 Functions that are used locally in more than one module go into a
-separate header file, e.g.\&
+separate header file, e.g.,
 .Qq Pa extern.h .
 .Pp
 Do not use the
@@ -512,7 +511,7 @@ Code which is unreachable for non-obvious reasons may be marked /*
 .Bd -literal
 	while ((ch = getopt(argc, argv, "abNn:")) != -1)
 		switch (ch) {		/* Indent the switch. */
-		case 'a':		/* Don't indent the case. */
+		case 'a':		/* Do not indent the case. */
 			aflag = 1;	/* Indent case body one tab. */
 			/* FALLTHROUGH */
 		case 'b':
@@ -726,7 +725,7 @@ not:
 .Pp
 Do not use
 .Ic \&!
-for tests unless it is a boolean, e.g.\& use:
+for tests unless it is a boolean, e.g., use:
 .Bd -literal
 if (*p == '\e0')
 .Ed
@@ -759,17 +758,9 @@ do not roll your own.
 }
 .Ed
 .Pp
-Old-style function declarations look like this:
-.Bd -literal
-static char *
-function(a1, a2, fl, a4)
-	int a1, a2;	/* Declare ints, too, don't default them. */
-	float fl;	/* Beware double vs. float prototype differences. */
-	int a4;		/* List in order declared. */
-{
-.Ed
+When converting K&R style declarations to ANSI style, preserve
+any comments about parameters.
 .Pp
-Use ANSI function declarations unless you explicitly need K&R compatibility.
 Long parameter lists are wrapped with a normal four space indent.
 .Pp
 Variable numbers of arguments should look like this:
@@ -867,14 +858,11 @@ KNF
 compliant in the repository must not diverge from compliance.
 .Pp
 Whenever possible, code should be run through a code checker
-(e.g.,
-.Xr lint 1
-or
+(e.g., various static analyzers or
 .Nm cc Fl Wall )
 and produce minimal warnings.
 .Sh SEE ALSO
 .Xr indent 1 ,
-.Xr lint 1 ,
 .Xr err 3 ,
 .Xr warn 3 ,
 .Xr style.Makefile 5

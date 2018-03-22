@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  * (c) UNIX System Laboratories, Inc.
@@ -410,7 +412,7 @@ vfs_setpublicfs(struct mount *mp, struct netexport *nep,
 	 * If an indexfile was specified, pull it in.
 	 */
 	if (argp->ex_indexfile != NULL) {
-		if (nfs_pub.np_index != NULL)
+		if (nfs_pub.np_index == NULL)
 			nfs_pub.np_index = malloc(MAXNAMLEN + 1, M_TEMP,
 			    M_WAITOK);
 		error = copyinstr(argp->ex_indexfile, nfs_pub.np_index,

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
  *
@@ -1452,7 +1454,7 @@ in6ifa_ifpforlinklocal(struct ifnet *ifp, int ignoreflags)
 
 
 /*
- * find the internet address corresponding to a given address.
+ * find the interface address corresponding to a given IPv6 address.
  * ifaddr is returned referenced.
  */
 struct in6_ifaddr *
@@ -2146,6 +2148,25 @@ in6_lltable_rtcheck(struct ifnet *ifp,
 	return 0;
 }
 
+/*
+ * Called by the datapath to indicate that the entry was used.
+ */
+static void
+in6_lltable_mark_used(struct llentry *lle)
+{
+
+	LLE_REQ_LOCK(lle);
+	lle->r_skip_req = 0;
+
+	/*
+	 * Set the hit time so the callback function
+	 * can determine the remaining time before
+	 * transiting to the DELAY state.
+	 */
+	lle->lle_hittime = time_uptime;
+	LLE_REQ_UNLOCK(lle);
+}
+
 static inline uint32_t
 in6_lltable_hash_dst(const struct in6_addr *dst, uint32_t hsize)
 {
@@ -2378,6 +2399,7 @@ in6_lltattach(struct ifnet *ifp)
 	llt->llt_fill_sa_entry = in6_lltable_fill_sa_entry;
 	llt->llt_free_entry = in6_lltable_free_entry;
 	llt->llt_match_prefix = in6_lltable_match_prefix;
+	llt->llt_mark_used = in6_lltable_mark_used;
  	lltable_link(llt);
 
 	return (llt);

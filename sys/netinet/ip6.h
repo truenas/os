@@ -2,6 +2,8 @@
 /*	$KAME: ip6.h,v 1.18 2001/03/29 05:34:30 itojun Exp $	*/
 
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
  *
@@ -102,6 +104,7 @@ struct ip6_hdr {
 #define IPV6_FLOWLABEL_MASK	0xffff0f00	/* flow label (20 bits) */
 #endif /* LITTLE_ENDIAN */
 #endif
+#define IPV6_FLOWLABEL_LEN	20
 #if 1
 /* ECN bits proposed by Sally Floyd */
 #define IP6TOS_CE		0x01	/* congestion experienced */

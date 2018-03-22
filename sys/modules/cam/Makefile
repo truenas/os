@@ -8,9 +8,11 @@ KMOD=	cam
 
 # See sys/conf/options for the flags that go into the different opt_*.h files.
 SRCS=	opt_cam.h
+SRCS+=	opt_compat.h
 SRCS+=	opt_ada.h
 SRCS+=	opt_scsi.h
 SRCS+=	opt_cd.h
+SRCS+=	opt_da.h
 SRCS+=	opt_pt.h
 SRCS+=	opt_sa.h
 SRCS+=	opt_ses.h

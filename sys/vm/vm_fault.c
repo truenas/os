@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: (BSD-4-Clause AND MIT-CMU)
+ *
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  * Copyright (c) 1994 John S. Dyson
@@ -680,7 +682,7 @@ RetryFault:;
 				/*
 				 * Reference the page before unlocking and
 				 * sleeping so that the page daemon is less
-				 * likely to reclaim it. 
+				 * likely to reclaim it.
 				 */
 				vm_page_aflag_set(fs.m, PGA_REFERENCED);
 				if (fs.object != fs.first_object) {
@@ -708,9 +710,6 @@ RetryFault:;
 				vm_object_deallocate(fs.first_object);
 				goto RetryFault;
 			}
-			vm_page_lock(fs.m);
-			vm_page_remque(fs.m);
-			vm_page_unlock(fs.m);
 
 			/*
 			 * Mark page busy for other processes, and the 
@@ -721,7 +720,7 @@ RetryFault:;
 			vm_page_xbusy(fs.m);
 			if (fs.m->valid != VM_PAGE_BITS_ALL)
 				goto readrest;
-			break;
+			break; /* break to PAGE HAS BEEN FOUND */
 		}
 		KASSERT(fs.m == NULL, ("fs.m should be NULL, not %p", fs.m));
 
@@ -785,7 +784,7 @@ RetryFault:;
 			}
 			if (fs.m == NULL) {
 				unlock_and_deallocate(&fs);
-				VM_WAITPFAULT;
+				vm_waitpfault();
 				goto RetryFault;
 			}
 		}
@@ -1103,6 +1102,7 @@ readrest:
 				 */
 			    fs.object == fs.first_object->backing_object) {
 				vm_page_lock(fs.m);
+				vm_page_remque(fs.m);
 				vm_page_remove(fs.m);
 				vm_page_unlock(fs.m);
 				vm_page_lock(fs.first_m);
@@ -1133,6 +1133,10 @@ readrest:
 				 */
 				pmap_copy_page(fs.m, fs.first_m);
 				fs.first_m->valid = VM_PAGE_BITS_ALL;
+				if ((fault_flags & VM_FAULT_WIRE) == 0) {
+					prot &= ~VM_PROT_WRITE;
+					fault_type &= ~VM_PROT_WRITE;
+				}
 				if (wired && (fault_flags &
 				    VM_FAULT_WIRE) == 0) {
 					vm_page_lock(fs.first_m);
@@ -1217,6 +1221,12 @@ readrest:
 			 * write-enabled after all.
 			 */
 			prot &= retry_prot;
+			fault_type &= retry_prot;
+			if (prot == 0) {
+				release_page(&fs);
+				unlock_and_deallocate(&fs);
+				goto RetryFault;
+			}
 		}
 	}
 
@@ -1367,7 +1377,8 @@ vm_fault_dontneed(const struct faultstate *fs, vm_offset_t vaddr, int ahead)
 				 * active queue.
 				 */
 				vm_page_lock(m);
-				vm_page_deactivate(m);
+				if (!vm_page_inactive(m))
+					vm_page_deactivate(m);
 				vm_page_unlock(m);
 			}
 		}
@@ -1587,6 +1598,7 @@ vm_fault_copy_entry(vm_map_t dst_map, vm_map_t src_map,
 	KASSERT(upgrade || dst_entry->object.vm_object == NULL,
 	    ("vm_fault_copy_entry: vm_object not NULL"));
 	if (src_object != dst_object) {
+		dst_object->domain = src_object->domain;
 		dst_entry->object.vm_object = dst_object;
 		dst_entry->offset = 0;
 		dst_object->charge = dst_entry->end - dst_entry->start;
@@ -1672,7 +1684,7 @@ again:
 			if (dst_m == NULL) {
 				VM_OBJECT_WUNLOCK(dst_object);
 				VM_OBJECT_RUNLOCK(object);
-				VM_WAIT;
+				vm_wait(dst_object);
 				VM_OBJECT_WLOCK(dst_object);
 				goto again;
 			}
