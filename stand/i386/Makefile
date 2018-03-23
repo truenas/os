@@ -6,6 +6,7 @@ NO_OBJ=t
 
 SUBDIR.yes=	mbr pmbr boot0 boot0sio btx boot2 cdboot gptboot \
 		libi386
+SUBDIR.yes+=	pmbr-datadisk
 
 SUBDIR.${MK_LOADER_FIREWIRE}+=	libfirewire
 
