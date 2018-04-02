@@ -182,6 +182,8 @@ struct td_sched;
 struct thread;
 struct trapframe;
 struct turnstile;
+struct vm_map;
+struct vm_map_entry;
 
 /*
  * XXX: Does this belong in resource.h or resourcevar.h instead?
@@ -225,8 +227,8 @@ struct thread {
 	struct umtx_q   *td_umtxq;	/* (c?) Link for when we're blocked. */
 	struct vm_domain_policy td_vm_dom_policy;	/* (c) current numa domain policy */
 	lwpid_t		td_tid;		/* (b) Thread ID. */
-	uint64_t	padding1[4];
-	void		*padding2[4];
+	uint64_t	td_padding1[4];
+	void		*td_padding2[4];
 	u_char		td_lend_user_pri; /* (t) Lend user pri. */
 
 /* Cleared during fork1() */
@@ -275,7 +277,7 @@ struct thread {
 	char		td_name[MAXCOMLEN + 1];	/* (*) Thread name. */
 	struct file	*td_fpop;	/* (k) file referencing cdev under op */
 	int		td_dbgflags;	/* (c) Userland debugger flags */
-	struct ksiginfo td_dbgksi;	/* (c) ksi reflected to debugger. */
+	struct ksiginfo	td_padding3;
 	int		td_ng_outbound;	/* (k) Thread entered ng from above. */
 	struct osd	td_osd;		/* (k) Object specific data. */
 	struct vm_map_entry *td_map_def_user; /* (k) Deferred entries. */
@@ -296,8 +298,8 @@ struct thread {
 	u_char		td_pri_class;	/* (t) Scheduling class. */
 	u_char		td_user_pri;	/* (t) User pri from estcpu and nice. */
 	u_char		td_base_user_pri; /* (t) Base user pri */
-	u_int		td_padding3;
 	u_int		td_padding4;
+	u_int		td_padding5;
 	uintptr_t	td_rb_list;	/* (k) Robust list head. */
 	uintptr_t	td_rbp_list;	/* (k) Robust priv list head. */
 	uintptr_t	td_rb_inact;	/* (k) Current in-action mutex loc. */
@@ -346,6 +348,8 @@ struct thread {
 #define	td_siglist	td_sigqueue.sq_signals
 	struct syscall_args td_sa;	/* (kx) Syscall parameters. Copied on
 					   fork for child tracing. */
+	siginfo_t	td_si;		/* (c) For debugger or core file */
+	void		*td_lkpi_task;	/* LinuxKPI task struct pointer */
 };
 
 struct thread0_storage {
@@ -1001,6 +1005,8 @@ void	fork_exit(void (*)(void *, struct trapframe *), void *,
 	    struct trapframe *);
 void	fork_return(struct thread *, struct trapframe *);
 int	inferior(struct proc *p);
+void	kern_proc_vmmap_resident(struct vm_map *map, struct vm_map_entry *entry,
+	    int *resident_count, bool *super);
 void	kern_yield(int);
 void 	kick_proc0(void);
 void	killjobc(void);

@@ -31,6 +31,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/acl.h>
 #include <sys/capsicum.h>
+#include <sys/event.h>
 #include <sys/extattr.h>
 #include <sys/linker.h>
 #include <sys/mman.h>
@@ -46,6 +47,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <sys/thr.h>
 #include <sys/umtx.h>
+#include <machine/sysarch.h>
 #include <netinet/in.h>
 #include <netinet/sctp.h>
 #include <netinet/tcp.h>
@@ -248,6 +250,13 @@ sysdecode_atfd(int fd)
 	if (fd == AT_FDCWD)
 		return ("AT_FDCWD");
 	return (NULL);
+}
+
+bool
+sysdecode_atflags(FILE *fp, int flag, int *rem)
+{
+
+	return (print_mask_int(fp, atflags, flag, rem));
 }
 
 static struct name_table semctlops[] = {
@@ -487,6 +496,123 @@ sysdecode_getfsstat_mode(int mode)
 }
 
 const char *
+sysdecode_getrusage_who(int who)
+{
+
+	return (lookup_value(rusage, who));
+}
+
+static struct name_table kevent_user_ffctrl[] = {
+	X(NOTE_FFNOP) X(NOTE_FFAND) X(NOTE_FFOR) X(NOTE_FFCOPY)
+	XEND
+};
+
+static struct name_table kevent_rdwr_fflags[] = {
+	X(NOTE_LOWAT) X(NOTE_FILE_POLL) XEND
+};
+
+static struct name_table kevent_vnode_fflags[] = {
+	X(NOTE_DELETE) X(NOTE_WRITE) X(NOTE_EXTEND) X(NOTE_ATTRIB)
+	X(NOTE_LINK) X(NOTE_RENAME) X(NOTE_REVOKE) X(NOTE_OPEN) X(NOTE_CLOSE)
+	X(NOTE_CLOSE_WRITE) X(NOTE_READ) XEND
+};
+
+static struct name_table kevent_proc_fflags[] = {
+	X(NOTE_EXIT) X(NOTE_FORK) X(NOTE_EXEC) X(NOTE_TRACK) X(NOTE_TRACKERR)
+	X(NOTE_CHILD) XEND
+};
+
+static struct name_table kevent_timer_fflags[] = {
+	X(NOTE_SECONDS) X(NOTE_MSECONDS) X(NOTE_USECONDS) X(NOTE_NSECONDS)
+	XEND
+};
+
+void
+sysdecode_kevent_fflags(FILE *fp, short filter, int fflags, int base)
+{
+	int rem;
+
+	if (fflags == 0) {
+		fputs("0", fp);
+		return;
+	}
+
+	switch (filter) {
+	case EVFILT_READ:
+	case EVFILT_WRITE:
+		if (!print_mask_int(fp, kevent_rdwr_fflags, fflags, &rem))
+			fprintf(fp, "%#x", rem);
+		else if (rem != 0)
+			fprintf(fp, "|%#x", rem);
+		break;
+	case EVFILT_VNODE:
+		if (!print_mask_int(fp, kevent_vnode_fflags, fflags, &rem))
+			fprintf(fp, "%#x", rem);
+		else if (rem != 0)
+			fprintf(fp, "|%#x", rem);
+		break;
+	case EVFILT_PROC:
+	case EVFILT_PROCDESC:
+		if (!print_mask_int(fp, kevent_proc_fflags, fflags, &rem))
+			fprintf(fp, "%#x", rem);
+		else if (rem != 0)
+			fprintf(fp, "|%#x", rem);
+		break;
+	case EVFILT_TIMER:
+		if (!print_mask_int(fp, kevent_timer_fflags, fflags, &rem))
+			fprintf(fp, "%#x", rem);
+		else if (rem != 0)
+			fprintf(fp, "|%#x", rem);
+		break;
+	case EVFILT_USER: {
+		unsigned int ctrl, data;
+
+		ctrl = fflags & NOTE_FFCTRLMASK;
+		data = fflags & NOTE_FFLAGSMASK;
+
+		if (fflags & NOTE_TRIGGER) {
+			fputs("NOTE_TRIGGER", fp);
+			if (fflags == NOTE_TRIGGER)
+				return;
+			fputc('|', fp);
+		}
+
+		/*
+		 * An event with 'ctrl' == NOTE_FFNOP is either a reported
+		 * (output) event for which only 'data' should be output
+		 * or a pointless input event.  Assume that pointless
+		 * input events don't occur in practice.  An event with
+		 * NOTE_TRIGGER is always an input event.
+		 */
+		if (ctrl != NOTE_FFNOP || fflags & NOTE_TRIGGER) {
+			fprintf(fp, "%s|%#x",
+			    lookup_value(kevent_user_ffctrl, ctrl), data);
+		} else {
+			print_integer(fp, data, base);
+		}
+		break;
+	}
+	default:
+		print_integer(fp, fflags, base);
+		break;
+	}
+}
+
+bool
+sysdecode_kevent_flags(FILE *fp, int flags, int *rem)
+{
+
+	return (print_mask_int(fp, keventflags, flags, rem));
+}
+
+const char *
+sysdecode_kevent_filter(int filter)
+{
+
+	return (lookup_value(keventfilters, filter));
+}
+
+const char *
 sysdecode_kldsym_cmd(int cmd)
 {
 
@@ -627,8 +753,19 @@ sysdecode_quotactl_cmd(FILE *fp, int cmd)
 bool
 sysdecode_reboot_howto(FILE *fp, int howto, int *rem)
 {
+	bool printed;
 
-	return (print_mask_int(fp, rebootopt, howto, rem));
+	/*
+	 * RB_AUTOBOOT is special in that its value is zero, but it is
+	 * also an implied argument if a different operation is not
+	 * requested via RB_HALT, RB_POWEROFF, or RB_REROOT.
+	 */
+	if (howto != 0 && (howto & (RB_HALT | RB_POWEROFF | RB_REROOT)) == 0) {
+		fputs("RB_AUTOBOOT|", fp);
+		printed = true;
+	} else
+		printed = false;
+	return (print_mask_int(fp, rebootopt, howto, rem) || printed);
 }
 
 bool
@@ -930,6 +1067,13 @@ sysdecode_mmap_flags(FILE *fp, int flags, int *rem)
 }
 
 const char *
+sysdecode_pathconf_name(int name)
+{
+
+	return (lookup_value(pathconfname, name));
+}
+
+const char *
 sysdecode_rtprio_function(int function)
 {
 
@@ -970,6 +1114,13 @@ sysdecode_sigcode(int sig, int si_code)
 	}
 }
 
+const char *
+sysdecode_sysarch_number(int number)
+{
+
+	return (lookup_value(sysarchnum, number));
+}
+
 bool
 sysdecode_umtx_cvwait_flags(FILE *fp, u_long flags, u_long *rem)
 {
@@ -988,8 +1139,15 @@ void
 sysdecode_cap_rights(FILE *fp, cap_rights_t *rightsp)
 {
 	struct name_table *t;
+	int i;
 	bool comma;
 
+	for (i = 0; i < CAPARSIZE(rightsp); i++) {
+		if (CAPIDXBIT(rightsp->cr_rights[i]) != 1 << i) {
+			fprintf(fp, "invalid cap_rights_t");
+			return;
+		}
+	}
 	comma = false;
 	for (t = caprights; t->str != NULL; t++) {
 		if (cap_rights_is_set(rightsp, t->val)) {

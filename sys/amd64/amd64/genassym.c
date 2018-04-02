@@ -81,7 +81,6 @@ ASSYM(TD_FLAGS, offsetof(struct thread, td_flags));
 ASSYM(TD_PCB, offsetof(struct thread, td_pcb));
 ASSYM(TD_PFLAGS, offsetof(struct thread, td_pflags));
 ASSYM(TD_PROC, offsetof(struct thread, td_proc));
-ASSYM(TD_TID, offsetof(struct thread, td_tid));
 ASSYM(TD_FRAME, offsetof(struct thread, td_frame));
 
 ASSYM(TDF_ASTPENDING, TDF_ASTPENDING);
@@ -155,7 +154,7 @@ ASSYM(PCB_FULL_IRET, PCB_FULL_IRET);
 ASSYM(PCB_DBREGS, PCB_DBREGS);
 ASSYM(PCB_32BIT, PCB_32BIT);
 
-ASSYM(COMMON_TSS_RSP0, offsetof(struct amd64tss, tss_rsp0));
+ASSYM(TSS_RSP0, offsetof(struct amd64tss, tss_rsp0));
 
 ASSYM(TF_R15, offsetof(struct trapframe, tf_r15));
 ASSYM(TF_R14, offsetof(struct trapframe, tf_r14));

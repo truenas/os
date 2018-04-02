@@ -8,6 +8,8 @@
     bin
         cat
         ..
+        chflags
+        ..
         chmod
         ..
         date
@@ -22,6 +24,8 @@
         ..
         ls
         ..
+        mkdir
+        ..
         mv
         ..
         pax
@@ -29,6 +33,10 @@
         pkill
         ..
         pwait
+        ..
+        rcp
+        ..
+        rmdir
         ..
         sh
             builtins
@@ -57,6 +65,8 @@
         sbin
         ..
         usr.bin
+            ctfconvert
+            ..
         ..
         usr.sbin
             dtrace
@@ -632,11 +642,17 @@
         ..
         file2c
         ..
+        fold
+        ..
         getconf
         ..
         grep
         ..
         gzip
+        ..
+        head
+        ..
+        hexdump
         ..
         ident
         ..
@@ -661,6 +677,8 @@
         printf
         ..
         procstat
+        ..
+        rs
         ..
         sdiff
         ..

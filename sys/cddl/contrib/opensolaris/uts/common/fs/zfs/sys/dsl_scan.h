@@ -127,14 +127,12 @@ typedef struct dsl_scan {
 	zio_t *scn_zio_root;		/* root zio for waiting on IO */
 	taskq_t *scn_taskq;		/* task queue for issuing extents */
 
-	/* for controlling scan prefetch */
+	/* for controlling scan prefetch, protected by spa_scrub_lock */
 	boolean_t scn_prefetch_stop;	/* prefetch should stop */
-	uint64_t scn_prefetch_inflight;	/* number of inflight prefetch zios */
-	kmutex_t scn_prefetch_lock;	/* lock for scn_prefetch_cv */
-	kcondvar_t scn_prefetch_cv;	/* cv for throttling prefetches */
 	zbookmark_phys_t scn_prefetch_bookmark;	/* prefetch start bookmark */
 	avl_tree_t scn_prefetch_queue;	/* priority queue of prefetch IOs */
-
+	uint64_t scn_maxinflight_bytes;	/* max bytes in flight for poool */
+	
 	/* per txg statistics */
 	uint64_t scn_visited_this_txg;	/* total bps visited this txg */
 	uint64_t scn_holes_this_txg;
@@ -158,6 +156,8 @@ typedef struct dsl_scan_io_queue dsl_scan_io_queue_t;
 
 void dsl_scan_global_init(void);
 
+void scan_init(void);
+void scan_fini(void);
 int dsl_scan_init(struct dsl_pool *dp, uint64_t txg);
 void dsl_scan_fini(struct dsl_pool *dp);
 void dsl_scan_sync(struct dsl_pool *, dmu_tx_t *);

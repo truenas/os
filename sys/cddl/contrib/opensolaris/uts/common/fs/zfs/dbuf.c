@@ -2362,6 +2362,11 @@ dbuf_prefetch_indirect_done(zio_t *zio, const zbookmark_phys_t *zb,
 		dbuf_rele(db, FTAG);
 	}
 
+	if (abuf == NULL) {
+		kmem_free(dpa, sizeof(*dpa));
+		return;
+	}
+	
 	dpa->dpa_curlevel--;
 
 	uint64_t nextblkid = dpa->dpa_zb.zb_blkid >>
@@ -2377,6 +2382,10 @@ dbuf_prefetch_indirect_done(zio_t *zio, const zbookmark_phys_t *zb,
 	} else {
 		arc_flags_t iter_aflags = ARC_FLAG_NOWAIT;
 		zbookmark_phys_t zb;
+
+		/* flag if L2ARC eligible, l2arc_noprefetch then decides */
+		if (dpa->dpa_aflags & ARC_FLAG_L2CACHE)
+			iter_aflags |= ARC_FLAG_L2CACHE;
 
 		ASSERT3U(dpa->dpa_curlevel, ==, BP_GET_LEVEL(bp));
 
@@ -2487,6 +2496,10 @@ dbuf_prefetch(dnode_t *dn, int64_t level, uint64_t blkid, zio_priority_t prio,
 	dpa->dpa_epbs = epbs;
 	dpa->dpa_zio = pio;
 
+	/* flag if L2ARC eligible, l2arc_noprefetch then decides */
+	if (DNODE_LEVEL_IS_L2CACHEABLE(dn, level))
+		dpa->dpa_aflags |= ARC_FLAG_L2CACHE;
+
 	/*
 	 * If we have the indirect just above us, no need to do the asynchronous
 	 * prefetch chain; we'll just run the last step ourselves.  If we're at
@@ -2501,6 +2514,10 @@ dbuf_prefetch(dnode_t *dn, int64_t level, uint64_t blkid, zio_priority_t prio,
 	} else {
 		arc_flags_t iter_aflags = ARC_FLAG_NOWAIT;
 		zbookmark_phys_t zb;
+
+		/* flag if L2ARC eligible, l2arc_noprefetch then decides */
+		if (DNODE_LEVEL_IS_L2CACHEABLE(dn, level))
+			iter_aflags |= ARC_FLAG_L2CACHE;
 
 		SET_BOOKMARK(&zb, ds != NULL ? ds->ds_object : DMU_META_OBJSET,
 		    dn->dn_object, curlevel, curblkid);

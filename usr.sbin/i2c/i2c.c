@@ -212,15 +212,14 @@ start_over:
 				use_read_xfer = 1;
 				goto start_over;
 			}
-			cmd.slave = i << 1;
-			cmd.last = 1;
-			ioctl(fd, I2CSTOP, &cmd);
+			ioctl(fd, I2CSTOP);
 		}
 		if (error == 0) {
 			++num_found;
 			printf("%02x ", i);
 		}
 	}
+
 	/*
 	 * If we found nothing, maybe START is not supported and returns a
 	 * generic error code such as EIO or ENXIO, so try again using reads.
@@ -350,12 +349,12 @@ i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
 			error = ioctl(fd, I2CWRITE, &cmd);
 			free(buf);
 			if (error == -1) {
-				err_msg = "ioctl: error when write offset";
+				err_msg = "ioctl: error writing offset";
 				goto err1;
 			}
 		}
 
-		error = ioctl(fd, I2CSTOP, &cmd);
+		error = ioctl(fd, I2CSTOP);
 		if (error == -1) {
 			err_msg = "ioctl: error sending stop condition";
 			goto err2;
@@ -375,7 +374,7 @@ i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
 		cmd.last = 0;
 		error = ioctl(fd, I2CWRITE, &cmd);
 		if (error == -1) {
-			err_msg = "ioctl: error when write";
+			err_msg = "ioctl: error writing";
 			goto err1;
 		}
 		break;
@@ -390,7 +389,7 @@ i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
 			error = ioctl(fd, I2CWRITE, &cmd);
 			free(buf);
 			if (error == -1) {
-				err_msg = "ioctl: error when write offset";
+				err_msg = "ioctl: error writing offset";
 				goto err1;
 			}
 		}
@@ -411,7 +410,7 @@ i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
 		cmd.last = 0;
 		error = ioctl(fd, I2CWRITE, &cmd);
 		if (error == -1) {
-			err_msg = "ioctl: error when write";
+			err_msg = "ioctl: error writing";
 			goto err1;
 		}
 		break;
@@ -434,13 +433,12 @@ i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
 		error = ioctl(fd, I2CWRITE, &cmd);
 		free(buf);
 		if (error == -1) {
-			err_msg = "ioctl: error when write";
+			err_msg = "ioctl: error writing";
 			goto err1;
 		}
 		break;
 	}
-	cmd.slave = i2c_opt.addr;
-	error = ioctl(fd, I2CSTOP, &cmd);
+	error = ioctl(fd, I2CSTOP);
 	if (error == -1) {
 		err_msg = "ioctl: error sending stop condition";
 		goto err2;
@@ -450,13 +448,12 @@ i2c_write(char *dev, struct options i2c_opt, char *i2c_buf)
 	return (0);
 
 err1:
-	cmd.slave = i2c_opt.addr;
-	error = ioctl(fd, I2CSTOP, &cmd);
+	error = ioctl(fd, I2CSTOP);
 	if (error == -1)
-		fprintf(stderr, "error sending stop condtion\n");
+		fprintf(stderr, "error sending stop condition\n");
 err2:
 	if (err_msg)
-		fprintf(stderr, "%s", err_msg);
+		fprintf(stderr, "%s\n", err_msg);
 
 	close(fd);
 	return (1);
@@ -466,7 +463,7 @@ static int
 i2c_read(char *dev, struct options i2c_opt, char *i2c_buf)
 {
 	struct iiccmd cmd;
-	int i, fd, error, bufsize;
+	int fd, error, bufsize;
 	char *err_msg, data = 0, *buf;
 
 	fd = open(dev, O_RDWR);
@@ -498,28 +495,27 @@ i2c_read(char *dev, struct options i2c_opt, char *i2c_buf)
 		error = ioctl(fd, I2CWRITE, &cmd);
 		free(buf);
 		if (error == -1) {
-			err_msg = "ioctl: error when write offset";
+			err_msg = "ioctl: error writing offset";
 			goto err1;
 		}
 
 		if (i2c_opt.mode == I2C_MODE_STOP_START) {
-			cmd.slave = i2c_opt.addr;
-			error = ioctl(fd, I2CSTOP, &cmd);
+			error = ioctl(fd, I2CSTOP);
 			if (error == -1) {
-				err_msg = "error sending stop condtion\n";
+				err_msg = "error sending stop condition";
 				goto err2;
 			}
 		}
 	}
-	cmd.slave = i2c_opt.addr;
+	cmd.slave = i2c_opt.addr | 1;
 	cmd.count = 1;
 	cmd.last = 0;
 	cmd.buf = &data;
-	if (i2c_opt.mode == I2C_MODE_STOP_START) {
+	if (i2c_opt.mode == I2C_MODE_STOP_START || i2c_opt.width == 0) {
 		error = ioctl(fd, I2CSTART, &cmd);
 		if (error == -1) {
 			err_msg = "ioctl: error sending start condition";
-			goto err1;
+			goto err2;
 		}
 	} else if (i2c_opt.mode == I2C_MODE_REPEATED_START) {
 		error = ioctl(fd, I2CRPTSTART, &cmd);
@@ -529,31 +525,32 @@ i2c_read(char *dev, struct options i2c_opt, char *i2c_buf)
 			goto err1;
 		}
 	}
-	error = ioctl(fd, I2CSTOP, &cmd);
+
+	cmd.count = i2c_opt.count;
+	cmd.buf = i2c_buf;
+	cmd.last = 1;
+	error = ioctl(fd, I2CREAD, &cmd);
+	if (error == -1) {
+		err_msg = "ioctl: error while reading";
+		goto err1;
+	}
+
+	error = ioctl(fd, I2CSTOP);
 	if (error == -1) {
 		err_msg = "error sending stop condtion\n";
 		goto err2;
-	}
-
-	for (i = 0; i < i2c_opt.count; i++) {
-		error = read(fd, &i2c_buf[i], 1);
-		if (error == -1) {
-			err_msg = "ioctl: error while reading";
-			goto err1;
-		}
 	}
 
 	close(fd);
 	return (0);
 
 err1:
-	cmd.slave = i2c_opt.addr;
-	error = ioctl(fd, I2CSTOP, &cmd);
+	error = ioctl(fd, I2CSTOP);
 	if (error == -1)
-		fprintf(stderr, "error sending stop condtion\n");
+		fprintf(stderr, "error sending stop condition\n");
 err2:
 	if (err_msg)
-		fprintf(stderr, "%s", err_msg);
+		fprintf(stderr, "%s\n", err_msg);
 
 	close(fd);
 	return (1);

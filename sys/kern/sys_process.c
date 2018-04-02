@@ -87,20 +87,6 @@ struct ptrace_vm_entry32 {
 	u_int		pve_fsid;
 	uint32_t	pve_path;
 };
-
-struct ptrace_lwpinfo32 {
-	lwpid_t	pl_lwpid;	/* LWP described. */
-	int	pl_event;	/* Event that stopped the LWP. */
-	int	pl_flags;	/* LWP flags. */
-	sigset_t	pl_sigmask;	/* LWP signal mask */
-	sigset_t	pl_siglist;	/* LWP pending signal */
-	struct siginfo32 pl_siginfo;	/* siginfo for signal */
-	char	pl_tdname[MAXCOMLEN + 1];	/* LWP name. */
-	pid_t	pl_child_pid;		/* New child pid */
-	u_int		pl_syscall_code;
-	u_int		pl_syscall_narg;
-};
-
 #endif
 
 /*
@@ -518,6 +504,7 @@ ptrace_lwpinfo_to32(const struct ptrace_lwpinfo *pl,
     struct ptrace_lwpinfo32 *pl32)
 {
 
+	bzero(pl32, sizeof(*pl32));
 	pl32->pl_lwpid = pl->pl_lwpid;
 	pl32->pl_event = pl->pl_event;
 	pl32->pl_flags = pl->pl_flags;
@@ -1053,8 +1040,8 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 
 		switch (req) {
 		case PT_STEP:
-			CTR2(KTR_PTRACE, "PT_STEP: tid %d (pid %d)",
-			    td2->td_tid, p->p_pid);
+			CTR3(KTR_PTRACE, "PT_STEP: tid %d (pid %d), sig = %d",
+			    td2->td_tid, p->p_pid, data);
 			error = ptrace_single_step(td2);
 			if (error)
 				goto out;
@@ -1143,6 +1130,13 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		}
 
 	sendsig:
+		/*
+		 * Clear the pending event for the thread that just
+		 * reported its event (p_xthread).  This may not be
+		 * the thread passed to PT_CONTINUE, PT_STEP, etc. if
+		 * the debugger is resuming a different thread.
+		 */
+		td2 = p->p_xthread;
 		if (proctree_locked) {
 			sx_xunlock(&proctree_lock);
 			proctree_locked = 0;
@@ -1330,12 +1324,13 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		} else
 #endif
 		pl = addr;
+		bzero(pl, sizeof(*pl));
 		pl->pl_lwpid = td2->td_tid;
 		pl->pl_event = PL_EVENT_NONE;
 		pl->pl_flags = 0;
 		if (td2->td_dbgflags & TDB_XSIG) {
 			pl->pl_event = PL_EVENT_SIGNAL;
-			if (td2->td_dbgksi.ksi_signo != 0 &&
+			if (td2->td_si.si_signo != 0 &&
 #ifdef COMPAT_FREEBSD32
 			    ((!wrap32 && data >= offsetof(struct ptrace_lwpinfo,
 			    pl_siginfo) + sizeof(pl->pl_siginfo)) ||
@@ -1347,11 +1342,9 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 #endif
 			){
 				pl->pl_flags |= PL_FLAG_SI;
-				pl->pl_siginfo = td2->td_dbgksi.ksi_info;
+				pl->pl_siginfo = td2->td_si;
 			}
 		}
-		if ((pl->pl_flags & PL_FLAG_SI) == 0)
-			bzero(&pl->pl_siginfo, sizeof(pl->pl_siginfo));
 		if (td2->td_dbgflags & TDB_SCE)
 			pl->pl_flags |= PL_FLAG_SCE;
 		else if (td2->td_dbgflags & TDB_SCX)

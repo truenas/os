@@ -165,6 +165,7 @@ MAC_STUB	opt_dontuse.h
 MAC_TEST	opt_dontuse.h
 MD_ROOT		opt_md.h
 MD_ROOT_FSTYPE	opt_md.h
+MD_ROOT_READONLY	opt_md.h
 MD_ROOT_SIZE	opt_md.h
 MFI_DEBUG	opt_mfi.h
 MFI_DECODE_LOG	opt_mfi.h
@@ -1000,3 +1001,6 @@ UINPUT_DEBUG	opt_evdev.h
 
 # Hyper-V network driver
 HN_DEBUG	opt_hn.h
+
+# NVME options
+NVME_USE_NVD	opt_nvme.h

@@ -5100,7 +5100,7 @@ key_updateaddresses(struct socket *so, struct mbuf *m,
 	newsav->natt = NULL;
 	newsav->sah = sah;
 	newsav->state = SADB_SASTATE_MATURE;
-	error = key_setnatt(sav, mhp);
+	error = key_setnatt(newsav, mhp);
 	if (error != 0)
 		goto fail;
 
@@ -8145,7 +8145,10 @@ key_destroy(void)
 		TAILQ_CONCAT(&drainq, &V_sptree[i], chain);
 		TAILQ_CONCAT(&drainq, &V_sptree_ifnet[i], chain);
 	}
+	for (i = 0; i < V_sphash_mask + 1; i++)
+		LIST_INIT(&V_sphashtbl[i]);
 	SPTREE_WUNLOCK();
+
 	sp = TAILQ_FIRST(&drainq);
 	while (sp != NULL) {
 		nextsp = TAILQ_NEXT(sp, chain);
@@ -8196,6 +8199,10 @@ key_destroy(void)
 		free(acq, M_IPSEC_SAQ);
 		acq = nextacq;
 	}
+	for (i = 0; i < V_acqaddrhash_mask + 1; i++)
+		LIST_INIT(&V_acqaddrhashtbl[i]);
+	for (i = 0; i < V_acqseqhash_mask + 1; i++)
+		LIST_INIT(&V_acqseqhashtbl[i]);
 	ACQ_UNLOCK();
 
 	SPACQ_LOCK();
@@ -8211,6 +8218,18 @@ key_destroy(void)
 	hashdestroy(V_acqaddrhashtbl, M_IPSEC_SAQ, V_acqaddrhash_mask);
 	hashdestroy(V_acqseqhashtbl, M_IPSEC_SAQ, V_acqseqhash_mask);
 	uma_zdestroy(V_key_lft_zone);
+
+	if (!IS_DEFAULT_VNET(curvnet))
+		return;
+#ifndef IPSEC_DEBUG2
+	callout_drain(&key_timer);
+#endif
+	XFORMS_LOCK_DESTROY();
+	SPTREE_LOCK_DESTROY();
+	REGTREE_LOCK_DESTROY();
+	SAHTREE_LOCK_DESTROY();
+	ACQ_LOCK_DESTROY();
+	SPACQ_LOCK_DESTROY();
 }
 #endif
 

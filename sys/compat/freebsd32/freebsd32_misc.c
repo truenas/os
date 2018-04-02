@@ -30,6 +30,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_compat.h"
 #include "opt_inet.h"
 #include "opt_inet6.h"
+#include "opt_ktrace.h"
 
 #define __ELF_WORD_SIZE 32
 
@@ -83,6 +84,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/msg.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#ifdef KTRACE
+#include <sys/ktrace.h>
+#endif
 
 #ifdef INET
 #include <netinet/in.h>
@@ -658,6 +662,9 @@ freebsd32_kevent(struct thread *td, struct freebsd32_kevent_args *uap)
 		.k_copyout = freebsd32_kevent_copyout,
 		.k_copyin = freebsd32_kevent_copyin,
 	};
+#ifdef KTRACE
+	struct kevent32 *eventlist = uap->eventlist;
+#endif
 	int error;
 
 
@@ -670,8 +677,18 @@ freebsd32_kevent(struct thread *td, struct freebsd32_kevent_args *uap)
 		tsp = &ts;
 	} else
 		tsp = NULL;
+#ifdef KTRACE
+	if (KTRPOINT(td, KTR_STRUCT_ARRAY))
+		ktrstructarray("kevent32", UIO_USERSPACE, uap->changelist,
+		    uap->nchanges, sizeof(struct kevent32));
+#endif
 	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
 	    &k_ops, tsp);
+#ifdef KTRACE
+	if (error == 0 && KTRPOINT(td, KTR_STRUCT_ARRAY))
+		ktrstructarray("kevent32", UIO_USERSPACE, eventlist,
+		    td->td_retval[0], sizeof(struct kevent32));
+#endif
 	return (error);
 }
 
@@ -2950,8 +2967,8 @@ freebsd32_copyout_strings(struct image_params *imgp)
 int
 freebsd32_kldstat(struct thread *td, struct freebsd32_kldstat_args *uap)
 {
-	struct kld_file_stat stat;
-	struct kld32_file_stat stat32;
+	struct kld_file_stat *stat;
+	struct kld32_file_stat *stat32;
 	int error, version;
 
 	if ((error = copyin(&uap->stat->version, &version, sizeof(version)))
@@ -2961,17 +2978,22 @@ freebsd32_kldstat(struct thread *td, struct freebsd32_kldstat_args *uap)
 	    version != sizeof(struct kld32_file_stat))
 		return (EINVAL);
 
-	error = kern_kldstat(td, uap->fileid, &stat);
-	if (error != 0)
-		return (error);
-
-	bcopy(&stat.name[0], &stat32.name[0], sizeof(stat.name));
-	CP(stat, stat32, refs);
-	CP(stat, stat32, id);
-	PTROUT_CP(stat, stat32, address);
-	CP(stat, stat32, size);
-	bcopy(&stat.pathname[0], &stat32.pathname[0], sizeof(stat.pathname));
-	return (copyout(&stat32, uap->stat, version));
+	stat = malloc(sizeof(*stat), M_TEMP, M_WAITOK | M_ZERO);
+	stat32 = malloc(sizeof(*stat32), M_TEMP, M_WAITOK | M_ZERO);
+	error = kern_kldstat(td, uap->fileid, stat);
+	if (error == 0) {
+		bcopy(&stat->name[0], &stat32->name[0], sizeof(stat->name));
+		CP(*stat, *stat32, refs);
+		CP(*stat, *stat32, id);
+		PTROUT_CP(*stat, *stat32, address);
+		CP(*stat, *stat32, size);
+		bcopy(&stat->pathname[0], &stat32->pathname[0],
+		    sizeof(stat->pathname));
+		error = copyout(stat32, uap->stat, version);
+	}
+	free(stat, M_TEMP);
+	free(stat32, M_TEMP);
+	return (error);
 }
 
 int

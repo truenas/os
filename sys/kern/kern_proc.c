@@ -131,9 +131,9 @@ struct pgrphashhead *pgrphashtbl;
 u_long pgrphash;
 struct proclist allproc;
 struct proclist zombproc;
-struct sx allproc_lock;
-struct sx proctree_lock;
-struct mtx ppeers_lock;
+struct sx __exclusive_cache_line allproc_lock;
+struct sx __exclusive_cache_line proctree_lock;
+struct mtx __exclusive_cache_line ppeers_lock;
 uma_zone_t proc_zone;
 
 /*
@@ -1311,6 +1311,7 @@ freebsd32_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc32 *ki32)
 	PTRTRIM_CP(*ki, *ki32, ki_pcb);
 	PTRTRIM_CP(*ki, *ki32, ki_kstack);
 	PTRTRIM_CP(*ki, *ki32, ki_udata);
+	PTRTRIM_CP(*ki, *ki32, ki_tdaddr);
 	CP(*ki, *ki32, ki_sflag);
 	CP(*ki, *ki32, ki_tdflags);
 }
@@ -1932,7 +1933,7 @@ sysctl_kern_proc_args(SYSCTL_HANDLER_ARGS)
 	if (error != 0 || req->newptr == NULL)
 		return (error);
 
-	if (req->newlen + sizeof(struct pargs) > ps_arg_cache_limit)
+	if (req->newlen > ps_arg_cache_limit - sizeof(struct pargs))
 		return (ENOMEM);
 	newpa = pargs_alloc(req->newlen);
 	error = SYSCTL_IN(req, newpa->ar_args, req->newlen);
@@ -2137,8 +2138,10 @@ sysctl_kern_proc_ovmmap(SYSCTL_HANDLER_ARGS)
 		}
 
 		for (lobj = tobj = obj; tobj; tobj = tobj->backing_object) {
-			if (tobj != obj)
+			if (tobj != obj) {
 				VM_OBJECT_RLOCK(tobj);
+				kve->kve_offset += tobj->backing_object_offset;
+			}
 			if (lobj != obj)
 				VM_OBJECT_RUNLOCK(lobj);
 			lobj = tobj;
@@ -2146,7 +2149,7 @@ sysctl_kern_proc_ovmmap(SYSCTL_HANDLER_ARGS)
 
 		kve->kve_start = (void*)entry->start;
 		kve->kve_end = (void*)entry->end;
-		kve->kve_offset = (off_t)entry->offset;
+		kve->kve_offset += (off_t)entry->offset;
 
 		if (entry->protection & VM_PROT_READ)
 			kve->kve_protection |= KVME_PROT_READ;
@@ -2255,15 +2258,20 @@ sysctl_kern_proc_ovmmap(SYSCTL_HANDLER_ARGS)
 CTASSERT(sizeof(struct kinfo_vmentry) == KINFO_VMENTRY_SIZE);
 #endif
 
-static void
+void
 kern_proc_vmmap_resident(vm_map_t map, vm_map_entry_t entry,
-    struct kinfo_vmentry *kve)
+    int *resident_count, bool *super)
 {
 	vm_object_t obj, tobj;
 	vm_page_t m, m_adv;
 	vm_offset_t addr;
 	vm_paddr_t locked_pa;
 	vm_pindex_t pi, pi_adv, pindex;
+
+	*super = false;
+	*resident_count = 0;
+	if (vmmap_skip_res_cnt)
+		return;
 
 	locked_pa = 0;
 	obj = entry->object.vm_object;
@@ -2297,7 +2305,7 @@ kern_proc_vmmap_resident(vm_map_t map, vm_map_entry_t entry,
 		    (addr & (pagesizes[1] - 1)) == 0 &&
 		    (pmap_mincore(map->pmap, addr, &locked_pa) &
 		    MINCORE_SUPER) != 0) {
-			kve->kve_flags |= KVME_FLAG_SUPER;
+			*super = true;
 			pi_adv = atop(pagesizes[1]);
 		} else {
 			/*
@@ -2309,7 +2317,7 @@ kern_proc_vmmap_resident(vm_map_t map, vm_map_entry_t entry,
 			 */
 			pi_adv = 1;
 		}
-		kve->kve_resident += pi_adv;
+		*resident_count += pi_adv;
 next:;
 	}
 	PA_UNLOCK_COND(locked_pa);
@@ -2333,6 +2341,7 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 	vm_offset_t addr;
 	unsigned int last_timestamp;
 	int error;
+	bool super;
 
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 
@@ -2360,13 +2369,16 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 			for (tobj = obj; tobj != NULL;
 			    tobj = tobj->backing_object) {
 				VM_OBJECT_RLOCK(tobj);
+				kve->kve_offset += tobj->backing_object_offset;
 				lobj = tobj;
 			}
 			if (obj->backing_object == NULL)
 				kve->kve_private_resident =
 				    obj->resident_page_count;
-			if (!vmmap_skip_res_cnt)
-				kern_proc_vmmap_resident(map, entry, kve);
+			kern_proc_vmmap_resident(map, entry,
+			    &kve->kve_resident, &super);
+			if (super)
+				kve->kve_flags |= KVME_FLAG_SUPER;
 			for (tobj = obj; tobj != NULL;
 			    tobj = tobj->backing_object) {
 				if (tobj != obj && tobj != lobj)
@@ -2378,7 +2390,7 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 
 		kve->kve_start = entry->start;
 		kve->kve_end = entry->end;
-		kve->kve_offset = entry->offset;
+		kve->kve_offset += entry->offset;
 
 		if (entry->protection & VM_PROT_READ)
 			kve->kve_protection |= KVME_PROT_READ;
@@ -3076,6 +3088,7 @@ resume_all_proc(void)
 
 	cp = curproc;
 	sx_xlock(&allproc_lock);
+again:
 	LIST_REMOVE(cp, p_list);
 	LIST_INSERT_HEAD(&allproc, cp, p_list);
 	for (;;) {
@@ -3095,6 +3108,12 @@ resume_all_proc(void)
 		} else {
 			PROC_UNLOCK(p);
 		}
+	}
+	/*  Did the loop above missed any stopped process ? */
+	LIST_FOREACH(p, &allproc, p_list) {
+		/* No need for proc lock. */
+		if ((p->p_flag & P_TOTAL_STOP) != 0)
+			goto again;
 	}
 	sx_xunlock(&allproc_lock);
 }

@@ -1954,7 +1954,7 @@ spa_load_verify_done(zio_t *zio)
 	}
 
 	mutex_enter(&spa->spa_scrub_lock);
-	spa->spa_scrub_inflight--;
+	spa->spa_load_verify_ios--;
 	cv_broadcast(&spa->spa_scrub_io_cv);
 	mutex_exit(&spa->spa_scrub_lock);
 }
@@ -2001,9 +2001,9 @@ spa_load_verify_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	size_t size = BP_GET_PSIZE(bp);
 
 	mutex_enter(&spa->spa_scrub_lock);
-	while (spa->spa_scrub_inflight >= spa_load_verify_maxinflight)
+	while (spa->spa_load_verify_ios >= spa_load_verify_maxinflight)
 		cv_wait(&spa->spa_scrub_io_cv, &spa->spa_scrub_lock);
-	spa->spa_scrub_inflight++;
+	spa->spa_load_verify_ios++;
 	mutex_exit(&spa->spa_scrub_lock);
 
 	zio_nowait(zio_read(rio, spa, bp, abd_alloc_for_io(size, B_FALSE), size,
@@ -3101,6 +3101,8 @@ spa_load_best(spa_t *spa, spa_load_state_t state, int mosconfig,
 
 	if (config && (rewind_error || state != SPA_LOAD_RECOVER))
 		spa_config_set(spa, config);
+	else
+		nvlist_free(config);
 
 	if (state == SPA_LOAD_RECOVER) {
 		ASSERT3P(loadinfo, ==, NULL);
@@ -6251,8 +6253,6 @@ spa_async_thread_vd(void *arg)
 {
 	spa_t *spa = arg;
 	int tasks;
-
-	ASSERT(spa->spa_sync_on);
 
 	mutex_enter(&spa->spa_async_lock);
 	tasks = spa->spa_async_tasks;

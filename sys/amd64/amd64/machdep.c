@@ -1523,6 +1523,22 @@ amd64_kdb_init(void)
 #endif
 }
 
+/* Set up the fast syscall stuff */
+void
+amd64_conf_fast_syscall(void)
+{
+	uint64_t msr;
+
+	msr = rdmsr(MSR_EFER) | EFER_SCE;
+	wrmsr(MSR_EFER, msr);
+	wrmsr(MSR_LSTAR, (u_int64_t)IDTVEC(fast_syscall));
+	wrmsr(MSR_CSTAR, (u_int64_t)IDTVEC(fast_syscall32));
+	msr = ((u_int64_t)GSEL(GCODE_SEL, SEL_KPL) << 32) |
+	    ((u_int64_t)GSEL(GUCODE32_SEL, SEL_UPL) << 48);
+	wrmsr(MSR_STAR, msr);
+	wrmsr(MSR_SF_MASK, PSL_NT | PSL_T | PSL_I | PSL_C | PSL_D);
+}
+
 u_int64_t
 hammer_time(u_int64_t modulep, u_int64_t physfree)
 {
@@ -1531,7 +1547,6 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	struct pcpu *pc;
 	struct nmi_pcpu *np;
 	struct xstate_hdr *xhdr;
-	u_int64_t msr;
 	char *env;
 	size_t kstack0_sz;
 	int late_console;
@@ -1544,7 +1559,7 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 
 	kmdp = init_ops.parse_preload_data(modulep);
 
-	identify_cpu();
+	identify_cpu1();
 	identify_hypervisor();
 
 	/* Init basic tunables, hz etc */
@@ -1672,15 +1687,7 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	gsel_tss = GSEL(GPROC0_SEL, SEL_KPL);
 	ltr(gsel_tss);
 
-	/* Set up the fast syscall stuff */
-	msr = rdmsr(MSR_EFER) | EFER_SCE;
-	wrmsr(MSR_EFER, msr);
-	wrmsr(MSR_LSTAR, (u_int64_t)IDTVEC(fast_syscall));
-	wrmsr(MSR_CSTAR, (u_int64_t)IDTVEC(fast_syscall32));
-	msr = ((u_int64_t)GSEL(GCODE_SEL, SEL_KPL) << 32) |
-	      ((u_int64_t)GSEL(GUCODE32_SEL, SEL_UPL) << 48);
-	wrmsr(MSR_STAR, msr);
-	wrmsr(MSR_SF_MASK, PSL_NT|PSL_T|PSL_I|PSL_C|PSL_D);
+	amd64_conf_fast_syscall();
 
 	/*
 	 * Temporary forge some valid pointer to PCB, for exception
@@ -2248,7 +2255,6 @@ static int
 set_fpcontext(struct thread *td, mcontext_t *mcp, char *xfpustate,
     size_t xfpustate_len)
 {
-	struct savefpu *fpstate;
 	int error;
 
 	if (mcp->mc_fpformat == _MC_FPFMT_NODEV)
@@ -2261,9 +2267,8 @@ set_fpcontext(struct thread *td, mcontext_t *mcp, char *xfpustate,
 		error = 0;
 	} else if (mcp->mc_ownedfp == _MC_FPOWNED_FPU ||
 	    mcp->mc_ownedfp == _MC_FPOWNED_PCB) {
-		fpstate = (struct savefpu *)&mcp->mc_fpstate;
-		fpstate->sv_env.en_mxcsr &= cpu_mxcsr_mask;
-		error = fpusetregs(td, fpstate, xfpustate, xfpustate_len);
+		error = fpusetregs(td, (struct savefpu *)&mcp->mc_fpstate,
+		    xfpustate, xfpustate_len);
 	} else
 		return (EINVAL);
 	return (error);

@@ -90,7 +90,7 @@ mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
 	}
 
 	/* ensure wqes are visible to device before updating doorbell record */
-	wmb();
+	atomic_thread_fence_rel();
 
 	mlx5_wq_ll_update_db_record(&rq->wq);
 }
@@ -391,7 +391,7 @@ wq_ll_pop:
 	mlx5_cqwq_update_db_record(&rq->cq.wq);
 
 	/* ensure cq space is freed before enabling more cqes */
-	wmb();
+	atomic_thread_fence_rel();
 	return (i);
 }
 
@@ -430,7 +430,7 @@ mlx5e_rx_cq_comp(struct mlx5_core_cq *mcq)
 		mlx5e_post_rx_wqes(rq);
 	}
 	mlx5e_post_rx_wqes(rq);
-	mlx5e_cq_arm(&rq->cq);
+	mlx5e_cq_arm(&rq->cq, MLX5_GET_DOORBELL_LOCK(&rq->channel->priv->doorbell_lock));
 	tcp_lro_flush_all(&rq->lro);
 	mtx_unlock(&rq->mtx);
 }

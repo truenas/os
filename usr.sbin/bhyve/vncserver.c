@@ -108,7 +108,7 @@ struct vncserver_softc {
 #define LIB_HYVE_REMOTE "/usr/local/lib/libhyverem.so"
 
 /* prototype functions from shared library libhyve-remote */
-int (*vnc_init_server)(struct vncserver_softc *sc);
+int (*vnc_init_server)(struct vncserver_softc *sc, char *hostname);
 int (*vnc_event_loop)(int time, bool b);
 int (*vnc_enable_http)(char *webdir, bool enable);
 int (*vnc_enable_password)(char *vnc_password);
@@ -441,7 +441,7 @@ vncserver_init(char *hostname, int port, int wait, char *password, int webserver
 	pthread_create(&sc->vs_tid, NULL, vncserver_thr, sc);
 	pthread_set_name_np(sc->vs_tid, "vncserver");
 
-	vnc_init_server(sc);
+	vnc_init_server(sc, hostname);
 	vnc_event_loop(-1, true);
 
 	if (wait) {
@@ -451,5 +451,6 @@ vncserver_init(char *hostname, int port, int wait, char *password, int webserver
 		pthread_mutex_unlock(&sc->vs_mtx);
 	}
 
+	free(sc);
 	return (0);
 }

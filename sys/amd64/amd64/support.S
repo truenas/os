@@ -50,7 +50,6 @@ ENTRY(bzero)
 	movq	%rsi,%rcx
 	xorl	%eax,%eax
 	shrq	$3,%rcx
-	cld
 	rep
 	stosq
 	movq	%rsi,%rcx
@@ -76,7 +75,6 @@ ENTRY(bcmp)
 	PUSH_FRAME_POINTER
 	movq	%rdx,%rcx
 	shrq	$3,%rcx
-	cld					/* compare forwards */
 	repe
 	cmpsq
 	jne	1f
@@ -108,7 +106,6 @@ ENTRY(bcopy)
 	jb	1f
 
 	shrq	$3,%rcx				/* copy by 64-bit words */
-	cld					/* nope, copy forwards */
 	rep
 	movsq
 	movq	%rdx,%rcx
@@ -147,7 +144,6 @@ ENTRY(memcpy)
 	movq	%rdi,%rax
 	movq	%rdx,%rcx
 	shrq	$3,%rcx				/* copy by 64-bit words */
-	cld					/* copy forwards */
 	rep
 	movsq
 	movq	%rdx,%rcx
@@ -194,7 +190,6 @@ ENTRY(fillw)
 	movq	%rdi,%rax
 	movq	%rsi,%rdi
 	movq	%rdx,%rcx
-	cld
 	rep
 	stosw
 	POP_FRAME_POINTER
@@ -214,7 +209,7 @@ END(fillw)
  */
 
 /*
- * copyout(from_kernel, to_user, len)  - MP SAFE
+ * copyout(from_kernel, to_user, len)
  *         %rdi,        %rsi,    %rdx
  */
 ENTRY(copyout)
@@ -225,12 +220,11 @@ ENTRY(copyout)
 	jz	done_copyout
 
 	/*
-	 * Check explicitly for non-user addresses.  If 486 write protection
-	 * is being used, this check is essential because we are in kernel
-	 * mode so the h/w does not provide any protection against writing
-	 * kernel addresses.
+	 * Check explicitly for non-user addresses.  This check is essential
+	 * because it prevents usermode from writing into the kernel.  We do
+	 * not verify anywhere else that the user did not specify a rogue
+	 * address.
 	 */
-
 	/*
 	 * First, prevent address wrapping.
 	 */
@@ -252,7 +246,6 @@ ENTRY(copyout)
 	movq	%rdx,%rcx
 
 	shrq	$3,%rcx
-	cld
 	rep
 	movsq
 	movb	%dl,%cl
@@ -277,7 +270,7 @@ copyout_fault:
 END(copyout)
 
 /*
- * copyin(from_user, to_kernel, len) - MP SAFE
+ * copyin(from_user, to_kernel, len)
  *        %rdi,      %rsi,      %rdx
  */
 ENTRY(copyin)
@@ -301,7 +294,6 @@ ENTRY(copyin)
 	movq	%rdx,%rcx
 	movb	%cl,%al
 	shrq	$3,%rcx				/* copy longword-wise */
-	cld
 	rep
 	movsq
 	movb	%al,%cl
@@ -494,7 +486,7 @@ fusufault:
 
 /*
  * Store a 64-bit word, a 32-bit word, a 16-bit word, or an 8-bit byte to
- * user memory.  All these functions are MPSAFE.
+ * user memory.
  * addr = %rdi, value = %rsi
  */
 ALTENTRY(suword64)
@@ -569,7 +561,7 @@ ENTRY(subyte)
 END(subyte)
 
 /*
- * copyinstr(from, to, maxlen, int *lencopied) - MP SAFE
+ * copyinstr(from, to, maxlen, int *lencopied)
  *           %rdi, %rsi, %rdx, %rcx
  *
  *	copy a string from from to to, stop when a 0 character is reached.
@@ -598,7 +590,6 @@ ENTRY(copyinstr)
 	movq	%rax,%r8
 1:
 	incq	%rdx
-	cld
 
 2:
 	decq	%rdx
@@ -640,7 +631,7 @@ cpystrflt_x:
 END(copyinstr)
 
 /*
- * copystr(from, to, maxlen, int *lencopied) - MP SAFE
+ * copystr(from, to, maxlen, int *lencopied)
  *         %rdi, %rsi, %rdx, %rcx
  */
 ENTRY(copystr)
@@ -649,7 +640,6 @@ ENTRY(copystr)
 
 	xchgq	%rdi,%rsi
 	incq	%rdx
-	cld
 1:
 	decq	%rdx
 	jz	4f
@@ -680,7 +670,6 @@ END(copystr)
 
 /*
  * Handling of special amd64 registers and descriptor tables etc
- * %rdi
  */
 /* void lgdt(struct region_descriptor *rdp); */
 ENTRY(lgdt)

@@ -1083,8 +1083,8 @@ vm_object_sync(vm_object_t object, vm_ooffset_t offset, vm_size_t size,
 	 * I/O.
 	 */
 	if (object->type == OBJT_VNODE &&
-	    (object->flags & OBJ_MIGHTBEDIRTY) != 0) {
-		vp = object->handle;
+	    (object->flags & OBJ_MIGHTBEDIRTY) != 0 &&
+	    ((vp = object->handle)->v_vflag & VV_NOSYNC) == 0) {
 		VM_OBJECT_WUNLOCK(object);
 		(void) vn_start_write(vp, &mp, V_WAIT);
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
@@ -1461,7 +1461,7 @@ retry:
 		if (vm_page_rename(m, new_object, idx)) {
 			VM_OBJECT_WUNLOCK(new_object);
 			VM_OBJECT_WUNLOCK(orig_object);
-			VM_WAIT;
+			vm_radix_wait();
 			VM_OBJECT_WLOCK(orig_object);
 			VM_OBJECT_WLOCK(new_object);
 			goto retry;
@@ -1523,8 +1523,9 @@ vm_object_collapse_scan_wait(vm_object_t object, vm_page_t p, vm_page_t next,
 		vm_page_lock(p);
 	VM_OBJECT_WUNLOCK(object);
 	VM_OBJECT_WUNLOCK(backing_object);
+	/* The page is only NULL when rename fails. */
 	if (p == NULL)
-		VM_WAIT;
+		vm_radix_wait();
 	else
 		vm_page_busy_sleep(p, "vmocol", false);
 	VM_OBJECT_WLOCK(object);
@@ -1997,7 +1998,8 @@ again:
 			goto again;
 		}
 		if (p->wire_count != 0) {
-			if ((options & OBJPR_NOTMAPPED) == 0)
+			if ((options & OBJPR_NOTMAPPED) == 0 &&
+			    object->ref_count != 0)
 				pmap_remove_all(p);
 			if ((options & OBJPR_CLEANONLY) == 0) {
 				p->valid = 0;
@@ -2014,12 +2016,13 @@ again:
 		KASSERT((p->flags & PG_FICTITIOUS) == 0,
 		    ("vm_object_page_remove: page %p is fictitious", p));
 		if ((options & OBJPR_CLEANONLY) != 0 && p->valid != 0) {
-			if ((options & OBJPR_NOTMAPPED) == 0)
+			if ((options & OBJPR_NOTMAPPED) == 0 &&
+			    object->ref_count != 0)
 				pmap_remove_write(p);
-			if (p->dirty)
+			if (p->dirty != 0)
 				continue;
 		}
-		if ((options & OBJPR_NOTMAPPED) == 0)
+		if ((options & OBJPR_NOTMAPPED) == 0 && object->ref_count != 0)
 			pmap_remove_all(p);
 		p->flags &= ~PG_ZERO;
 		if (vm_page_free_prep(p, false))

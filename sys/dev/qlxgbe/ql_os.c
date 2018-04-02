@@ -492,6 +492,7 @@ qla_pci_attach(device_t dev)
 		device_printf(dev, "%s: ql_minidump_init failed\n", __func__);
 		goto qla_pci_attach_err;
 	}
+	ql_alloc_drvr_state_buffer(ha);
 	/* create the o.s ethernet interface */
 	qla_init_ifnet(dev, ha);
 
@@ -645,6 +646,7 @@ qla_release(qla_host_t *ha)
 	if (ha->ifp != NULL)
 		ether_ifdetach(ha->ifp);
 
+	ql_free_drvr_state_buffer(ha);
 	ql_free_dma(ha); 
 	qla_free_parent_dma_tag(ha);
 
@@ -975,7 +977,19 @@ qla_set_multi(qla_host_t *ha, uint32_t add_multi)
 		return (-1);
 
 	if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
-		ret = ql_hw_set_multi(ha, mta, mcnt, add_multi);
+
+		if (!add_multi) {
+			ret = qla_hw_del_all_mcast(ha);
+
+			if (ret)
+				device_printf(ha->pci_dev,
+					"%s: qla_hw_del_all_mcast() failed\n",
+				__func__);
+		}
+
+		if (!ret)
+			ret = ql_hw_set_multi(ha, mta, mcnt, 1);
+
 	}
 
 	QLA_UNLOCK(ha, __func__);
@@ -1220,6 +1234,17 @@ qla_send(qla_host_t *ha, struct mbuf **m_headp, uint32_t txr_idx,
 	QL_DPRINT8(ha, (ha->pci_dev, "%s: enter\n", __func__));
 
 	tx_idx = ha->hw.tx_cntxt[txr_idx].txr_next;
+
+	if (NULL != ha->tx_ring[txr_idx].tx_buf[tx_idx].m_head) {
+		QL_ASSERT(ha, 0, ("%s [%d]: txr_idx = %d tx_idx = %d "\
+			"mbuf = %p\n", __func__, __LINE__, txr_idx, tx_idx,\
+			ha->tx_ring[txr_idx].tx_buf[tx_idx].m_head));
+		if (m_head)
+			m_freem(m_head);
+		*m_headp = NULL;
+		return (ret);
+	}
+
 	map = ha->tx_ring[txr_idx].tx_buf[tx_idx].map;
 
 	ret = bus_dmamap_load_mbuf_sg(ha->tx_tag, map, m_head, segs, &nsegs,

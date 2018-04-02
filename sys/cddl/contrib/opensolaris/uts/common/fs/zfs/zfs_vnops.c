@@ -75,6 +75,7 @@
 #include <sys/sched.h>
 #include <sys/acl.h>
 #include <vm/vm_param.h>
+#include <sys/zil.h>
 
 /*
  * Programming rules.
@@ -1035,31 +1036,18 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 			 * holding up the transaction if the data copy hangs
 			 * up on a pagefault (e.g., from an NFS server mapping).
 			 */
-#ifdef illumos
 			size_t cbytes;
-#endif
 
 			abuf = dmu_request_arcbuf(sa_get_db(zp->z_sa_hdl),
 			    max_blksz);
 			ASSERT(abuf != NULL);
 			ASSERT(arc_buf_size(abuf) == max_blksz);
-#ifdef illumos
 			if (error = uiocopy(abuf->b_data, max_blksz,
 			    UIO_WRITE, uio, &cbytes)) {
 				dmu_return_arcbuf(abuf);
 				break;
 			}
 			ASSERT(cbytes == max_blksz);
-#else
-			ssize_t resid = uio->uio_resid;
-			error = vn_io_fault_uiomove(abuf->b_data, max_blksz, uio);
-			if (error != 0) {
-				uio->uio_offset -= resid - uio->uio_resid;
-				uio->uio_resid = resid;
-				dmu_return_arcbuf(abuf);
-				break;
-			}
-#endif
 		}
 
 		/*
@@ -1137,10 +1125,8 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 				dmu_assign_arcbuf(sa_get_db(zp->z_sa_hdl),
 				    woff, abuf, tx);
 			}
-#ifdef illumos
 			ASSERT(tx_bytes <= uio->uio_resid);
 			uioskip(uio, tx_bytes);
-#endif
 		}
 		if (tx_bytes && vn_has_cached_data(vp)) {
 			update_pages(vp, woff, tx_bytes, zfsvfs->z_os,
@@ -1275,7 +1261,7 @@ zfs_get_done(zgd_t *zgd, int error)
 	VN_RELE_ASYNC(ZTOV(zp), dsl_pool_vnrele_taskq(dmu_objset_pool(os)));
 
 	if (error == 0 && zgd->zgd_bp)
-		zil_add_block(zgd->zgd_zilog, zgd->zgd_bp);
+		zil_lwb_add_block(zgd->zgd_lwb, zgd->zgd_bp);
 
 	kmem_free(zgd, sizeof (zgd_t));
 }
@@ -1288,7 +1274,7 @@ static int zil_fault_io = 0;
  * Get data to generate a TX_WRITE intent log record.
  */
 int
-zfs_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
+zfs_get_data(void *arg, lr_write_t *lr, char *buf, struct lwb *lwb, zio_t *zio)
 {
 	zfsvfs_t *zfsvfs = arg;
 	objset_t *os = zfsvfs->z_os;
@@ -1300,8 +1286,9 @@ zfs_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
 	zgd_t *zgd;
 	int error = 0;
 
-	ASSERT(zio != NULL);
-	ASSERT(size != 0);
+	ASSERT3P(lwb, !=, NULL);
+	ASSERT3P(zio, !=, NULL);
+	ASSERT3U(size, !=, 0);
 
 	/*
 	 * Nothing to do if the file has been removed
@@ -1319,7 +1306,7 @@ zfs_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
 	}
 
 	zgd = (zgd_t *)kmem_zalloc(sizeof (zgd_t), KM_SLEEP);
-	zgd->zgd_zilog = zfsvfs->z_log;
+	zgd->zgd_lwb = lwb;
 	zgd->zgd_private = zp;
 
 	/*
@@ -1342,7 +1329,7 @@ zfs_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
 	} else { /* indirect write */
 		/*
 		 * Have to lock the whole block to ensure when it's
-		 * written out and it's checksum is being calculated
+		 * written out and its checksum is being calculated
 		 * that no one can change the data. We need to re-check
 		 * blocksize after we get the lock in case it's changed!
 		 */
@@ -5417,30 +5404,25 @@ zfs_freebsd_pathconf(ap)
 	int error;
 
 	error = zfs_pathconf(ap->a_vp, ap->a_name, &val, curthread->td_ucred, NULL);
-	if (error == 0)
+	if (error == 0) {
 		*ap->a_retval = val;
-	else if (error == EOPNOTSUPP)
-		error = vop_stdpathconf(ap);
-	return (error);
-}
-
-static int
-zfs_freebsd_fifo_pathconf(ap)
-	struct vop_pathconf_args /* {
-		struct vnode *a_vp;
-		int a_name;
-		register_t *a_retval;
-	} */ *ap;
-{
+		return (error);
+	}
+	if (error != EOPNOTSUPP)
+		return (error);
 
 	switch (ap->a_name) {
-	case _PC_ACL_EXTENDED:
-	case _PC_ACL_NFS4:
-	case _PC_ACL_PATH_MAX:
-	case _PC_MAC_PRESENT:
-		return (zfs_freebsd_pathconf(ap));
+	case _PC_NAME_MAX:
+		*ap->a_retval = NAME_MAX;
+		return (0);
+	case _PC_PIPE_BUF:
+		if (ap->a_vp->v_type == VDIR || ap->a_vp->v_type == VFIFO) {
+			*ap->a_retval = PIPE_BUF;
+			return (0);
+		}
+		return (EINVAL);
 	default:
-		return (fifo_specops.vop_pathconf(ap));
+		return (vop_stdpathconf(ap));
 	}
 }
 
@@ -5924,7 +5906,6 @@ zfs_vptocnp(struct vop_vptocnp_args *ap)
 	vnode_t *vp = ap->a_vp;;
 	zfsvfs_t *zfsvfs = vp->v_vfsp->vfs_data;
 	znode_t *zp = VTOZ(vp);
-	uint64_t parent;
 	int ltype;
 	int error;
 
@@ -5935,13 +5916,7 @@ zfs_vptocnp(struct vop_vptocnp_args *ap)
 	 * If we are a snapshot mounted under .zfs, run the operation
 	 * on the covered vnode.
 	 */
-	if ((error = sa_lookup(zp->z_sa_hdl,
-	    SA_ZPL_PARENT(zfsvfs), &parent, sizeof (parent))) != 0) {
-		ZFS_EXIT(zfsvfs);
-		return (error);
-	}
-
-	if (zp->z_id != parent || zfsvfs->z_parent == zfsvfs) {
+	if (zp->z_id != zfsvfs->z_root || zfsvfs->z_parent == zfsvfs) {
 		char name[MAXNAMLEN + 1];
 		znode_t *dzp;
 		size_t len;
@@ -6061,7 +6036,7 @@ struct vop_vector zfs_fifoops = {
 	.vop_reclaim =		zfs_freebsd_reclaim,
 	.vop_setattr =		zfs_freebsd_setattr,
 	.vop_write =		VOP_PANIC,
-	.vop_pathconf = 	zfs_freebsd_fifo_pathconf,
+	.vop_pathconf = 	zfs_freebsd_pathconf,
 	.vop_fid =		zfs_freebsd_fid,
 	.vop_getacl =		zfs_freebsd_getacl,
 	.vop_setacl =		zfs_freebsd_setacl,

@@ -339,17 +339,17 @@ static void
 dtrace_nullop(void)
 {}
 
-static dtrace_pops_t	dtrace_provider_ops = {
-	(void (*)(void *, dtrace_probedesc_t *))dtrace_nullop,
-	(void (*)(void *, modctl_t *))dtrace_nullop,
-	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
-	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
-	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
-	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
-	NULL,
-	NULL,
-	NULL,
-	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop
+static dtrace_pops_t dtrace_provider_ops = {
+	.dtps_provide =	(void (*)(void *, dtrace_probedesc_t *))dtrace_nullop,
+	.dtps_provide_module =	(void (*)(void *, modctl_t *))dtrace_nullop,
+	.dtps_enable =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
+	.dtps_disable =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
+	.dtps_suspend =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
+	.dtps_resume =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
+	.dtps_getargdesc =	NULL,
+	.dtps_getargval =	NULL,
+	.dtps_usermode =	NULL,
+	.dtps_destroy =	(void (*)(void *, dtrace_id_t, void *))dtrace_nullop,
 };
 
 static dtrace_id_t	dtrace_probeid_begin;	/* special BEGIN probe */
@@ -13838,6 +13838,7 @@ static int
 dtrace_dof_relocate(dof_hdr_t *dof, dof_sec_t *sec, uint64_t ubase)
 {
 	uintptr_t daddr = (uintptr_t)dof;
+	uintptr_t ts_end;
 	dof_relohdr_t *dofr =
 	    (dof_relohdr_t *)(uintptr_t)(daddr + sec->dofs_offset);
 	dof_sec_t *ss, *rs, *ts;
@@ -13853,6 +13854,7 @@ dtrace_dof_relocate(dof_hdr_t *dof, dof_sec_t *sec, uint64_t ubase)
 	ss = dtrace_dof_sect(dof, DOF_SECT_STRTAB, dofr->dofr_strtab);
 	rs = dtrace_dof_sect(dof, DOF_SECT_RELTAB, dofr->dofr_relsec);
 	ts = dtrace_dof_sect(dof, DOF_SECT_NONE, dofr->dofr_tgtsec);
+	ts_end = (uintptr_t)ts + sizeof (dof_sec_t);
 
 	if (ss == NULL || rs == NULL || ts == NULL)
 		return (-1); /* dtrace_dof_error() has been called already */
@@ -13875,6 +13877,11 @@ dtrace_dof_relocate(dof_hdr_t *dof, dof_sec_t *sec, uint64_t ubase)
 		case DOF_RELO_SETX:
 			if (r->dofr_offset >= ts->dofs_size || r->dofr_offset +
 			    sizeof (uint64_t) > ts->dofs_size) {
+				dtrace_dof_error(dof, "bad relocation offset");
+				return (-1);
+			}
+
+			if (taddr >= (uintptr_t)ts && taddr < ts_end) {
 				dtrace_dof_error(dof, "bad relocation offset");
 				return (-1);
 			}
