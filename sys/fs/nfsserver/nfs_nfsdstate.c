@@ -5345,7 +5345,8 @@ out:
  */
 APPLESTATIC int
 nfsrv_checkgetattr(struct nfsrv_descript *nd, vnode_t vp,
-    struct nfsvattr *nvap, nfsattrbit_t *attrbitp, NFSPROC_T *p)
+    struct nfsvattr *nvap, nfsattrbit_t *attrbitp, struct ucred *cred,
+    NFSPROC_T *p)
 {
 	struct nfsstate *stp;
 	struct nfslockfile *lfp;
