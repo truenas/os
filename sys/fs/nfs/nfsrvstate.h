@@ -31,6 +31,7 @@
 #ifndef _NFS_NFSRVSTATE_H_
 #define	_NFS_NFSRVSTATE_H_
 
+#if defined(_KERNEL) || defined(KERNEL)
 /*
  * Definitions for NFS V4 server state handling.
  */
@@ -46,6 +47,9 @@ LIST_HEAD(nfslockhead, nfslock);
 LIST_HEAD(nfslockhashhead, nfslockfile);
 LIST_HEAD(nfssessionhead, nfsdsession);
 LIST_HEAD(nfssessionhashhead, nfsdsession);
+LIST_HEAD(nfslayouthead, nfslayout);
+SLIST_HEAD(nfsdsdirhead, nfsdsdir);
+TAILQ_HEAD(nfsdevicehead, nfsdevice);
 
 /*
  * List head for nfsusrgrp.
@@ -73,6 +77,13 @@ struct nfssessionhash {
 };
 #define	NFSSESSIONHASH(f) 						\
 	(&nfssessionhash[nfsrv_hashsessionid(f) % nfsrv_sessionhashsize])
+
+struct nfslayouthash {
+	struct mtx		mtx;
+	struct nfslayouthead	list;
+};
+#define	NFSLAYOUTHASH(f) 						\
+	(&nfslayouthash[nfsrv_hashfh(f) % nfsrv_layouthashsize])
 
 /*
  * Client server structure for V4. It is doubly linked into two lists.
@@ -110,6 +121,22 @@ struct nfsclient {
 #define	CLOPS_CONFIRM		0x0001
 #define	CLOPS_RENEW		0x0002
 #define	CLOPS_RENEWOP		0x0004
+
+/*
+ * Structure for NFSv4.1 Layouts.
+ * Malloc'd to correct size for the lay_xdr.
+ */
+struct nfslayout {
+	LIST_ENTRY(nfslayout)	lay_list;
+	nfsv4stateid_t		lay_stateid;
+	nfsquad_t		lay_clientid;
+	fhandle_t		lay_fh;
+	uint32_t		lay_layoutlen;
+	uint16_t		lay_type;
+	uint8_t			lay_read;
+	uint8_t			lay_rw;
+	char			lay_xdr[0];
+};
 
 /*
  * Structure for an NFSv4.1 session.
@@ -155,6 +182,7 @@ struct nfsdsession {
  * - open file structures chained off an open_owner structure
  * - lock_owner structures chained off an open file structure
  * - delegated file structures chained off of nfsclient and nfslockfile
+ * - pNFS layouts chained off of nfsclient and nfslockfile
  * - the ls_list field is used for the chain it is in
  * - the ls_head structure is used to chain off the sibling structure
  *   (it is a union between an nfsstate and nfslock structure head)
@@ -188,8 +216,9 @@ struct nfsstate {
 	struct nfslockfile	*ls_lfp;	/* Back pointer */
 	struct nfsrvcache	*ls_op;		/* Op cache reference */
 	struct nfsclient	*ls_clp;	/* Back pointer */
-	u_short			ls_ownerlen;	/* Length of ls_owner */
+	u_int32_t		ls_ownerlen;	/* Length of ls_owner */
 	u_char			ls_owner[1];	/* malloc'd the correct size */
+						/* Must be uint32_t * aligned */
 };
 #define	ls_lock			ls_head.lock
 #define	ls_open			ls_head.open
@@ -201,6 +230,8 @@ struct nfsstate {
 #define	ls_delegtime		ls_un.deleg.expiry
 #define	ls_delegtimelimit	ls_un.deleg.limit
 #define	ls_compref		ls_un.deleg.compref
+#define	ls_layout		ls_owner
+#define	ls_layoutlen		ls_ownerlen
 
 /*
  * Nfs lock structure.
@@ -251,6 +282,7 @@ struct nfsrollback {
 struct nfslockfile {
 	LIST_HEAD(, nfsstate)	lf_open;	/* Open list */
 	LIST_HEAD(, nfsstate)	lf_deleg;	/* Delegation list */
+	LIST_HEAD(, nfsstate)	lf_layout;	/* Layout list */
 	LIST_HEAD(, nfslock)	lf_lock;	/* Lock list */
 	LIST_HEAD(, nfslock)	lf_locallock;	/* Local lock list */
 	LIST_HEAD(, nfsrollback) lf_rollback;	/* Local lock rollback list */
@@ -290,9 +322,61 @@ struct nfsf_rec {
 	u_int32_t	numboots;		/* Number of boottimes */
 };
 
-#if defined(_KERNEL) || defined(KERNEL)
 void nfsrv_cleanclient(struct nfsclient *, NFSPROC_T *);
 void nfsrv_freedeleglist(struct nfsstatehead *);
-#endif
+
+/*
+ * This structure is used to create the list of device info entries for
+ * a GetDeviceInfo operation and stores the DS server info.
+ * The nfsdev_addrandhost field has the fully qualified host domain name
+ * followed by the network address in XDR.
+ * It is allocated with nfsrv_dsdirsize nfsdev_dsdir[] entries.
+ */
+struct nfsdevice {
+	TAILQ_ENTRY(nfsdevice)	nfsdev_list;
+	struct nfsdevicehead	nfsdev_mirrors;
+	vnode_t			nfsdev_dvp;
+	struct nfsmount		*nfsdev_nmp;
+	char			nfsdev_deviceid[NFSX_V4DEVICEID];
+	char			nfsdev_mirrorid[NFSDEV_MIRRORSTR + 1];
+	uint16_t		nfsdev_hostnamelen;
+	uint16_t		nfsdev_fileaddrlen;
+	uint16_t		nfsdev_flexaddrlen;
+	char			*nfsdev_fileaddr;
+	char			*nfsdev_flexaddr;
+	char			*nfsdev_host;
+	uint32_t		nfsdev_nextdir;
+	vnode_t			nfsdev_dsdir[0];
+};
+
+/*
+ * This structure holds the va_size, va_filerev, va_atime and va_mtime for the
+ * DS file and is stored in the metadata file's extended attribute pnfsd.dsattr.
+ */
+struct pnfsdsattr {
+	uint64_t	dsa_filerev;
+	uint64_t	dsa_size;
+	struct timespec	dsa_atime;
+	struct timespec	dsa_mtime;
+};
+
+#endif	/* defined(_KERNEL) || defined(KERNEL) */
+
+/*
+ * This structure holds the information about the DS file and is stored
+ * in the metadata file's extended attribute called pnfsd.dsfile.
+ */
+#define	PNFS_FILENAME_LEN	(2 * sizeof(fhandle_t))
+struct pnfsdsfile {
+	fhandle_t	dsf_fh;
+	uint32_t	dsf_dir;
+	union {
+		struct sockaddr_in	sin;
+		struct sockaddr_in6	sin6;
+	} dsf_nam;
+	char		dsf_filename[PNFS_FILENAME_LEN + 1];
+};
+#define	dsf_sin		dsf_nam.sin
+#define	dsf_sin6	dsf_nam.sin6
 
 #endif	/* _NFS_NFSRVSTATE_H_ */
