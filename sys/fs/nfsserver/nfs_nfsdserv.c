@@ -254,7 +254,7 @@ nfsrvd_getattr(struct nfsrv_descript *nd, int isdgram,
 				nd->nd_repstat = nfsvno_getfh(vp, &fh, p);
 			if (!nd->nd_repstat)
 				nd->nd_repstat = nfsrv_checkgetattr(nd, vp,
-				    &nva, &attrbits, p);
+				    &nva, &attrbits, nd->nd_cred, p);
 			if (nd->nd_repstat == 0) {
 				supports_nfsv4acls = nfs_supportsnfsv4acls(vp);
 				mp = vp->v_mount;
