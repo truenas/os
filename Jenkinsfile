@@ -1,23 +1,45 @@
-throttle(['FreeNAS']) {
-  node('FreeNAS-ISO') {
-    stage('Checkout') {
-      checkout scm
+pipeline {
+  agent none
+
+  environment {
+    GH_ORG = 'freenas'
+    GH_REPO = 'os'
+  }
+  stages {
+
+    stage('Queued') {
+      agent {
+        label 'JenkinsMaster'
+      }
+      steps {
+        echo "Build queued"
+      }
     }
-    withEnv(['GH_ORG=freenas','GH_REPO=os']) {
-      stage('ixbuild') {
-        echo 'Starting iXBuild Framework pipeline'
-        try {
-          sh '/ixbuild/jenkins.sh freenas freenas-pipeline'
-        } catch (exc) {
+
+    stage('ixbuild') {
+      agent {
+        label 'FreeNAS-ISO'
+      }
+      post {
+        success {
+          archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
+          junit 'results/**'
+        }
+        failure {
           echo 'Saving failed artifacts...'
           archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
-          throw
         }
       }
-      stage('artifact') {
-        archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
-        junit 'results/**'
+      steps {
+        checkout scm
+        echo 'Starting iXBuild Framework pipeline'
+        sh '/ixbuild/jenkins.sh freenas freenas-pipeline'
       }
     }
+  }
+  post { 
+     always { 
+        cleanWs()
+     }
   }
 }
