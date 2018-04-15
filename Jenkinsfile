@@ -16,30 +16,15 @@ pipeline {
       }
     }
 
-    stage('ixbuild') {
+    stage('Makefile Test') {
       agent {
         label 'FreeNAS-ISO'
       }
-      post {
-        success {
-          archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
-          junit 'results/**'
-        }
-        failure {
-          echo 'Saving failed artifacts...'
-          archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
-        }
-      }
       steps {
         checkout scm
-        echo 'Starting iXBuild Framework pipeline'
-        sh '/ixbuild/jenkins.sh freenas freenas-pipeline'
+        echo 'Performing Makefile Checking'
+        sh 'make clean'
       }
     }
-  }
-  post { 
-     always { 
-        cleanWs()
-     }
   }
 }
