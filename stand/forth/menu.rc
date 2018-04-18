@@ -117,7 +117,7 @@ set optionsmenu_keycode[5]=107
 set optionsmenu_caption[6]="[Esc]ape to loader prompt"
 set optionsmenu_command[6]="goto_prompt"
 set optionsmenu_keycode[6]=27
-set optionsansi_caption[6]="[Esc]ape to loader prompt"
+set optionsansi_caption[6]="^[1m[Esc]^[mape to loader prompt"
 
 \ 
 \ BOOT ENVIRONMENT MENU
