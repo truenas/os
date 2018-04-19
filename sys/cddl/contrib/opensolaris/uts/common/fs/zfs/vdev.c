@@ -237,7 +237,7 @@ vdev_dbgmsg_print_tree(vdev_t *vd, int indent)
 	}
 
 	zfs_dbgmsg("%*svdev %u: %s%s, guid: %llu, path: %s, %s", indent,
-	    "", vd->vdev_id, vd->vdev_ops->vdev_op_type,
+	    "", (int)vd->vdev_id, vd->vdev_ops->vdev_op_type,
 	    vd->vdev_islog ? " (log)" : "",
 	    (u_longlong_t)vd->vdev_guid,
 	    vd->vdev_path ? vd->vdev_path : "N/A", state);
@@ -1604,14 +1604,6 @@ vdev_open(vdev_t *vd)
 		vdev_set_state(vd, B_TRUE, VDEV_STATE_FAULTED,
 		    VDEV_AUX_ERR_EXCEEDED);
 		return (error);
-	}
-
-	if (vd->vdev_top == vd && vd->vdev_ashift != 0 &&
-	    !vd->vdev_isl2cache && !vd->vdev_islog) {
-		if (vd->vdev_ashift > spa->spa_max_ashift)
-			spa->spa_max_ashift = vd->vdev_ashift;
-		if (vd->vdev_ashift < spa->spa_min_ashift)
-			spa->spa_min_ashift = vd->vdev_ashift;
 	}
 
 	/*

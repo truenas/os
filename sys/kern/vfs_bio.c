@@ -262,17 +262,17 @@ SYSCTL_PROC(_vfs, OID_AUTO, numdirtybuffers,
 static int lodirtybuffers;
 SYSCTL_PROC(_vfs, OID_AUTO, lodirtybuffers,
     CTLTYPE_INT|CTLFLAG_MPSAFE|CTLFLAG_RW, &lodirtybuffers,
-    __offsetof(struct bufdomain, bd_lodirtybuffers), sysctl_bufdomain_int, "L",
+    __offsetof(struct bufdomain, bd_lodirtybuffers), sysctl_bufdomain_int, "I",
     "How many buffers we want to have free before bufdaemon can sleep");
 static int hidirtybuffers;
 SYSCTL_PROC(_vfs, OID_AUTO, hidirtybuffers,
     CTLTYPE_INT|CTLFLAG_MPSAFE|CTLFLAG_RW, &hidirtybuffers,
-    __offsetof(struct bufdomain, bd_hidirtybuffers), sysctl_bufdomain_int, "L",
+    __offsetof(struct bufdomain, bd_hidirtybuffers), sysctl_bufdomain_int, "I",
     "When the number of dirty buffers is considered severe");
 int dirtybufthresh;
 SYSCTL_PROC(_vfs, OID_AUTO, dirtybufthresh,
     CTLTYPE_INT|CTLFLAG_MPSAFE|CTLFLAG_RW, &dirtybufthresh,
-    __offsetof(struct bufdomain, bd_dirtybufthresh), sysctl_bufdomain_int, "L",
+    __offsetof(struct bufdomain, bd_dirtybufthresh), sysctl_bufdomain_int, "I",
     "Number of bdwrite to bawrite conversions to clear dirty buffers");
 static int numfreebuffers;
 SYSCTL_INT(_vfs, OID_AUTO, numfreebuffers, CTLFLAG_RD, &numfreebuffers, 0,
@@ -280,12 +280,12 @@ SYSCTL_INT(_vfs, OID_AUTO, numfreebuffers, CTLFLAG_RD, &numfreebuffers, 0,
 static int lofreebuffers;
 SYSCTL_PROC(_vfs, OID_AUTO, lofreebuffers,
     CTLTYPE_INT|CTLFLAG_MPSAFE|CTLFLAG_RW, &lofreebuffers,
-    __offsetof(struct bufdomain, bd_lofreebuffers), sysctl_bufdomain_int, "L",
+    __offsetof(struct bufdomain, bd_lofreebuffers), sysctl_bufdomain_int, "I",
    "Target number of free buffers");
 static int hifreebuffers;
 SYSCTL_PROC(_vfs, OID_AUTO, hifreebuffers,
     CTLTYPE_INT|CTLFLAG_MPSAFE|CTLFLAG_RW, &hifreebuffers,
-    __offsetof(struct bufdomain, bd_hifreebuffers), sysctl_bufdomain_int, "L",
+    __offsetof(struct bufdomain, bd_hifreebuffers), sysctl_bufdomain_int, "I",
    "Threshold for clean buffer recycling");
 static counter_u64_t getnewbufcalls;
 SYSCTL_COUNTER_U64(_vfs, OID_AUTO, getnewbufcalls, CTLFLAG_RD,
@@ -821,7 +821,8 @@ bufspace_daemon(void *arg)
 		 *	which will inefficiently trade bufs with bqrelse
 		 *	until we return to condition 2.
 		 */
-		do {
+		while (bd->bd_bufspace > bd->bd_lobufspace ||
+		    bd->bd_freebuffers < bd->bd_hifreebuffers) {
 			if (buf_recycle(bd, false) != 0) {
 				if (bd_flushall(bd))
 					continue;
@@ -842,9 +843,7 @@ bufspace_daemon(void *arg)
 					BD_UNLOCK(bd);
 			}
 			maybe_yield();
-		} while (bd->bd_bufspace > bd->bd_lobufspace ||
-		    bd->bd_freebuffers < bd->bd_hifreebuffers);
-
+		}
 		bufspace_daemon_wait(bd);
 	}
 }
