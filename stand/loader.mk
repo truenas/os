@@ -22,12 +22,16 @@ SRCS+=	load_elf32.c reloc_elf32.c
 .elif ${MACHINE_CPUARCH} == "powerpc"
 SRCS+=	load_elf32.c reloc_elf32.c
 SRCS+=	load_elf64.c reloc_elf64.c
+SRCS+=	metadata.c
 .elif ${MACHINE_CPUARCH} == "sparc64"
 SRCS+=	load_elf64.c reloc_elf64.c
+SRCS+=	metadata.c
 .elif ${MACHINE_ARCH:Mmips64*} != ""
 SRCS+= load_elf64.c reloc_elf64.c
+SRCS+=	metadata.c
 .elif ${MACHINE} == "mips"
 SRCS+=	load_elf32.c reloc_elf32.c
+SRCS+=	metadata.c
 .endif
 
 .if ${LOADER_DISK_SUPPORT:Uyes} == "yes"
@@ -121,7 +125,8 @@ CFLAGS+= -DLOADER_MBR_SUPPORT
 CFLAGS+=	-DLOADER_ZFS_SUPPORT
 CFLAGS+=	-I${ZFSSRC}
 CFLAGS+=	-I${SYSDIR}/cddl/boot/zfs
-.if ${MACHINE} == "amd64"
+SRCS+=		zfs_cmd.c
+.if ${MACHINE_CPUARCH} == "amd64" && ${DO32:U0} == 1
 # Have to override to use 32-bit version of zfs library...
 # kinda lame to select that there XXX
 LIBZFSBOOT=	${BOOTOBJ}/zfs32/libzfsboot.a

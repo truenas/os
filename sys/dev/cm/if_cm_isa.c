@@ -4,8 +4,6 @@
 __FBSDID("$FreeBSD$");
 
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-NetBSD
- *
  * Copyright (c) 1994, 1995, 1998 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
@@ -113,6 +111,7 @@ cm_isa_attach(dev)
 	if (error)
 		goto err;
 
+	gone_in_dev(dev, 12, "cm(4) driver");
 	return 0;
 
 err:

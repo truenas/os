@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1995 Bruce D. Evans.
  * All rights reserved.
  *
@@ -73,6 +71,5 @@ void	set_gsbase(struct thread *td, uint32_t base);
 void	setidt(int idx, alias_for_inthand_t *func, int typ, int dpl, int selec);
 union savefpu *get_pcb_user_save_td(struct thread *td);
 union savefpu *get_pcb_user_save_pcb(struct pcb *pcb);
-struct pcb *get_pcb_td(struct thread *td);
 
 #endif /* !_MACHINE_MD_VAR_H_ */

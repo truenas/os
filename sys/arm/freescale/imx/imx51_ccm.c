@@ -1,7 +1,5 @@
 /*	$NetBSD: imx51_ccm.c,v 1.1 2012/04/17 09:33:31 bsh Exp $	*/
-/*-
- * SPDX-License-Identifier: BSD-2-Clause AND BSD-2-Clause-FreeBSD
- *
+/*
  * Copyright (c) 2010, 2011, 2012  Genetec Corporation.  All rights reserved.
  * Written by Hashimoto Kenichi for Genetec Corporation.
  *
@@ -622,6 +620,13 @@ imx_ccm_usbphy_enable(device_t dev)
 }
 
 uint32_t
+imx_ccm_ecspi_hz(void)
+{
+
+	return (imx51_get_clock(IMX51CLK_CSPI_CLK_ROOT));
+}
+
+uint32_t
 imx_ccm_ipg_hz(void)
 {
 
@@ -655,3 +660,4 @@ imx_ccm_ahb_hz(void)
 
 	return (imx51_get_clock(IMX51CLK_AHB_CLK_ROOT));
 }
+

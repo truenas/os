@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (c) 2000 Berkeley Software Design, Inc.
  * Copyright (c) 1997, 1998, 1999, 2000
  *	Bill Paul <wpaul@osd.bsdi.com>.  All rights reserved.
@@ -1455,7 +1453,7 @@ pcn_watchdog(struct pcn_softc *sc)
 static void
 pcn_stop(struct pcn_softc *sc)
 {
-	register int		i;
+	int			i;
 	struct ifnet		*ifp;
 
 	PCN_LOCK_ASSERT(sc);

@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1991, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -44,6 +42,7 @@ static char sccsid[] = "@(#)basename.c	8.4 (Berkeley) 5/4/95";
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <capsicum_helpers.h>
 #include <err.h>
 #include <libgen.h>
 #include <limits.h>
@@ -65,6 +64,9 @@ main(int argc, char **argv)
 	int aflag, ch;
 
 	setlocale(LC_ALL, "");
+
+	if (caph_limit_stdio() < 0 || (cap_enter() < 0 && errno != ENOSYS))
+		err(1, "capsicum");
 
 	aflag = 0;
 	suffix = NULL;

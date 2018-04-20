@@ -53,7 +53,6 @@ __FBSDID("$FreeBSD$");
 #define		ZFS_BE_LAST	8
 
 static int	zfs_open(const char *path, struct open_file *f);
-static int	zfs_write(struct open_file *f, void *buf, size_t size, size_t *resid);
 static int	zfs_close(struct open_file *f);
 static int	zfs_read(struct open_file *f, void *buf, size_t size, size_t *resid);
 static off_t	zfs_seek(struct open_file *f, off_t offset, int where);
@@ -67,7 +66,7 @@ struct fs_ops zfs_fsops = {
 	zfs_open,
 	zfs_close,
 	zfs_read,
-	zfs_write,
+	null_write,
 	zfs_seek,
 	zfs_stat,
 	zfs_readdir
@@ -169,16 +168,6 @@ zfs_read(struct open_file *f, void *start, size_t size, size_t *resid	/* out */)
 		*resid = size - n;
 
 	return (0);
-}
-
-/*
- * Don't be silly - the bootstrap has no business writing anything.
- */
-static int
-zfs_write(struct open_file *f, void *start, size_t size, size_t *resid	/* out */)
-{
-
-	return (EROFS);
 }
 
 static off_t
@@ -696,8 +685,7 @@ zfs_parsedev(struct zfs_devdesc *dev, const char *devspec, const char **path)
 		return (rv);
 	if (path != NULL)
 		*path = (*end == '\0') ? end : end + 1;
-	dev->d_dev = &zfs_dev;
-	dev->d_type = zfs_dev.dv_type;
+	dev->dd.d_dev = &zfs_dev;
 	return (0);
 }
 
@@ -710,7 +698,7 @@ zfs_fmtdev(void *vdev)
 	spa_t			*spa;
 
 	buf[0] = '\0';
-	if (dev->d_type != DEVT_ZFS)
+	if (dev->dd.d_dev->dv_type != DEVT_ZFS)
 		return (buf);
 
 	if (dev->pool_guid == 0) {
@@ -732,9 +720,9 @@ zfs_fmtdev(void *vdev)
 	}
 
 	if (rootname[0] == '\0')
-		sprintf(buf, "%s:%s:", dev->d_dev->dv_name, spa->spa_name);
+		sprintf(buf, "%s:%s:", dev->dd.d_dev->dv_name, spa->spa_name);
 	else
-		sprintf(buf, "%s:%s/%s:", dev->d_dev->dv_name, spa->spa_name,
+		sprintf(buf, "%s:%s/%s:", dev->dd.d_dev->dv_name, spa->spa_name,
 		    rootname);
 	return (buf);
 }

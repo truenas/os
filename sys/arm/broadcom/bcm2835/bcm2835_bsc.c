@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2001 Tsubai Masanari.
  * Copyright (c) 2012 Oleksandr Tymoshenko <gonzo@freebsd.org>
  * Copyright (c) 2013 Luiz Otavio O Souza <loos@freebsd.org>
@@ -109,6 +107,7 @@ __FBSDID("$FreeBSD$");
 static struct ofw_compat_data compat_data[] = {
 	{"broadcom,bcm2835-bsc",	1},
 	{"brcm,bcm2708-i2c",		1},
+	{"brcm,bcm2835-i2c",		1},
 	{NULL,				0}
 };
 

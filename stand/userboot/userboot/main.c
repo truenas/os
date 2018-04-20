@@ -159,13 +159,13 @@ extract_currdev(void)
 	//bzero(&dev, sizeof(dev));
 
 #if defined(USERBOOT_ZFS_SUPPORT)
+	CTASSERT(sizeof(struct disk_devdesc) >= sizeof(struct zfs_devdesc));
 	if (userboot_zfs_found) {
 		struct zfs_devdesc zdev;
 	
 		/* Leave the pool/root guid's unassigned */
 		bzero(&zdev, sizeof(zdev));
-		zdev.d_dev = &zfs_dev;
-		zdev.d_type = zdev.d_dev->dv_type;
+		zdev.dd.d_dev = &zfs_dev;
 		
 		dev = *(struct disk_devdesc *)&zdev;
 		init_zfs_bootenv(zfs_fmtdev(&dev));
@@ -173,23 +173,21 @@ extract_currdev(void)
 #endif
 
 	if (userboot_disk_maxunit > 0) {
-		dev.d_dev = &userboot_disk;
-		dev.d_type = dev.d_dev->dv_type;
-		dev.d_unit = 0;
+		dev.dd.d_dev = &userboot_disk;
+		dev.dd.d_unit = 0;
 		dev.d_slice = 0;
 		dev.d_partition = 0;
 		/*
 		 * If we cannot auto-detect the partition type then
 		 * access the disk as a raw device.
 		 */
-		if (dev.d_dev->dv_open(NULL, &dev)) {
+		if (dev.dd.d_dev->dv_open(NULL, &dev)) {
 			dev.d_slice = -1;
 			dev.d_partition = -1;
 		}
 	} else {
-		dev.d_dev = &host_dev;
-		dev.d_type = dev.d_dev->dv_type;
-		dev.d_unit = 0;
+		dev.dd.d_dev = &host_dev;
+		dev.dd.d_unit = 0;
 	}
 
 	env_setenv("currdev", EV_VOLATILE, userboot_fmtdev(&dev),
@@ -218,70 +216,7 @@ userboot_zfs_probe(void)
 			userboot_zfs_found = 1;
 	}
 }
-
-COMMAND_SET(lszfs, "lszfs", "list child datasets of a zfs dataset",
-	    command_lszfs);
-
-static int
-command_lszfs(int argc, char *argv[])
-{
-	int err;
-
-	if (argc != 2) {
-		command_errmsg = "a single dataset must be supplied";
-		return (CMD_ERROR);
-	}
-
-	err = zfs_list(argv[1]);
-	if (err != 0) {
-		command_errmsg = strerror(err);
-		return (CMD_ERROR);
-	}
-	return (CMD_OK);
-}
-
-COMMAND_SET(reloadbe, "reloadbe", "refresh the list of ZFS Boot Environments",
-	    command_reloadbe);
-
-static int
-command_reloadbe(int argc, char *argv[])
-{
-	int err;
-	char *root;
-
-	if (argc > 2) {
-		command_errmsg = "wrong number of arguments";
-		return (CMD_ERROR);
-	}
-
-	if (argc == 2) {
-		err = zfs_bootenv(argv[1]);
-	} else {
-		root = getenv("zfs_be_root");
-		if (root == NULL) {
-			return (CMD_OK);
-		}
-		err = zfs_bootenv(root);
-	}
-
-	if (err != 0) {
-		command_errmsg = strerror(err);
-		return (CMD_ERROR);
-	}
-
-	return (CMD_OK);
-}
-
-uint64_t
-ldi_get_size(void *priv)
-{
-	int fd = (uintptr_t) priv;
-	uint64_t size;
-
-	ioctl(fd, DIOCGMEDIASIZE, &size);
-	return (size);
-}
-#endif /* USERBOOT_ZFS_SUPPORT */
+#endif
 
 COMMAND_SET(quit, "quit", "exit the loader", command_quit);
 

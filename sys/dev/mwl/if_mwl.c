@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2007-2009 Sam Leffler, Errno Consulting
  * Copyright (c) 2007-2008 Marvell Semiconductor, Inc.
  * All rights reserved.
@@ -4746,8 +4744,8 @@ mwl_ioctl(struct ieee80211com *ic, u_long cmd, void *data)
 		 * statistics.  The alternative is to copy the data
 		 * to a local structure.
 		 */
-		return (copyout(&sc->sc_stats,
-				ifr->ifr_data, sizeof (sc->sc_stats)));
+		return (copyout(&sc->sc_stats, ifr_data_get_ptr(ifr),
+		    sizeof (sc->sc_stats)));
 #ifdef MWL_DIAGAPI
 	case SIOCGMVDIAG:
 		/* XXX check privs */

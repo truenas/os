@@ -2161,9 +2161,12 @@ get_numeric_property(zfs_handle_t *zhp, zfs_prop_t prop, zprop_source_t *src,
 			/*
 			 * If we tried to use a default value for a
 			 * readonly property, it means that it was not
-			 * present.
+			 * present.  Note this only applies to "truly"
+			 * readonly properties, not set-once properties
+			 * like volblocksize.
 			 */
 			if (zfs_prop_readonly(prop) &&
+			    !zfs_prop_setonce(prop) &&
 			    *source != NULL && (*source)[0] == '\0') {
 				*source = NULL;
 				return (-1);
@@ -3783,6 +3786,9 @@ zfs_promote(zfs_handle_t *zhp)
 		return (zfs_error(hdl, EZFS_BADTYPE, errbuf));
 	}
 
+	if (!zfs_validate_name(hdl, zhp->zfs_name, zhp->zfs_type, B_TRUE))
+		return (zfs_error(hdl, EZFS_INVALIDNAME, errbuf));
+
 	ret = lzc_promote(zhp->zfs_name, snapname, sizeof (snapname));
 
 	if (ret != 0) {
@@ -3824,6 +3830,24 @@ zfs_snapshot_cb(zfs_handle_t *zhp, void *arg)
 	zfs_close(zhp);
 
 	return (rv);
+}
+
+int
+zfs_remap_indirects(libzfs_handle_t *hdl, const char *fs)
+{
+	int err;
+	char errbuf[1024];
+
+	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
+	    "cannot remap filesystem '%s' "), fs);
+
+	err = lzc_remap(fs);
+
+	if (err != 0) {
+		(void) zfs_standard_error(hdl, err, errbuf);
+	}
+
+	return (err);
 }
 
 /*
@@ -4134,6 +4158,10 @@ zfs_rename(zfs_handle_t *zhp, const char *source, const char *target,
 		(void) strlcat(zhp->zfs_name, source, sizeof(zhp->zfs_name));
 		zhp->zfs_type = ZFS_TYPE_SNAPSHOT;
 	}
+
+	/* make sure source name is valid */
+	if (!zfs_validate_name(hdl, zhp->zfs_name, zhp->zfs_type, B_TRUE))
+		return (zfs_error(hdl, EZFS_INVALIDNAME, errbuf));
 
 	/*
 	 * Make sure the target name is valid

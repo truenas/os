@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2009, Oleksandr Tymoshenko <gonzo@FreeBSD.org>
  * All rights reserved.
  *
@@ -213,6 +211,8 @@ ar71xx_spi_transfer(device_t dev, device_t child, struct spi_command *cmd)
 	sc = device_get_softc(dev);
 
 	spibus_get_cs(child, &cs);
+
+	cs &= ~SPIBUS_CS_HIGH;
 
 	ar71xx_spi_chip_activate(sc, cs);
 

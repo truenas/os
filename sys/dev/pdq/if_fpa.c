@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-NetBSD
- *
  * Copyright (c) 1995, 1996 Matt Thomas <matt@3am-software.com>
  * All rights reserved.
  *
@@ -158,6 +156,7 @@ pdq_pci_attach(device_t dev)
     }
 
 
+    gone_in_dev(dev, 12, "fpa(4) driver");
     return (0);
 bad:
     pdq_free(dev);

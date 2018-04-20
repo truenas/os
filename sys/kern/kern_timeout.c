@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1982, 1986, 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  * (c) UNIX System Laboratories, Inc.
@@ -1477,7 +1475,7 @@ _callout_init_lock(struct callout *c, struct lock_object *lock, int flags)
 void
 adjust_timeout_calltodo(struct timeval *time_change)
 {
-	register struct callout *p;
+	struct callout *p;
 	unsigned long delta_ticks;
 
 	/* 

@@ -1,6 +1,4 @@
-/*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
+/*
  * Copyright (c) 2013-2016 Qlogic Corporation
  * All rights reserved.
  *
@@ -703,6 +701,7 @@ ql_rcv_isr(qla_host_t *ha, uint32_t sds_idx, uint32_t count)
 			break;
 
 		default:
+			desc_count = 0;
 			device_printf(dev, "%s: default 0x%llx!\n", __func__,
 					(long long unsigned int)sdesc->data[0]);
 			break;

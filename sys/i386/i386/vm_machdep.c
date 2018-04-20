@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (c) 1982, 1986 The Regents of the University of California.
  * Copyright (c) 1989, 1990 William Jolitz
  * Copyright (c) 1994 John Dyson
@@ -172,7 +170,7 @@ alloc_fpusave(int flags)
 void
 cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 {
-	register struct proc *p1;
+	struct proc *p1;
 	struct pcb *pcb2;
 	struct mdproc *mdp2;
 
@@ -596,7 +594,8 @@ cpu_reset_proxy()
 
 	cpu_reset_proxy_active = 1;
 	while (cpu_reset_proxy_active == 1)
-		;	/* Wait for other cpu to see that we've started */
+		ia32_pause(); /* Wait for other cpu to see that we've started */
+
 	CPU_SETOF(cpu_reset_proxyid, &tcrp);
 	stop_cpus(tcrp);
 	printf("cpu_reset_proxy: Stopped CPU %d\n", cpu_reset_proxyid);
@@ -636,19 +635,21 @@ cpu_reset()
 			printf("cpu_reset: Restarting BSP\n");
 
 			/* Restart CPU #0. */
-			/* XXX: restart_cpus(1 << 0); */
 			CPU_SETOF(0, &started_cpus);
 			wmb();
 
 			cnt = 0;
-			while (cpu_reset_proxy_active == 0 && cnt < 10000000)
+			while (cpu_reset_proxy_active == 0 && cnt < 10000000) {
+				ia32_pause();
 				cnt++;	/* Wait for BSP to announce restart */
+			}
 			if (cpu_reset_proxy_active == 0)
 				printf("cpu_reset: Failed to restart BSP\n");
 			enable_intr();
 			cpu_reset_proxy_active = 2;
 
-			while (1);
+			while (1)
+				ia32_pause();
 			/* NOTREACHED */
 		}
 

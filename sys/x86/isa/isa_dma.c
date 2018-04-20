@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1991 The Regents of the University of California.
  * All rights reserved.
  *
@@ -146,8 +144,7 @@ isa_dma_init(int chan, u_int bouncebufsize, int flag)
  * in open() or during its initialization.
  */
 int
-isa_dma_acquire(chan)
-	int chan;
+isa_dma_acquire(int chan)
 {
 #ifdef DIAGNOSTIC
 	if (chan & ~VALID_DMA_MASK)
@@ -172,8 +169,7 @@ isa_dma_acquire(chan)
  * during close() or during its shutdown.
  */
 void
-isa_dma_release(chan)
-	int chan;
+isa_dma_release(int chan)
 {
 #ifdef DIAGNOSTIC
 	if (chan & ~VALID_DMA_MASK)
@@ -207,8 +203,7 @@ isa_dma_release(chan)
  * external dma control by a board.
  */
 void
-isa_dmacascade(chan)
-	int chan;
+isa_dmacascade(int chan)
 {
 #ifdef DIAGNOSTIC
 	if (chan & ~VALID_DMA_MASK)

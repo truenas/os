@@ -147,7 +147,8 @@ TEST_SYSTEM_COMPILER_VARS= \
 	WANT_COMPILER_TYPE WANT_COMPILER_VERSION WANT_COMPILER_VERSION_FILE \
 	WANT_COMPILER_FREEBSD_VERSION WANT_COMPILER_FREEBSD_VERSION_FILE \
 	CC COMPILER_TYPE COMPILER_FEATURES COMPILER_VERSION \
-	COMPILER_FREEBSD_VERSION
+	COMPILER_FREEBSD_VERSION \
+	LINKER_TYPE LINKER_FEATURES LINKER_VERSION
 test-system-compiler: .PHONY
 .for v in ${TEST_SYSTEM_COMPILER_VARS}
 	${_+_}@printf "%-35s= %s\n" "${v}" "${${v}}"
@@ -165,11 +166,11 @@ test-system-compiler: .PHONY
 .if !defined(X_COMPILER_TYPE)
 CROSSENV+=	COMPILER_VERSION=${COMPILER_VERSION} \
 		COMPILER_TYPE=${COMPILER_TYPE} \
-		COMPILER_FEATURES=${COMPILER_FEATURES} \
+		COMPILER_FEATURES="${COMPILER_FEATURES}" \
 		COMPILER_FREEBSD_VERSION=${COMPILER_FREEBSD_VERSION}
 .else
 CROSSENV+=	COMPILER_VERSION=${X_COMPILER_VERSION} \
-		COMPILER_FEATURES=${X_COMPILER_FEATURES} \
+		COMPILER_FEATURES="${X_COMPILER_FEATURES}" \
 		COMPILER_TYPE=${X_COMPILER_TYPE} \
 		COMPILER_FREEBSD_VERSION=${X_COMPILER_FREEBSD_VERSION}
 .endif
@@ -179,7 +180,10 @@ CROSSENV+=	COMPILER_VERSION=${X_COMPILER_VERSION} \
 _COMPILER_METADATA_VARS=	COMPILER_VERSION \
 				COMPILER_TYPE \
 				COMPILER_FEATURES \
-				COMPILER_FREEBSD_VERSION
+				COMPILER_FREEBSD_VERSION \
+				LINKER_VERSION \
+				LINKER_FEATURES \
+				LINKER_TYPE
 compiler-metadata.mk: .PHONY .META
 	@: > ${.TARGET}
 	@echo ".info Using cached compiler metadata from build at $$(hostname) on $$(date)" \
@@ -2137,16 +2141,24 @@ _lib_libradius=	lib/libradius
 .endif
 
 .if ${MK_OFED} != "no"
-_ofed_lib=		contrib/ofed/usr.lib
-_prebuild_libs+=	contrib/ofed/usr.lib/libosmcomp
-_prebuild_libs+=	contrib/ofed/usr.lib/libopensm
-_prebuild_libs+=	contrib/ofed/usr.lib/libibcommon
-_prebuild_libs+=	contrib/ofed/usr.lib/libibverbs
-_prebuild_libs+=	contrib/ofed/usr.lib/libibumad
+#
+# The OFED libraries are built in four steps
+# as reflected below, due to interdependencies.
+#
+# NOTE: Depending on contrib/ofed/include is only needed for
+# the lib32 compat build.
+#
+_ofed_lib= \
+contrib/ofed/include \
+contrib/ofed/usr.lib/0 \
+contrib/ofed/usr.lib/1 \
+contrib/ofed/usr.lib/2 \
+contrib/ofed/usr.lib/3
 
-contrib/ofed/usr.lib/libopensm__L: lib/libthr__L
-contrib/ofed/usr.lib/libosmcomp__L: lib/libthr__L
-contrib/ofed/usr.lib/libibumad__L: contrib/ofed/usr.lib/libibcommon__L
+contrib/ofed/usr.lib/0__L: contrib/ofed/include__L lib/libthr__L
+contrib/ofed/usr.lib/1__L: contrib/ofed/usr.lib/0__L
+contrib/ofed/usr.lib/2__L: contrib/ofed/usr.lib/1__L
+contrib/ofed/usr.lib/3__L: contrib/ofed/usr.lib/2__L
 .endif
 
 .if ${MK_CASPER} != "no"

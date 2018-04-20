@@ -2,8 +2,6 @@
 /*	$FreeBSD$ */
 
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (c) 1994, 1995 Ignatios Souvatzis
  * Copyright (c) 1982, 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -681,12 +679,7 @@ arc_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		break;
 
 	case SIOCGIFADDR:
-		{
-			struct sockaddr *sa;
-
-			sa = (struct sockaddr *) &ifr->ifr_data;
-			*(u_int8_t *)sa->sa_data = ARC_LLADDR(ifp);
-		}
+		ifr->ifr_addr.sa_data[0] = ARC_LLADDR(ifp);
 		break;
 
 	case SIOCADDMULTI:

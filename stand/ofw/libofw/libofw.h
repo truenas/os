@@ -27,14 +27,13 @@
 
 #include "openfirm.h"
 
-/* Note: Must match the 'struct devdesc' in bootstrap.h */
 struct ofw_devdesc {
-	struct devsw	*d_dev;
-	int		d_type;
-	int		d_unit;
-	ihandle_t	d_handle;
+	struct devdesc			dd;
 	union {
-		char			d_path[256];
+		struct {
+			ihandle_t	d_handle;	
+			char		d_path[256];
+		};
 		struct {
 			uint64_t	pool_guid;
 			uint64_t	root_guid;
@@ -62,17 +61,9 @@ void	ofw_memmap(int);
 struct preloaded_file;
 struct file_format;
 
-int	ofw_elf_loadfile(char *, vm_offset_t, struct preloaded_file **);
-int	ofw_elf_exec(struct preloaded_file *);
-
 /* MD code implementing MI interfaces */
 vm_offset_t md_load(char *args, vm_offset_t *modulep, vm_offset_t *dtb);
 vm_offset_t md_load64(char *args, vm_offset_t *modulep, vm_offset_t *dtb);
-
-extern struct file_format	ofw_elf;
-#ifdef __powerpc__
-extern struct file_format	ofw_elf64;
-#endif
 
 extern void	reboot(void);
 

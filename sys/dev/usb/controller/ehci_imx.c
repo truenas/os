@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2010-2012 Semihalf
  * Copyright (c) 2012 The FreeBSD Foundation
  * Copyright (c) 2013 Ian Lepore <ian@freebsd.org>
@@ -268,6 +266,7 @@ struct imx_ehci_softc {
 	device_t	dev;
 	struct resource	*ehci_mem_res;	/* EHCI core regs. */
 	struct resource	*ehci_irq_res;	/* EHCI core IRQ. */ 
+	bool		usb_mem_allocated;
 };
 
 static struct ofw_compat_data compat_data[] = {
@@ -331,7 +330,8 @@ imx_ehci_detach(device_t dev)
 		bus_release_resource(dev, SYS_RES_MEMORY, 0,
 		    sc->ehci_mem_res);
 
-	usb_bus_mem_free_all(&esc->sc_bus, &ehci_iterate_hw_softc);
+	if (sc->usb_mem_allocated)
+		usb_bus_mem_free_all(&esc->sc_bus, &ehci_iterate_hw_softc);
 
 	/* During module unload there are lots of children leftover */
 	device_delete_children(dev);
@@ -413,6 +413,7 @@ imx_ehci_attach(device_t dev)
 		err = ENOMEM;
 		goto out;
 	}
+	sc->usb_mem_allocated = true;
 
 	/*
 	 * Set handle to USB related registers subregion used by

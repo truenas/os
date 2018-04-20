@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1982, 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -447,7 +445,8 @@ ether_output_frame(struct ifnet *ifp, struct mbuf *m)
 	int i;
 
 	if (PFIL_HOOKED(&V_link_pfil_hook)) {
-		i = pfil_run_hooks(&V_link_pfil_hook, &m, ifp, PFIL_OUT, NULL);
+		i = pfil_run_hooks(&V_link_pfil_hook, &m, ifp, PFIL_OUT, 0,
+		    NULL);
 
 		if (i != 0)
 			return (EACCES);
@@ -780,7 +779,8 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 
 	/* Do not grab PROMISC frames in case we are re-entered. */
 	if (PFIL_HOOKED(&V_link_pfil_hook) && !(m->m_flags & M_PROMISC)) {
-		i = pfil_run_hooks(&V_link_pfil_hook, &m, ifp, PFIL_IN, NULL);
+		i = pfil_run_hooks(&V_link_pfil_hook, &m, ifp, PFIL_IN, 0,
+		    NULL);
 
 		if (i != 0 || m == NULL)
 			return;
@@ -1086,13 +1086,8 @@ ether_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		break;
 
 	case SIOCGIFADDR:
-		{
-			struct sockaddr *sa;
-
-			sa = (struct sockaddr *) & ifr->ifr_data;
-			bcopy(IF_LLADDR(ifp),
-			      (caddr_t) sa->sa_data, ETHER_ADDR_LEN);
-		}
+		bcopy(IF_LLADDR(ifp), &ifr->ifr_addr.sa_data[0],
+		    ETHER_ADDR_LEN);
 		break;
 
 	case SIOCSIFMTU:

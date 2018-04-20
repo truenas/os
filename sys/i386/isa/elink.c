@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (c) 1994 Charles Hannum.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,8 +70,8 @@ elink_reset()
 void
 elink_idseq(u_char p)
 {
-	register int i;
-	register u_char c;
+	int i;
+	u_char c;
 
 	c = 0xff;
 	for (i = 255; i; i--) {
