@@ -38,6 +38,15 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20180417: remove fuswintr and suswintr
+OLD_FILES+=usr/share/man/man9/fuswintr.9.gz
+OLD_FILES+=usr/share/man/man9/suswintr.9.gz
+# 20180413: remove Arcnet support
+OLD_FILES+=usr/include/net/if_arc.h
+OLD_FILES+=usr/share/man/man4/cm.4.gz
+# 20180409: remove FDDI support
+OLD_FILES+=usr/include/net/fddi.h
+OLD_FILES+=usr/share/man/man4/fpa.4.gz
 # 20180319: remove /boot/overlays, replaced by /boot/dtb/overlays
 OLD_DIRS+=boot/overlays
 # 20180311: remove sys/sys/i386/include/pcaudioio.h
@@ -413,7 +422,7 @@ OLD_FILES+=usr/share/man/man9/mbp_sync.9.gz
 OLD_FILES+=usr/lib/libstand.a
 OLD_FILES+=usr/lib/libstand_p.a
 OLD_FILES+=usr/include/stand.h
-OLD_FILES+=usr/share/man/man3/libstand.3
+OLD_FILES+=usr/share/man/man3/libstand.3.gz
 # 20171003: remove RCMDS
 OLD_FILES+=bin/rcp
 OLD_FILES+=rescue/rcp
@@ -1067,7 +1076,6 @@ OLD_FILES+=usr/share/man/man7/mm.7.gz
 OLD_FILES+=usr/share/man/man7/mmse.7.gz
 OLD_FILES+=usr/share/man/man7/ms.7.gz
 OLD_FILES+=usr/share/man/man7/orig_me.7.gz
-OLD_FILES+=usr/share/man/man7/roff.7.gz
 OLD_FILES+=usr/share/me/acm.me
 OLD_FILES+=usr/share/me/chars.me
 OLD_FILES+=usr/share/me/deltext.me

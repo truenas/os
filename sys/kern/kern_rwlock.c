@@ -95,8 +95,8 @@ struct lock_class lock_class_rw = {
 };
 
 #ifdef ADAPTIVE_RWLOCKS
-static int __read_frequently rowner_retries = 10;
-static int __read_frequently rowner_loops = 10000;
+static int __read_frequently rowner_retries;
+static int __read_frequently rowner_loops;
 static SYSCTL_NODE(_debug, OID_AUTO, rwlock, CTLFLAG_RD, NULL,
     "rwlock debugging");
 SYSCTL_INT(_debug_rwlock, OID_AUTO, retry, CTLFLAG_RW, &rowner_retries, 0, "");
@@ -109,7 +109,15 @@ SYSCTL_INT(_debug_rwlock, OID_AUTO, delay_base, CTLFLAG_RW, &rw_delay.base,
 SYSCTL_INT(_debug_rwlock, OID_AUTO, delay_max, CTLFLAG_RW, &rw_delay.max,
     0, "");
 
-LOCK_DELAY_SYSINIT_DEFAULT(rw_delay);
+static void
+rw_lock_delay_init(void *arg __unused)
+{
+
+	lock_delay_default_init(&rw_delay);
+	rowner_retries = 10;
+	rowner_loops = max(10000, rw_delay.max);
+}
+LOCK_DELAY_SYSINIT(rw_lock_delay_init);
 #endif
 
 /*
@@ -1204,7 +1212,7 @@ __rw_wunlock_hard(volatile uintptr_t *c, uintptr_t v LOCK_FILE_LINE_ARG_DEF)
 int
 __rw_try_upgrade_int(struct rwlock *rw LOCK_FILE_LINE_ARG_DEF)
 {
-	uintptr_t v, x, tid;
+	uintptr_t v, setv, tid;
 	struct turnstile *ts;
 	int success;
 
@@ -1224,12 +1232,12 @@ __rw_try_upgrade_int(struct rwlock *rw LOCK_FILE_LINE_ARG_DEF)
 	 */
 	tid = (uintptr_t)curthread;
 	success = 0;
+	v = RW_READ_VALUE(rw);
 	for (;;) {
-		v = rw->rw_lock;
 		if (RW_READERS(v) > 1)
 			break;
 		if (!(v & RW_LOCK_WAITERS)) {
-			success = atomic_cmpset_acq_ptr(&rw->rw_lock, v, tid);
+			success = atomic_fcmpset_acq_ptr(&rw->rw_lock, &v, tid);
 			if (!success)
 				continue;
 			break;
@@ -1239,7 +1247,8 @@ __rw_try_upgrade_int(struct rwlock *rw LOCK_FILE_LINE_ARG_DEF)
 		 * Ok, we think we have waiters, so lock the turnstile.
 		 */
 		ts = turnstile_trywait(&rw->lock_object);
-		v = rw->rw_lock;
+		v = RW_READ_VALUE(rw);
+retry_ts:
 		if (RW_READERS(v) > 1) {
 			turnstile_cancel(ts);
 			break;
@@ -1250,16 +1259,16 @@ __rw_try_upgrade_int(struct rwlock *rw LOCK_FILE_LINE_ARG_DEF)
 		 * If we obtain the lock with the flags set, then claim
 		 * ownership of the turnstile.
 		 */
-		x = rw->rw_lock & RW_LOCK_WAITERS;
-		success = atomic_cmpset_ptr(&rw->rw_lock, v, tid | x);
+		setv = tid | (v & RW_LOCK_WAITERS);
+		success = atomic_fcmpset_ptr(&rw->rw_lock, &v, setv);
 		if (success) {
-			if (x)
+			if (v & RW_LOCK_WAITERS)
 				turnstile_claim(ts);
 			else
 				turnstile_cancel(ts);
 			break;
 		}
-		turnstile_cancel(ts);
+		goto retry_ts;
 	}
 	LOCK_LOG_TRY("WUPGRADE", &rw->lock_object, 0, success, file, line);
 	if (success) {

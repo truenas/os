@@ -158,6 +158,10 @@ struct cache_info {
 	int	present;
 } static caches[MAX_CACHE_LEVELS];
 
+unsigned int boot_address;
+
+#define MiB(v)	(v ## ULL << 20)
+
 void
 mem_range_AP_init(void)
 {
@@ -905,6 +909,56 @@ cpu_mp_probe(void)
 	return (mp_ncpus > 1);
 }
 
+/* Allocate memory for the AP trampoline. */
+void
+alloc_ap_trampoline(vm_paddr_t *physmap, unsigned int *physmap_idx)
+{
+	unsigned int i;
+	bool allocated;
+
+	allocated = false;
+	for (i = *physmap_idx; i <= *physmap_idx; i -= 2) {
+		/*
+		 * Find a memory region big enough and below the 1MB boundary
+		 * for the trampoline code.
+		 * NB: needs to be page aligned.
+		 */
+		if (physmap[i] >= MiB(1) ||
+		    (trunc_page(physmap[i + 1]) - round_page(physmap[i])) <
+		    round_page(bootMP_size))
+			continue;
+
+		allocated = true;
+		/*
+		 * Try to steal from the end of the region to mimic previous
+		 * behaviour, else fallback to steal from the start.
+		 */
+		if (physmap[i + 1] < MiB(1)) {
+			boot_address = trunc_page(physmap[i + 1]);
+			if ((physmap[i + 1] - boot_address) < bootMP_size)
+				boot_address -= round_page(bootMP_size);
+			physmap[i + 1] = boot_address;
+		} else {
+			boot_address = round_page(physmap[i]);
+			physmap[i] = boot_address + round_page(bootMP_size);
+		}
+		if (physmap[i] == physmap[i + 1] && *physmap_idx != 0) {
+			memmove(&physmap[i], &physmap[i + 2],
+			    sizeof(*physmap) * (*physmap_idx - i + 2));
+			*physmap_idx -= 2;
+		}
+		break;
+	}
+
+	if (!allocated) {
+		boot_address = basemem * 1024 - bootMP_size;
+		if (bootverbose)
+			printf(
+"Cannot find enough space for the boot trampoline, placing it at %#x",
+			    boot_address);
+	}
+}
+
 /*
  * AP CPU's call this to initialize themselves.
  */
@@ -1632,8 +1686,10 @@ invltlb_handler(void)
 	generation = smp_tlb_generation;
 	if (smp_tlb_pmap == kernel_pmap)
 		invltlb_glob();
+#ifdef __amd64__
 	else
 		invltlb();
+#endif
 	PCPU_SET(smp_tlb_done, generation);
 }
 
@@ -1650,7 +1706,10 @@ invlpg_handler(void)
 #endif /* COUNT_IPIS */
 
 	generation = smp_tlb_generation;	/* Overlap with serialization */
-	invlpg(smp_tlb_addr1);
+#ifdef __i386__
+	if (smp_tlb_pmap == kernel_pmap)
+#endif
+		invlpg(smp_tlb_addr1);
 	PCPU_SET(smp_tlb_done, generation);
 }
 
@@ -1670,10 +1729,13 @@ invlrng_handler(void)
 	addr = smp_tlb_addr1;
 	addr2 = smp_tlb_addr2;
 	generation = smp_tlb_generation;	/* Overlap with serialization */
-	do {
-		invlpg(addr);
-		addr += PAGE_SIZE;
-	} while (addr < addr2);
+#ifdef __i386__
+	if (smp_tlb_pmap == kernel_pmap)
+#endif
+		do {
+			invlpg(addr);
+			addr += PAGE_SIZE;
+		} while (addr < addr2);
 
 	PCPU_SET(smp_tlb_done, generation);
 }

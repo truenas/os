@@ -41,8 +41,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_compat.h"
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -443,6 +441,9 @@ cryptof_ioctl(
 		case CRYPTO_AES_NIST_GCM_16:
 			txform = &enc_xform_aes_nist_gcm;
  			break;
+		case CRYPTO_CHACHA20:
+			txform = &enc_xform_chacha20;
+			break;
 
 		default:
 			CRYPTDEB("invalid cipher");

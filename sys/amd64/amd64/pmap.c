@@ -1290,7 +1290,35 @@ pmap_init(void)
 	struct pmap_preinit_mapping *ppim;
 	vm_page_t mpte;
 	vm_size_t s;
-	int error, i, pv_npg;
+	int error, i, pv_npg, ret, skz63;
+
+	/* Detect bare-metal Skylake Server and Skylake-X. */
+	if (vm_guest == VM_GUEST_NO && cpu_vendor_id == CPU_VENDOR_INTEL &&
+	    CPUID_TO_FAMILY(cpu_id) == 0x6 && CPUID_TO_MODEL(cpu_id) == 0x55) {
+		/*
+		 * Skylake-X errata SKZ63. Processor May Hang When
+		 * Executing Code In an HLE Transaction Region between
+		 * 40000000H and 403FFFFFH.
+		 *
+		 * Mark the pages in the range as preallocated.  It
+		 * seems to be impossible to distinguish between
+		 * Skylake Server and Skylake X.
+		 */
+		skz63 = 1;
+		TUNABLE_INT_FETCH("hw.skz63_enable", &skz63);
+		if (skz63 != 0) {
+			if (bootverbose)
+				printf("SKZ63: skipping 4M RAM starting "
+				    "at physical 1G\n");
+			for (i = 0; i < atop(0x400000); i++) {
+				ret = vm_page_blacklist_add(0x40000000 +
+				    ptoa(i), FALSE);
+				if (!ret && bootverbose)
+					printf("page at %#lx already used\n",
+					    0x40000000 + ptoa(i));
+			}
+		}
+	}
 
 	/*
 	 * Initialize the vm page array entries for the kernel pmap's
@@ -7302,8 +7330,9 @@ pmap_pcid_alloc(pmap_t pmap, u_int cpuid)
 
 	CRITICAL_ASSERT(curthread);
 	gen = PCPU_GET(pcid_gen);
-	if (!pti && (pmap->pm_pcids[cpuid].pm_pcid == PMAP_PCID_KERN ||
-	    pmap->pm_pcids[cpuid].pm_gen == gen))
+	if (pmap->pm_pcids[cpuid].pm_pcid == PMAP_PCID_KERN)
+		return (pti ? 0 : CR3_PCID_SAVE);
+	if (pmap->pm_pcids[cpuid].pm_gen == gen)
 		return (CR3_PCID_SAVE);
 	pcid_next = PCPU_GET(pcid_next);
 	KASSERT((!pti && pcid_next <= PMAP_PCID_OVERMAX) ||
@@ -7330,7 +7359,7 @@ pmap_activate_sw(struct thread *td)
 {
 	pmap_t oldpmap, pmap;
 	struct invpcid_descr d;
-	uint64_t cached, cr3, kcr3, ucr3;
+	uint64_t cached, cr3, kcr3, kern_pti_cached, ucr3;
 	register_t rflags;
 	u_int cpuid;
 
@@ -7379,11 +7408,10 @@ pmap_activate_sw(struct thread *td)
 		if (!invpcid_works)
 			rflags = intr_disable();
 
-		if (!cached || (cr3 & ~CR3_PCID_MASK) != pmap->pm_cr3) {
+		kern_pti_cached = pti ? 0 : cached;
+		if (!kern_pti_cached || (cr3 & ~CR3_PCID_MASK) != pmap->pm_cr3) {
 			load_cr3(pmap->pm_cr3 | pmap->pm_pcids[cpuid].pm_pcid |
-			    cached);
-			if (cached)
-				PCPU_INC(pm_save_cnt);
+			    kern_pti_cached);
 		}
 		PCPU_SET(curpmap, pmap);
 		if (pti) {
@@ -7391,13 +7419,13 @@ pmap_activate_sw(struct thread *td)
 			ucr3 = pmap->pm_ucr3 | pmap->pm_pcids[cpuid].pm_pcid |
 			    PMAP_PCID_USER_PT;
 
-			/*
-			 * Manually invalidate translations cached
-			 * from the user page table, which are not
-			 * flushed by reload of cr3 with the kernel
-			 * page table pointer above.
-			 */
-			if (pmap->pm_ucr3 != PMAP_NO_CR3) {
+			if (!cached && pmap->pm_ucr3 != PMAP_NO_CR3) {
+				/*
+				 * Manually invalidate translations cached
+				 * from the user page table.  They are not
+				 * flushed by reload of cr3 with the kernel
+				 * page table pointer above.
+				 */
 				if (invpcid_works) {
 					d.pcid = PMAP_PCID_USER_PT |
 					    pmap->pm_pcids[cpuid].pm_pcid;
@@ -7414,6 +7442,8 @@ pmap_activate_sw(struct thread *td)
 		}
 		if (!invpcid_works)
 			intr_restore(rflags);
+		if (cached)
+			PCPU_INC(pm_save_cnt);
 	} else if (cr3 != pmap->pm_cr3) {
 		load_cr3(pmap->pm_cr3);
 		PCPU_SET(curpmap, pmap);
@@ -7970,7 +8000,7 @@ pmap_pti_add_kva_locked(vm_offset_t sva, vm_offset_t eva, bool exec)
 	for (; sva < eva; sva += PAGE_SIZE) {
 		pte = pmap_pti_pte(sva, &unwire_pde);
 		pa = pmap_kextract(sva);
-		ptev = pa | X86_PG_RW | X86_PG_V | X86_PG_A |
+		ptev = pa | X86_PG_RW | X86_PG_V | X86_PG_A | X86_PG_G |
 		    (exec ? 0 : pg_nx) | pmap_cache_bits(kernel_pmap,
 		    VM_MEMATTR_DEFAULT, FALSE);
 		if (*pte == 0) {

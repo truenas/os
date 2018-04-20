@@ -470,6 +470,14 @@ static int pcie_relaxed_ordering = -1;
 TUNABLE_INT("hw.cxgbe.pcie_relaxed_ordering", &pcie_relaxed_ordering);
 
 
+#ifdef TCP_OFFLOAD
+/*
+ * TOE tunables.
+ */
+static int t4_cop_managed_offloading = 0;
+TUNABLE_INT("hw.cxgbe.cop_managed_offloading", &t4_cop_managed_offloading);
+#endif
+
 /* Functions used by VIs to obtain unique MAC addresses for each VI. */
 static int vi_mac_funcs[] = {
 	FW_VI_FUNC_ETH,
@@ -511,11 +519,6 @@ struct filter_entry {
 
 static void setup_memwin(struct adapter *);
 static void position_memwin(struct adapter *, int, uint32_t);
-static int rw_via_memwin(struct adapter *, int, uint32_t, uint32_t *, int, int);
-static inline int read_via_memwin(struct adapter *, int, uint32_t, uint32_t *,
-    int);
-static inline int write_via_memwin(struct adapter *, int, uint32_t,
-    const uint32_t *, int);
 static int validate_mem_range(struct adapter *, uint32_t, int);
 static int fwmtype_to_hwmtype(int);
 static int validate_mt_off_len(struct adapter *, int, uint32_t, int,
@@ -622,6 +625,8 @@ static int load_cfg(struct adapter *, struct t4_data *);
 static int load_boot(struct adapter *, struct t4_bootrom *);
 static int load_bootcfg(struct adapter *, struct t4_data *);
 static int cudbg_dump(struct adapter *, struct t4_cudbg_dump *);
+static void free_offload_policy(struct t4_offload_policy *);
+static int set_offload_policy(struct adapter *, struct t4_offload_policy *);
 static int read_card_mem(struct adapter *, int, struct t4_mem_range *);
 static int read_i2c(struct adapter *, struct t4_i2c_data *);
 #ifdef TCP_OFFLOAD
@@ -901,6 +906,9 @@ t4_attach(device_t dev)
 	callout_init_mtx(&sc->sfl_callout, &sc->sfl_lock, 0);
 
 	mtx_init(&sc->reg_lock, "indirect register access", 0, MTX_DEF);
+
+	sc->policy = NULL;
+	rw_init(&sc->policy_lock, "connection offload policy");
 
 	rc = t4_map_bars_0_and_4(sc);
 	if (rc != 0)
@@ -1410,6 +1418,14 @@ t4_detach_common(device_t dev)
 	if (mtx_initialized(&sc->reg_lock))
 		mtx_destroy(&sc->reg_lock);
 
+	if (rw_initialized(&sc->policy_lock)) {
+		rw_destroy(&sc->policy_lock);
+#ifdef TCP_OFFLOAD
+		if (sc->policy != NULL)
+			free_offload_policy(sc->policy);
+#endif
+	}
+
 	for (i = 0; i < NUM_MEMWIN; i++) {
 		struct memwin *mw = &sc->memwin[i];
 
@@ -1641,8 +1657,13 @@ cxgbe_ioctl(struct ifnet *ifp, unsigned long cmd, caddr_t data)
 redo_sifflags:
 		rc = begin_synchronized_op(sc, vi,
 		    can_sleep ? (SLEEP_OK | INTR_OK) : HOLD_LOCK, "t4flg");
-		if (rc)
+		if (rc) {
+			if_printf(ifp, "%ssleepable synch operation failed: %d."
+			    "  if_flags 0x%08x, if_drv_flags 0x%08x\n",
+			    can_sleep ? "" : "non-", rc, ifp->if_flags,
+			    ifp->if_drv_flags);
 			return (rc);
+		}
 
 		if (ifp->if_flags & IFF_UP) {
 			if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
@@ -1800,7 +1821,7 @@ fail:
 	case SIOCGI2C: {
 		struct ifi2creq i2c;
 
-		rc = copyin(ifr->ifr_data, &i2c, sizeof(i2c));
+		rc = copyin(ifr_data_get_ptr(ifr), &i2c, sizeof(i2c));
 		if (rc != 0)
 			break;
 		if (i2c.dev_addr != 0xA0 && i2c.dev_addr != 0xA2) {
@@ -1818,7 +1839,7 @@ fail:
 		    i2c.offset, i2c.len, &i2c.data[0]);
 		end_synchronized_op(sc, 0);
 		if (rc == 0)
-			rc = copyout(&i2c, ifr->ifr_data, sizeof(i2c));
+			rc = copyout(&i2c, ifr_data_get_ptr(ifr), sizeof(i2c));
 		break;
 	}
 
@@ -2391,7 +2412,7 @@ position_memwin(struct adapter *sc, int idx, uint32_t addr)
 	t4_read_reg(sc, reg);	/* flush */
 }
 
-static int
+int
 rw_via_memwin(struct adapter *sc, int idx, uint32_t addr, uint32_t *val,
     int len, int rw)
 {
@@ -2437,22 +2458,6 @@ rw_via_memwin(struct adapter *sc, int idx, uint32_t addr, uint32_t *val,
 	}
 
 	return (0);
-}
-
-static inline int
-read_via_memwin(struct adapter *sc, int idx, uint32_t addr, uint32_t *val,
-    int len)
-{
-
-	return (rw_via_memwin(sc, idx, addr, val, len, 0));
-}
-
-static inline int
-write_via_memwin(struct adapter *sc, int idx, uint32_t addr,
-    const uint32_t *val, int len)
-{
-
-	return (rw_via_memwin(sc, idx, addr, (void *)(uintptr_t)val, len, 1));
 }
 
 static int
@@ -4327,8 +4332,13 @@ cxgbe_uninit_synchronized(struct vi_info *vi)
 	ASSERT_SYNCHRONIZED_OP(sc);
 
 	if (!(vi->flags & VI_INIT_DONE)) {
-		KASSERT(!(ifp->if_drv_flags & IFF_DRV_RUNNING),
-		    ("uninited VI is running"));
+		if (__predict_false(ifp->if_drv_flags & IFF_DRV_RUNNING)) {
+			KASSERT(0, ("uninited VI is running"));
+			if_printf(ifp, "uninited VI with running ifnet.  "
+			    "vi->flags 0x%016lx, if_flags 0x%08x, "
+			    "if_drv_flags 0x%08x\n", vi->flags, ifp->if_flags,
+			    ifp->if_drv_flags);
+		}
 		return (0);
 	}
 
@@ -5450,6 +5460,12 @@ t4_sysctls(struct adapter *sc)
 		SYSCTL_ADD_INT(ctx, children, OID_AUTO, "tx_zcopy",
 		    CTLFLAG_RW, &sc->tt.tx_zcopy, 0,
 		    "Enable zero-copy aio_write(2)");
+
+		sc->tt.cop_managed_offloading = !!t4_cop_managed_offloading;
+		SYSCTL_ADD_INT(ctx, children, OID_AUTO,
+		    "cop_managed_offloading", CTLFLAG_RW,
+		    &sc->tt.cop_managed_offloading, 0,
+		    "COP (Connection Offload Policy) controls all TOE offload");
 
 		SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "timer_tick",
 		    CTLTYPE_STRING | CTLFLAG_RD, sc, 0, sysctl_tp_tick, "A",
@@ -9396,6 +9412,113 @@ done:
 	return (rc);
 }
 
+static void
+free_offload_policy(struct t4_offload_policy *op)
+{
+	struct offload_rule *r;
+	int i;
+
+	if (op == NULL)
+		return;
+
+	r = &op->rule[0];
+	for (i = 0; i < op->nrules; i++, r++) {
+		free(r->bpf_prog.bf_insns, M_CXGBE);
+	}
+	free(op->rule, M_CXGBE);
+	free(op, M_CXGBE);
+}
+
+static int
+set_offload_policy(struct adapter *sc, struct t4_offload_policy *uop)
+{
+	int i, rc, len;
+	struct t4_offload_policy *op, *old;
+	struct bpf_program *bf;
+	const struct offload_settings *s;
+	struct offload_rule *r;
+	void *u;
+
+	if (!is_offload(sc))
+		return (ENODEV);
+
+	if (uop->nrules == 0) {
+		/* Delete installed policies. */
+		op = NULL;
+		goto set_policy;
+	} if (uop->nrules > 256) { /* arbitrary */
+		return (E2BIG);
+	}
+
+	/* Copy userspace offload policy to kernel */
+	op = malloc(sizeof(*op), M_CXGBE, M_ZERO | M_WAITOK);
+	op->nrules = uop->nrules;
+	len = op->nrules * sizeof(struct offload_rule);
+	op->rule = malloc(len, M_CXGBE, M_ZERO | M_WAITOK);
+	rc = copyin(uop->rule, op->rule, len);
+	if (rc) {
+		free(op->rule, M_CXGBE);
+		free(op, M_CXGBE);
+		return (rc);
+	}
+
+	r = &op->rule[0];
+	for (i = 0; i < op->nrules; i++, r++) {
+
+		/* Validate open_type */
+		if (r->open_type != OPEN_TYPE_LISTEN &&
+		    r->open_type != OPEN_TYPE_ACTIVE &&
+		    r->open_type != OPEN_TYPE_PASSIVE &&
+		    r->open_type != OPEN_TYPE_DONTCARE) {
+error:
+			/*
+			 * Rules 0 to i have malloc'd filters that need to be
+			 * freed.  Rules i+1 to nrules have userspace pointers
+			 * and should be left alone.
+			 */
+			op->nrules = i;
+			free_offload_policy(op);
+			return (rc);
+		}
+
+		/* Validate settings */
+		s = &r->settings;
+		if ((s->offload != 0 && s->offload != 1) ||
+		    s->cong_algo < -1 || s->cong_algo > CONG_ALG_HIGHSPEED ||
+		    s->sched_class < -1 ||
+		    s->sched_class >= sc->chip_params->nsched_cls) {
+			rc = EINVAL;
+			goto error;
+		}
+
+		bf = &r->bpf_prog;
+		u = bf->bf_insns;	/* userspace ptr */
+		bf->bf_insns = NULL;
+		if (bf->bf_len == 0) {
+			/* legal, matches everything */
+			continue;
+		}
+		len = bf->bf_len * sizeof(*bf->bf_insns);
+		bf->bf_insns = malloc(len, M_CXGBE, M_ZERO | M_WAITOK);
+		rc = copyin(u, bf->bf_insns, len);
+		if (rc != 0)
+			goto error;
+
+		if (!bpf_validate(bf->bf_insns, bf->bf_len)) {
+			rc = EINVAL;
+			goto error;
+		}
+	}
+set_policy:
+	rw_wlock(&sc->policy_lock);
+	old = sc->policy;
+	sc->policy = op;
+	rw_wunlock(&sc->policy_lock);
+	free_offload_policy(old);
+
+	return (0);
+}
+
 #define MAX_READ_BUF_SIZE (128 * 1024)
 static int
 read_card_mem(struct adapter *sc, int win, struct t4_mem_range *mr)
@@ -9753,6 +9876,9 @@ t4_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data, int fflag,
 		break;
 	case CHELSIO_T4_CUDBG_DUMP:
 		rc = cudbg_dump(sc, (struct t4_cudbg_dump *)data);
+		break;
+	case CHELSIO_T4_SET_OFLD_POLICY:
+		rc = set_offload_policy(sc, (struct t4_offload_policy *)data);
 		break;
 	default:
 		rc = ENOTTY;

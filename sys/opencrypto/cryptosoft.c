@@ -84,7 +84,7 @@ static int
 swcr_encdec(struct cryptodesc *crd, struct swcr_data *sw, caddr_t buf,
     int flags)
 {
-	unsigned char iv[EALG_MAX_BLOCK_LEN], blk[EALG_MAX_BLOCK_LEN], *idat;
+	unsigned char iv[EALG_MAX_BLOCK_LEN], blk[EALG_MAX_BLOCK_LEN];
 	unsigned char *ivp, *nivp, iv2[EALG_MAX_BLOCK_LEN];
 	struct enc_xform *exf;
 	int i, j, k, blks, ind, count, ivlen;
@@ -249,11 +249,13 @@ swcr_encdec(struct cryptodesc *crd, struct swcr_data *sw, caddr_t buf,
 		}
 
 		while (uio->uio_iov[ind].iov_len >= k + blks && i > 0) {
+			uint8_t *idat;
 			size_t nb, rem;
 
 			nb = blks;
-			rem = uio->uio_iov[ind].iov_len - k;
-			idat = (char *)uio->uio_iov[ind].iov_base + k;
+			rem = MIN((size_t)i,
+			    uio->uio_iov[ind].iov_len - (size_t)k);
+			idat = (uint8_t *)uio->uio_iov[ind].iov_base + k;
 
 			if (exf->reinit) {
 				if ((crd->crd_flags & CRD_F_ENCRYPT) != 0 &&
@@ -296,7 +298,6 @@ swcr_encdec(struct cryptodesc *crd, struct swcr_data *sw, caddr_t buf,
 				ivp = nivp;
 			}
 
-			idat += nb;
 			count += nb;
 			k += nb;
 			i -= nb;
@@ -830,6 +831,9 @@ swcr_newsession(device_t dev, u_int32_t *sid, struct cryptoini *cri)
 		case CRYPTO_NULL_CBC:
 			txf = &enc_xform_null;
 			goto enccommon;
+		case CRYPTO_CHACHA20:
+			txf = &enc_xform_chacha20;
+			goto enccommon;
 		enccommon:
 			if (cri->cri_key != NULL) {
 				error = txf->setkey(&((*swd)->sw_kschedule),
@@ -1056,6 +1060,7 @@ swcr_freesession_locked(device_t dev, u_int64_t tid)
 		case CRYPTO_AES_NIST_GMAC:
 		case CRYPTO_CAMELLIA_CBC:
 		case CRYPTO_NULL_CBC:
+		case CRYPTO_CHACHA20:
 			txf = swd->sw_exf;
 
 			if (swd->sw_kschedule)
@@ -1185,6 +1190,7 @@ swcr_process(device_t dev, struct cryptop *crp, int hint)
 		case CRYPTO_AES_XTS:
 		case CRYPTO_AES_ICM:
 		case CRYPTO_CAMELLIA_CBC:
+		case CRYPTO_CHACHA20:
 			if ((crp->crp_etype = swcr_encdec(crd, sw,
 			    crp->crp_buf, crp->crp_flags)) != 0)
 				goto done;
@@ -1298,6 +1304,7 @@ swcr_attach(device_t dev)
 	REGISTER(CRYPTO_DEFLATE_COMP);
 	REGISTER(CRYPTO_BLAKE2B);
 	REGISTER(CRYPTO_BLAKE2S);
+	REGISTER(CRYPTO_CHACHA20);
 #undef REGISTER
 
 	return 0;

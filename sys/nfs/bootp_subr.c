@@ -1645,8 +1645,6 @@ bootpc_init(void)
 			continue;
 		switch (ifp->if_alloctype) {
 			case IFT_ETHER:
-			case IFT_FDDI:
-			case IFT_ISO88025:
 				break;
 			default:
 				continue;
@@ -1676,8 +1674,6 @@ retry:
 			continue;
 		switch (ifp->if_alloctype) {
 			case IFT_ETHER:
-			case IFT_FDDI:
-			case IFT_ISO88025:
 				break;
 			default:
 				continue;

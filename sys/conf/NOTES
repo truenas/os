@@ -145,7 +145,6 @@ options 	INCLUDE_CONFIG_FILE     # Include this file in kernel
 options 	BOOTVERBOSE=1
 options 	BOOTHOWTO=RB_MULTIPLE
 
-options 	GEOM_AES		# Don't use, use GEOM_BDE
 options 	GEOM_BDE		# Disk encryption.
 options 	GEOM_BSD		# BSD disklabels (obsolete, gone in 12)
 options 	GEOM_CACHE		# Disk cache.
@@ -807,7 +806,7 @@ device		loop
 
 #  The `ether' device provides generic code to handle
 #  Ethernets; it is MANDATORY when an Ethernet device driver is
-#  configured or token-ring is enabled.
+#  configured.
 device		ether
 
 #  The `vlan' device implements the VLAN tagging of Ethernet frames
@@ -845,15 +844,6 @@ device		wlan_xauth
 #  The 'wlan_amrr' device provides AMRR transmit rate control algorithm
 device		wlan_acl
 device		wlan_amrr
-
-# Generic TokenRing
-device		token
-
-#  The `fddi' device provides generic code to support FDDI.
-device		fddi
-
-#  The `arcnet' device provides generic code to support Arcnet.
-device		arcnet
 
 #  The `sppp' device serves a similar role for certain types
 #  of synchronous PPP links (like `cx', `ar').
@@ -1952,8 +1942,6 @@ device		xmphy		# XaQti XMAC II
 # bwi:	Broadcom BCM430* and BCM431* family of wireless adapters.
 # bwn:	Broadcom BCM43xx family of wireless adapters.
 # cas:	Sun Cassini/Cassini+ and National Semiconductor DP83065 Saturn
-# cm:	Arcnet SMC COM90c26 / SMC COM90c56
-#	(and SMC COM90c66 in '56 compatibility mode) adapters.
 # cxgb: Chelsio T3 based 1GbE/10GbE PCIe Ethernet adapters.
 # cxgbe:Chelsio T4, T5, and T6-based 1/10/25/40/100GbE PCIe Ethernet
 #	adapters.
@@ -1976,7 +1964,6 @@ device		xmphy		# XaQti XMAC II
 # ex:   Intel EtherExpress Pro/10 and other i82595-based adapters,
 #       Olicom Ethernet PC Card devices.
 # fe:   Fujitsu MB86960A/MB86965A Ethernet
-# fpa:  Support for the Digital DEFPA PCI FDDI. `device fddi' is also needed.
 # fxp:  Intel EtherExpress Pro/100B
 #	(hint of prefer_iomap can be done to prefer I/O instead of Mem mapping)
 # gem:  Apple GMAC/Sun ERI/Sun GEM
@@ -2079,11 +2066,6 @@ device		xmphy		# XaQti XMAC II
 
 # Order for ISA devices is important here
 
-device		cm
-hint.cm.0.at="isa"
-hint.cm.0.port="0x2e0"
-hint.cm.0.irq="9"
-hint.cm.0.maddr="0xdc000"
 device		ep
 device		ex
 device		fe
@@ -2153,9 +2135,6 @@ device		ti		# Alteon Networks Tigon I/II gigabit Ethernet
 device		txp		# 3Com 3cR990 (``Typhoon'')
 device		vx		# 3Com 3c590, 3c595 (``Vortex'')
 device		vxge		# Exar/Neterion XFrame 3100 10GbE
-
-# PCI FDDI NICs.
-device		fpa
 
 # PCI WAN adapters.
 device		lmc
