@@ -64,6 +64,7 @@ SUBDIR=	\
 	bwn \
 	bwn_pci \
 	${_bytgpio} \
+	${_chvgpio} \
 	cam \
 	${_canbepm} \
 	${_canbus} \
@@ -294,6 +295,7 @@ SUBDIR=	\
 	${_nvram} \
 	${_nxge} \
 	oce \
+	${_ocs_fc} \
 	otus \
 	${_otusfw} \
 	ow \
@@ -361,7 +363,7 @@ SUBDIR=	\
 	snp \
 	sound \
 	${_speaker} \
-	spigen \
+	spi \
 	${_splash} \
 	${_sppp} \
 	ste \
@@ -609,6 +611,7 @@ _lio=		lio
 .endif
 _nctgpio=	nctgpio
 _ndis=		ndis
+_ocs_fc=	ocs_fc
 _pccard=	pccard
 .if ${MK_OFED} != "no" || defined(ALL_MODULES)
 _rdma=		rdma
@@ -638,6 +641,7 @@ _amdtemp=	amdtemp
 _arcmsr=	arcmsr
 _asmc=		asmc
 _bytgpio=	bytgpio
+_chvgpio=	chvgpio
 _ciss=		ciss
 _chromebook_platform=	chromebook_platform
 _cmx=		cmx
@@ -678,13 +682,11 @@ _mlx4en=	mlx4en
 _mlx5en=	mlx5en
 .endif
 .if ${MK_OFED} != "no" || defined(ALL_MODULES)
+_mthca=		mthca
 _mlx4ib=	mlx4ib
 _mlx5ib=	mlx5ib
 .endif
 _mly=		mly
-.if ${MK_OFED} != "no" || defined(ALL_MODULES)
-_mthca=		mthca
-.endif
 _nfe=		nfe
 _nvd=		nvd
 _nvme=		nvme
@@ -835,10 +837,6 @@ _cloudabi32=	cloudabi32
 _cloudabi64=	cloudabi64
 .endif
 
-.endif
-
-.if ${MACHINE_ARCH} == "armv6"
-_ffec=		ffec
 .endif
 
 SUBDIR+=${MODULES_EXTRA}

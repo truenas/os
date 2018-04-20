@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (C) 1994, David Greenman
  * Copyright (c) 1990, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -178,6 +176,8 @@ userret(struct thread *td, struct trapframe *frame)
 	    ("userret: Returning with stop signals deferred"));
 	KASSERT(td->td_su == NULL,
 	    ("userret: Returning with SU cleanup request not handled"));
+	KASSERT(td->td_vslock_sz == 0,
+	    ("userret: Returning with vslock-wired space"));
 #ifdef VIMAGE
 	/* Unfortunately td_vnet_lpush needs VNET_DEBUG. */
 	VNET_ASSERT(curvnet == NULL,

@@ -78,6 +78,15 @@ EFI_GUID inputid = SIMPLE_TEXT_INPUT_PROTOCOL;
 
 static EFI_LOADED_IMAGE *img;
 
+/*
+ * Number of seconds to wait for a keystroke before exiting with failure
+ * in the event no currdev is found. -2 means always break, -1 means
+ * never break, 0 means poll once and then reboot, > 0 means wait for
+ * that many seconds. "fail_timeout" can be set in the environment as
+ * well.
+ */
+static int fail_timeout = 5;
+
 #ifdef	EFI_ZFS_BOOT
 bool
 efi_zfs_is_preferred(EFI_HANDLE *h)
@@ -169,119 +178,183 @@ out:
 }
 
 static void
-set_devdesc_currdev(struct devsw *dev, int unit)
+set_currdev_devdesc(struct devdesc *currdev)
+{
+	const char *devname;
+
+	devname = efi_fmtdev(currdev);
+
+	printf("Setting currdev to %s\n", devname);
+
+	env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev, env_nounset);
+	env_setenv("loaddev", EV_VOLATILE, devname, env_noset, env_nounset);
+}
+
+static void
+set_currdev_devsw(struct devsw *dev, int unit)
 {
 	struct devdesc currdev;
-	char *devname;
 
 	currdev.d_dev = dev;
-	currdev.d_type = currdev.d_dev->dv_type;
 	currdev.d_unit = unit;
-	currdev.d_opendata = NULL;
-	devname = efi_fmtdev(&currdev);
 
-	env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
-	    env_nounset);
-	env_setenv("loaddev", EV_VOLATILE, devname, env_noset, env_nounset);
+	set_currdev_devdesc(&currdev);
+}
+
+static void
+set_currdev_pdinfo(pdinfo_t *dp)
+{
+
+	/*
+	 * Disks are special: they have partitions. if the parent
+	 * pointer is non-null, we're a partition not a full disk
+	 * and we need to adjust currdev appropriately.
+	 */
+	if (dp->pd_devsw->dv_type == DEVT_DISK) {
+		struct disk_devdesc currdev;
+
+		currdev.dd.d_dev = dp->pd_devsw;
+		if (dp->pd_parent == NULL) {
+			currdev.dd.d_unit = dp->pd_unit;
+			currdev.d_slice = -1;
+			currdev.d_partition = -1;
+		} else {
+			currdev.dd.d_unit = dp->pd_parent->pd_unit;
+			currdev.d_slice = dp->pd_unit;
+			currdev.d_partition = 255;	/* Assumes GPT */
+		}
+		set_currdev_devdesc((struct devdesc *)&currdev);
+	} else {
+		set_currdev_devsw(dp->pd_devsw, dp->pd_unit);
+	}
+}
+
+static bool
+sanity_check_currdev(void)
+{
+	struct stat st;
+
+	return (stat("/boot/defaults/loader.conf", &st) == 0);
+}
+
+#ifdef EFI_ZFS_BOOT
+static bool
+probe_zfs_currdev(uint64_t guid)
+{
+	char *devname;
+	struct zfs_devdesc currdev;
+
+	currdev.dd.d_dev = &zfs_dev;
+	currdev.dd.d_unit = 0;
+	currdev.pool_guid = guid;
+	currdev.root_guid = 0;
+	set_currdev_devdesc((struct devdesc *)&currdev);
+	devname = efi_fmtdev(&currdev);
+	init_zfs_bootenv(devname);
+
+	return (sanity_check_currdev());
+}
+#endif
+
+static bool
+try_as_currdev(pdinfo_t *hd, pdinfo_t *pp)
+{
+	uint64_t guid;
+
+#ifdef EFI_ZFS_BOOT
+	/*
+	 * If there's a zpool on this device, try it as a ZFS
+	 * filesystem, which has somewhat different setup than all
+	 * other types of fs due to imperfect loader integration.
+	 * This all stems from ZFS being both a device (zpool) and
+	 * a filesystem, plus the boot env feature.
+	 */
+	if (efizfs_get_guid_by_handle(pp->pd_handle, &guid))
+		return (probe_zfs_currdev(guid));
+#endif
+	/*
+	 * All other filesystems just need the pdinfo
+	 * initialized in the standard way.
+	 */
+	set_currdev_pdinfo(pp);
+	return (sanity_check_currdev());
 }
 
 static int
 find_currdev(EFI_LOADED_IMAGE *img)
 {
-	pdinfo_list_t *pdi_list;
 	pdinfo_t *dp, *pp;
 	EFI_DEVICE_PATH *devpath, *copy;
 	EFI_HANDLE h;
-	char *devname;
+	CHAR16 *text;
 	struct devsw *dev;
 	int unit;
 	uint64_t extra;
 
 #ifdef EFI_ZFS_BOOT
-	/* Did efi_zfs_probe() detect the boot pool? */
+	/*
+	 * Did efi_zfs_probe() detect the boot pool? If so, use the zpool
+	 * it found, if it's sane. ZFS is the only thing that looks for
+	 * disks and pools to boot. This may change in the future, however,
+	 * if we allow specifying which pool to boot from via UEFI variables
+	 * rather than the bootenv stuff that FreeBSD uses today.
+	 */
 	if (pool_guid != 0) {
-		struct zfs_devdesc currdev;
-
-		currdev.d_dev = &zfs_dev;
-		currdev.d_unit = 0;
-		currdev.d_type = currdev.d_dev->dv_type;
-		currdev.d_opendata = NULL;
-		currdev.pool_guid = pool_guid;
-		currdev.root_guid = 0;
-		devname = efi_fmtdev(&currdev);
-
-		env_setenv("currdev", EV_VOLATILE, devname, efi_setcurrdev,
-		    env_nounset);
-		env_setenv("loaddev", EV_VOLATILE, devname, env_noset,
-		    env_nounset);
-		init_zfs_bootenv(devname);
-		return (0);
+		printf("Trying ZFS pool\n");
+		if (probe_zfs_currdev(pool_guid))
+			return (0);
 	}
 #endif /* EFI_ZFS_BOOT */
 
-	/* We have device lists for hd, cd, fd, walk them all. */
-	pdi_list = efiblk_get_pdinfo_list(&efipart_hddev);
-	STAILQ_FOREACH(dp, pdi_list, pd_link) {
-		struct disk_devdesc currdev;
-
-		currdev.d_dev = &efipart_hddev;
-		currdev.d_type = currdev.d_dev->dv_type;
-		currdev.d_unit = dp->pd_unit;
-		currdev.d_opendata = NULL;
-		currdev.d_slice = -1;
-		currdev.d_partition = -1;
-
-		if (dp->pd_handle == img->DeviceHandle) {
-			devname = efi_fmtdev(&currdev);
-
-			env_setenv("currdev", EV_VOLATILE, devname,
-			    efi_setcurrdev, env_nounset);
-			env_setenv("loaddev", EV_VOLATILE, devname,
-			    env_noset, env_nounset);
-			return (0);
+	/*
+	 * Try to find the block device by its handle based on the
+	 * image we're booting. If we can't find a sane partition,
+	 * search all the other partitions of the disk. We do not
+	 * search other disks because it's a violation of the UEFI
+	 * boot protocol to do so. We fail and let UEFI go on to
+	 * the next candidate.
+	 */
+	dp = efiblk_get_pdinfo_by_handle(img->DeviceHandle);
+	if (dp != NULL) {
+		text = efi_devpath_name(dp->pd_devpath);
+		if (text != NULL) {
+			printf("Trying ESP: %S\n", text);
+			efi_free_devpath_name(text);
 		}
-		/* Assuming GPT partitioning. */
-		STAILQ_FOREACH(pp, &dp->pd_part, pd_link) {
-			if (pp->pd_handle == img->DeviceHandle) {
-				currdev.d_slice = pp->pd_unit;
-				currdev.d_partition = 255;
-				devname = efi_fmtdev(&currdev);
-
-				env_setenv("currdev", EV_VOLATILE, devname,
-				    efi_setcurrdev, env_nounset);
-				env_setenv("loaddev", EV_VOLATILE, devname,
-				    env_noset, env_nounset);
-				return (0);
+		set_currdev_pdinfo(dp);
+		if (sanity_check_currdev())
+			return (0);
+		if (dp->pd_parent != NULL) {
+			dp = dp->pd_parent;
+			STAILQ_FOREACH(pp, &dp->pd_part, pd_link) {
+				text = efi_devpath_name(pp->pd_devpath);
+				if (text != NULL) {
+					printf("And now the part: %S\n", text);
+					efi_free_devpath_name(text);
+				}
+				/*
+				 * Roll up the ZFS special case
+				 * for those partitions that have
+				 * zpools on them 
+				 */
+				if (try_as_currdev(dp, pp))
+					return (0);
 			}
 		}
-	}
-
-	pdi_list = efiblk_get_pdinfo_list(&efipart_cddev);
-	STAILQ_FOREACH(dp, pdi_list, pd_link) {
-		if (dp->pd_handle == img->DeviceHandle ||
-		    dp->pd_alias == img->DeviceHandle) {
-			set_devdesc_currdev(&efipart_cddev, dp->pd_unit);
-			return (0);
-		}
-	}
-
-	pdi_list = efiblk_get_pdinfo_list(&efipart_fddev);
-	STAILQ_FOREACH(dp, pdi_list, pd_link) {
-		if (dp->pd_handle == img->DeviceHandle) {
-			set_devdesc_currdev(&efipart_fddev, dp->pd_unit);
-			return (0);
-		}
+	} else {
+		printf("Can't find device by handle\n");
 	}
 
 	/*
 	 * Try the device handle from our loaded image first.  If that
 	 * fails, use the device path from the loaded image and see if
 	 * any of the nodes in that path match one of the enumerated
-	 * handles.
+	 * handles. Currently, this handle list is only for netboot.
 	 */
 	if (efi_handle_lookup(img->DeviceHandle, &dev, &unit, &extra) == 0) {
-		set_devdesc_currdev(dev, unit);
-		return (0);
+		set_currdev_devsw(dev, unit);
+		if (sanity_check_currdev())
+			return (0);
 	}
 
 	copy = NULL;
@@ -295,8 +368,9 @@ find_currdev(EFI_LOADED_IMAGE *img)
 		copy = NULL;
 
 		if (efi_handle_lookup(h, &dev, &unit, &extra) == 0) {
-			set_devdesc_currdev(dev, unit);
-			return (0);
+			set_currdev_devsw(dev, unit);
+			if (sanity_check_currdev())
+				return (0);
 		}
 
 		devpath = efi_lookup_devpath(h);
@@ -310,6 +384,33 @@ find_currdev(EFI_LOADED_IMAGE *img)
 	return (ENOENT);
 }
 
+static bool
+interactive_interrupt(const char *msg)
+{
+	time_t now, then, last;
+
+	last = 0;
+	now = then = getsecs();
+	printf("%s\n", msg);
+	if (fail_timeout == -2)		/* Always break to OK */
+		return (true);
+	if (fail_timeout == -1)		/* Never break to OK */
+		return (false);
+	do {
+		if (last != now) {
+			printf("press any key to interrupt reboot in %d seconds\r",
+			    fail_timeout - (int)(now - then));
+			last = now;
+		}
+
+		/* XXX no pause or timeout wait for char */
+		if (ischar())
+			return (true);
+		now = getsecs();
+	} while (now - then < fail_timeout);
+	return (false);
+}
+
 EFI_STATUS
 main(int argc, CHAR16 *argv[])
 {
@@ -318,6 +419,13 @@ main(int argc, CHAR16 *argv[])
 	int i, j, vargood, howto;
 	UINTN k;
 	int has_kbd;
+	char *s;
+	EFI_DEVICE_PATH *imgpath;
+	CHAR16 *text;
+	EFI_STATUS status;
+	UINT16 boot_current;
+	size_t sz;
+	UINT16 boot_order[100];
 #if !defined(__arm__)
 	char buf[40];
 #endif
@@ -356,12 +464,15 @@ main(int argc, CHAR16 *argv[])
 	/*
 	 * Parse the args to set the console settings, etc
 	 * boot1.efi passes these in, if it can read /boot.config or /boot/config
-	 * or iPXE may be setup to pass these in.
+	 * or iPXE may be setup to pass these in. Or the optional argument in the
+	 * boot environment was used to pass these arguments in (in which case
+	 * neither /boot.config nor /boot/config are consulted).
 	 *
 	 * Loop through the args, and for each one that contains an '=' that is
 	 * not the first character, add it to the environment.  This allows
 	 * loader and kernel env vars to be passed on the command line.  Convert
-	 * args from UCS-2 to ASCII (16 to 8 bit) as they are copied.
+	 * args from UCS-2 to ASCII (16 to 8 bit) as they are copied (though this
+	 * method is flawed for non-ASCII characters).
 	 */
 	howto = 0;
 	for (i = 1; i < argc; i++) {
@@ -441,6 +552,10 @@ main(int argc, CHAR16 *argv[])
 	for (i = 0; howto_names[i].ev != NULL; i++)
 		if (howto & howto_names[i].mask)
 			setenv(howto_names[i].ev, "YES", 1);
+
+	/*
+	 * XXX we need fallback to this stuff after looking at the ConIn, ConOut and ConErr variables
+	 */
 	if (howto & RB_MULTIPLE) {
 		if (howto & RB_SERIAL)
 			setenv("console", "comconsole efi" , 1);
@@ -448,19 +563,27 @@ main(int argc, CHAR16 *argv[])
 			setenv("console", "efi comconsole" , 1);
 	} else if (howto & RB_SERIAL) {
 		setenv("console", "comconsole" , 1);
-	}
+	} else
+		setenv("console", "efi", 1);
 
 	if (efi_copy_init()) {
 		printf("failed to allocate staging area\n");
 		return (EFI_BUFFER_TOO_SMALL);
 	}
 
+	if ((s = getenv("fail_timeout")) != NULL)
+		fail_timeout = strtol(s, NULL, 10);
+
 	/*
-	 * March through the device switch probing for things.
+	 * Scan the BLOCK IO MEDIA handles then
+	 * march through the device switch probing for things.
 	 */
-	for (i = 0; devsw[i] != NULL; i++)
-		if (devsw[i]->dv_init != NULL)
-			(devsw[i]->dv_init)();
+	if ((i = efipart_inithandles()) == 0) {
+		for (i = 0; devsw[i] != NULL; i++)
+			if (devsw[i]->dv_init != NULL)
+				(devsw[i]->dv_init)();
+	} else
+		printf("efipart_inithandles failed %d, expect failures", i);
 
 	printf("Command line arguments:");
 	for (i = 0; i < argc; i++)
@@ -475,6 +598,37 @@ main(int argc, CHAR16 *argv[])
 
 	printf("\n%s", bootprog_info);
 
+	/* Determine the devpath of our image so we can prefer it. */
+	text = efi_devpath_name(img->FilePath);
+	if (text != NULL) {
+		printf("   Load Path: %S\n", text);
+		efi_setenv_freebsd_wcs("LoaderPath", text);
+		efi_free_devpath_name(text);
+	}
+
+	status = BS->HandleProtocol(img->DeviceHandle, &devid, (void **)&imgpath);
+	if (status == EFI_SUCCESS) {
+		text = efi_devpath_name(imgpath);
+		if (text != NULL) {
+			printf("   Load Device: %S\n", text);
+			efi_setenv_freebsd_wcs("LoaderDev", text);
+			efi_free_devpath_name(text);
+		}
+	}
+
+	boot_current = 0;
+	sz = sizeof(boot_current);
+	efi_global_getenv("BootCurrent", &boot_current, &sz);
+	printf("   BootCurrent: %04x\n", boot_current);
+
+	sz = sizeof(boot_order);
+	efi_global_getenv("BootOrder", &boot_order, &sz);
+	printf("   BootOrder:");
+	for (i = 0; i < sz / sizeof(boot_order[0]); i++)
+		printf(" %04x%s", boot_order[i],
+		    boot_order[i] == boot_current ? "[*]" : "");
+	printf("\n");
+
 	/*
 	 * Disable the watchdog timer. By default the boot manager sets
 	 * the timer to 5 minutes before invoking a boot option. If we
@@ -486,8 +640,16 @@ main(int argc, CHAR16 *argv[])
 	 */
 	BS->SetWatchdogTimer(0, 0, 0, NULL);
 
+	/*
+	 * Try and find a good currdev based on the image that was booted.
+	 * It might be desirable here to have a short pause to allow falling
+	 * through to the boot loader instead of returning instantly to follow
+	 * the boot protocol and also allow an escape hatch for users wishing
+	 * to try something different.
+	 */
 	if (find_currdev(img) != 0)
-		return (EFI_NOT_FOUND);
+		if (!interactive_interrupt("Failed to find bootable partition"))
+			return (EFI_NOT_FOUND);
 
 	efi_init_environment();
 	setenv("LINES", "24", 1);	/* optional */
@@ -743,61 +905,6 @@ command_mode(int argc, char *argv[])
 	return (CMD_OK);
 }
 
-#ifdef EFI_ZFS_BOOT
-COMMAND_SET(lszfs, "lszfs", "list child datasets of a zfs dataset",
-    command_lszfs);
-
-static int
-command_lszfs(int argc, char *argv[])
-{
-	int err;
-
-	if (argc != 2) {
-		command_errmsg = "wrong number of arguments";
-		return (CMD_ERROR);
-	}
-
-	err = zfs_list(argv[1]);
-	if (err != 0) {
-		command_errmsg = strerror(err);
-		return (CMD_ERROR);
-	}
-	return (CMD_OK);
-}
-
-COMMAND_SET(reloadbe, "reloadbe", "refresh the list of ZFS Boot Environments",
-	    command_reloadbe);
-
-static int
-command_reloadbe(int argc, char *argv[])
-{
-	int err;
-	char *root;
-
-	if (argc > 2) {
-		command_errmsg = "wrong number of arguments";
-		return (CMD_ERROR);
-	}
-
-	if (argc == 2) {
-		err = zfs_bootenv(argv[1]);
-	} else {
-		root = getenv("zfs_be_root");
-		if (root == NULL) {
-			return (CMD_OK);
-		}
-		err = zfs_bootenv(root);
-	}
-
-	if (err != 0) {
-		command_errmsg = strerror(err);
-		return (CMD_ERROR);
-	}
-
-	return (CMD_OK);
-}
-#endif
-
 #ifdef LOADER_FDT_SUPPORT
 extern int command_fdt_internal(int argc, char *argv[]);
 
@@ -899,7 +1006,7 @@ command_chain(int argc, char *argv[])
 		struct disk_devdesc *d_dev;
 		pdinfo_t *hd, *pd;
 
-		switch (dev->d_type) {
+		switch (dev->d_dev->dv_type) {
 #ifdef EFI_ZFS_BOOT
 		case DEVT_ZFS:
 			z_dev = (struct zfs_devdesc *)dev;

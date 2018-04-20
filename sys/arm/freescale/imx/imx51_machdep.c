@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2013 Ian Lepore <ian@freebsd.org>
  * All rights reserved.
  *
@@ -83,8 +81,8 @@ imx51_devmap_init(platform_t plat)
 	return (0);
 }
 
-void
-cpu_reset(void)
+static void
+imx51_cpu_reset(platform_t plat)
 {
 
 	imx_wdog_cpu_reset(0x73F98000);
@@ -99,6 +97,7 @@ static platform_method_t imx51_methods[] = {
 	PLATFORMMETHOD(platform_attach,		imx51_attach),
 	PLATFORMMETHOD(platform_devmap_init,	imx51_devmap_init),
 	PLATFORMMETHOD(platform_lastaddr,	imx51_lastaddr),
+	PLATFORMMETHOD(platform_cpu_reset,	imx51_cpu_reset),
 
 	PLATFORMMETHOD_END,
 };

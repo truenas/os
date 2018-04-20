@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1986, 1989, 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  * (c) UNIX System Laboratories, Inc.
@@ -352,6 +350,7 @@ struct thread {
 					   fork for child tracing. */
 	siginfo_t	td_si;		/* (c) For debugger or core file */
 	void		*td_lkpi_task;	/* LinuxKPI task struct pointer */
+	size_t		td_vslock_sz;	/* (k) amount of vslock-ed space */
 };
 
 struct thread0_storage {
@@ -378,7 +377,11 @@ do {									\
 } while (0)
 
 #define	TD_LOCKS_INC(td)	((td)->td_locks++)
-#define	TD_LOCKS_DEC(td)	((td)->td_locks--)
+#define	TD_LOCKS_DEC(td) do {						\
+	KASSERT(SCHEDULER_STOPPED_TD(td) || (td)->td_locks > 0,		\
+	    ("thread %p owns no locks", (td)));				\
+	(td)->td_locks--;						\
+} while (0)
 #else
 #define	THREAD_LOCKPTR_ASSERT(td, lock)
 

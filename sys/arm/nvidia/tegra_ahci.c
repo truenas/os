@@ -255,7 +255,7 @@ get_fdt_resources(struct tegra_ahci_sc *sc, phandle_t node)
 		return (ENXIO);
 	}
 
-	rv = phy_get_by_ofw_name(sc->dev, 0, "sata-phy", &sc->phy);
+	rv = phy_get_by_ofw_name(sc->dev, 0, "sata-0", &sc->phy);
 	if (rv != 0) {
 		device_printf(sc->dev, "Cannot get 'sata' phy\n");
 		return (ENXIO);
@@ -372,7 +372,7 @@ enable_fdt_resources(struct tegra_ahci_sc *sc)
 		return (rv);
 	}
 
-	rv = phy_enable(sc->dev, sc->phy);
+	rv = phy_enable(sc->phy);
 	if (rv != 0) {
 		device_printf(sc->dev, "Cannot enable SATA phy\n");
 		return (rv);
@@ -619,8 +619,7 @@ static device_method_t tegra_ahci_methods[] = {
 	DEVMETHOD_END
 };
 
-static devclass_t tegra_ahci_devclass;
 static DEFINE_CLASS_0(ahci, tegra_ahci_driver, tegra_ahci_methods,
     sizeof(struct tegra_ahci_sc));
-DRIVER_MODULE(tegra_ahci, simplebus, tegra_ahci_driver, tegra_ahci_devclass,
+DRIVER_MODULE(tegra_ahci, simplebus, tegra_ahci_driver, ahci_devclass,
     NULL, NULL);

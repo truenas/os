@@ -53,8 +53,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/resourcevar.h>
 #include <sys/signalvar.h>
-#include <sys/sysctl.h>
 #include <sys/syscallsubr.h>
+#include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
 #include <sys/vnode.h>
@@ -204,15 +204,15 @@ translate_traps(int signal, int trap_code)
 {
 
 	if (signal != SIGBUS)
-		return signal;
+		return (signal);
 	switch (trap_code) {
 	case T_PROTFLT:
 	case T_TSSFLT:
 	case T_DOUBLEFLT:
 	case T_PAGEFLT:
-		return SIGSEGV;
+		return (SIGSEGV);
 	default:
-		return signal;
+		return (signal);
 	}
 }
 

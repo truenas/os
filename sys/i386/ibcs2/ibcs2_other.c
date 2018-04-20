@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 1995 Steven Wallace
  * All rights reserved.
  *
@@ -70,7 +68,7 @@ ibcs2_secure(struct thread *td, struct ibcs2_secure_args *uap)
 }
 
 int
-ibcs2_lseek(struct thread *td, register struct ibcs2_lseek_args *uap)
+ibcs2_lseek(struct thread *td, struct ibcs2_lseek_args *uap)
 {
 	struct lseek_args largs;
 	int error;

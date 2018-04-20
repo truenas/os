@@ -38,6 +38,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libbz2 \
 	libcalendar \
 	libcam \
+	libcapsicum \
 	${_libcasper} \
 	${_libcom_err} \
 	libcompat \
@@ -46,6 +47,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libdevdctl \
 	libdevinfo \
 	libdevstat \
+	${_libdl} \
 	libdwarf \
 	libedit \
 	${_libefivar} \
@@ -272,6 +274,10 @@ _librtld_db=	librtld_db
 .if ${MACHINE_CPUARCH} == "powerpc"
 _libproc=	libproc
 _librtld_db=	librtld_db
+.endif
+
+.if defined(LINKER_FEATURES) && ${LINKER_FEATURES:Mfilter}
+_libdl=		libdl
 .endif
 
 .if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "arm" || \

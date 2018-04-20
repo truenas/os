@@ -121,6 +121,7 @@ MAN=	accept_filter.9 \
 	eventtimers.9 \
 	extattr.9 \
 	fail.9 \
+	fdt_pinctrl.9 \
 	fetch.9 \
 	firmware.9 \
 	fpu_kern.9 \
@@ -721,7 +722,8 @@ MLINKS+=devstat.9 devicestat.9 \
 	devstat.9 devstat_end_transaction.9 \
 	devstat.9 devstat_remove_entry.9 \
 	devstat.9 devstat_start_transaction.9
-MLINKS+=disk.9 disk_alloc.9 \
+MLINKS+=disk.9 disk_add_alias.9 \
+	disk.9 disk_alloc.9 \
 	disk.9 disk_create.9 \
 	disk.9 disk_destroy.9 \
 	disk.9 disk_gone.9 \
@@ -768,6 +770,10 @@ MLINKS+=fail.9 KFAIL_POINT_CODE.9 \
 	fail.9 KFAIL_POINT_GOTO.9 \
 	fail.9 KFAIL_POINT_RETURN.9 \
 	fail.9 KFAIL_POINT_RETURN_VOID.9
+MLINKS+=fdt_pinctrl.9 fdt_pinctrl_configure.9 \
+	fdt_pinctrl.9 fdt_pinctrl_configure_by_name.9 \
+	fdt_pinctrl.9 fdt_pinctrl_configure_tree.9 \
+	fdt_pinctrl.9 fdt_pinctrl_register.9
 MLINKS+=fetch.9 fubyte.9 \
 	fetch.9 fuswintr.9 \
 	fetch.9 fuword.9 \

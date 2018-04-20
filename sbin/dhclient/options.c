@@ -2,9 +2,7 @@
 
 /* DHCP options parsing and reassembly. */
 
-/*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
+/*
  * Copyright (c) 1995, 1996, 1997, 1998 The Internet Software Consortium.
  * All rights reserved.
  *
@@ -628,7 +626,7 @@ store_options(unsigned char *buffer, int buflen, struct tree_cache **options,
 /*
  * Format the specified option so that a human can easily read it.
  */
-char *
+const char *
 pretty_print_option(unsigned int code, unsigned char *data, int len,
     int emit_commas, int emit_quotes)
 {

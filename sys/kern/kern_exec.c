@@ -143,6 +143,8 @@ static int map_at_zero = 0;
 SYSCTL_INT(_security_bsd, OID_AUTO, map_at_zero, CTLFLAG_RWTUN, &map_at_zero, 0,
     "Permit processes to map an object at virtual address 0.");
 
+EVENTHANDLER_LIST_DECLARE(process_exec);
+
 static int
 sysctl_kern_ps_strings(SYSCTL_HANDLER_ARGS)
 {
@@ -352,10 +354,7 @@ kern_execve(struct thread *td, struct image_args *args, struct mac *mac_p)
  * userspace pointers from the passed thread.
  */
 static int
-do_execve(td, args, mac_p)
-	struct thread *td;
-	struct image_args *args;
-	struct mac *mac_p;
+do_execve(struct thread *td, struct image_args *args, struct mac *mac_p)
 {
 	struct proc *p = td->td_proc;
 	struct nameidata nd;
@@ -1041,8 +1040,7 @@ exec_map_first_page(imgp)
 }
 
 void
-exec_unmap_first_page(imgp)
-	struct image_params *imgp;
+exec_unmap_first_page(struct image_params *imgp)
 {
 	vm_page_t m;
 
@@ -1062,9 +1060,7 @@ exec_unmap_first_page(imgp)
  *	automatically on a page fault.
  */
 int
-exec_new_vmspace(imgp, sv)
-	struct image_params *imgp;
-	struct sysentvec *sv;
+exec_new_vmspace(struct image_params *imgp, struct sysentvec *sv)
 {
 	int error;
 	struct proc *p = imgp->proc;
@@ -1079,7 +1075,7 @@ exec_new_vmspace(imgp, sv)
 	imgp->sysent = sv;
 
 	/* May be called with Giant held */
-	EVENTHANDLER_INVOKE(process_exec, p, imgp);
+	EVENTHANDLER_DIRECT_INVOKE(process_exec, p, imgp);
 
 	/*
 	 * Blow away entire process VM, if address space not shared,
@@ -1462,8 +1458,7 @@ exec_free_args(struct image_args *args)
  * as the initial stack pointer.
  */
 register_t *
-exec_copyout_strings(imgp)
-	struct image_params *imgp;
+exec_copyout_strings(struct image_params *imgp)
 {
 	int argc, envc;
 	char **vectp;
@@ -1619,8 +1614,7 @@ exec_copyout_strings(imgp)
  *	Return 0 for success or error code on failure.
  */
 int
-exec_check_permissions(imgp)
-	struct image_params *imgp;
+exec_check_permissions(struct image_params *imgp)
 {
 	struct vnode *vp = imgp->vp;
 	struct vattr *attr = imgp->attr;
@@ -1690,8 +1684,7 @@ exec_check_permissions(imgp)
  * Exec handler registration
  */
 int
-exec_register(execsw_arg)
-	const struct execsw *execsw_arg;
+exec_register(const struct execsw *execsw_arg)
 {
 	const struct execsw **es, **xs, **newexecsw;
 	int count = 2;	/* New slot and trailing NULL */
@@ -1713,8 +1706,7 @@ exec_register(execsw_arg)
 }
 
 int
-exec_unregister(execsw_arg)
-	const struct execsw *execsw_arg;
+exec_unregister(const struct execsw *execsw_arg)
 {
 	const struct execsw **es, **xs, **newexecsw;
 	int count = 1;

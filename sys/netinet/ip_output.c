@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1982, 1986, 1988, 1990, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -117,7 +115,7 @@ ip_output_pfil(struct mbuf **mp, struct ifnet *ifp, struct inpcb *inp,
 
 	/* Run through list of hooks for output packets. */
 	odst.s_addr = ip->ip_dst.s_addr;
-	*error = pfil_run_hooks(&V_inet_pfil_hook, mp, ifp, PFIL_OUT, inp);
+	*error = pfil_run_hooks(&V_inet_pfil_hook, mp, ifp, PFIL_OUT, 0, inp);
 	m = *mp;
 	if ((*error) != 0 || m == NULL)
 		return 1; /* Finished */

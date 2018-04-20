@@ -2632,6 +2632,7 @@ vdev_ops_t vdev_raidz_ops = {
 	vdev_raidz_need_resilver,
 	NULL,
 	NULL,
+	NULL,
 	VDEV_TYPE_RAIDZ,	/* name of this vdev type */
 	B_FALSE			/* not a leaf vdev */
 };

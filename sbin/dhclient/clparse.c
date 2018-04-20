@@ -2,9 +2,7 @@
 
 /* Parser for dhclient config and lease files... */
 
-/*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
+/*
  * Copyright (c) 1997 The Internet Software Consortium.
  * All rights reserved.
  *
@@ -687,7 +685,7 @@ parse_option_decl(FILE *cfile, struct option_data *options)
 	u_int8_t	 hunkbuf[1024];
 	unsigned	 hunkix = 0;
 	char		*vendor;
-	char		*fmt;
+	const char	*fmt;
 	struct universe	*universe;
 	struct option	*option;
 	struct iaddr	 ip_addr;

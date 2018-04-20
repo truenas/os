@@ -105,7 +105,7 @@ struct fs_ops {
     int		(*fo_close)(struct open_file *f);
     int		(*fo_read)(struct open_file *f, void *buf,
 			   size_t size, size_t *resid);
-    int		(*fo_write)(struct open_file *f, void *buf,
+    int		(*fo_write)(struct open_file *f, const void *buf,
 			    size_t size, size_t *resid);
     off_t	(*fo_seek)(struct open_file *f, off_t offset, int where);
     int		(*fo_stat)(struct open_file *f, struct stat *sb);
@@ -138,6 +138,12 @@ extern struct fs_ops pkgfs_fsops;
 struct devsw {
     const char	dv_name[8];
     int		dv_type;		/* opaque type constant, arch-dependant */
+#define DEVT_NONE	0
+#define DEVT_DISK	1
+#define DEVT_NET	2
+#define DEVT_CD		3
+#define DEVT_ZFS	4
+#define DEVT_FD		5
     int		(*dv_init)(void);	/* early probe call */
     int		(*dv_strategy)(void *devdata, int rw, daddr_t blk,
 			size_t size, char *buf, size_t *rsize);
@@ -160,16 +166,8 @@ extern int errno;
  * versions may be larger, but should be allowed to
  * overlap.
  */
-struct devdesc
-{
+struct devdesc {
     struct devsw	*d_dev;
-    int			d_type;
-#define DEVT_NONE	0
-#define DEVT_DISK	1
-#define DEVT_NET	2
-#define DEVT_CD		3
-#define DEVT_ZFS	4
-#define DEVT_FD		5
     int			d_unit;
     void		*d_opendata;
 };
@@ -289,7 +287,7 @@ extern int	open(const char *, int);
 extern int	close(int);
 extern void	closeall(void);
 extern ssize_t	read(int, void *, size_t);
-extern ssize_t	write(int, void *, size_t);
+extern ssize_t	write(int, const void *, size_t);
 extern struct	dirent *readdirfd(int);
 
 extern void	srandom(u_long seed);
@@ -383,7 +381,7 @@ extern void	nullsys(void);
 extern int	null_open(const char *path, struct open_file *f);
 extern int	null_close(struct open_file *f);
 extern int	null_read(struct open_file *f, void *buf, size_t size, size_t *resid);
-extern int	null_write(struct open_file *f, void *buf, size_t size, size_t *resid);
+extern int	null_write(struct open_file *f, const void *buf, size_t size, size_t *resid);
 extern off_t	null_seek(struct open_file *f, off_t offset, int where);
 extern int	null_stat(struct open_file *f, struct stat *sb);
 extern int	null_readdir(struct open_file *f, struct dirent *d);

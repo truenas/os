@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (c) 2002 Mike Barcroft <mike@FreeBSD.org>
  * Copyright (c) 1990, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -80,15 +78,19 @@ typedef	unsigned long long	__uint64_t;
 #ifdef	__LP64__
 typedef	__int32_t	__clock_t;		/* clock()... */
 typedef	__int64_t	__critical_t;
+#ifndef _STANDALONE
 typedef	double		__double_t;
 typedef	float		__float_t;
+#endif
 typedef	__int64_t	__intfptr_t;
 typedef	__int64_t	__intptr_t;
 #else
 typedef	unsigned long	__clock_t;
 typedef	__int32_t	__critical_t;
+#ifndef _STANDALONE
 typedef	long double	__double_t;
 typedef	long double	__float_t;
+#endif
 typedef	__int32_t	__intfptr_t;
 typedef	__int32_t	__intptr_t;
 #endif

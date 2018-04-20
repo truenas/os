@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause-FreeBSD
- *
  * Copyright (c) 2009, Nathan Whitehorn <nwhitehorn@FreeBSD.org>
  * Copyright (c) 2013 The FreeBSD Foundation
  * All rights reserved.

@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  * (c) UNIX System Laboratories, Inc.
@@ -100,9 +98,9 @@ static int
 vfs_hang_addrlist(struct mount *mp, struct netexport *nep,
     struct export_args *argp)
 {
-	register struct netcred *np;
-	register struct radix_node_head *rnh;
-	register int i;
+	struct netcred *np;
+	struct radix_node_head *rnh;
+	int i;
 	struct radix_node *rn;
 	struct sockaddr *saddr, *smask = NULL;
 #if defined(INET6) || defined(INET)
@@ -446,8 +444,8 @@ static struct netcred *
 vfs_export_lookup(struct mount *mp, struct sockaddr *nam)
 {
 	struct netexport *nep;
-	register struct netcred *np;
-	register struct radix_node_head *rnh;
+	struct netcred *np;
+	struct radix_node_head *rnh;
 	struct sockaddr *saddr;
 
 	nep = mp->mnt_export;

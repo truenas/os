@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1990, 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -117,9 +115,6 @@ struct bpf_d {
 #define BPF_PID_REFRESH(bd, td)	(bd)->bd_pid = (td)->td_proc->p_pid
 #define BPF_PID_REFRESH_CUR(bd)	(bd)->bd_pid = curthread->td_proc->p_pid
 
-#define BPF_LOCK()		mtx_lock(&bpf_mtx)
-#define BPF_UNLOCK()		mtx_unlock(&bpf_mtx)
-#define BPF_LOCK_ASSERT()	mtx_assert(&bpf_mtx, MA_OWNED)
 /*
  * External representation of the bpf descriptor
  */

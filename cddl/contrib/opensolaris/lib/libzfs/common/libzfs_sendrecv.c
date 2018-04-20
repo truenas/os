@@ -275,6 +275,15 @@ cksummer(void *arg)
 	ofp = fdopen(dda->inputfd, "r");
 	while (ssread(drr, sizeof (*drr), ofp) != 0) {
 
+		/*
+		 * kernel filled in checksum, we are going to write same
+		 * record, but need to regenerate checksum.
+		 */
+		if (drr->drr_type != DRR_BEGIN) {
+			bzero(&drr->drr_u.drr_checksum.drr_checksum,
+			    sizeof (drr->drr_u.drr_checksum.drr_checksum));
+		}
+
 		switch (drr->drr_type) {
 		case DRR_BEGIN:
 		{
@@ -1590,6 +1599,7 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 	int error = 0;
 	char name[ZFS_MAX_DATASET_NAME_LEN];
 	enum lzc_send_flags lzc_flags = 0;
+	FILE *fout = (flags->verbose && flags->dryrun) ? stdout : stderr;
 	uint64_t size = 0;
 
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
@@ -1605,9 +1615,9 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 		return (zfs_error(hdl, EZFS_FAULT, errbuf));
 	}
 	if (flags->verbose) {
-		(void) fprintf(stderr, dgettext(TEXT_DOMAIN,
+		(void) fprintf(fout, dgettext(TEXT_DOMAIN,
 		    "resume token contents:\n"));
-		nvlist_print(stderr, resume_nvl);
+		nvlist_print(fout, resume_nvl);
 	}
 
 	if (nvlist_lookup_string(resume_nvl, "toname", &toname) != 0 ||
@@ -1665,7 +1675,7 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 			size = MAX(0, (int64_t)(size - bytes));
 	}
 	if (flags->verbose) {
-		send_print_verbose(stderr, zhp->zfs_name, fromname,
+		send_print_verbose(fout, zhp->zfs_name, fromname,
 		    size, flags->parsable);
 	}
 

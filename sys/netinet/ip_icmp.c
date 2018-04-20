@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1982, 1986, 1988, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -831,7 +829,7 @@ match:
 	ip->ip_ttl = V_ip_defttl;
 
 	if (optlen > 0) {
-		register u_char *cp;
+		u_char *cp;
 		int opt, cnt;
 		u_int len;
 
@@ -906,9 +904,9 @@ done:
 static void
 icmp_send(struct mbuf *m, struct mbuf *opts)
 {
-	register struct ip *ip = mtod(m, struct ip *);
-	register int hlen;
-	register struct icmp *icp;
+	struct ip *ip = mtod(m, struct ip *);
+	int hlen;
+	struct icmp *icp;
 
 	hlen = ip->ip_hl << 2;
 	m->m_data += hlen;

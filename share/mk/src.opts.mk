@@ -100,6 +100,8 @@ __DEFAULT_YES_OPTIONS = \
     GCOV \
     GDB \
     GNU \
+    GNU_DIFF \
+    GNU_GREP \
     GNU_GREP_COMPAT \
     GPIO \
     GPL_DTC \
@@ -124,6 +126,8 @@ __DEFAULT_YES_OPTIONS = \
     LIBPTHREAD \
     LIBTHR \
     LOADER_GELI \
+    LOADER_OFW \
+    LOADER_UBOOT \
     LOCALES \
     LOCATE \
     LPR \
@@ -274,9 +278,24 @@ BROKEN_OPTIONS+=LLDB
 .if ${__T} != "armv6"
 BROKEN_OPTIONS+=LIBSOFT
 .endif
-.if ${__T:Mmips*} || ${__T:Mpowerpc*} || ${__T:Msparc64} || ${__T:Mriscv*}
+# EFI doesn't exist on mips, pc98, powerpc, sparc or riscv.
+.if ${__T:Mmips*} || ${__TT:Mpc98*} || ${__T:Mpowerpc*} || ${__T:Msparc64} || \
+    ${__T:Mriscv*}
 BROKEN_OPTIONS+=EFI
 .endif
+# GELI isn't supported on !x86
+.if ${__T} != "i386" && ${__T} != "amd64"
+BROKEN_OPTIONS+=LOADER_GELI
+.endif
+# OFW is only for powerpc and sparc64, exclude others
+.if ${__T:Mpowerpc*} == "" && ${__T:Msparc64} == ""
+BROKEN_OPTIONS+=LOADER_OFW
+.endif
+# UBOOT is only for arm, mips and powerpc, exclude others
+.if ${__T:Marm*} == "" && ${__T:Mmips*} == "" && ${__T:Mpowerpc*} == ""
+BROKEN_OPTIONS+=LOADER_UBOOT
+.endif
+
 .if ${__T:Mmips64*}
 # profiling won't work on MIPS64 because there is only assembly for o32
 BROKEN_OPTIONS+=PROFILE
@@ -284,8 +303,10 @@ BROKEN_OPTIONS+=PROFILE
 .if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "i386" || \
     ${__T} == "powerpc64" || ${__T} == "sparc64"
 __DEFAULT_YES_OPTIONS+=CXGBETOOL
+__DEFAULT_YES_OPTIONS+=MLX5TOOL
 .else
 __DEFAULT_NO_OPTIONS+=CXGBETOOL
+__DEFAULT_NO_OPTIONS+=MLX5TOOL
 .endif
 
 .include <bsd.mkopt.mk>

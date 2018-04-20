@@ -21,9 +21,10 @@
 
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2011, 2016 by Delphix. All rights reserved.
+ * Copyright (c) 2011, 2017 by Delphix. All rights reserved.
  * Copyright (c) 2014 Integros [integros.com]
  * Copyright 2017 Nexenta Systems, Inc.
+ * Copyright 2017 RackTop Systems.
  */
 
 #include <stdio.h>
@@ -67,6 +68,8 @@
 #undef verify
 #include <libzfs.h>
 
+#include "zdb.h"
+
 #define	ZDB_COMPRESS_NAME(idx) ((idx) < ZIO_COMPRESS_FUNCTIONS ?	\
 	zio_compress_table[(idx)].ci_name : "UNKNOWN")
 #define	ZDB_CHECKSUM_NAME(idx) ((idx) < ZIO_CHECKSUM_FUNCTIONS ?	\
@@ -75,29 +78,34 @@
 	dmu_ot[(idx)].ot_name : DMU_OT_IS_VALID(idx) ?	\
 	dmu_ot_byteswap[DMU_OT_BYTESWAP(idx)].ob_name : "UNKNOWN")
 #define	ZDB_OT_TYPE(idx) ((idx) < DMU_OT_NUMTYPES ? (idx) :		\
-	(((idx) == DMU_OTN_ZAP_DATA || (idx) == DMU_OTN_ZAP_METADATA) ?	\
-	DMU_OT_ZAP_OTHER : DMU_OT_NUMTYPES))
+	(idx) == DMU_OTN_ZAP_DATA || (idx) == DMU_OTN_ZAP_METADATA ?	\
+	DMU_OT_ZAP_OTHER : \
+	(idx) == DMU_OTN_UINT64_DATA || (idx) == DMU_OTN_UINT64_METADATA ? \
+	DMU_OT_UINT64_OTHER : DMU_OT_NUMTYPES)
 
 #ifndef lint
 extern int reference_tracking_enable;
 extern boolean_t zfs_recover;
 extern uint64_t zfs_arc_max, zfs_arc_meta_limit;
 extern int zfs_vdev_async_read_max_active;
+extern boolean_t spa_load_verify_dryrun;
+extern int aok;
 #else
 int reference_tracking_enable;
 boolean_t zfs_recover;
 uint64_t zfs_arc_max, zfs_arc_meta_limit;
 int zfs_vdev_async_read_max_active;
+boolean_t spa_load_verify_dryrun;
+int aok;
 #endif
 
-const char cmdname[] = "zdb";
+static const char cmdname[] = "zdb";
 uint8_t dump_opt[256];
 
 typedef void object_viewer_t(objset_t *, uint64_t, void *data, size_t size);
 
-extern void dump_intent_log(zilog_t *);
 static uint64_t *zopt_object = NULL;
-static int zopt_objects = 0;
+static unsigned zopt_objects = 0;
 static libzfs_handle_t *g_zfs;
 static uint64_t max_inflight = 1000;
 
@@ -123,7 +131,7 @@ static void
 usage(void)
 {
 	(void) fprintf(stderr,
-	    "Usage:\t%s [-AbcdDFGhiLMPsvX] [-e [-V] [-p <path> ...]] "
+	    "Usage:\t%s [-AbcdDFGhikLMPsvX] [-e [-V] [-p <path> ...]] "
 	    "[-I <inflight I/Os>]\n"
 	    "\t\t[-o <var>=<value>]... [-t <txg>] [-U <cache>] [-x <dumpdir>]\n"
 	    "\t\t[<poolname> [<object> ...]]\n"
@@ -160,6 +168,8 @@ usage(void)
 	(void) fprintf(stderr, "        -h pool history\n");
 	(void) fprintf(stderr, "        -i intent logs\n");
 	(void) fprintf(stderr, "        -l read label contents\n");
+	(void) fprintf(stderr, "        -k examine the checkpointed state "
+	    "of the pool\n");
 	(void) fprintf(stderr, "        -L disable leak tracking (do not "
 	    "load spacemaps)\n");
 	(void) fprintf(stderr, "        -m metaslabs\n");
@@ -285,8 +295,8 @@ zdb_nicenum(uint64_t num, char *buf, size_t buflen)
 		nicenum(num, buf, sizeof (buf));
 }
 
-const char histo_stars[] = "****************************************";
-const int histo_width = sizeof (histo_stars) - 1;
+static const char histo_stars[] = "****************************************";
+static const uint64_t histo_width = sizeof (histo_stars) - 1;
 
 static void
 dump_histogram(const uint64_t *histo, int size, int offset)
@@ -392,7 +402,7 @@ dump_unknown(objset_t *os, uint64_t object, void *data, size_t size)
 }
 
 /*ARGSUSED*/
-void
+static void
 dump_uint8(objset_t *os, uint64_t object, void *data, size_t size)
 {
 }
@@ -410,7 +420,7 @@ dump_zap(objset_t *os, uint64_t object, void *data, size_t size)
 	zap_cursor_t zc;
 	zap_attribute_t attr;
 	void *prop;
-	int i;
+	unsigned i;
 
 	dump_zap_stats(os, object);
 	(void) printf("\n");
@@ -573,7 +583,7 @@ dump_sa_layouts(objset_t *os, uint64_t object, void *data, size_t size)
 	zap_cursor_t zc;
 	zap_attribute_t attr;
 	uint16_t *layout_attrs;
-	int i;
+	unsigned i;
 
 	dump_zap_stats(os, object);
 	(void) printf("\n");
@@ -642,7 +652,7 @@ dump_zpldir(objset_t *os, uint64_t object, void *data, size_t size)
 	zap_cursor_fini(&zc);
 }
 
-int
+static int
 get_dtl_refcount(vdev_t *vd)
 {
 	int refcount = 0;
@@ -656,18 +666,18 @@ get_dtl_refcount(vdev_t *vd)
 		return (0);
 	}
 
-	for (int c = 0; c < vd->vdev_children; c++)
+	for (unsigned c = 0; c < vd->vdev_children; c++)
 		refcount += get_dtl_refcount(vd->vdev_child[c]);
 	return (refcount);
 }
 
-int
+static int
 get_metaslab_refcount(vdev_t *vd)
 {
 	int refcount = 0;
 
-	if (vd->vdev_top == vd && !vd->vdev_removing) {
-		for (int m = 0; m < vd->vdev_ms_count; m++) {
+	if (vd->vdev_top == vd) {
+		for (uint64_t m = 0; m < vd->vdev_ms_count; m++) {
 			space_map_t *sm = vd->vdev_ms[m]->ms_sm;
 
 			if (sm != NULL &&
@@ -675,8 +685,63 @@ get_metaslab_refcount(vdev_t *vd)
 				refcount++;
 		}
 	}
-	for (int c = 0; c < vd->vdev_children; c++)
+	for (unsigned c = 0; c < vd->vdev_children; c++)
 		refcount += get_metaslab_refcount(vd->vdev_child[c]);
+
+	return (refcount);
+}
+
+static int
+get_obsolete_refcount(vdev_t *vd)
+{
+	int refcount = 0;
+
+	uint64_t obsolete_sm_obj = vdev_obsolete_sm_object(vd);
+	if (vd->vdev_top == vd && obsolete_sm_obj != 0) {
+		dmu_object_info_t doi;
+		VERIFY0(dmu_object_info(vd->vdev_spa->spa_meta_objset,
+		    obsolete_sm_obj, &doi));
+		if (doi.doi_bonus_size == sizeof (space_map_phys_t)) {
+			refcount++;
+		}
+	} else {
+		ASSERT3P(vd->vdev_obsolete_sm, ==, NULL);
+		ASSERT3U(obsolete_sm_obj, ==, 0);
+	}
+	for (unsigned c = 0; c < vd->vdev_children; c++) {
+		refcount += get_obsolete_refcount(vd->vdev_child[c]);
+	}
+
+	return (refcount);
+}
+
+static int
+get_prev_obsolete_spacemap_refcount(spa_t *spa)
+{
+	uint64_t prev_obj =
+	    spa->spa_condensing_indirect_phys.scip_prev_obsolete_sm_object;
+	if (prev_obj != 0) {
+		dmu_object_info_t doi;
+		VERIFY0(dmu_object_info(spa->spa_meta_objset, prev_obj, &doi));
+		if (doi.doi_bonus_size == sizeof (space_map_phys_t)) {
+			return (1);
+		}
+	}
+	return (0);
+}
+
+static int
+get_checkpoint_refcount(vdev_t *vd)
+{
+	int refcount = 0;
+
+	if (vd->vdev_top == vd && vd->vdev_top_zap != 0 &&
+	    zap_contains(spa_meta_objset(vd->vdev_spa),
+	    vd->vdev_top_zap, VDEV_TOP_ZAP_POOL_CHECKPOINT_SM) == 0)
+		refcount++;
+
+	for (uint64_t c = 0; c < vd->vdev_children; c++)
+		refcount += get_checkpoint_refcount(vd->vdev_child[c]);
 
 	return (refcount);
 }
@@ -692,6 +757,9 @@ verify_spacemap_refcounts(spa_t *spa)
 	    &expected_refcount);
 	actual_refcount = get_dtl_refcount(spa->spa_root_vdev);
 	actual_refcount += get_metaslab_refcount(spa->spa_root_vdev);
+	actual_refcount += get_obsolete_refcount(spa->spa_root_vdev);
+	actual_refcount += get_prev_obsolete_spacemap_refcount(spa);
+	actual_refcount += get_checkpoint_refcount(spa->spa_root_vdev);
 
 	if (expected_refcount != actual_refcount) {
 		(void) printf("space map refcount mismatch: expected %lld != "
@@ -708,10 +776,17 @@ dump_spacemap(objset_t *os, space_map_t *sm)
 {
 	uint64_t alloc, offset, entry;
 	char *ddata[] = { "ALLOC", "FREE", "CONDENSE", "INVALID",
-			    "INVALID", "INVALID", "INVALID", "INVALID" };
+	    "INVALID", "INVALID", "INVALID", "INVALID" };
 
 	if (sm == NULL)
 		return;
+
+	(void) printf("space map object %llu:\n",
+	    (longlong_t)sm->sm_phys->smp_object);
+	(void) printf("  smp_objsize = 0x%llx\n",
+	    (longlong_t)sm->sm_phys->smp_objsize);
+	(void) printf("  smp_alloc = 0x%llx\n",
+	    (longlong_t)sm->sm_phys->smp_alloc);
 
 	/*
 	 * Print out the freelist entries in both encoded and decoded form.
@@ -758,8 +833,8 @@ static void
 dump_metaslab_stats(metaslab_t *msp)
 {
 	char maxbuf[32];
-	range_tree_t *rt = msp->ms_tree;
-	avl_tree_t *t = &msp->ms_size_tree;
+	range_tree_t *rt = msp->ms_allocatable;
+	avl_tree_t *t = &msp->ms_allocatable_by_size;
 	int free_pct = range_tree_space(rt) * 100 / msp->ms_size;
 
 	/* max sure nicenum has enough space */
@@ -795,7 +870,7 @@ dump_metaslab(metaslab_t *msp)
 		metaslab_load_wait(msp);
 		if (!msp->ms_loaded) {
 			VERIFY0(metaslab_load(msp));
-			range_tree_stat_verify(msp->ms_tree);
+			range_tree_stat_verify(msp->ms_allocatable);
 		}
 		dump_metaslab_stats(msp);
 		metaslab_unload(msp);
@@ -817,9 +892,7 @@ dump_metaslab(metaslab_t *msp)
 	if (dump_opt['d'] > 5 || dump_opt['m'] > 3) {
 		ASSERT(msp->ms_size == (1ULL << vd->vdev_ms_shift));
 
-		mutex_enter(&msp->ms_lock);
 		dump_spacemap(spa->spa_meta_objset, msp->ms_sm);
-		mutex_exit(&msp->ms_lock);
 	}
 }
 
@@ -844,7 +917,7 @@ dump_metaslab_groups(spa_t *spa)
 
 	metaslab_class_histogram_verify(mc);
 
-	for (int c = 0; c < rvd->vdev_children; c++) {
+	for (unsigned c = 0; c < rvd->vdev_children; c++) {
 		vdev_t *tvd = rvd->vdev_child[c];
 		metaslab_group_t *mg = tvd->vdev_mg;
 
@@ -874,6 +947,78 @@ dump_metaslab_groups(spa_t *spa)
 	else
 		(void) printf("\t%3llu%%\n", (u_longlong_t)fragmentation);
 	dump_histogram(mc->mc_histogram, RANGE_TREE_HISTOGRAM_SIZE, 0);
+}
+
+static void
+print_vdev_indirect(vdev_t *vd)
+{
+	vdev_indirect_config_t *vic = &vd->vdev_indirect_config;
+	vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+	vdev_indirect_births_t *vib = vd->vdev_indirect_births;
+
+	if (vim == NULL) {
+		ASSERT3P(vib, ==, NULL);
+		return;
+	}
+
+	ASSERT3U(vdev_indirect_mapping_object(vim), ==,
+	    vic->vic_mapping_object);
+	ASSERT3U(vdev_indirect_births_object(vib), ==,
+	    vic->vic_births_object);
+
+	(void) printf("indirect births obj %llu:\n",
+	    (longlong_t)vic->vic_births_object);
+	(void) printf("    vib_count = %llu\n",
+	    (longlong_t)vdev_indirect_births_count(vib));
+	for (uint64_t i = 0; i < vdev_indirect_births_count(vib); i++) {
+		vdev_indirect_birth_entry_phys_t *cur_vibe =
+		    &vib->vib_entries[i];
+		(void) printf("\toffset %llx -> txg %llu\n",
+		    (longlong_t)cur_vibe->vibe_offset,
+		    (longlong_t)cur_vibe->vibe_phys_birth_txg);
+	}
+	(void) printf("\n");
+
+	(void) printf("indirect mapping obj %llu:\n",
+	    (longlong_t)vic->vic_mapping_object);
+	(void) printf("    vim_max_offset = 0x%llx\n",
+	    (longlong_t)vdev_indirect_mapping_max_offset(vim));
+	(void) printf("    vim_bytes_mapped = 0x%llx\n",
+	    (longlong_t)vdev_indirect_mapping_bytes_mapped(vim));
+	(void) printf("    vim_count = %llu\n",
+	    (longlong_t)vdev_indirect_mapping_num_entries(vim));
+
+	if (dump_opt['d'] <= 5 && dump_opt['m'] <= 3)
+		return;
+
+	uint32_t *counts = vdev_indirect_mapping_load_obsolete_counts(vim);
+
+	for (uint64_t i = 0; i < vdev_indirect_mapping_num_entries(vim); i++) {
+		vdev_indirect_mapping_entry_phys_t *vimep =
+		    &vim->vim_entries[i];
+		(void) printf("\t<%llx:%llx:%llx> -> "
+		    "<%llx:%llx:%llx> (%x obsolete)\n",
+		    (longlong_t)vd->vdev_id,
+		    (longlong_t)DVA_MAPPING_GET_SRC_OFFSET(vimep),
+		    (longlong_t)DVA_GET_ASIZE(&vimep->vimep_dst),
+		    (longlong_t)DVA_GET_VDEV(&vimep->vimep_dst),
+		    (longlong_t)DVA_GET_OFFSET(&vimep->vimep_dst),
+		    (longlong_t)DVA_GET_ASIZE(&vimep->vimep_dst),
+		    counts[i]);
+	}
+	(void) printf("\n");
+
+	uint64_t obsolete_sm_object = vdev_obsolete_sm_object(vd);
+	if (obsolete_sm_object != 0) {
+		objset_t *mos = vd->vdev_spa->spa_meta_objset;
+		(void) printf("obsolete space map object %llu:\n",
+		    (u_longlong_t)obsolete_sm_object);
+		ASSERT(vd->vdev_obsolete_sm != NULL);
+		ASSERT3U(space_map_object(vd->vdev_obsolete_sm), ==,
+		    obsolete_sm_object);
+		dump_spacemap(mos, vd->vdev_obsolete_sm);
+		(void) printf("\n");
+	}
 }
 
 static void
@@ -912,6 +1057,8 @@ dump_metaslabs(spa_t *spa)
 		vd = rvd->vdev_child[c];
 		print_vdev_metaslab_header(vd);
 
+		print_vdev_indirect(vd);
+
 		for (m = 0; m < vd->vdev_ms_count; m++)
 			dump_metaslab(vd->vdev_ms[m]);
 		(void) printf("\n");
@@ -923,7 +1070,7 @@ dump_dde(const ddt_t *ddt, const ddt_entry_t *dde, uint64_t index)
 {
 	const ddt_phys_t *ddp = dde->dde_phys;
 	const ddt_key_t *ddk = &dde->dde_key;
-	char *types[4] = { "ditto", "single", "double", "triple" };
+	const char *types[4] = { "ditto", "single", "double", "triple" };
 	char blkbuf[BP_SPRINTF_LEN];
 	blkptr_t blk;
 
@@ -1016,8 +1163,11 @@ dump_ddt(ddt_t *ddt, enum ddt_type type, enum ddt_class class)
 static void
 dump_all_ddts(spa_t *spa)
 {
-	ddt_histogram_t ddh_total = { 0 };
-	ddt_stat_t dds_total = { 0 };
+	ddt_histogram_t ddh_total;
+	ddt_stat_t dds_total;
+
+	bzero(&ddh_total, sizeof (ddh_total));
+	bzero(&dds_total, sizeof (dds_total));
 
 	for (enum zio_checksum c = 0; c < ZIO_CHECKSUM_FUNCTIONS; c++) {
 		ddt_t *ddt = spa->spa_ddt[c];
@@ -1064,7 +1214,8 @@ dump_dtl(vdev_t *vd, int indent)
 {
 	spa_t *spa = vd->vdev_spa;
 	boolean_t required;
-	char *name[DTL_TYPES] = { "missing", "partial", "scrub", "outage" };
+	const char *name[DTL_TYPES] = { "missing", "partial", "scrub",
+		"outage" };
 	char prefix[256];
 
 	spa_vdev_state_enter(spa, SCL_NONE);
@@ -1085,14 +1236,12 @@ dump_dtl(vdev_t *vd, int indent)
 			continue;
 		(void) snprintf(prefix, sizeof (prefix), "\t%*s%s",
 		    indent + 2, "", name[t]);
-		mutex_enter(rt->rt_lock);
 		range_tree_walk(rt, dump_dtl_seg, prefix);
-		mutex_exit(rt->rt_lock);
 		if (dump_opt['d'] > 5 && vd->vdev_children == 0)
 			dump_spacemap(spa->spa_meta_objset, vd->vdev_dtl_sm);
 	}
 
-	for (int c = 0; c < vd->vdev_children; c++)
+	for (unsigned c = 0; c < vd->vdev_children; c++)
 		dump_dtl(vd->vdev_child[c], indent + 4);
 }
 
@@ -1150,7 +1299,7 @@ dump_history(spa_t *spa)
 	free(buf);
 
 	(void) printf("\nHistory:\n");
-	for (int i = 0; i < num; i++) {
+	for (unsigned i = 0; i < num; i++) {
 		uint64_t time, txg, ievent;
 		char *cmd, *intstr;
 		boolean_t printed = B_FALSE;
@@ -1172,8 +1321,8 @@ dump_history(spa_t *spa)
 
 			(void) snprintf(internalstr,
 			    sizeof (internalstr),
-			    "[internal %s txg:%lld] %s",
-			    zfs_history_event_names[ievent], txg,
+			    "[internal %s txg:%ju] %s",
+			    zfs_history_event_names[ievent], (uintmax_t)txg,
 			    intstr);
 			cmd = internalstr;
 		}
@@ -1490,7 +1639,7 @@ dump_bptree_cb(void *arg, const blkptr_t *bp, dmu_tx_t *tx)
 }
 
 static void
-dump_bptree(objset_t *os, uint64_t obj, char *name)
+dump_bptree(objset_t *os, uint64_t obj, const char *name)
 {
 	char bytes[32];
 	bptree_phys_t *bt;
@@ -1530,7 +1679,7 @@ dump_bpobj_cb(void *arg, const blkptr_t *bp, dmu_tx_t *tx)
 }
 
 static void
-dump_full_bpobj(bpobj_t *bpo, char *name, int indent)
+dump_full_bpobj(bpobj_t *bpo, const char *name, int indent)
 {
 	char bytes[32];
 	char comp[32];
@@ -2034,7 +2183,7 @@ dump_object(objset_t *os, uint64_t object, int verbosity, int *print_header)
 		dmu_buf_rele(db, FTAG);
 }
 
-static char *objset_types[DMU_OST_NUMTYPES] = {
+static const char *objset_types[DMU_OST_NUMTYPES] = {
 	"NONE", "META", "ZPL", "ZVOL", "OTHER", "ANY" };
 
 static void
@@ -2046,10 +2195,11 @@ dump_dir(objset_t *os)
 	char numbuf[32];
 	char blkbuf[BP_SPRINTF_LEN + 20];
 	char osname[ZFS_MAX_DATASET_NAME_LEN];
-	char *type = "UNKNOWN";
+	const char *type = "UNKNOWN";
 	int verbosity = dump_opt['d'];
 	int print_header = 1;
-	int i, error;
+	unsigned i;
+	int error;
 
 	/* make sure nicenum has enough space */
 	CTASSERT(sizeof (numbuf) >= NN_NUMBUF_SZ);
@@ -2101,8 +2251,15 @@ dump_dir(objset_t *os)
 	if (dump_opt['i'] != 0 || verbosity >= 2)
 		dump_intent_log(dmu_objset_zil(os));
 
-	if (dmu_objset_ds(os) != NULL)
-		dump_deadlist(&dmu_objset_ds(os)->ds_deadlist);
+	if (dmu_objset_ds(os) != NULL) {
+		dsl_dataset_t *ds = dmu_objset_ds(os);
+		dump_deadlist(&ds->ds_deadlist);
+
+		if (dsl_dataset_remap_deadlist_exists(ds)) {
+			(void) printf("ds_remap_deadlist:\n");
+			dump_deadlist(&ds->ds_remap_deadlist);
+		}
+	}
 
 	if (verbosity < 2)
 		return;
@@ -2139,7 +2296,7 @@ dump_uberblock(uberblock_t *ub, const char *header, const char *footer)
 {
 	time_t timestamp = ub->ub_timestamp;
 
-	(void) printf(header ? header : "");
+	(void) printf("%s", header ? header : "");
 	(void) printf("\tmagic = %016llx\n", (u_longlong_t)ub->ub_magic);
 	(void) printf("\tversion = %llu\n", (u_longlong_t)ub->ub_version);
 	(void) printf("\ttxg = %llu\n", (u_longlong_t)ub->ub_txg);
@@ -2151,7 +2308,9 @@ dump_uberblock(uberblock_t *ub, const char *header, const char *footer)
 		snprintf_blkptr(blkbuf, sizeof (blkbuf), &ub->ub_rootbp);
 		(void) printf("\trootbp = %s\n", blkbuf);
 	}
-	(void) printf(footer ? footer : "");
+	(void) printf("\tcheckpoint_txg = %llu\n",
+	    (u_longlong_t)ub->ub_checkpoint_txg);
+	(void) printf("%s", footer ? footer : "");
 }
 
 static void
@@ -2446,6 +2605,7 @@ dump_label(const char *dev)
 }
 
 static uint64_t dataset_feature_count[SPA_FEATURES];
+static uint64_t remap_deadlist_count = 0;
 
 /*ARGSUSED*/
 static int
@@ -2464,6 +2624,10 @@ dump_one_dir(const char *dsname, void *arg)
 		ASSERT(spa_feature_table[f].fi_flags &
 		    ZFEATURE_FLAG_PER_DATASET);
 		dataset_feature_count[f]++;
+	}
+
+	if (dsl_dataset_remap_deadlist_exists(dmu_objset_ds(os))) {
+		remap_deadlist_count++;
 	}
 
 	dump_dir(os);
@@ -2494,7 +2658,7 @@ typedef struct zdb_blkstats {
 #define	ZDB_OT_OTHER	(DMU_OT_NUMTYPES + 2)
 #define	ZDB_OT_TOTAL	(DMU_OT_NUMTYPES + 3)
 
-static char *zdb_ot_extname[] = {
+static const char *zdb_ot_extname[] = {
 	"deferred free",
 	"dedup ditto",
 	"other",
@@ -2505,18 +2669,21 @@ static char *zdb_ot_extname[] = {
 
 typedef struct zdb_cb {
 	zdb_blkstats_t	zcb_type[ZB_TOTAL + 1][ZDB_OT_TOTAL + 1];
+	uint64_t	zcb_removing_size;
+	uint64_t	zcb_checkpoint_size;
 	uint64_t	zcb_dedup_asize;
 	uint64_t	zcb_dedup_blocks;
 	uint64_t	zcb_embedded_blocks[NUM_BP_EMBEDDED_TYPES];
 	uint64_t	zcb_embedded_histogram[NUM_BP_EMBEDDED_TYPES]
 	    [BPE_PAYLOAD_SIZE];
 	uint64_t	zcb_start;
-	uint64_t	zcb_lastprint;
+	hrtime_t	zcb_lastprint;
 	uint64_t	zcb_totalasize;
 	uint64_t	zcb_errors[256];
 	int		zcb_readfails;
 	int		zcb_haderrors;
 	spa_t		*zcb_spa;
+	uint32_t	**zcb_vd_obsolete_counts;
 } zdb_cb_t;
 
 static void
@@ -2546,7 +2713,7 @@ zdb_count_block(zdb_cb_t *zcb, zilog_t *zilog, const blkptr_t *bp,
 		 * SPA_OLD_MAXBLOCKSIZE; larger blocks go into the last,
 		 * "other", bucket.
 		 */
-		int idx = BP_GET_PSIZE(bp) >> SPA_MINBLOCKSHIFT;
+		unsigned idx = BP_GET_PSIZE(bp) >> SPA_MINBLOCKSHIFT;
 		idx = MIN(idx, SPA_OLD_MAXBLOCKSIZE / SPA_MINBLOCKSIZE + 1);
 		zb->zb_psize_histogram[idx]++;
 
@@ -2603,7 +2770,7 @@ zdb_count_block(zdb_cb_t *zcb, zilog_t *zilog, const blkptr_t *bp,
 	}
 
 	VERIFY3U(zio_wait(zio_claim(NULL, zcb->zcb_spa,
-	    refcnt ? 0 : spa_first_txg(zcb->zcb_spa),
+	    refcnt ? 0 : spa_min_claim_txg(zcb->zcb_spa),
 	    bp, NULL, NULL, ZIO_FLAG_CANFAIL)), ==, 0);
 }
 
@@ -2755,10 +2922,11 @@ static metaslab_ops_t zdb_metaslab_ops = {
 static void
 zdb_ddt_leak_init(spa_t *spa, zdb_cb_t *zcb)
 {
-	ddt_bookmark_t ddb = { 0 };
+	ddt_bookmark_t ddb;
 	ddt_entry_t dde;
 	int error;
 
+	bzero(&ddb, sizeof (ddb));
 	while ((error = ddt_walk(spa, &ddb, &dde)) == 0) {
 		blkptr_t blk;
 		ddt_phys_t *ddp = dde.dde_phys;
@@ -2792,108 +2960,566 @@ zdb_ddt_leak_init(spa_t *spa, zdb_cb_t *zcb)
 	ASSERT(error == ENOENT);
 }
 
+/* ARGSUSED */
+static void
+claim_segment_impl_cb(uint64_t inner_offset, vdev_t *vd, uint64_t offset,
+    uint64_t size, void *arg)
+{
+	/*
+	 * This callback was called through a remap from
+	 * a device being removed. Therefore, the vdev that
+	 * this callback is applied to is a concrete
+	 * vdev.
+	 */
+	ASSERT(vdev_is_concrete(vd));
+
+	VERIFY0(metaslab_claim_impl(vd, offset, size,
+	    spa_min_claim_txg(vd->vdev_spa)));
+}
+
+static void
+claim_segment_cb(void *arg, uint64_t offset, uint64_t size)
+{
+	vdev_t *vd = arg;
+
+	vdev_indirect_ops.vdev_op_remap(vd, offset, size,
+	    claim_segment_impl_cb, NULL);
+}
+
+/*
+ * After accounting for all allocated blocks that are directly referenced,
+ * we might have missed a reference to a block from a partially complete
+ * (and thus unused) indirect mapping object. We perform a secondary pass
+ * through the metaslabs we have already mapped and claim the destination
+ * blocks.
+ */
+static void
+zdb_claim_removing(spa_t *spa, zdb_cb_t *zcb)
+{
+	if (spa->spa_vdev_removal == NULL)
+		return;
+
+	spa_config_enter(spa, SCL_CONFIG, FTAG, RW_READER);
+
+	spa_vdev_removal_t *svr = spa->spa_vdev_removal;
+	vdev_t *vd = svr->svr_vdev;
+	vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+
+	for (uint64_t msi = 0; msi < vd->vdev_ms_count; msi++) {
+		metaslab_t *msp = vd->vdev_ms[msi];
+
+		if (msp->ms_start >= vdev_indirect_mapping_max_offset(vim))
+			break;
+
+		ASSERT0(range_tree_space(svr->svr_allocd_segs));
+
+		if (msp->ms_sm != NULL) {
+			VERIFY0(space_map_load(msp->ms_sm,
+			    svr->svr_allocd_segs, SM_ALLOC));
+
+			/*
+			 * Clear everything past what has been synced,
+			 * because we have not allocated mappings for it yet.
+			 */
+			range_tree_clear(svr->svr_allocd_segs,
+			    vdev_indirect_mapping_max_offset(vim),
+			    msp->ms_sm->sm_start + msp->ms_sm->sm_size -
+			    vdev_indirect_mapping_max_offset(vim));
+		}
+
+		zcb->zcb_removing_size +=
+		    range_tree_space(svr->svr_allocd_segs);
+		range_tree_vacate(svr->svr_allocd_segs, claim_segment_cb, vd);
+	}
+
+	spa_config_exit(spa, SCL_CONFIG, FTAG);
+}
+
+/* ARGSUSED */
+static int
+increment_indirect_mapping_cb(void *arg, const blkptr_t *bp, dmu_tx_t *tx)
+{
+	zdb_cb_t *zcb = arg;
+	spa_t *spa = zcb->zcb_spa;
+	vdev_t *vd;
+	const dva_t *dva = &bp->blk_dva[0];
+
+	ASSERT(!dump_opt['L']);
+	ASSERT3U(BP_GET_NDVAS(bp), ==, 1);
+
+	spa_config_enter(spa, SCL_VDEV, FTAG, RW_READER);
+	vd = vdev_lookup_top(zcb->zcb_spa, DVA_GET_VDEV(dva));
+	ASSERT3P(vd, !=, NULL);
+	spa_config_exit(spa, SCL_VDEV, FTAG);
+
+	ASSERT(vd->vdev_indirect_config.vic_mapping_object != 0);
+	ASSERT3P(zcb->zcb_vd_obsolete_counts[vd->vdev_id], !=, NULL);
+
+	vdev_indirect_mapping_increment_obsolete_count(
+	    vd->vdev_indirect_mapping,
+	    DVA_GET_OFFSET(dva), DVA_GET_ASIZE(dva),
+	    zcb->zcb_vd_obsolete_counts[vd->vdev_id]);
+
+	return (0);
+}
+
+static uint32_t *
+zdb_load_obsolete_counts(vdev_t *vd)
+{
+	vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+	spa_t *spa = vd->vdev_spa;
+	spa_condensing_indirect_phys_t *scip =
+	    &spa->spa_condensing_indirect_phys;
+	uint32_t *counts;
+
+	EQUIV(vdev_obsolete_sm_object(vd) != 0, vd->vdev_obsolete_sm != NULL);
+	counts = vdev_indirect_mapping_load_obsolete_counts(vim);
+	if (vd->vdev_obsolete_sm != NULL) {
+		vdev_indirect_mapping_load_obsolete_spacemap(vim, counts,
+		    vd->vdev_obsolete_sm);
+	}
+	if (scip->scip_vdev == vd->vdev_id &&
+	    scip->scip_prev_obsolete_sm_object != 0) {
+		space_map_t *prev_obsolete_sm = NULL;
+		VERIFY0(space_map_open(&prev_obsolete_sm, spa->spa_meta_objset,
+		    scip->scip_prev_obsolete_sm_object, 0, vd->vdev_asize, 0));
+		space_map_update(prev_obsolete_sm);
+		vdev_indirect_mapping_load_obsolete_spacemap(vim, counts,
+		    prev_obsolete_sm);
+		space_map_close(prev_obsolete_sm);
+	}
+	return (counts);
+}
+
+typedef struct checkpoint_sm_exclude_entry_arg {
+	vdev_t *cseea_vd;
+	uint64_t cseea_checkpoint_size;
+} checkpoint_sm_exclude_entry_arg_t;
+
+static int
+checkpoint_sm_exclude_entry_cb(maptype_t type, uint64_t offset, uint64_t size,
+    void *arg)
+{
+	checkpoint_sm_exclude_entry_arg_t *cseea = arg;
+	vdev_t *vd = cseea->cseea_vd;
+	metaslab_t *ms = vd->vdev_ms[offset >> vd->vdev_ms_shift];
+	uint64_t end = offset + size;
+
+	ASSERT(type == SM_FREE);
+
+	/*
+	 * Since the vdev_checkpoint_sm exists in the vdev level
+	 * and the ms_sm space maps exist in the metaslab level,
+	 * an entry in the checkpoint space map could theoretically
+	 * cross the boundaries of the metaslab that it belongs.
+	 *
+	 * In reality, because of the way that we populate and
+	 * manipulate the checkpoint's space maps currently,
+	 * there shouldn't be any entries that cross metaslabs.
+	 * Hence the assertion below.
+	 *
+	 * That said, there is no fundamental requirement that
+	 * the checkpoint's space map entries should not cross
+	 * metaslab boundaries. So if needed we could add code
+	 * that handles metaslab-crossing segments in the future.
+	 */
+	VERIFY3U(offset, >=, ms->ms_start);
+	VERIFY3U(end, <=, ms->ms_start + ms->ms_size);
+
+	/*
+	 * By removing the entry from the allocated segments we
+	 * also verify that the entry is there to begin with.
+	 */
+	mutex_enter(&ms->ms_lock);
+	range_tree_remove(ms->ms_allocatable, offset, size);
+	mutex_exit(&ms->ms_lock);
+
+	cseea->cseea_checkpoint_size += size;
+	return (0);
+}
+
+static void
+zdb_leak_init_vdev_exclude_checkpoint(vdev_t *vd, zdb_cb_t *zcb)
+{
+	spa_t *spa = vd->vdev_spa;
+	space_map_t *checkpoint_sm = NULL;
+	uint64_t checkpoint_sm_obj;
+
+	/*
+	 * If there is no vdev_top_zap, we are in a pool whose
+	 * version predates the pool checkpoint feature.
+	 */
+	if (vd->vdev_top_zap == 0)
+		return;
+
+	/*
+	 * If there is no reference of the vdev_checkpoint_sm in
+	 * the vdev_top_zap, then one of the following scenarios
+	 * is true:
+	 *
+	 * 1] There is no checkpoint
+	 * 2] There is a checkpoint, but no checkpointed blocks
+	 *    have been freed yet
+	 * 3] The current vdev is indirect
+	 *
+	 * In these cases we return immediately.
+	 */
+	if (zap_contains(spa_meta_objset(spa), vd->vdev_top_zap,
+	    VDEV_TOP_ZAP_POOL_CHECKPOINT_SM) != 0)
+		return;
+
+	VERIFY0(zap_lookup(spa_meta_objset(spa), vd->vdev_top_zap,
+	    VDEV_TOP_ZAP_POOL_CHECKPOINT_SM, sizeof (uint64_t), 1,
+	    &checkpoint_sm_obj));
+
+	checkpoint_sm_exclude_entry_arg_t cseea;
+	cseea.cseea_vd = vd;
+	cseea.cseea_checkpoint_size = 0;
+
+	VERIFY0(space_map_open(&checkpoint_sm, spa_meta_objset(spa),
+	    checkpoint_sm_obj, 0, vd->vdev_asize, vd->vdev_ashift));
+	space_map_update(checkpoint_sm);
+
+	VERIFY0(space_map_iterate(checkpoint_sm,
+	    checkpoint_sm_exclude_entry_cb, &cseea));
+	space_map_close(checkpoint_sm);
+
+	zcb->zcb_checkpoint_size += cseea.cseea_checkpoint_size;
+}
+
+static void
+zdb_leak_init_exclude_checkpoint(spa_t *spa, zdb_cb_t *zcb)
+{
+	vdev_t *rvd = spa->spa_root_vdev;
+	for (uint64_t c = 0; c < rvd->vdev_children; c++) {
+		ASSERT3U(c, ==, rvd->vdev_child[c]->vdev_id);
+		zdb_leak_init_vdev_exclude_checkpoint(rvd->vdev_child[c], zcb);
+	}
+}
+
+static void
+load_concrete_ms_allocatable_trees(spa_t *spa, maptype_t maptype)
+{
+	vdev_t *rvd = spa->spa_root_vdev;
+	for (uint64_t i = 0; i < rvd->vdev_children; i++) {
+		vdev_t *vd = rvd->vdev_child[i];
+
+		ASSERT3U(i, ==, vd->vdev_id);
+
+		if (vd->vdev_ops == &vdev_indirect_ops)
+			continue;
+
+		for (uint64_t m = 0; m < vd->vdev_ms_count; m++) {
+			metaslab_t *msp = vd->vdev_ms[m];
+
+			(void) fprintf(stderr,
+			    "\rloading concrete vdev %llu, "
+			    "metaslab %llu of %llu ...",
+			    (longlong_t)vd->vdev_id,
+			    (longlong_t)msp->ms_id,
+			    (longlong_t)vd->vdev_ms_count);
+
+			mutex_enter(&msp->ms_lock);
+			metaslab_unload(msp);
+
+			/*
+			 * We don't want to spend the CPU manipulating the
+			 * size-ordered tree, so clear the range_tree ops.
+			 */
+			msp->ms_allocatable->rt_ops = NULL;
+
+			if (msp->ms_sm != NULL) {
+				VERIFY0(space_map_load(msp->ms_sm,
+				    msp->ms_allocatable, maptype));
+			}
+			if (!msp->ms_loaded)
+				msp->ms_loaded = B_TRUE;
+			mutex_exit(&msp->ms_lock);
+		}
+	}
+}
+
+/*
+ * vm_idxp is an in-out parameter which (for indirect vdevs) is the
+ * index in vim_entries that has the first entry in this metaslab.
+ * On return, it will be set to the first entry after this metaslab.
+ */
+static void
+load_indirect_ms_allocatable_tree(vdev_t *vd, metaslab_t *msp,
+    uint64_t *vim_idxp)
+{
+	vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+
+	mutex_enter(&msp->ms_lock);
+	metaslab_unload(msp);
+
+	/*
+	 * We don't want to spend the CPU manipulating the
+	 * size-ordered tree, so clear the range_tree ops.
+	 */
+	msp->ms_allocatable->rt_ops = NULL;
+
+	for (; *vim_idxp < vdev_indirect_mapping_num_entries(vim);
+	    (*vim_idxp)++) {
+		vdev_indirect_mapping_entry_phys_t *vimep =
+		    &vim->vim_entries[*vim_idxp];
+		uint64_t ent_offset = DVA_MAPPING_GET_SRC_OFFSET(vimep);
+		uint64_t ent_len = DVA_GET_ASIZE(&vimep->vimep_dst);
+		ASSERT3U(ent_offset, >=, msp->ms_start);
+		if (ent_offset >= msp->ms_start + msp->ms_size)
+			break;
+
+		/*
+		 * Mappings do not cross metaslab boundaries,
+		 * because we create them by walking the metaslabs.
+		 */
+		ASSERT3U(ent_offset + ent_len, <=,
+		    msp->ms_start + msp->ms_size);
+		range_tree_add(msp->ms_allocatable, ent_offset, ent_len);
+	}
+
+	if (!msp->ms_loaded)
+		msp->ms_loaded = B_TRUE;
+	mutex_exit(&msp->ms_lock);
+}
+
+static void
+zdb_leak_init_prepare_indirect_vdevs(spa_t *spa, zdb_cb_t *zcb)
+{
+	vdev_t *rvd = spa->spa_root_vdev;
+	for (uint64_t c = 0; c < rvd->vdev_children; c++) {
+		vdev_t *vd = rvd->vdev_child[c];
+
+		ASSERT3U(c, ==, vd->vdev_id);
+
+		if (vd->vdev_ops != &vdev_indirect_ops)
+			continue;
+
+		/*
+		 * Note: we don't check for mapping leaks on
+		 * removing vdevs because their ms_allocatable's
+		 * are used to look for leaks in allocated space.
+		 */
+		zcb->zcb_vd_obsolete_counts[c] = zdb_load_obsolete_counts(vd);
+
+		/*
+		 * Normally, indirect vdevs don't have any
+		 * metaslabs.  We want to set them up for
+		 * zio_claim().
+		 */
+		VERIFY0(vdev_metaslab_init(vd, 0));
+
+		vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+		uint64_t vim_idx = 0;
+		for (uint64_t m = 0; m < vd->vdev_ms_count; m++) {
+
+			(void) fprintf(stderr,
+			    "\rloading indirect vdev %llu, "
+			    "metaslab %llu of %llu ...",
+			    (longlong_t)vd->vdev_id,
+			    (longlong_t)vd->vdev_ms[m]->ms_id,
+			    (longlong_t)vd->vdev_ms_count);
+
+			load_indirect_ms_allocatable_tree(vd, vd->vdev_ms[m],
+			    &vim_idx);
+		}
+		ASSERT3U(vim_idx, ==, vdev_indirect_mapping_num_entries(vim));
+	}
+}
+
 static void
 zdb_leak_init(spa_t *spa, zdb_cb_t *zcb)
 {
 	zcb->zcb_spa = spa;
 
 	if (!dump_opt['L']) {
+		dsl_pool_t *dp = spa->spa_dsl_pool;
 		vdev_t *rvd = spa->spa_root_vdev;
 
 		/*
 		 * We are going to be changing the meaning of the metaslab's
-		 * ms_tree.  Ensure that the allocator doesn't try to
+		 * ms_allocatable.  Ensure that the allocator doesn't try to
 		 * use the tree.
 		 */
 		spa->spa_normal_class->mc_ops = &zdb_metaslab_ops;
 		spa->spa_log_class->mc_ops = &zdb_metaslab_ops;
 
-		for (uint64_t c = 0; c < rvd->vdev_children; c++) {
-			vdev_t *vd = rvd->vdev_child[c];
-			metaslab_group_t *mg = vd->vdev_mg;
-			for (uint64_t m = 0; m < vd->vdev_ms_count; m++) {
-				metaslab_t *msp = vd->vdev_ms[m];
-				ASSERT3P(msp->ms_group, ==, mg);
-				mutex_enter(&msp->ms_lock);
-				metaslab_unload(msp);
+		zcb->zcb_vd_obsolete_counts =
+		    umem_zalloc(rvd->vdev_children * sizeof (uint32_t *),
+		    UMEM_NOFAIL);
 
-				/*
-				 * For leak detection, we overload the metaslab
-				 * ms_tree to contain allocated segments
-				 * instead of free segments. As a result,
-				 * we can't use the normal metaslab_load/unload
-				 * interfaces.
-				 */
-				if (msp->ms_sm != NULL) {
-					(void) fprintf(stderr,
-					    "\rloading space map for "
-					    "vdev %llu of %llu, "
-					    "metaslab %llu of %llu ...",
-					    (longlong_t)c,
-					    (longlong_t)rvd->vdev_children,
-					    (longlong_t)m,
-					    (longlong_t)vd->vdev_ms_count);
+		/*
+		 * For leak detection, we overload the ms_allocatable trees
+		 * to contain allocated segments instead of free segments.
+		 * As a result, we can't use the normal metaslab_load/unload
+		 * interfaces.
+		 */
+		zdb_leak_init_prepare_indirect_vdevs(spa, zcb);
+		load_concrete_ms_allocatable_trees(spa, SM_ALLOC);
 
-					/*
-					 * We don't want to spend the CPU
-					 * manipulating the size-ordered
-					 * tree, so clear the range_tree
-					 * ops.
-					 */
-					msp->ms_tree->rt_ops = NULL;
-					VERIFY0(space_map_load(msp->ms_sm,
-					    msp->ms_tree, SM_ALLOC));
+		/*
+		 * On load_concrete_ms_allocatable_trees() we loaded all the
+		 * allocated entries from the ms_sm to the ms_allocatable for
+		 * each metaslab. If the pool has a checkpoint or is in the
+		 * middle of discarding a checkpoint, some of these blocks
+		 * may have been freed but their ms_sm may not have been
+		 * updated because they are referenced by the checkpoint. In
+		 * order to avoid false-positives during leak-detection, we
+		 * go through the vdev's checkpoint space map and exclude all
+		 * its entries from their relevant ms_allocatable.
+		 *
+		 * We also aggregate the space held by the checkpoint and add
+		 * it to zcb_checkpoint_size.
+		 *
+		 * Note that at this point we are also verifying that all the
+		 * entries on the checkpoint_sm are marked as allocated in
+		 * the ms_sm of their relevant metaslab.
+		 * [see comment in checkpoint_sm_exclude_entry_cb()]
+		 */
+		zdb_leak_init_exclude_checkpoint(spa, zcb);
 
-					if (!msp->ms_loaded) {
-						msp->ms_loaded = B_TRUE;
-					}
-				}
-				mutex_exit(&msp->ms_lock);
-			}
-		}
+		/* for cleaner progress output */
 		(void) fprintf(stderr, "\n");
+
+		if (bpobj_is_open(&dp->dp_obsolete_bpobj)) {
+			ASSERT(spa_feature_is_enabled(spa,
+			    SPA_FEATURE_DEVICE_REMOVAL));
+			(void) bpobj_iterate_nofree(&dp->dp_obsolete_bpobj,
+			    increment_indirect_mapping_cb, zcb, NULL);
+		}
+	} else {
+		/*
+		 * If leak tracing is disabled, we still need to consider
+		 * any checkpointed space in our space verification.
+		 */
+		zcb->zcb_checkpoint_size += spa_get_checkpoint_space(spa);
 	}
 
 	spa_config_enter(spa, SCL_CONFIG, FTAG, RW_READER);
-
 	zdb_ddt_leak_init(spa, zcb);
-
 	spa_config_exit(spa, SCL_CONFIG, FTAG);
 }
 
-static void
-zdb_leak_fini(spa_t *spa)
+static boolean_t
+zdb_check_for_obsolete_leaks(vdev_t *vd, zdb_cb_t *zcb)
 {
+	boolean_t leaks = B_FALSE;
+	vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+	uint64_t total_leaked = 0;
+
+	ASSERT(vim != NULL);
+
+	for (uint64_t i = 0; i < vdev_indirect_mapping_num_entries(vim); i++) {
+		vdev_indirect_mapping_entry_phys_t *vimep =
+		    &vim->vim_entries[i];
+		uint64_t obsolete_bytes = 0;
+		uint64_t offset = DVA_MAPPING_GET_SRC_OFFSET(vimep);
+		metaslab_t *msp = vd->vdev_ms[offset >> vd->vdev_ms_shift];
+
+		/*
+		 * This is not very efficient but it's easy to
+		 * verify correctness.
+		 */
+		for (uint64_t inner_offset = 0;
+		    inner_offset < DVA_GET_ASIZE(&vimep->vimep_dst);
+		    inner_offset += 1 << vd->vdev_ashift) {
+			if (range_tree_contains(msp->ms_allocatable,
+			    offset + inner_offset, 1 << vd->vdev_ashift)) {
+				obsolete_bytes += 1 << vd->vdev_ashift;
+			}
+		}
+
+		int64_t bytes_leaked = obsolete_bytes -
+		    zcb->zcb_vd_obsolete_counts[vd->vdev_id][i];
+		ASSERT3U(DVA_GET_ASIZE(&vimep->vimep_dst), >=,
+		    zcb->zcb_vd_obsolete_counts[vd->vdev_id][i]);
+		if (bytes_leaked != 0 &&
+		    (vdev_obsolete_counts_are_precise(vd) ||
+		    dump_opt['d'] >= 5)) {
+			(void) printf("obsolete indirect mapping count "
+			    "mismatch on %llu:%llx:%llx : %llx bytes leaked\n",
+			    (u_longlong_t)vd->vdev_id,
+			    (u_longlong_t)DVA_MAPPING_GET_SRC_OFFSET(vimep),
+			    (u_longlong_t)DVA_GET_ASIZE(&vimep->vimep_dst),
+			    (u_longlong_t)bytes_leaked);
+		}
+		total_leaked += ABS(bytes_leaked);
+	}
+
+	if (!vdev_obsolete_counts_are_precise(vd) && total_leaked > 0) {
+		int pct_leaked = total_leaked * 100 /
+		    vdev_indirect_mapping_bytes_mapped(vim);
+		(void) printf("cannot verify obsolete indirect mapping "
+		    "counts of vdev %llu because precise feature was not "
+		    "enabled when it was removed: %d%% (%llx bytes) of mapping"
+		    "unreferenced\n",
+		    (u_longlong_t)vd->vdev_id, pct_leaked,
+		    (u_longlong_t)total_leaked);
+	} else if (total_leaked > 0) {
+		(void) printf("obsolete indirect mapping count mismatch "
+		    "for vdev %llu -- %llx total bytes mismatched\n",
+		    (u_longlong_t)vd->vdev_id,
+		    (u_longlong_t)total_leaked);
+		leaks |= B_TRUE;
+	}
+
+	vdev_indirect_mapping_free_obsolete_counts(vim,
+	    zcb->zcb_vd_obsolete_counts[vd->vdev_id]);
+	zcb->zcb_vd_obsolete_counts[vd->vdev_id] = NULL;
+
+	return (leaks);
+}
+
+static boolean_t
+zdb_leak_fini(spa_t *spa, zdb_cb_t *zcb)
+{
+	boolean_t leaks = B_FALSE;
 	if (!dump_opt['L']) {
 		vdev_t *rvd = spa->spa_root_vdev;
-		for (int c = 0; c < rvd->vdev_children; c++) {
+		for (unsigned c = 0; c < rvd->vdev_children; c++) {
 			vdev_t *vd = rvd->vdev_child[c];
 			metaslab_group_t *mg = vd->vdev_mg;
-			for (int m = 0; m < vd->vdev_ms_count; m++) {
+
+			if (zcb->zcb_vd_obsolete_counts[c] != NULL) {
+				leaks |= zdb_check_for_obsolete_leaks(vd, zcb);
+			}
+
+			for (uint64_t m = 0; m < vd->vdev_ms_count; m++) {
 				metaslab_t *msp = vd->vdev_ms[m];
 				ASSERT3P(mg, ==, msp->ms_group);
-				mutex_enter(&msp->ms_lock);
 
 				/*
-				 * The ms_tree has been overloaded to
-				 * contain allocated segments. Now that we
-				 * finished traversing all blocks, any
-				 * block that remains in the ms_tree
+				 * ms_allocatable has been overloaded
+				 * to contain allocated segments. Now that
+				 * we finished traversing all blocks, any
+				 * block that remains in the ms_allocatable
 				 * represents an allocated block that we
 				 * did not claim during the traversal.
 				 * Claimed blocks would have been removed
-				 * from the ms_tree.
+				 * from the ms_allocatable.  For indirect
+				 * vdevs, space remaining in the tree
+				 * represents parts of the mapping that are
+				 * not referenced, which is not a bug.
 				 */
-				range_tree_vacate(msp->ms_tree, zdb_leak, vd);
+				if (vd->vdev_ops == &vdev_indirect_ops) {
+					range_tree_vacate(msp->ms_allocatable,
+					    NULL, NULL);
+				} else {
+					range_tree_vacate(msp->ms_allocatable,
+					    zdb_leak, vd);
+				}
 
 				if (msp->ms_loaded) {
 					msp->ms_loaded = B_FALSE;
 				}
-
-				mutex_exit(&msp->ms_lock);
 			}
 		}
+
+		umem_free(zcb->zcb_vd_obsolete_counts,
+		    rvd->vdev_children * sizeof (uint32_t *));
+		zcb->zcb_vd_obsolete_counts = NULL;
 	}
+	return (leaks);
 }
 
 /* ARGSUSED */
@@ -2915,12 +3541,13 @@ count_block_cb(void *arg, const blkptr_t *bp, dmu_tx_t *tx)
 static int
 dump_block_stats(spa_t *spa)
 {
-	zdb_cb_t zcb = { 0 };
+	zdb_cb_t zcb;
 	zdb_blkstats_t *zb, *tzb;
 	uint64_t norm_alloc, norm_space, total_alloc, total_found;
 	int flags = TRAVERSE_PRE | TRAVERSE_PREFETCH_METADATA | TRAVERSE_HARD;
 	boolean_t leaks = B_FALSE;
 
+	bzero(&zcb, sizeof (zcb));
 	(void) printf("\nTraversing all blocks %s%s%s%s%s...\n\n",
 	    (dump_opt['c'] || !dump_opt['L']) ? "to verify " : "",
 	    (dump_opt['c'] == 1) ? "metadata " : "",
@@ -2943,10 +3570,14 @@ dump_block_stats(spa_t *spa)
 	 */
 	(void) bpobj_iterate_nofree(&spa->spa_deferred_bpobj,
 	    count_block_cb, &zcb, NULL);
+
 	if (spa_version(spa) >= SPA_VERSION_DEADLISTS) {
 		(void) bpobj_iterate_nofree(&spa->spa_dsl_pool->dp_free_bpobj,
 		    count_block_cb, &zcb, NULL);
 	}
+
+	zdb_claim_removing(spa, &zcb);
+
 	if (spa_feature_is_active(spa, SPA_FEATURE_ASYNC_DESTROY)) {
 		VERIFY3U(0, ==, bptree_iterate(spa->spa_meta_objset,
 		    spa->spa_dsl_pool->dp_bptree_obj, B_FALSE, count_block_cb,
@@ -2988,7 +3619,7 @@ dump_block_stats(spa_t *spa)
 	/*
 	 * Report any leaked segments.
 	 */
-	zdb_leak_fini(spa);
+	leaks |= zdb_leak_fini(spa, &zcb);
 
 	tzb = &zcb.zcb_type[ZB_TOTAL][ZDB_OT_TOTAL];
 
@@ -2996,7 +3627,8 @@ dump_block_stats(spa_t *spa)
 	norm_space = metaslab_class_get_space(spa_normal_class(spa));
 
 	total_alloc = norm_alloc + metaslab_class_get_alloc(spa_log_class(spa));
-	total_found = tzb->zb_asize - zcb.zcb_dedup_asize;
+	total_found = tzb->zb_asize - zcb.zcb_dedup_asize +
+	    zcb.zcb_removing_size + zcb.zcb_checkpoint_size;
 
 	if (total_found == total_alloc) {
 		if (!dump_opt['L'])
@@ -3063,6 +3695,24 @@ dump_block_stats(spa_t *spa)
 		    (longlong_t)tzb->zb_ditto_samevdev);
 	}
 
+	for (uint64_t v = 0; v < spa->spa_root_vdev->vdev_children; v++) {
+		vdev_t *vd = spa->spa_root_vdev->vdev_child[v];
+		vdev_indirect_mapping_t *vim = vd->vdev_indirect_mapping;
+
+		if (vim == NULL) {
+			continue;
+		}
+
+		char mem[32];
+		zdb_nicenum(vdev_indirect_mapping_num_entries(vim),
+		    mem, vdev_indirect_mapping_size(vim));
+
+		(void) printf("\tindirect vdev id %llu has %llu segments "
+		    "(%s in memory)\n",
+		    (longlong_t)vd->vdev_id,
+		    (longlong_t)vdev_indirect_mapping_num_entries(vim), mem);
+	}
+
 	if (dump_opt['b'] >= 2) {
 		int l, t, level;
 		(void) printf("\nBlocks\tLSIZE\tPSIZE\tASIZE"
@@ -3071,7 +3721,7 @@ dump_block_stats(spa_t *spa)
 		for (t = 0; t <= ZDB_OT_TOTAL; t++) {
 			char csize[32], lsize[32], psize[32], asize[32];
 			char avg[32], gang[32];
-			char *typename;
+			const char *typename;
 
 			/* make sure nicenum has enough space */
 			CTASSERT(sizeof (csize) >= NN_NUMBUF_SZ);
@@ -3222,9 +3872,11 @@ dump_simulated_ddt(spa_t *spa)
 	avl_tree_t t;
 	void *cookie = NULL;
 	zdb_ddt_entry_t *zdde;
-	ddt_histogram_t ddh_total = { 0 };
-	ddt_stat_t dds_total = { 0 };
+	ddt_histogram_t ddh_total;
+	ddt_stat_t dds_total;
 
+	bzero(&ddh_total, sizeof (ddh_total));
+	bzero(&dds_total, sizeof (dds_total));
 	avl_create(&t, ddt_entry_compare,
 	    sizeof (zdb_ddt_entry_t), offsetof(zdb_ddt_entry_t, zdde_node));
 
@@ -3267,6 +3919,502 @@ dump_simulated_ddt(spa_t *spa)
 	dump_dedup_ratio(&dds_total);
 }
 
+static int
+verify_device_removal_feature_counts(spa_t *spa)
+{
+	uint64_t dr_feature_refcount = 0;
+	uint64_t oc_feature_refcount = 0;
+	uint64_t indirect_vdev_count = 0;
+	uint64_t precise_vdev_count = 0;
+	uint64_t obsolete_counts_object_count = 0;
+	uint64_t obsolete_sm_count = 0;
+	uint64_t obsolete_counts_count = 0;
+	uint64_t scip_count = 0;
+	uint64_t obsolete_bpobj_count = 0;
+	int ret = 0;
+
+	spa_condensing_indirect_phys_t *scip =
+	    &spa->spa_condensing_indirect_phys;
+	if (scip->scip_next_mapping_object != 0) {
+		vdev_t *vd = spa->spa_root_vdev->vdev_child[scip->scip_vdev];
+		ASSERT(scip->scip_prev_obsolete_sm_object != 0);
+		ASSERT3P(vd->vdev_ops, ==, &vdev_indirect_ops);
+
+		(void) printf("Condensing indirect vdev %llu: new mapping "
+		    "object %llu, prev obsolete sm %llu\n",
+		    (u_longlong_t)scip->scip_vdev,
+		    (u_longlong_t)scip->scip_next_mapping_object,
+		    (u_longlong_t)scip->scip_prev_obsolete_sm_object);
+		if (scip->scip_prev_obsolete_sm_object != 0) {
+			space_map_t *prev_obsolete_sm = NULL;
+			VERIFY0(space_map_open(&prev_obsolete_sm,
+			    spa->spa_meta_objset,
+			    scip->scip_prev_obsolete_sm_object,
+			    0, vd->vdev_asize, 0));
+			space_map_update(prev_obsolete_sm);
+			dump_spacemap(spa->spa_meta_objset, prev_obsolete_sm);
+			(void) printf("\n");
+			space_map_close(prev_obsolete_sm);
+		}
+
+		scip_count += 2;
+	}
+
+	for (uint64_t i = 0; i < spa->spa_root_vdev->vdev_children; i++) {
+		vdev_t *vd = spa->spa_root_vdev->vdev_child[i];
+		vdev_indirect_config_t *vic = &vd->vdev_indirect_config;
+
+		if (vic->vic_mapping_object != 0) {
+			ASSERT(vd->vdev_ops == &vdev_indirect_ops ||
+			    vd->vdev_removing);
+			indirect_vdev_count++;
+
+			if (vd->vdev_indirect_mapping->vim_havecounts) {
+				obsolete_counts_count++;
+			}
+		}
+		if (vdev_obsolete_counts_are_precise(vd)) {
+			ASSERT(vic->vic_mapping_object != 0);
+			precise_vdev_count++;
+		}
+		if (vdev_obsolete_sm_object(vd) != 0) {
+			ASSERT(vic->vic_mapping_object != 0);
+			obsolete_sm_count++;
+		}
+	}
+
+	(void) feature_get_refcount(spa,
+	    &spa_feature_table[SPA_FEATURE_DEVICE_REMOVAL],
+	    &dr_feature_refcount);
+	(void) feature_get_refcount(spa,
+	    &spa_feature_table[SPA_FEATURE_OBSOLETE_COUNTS],
+	    &oc_feature_refcount);
+
+	if (dr_feature_refcount != indirect_vdev_count) {
+		ret = 1;
+		(void) printf("Number of indirect vdevs (%llu) " \
+		    "does not match feature count (%llu)\n",
+		    (u_longlong_t)indirect_vdev_count,
+		    (u_longlong_t)dr_feature_refcount);
+	} else {
+		(void) printf("Verified device_removal feature refcount " \
+		    "of %llu is correct\n",
+		    (u_longlong_t)dr_feature_refcount);
+	}
+
+	if (zap_contains(spa_meta_objset(spa), DMU_POOL_DIRECTORY_OBJECT,
+	    DMU_POOL_OBSOLETE_BPOBJ) == 0) {
+		obsolete_bpobj_count++;
+	}
+
+
+	obsolete_counts_object_count = precise_vdev_count;
+	obsolete_counts_object_count += obsolete_sm_count;
+	obsolete_counts_object_count += obsolete_counts_count;
+	obsolete_counts_object_count += scip_count;
+	obsolete_counts_object_count += obsolete_bpobj_count;
+	obsolete_counts_object_count += remap_deadlist_count;
+
+	if (oc_feature_refcount != obsolete_counts_object_count) {
+		ret = 1;
+		(void) printf("Number of obsolete counts objects (%llu) " \
+		    "does not match feature count (%llu)\n",
+		    (u_longlong_t)obsolete_counts_object_count,
+		    (u_longlong_t)oc_feature_refcount);
+		(void) printf("pv:%llu os:%llu oc:%llu sc:%llu "
+		    "ob:%llu rd:%llu\n",
+		    (u_longlong_t)precise_vdev_count,
+		    (u_longlong_t)obsolete_sm_count,
+		    (u_longlong_t)obsolete_counts_count,
+		    (u_longlong_t)scip_count,
+		    (u_longlong_t)obsolete_bpobj_count,
+		    (u_longlong_t)remap_deadlist_count);
+	} else {
+		(void) printf("Verified indirect_refcount feature refcount " \
+		    "of %llu is correct\n",
+		    (u_longlong_t)oc_feature_refcount);
+	}
+	return (ret);
+}
+
+#define	BOGUS_SUFFIX "_CHECKPOINTED_UNIVERSE"
+/*
+ * Import the checkpointed state of the pool specified by the target
+ * parameter as readonly. The function also accepts a pool config
+ * as an optional parameter, else it attempts to infer the config by
+ * the name of the target pool.
+ *
+ * Note that the checkpointed state's pool name will be the name of
+ * the original pool with the above suffix appened to it. In addition,
+ * if the target is not a pool name (e.g. a path to a dataset) then
+ * the new_path parameter is populated with the updated path to
+ * reflect the fact that we are looking into the checkpointed state.
+ *
+ * The function returns a newly-allocated copy of the name of the
+ * pool containing the checkpointed state. When this copy is no
+ * longer needed it should be freed with free(3C). Same thing
+ * applies to the new_path parameter if allocated.
+ */
+static char *
+import_checkpointed_state(char *target, nvlist_t *cfg, char **new_path)
+{
+	int error = 0;
+	char *poolname, *bogus_name;
+
+	/* If the target is not a pool, the extract the pool name */
+	char *path_start = strchr(target, '/');
+	if (path_start != NULL) {
+		size_t poolname_len = path_start - target;
+		poolname = strndup(target, poolname_len);
+	} else {
+		poolname = target;
+	}
+
+	if (cfg == NULL) {
+		error = spa_get_stats(poolname, &cfg, NULL, 0);
+		if (error != 0) {
+			fatal("Tried to read config of pool \"%s\" but "
+			    "spa_get_stats() failed with error %d\n",
+			    poolname, error);
+		}
+	}
+
+	(void) asprintf(&bogus_name, "%s%s", poolname, BOGUS_SUFFIX);
+	fnvlist_add_string(cfg, ZPOOL_CONFIG_POOL_NAME, bogus_name);
+
+	error = spa_import(bogus_name, cfg, NULL,
+	    ZFS_IMPORT_MISSING_LOG | ZFS_IMPORT_CHECKPOINT);
+	if (error != 0) {
+		fatal("Tried to import pool \"%s\" but spa_import() failed "
+		    "with error %d\n", bogus_name, error);
+	}
+
+	if (new_path != NULL && path_start != NULL)
+		(void) asprintf(new_path, "%s%s", bogus_name, path_start);
+
+	if (target != poolname)
+		free(poolname);
+
+	return (bogus_name);
+}
+
+typedef struct verify_checkpoint_sm_entry_cb_arg {
+	vdev_t *vcsec_vd;
+
+	/* the following fields are only used for printing progress */
+	uint64_t vcsec_entryid;
+	uint64_t vcsec_num_entries;
+} verify_checkpoint_sm_entry_cb_arg_t;
+
+#define	ENTRIES_PER_PROGRESS_UPDATE 10000
+
+static int
+verify_checkpoint_sm_entry_cb(maptype_t type, uint64_t offset, uint64_t size,
+    void *arg)
+{
+	verify_checkpoint_sm_entry_cb_arg_t *vcsec = arg;
+	vdev_t *vd = vcsec->vcsec_vd;
+	metaslab_t *ms = vd->vdev_ms[offset >> vd->vdev_ms_shift];
+	uint64_t end = offset + size;
+
+	ASSERT(type == SM_FREE);
+
+	if ((vcsec->vcsec_entryid % ENTRIES_PER_PROGRESS_UPDATE) == 0) {
+		(void) fprintf(stderr,
+		    "\rverifying vdev %llu, space map entry %llu of %llu ...",
+		    (longlong_t)vd->vdev_id,
+		    (longlong_t)vcsec->vcsec_entryid,
+		    (longlong_t)vcsec->vcsec_num_entries);
+	}
+	vcsec->vcsec_entryid++;
+
+	/*
+	 * See comment in checkpoint_sm_exclude_entry_cb()
+	 */
+	VERIFY3U(offset, >=, ms->ms_start);
+	VERIFY3U(end, <=, ms->ms_start + ms->ms_size);
+
+	/*
+	 * The entries in the vdev_checkpoint_sm should be marked as
+	 * allocated in the checkpointed state of the pool, therefore
+	 * their respective ms_allocateable trees should not contain them.
+	 */
+	mutex_enter(&ms->ms_lock);
+	range_tree_verify(ms->ms_allocatable, offset, size);
+	mutex_exit(&ms->ms_lock);
+
+	return (0);
+}
+
+/*
+ * Verify that all segments in the vdev_checkpoint_sm are allocated
+ * according to the checkpoint's ms_sm (i.e. are not in the checkpoint's
+ * ms_allocatable).
+ *
+ * Do so by comparing the checkpoint space maps (vdev_checkpoint_sm) of
+ * each vdev in the current state of the pool to the metaslab space maps
+ * (ms_sm) of the checkpointed state of the pool.
+ *
+ * Note that the function changes the state of the ms_allocatable
+ * trees of the current spa_t. The entries of these ms_allocatable
+ * trees are cleared out and then repopulated from with the free
+ * entries of their respective ms_sm space maps.
+ */
+static void
+verify_checkpoint_vdev_spacemaps(spa_t *checkpoint, spa_t *current)
+{
+	vdev_t *ckpoint_rvd = checkpoint->spa_root_vdev;
+	vdev_t *current_rvd = current->spa_root_vdev;
+
+	load_concrete_ms_allocatable_trees(checkpoint, SM_FREE);
+
+	for (uint64_t c = 0; c < ckpoint_rvd->vdev_children; c++) {
+		vdev_t *ckpoint_vd = ckpoint_rvd->vdev_child[c];
+		vdev_t *current_vd = current_rvd->vdev_child[c];
+
+		space_map_t *checkpoint_sm = NULL;
+		uint64_t checkpoint_sm_obj;
+
+		if (ckpoint_vd->vdev_ops == &vdev_indirect_ops) {
+			/*
+			 * Since we don't allow device removal in a pool
+			 * that has a checkpoint, we expect that all removed
+			 * vdevs were removed from the pool before the
+			 * checkpoint.
+			 */
+			ASSERT3P(current_vd->vdev_ops, ==, &vdev_indirect_ops);
+			continue;
+		}
+
+		/*
+		 * If the checkpoint space map doesn't exist, then nothing
+		 * here is checkpointed so there's nothing to verify.
+		 */
+		if (current_vd->vdev_top_zap == 0 ||
+		    zap_contains(spa_meta_objset(current),
+		    current_vd->vdev_top_zap,
+		    VDEV_TOP_ZAP_POOL_CHECKPOINT_SM) != 0)
+			continue;
+
+		VERIFY0(zap_lookup(spa_meta_objset(current),
+		    current_vd->vdev_top_zap, VDEV_TOP_ZAP_POOL_CHECKPOINT_SM,
+		    sizeof (uint64_t), 1, &checkpoint_sm_obj));
+
+		VERIFY0(space_map_open(&checkpoint_sm, spa_meta_objset(current),
+		    checkpoint_sm_obj, 0, current_vd->vdev_asize,
+		    current_vd->vdev_ashift));
+		space_map_update(checkpoint_sm);
+
+		verify_checkpoint_sm_entry_cb_arg_t vcsec;
+		vcsec.vcsec_vd = ckpoint_vd;
+		vcsec.vcsec_entryid = 0;
+		vcsec.vcsec_num_entries =
+		    space_map_length(checkpoint_sm) / sizeof (uint64_t);
+		VERIFY0(space_map_iterate(checkpoint_sm,
+		    verify_checkpoint_sm_entry_cb, &vcsec));
+		dump_spacemap(current->spa_meta_objset, checkpoint_sm);
+		space_map_close(checkpoint_sm);
+	}
+
+	/*
+	 * If we've added vdevs since we took the checkpoint, ensure
+	 * that their checkpoint space maps are empty.
+	 */
+	if (ckpoint_rvd->vdev_children < current_rvd->vdev_children) {
+		for (uint64_t c = ckpoint_rvd->vdev_children;
+		    c < current_rvd->vdev_children; c++) {
+			vdev_t *current_vd = current_rvd->vdev_child[c];
+			ASSERT3P(current_vd->vdev_checkpoint_sm, ==, NULL);
+		}
+	}
+
+	/* for cleaner progress output */
+	(void) fprintf(stderr, "\n");
+}
+
+/*
+ * Verifies that all space that's allocated in the checkpoint is
+ * still allocated in the current version, by checking that everything
+ * in checkpoint's ms_allocatable (which is actually allocated, not
+ * allocatable/free) is not present in current's ms_allocatable.
+ *
+ * Note that the function changes the state of the ms_allocatable
+ * trees of both spas when called. The entries of all ms_allocatable
+ * trees are cleared out and then repopulated from their respective
+ * ms_sm space maps. In the checkpointed state we load the allocated
+ * entries, and in the current state we load the free entries.
+ */
+static void
+verify_checkpoint_ms_spacemaps(spa_t *checkpoint, spa_t *current)
+{
+	vdev_t *ckpoint_rvd = checkpoint->spa_root_vdev;
+	vdev_t *current_rvd = current->spa_root_vdev;
+
+	load_concrete_ms_allocatable_trees(checkpoint, SM_ALLOC);
+	load_concrete_ms_allocatable_trees(current, SM_FREE);
+
+	for (uint64_t i = 0; i < ckpoint_rvd->vdev_children; i++) {
+		vdev_t *ckpoint_vd = ckpoint_rvd->vdev_child[i];
+		vdev_t *current_vd = current_rvd->vdev_child[i];
+
+		if (ckpoint_vd->vdev_ops == &vdev_indirect_ops) {
+			/*
+			 * See comment in verify_checkpoint_vdev_spacemaps()
+			 */
+			ASSERT3P(current_vd->vdev_ops, ==, &vdev_indirect_ops);
+			continue;
+		}
+
+		for (uint64_t m = 0; m < ckpoint_vd->vdev_ms_count; m++) {
+			metaslab_t *ckpoint_msp = ckpoint_vd->vdev_ms[m];
+			metaslab_t *current_msp = current_vd->vdev_ms[m];
+
+			(void) fprintf(stderr,
+			    "\rverifying vdev %llu of %llu, "
+			    "metaslab %llu of %llu ...",
+			    (longlong_t)current_vd->vdev_id,
+			    (longlong_t)current_rvd->vdev_children,
+			    (longlong_t)current_vd->vdev_ms[m]->ms_id,
+			    (longlong_t)current_vd->vdev_ms_count);
+
+			/*
+			 * We walk through the ms_allocatable trees that
+			 * are loaded with the allocated blocks from the
+			 * ms_sm spacemaps of the checkpoint. For each
+			 * one of these ranges we ensure that none of them
+			 * exists in the ms_allocatable trees of the
+			 * current state which are loaded with the ranges
+			 * that are currently free.
+			 *
+			 * This way we ensure that none of the blocks that
+			 * are part of the checkpoint were freed by mistake.
+			 */
+			range_tree_walk(ckpoint_msp->ms_allocatable,
+			    (range_tree_func_t *)range_tree_verify,
+			    current_msp->ms_allocatable);
+		}
+	}
+
+	/* for cleaner progress output */
+	(void) fprintf(stderr, "\n");
+}
+
+static void
+verify_checkpoint_blocks(spa_t *spa)
+{
+	spa_t *checkpoint_spa;
+	char *checkpoint_pool;
+	nvlist_t *config = NULL;
+	int error = 0;
+
+	/*
+	 * We import the checkpointed state of the pool (under a different
+	 * name) so we can do verification on it against the current state
+	 * of the pool.
+	 */
+	checkpoint_pool = import_checkpointed_state(spa->spa_name, config,
+	    NULL);
+	ASSERT(strcmp(spa->spa_name, checkpoint_pool) != 0);
+
+	error = spa_open(checkpoint_pool, &checkpoint_spa, FTAG);
+	if (error != 0) {
+		fatal("Tried to open pool \"%s\" but spa_open() failed with "
+		    "error %d\n", checkpoint_pool, error);
+	}
+
+	/*
+	 * Ensure that ranges in the checkpoint space maps of each vdev
+	 * are allocated according to the checkpointed state's metaslab
+	 * space maps.
+	 */
+	verify_checkpoint_vdev_spacemaps(checkpoint_spa, spa);
+
+	/*
+	 * Ensure that allocated ranges in the checkpoint's metaslab
+	 * space maps remain allocated in the metaslab space maps of
+	 * the current state.
+	 */
+	verify_checkpoint_ms_spacemaps(checkpoint_spa, spa);
+
+	/*
+	 * Once we are done, we get rid of the checkpointed state.
+	 */
+	spa_close(checkpoint_spa, FTAG);
+	free(checkpoint_pool);
+}
+
+static void
+dump_leftover_checkpoint_blocks(spa_t *spa)
+{
+	vdev_t *rvd = spa->spa_root_vdev;
+
+	for (uint64_t i = 0; i < rvd->vdev_children; i++) {
+		vdev_t *vd = rvd->vdev_child[i];
+
+		space_map_t *checkpoint_sm = NULL;
+		uint64_t checkpoint_sm_obj;
+
+		if (vd->vdev_top_zap == 0)
+			continue;
+
+		if (zap_contains(spa_meta_objset(spa), vd->vdev_top_zap,
+		    VDEV_TOP_ZAP_POOL_CHECKPOINT_SM) != 0)
+			continue;
+
+		VERIFY0(zap_lookup(spa_meta_objset(spa), vd->vdev_top_zap,
+		    VDEV_TOP_ZAP_POOL_CHECKPOINT_SM,
+		    sizeof (uint64_t), 1, &checkpoint_sm_obj));
+
+		VERIFY0(space_map_open(&checkpoint_sm, spa_meta_objset(spa),
+		    checkpoint_sm_obj, 0, vd->vdev_asize, vd->vdev_ashift));
+		space_map_update(checkpoint_sm);
+		dump_spacemap(spa->spa_meta_objset, checkpoint_sm);
+		space_map_close(checkpoint_sm);
+	}
+}
+
+static int
+verify_checkpoint(spa_t *spa)
+{
+	uberblock_t checkpoint;
+	int error;
+
+	if (!spa_feature_is_active(spa, SPA_FEATURE_POOL_CHECKPOINT))
+		return (0);
+
+	error = zap_lookup(spa->spa_meta_objset, DMU_POOL_DIRECTORY_OBJECT,
+	    DMU_POOL_ZPOOL_CHECKPOINT, sizeof (uint64_t),
+	    sizeof (uberblock_t) / sizeof (uint64_t), &checkpoint);
+
+	if (error == ENOENT) {
+		/*
+		 * If the feature is active but the uberblock is missing
+		 * then we must be in the middle of discarding the
+		 * checkpoint.
+		 */
+		(void) printf("\nPartially discarded checkpoint "
+		    "state found:\n");
+		dump_leftover_checkpoint_blocks(spa);
+		return (0);
+	} else if (error != 0) {
+		(void) printf("lookup error %d when looking for "
+		    "checkpointed uberblock in MOS\n", error);
+		return (error);
+	}
+	dump_uberblock(&checkpoint, "\nCheckpointed uberblock found:\n", "\n");
+
+	if (checkpoint.ub_checkpoint_txg == 0) {
+		(void) printf("\nub_checkpoint_txg not set in checkpointed "
+		    "uberblock\n");
+		error = 3;
+	}
+
+	if (error == 0)
+		verify_checkpoint_blocks(spa);
+
+	return (error);
+}
+
 static void
 dump_zpool(spa_t *spa)
 {
@@ -3300,18 +4448,24 @@ dump_zpool(spa_t *spa)
 	if (dump_opt['d'] || dump_opt['i']) {
 		dump_dir(dp->dp_meta_objset);
 		if (dump_opt['d'] >= 3) {
+			dsl_pool_t *dp = spa->spa_dsl_pool;
 			dump_full_bpobj(&spa->spa_deferred_bpobj,
 			    "Deferred frees", 0);
 			if (spa_version(spa) >= SPA_VERSION_DEADLISTS) {
-				dump_full_bpobj(
-				    &spa->spa_dsl_pool->dp_free_bpobj,
+				dump_full_bpobj(&dp->dp_free_bpobj,
 				    "Pool snapshot frees", 0);
+			}
+			if (bpobj_is_open(&dp->dp_obsolete_bpobj)) {
+				ASSERT(spa_feature_is_enabled(spa,
+				    SPA_FEATURE_DEVICE_REMOVAL));
+				dump_full_bpobj(&dp->dp_obsolete_bpobj,
+				    "Pool obsolete blocks", 0);
 			}
 
 			if (spa_feature_is_active(spa,
 			    SPA_FEATURE_ASYNC_DESTROY)) {
 				dump_bptree(spa->spa_meta_objset,
-				    spa->spa_dsl_pool->dp_bptree_obj,
+				    dp->dp_bptree_obj,
 				    "Pool dataset frees");
 			}
 			dump_dtl(spa->spa_root_vdev, 0);
@@ -3343,6 +4497,10 @@ dump_zpool(spa_t *spa)
 				    (longlong_t)refcount);
 			}
 		}
+
+		if (rc == 0) {
+			rc = verify_device_removal_feature_counts(spa);
+		}
 	}
 	if (rc == 0 && (dump_opt['b'] || dump_opt['c']))
 		rc = dump_block_stats(spa);
@@ -3355,6 +4513,9 @@ dump_zpool(spa_t *spa)
 
 	if (dump_opt['h'])
 		dump_history(spa);
+
+	if (rc == 0 && !dump_opt['L'])
+		rc = verify_checkpoint(spa);
 
 	if (rc != 0) {
 		dump_debug_buffer();
@@ -3371,7 +4532,7 @@ dump_zpool(spa_t *spa)
 #define	ZDB_FLAG_RAW		0x0040
 #define	ZDB_FLAG_PRINT_BLKPTR	0x0080
 
-int flagbits[256];
+static int flagbits[256];
 
 static void
 zdb_print_blkptr(blkptr_t *bp, int flags)
@@ -3412,10 +4573,11 @@ static void
 zdb_dump_block(char *label, void *buf, uint64_t size, int flags)
 {
 	uint64_t *d = (uint64_t *)buf;
-	int nwords = size / sizeof (uint64_t);
+	unsigned nwords = size / sizeof (uint64_t);
 	int do_bswap = !!(flags & ZDB_FLAG_BSWAP);
-	int i, j;
-	char *hdr, *c;
+	unsigned i, j;
+	const char *hdr;
+	char *c;
 
 
 	if (do_bswap)
@@ -3448,19 +4610,19 @@ zdb_dump_block(char *label, void *buf, uint64_t size, int flags)
  * RAID-Zs, you can specify either RAID-Z vdev with 0.0 or 0.1 .
  */
 static vdev_t *
-zdb_vdev_lookup(vdev_t *vdev, char *path)
+zdb_vdev_lookup(vdev_t *vdev, const char *path)
 {
 	char *s, *p, *q;
-	int i;
+	unsigned i;
 
 	if (vdev == NULL)
 		return (NULL);
 
 	/* First, assume the x.x.x.x format */
-	i = (int)strtoul(path, &s, 10);
+	i = strtoul(path, &s, 10);
 	if (s == path || (s && *s != '.' && *s != '\0'))
 		goto name;
-	if (i < 0 || i >= vdev->vdev_children)
+	if (i >= vdev->vdev_children)
 		return (NULL);
 
 	vdev = vdev->vdev_child[i];
@@ -3535,7 +4697,8 @@ zdb_read_block(char *thing, spa_t *spa)
 	vdev_t *vd;
 	abd_t *pabd;
 	void *lbuf, *buf;
-	char *s, *p, *dup, *vdev, *flagstr;
+	const char *s, *vdev;
+	char *p, *dup, *flagstr;
 	int i, error;
 
 	dup = strdup(thing);
@@ -3546,7 +4709,10 @@ zdb_read_block(char *thing, spa_t *spa)
 	s = strtok(NULL, ":");
 	size = strtoull(s ? s : "", NULL, 16);
 	s = strtok(NULL, ":");
-	flagstr = s ? s : "";
+	if (s)
+		flagstr = strdup(s);
+	else
+		flagstr = strdup("");
 
 	s = NULL;
 	if (size == 0)
@@ -3557,6 +4723,7 @@ zdb_read_block(char *thing, spa_t *spa)
 		s = "offset must be a multiple of sector size";
 	if (s) {
 		(void) printf("Invalid block specifier: %s  - %s\n", thing, s);
+		free(flagstr);
 		free(dup);
 		return;
 	}
@@ -3582,12 +4749,14 @@ zdb_read_block(char *thing, spa_t *spa)
 				blkptr_offset = strtoull(p, &p, 16);
 			if (*p != ':' && *p != '\0') {
 				(void) printf("***Invalid flag arg: '%s'\n", s);
+				free(flagstr);
 				free(dup);
 				return;
 			}
 			i += p - &flagstr[i + 1]; /* skip over the number */
 		}
 	}
+	free(flagstr);
 
 	vd = zdb_vdev_lookup(spa->spa_root_vdev, vdev);
 	if (vd == NULL) {
@@ -3645,7 +4814,8 @@ zdb_read_block(char *thing, spa_t *spa)
 		    psize, ZIO_TYPE_READ, ZIO_PRIORITY_SYNC_READ,
 		    ZIO_FLAG_DONT_CACHE | ZIO_FLAG_DONT_QUEUE |
 		    ZIO_FLAG_DONT_PROPAGATE | ZIO_FLAG_DONT_RETRY |
-		    ZIO_FLAG_CANFAIL | ZIO_FLAG_RAW, NULL, NULL));
+		    ZIO_FLAG_CANFAIL | ZIO_FLAG_RAW | ZIO_FLAG_OPTIONAL,
+		    NULL, NULL));
 	}
 
 	error = zio_wait(zio);
@@ -3724,11 +4894,12 @@ out:
 static void
 zdb_embedded_block(char *thing)
 {
-	blkptr_t bp = { 0 };
+	blkptr_t bp;
 	unsigned long long *words = (void *)&bp;
 	char *buf;
 	int err;
 
+	bzero(&bp, sizeof (bp));
 	err = sscanf(thing, "%llx:%llx:%llx:%llx:%llx:%llx:%llx:%llx:"
 	    "%llx:%llx:%llx:%llx:%llx:%llx:%llx:%llx",
 	    words + 0, words + 1, words + 2, words + 3,
@@ -3781,8 +4952,9 @@ find_zpool(char **target, nvlist_t **configp, int dirc, char **dirv)
 	char *sepp = NULL;
 	char sep = '\0';
 	int count = 0;
-	importargs_t args = { 0 };
+	importargs_t args;
 
+	bzero(&args, sizeof (args));
 	args.paths = dirc;
 	args.path = dirv;
 	args.can_be_active = B_TRUE;
@@ -3842,7 +5014,7 @@ find_zpool(char **target, nvlist_t **configp, int dirc, char **dirv)
 int
 main(int argc, char **argv)
 {
-	int i, c;
+	int c;
 	struct rlimit rl = { 1024, 1024 };
 	spa_t *spa = NULL;
 	objset_t *os = NULL;
@@ -3858,6 +5030,7 @@ main(int argc, char **argv)
 	int rewind = ZPOOL_NEVER_REWIND;
 	char *spa_config_path_env;
 	boolean_t target_is_spa = B_TRUE;
+	nvlist_t *cfg = NULL;
 
 	(void) setrlimit(RLIMIT_NOFILE, &rl);
 	(void) enable_extended_FILE_stdio(-1, -1);
@@ -3874,7 +5047,7 @@ main(int argc, char **argv)
 		spa_config_path = spa_config_path_env;
 
 	while ((c = getopt(argc, argv,
-	    "AbcCdDeEFGhiI:lLmMo:Op:PqRsSt:uU:vVx:X")) != -1) {
+	    "AbcCdDeEFGhiI:klLmMo:Op:PqRsSt:uU:vVx:X")) != -1) {
 		switch (c) {
 		case 'b':
 		case 'c':
@@ -3899,6 +5072,7 @@ main(int argc, char **argv)
 		case 'A':
 		case 'e':
 		case 'F':
+		case 'k':
 		case 'L':
 		case 'P':
 		case 'q':
@@ -3990,6 +5164,12 @@ main(int argc, char **argv)
 	 */
 	reference_tracking_enable = B_FALSE;
 
+	/*
+	 * Do not fail spa_load when spa_load_verify fails. This is needed
+	 * to load non-idle pools.
+	 */
+	spa_load_verify_dryrun = B_TRUE;
+
 	kernel_init(FREAD);
 	g_zfs = libzfs_init();
 	if (g_zfs == NULL)
@@ -3999,7 +5179,7 @@ main(int argc, char **argv)
 		verbose = MAX(verbose, 1);
 
 	for (c = 0; c < 256; c++) {
-		if (dump_all && strchr("AeEFlLOPRSX", c) == NULL)
+		if (dump_all && strchr("AeEFklLOPRSX", c) == NULL)
 			dump_opt[c] = 1;
 		if (dump_opt[c])
 			dump_opt[c] += verbose;
@@ -4044,15 +5224,14 @@ main(int argc, char **argv)
 		    (dump_opt['X'] ? ZPOOL_EXTREME_REWIND : 0);
 
 	if (nvlist_alloc(&policy, NV_UNIQUE_NAME_TYPE, 0) != 0 ||
-	    nvlist_add_uint64(policy, ZPOOL_REWIND_REQUEST_TXG, max_txg) != 0 ||
-	    nvlist_add_uint32(policy, ZPOOL_REWIND_REQUEST, rewind) != 0)
+	    nvlist_add_uint64(policy, ZPOOL_LOAD_REQUEST_TXG, max_txg) != 0 ||
+	    nvlist_add_uint32(policy, ZPOOL_LOAD_REWIND_POLICY, rewind) != 0)
 		fatal("internal error: %s", strerror(ENOMEM));
 
 	error = 0;
 	target = argv[0];
 
 	if (dump_opt['e']) {
-		nvlist_t *cfg = NULL;
 		char *name = find_zpool(&target, &cfg, nsearch, searchdirs);
 
 		error = ENOENT;
@@ -4061,13 +5240,25 @@ main(int argc, char **argv)
 				(void) printf("\nConfiguration for import:\n");
 				dump_nvlist(cfg, 8);
 			}
+
 			if (nvlist_add_nvlist(cfg,
-			    ZPOOL_REWIND_POLICY, policy) != 0) {
+			    ZPOOL_LOAD_POLICY, policy) != 0) {
 				fatal("can't open '%s': %s",
 				    target, strerror(ENOMEM));
 			}
 			error = spa_import(name, cfg, NULL, flags);
 		}
+	}
+
+	char *checkpoint_pool = NULL;
+	char *checkpoint_target = NULL;
+	if (dump_opt['k']) {
+		checkpoint_pool = import_checkpointed_state(target, cfg,
+		    &checkpoint_target);
+
+		if (checkpoint_target != NULL)
+			target = checkpoint_target;
+
 	}
 
 	if (strpbrk(target, "/@") != NULL) {
@@ -4086,7 +5277,18 @@ main(int argc, char **argv)
 	}
 
 	if (error == 0) {
-		if (target_is_spa || dump_opt['R']) {
+		if (dump_opt['k'] && (target_is_spa || dump_opt['R'])) {
+			ASSERT(checkpoint_pool != NULL);
+			ASSERT(checkpoint_target == NULL);
+
+			error = spa_open(checkpoint_pool, &spa, FTAG);
+			if (error != 0) {
+				fatal("Tried to open pool \"%s\" but "
+				    "spa_open() failed with error %d\n",
+				    checkpoint_pool, error);
+			}
+
+		} else if (target_is_spa || dump_opt['R']) {
 			error = spa_open_rewind(target, &spa, FTAG, policy,
 			    NULL);
 			if (error) {
@@ -4123,7 +5325,7 @@ main(int argc, char **argv)
 		if (argc > 0) {
 			zopt_objects = argc;
 			zopt_object = calloc(zopt_objects, sizeof (uint64_t));
-			for (i = 0; i < zopt_objects; i++) {
+			for (unsigned i = 0; i < zopt_objects; i++) {
 				errno = 0;
 				zopt_object[i] = strtoull(argv[i], NULL, 0);
 				if (zopt_object[i] == 0 && errno != 0)
@@ -4148,8 +5350,14 @@ main(int argc, char **argv)
 		flagbits['p'] = ZDB_FLAG_PHYS;
 		flagbits['r'] = ZDB_FLAG_RAW;
 
-		for (i = 0; i < argc; i++)
+		for (int i = 0; i < argc; i++)
 			zdb_read_block(argv[i], spa);
+	}
+
+	if (dump_opt['k']) {
+		free(checkpoint_pool);
+		if (!target_is_spa)
+			free(checkpoint_target);
 	}
 
 	if (os != NULL)

@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2009 Stanislav Sedov <stas@FreeBSD.org>
  * Copyright (c) 2017 Dell EMC
  * All rights reserved.
@@ -70,6 +68,7 @@
 #define	PS_FST_TYPE_SEM		10
 #define	PS_FST_TYPE_UNKNOWN	11
 #define	PS_FST_TYPE_NONE	12
+#define	PS_FST_TYPE_PROCDESC	13
 
 /*
  * Special descriptor numbers.

@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2006 M. Warner Losh.
  * Copyright (c) 2011-2012 Ian Lepore.
  * All rights reserved.
@@ -303,6 +301,8 @@ at91_spi_transfer(device_t dev, device_t child, struct spi_command *cmd)
 
 	/* get the proper chip select */
 	spibus_get_cs(child, &cs);
+
+	cs &= ~SPIBUS_CS_HIGH;
 
 	sc = device_get_softc(dev);
 	i = 0;

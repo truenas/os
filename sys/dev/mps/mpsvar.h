@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 2009 Yahoo! Inc.
  * Copyright (c) 2011-2015 LSI Corp.
  * Copyright (c) 2013-2015 Avago Technologies
@@ -724,7 +722,7 @@ int mps_config_get_volume_wwid(struct mps_softc *sc, u16 volume_handle,
 int mps_config_get_raid_pd_pg0(struct mps_softc *sc,
     Mpi2ConfigReply_t *mpi_reply, Mpi2RaidPhysDiskPage0_t *config_page,
     u32 page_address);
-void mpssas_ir_shutdown(struct mps_softc *sc);
+void mpssas_ir_shutdown(struct mps_softc *sc, int howto);
 
 int mps_reinit(struct mps_softc *sc);
 void mpssas_handle_reinit(struct mps_softc *sc);

@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-4-Clause
- *
  * Copyright (c) 1995 Terrence R. Lambert
  * All rights reserved.
  *
@@ -137,6 +135,11 @@ SYSINIT(placeholder, SI_SUB_DUMMY, SI_ORDER_ANY, NULL, NULL);
 SET_DECLARE(sysinit_set, struct sysinit);
 struct sysinit **sysinit, **sysinit_end;
 struct sysinit **newsysinit, **newsysinit_end;
+
+EVENTHANDLER_LIST_DECLARE(process_init);
+EVENTHANDLER_LIST_DECLARE(thread_init);
+EVENTHANDLER_LIST_DECLARE(process_ctor);
+EVENTHANDLER_LIST_DECLARE(thread_ctor);
 
 /*
  * Merge a new sysinit set into the current set, reallocating it if
@@ -587,10 +590,10 @@ proc0_init(void *dummy __unused)
 	 * Call the init and ctor for the new thread and proc.  We wait
 	 * to do this until all other structures are fairly sane.
 	 */
-	EVENTHANDLER_INVOKE(process_init, p);
-	EVENTHANDLER_INVOKE(thread_init, td);
-	EVENTHANDLER_INVOKE(process_ctor, p);
-	EVENTHANDLER_INVOKE(thread_ctor, td);
+	EVENTHANDLER_DIRECT_INVOKE(process_init, p);
+	EVENTHANDLER_DIRECT_INVOKE(thread_init, td);
+	EVENTHANDLER_DIRECT_INVOKE(process_ctor, p);
+	EVENTHANDLER_DIRECT_INVOKE(thread_ctor, td);
 
 	/*
 	 * Charge root for one process.

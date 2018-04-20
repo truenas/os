@@ -63,12 +63,14 @@ LUA_OBJS +=			\
 
 ZFS_COMMON_OBJS +=		\
 	abd.o			\
+	aggsum.o		\
 	arc.o			\
 	bplist.o		\
 	blkptr.o		\
 	bpobj.o			\
 	bptree.o		\
 	bqueue.o		\
+	cityhash.o		\
 	dbuf.o			\
 	ddt.o			\
 	ddt_zap.o		\
@@ -106,6 +108,7 @@ ZFS_COMMON_OBJS +=		\
 	sha256.o		\
 	skein_zfs.o		\
 	spa.o			\
+	spa_checkpoint.o	\
 	spa_config.o		\
 	spa_errlog.o		\
 	spa_history.o		\
@@ -118,11 +121,15 @@ ZFS_COMMON_OBJS +=		\
 	vdev.o			\
 	vdev_cache.o		\
 	vdev_file.o		\
+	vdev_indirect.o		\
+	vdev_indirect_births.o	\
+	vdev_indirect_mapping.o	\
 	vdev_label.o		\
 	vdev_mirror.o		\
 	vdev_missing.o		\
 	vdev_queue.o		\
 	vdev_raidz.o		\
+	vdev_removal.o		\
 	vdev_root.o		\
 	zap.o			\
 	zap_leaf.o		\
@@ -144,7 +151,8 @@ ZFS_COMMON_OBJS +=		\
 	zio_compress.o		\
 	zio_inject.o		\
 	zle.o			\
-	zrlock.o
+	zrlock.o		\
+	zthr.o
 
 ZFS_SHARED_OBJS +=		\
 	zfeature_common.o	\

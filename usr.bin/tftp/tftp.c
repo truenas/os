@@ -1,6 +1,4 @@
-/*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
+/*
  * Copyright (c) 1983, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -265,7 +263,6 @@ recvfile(int peer, char *port, int fd, char *name, char *mode)
 		tftp_receive(peer, &block, &tftp_stats, rp, n);
 	}
 
-	write_close();
 	if (tftp_stats.amount > 0)
 		printstats("Received", verbose, &tftp_stats);
 	return;

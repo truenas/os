@@ -2,9 +2,7 @@
 
 /* Lexical scanner for dhcpd config file... */
 
-/*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
+/*
  * Copyright (c) 1995, 1996, 1997 The Internet Software Consortium.
  * All rights reserved.
  *
@@ -55,7 +53,7 @@ int lexchar;
 char *token_line;
 char *prev_line;
 char *cur_line;
-char *tlname;
+const char *tlname;
 int eol_token;
 
 static char line1[81];
@@ -78,7 +76,7 @@ static int read_num_or_name(int, FILE *);
 static int intern(char *, int);
 
 void
-new_parse(char *name)
+new_parse(const char *name)
 {
 	tlname = name;
 	lpos = line = 1;
@@ -264,7 +262,7 @@ read_string(FILE *cfile)
 static int
 read_number(int c, FILE *cfile)
 {
-	int	seenx = 0, token = NUMBER;
+	int	seenx = 0, _token = NUMBER;
 	unsigned i = 0;
 
 	tokbuf[i++] = c;
@@ -286,7 +284,7 @@ read_number(int c, FILE *cfile)
 	tokbuf[i] = 0;
 	tval = tokbuf;
 
-	return (token);
+	return (_token);
 }
 
 static int

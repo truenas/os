@@ -1,6 +1,4 @@
-/*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
+/*
  * Copyright (c) 2005, David Xu <davidxu@freebsd.org>
  * All rights reserved.
  *
@@ -132,8 +130,10 @@ _pthread_setcanceltype(int type, int *oldtype)
 void
 _pthread_testcancel(void)
 {
-	struct pthread *curthread = _get_curthread();
+	struct pthread *curthread;
 
+	_thr_check_init();
+	curthread = _get_curthread();
 	testcancel(curthread);
 }
 

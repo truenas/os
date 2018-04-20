@@ -2,8 +2,6 @@
 /*	$FreeBSD$ */
 
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 2009, Sun Microsystems, Inc.
  * All rights reserved.
  *
@@ -552,6 +550,8 @@ init_transport(struct netconfig *nconf)
 		pml->pml_map.pm_port = PMAPPORT;
 		if (strcmp(nconf->nc_proto, NC_TCP) == 0) {
 			if (tcptrans[0]) {
+				free(pml);
+				pml = NULL;
 				syslog(LOG_ERR,
 				"cannot have more than one TCP transport");
 				goto error;

@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
  * Copyright (c) 1997,1998 Maxim Bolotin and Oleg Sharoiko.
  * All rights reserved.
  *
@@ -1040,7 +1038,7 @@ cs_setmode(struct cs_softc *sc)
 }
 
 static int
-cs_ioctl(register struct ifnet *ifp, u_long command, caddr_t data)
+cs_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
 	struct cs_softc *sc=ifp->if_softc;
 	struct ifreq *ifr = (struct ifreq *)data;

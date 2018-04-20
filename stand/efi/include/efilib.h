@@ -59,10 +59,13 @@ typedef struct pdinfo
 	uint32_t		pd_unit;	/* unit number */
 	uint32_t		pd_open;	/* reference counter */
 	void			*pd_bcache;	/* buffer cache data */
+	struct pdinfo		*pd_parent;	/* Linked items (eg partitions) */
+	struct devsw		*pd_devsw;	/* Back pointer to devsw */
 } pdinfo_t;
 
 pdinfo_list_t *efiblk_get_pdinfo_list(struct devsw *dev);
 pdinfo_t *efiblk_get_pdinfo(struct devdesc *dev);
+pdinfo_t *efiblk_get_pdinfo_by_handle(EFI_HANDLE h);
 
 void *efi_get_table(EFI_GUID *tbl);
 
@@ -105,5 +108,19 @@ void efi_init_environment(void);
 int wcscmp(CHAR16 *, CHAR16 *);
 void cpy8to16(const char *, CHAR16 *, size_t);
 void cpy16to8(const CHAR16 *, char *, size_t);
+
+/*
+ * Routines for interacting with EFI's env vars in a more unix-like
+ * way than the standard APIs. In addition, convenience routines for
+ * the loader setting / getting FreeBSD specific variables.
+ */
+
+EFI_STATUS efi_freebsd_getenv(const char *v, void *data, __size_t *len);
+EFI_STATUS efi_getenv(EFI_GUID *g, const char *v, void *data, __size_t *len);
+EFI_STATUS efi_global_getenv(const char *v, void *data, __size_t *len);
+EFI_STATUS efi_setenv_freebsd_wcs(const char *varname, CHAR16 *valstr);
+
+/* efipart.c */
+int	efipart_inithandles(void);
 
 #endif	/* _LOADER_EFILIB_H */

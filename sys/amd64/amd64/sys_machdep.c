@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 2003 Peter Wemm.
  * Copyright (c) 1990 The Regents of the University of California.
  * All rights reserved.
@@ -168,9 +166,7 @@ update_gdt_fsbase(struct thread *td, uint32_t base)
 }
 
 int
-sysarch(td, uap)
-	struct thread *td;
-	register struct sysarch_args *uap;
+sysarch(struct thread *td, struct sysarch_args *uap)
 {
 	int error = 0;
 	struct pcb *pcb = curthread->td_pcb;

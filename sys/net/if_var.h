@@ -1,6 +1,4 @@
 /*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
  * Copyright (c) 1982, 1986, 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -659,6 +657,9 @@ int drbr_enqueue_drv(if_t ifp, struct buf_ring *br, struct mbuf *m);
 /* TSO */
 void if_hw_tsomax_common(if_t ifp, struct ifnet_hw_tsomax *);
 int if_hw_tsomax_update(if_t ifp, struct ifnet_hw_tsomax *);
+
+/* accessors for struct ifreq */
+void *ifr_data_get_ptr(void *ifrp);
 
 #ifdef DEVICE_POLLING
 enum poll_cmd { POLL_ONLY, POLL_AND_CHECK_STATUS };

@@ -31,8 +31,10 @@
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  * Copyright (c) 2013 Steven Hartland. All rights reserved.
  * Copyright (c) 2014 Integros [integros.com]
+ * Copyright 2016 Toomas Soome <tsoome@me.com>
  * Copyright 2017 RackTop Systems.
  * Copyright (c) 2017 Datto Inc.
+ * Copyright 2016 Toomas Soome <tsoome@me.com>
  */
 
 /*
@@ -193,6 +195,7 @@
 #include <sys/zfeature.h>
 #include <sys/zcp.h>
 #include <sys/zio_checksum.h>
+#include <sys/vdev_removal.h>
 
 #include "zfs_namecheck.h"
 #include "zfs_prop.h"
@@ -1069,6 +1072,14 @@ zfs_secpolicy_bookmark(zfs_cmd_t *zc, nvlist_t *innvl, cred_t *cr)
 			break;
 	}
 	return (error);
+}
+
+/* ARGSUSED */
+static int
+zfs_secpolicy_remap(zfs_cmd_t *zc, nvlist_t *innvl, cred_t *cr)
+{
+	return (zfs_secpolicy_write_perms(zc->zc_name,
+	    ZFS_DELEG_PERM_REMAP, cr));
 }
 
 /* ARGSUSED */
@@ -1968,8 +1979,8 @@ zfs_ioc_vdev_add(zfs_cmd_t *zc)
 /*
  * inputs:
  * zc_name		name of the pool
- * zc_nvlist_conf	nvlist of devices to remove
- * zc_cookie		to stop the remove?
+ * zc_guid		guid of vdev to remove
+ * zc_cookie		cancel removal
  */
 static int
 zfs_ioc_vdev_remove(zfs_cmd_t *zc)
@@ -1980,7 +1991,11 @@ zfs_ioc_vdev_remove(zfs_cmd_t *zc)
 	error = spa_open(zc->zc_name, &spa, FTAG);
 	if (error != 0)
 		return (error);
-	error = spa_vdev_remove(spa, zc->zc_guid, B_FALSE);
+	if (zc->zc_cookie != 0) {
+		error = spa_vdev_remove_cancel(spa);
+	} else {
+		error = spa_vdev_remove(spa, zc->zc_guid, B_FALSE);
+	}
 	spa_close(spa, FTAG);
 	return (error);
 }
@@ -2933,7 +2948,7 @@ zfs_ioc_pool_set_props(zfs_cmd_t *zc)
 		mutex_enter(&spa_namespace_lock);
 		if ((spa = spa_lookup(zc->zc_name)) != NULL) {
 			spa_configfile_set(spa, props, B_FALSE);
-			spa_config_sync(spa, B_FALSE, B_TRUE);
+			spa_write_cachefile(spa, B_FALSE, B_TRUE);
 		}
 		mutex_exit(&spa_namespace_lock);
 		if (spa != NULL) {
@@ -3379,6 +3394,17 @@ zfs_ioc_clone(const char *fsname, nvlist_t *innvl, nvlist_t *outnvl)
 	return (error);
 }
 
+/* ARGSUSED */
+static int
+zfs_ioc_remap(const char *fsname, nvlist_t *innvl, nvlist_t *outnvl)
+{
+	if (strchr(fsname, '@') ||
+	    strchr(fsname, '%'))
+		return (SET_ERROR(EINVAL));
+
+	return (dmu_objset_remap_indirects(fsname));
+}
+
 /*
  * innvl: {
  *     "snaps" -> { snapshot1, snapshot2 }
@@ -3782,6 +3808,29 @@ zfs_ioc_channel_program(const char *poolname, nvlist_t *innvl,
 }
 
 /*
+ * innvl: unused
+ * outnvl: empty
+ */
+/* ARGSUSED */
+static int
+zfs_ioc_pool_checkpoint(const char *poolname, nvlist_t *innvl, nvlist_t *outnvl)
+{
+	return (spa_checkpoint(poolname));
+}
+
+/*
+ * innvl: unused
+ * outnvl: empty
+ */
+/* ARGSUSED */
+static int
+zfs_ioc_pool_discard_checkpoint(const char *poolname, nvlist_t *innvl,
+    nvlist_t *outnvl)
+{
+	return (spa_checkpoint_discard(poolname));
+}
+
+/*
  * inputs:
  * zc_name		name of dataset to destroy
  * zc_objset_type	type of objset
@@ -3894,9 +3943,12 @@ zfs_ioc_rename(zfs_cmd_t *zc)
 	allow_mounted = (zc->zc_cookie & 2) != 0;
 #endif
 
+	/* "zfs rename" from and to ...%recv datasets should both fail */
+	zc->zc_name[sizeof (zc->zc_name) - 1] = '\0';
 	zc->zc_value[sizeof (zc->zc_value) - 1] = '\0';
-	if (dataset_namecheck(zc->zc_value, NULL, NULL) != 0 ||
-	    strchr(zc->zc_value, '%'))
+	if (dataset_namecheck(zc->zc_name, NULL, NULL) != 0 ||
+	    dataset_namecheck(zc->zc_value, NULL, NULL) != 0 ||
+	    strchr(zc->zc_name, '%') || strchr(zc->zc_value, '%'))
 		return (SET_ERROR(EINVAL));
 
 	at = strchr(zc->zc_name, '@');
@@ -4048,16 +4100,6 @@ zfs_check_settable(const char *dsname, nvpair_t *pair, cred_t *cr)
 		if (nvpair_value_uint64(pair, &intval) == 0 &&
 		    intval > SPA_OLD_MAXBLOCKSIZE) {
 			spa_t *spa;
-
-			/*
-			 * If this is a bootable dataset then
-			 * the we don't allow large (>128K) blocks,
-			 * because GRUB doesn't support them.
-			 */
-			if (zfs_is_bootfs(dsname) &&
-			    intval > SPA_OLD_MAXBLOCKSIZE) {
-				return (SET_ERROR(ERANGE));
-			}
 
 			/*
 			 * We don't allow setting the property above 1MB,
@@ -4958,6 +5000,11 @@ zfs_ioc_promote(zfs_cmd_t *zc)
 	char *cp;
 	int error;
 
+	zc->zc_name[sizeof (zc->zc_name) - 1] = '\0';
+	if (dataset_namecheck(zc->zc_name, NULL, NULL) != 0 ||
+	    strchr(zc->zc_name, '%'))
+		return (SET_ERROR(EINVAL));
+
 	error = dsl_pool_hold(zc->zc_name, FTAG, &dp);
 	if (error != 0)
 		return (error);
@@ -5092,14 +5139,14 @@ zfs_ioc_userspace_upgrade(zfs_cmd_t *zc)
 			 * objset needs to be closed & reopened (to grow the
 			 * objset_phys_t).  Suspend/resume the fs will do that.
 			 */
-			dsl_dataset_t *ds;
+			dsl_dataset_t *ds, *newds;
 
 			ds = dmu_objset_ds(zfsvfs->z_os);
 			error = zfs_suspend_fs(zfsvfs);
 			if (error == 0) {
-				dmu_objset_refresh_ownership(zfsvfs->z_os,
+				dmu_objset_refresh_ownership(ds, &newds,
 				    zfsvfs);
-				error = zfs_resume_fs(zfsvfs, ds);
+				error = zfs_resume_fs(zfsvfs, newds);
 			}
 		}
 		if (error == 0)
@@ -6022,6 +6069,10 @@ zfs_ioctl_init(void)
 	    zfs_ioc_clone, zfs_secpolicy_create_clone, DATASET_NAME,
 	    POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE, B_TRUE);
 
+	zfs_ioctl_register("remap", ZFS_IOC_REMAP,
+	    zfs_ioc_remap, zfs_secpolicy_remap, DATASET_NAME,
+	    POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_FALSE, B_TRUE);
+
 	zfs_ioctl_register("destroy_snaps", ZFS_IOC_DESTROY_SNAPS,
 	    zfs_ioc_destroy_snaps, zfs_secpolicy_destroy_snaps, POOL_NAME,
 	    POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE, B_TRUE);
@@ -6058,6 +6109,15 @@ zfs_ioctl_init(void)
 	    zfs_ioc_channel_program, zfs_secpolicy_config,
 	    POOL_NAME, POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE,
 	    B_TRUE);
+
+	zfs_ioctl_register("zpool_checkpoint", ZFS_IOC_POOL_CHECKPOINT,
+	    zfs_ioc_pool_checkpoint, zfs_secpolicy_config, POOL_NAME,
+	    POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE, B_TRUE);
+
+	zfs_ioctl_register("zpool_discard_checkpoint",
+	    ZFS_IOC_POOL_DISCARD_CHECKPOINT, zfs_ioc_pool_discard_checkpoint,
+	    zfs_secpolicy_config, POOL_NAME,
+	    POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE, B_TRUE);
 
 	/* IOCTLS that use the legacy function signature */
 
@@ -6130,7 +6190,7 @@ zfs_ioctl_init(void)
 	    zfs_secpolicy_config, B_TRUE, POOL_CHECK_NONE);
 
 	zfs_ioctl_register_pool(ZFS_IOC_CLEAR, zfs_ioc_clear,
-	    zfs_secpolicy_config, B_TRUE, POOL_CHECK_NONE);
+	    zfs_secpolicy_config, B_TRUE, POOL_CHECK_READONLY);
 	zfs_ioctl_register_pool(ZFS_IOC_POOL_REOPEN, zfs_ioc_pool_reopen,
 	    zfs_secpolicy_config, B_TRUE, POOL_CHECK_SUSPENDED);
 

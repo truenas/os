@@ -1,6 +1,4 @@
-/*-
- * SPDX-License-Identifier: BSD-3-Clause
- *
+/*
  * Copyright (c) 1980, 1986, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -113,6 +111,8 @@ main(int argc, char *argv[])
 		}
 	argc -= optind;
 	argv += optind;
+	if (argc != 0)
+		usage();
 
 	if ((howto & (RB_DUMP | RB_HALT)) == (RB_DUMP | RB_HALT))
 		errx(1, "cannot dump (-d) when halting; must reboot instead");
