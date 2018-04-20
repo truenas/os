@@ -172,16 +172,6 @@ data_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 #endif
 
 	pcb = td->td_pcb;
-
-	/*
-	 * Special case for fuswintr and suswintr. These can't sleep so
-	 * handle them early on in the trap handler.
-	 */
-	if (__predict_false(pcb->pcb_onfault == (vm_offset_t)&fsu_intr_fault)) {
-		frame->tf_elr = pcb->pcb_onfault;
-		return;
-	}
-
 	p = td->td_proc;
 	if (lower)
 		map = &p->p_vmspace->vm_map;
@@ -323,8 +313,12 @@ do_el1h_sync(struct thread *td, struct trapframe *frame)
 			break;
 		}
 #endif
+#ifdef KDB
 		kdb_trap(exception, 0,
 		    (td->td_frame != NULL) ? td->td_frame : frame);
+#else
+		panic("No debugger in kernel.\n");
+#endif
 		frame->tf_elr += 4;
 		break;
 	case EXCP_WATCHPT_EL1:

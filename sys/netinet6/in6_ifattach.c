@@ -274,8 +274,6 @@ found:
 	case IFT_BRIDGE:
 	case IFT_ETHER:
 	case IFT_L2VLAN:
-	case IFT_FDDI:
-	case IFT_ISO88025:
 	case IFT_ATM:
 	case IFT_IEEE1394:
 		/* IEEE802/EUI64 cases - what others? */
@@ -316,26 +314,6 @@ found:
 			in6->s6_addr[14] = addr[4];
 			in6->s6_addr[15] = addr[5];
 		}
-		break;
-
-	case IFT_ARCNET:
-		if (addrlen != 1) {
-			IF_ADDR_RUNLOCK(ifp);
-			return -1;
-		}
-		if (!addr[0]) {
-			IF_ADDR_RUNLOCK(ifp);
-			return -1;
-		}
-
-		bzero(&in6->s6_addr[8], 8);
-		in6->s6_addr[15] = addr[0];
-
-		/*
-		 * due to insufficient bitwidth, we mark it local.
-		 */
-		in6->s6_addr[8] &= ~EUI64_GBIT;	/* g bit to "individual" */
-		in6->s6_addr[8] |= EUI64_UBIT;	/* u bit to "local" */
 		break;
 
 	case IFT_GIF:

@@ -74,6 +74,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/tcp.h>
 #define	TCPOUTFLAGS
 #include <netinet/tcp_fsm.h>
+#include <netinet/tcp_log_buf.h>
 #include <netinet/tcp_seq.h>
 #include <netinet/tcp_timer.h>
 #include <netinet/tcp_var.h>
@@ -1358,6 +1359,10 @@ send:
 #endif /* TCPDEBUG */
 	TCP_PROBE3(debug__output, tp, th, m);
 
+	/* We're getting ready to send; log now. */
+	TCP_LOG_EVENT(tp, th, &so->so_rcv, &so->so_snd, TCP_LOG_OUT, ERRNO_UNK,
+	    len, NULL, false);
+
 	/*
 	 * Fill in IP length and desired time to live and
 	 * send to IP level.  There should be a better way
@@ -1549,6 +1554,9 @@ timer:
 	}
 
 	if (error) {
+		/* Record the error. */
+		TCP_LOG_EVENT(tp, NULL, &so->so_rcv, &so->so_snd, TCP_LOG_OUT,
+		    error, 0, NULL, false);
 
 		/*
 		 * We know that the packet was lost, so back out the

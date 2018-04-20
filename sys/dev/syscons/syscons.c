@@ -34,7 +34,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_compat.h"
 #include "opt_syscons.h"
 #include "opt_splash.h"
 #include "opt_ddb.h"
@@ -289,7 +288,11 @@ ec_putc(int c)
 		 * This is enough for ec_putc() to work very early on x86
 		 * if the kernel starts in normal color text mode.
 		 */
+#ifdef __amd64__
 		fb = KERNBASE + 0xb8000;
+#else /* __i386__ */
+		fb = PMAP_MAP_LOW + 0xb8000;
+#endif
 		xsize = 80;
 		ysize = 25;
 #endif
@@ -3858,28 +3861,22 @@ next_code:
 
 	    case RBT:
 #ifndef SC_DISABLE_REBOOT
-		if (enable_reboot && !(flags & SCGETC_CN)) {
-			mtx_unlock(&Giant);
+		if (enable_reboot && !(flags & SCGETC_CN))
 			shutdown_nice(0);
-		}
 #endif
 		break;
 
 	    case HALT:
 #ifndef SC_DISABLE_REBOOT
-		if (enable_reboot && !(flags & SCGETC_CN)) {
-			mtx_unlock(&Giant);
+		if (enable_reboot && !(flags & SCGETC_CN))
 			shutdown_nice(RB_HALT);
-		}
 #endif
 		break;
 
 	    case PDWN:
 #ifndef SC_DISABLE_REBOOT
-		if (enable_reboot && !(flags & SCGETC_CN)) {
-			mtx_unlock(&Giant);
+		if (enable_reboot && !(flags & SCGETC_CN))
 			shutdown_nice(RB_HALT|RB_POWEROFF);
-		}
 #endif
 		break;
 

@@ -95,6 +95,7 @@ PMC_SOFT_DEFINE( , , page_fault, write);
 #include <machine/smp.h>
 #endif
 #include <machine/stack.h>
+#include <machine/trap.h>
 #include <machine/tss.h>
 
 #ifdef KDTRACE_HOOKS
@@ -338,14 +339,14 @@ trap(struct trapframe *frame)
 					ucode = SEGV_ACCERR;
 				} else {
 					signo = SIGBUS;
-					ucode = BUS_PAGE_FAULT;
+					ucode = T_PAGEFLT;
 				}
 			} else if (prot_fault_translation == 1) {
 				/*
 				 * Always compat mode.
 				 */
 				signo = SIGBUS;
-				ucode = BUS_PAGE_FAULT;
+				ucode = T_PAGEFLT;
 			} else {
 				/*
 				 * Always SIGSEGV mode.
@@ -760,6 +761,9 @@ trap_fatal(frame, eva)
 	u_int type;
 	struct soft_segment_descriptor softseg;
 	char *msg;
+#ifdef KDB
+	bool handled;
+#endif
 
 	code = frame->tf_err;
 	type = frame->tf_trapno;
@@ -810,9 +814,13 @@ trap_fatal(frame, eva)
 	    curproc->p_pid, curthread->td_name);
 
 #ifdef KDB
-	if (debugger_on_panic || kdb_active)
-		if (kdb_trap(type, 0, frame))
+	if (debugger_on_panic) {
+		kdb_why = KDB_WHY_TRAP;
+		handled = kdb_trap(type, 0, frame);
+		kdb_why = KDB_WHY_UNSET;
+		if (handled)
 			return;
+	}
 #endif
 	printf("trap number		= %d\n", type);
 	if (type <= MAX_TRAP_MSG)

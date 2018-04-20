@@ -185,7 +185,6 @@ dev/ce/ceddk.c			optional ce
 dev/ce/if_ce.c			optional ce
 dev/ce/tau32-ddk.c		optional ce \
 	compile-with "${NORMAL_C} ${NO_WCONSTANT_CONVERSION}"
-dev/cm/if_cm_isa.c		optional cm isa
 dev/coretemp/coretemp.c		optional coretemp
 dev/cp/cpddk.c			optional cp
 dev/cp/if_cp.c			optional cp
@@ -327,6 +326,16 @@ dev/tpm/tpm_isa.c		optional tpm isa
 dev/uart/uart_cpu_x86.c		optional uart
 dev/viawd/viawd.c		optional viawd
 dev/vmware/vmxnet3/if_vmx.c	optional vmx
+dev/vmware/vmci/vmci.c			optional	vmci
+dev/vmware/vmci/vmci_datagram.c		optional	vmci
+dev/vmware/vmci/vmci_doorbell.c		optional	vmci
+dev/vmware/vmci/vmci_driver.c		optional	vmci
+dev/vmware/vmci/vmci_event.c		optional	vmci
+dev/vmware/vmci/vmci_hashtable.c	optional	vmci
+dev/vmware/vmci/vmci_kernel_if.c	optional	vmci
+dev/vmware/vmci/vmci_qpair.c		optional	vmci
+dev/vmware/vmci/vmci_queue_pair.c	optional	vmci
+dev/vmware/vmci/vmci_resource.c		optional	vmci
 dev/acpica/acpi_if.m		standard
 dev/acpica/acpi_hpet.c		optional acpi
 dev/acpica/acpi_timer.c		optional acpi
@@ -473,6 +482,7 @@ i386/i386/atomic.c		standard		\
 i386/i386/bios.c		standard
 i386/i386/bioscall.s		standard
 i386/i386/bpf_jit_machdep.c	optional bpf_jitter
+i386/i386/copyout.c		standard
 i386/i386/db_disasm.c		optional ddb
 i386/i386/db_interface.c	optional ddb
 i386/i386/db_trace.c		optional ddb

@@ -49,6 +49,7 @@ struct linux_emuldata {
 
 struct linux_emuldata	*em_find(struct thread *);
 
+int	linux_exec_imgact_try(struct image_params *);
 void	linux_proc_init(struct thread *, struct thread *, int);
 void	linux_proc_exit(void *, struct proc *);
 void	linux_schedtail(struct thread *);
@@ -77,6 +78,6 @@ struct linux_pemuldata {
 
 struct linux_pemuldata	*pem_find(struct proc *);
 
-extern const int bsd_to_linux_errno_generic[];
+extern const int linux_errtbl[];
 
 #endif	/* !_LINUX_EMUL_H_ */

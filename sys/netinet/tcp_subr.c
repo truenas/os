@@ -34,7 +34,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_compat.h"
 #include "opt_inet.h"
 #include "opt_inet6.h"
 #include "opt_ipsec.h"
@@ -98,7 +97,9 @@ __FBSDID("$FreeBSD$");
 #include <netinet/tcp_seq.h>
 #include <netinet/tcp_timer.h>
 #include <netinet/tcp_var.h>
+#include <netinet/tcp_log_buf.h>
 #include <netinet/tcp_syncache.h>
+#include <netinet/tcp_hpts.h>
 #include <netinet/cc/cc.h>
 #ifdef INET6
 #include <netinet6/tcp6_var.h>
@@ -232,6 +233,9 @@ VNET_DEFINE(uma_zone_t, sack_hole_zone);
 VNET_DEFINE(struct hhook_head *, tcp_hhh[HHOOK_TCP_LAST+1]);
 #endif
 
+static int	tcp_default_fb_init(struct tcpcb *tp);
+static void	tcp_default_fb_fini(struct tcpcb *tp, int tcb_is_purged);
+static int	tcp_default_handoff_ok(struct tcpcb *tp);
 static struct inpcb *tcp_notify(struct inpcb *, int);
 static struct inpcb *tcp_mtudisc_notify(struct inpcb *, int);
 static void tcp_mtudisc(struct inpcb *, int);
@@ -240,21 +244,17 @@ static char *	tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th,
 
 
 static struct tcp_function_block tcp_def_funcblk = {
-	"default",
-	tcp_output,
-	tcp_do_segment,
-	tcp_default_ctloutput,
-	NULL,
-	NULL,	
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	0,
-	0
+	.tfb_tcp_block_name = "freebsd",
+	.tfb_tcp_output = tcp_output,
+	.tfb_tcp_do_segment = tcp_do_segment,
+	.tfb_tcp_ctloutput = tcp_default_ctloutput,
+	.tfb_tcp_handoff_ok = tcp_default_handoff_ok,
+	.tfb_tcp_fb_init = tcp_default_fb_init,
+	.tfb_tcp_fb_fini = tcp_default_fb_fini,
 };
 
 int t_functions_inited = 0;
+static int tcp_fb_cnt = 0;
 struct tcp_funchead t_functions;
 static struct tcp_function_block *tcp_func_set_ptr = &tcp_def_funcblk;
 
@@ -327,6 +327,88 @@ find_and_ref_tcp_fb(struct tcp_function_block *blk)
 	return(rblk);
 }
 
+static struct tcp_function_block *
+find_and_ref_tcp_default_fb(void)
+{
+	struct tcp_function_block *rblk;
+
+	rw_rlock(&tcp_function_lock);
+	rblk = tcp_func_set_ptr;
+	refcount_acquire(&rblk->tfb_refcnt);
+	rw_runlock(&tcp_function_lock);
+	return (rblk);
+}
+
+void
+tcp_switch_back_to_default(struct tcpcb *tp)
+{
+	struct tcp_function_block *tfb;
+
+	KASSERT(tp->t_fb != &tcp_def_funcblk,
+	    ("%s: called by the built-in default stack", __func__));
+
+	/*
+	 * Release the old stack. This function will either find a new one
+	 * or panic.
+	 */
+	if (tp->t_fb->tfb_tcp_fb_fini != NULL)
+		(*tp->t_fb->tfb_tcp_fb_fini)(tp, 0);
+	refcount_release(&tp->t_fb->tfb_refcnt);
+
+	/*
+	 * Now, we'll find a new function block to use.
+	 * Start by trying the current user-selected
+	 * default, unless this stack is the user-selected
+	 * default.
+	 */
+	tfb = find_and_ref_tcp_default_fb();
+	if (tfb == tp->t_fb) {
+		refcount_release(&tfb->tfb_refcnt);
+		tfb = NULL;
+	}
+	/* Does the stack accept this connection? */
+	if (tfb != NULL && tfb->tfb_tcp_handoff_ok != NULL &&
+	    (*tfb->tfb_tcp_handoff_ok)(tp)) {
+		refcount_release(&tfb->tfb_refcnt);
+		tfb = NULL;
+	}
+	/* Try to use that stack. */
+	if (tfb != NULL) {
+		/* Initialize the new stack. If it succeeds, we are done. */
+		tp->t_fb = tfb;
+		if (tp->t_fb->tfb_tcp_fb_init == NULL ||
+		    (*tp->t_fb->tfb_tcp_fb_init)(tp) == 0)
+			return;
+
+		/*
+		 * Initialization failed. Release the reference count on
+		 * the stack.
+		 */
+		refcount_release(&tfb->tfb_refcnt);
+	}
+
+	/*
+	 * If that wasn't feasible, use the built-in default
+	 * stack which is not allowed to reject anyone.
+	 */
+	tfb = find_and_ref_tcp_fb(&tcp_def_funcblk);
+	if (tfb == NULL) {
+		/* there always should be a default */
+		panic("Can't refer to tcp_def_funcblk");
+	}
+	if (tfb->tfb_tcp_handoff_ok != NULL) {
+		if ((*tfb->tfb_tcp_handoff_ok) (tp)) {
+			/* The default stack cannot say no */
+			panic("Default stack rejects a new session?");
+		}
+	}
+	tp->t_fb = tfb;
+	if (tp->t_fb->tfb_tcp_fb_init != NULL &&
+	    (*tp->t_fb->tfb_tcp_fb_init)(tp)) {
+		/* The default stack cannot fail */
+		panic("Default stack initialization failed");
+	}
+}
 
 static int
 sysctl_net_inet_default_tcp_functions(SYSCTL_HANDLER_ARGS)
@@ -426,6 +508,169 @@ SYSCTL_PROC(_net_inet_tcp, OID_AUTO, functions_available,
 	    "list available TCP Function sets");
 
 /*
+ * Exports one (struct tcp_function_info) for each alias/name.
+ */
+static int
+sysctl_net_inet_list_func_info(SYSCTL_HANDLER_ARGS)
+{
+	int cnt, error;
+	struct tcp_function *f;
+	struct tcp_function_info tfi;
+
+	/*
+	 * We don't allow writes.
+	 */
+	if (req->newptr != NULL)
+		return (EINVAL);
+
+	/*
+	 * Wire the old buffer so we can directly copy the functions to
+	 * user space without dropping the lock.
+	 */
+	if (req->oldptr != NULL) {
+		error = sysctl_wire_old_buffer(req, 0);
+		if (error)
+			return (error);
+	}
+
+	/*
+	 * Walk the list and copy out matching entries. If INVARIANTS
+	 * is compiled in, also walk the list to verify the length of
+	 * the list matches what we have recorded.
+	 */
+	rw_rlock(&tcp_function_lock);
+#ifdef INVARIANTS
+	cnt = 0;
+#else
+	if (req->oldptr == NULL) {
+		cnt = tcp_fb_cnt;
+		goto skip_loop;
+	}
+#endif
+	TAILQ_FOREACH(f, &t_functions, tf_next) {
+#ifdef INVARIANTS
+		cnt++;
+#endif
+		if (req->oldptr != NULL) {
+			tfi.tfi_refcnt = f->tf_fb->tfb_refcnt;
+			tfi.tfi_id = f->tf_fb->tfb_id;
+			(void)strncpy(tfi.tfi_alias, f->tf_name,
+			    TCP_FUNCTION_NAME_LEN_MAX);
+			tfi.tfi_alias[TCP_FUNCTION_NAME_LEN_MAX - 1] = '\0';
+			(void)strncpy(tfi.tfi_name,
+			    f->tf_fb->tfb_tcp_block_name,
+			    TCP_FUNCTION_NAME_LEN_MAX);
+			tfi.tfi_name[TCP_FUNCTION_NAME_LEN_MAX - 1] = '\0';
+			error = SYSCTL_OUT(req, &tfi, sizeof(tfi));
+			/*
+			 * Don't stop on error, as that is the
+			 * mechanism we use to accumulate length
+			 * information if the buffer was too short.
+			 */
+		}
+	}
+	KASSERT(cnt == tcp_fb_cnt,
+	    ("%s: cnt (%d) != tcp_fb_cnt (%d)", __func__, cnt, tcp_fb_cnt));
+#ifndef INVARIANTS
+skip_loop:
+#endif
+	rw_runlock(&tcp_function_lock);
+	if (req->oldptr == NULL)
+		error = SYSCTL_OUT(req, NULL,
+		    (cnt + 1) * sizeof(struct tcp_function_info));
+
+	return (error);
+}
+
+SYSCTL_PROC(_net_inet_tcp, OID_AUTO, function_info,
+	    CTLTYPE_OPAQUE | CTLFLAG_SKIP | CTLFLAG_RD | CTLFLAG_MPSAFE,
+	    NULL, 0, sysctl_net_inet_list_func_info, "S,tcp_function_info",
+	    "List TCP function block name-to-ID mappings");
+
+/*
+ * tfb_tcp_handoff_ok() function for the default stack.
+ * Note that we'll basically try to take all comers.
+ */
+static int
+tcp_default_handoff_ok(struct tcpcb *tp)
+{
+
+	return (0);
+}
+
+/*
+ * tfb_tcp_fb_init() function for the default stack.
+ *
+ * This handles making sure we have appropriate timers set if you are
+ * transitioning a socket that has some amount of setup done.
+ *
+ * The init() fuction from the default can *never* return non-zero i.e.
+ * it is required to always succeed since it is the stack of last resort!
+ */
+static int
+tcp_default_fb_init(struct tcpcb *tp)
+{
+
+	struct socket *so;
+
+	INP_WLOCK_ASSERT(tp->t_inpcb);
+
+	KASSERT(tp->t_state >= 0 && tp->t_state < TCPS_TIME_WAIT,
+	    ("%s: connection %p in unexpected state %d", __func__, tp,
+	    tp->t_state));
+
+	/*
+	 * Nothing to do for ESTABLISHED or LISTEN states. And, we don't
+	 * know what to do for unexpected states (which includes TIME_WAIT).
+	 */
+	if (tp->t_state <= TCPS_LISTEN || tp->t_state >= TCPS_TIME_WAIT)
+		return (0);
+
+	/*
+	 * Make sure some kind of transmission timer is set if there is
+	 * outstanding data.
+	 */
+	so = tp->t_inpcb->inp_socket;
+	if ((!TCPS_HAVEESTABLISHED(tp->t_state) || sbavail(&so->so_snd) ||
+	    tp->snd_una != tp->snd_max) && !(tcp_timer_active(tp, TT_REXMT) ||
+	    tcp_timer_active(tp, TT_PERSIST))) {
+		/*
+		 * If the session has established and it looks like it should
+		 * be in the persist state, set the persist timer. Otherwise,
+		 * set the retransmit timer.
+		 */
+		if (TCPS_HAVEESTABLISHED(tp->t_state) && tp->snd_wnd == 0 &&
+		    (int32_t)(tp->snd_nxt - tp->snd_una) <
+		    (int32_t)sbavail(&so->so_snd))
+			tcp_setpersist(tp);
+		else
+			tcp_timer_activate(tp, TT_REXMT, tp->t_rxtcur);
+	}
+
+	/* All non-embryonic sessions get a keepalive timer. */
+	if (!tcp_timer_active(tp, TT_KEEP))
+		tcp_timer_activate(tp, TT_KEEP,
+		    TCPS_HAVEESTABLISHED(tp->t_state) ? TP_KEEPIDLE(tp) :
+		    TP_KEEPINIT(tp));
+
+	return (0);
+}
+
+/*
+ * tfb_tcp_fb_fini() function for the default stack.
+ *
+ * This changes state as necessary (or prudent) to prepare for another stack
+ * to assume responsibility for the connection.
+ */
+static void
+tcp_default_fb_fini(struct tcpcb *tp, int tcb_is_purged)
+{
+
+	INP_WLOCK_ASSERT(tp->t_inpcb);
+	return;
+}
+
+/*
  * Target size of TCP PCB hash tables. Must be a power of two.
  *
  * Note that this can be overridden by the kernel environment
@@ -504,6 +749,8 @@ maketcp_hashsize(int size)
 	return (hashsize);
 }
 
+static volatile int next_tcp_stack_id = 1;
+
 /*
  * Register a TCP function block with the name provided in the names
  * array.  (Note that this function does NOT automatically register
@@ -563,6 +810,7 @@ register_tcp_functions_as_names(struct tcp_function_block *blk, int wait,
 
 	refcount_init(&blk->tfb_refcnt, 0);
 	blk->tfb_flags = 0;
+	blk->tfb_id = atomic_fetchadd_int(&next_tcp_stack_id, 1);
 	for (i = 0; i < *num_names; i++) {
 		n = malloc(sizeof(struct tcp_function), M_TCPFUNCTIONS, wait);
 		if (n == NULL) {
@@ -585,6 +833,7 @@ register_tcp_functions_as_names(struct tcp_function_block *blk, int wait,
 		(void)strncpy(n->tf_name, names[i], TCP_FUNCTION_NAME_LEN_MAX);
 		n->tf_name[TCP_FUNCTION_NAME_LEN_MAX - 1] = '\0';
 		TAILQ_INSERT_TAIL(&t_functions, n, tf_next);
+		tcp_fb_cnt++;
 		rw_wunlock(&tcp_function_lock);
 	}
 	return(0);
@@ -601,6 +850,7 @@ cleanup:
 			if (!strncmp(n->tf_name, names[i],
 			    TCP_FUNCTION_NAME_LEN_MAX)) {
 				TAILQ_REMOVE(&t_functions, n, tf_next);
+				tcp_fb_cnt--;
 				n->tf_fb = NULL;
 				free(n, M_TCPFUNCTIONS);
 				break;
@@ -646,11 +896,28 @@ register_tcp_functions(struct tcp_function_block *blk, int wait)
 	return (register_tcp_functions_as_name(blk, NULL, wait));
 }
 
+/*
+ * Deregister all names associated with a function block. This
+ * functionally removes the function block from use within the system.
+ *
+ * When called with a true quiesce argument, mark the function block
+ * as being removed so no more stacks will use it and determine
+ * whether the removal would succeed.
+ *
+ * When called with a false quiesce argument, actually attempt the
+ * removal.
+ *
+ * When called with a force argument, attempt to switch all TCBs to
+ * use the default stack instead of returning EBUSY.
+ *
+ * Returns 0 on success (or if the removal would succeed, or an error
+ * code on failure.
+ */
 int
-deregister_tcp_functions(struct tcp_function_block *blk)
+deregister_tcp_functions(struct tcp_function_block *blk, bool quiesce,
+    bool force)
 {
 	struct tcp_function *f;
-	int error=ENOENT;
 	
 	if (strcmp(blk->tfb_tcp_block_name, "default") == 0) {
 		/* You can't un-register the default */
@@ -662,21 +929,63 @@ deregister_tcp_functions(struct tcp_function_block *blk)
 		rw_wunlock(&tcp_function_lock);
 		return (EBUSY);
 	}
+	/* Mark the block so no more stacks can use it. */
+	blk->tfb_flags |= TCP_FUNC_BEING_REMOVED;
+	/*
+	 * If TCBs are still attached to the stack, attempt to switch them
+	 * to the default stack.
+	 */
+	if (force && blk->tfb_refcnt) {
+		struct inpcb *inp;
+		struct tcpcb *tp;
+		VNET_ITERATOR_DECL(vnet_iter);
+
+		rw_wunlock(&tcp_function_lock);
+
+		VNET_LIST_RLOCK();
+		VNET_FOREACH(vnet_iter) {
+			CURVNET_SET(vnet_iter);
+			INP_INFO_WLOCK(&V_tcbinfo);
+			LIST_FOREACH(inp, V_tcbinfo.ipi_listhead, inp_list) {
+				INP_WLOCK(inp);
+				if (inp->inp_flags & INP_TIMEWAIT) {
+					INP_WUNLOCK(inp);
+					continue;
+				}
+				tp = intotcpcb(inp);
+				if (tp == NULL || tp->t_fb != blk) {
+					INP_WUNLOCK(inp);
+					continue;
+				}
+				tcp_switch_back_to_default(tp);
+				INP_WUNLOCK(inp);
+			}
+			INP_INFO_WUNLOCK(&V_tcbinfo);
+			CURVNET_RESTORE();
+		}
+		VNET_LIST_RUNLOCK();
+
+		rw_wlock(&tcp_function_lock);
+	}
 	if (blk->tfb_refcnt) {
-		/* Still tcb attached, mark it. */
-		blk->tfb_flags |= TCP_FUNC_BEING_REMOVED;
-		rw_wunlock(&tcp_function_lock);		
+		/* TCBs still attached. */
+		rw_wunlock(&tcp_function_lock);
 		return (EBUSY);
 	}
+	if (quiesce) {
+		/* Skip removal. */
+		rw_wunlock(&tcp_function_lock);
+		return (0);
+	}
+	/* Remove any function names that map to this function block. */
 	while (find_tcp_fb_locked(blk, &f) != NULL) {
-		/* Found */
 		TAILQ_REMOVE(&t_functions, f, tf_next);
+		tcp_fb_cnt--;
 		f->tf_fb = NULL;
 		free(f, M_TCPFUNCTIONS);
-		error = 0;
 	}
 	rw_wunlock(&tcp_function_lock);
-	return (error);
+	return (0);
 }
 
 void
@@ -779,6 +1088,10 @@ tcp_init(void)
 	/* Setup the tcp function block list */
 	init_tcp_functions();
 	register_tcp_functions(&tcp_def_funcblk, M_WAITOK);
+#ifdef TCP_BLACKBOX
+	/* Initialize the TCP logging data. */
+	tcp_log_init();
+#endif
 
 	if (tcp_soreceive_stream) {
 #ifdef INET
@@ -1360,6 +1673,10 @@ tcp_newtcpcb(struct inpcb *inp)
 	 */
 	tcp_pcap_tcpcb_init(tp);
 #endif
+#ifdef TCP_BLACKBOX
+	/* Initialize the per-TCPCB log data. */
+	tcp_log_tcpcbinit(tp);
+#endif
 	if (tp->t_fb->tfb_tcp_fb_init) {
 		(*tp->t_fb->tfb_tcp_fb_init)(tp);
 	}
@@ -1577,6 +1894,9 @@ tcp_discardcb(struct tcpcb *tp)
 	inp->inp_ppcb = NULL;
 	if (tp->t_timers->tt_draincnt == 0) {
 		/* We own the last reference on tcpcb, let's free it. */
+#ifdef TCP_BLACKBOX
+		tcp_log_tcpcbfini(tp);
+#endif
 		TCPSTATES_DEC(tp->t_state);
 		if (tp->t_fb->tfb_tcp_fb_fini)
 			(*tp->t_fb->tfb_tcp_fb_fini)(tp, 1);
@@ -1607,6 +1927,9 @@ tcp_timer_discard(void *ptp)
 	tp->t_timers->tt_draincnt--;
 	if (tp->t_timers->tt_draincnt == 0) {
 		/* We own the last reference on this tcpcb, let's free it. */
+#ifdef TCP_BLACKBOX
+		tcp_log_tcpcbfini(tp);
+#endif
 		TCPSTATES_DEC(tp->t_state);
 		if (tp->t_fb->tfb_tcp_fb_fini)
 			(*tp->t_fb->tfb_tcp_fb_fini)(tp, 1);
@@ -1700,6 +2023,9 @@ tcp_drain(void)
 			if ((tcpb = intotcpcb(inpb)) != NULL) {
 				tcp_reass_flush(tcpb);
 				tcp_clean_sackreport(tcpb);
+#ifdef TCP_BLACKBOX
+				tcp_log_drain(tcpb);
+#endif
 #ifdef TCPPCAP
 				if (tcp_pcap_aggressive_free) {
 					/* Free the TCP PCAP queues. */
@@ -2856,6 +3182,7 @@ tcp_inptoxtp(const struct inpcb *inp, struct xtcpcb *xt)
 		xt->t_state = TCPS_TIME_WAIT;
 	} else {
 		xt->t_state = tp->t_state;
+		xt->t_logstate = tp->t_logstate;
 		xt->t_flags = tp->t_flags;
 		xt->t_sndzerowin = tp->t_sndzerowin;
 		xt->t_sndrexmitpack = tp->t_sndrexmitpack;
@@ -2879,6 +3206,10 @@ tcp_inptoxtp(const struct inpcb *inp, struct xtcpcb *xt)
 
 		bcopy(tp->t_fb->tfb_tcp_block_name, xt->xt_stack,
 		    TCP_FUNCTION_NAME_LEN_MAX);
+		bzero(xt->xt_logid, TCP_LOG_ID_LEN);
+#ifdef TCP_BLACKBOX
+		(void)tcp_log_get_id(tp, xt->xt_logid);
+#endif
 	}
 
 	xt->xt_len = sizeof(struct xtcpcb);

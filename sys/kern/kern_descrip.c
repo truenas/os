@@ -40,7 +40,6 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_capsicum.h"
-#include "opt_compat.h"
 #include "opt_ddb.h"
 #include "opt_ktrace.h"
 
@@ -111,6 +110,11 @@ static void	fdgrowtable_exp(struct filedesc *fdp, int nfd);
 static void	fdunused(struct filedesc *fdp, int fd);
 static void	fdused(struct filedesc *fdp, int fd);
 static int	getmaxfd(struct thread *td);
+static u_long	*filecaps_copy_prep(const struct filecaps *src);
+static void	filecaps_copy_finish(const struct filecaps *src,
+		    struct filecaps *dst, u_long *ioctls);
+static u_long 	*filecaps_free_prep(struct filecaps *fcaps);
+static void	filecaps_free_finish(u_long *ioctls);
 
 /*
  * Each process has:
@@ -302,12 +306,12 @@ fdfree(struct filedesc *fdp, int fd)
 #ifdef CAPABILITIES
 	seq_write_begin(&fde->fde_seq);
 #endif
-	fdefree_last(fde);
 	fde->fde_file = NULL;
-	fdunused(fdp, fd);
 #ifdef CAPABILITIES
 	seq_write_end(&fde->fde_seq);
 #endif
+	fdefree_last(fde);
+	fdunused(fdp, fd);
 }
 
 void
@@ -813,6 +817,7 @@ kern_dup(struct thread *td, u_int mode, int flags, int old, int new)
 	struct filedescent *oldfde, *newfde;
 	struct proc *p;
 	struct file *delfp;
+	u_long *oioctls, *nioctls;
 	int error, maxfd;
 
 	p = td->td_proc;
@@ -902,15 +907,18 @@ kern_dup(struct thread *td, u_int mode, int flags, int old, int new)
 	newfde = &fdp->fd_ofiles[new];
 	delfp = newfde->fde_file;
 
+	oioctls = filecaps_free_prep(&newfde->fde_caps);
+	nioctls = filecaps_copy_prep(&oldfde->fde_caps);
+
 	/*
 	 * Duplicate the source descriptor.
 	 */
 #ifdef CAPABILITIES
 	seq_write_begin(&newfde->fde_seq);
 #endif
-	filecaps_free(&newfde->fde_caps);
 	memcpy(newfde, oldfde, fde_change_size);
-	filecaps_copy(&oldfde->fde_caps, &newfde->fde_caps, true);
+	filecaps_copy_finish(&oldfde->fde_caps, &newfde->fde_caps,
+	    nioctls);
 	if ((flags & FDDUP_FLAG_CLOEXEC) != 0)
 		newfde->fde_flags = oldfde->fde_flags | UF_EXCLOSE;
 	else
@@ -918,6 +926,7 @@ kern_dup(struct thread *td, u_int mode, int flags, int old, int new)
 #ifdef CAPABILITIES
 	seq_write_end(&newfde->fde_seq);
 #endif
+	filecaps_free_finish(oioctls);
 	td->td_retval[0] = new;
 
 	error = 0;
@@ -1483,16 +1492,16 @@ filecaps_init(struct filecaps *fcaps)
  * Note that if the table was not locked, the caller has to check the relevant
  * sequence counter to determine whether the operation was successful.
  */
-int
+bool
 filecaps_copy(const struct filecaps *src, struct filecaps *dst, bool locked)
 {
 	size_t size;
 
+	if (src->fc_ioctls != NULL && !locked)
+		return (false);
 	*dst = *src;
 	if (src->fc_ioctls == NULL)
-		return (0);
-	if (!locked)
-		return (1);
+		return (true);
 
 	KASSERT(src->fc_nioctls > 0,
 	    ("fc_ioctls != NULL, but fc_nioctls=%hd", src->fc_nioctls));
@@ -1500,7 +1509,41 @@ filecaps_copy(const struct filecaps *src, struct filecaps *dst, bool locked)
 	size = sizeof(src->fc_ioctls[0]) * src->fc_nioctls;
 	dst->fc_ioctls = malloc(size, M_FILECAPS, M_WAITOK);
 	bcopy(src->fc_ioctls, dst->fc_ioctls, size);
-	return (0);
+	return (true);
+}
+
+static u_long *
+filecaps_copy_prep(const struct filecaps *src)
+{
+	u_long *ioctls;
+	size_t size;
+
+	if (src->fc_ioctls == NULL)
+		return (NULL);
+
+	KASSERT(src->fc_nioctls > 0,
+	    ("fc_ioctls != NULL, but fc_nioctls=%hd", src->fc_nioctls));
+
+	size = sizeof(src->fc_ioctls[0]) * src->fc_nioctls;
+	ioctls = malloc(size, M_FILECAPS, M_WAITOK);
+	return (ioctls);
+}
+
+static void
+filecaps_copy_finish(const struct filecaps *src, struct filecaps *dst,
+    u_long *ioctls)
+{
+	size_t size;
+
+	*dst = *src;
+	if (src->fc_ioctls == NULL) {
+		MPASS(ioctls == NULL);
+		return;
+	}
+
+	size = sizeof(src->fc_ioctls[0]) * src->fc_nioctls;
+	dst->fc_ioctls = ioctls;
+	bcopy(src->fc_ioctls, dst->fc_ioctls, size);
 }
 
 /*
@@ -1536,6 +1579,23 @@ filecaps_free(struct filecaps *fcaps)
 
 	free(fcaps->fc_ioctls, M_FILECAPS);
 	bzero(fcaps, sizeof(*fcaps));
+}
+
+static u_long *
+filecaps_free_prep(struct filecaps *fcaps)
+{
+	u_long *ioctls;
+
+	ioctls = fcaps->fc_ioctls;
+	bzero(fcaps, sizeof(*fcaps));
+	return (ioctls);
+}
+
+static void
+filecaps_free_finish(u_long *ioctls)
+{
+
+	free(ioctls, M_FILECAPS);
 }
 
 /*
@@ -2963,6 +3023,7 @@ dupfdopen(struct thread *td, struct filedesc *fdp, int dfd, int mode,
 {
 	struct filedescent *newfde, *oldfde;
 	struct file *fp;
+	u_long *ioctls;
 	int error, indx;
 
 	KASSERT(openerror == ENODEV || openerror == ENXIO,
@@ -3007,11 +3068,13 @@ dupfdopen(struct thread *td, struct filedesc *fdp, int dfd, int mode,
 		fhold(fp);
 		newfde = &fdp->fd_ofiles[indx];
 		oldfde = &fdp->fd_ofiles[dfd];
+		ioctls = filecaps_copy_prep(&oldfde->fde_caps);
 #ifdef CAPABILITIES
 		seq_write_begin(&newfde->fde_seq);
 #endif
 		memcpy(newfde, oldfde, fde_change_size);
-		filecaps_copy(&oldfde->fde_caps, &newfde->fde_caps, true);
+		filecaps_copy_finish(&oldfde->fde_caps, &newfde->fde_caps,
+		    ioctls);
 #ifdef CAPABILITIES
 		seq_write_end(&newfde->fde_seq);
 #endif

@@ -74,6 +74,7 @@ struct vm_pagequeue {
 } __aligned(CACHE_LINE_SIZE);
 
 #include <sys/pidctrl.h>
+#include <vm/uma.h>
 struct sysctl_oid;
 
 /*
@@ -86,11 +87,13 @@ struct sysctl_oid;
  * d   vm_domainset_lock
  * a   atomic
  * c   const after boot
+ * q   page queue lock
 */
 struct vm_domain {
 	struct vm_pagequeue vmd_pagequeues[PQ_COUNT];
 	struct mtx_padalign vmd_free_mtx;
 	struct mtx_padalign vmd_pageout_mtx;
+	uma_zone_t vmd_pgcache;		/* (c) page free cache. */
 	struct vmem *vmd_kernel_arena;	/* (c) per-domain kva arena. */
 	u_int vmd_domain;		/* (c) Domain number. */
 	u_int vmd_page_count;		/* (c) Total page count. */
@@ -104,23 +107,22 @@ struct vm_domain {
 	boolean_t vmd_oom;
 	int vmd_oom_seq;
 	int vmd_last_active_scan;
-	struct vm_page vmd_laundry_marker;
-	struct vm_page vmd_marker; /* marker for pagedaemon private use */
+	struct vm_page vmd_markers[PQ_COUNT]; /* markers for queue scans */
 	struct vm_page vmd_inacthead; /* marker for LRU-defeating insertions */
 
 	int vmd_pageout_wanted;		/* (a, p) pageout daemon wait channel */
 	int vmd_pageout_pages_needed;	/* (d) page daemon waiting for pages? */
 	bool vmd_minset;		/* (d) Are we in vm_min_domains? */
 	bool vmd_severeset;		/* (d) Are we in vm_severe_domains? */
-	int vmd_inactq_scans;
 	enum {
 		VM_LAUNDRY_IDLE = 0,
 		VM_LAUNDRY_BACKGROUND,
 		VM_LAUNDRY_SHORTFALL
 	} vmd_laundry_request;
 
-	/* Paging thresholds. */
-	u_int vmd_background_launder_target;
+	/* Paging thresholds and targets. */
+	u_int vmd_clean_pages_freed;	/* (q) accumulator for laundry thread */
+	u_int vmd_background_launder_target; /* (c) */
 	u_int vmd_free_reserved;	/* (c) pages reserved for deadlock */
 	u_int vmd_free_target;		/* (c) pages desired free */
 	u_int vmd_free_min;		/* (c) pages desired free */
@@ -180,7 +182,7 @@ vm_pagequeue_cnt_add(struct vm_pagequeue *pq, int addend)
 
 void vm_domain_set(struct vm_domain *vmd);
 void vm_domain_clear(struct vm_domain *vmd);
-int vm_domain_available(struct vm_domain *vmd, int req, int npages);
+int vm_domain_allocate(struct vm_domain *vmd, int req, int npages);
 
 /*
  *      vm_pagequeue_domain:
@@ -265,23 +267,6 @@ vm_domain_freecnt_inc(struct vm_domain *vmd, int adj)
 	    new >= vmd->vmd_pageout_free_min)))
 		vm_domain_clear(vmd);
 }
-
-static inline void
-vm_domain_freecnt_dec(struct vm_domain *vmd, int adj)
-{
-	u_int old, new;
-
-	old = atomic_fetchadd_int(&vmd->vmd_free_count, -adj);
-	new = old - adj;
-	KASSERT(new >= 0, ("vm_domain_freecnt_dec: free count underflow"));
-	if (vm_paging_needed(vmd, new) && !vm_paging_needed(vmd, old))
-		pagedaemon_wakeup(vmd->vmd_domain);
-	/* Only update bitsets on transitions. */
-	if ((old >= vmd->vmd_free_min && new < vmd->vmd_free_min) ||
-	    (old >= vmd->vmd_free_severe && new < vmd->vmd_free_severe))
-		vm_domain_set(vmd);
-}
-
 
 #endif	/* _KERNEL */
 #endif				/* !_VM_PAGEQUEUE_ */

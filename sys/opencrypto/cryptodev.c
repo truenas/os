@@ -41,8 +41,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_compat.h"
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -443,6 +441,9 @@ cryptof_ioctl(
 		case CRYPTO_AES_NIST_GCM_16:
 			txform = &enc_xform_aes_nist_gcm;
  			break;
+		case CRYPTO_CHACHA20:
+			txform = &enc_xform_chacha20;
+			break;
 
 		default:
 			CRYPTDEB("invalid cipher");
@@ -854,7 +855,7 @@ cryptodev_op(
 			goto bail;
 		}
 		if ((error = copyin(cop->iv, crde->crd_iv,
-		    cse->txform->blocksize))) {
+		    cse->txform->ivsize))) {
 			SDT_PROBE1(opencrypto, dev, ioctl, error, __LINE__);
 			goto bail;
 		}
@@ -864,8 +865,8 @@ cryptodev_op(
 		crde->crd_skip = 0;
 	} else if (crde) {
 		crde->crd_flags |= CRD_F_IV_PRESENT;
-		crde->crd_skip = cse->txform->blocksize;
-		crde->crd_len -= cse->txform->blocksize;
+		crde->crd_skip = cse->txform->ivsize;
+		crde->crd_len -= cse->txform->ivsize;
 	}
 
 	if (cop->mac && crda == NULL) {
@@ -1032,8 +1033,8 @@ cryptodev_aead(
 		crde->crd_flags |= CRD_F_IV_EXPLICIT | CRD_F_IV_PRESENT;
 	} else {
 		crde->crd_flags |= CRD_F_IV_PRESENT;
-		crde->crd_skip += cse->txform->blocksize;
-		crde->crd_len -= cse->txform->blocksize;
+		crde->crd_skip += cse->txform->ivsize;
+		crde->crd_len -= cse->txform->ivsize;
 	}
 
 	if ((error = copyin(caead->tag, (caddr_t)cod->uio.uio_iov[0].iov_base +

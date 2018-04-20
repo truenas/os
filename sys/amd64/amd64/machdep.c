@@ -44,7 +44,6 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_atpic.h"
-#include "opt_compat.h"
 #include "opt_cpu.h"
 #include "opt_ddb.h"
 #include "opt_inet.h"
@@ -127,6 +126,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/reg.h>
 #include <machine/sigframe.h>
 #include <machine/specialreg.h>
+#include <machine/trap.h>
 #include <machine/tss.h>
 #ifdef SMP
 #include <machine/smp.h>
@@ -581,8 +581,12 @@ freebsd4_sigreturn(struct thread *td, struct freebsd4_sigreturn_args *uap)
 void
 exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
 {
-	struct trapframe *regs = td->td_frame;
-	struct pcb *pcb = td->td_pcb;
+	struct trapframe *regs;
+	struct pcb *pcb;
+	register_t saved_rflags;
+
+	regs = td->td_frame;
+	pcb = td->td_pcb;
 
 	if (td->td_proc->p_md.md_ldt != NULL)
 		user_ldt_free(td);
@@ -593,11 +597,12 @@ exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
 	clear_pcb_flags(pcb, PCB_32BIT);
 	pcb->pcb_initial_fpucw = __INITIAL_FPUCW__;
 
+	saved_rflags = regs->tf_rflags & PSL_T;
 	bzero((char *)regs, sizeof(struct trapframe));
 	regs->tf_rip = imgp->entry_addr;
 	regs->tf_rsp = ((stack - 8) & ~0xFul) + 8;
 	regs->tf_rdi = stack;		/* argv */
-	regs->tf_rflags = PSL_USER | (regs->tf_rflags & PSL_T);
+	regs->tf_rflags = PSL_USER | saved_rflags;
 	regs->tf_ss = _udatasel;
 	regs->tf_cs = _ucodesel;
 	regs->tf_ds = _udatasel;
@@ -1245,14 +1250,10 @@ getmemsize(caddr_t kmdp, u_int64_t first)
 	 * Make hole for "AP -> long mode" bootstrap code.  The
 	 * mp_bootaddress vector is only available when the kernel
 	 * is configured to support APs and APs for the system start
-	 * in 32bit mode (e.g. SMP bare metal).
+	 * in real mode mode (e.g. SMP bare metal).
 	 */
-	if (init_ops.mp_bootaddress) {
-		if (physmap[1] >= 0x100000000)
-			panic(
-	"Basemem segment is not suitable for AP bootstrap code!");
-		physmap[1] = init_ops.mp_bootaddress(physmap[1] / 1024);
-	}
+	if (init_ops.mp_bootaddress)
+		init_ops.mp_bootaddress(physmap, &physmap_idx);
 
 	/*
 	 * Maxmem isn't the "maximum memory", it's one larger than the
@@ -1635,7 +1636,7 @@ hammer_time(u_int64_t modulep, u_int64_t physfree)
 	setidt(IDT_BP, pti ? &IDTVEC(bpt_pti) : &IDTVEC(bpt), SDT_SYSIGT,
 	    SEL_UPL, 0);
 	setidt(IDT_OF, pti ? &IDTVEC(ofl_pti) : &IDTVEC(ofl), SDT_SYSIGT,
-	    SEL_KPL, 0);
+	    SEL_UPL, 0);
 	setidt(IDT_BR, pti ? &IDTVEC(bnd_pti) : &IDTVEC(bnd), SDT_SYSIGT,
 	    SEL_KPL, 0);
 	setidt(IDT_UD, pti ? &IDTVEC(ill_pti) : &IDTVEC(ill), SDT_SYSIGT,

@@ -158,7 +158,7 @@ powerpc/ofw/ofw_real.c		optional	aim
 powerpc/ofw/ofw_syscons.c	optional	sc aim
 powerpc/ofw/ofwcall32.S		optional	aim powerpc
 powerpc/ofw/ofwcall64.S		optional	aim powerpc64
-powerpc/ofw/openpic_ofw.c	optional	standard
+powerpc/ofw/openpic_ofw.c	standard
 powerpc/ofw/rtas.c		optional	aim
 powerpc/powermac/ata_kauai.c	optional	powermac ata | powermac atamacio
 powerpc/powermac/ata_macio.c	optional	powermac ata | powermac atamacio
@@ -212,7 +212,6 @@ powerpc/powerpc/elf32_machdep.c	optional	powerpc | powerpcspe | compat_freebsd32
 powerpc/powerpc/elf64_machdep.c	optional	powerpc64
 powerpc/powerpc/exec_machdep.c	standard
 powerpc/powerpc/fpu.c		standard
-powerpc/powerpc/fuswintr.c	standard
 powerpc/powerpc/gdb_machdep.c	optional	gdb
 powerpc/powerpc/in_cksum.c	optional	inet | inet6
 powerpc/powerpc/interrupt.c	standard
@@ -236,7 +235,6 @@ powerpc/powerpc/sigcode64.S	optional	powerpc64
 powerpc/powerpc/swtch32.S	optional	powerpc | powerpcspe
 powerpc/powerpc/swtch64.S	optional	powerpc64
 powerpc/powerpc/stack_machdep.c	optional	ddb | stack
-powerpc/powerpc/suswintr.c	standard
 powerpc/powerpc/syncicache.c	standard
 powerpc/powerpc/sys_machdep.c	standard
 powerpc/powerpc/trap.c		standard

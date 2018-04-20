@@ -43,7 +43,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_compat.h"
 #include "opt_ddb.h"
 #include "opt_ktrace.h"
 
@@ -684,14 +683,6 @@ trap(struct trapframe *trapframe)
 		 */
 		if (td->td_pcb->pcb_onfault == NULL)
 			goto err;
-
-		/* check for fuswintr() or suswintr() getting a page fault */
-		/* XXX There must be a nicer way to do this.  */
-		if (td->td_pcb->pcb_onfault == fswintrberr) {
-			pc = (register_t)(intptr_t)td->td_pcb->pcb_onfault;
-			td->td_pcb->pcb_onfault = NULL;
-			return (pc);
-		}
 
 		goto dofault;
 

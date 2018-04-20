@@ -139,7 +139,7 @@ __FBSDID("$FreeBSD$");
 #define	WITNESS_COUNT 		1536
 #endif
 #define	WITNESS_HASH_SIZE	251	/* Prime, gives load factor < 2 */
-#define	WITNESS_PENDLIST	(2048 + (MAXCPU * 4))
+#define	WITNESS_PENDLIST	(512 + (MAXCPU * 4))
 
 /* Allocate 256 KB of stack data space */
 #define	WITNESS_LO_DATA_COUNT	2048
@@ -480,7 +480,9 @@ static int w_max_used_index = 0;
 static unsigned int w_generation = 0;
 static const char w_notrunning[] = "Witness not running\n";
 static const char w_stillcold[] = "Witness is still cold\n";
-
+#ifdef __i386__
+static const char w_notallowed[] = "The sysctl is disabled on the arch\n";
+#endif
 
 static struct witness_order_list_entry order_lists[] = {
 	/*
@@ -569,7 +571,7 @@ static struct witness_order_list_entry order_lists[] = {
 	/*
 	 * BPF
 	 */
-	{ "bpf global lock", &lock_class_mtx_sleep },
+	{ "bpf global lock", &lock_class_sx },
 	{ "bpf interface lock", &lock_class_rw },
 	{ "bpf cdev lock", &lock_class_mtx_sleep },
 	{ NULL, NULL },
@@ -638,6 +640,14 @@ static struct witness_order_list_entry order_lists[] = {
 	{ "dn->dn_mtx", &lock_class_sx },
 	{ "dr->dt.di.dr_mtx", &lock_class_sx },
 	{ "db->db_mtx", &lock_class_sx },
+	{ NULL, NULL },
+	/*
+	 * TCP log locks
+	 */
+	{ "TCP ID tree", &lock_class_rw },
+	{ "tcp log id bucket", &lock_class_mtx_sleep },
+	{ "tcpinp", &lock_class_rw },
+	{ "TCP log expireq", &lock_class_mtx_sleep },
 	{ NULL, NULL },
 	/*
 	 * spin locks
@@ -744,27 +754,45 @@ fixup_filename(const char *file)
 }
 
 /*
+ * Calculate the size of early witness structures.
+ */
+int
+witness_startup_count(void)
+{
+	int sz;
+
+	sz = sizeof(struct witness) * witness_count;
+	sz += sizeof(*w_rmatrix) * (witness_count + 1);
+	sz += sizeof(*w_rmatrix[0]) * (witness_count + 1) *
+	    (witness_count + 1);
+
+	return (sz);
+}
+
+/*
  * The WITNESS-enabled diagnostic code.  Note that the witness code does
  * assume that the early boot is single-threaded at least until after this
  * routine is completed.
  */
-static void
-witness_initialize(void *dummy __unused)
+void
+witness_startup(void *mem)
 {
 	struct lock_object *lock;
 	struct witness_order_list_entry *order;
 	struct witness *w, *w1;
+	uintptr_t p;
 	int i;
 
-	w_data = malloc(sizeof (struct witness) * witness_count, M_WITNESS,
-	    M_WAITOK | M_ZERO);
+	p = (uintptr_t)mem;
+	w_data = (void *)p;
+	p += sizeof(struct witness) * witness_count;
 
-	w_rmatrix = malloc(sizeof(*w_rmatrix) * (witness_count + 1),
-	    M_WITNESS, M_WAITOK | M_ZERO);
+	w_rmatrix = (void *)p;
+	p += sizeof(*w_rmatrix) * (witness_count + 1);
 
 	for (i = 0; i < witness_count + 1; i++) {
-		w_rmatrix[i] = malloc(sizeof(*w_rmatrix[i]) *
-		    (witness_count + 1), M_WITNESS, M_WAITOK | M_ZERO);
+		w_rmatrix[i] = (void *)p;
+		p += sizeof(*w_rmatrix[i]) * (witness_count + 1);
 	}
 	badstack_sbuf_size = witness_count * 256;
 
@@ -832,8 +860,6 @@ witness_initialize(void *dummy __unused)
 
 	mtx_lock(&Giant);
 }
-SYSINIT(witness_init, SI_SUB_WITNESS, SI_ORDER_FIRST, witness_initialize,
-    NULL);
 
 void
 witness_init(struct lock_object *lock, const char *type)
@@ -2754,6 +2780,11 @@ sysctl_debug_witness_fullgraph(SYSCTL_HANDLER_ARGS)
 	struct witness *w;
 	struct sbuf *sb;
 	int error;
+
+#ifdef __i386__
+	error = SYSCTL_OUT(req, w_notallowed, sizeof(w_notallowed));
+	return (error);
+#endif
 
 	if (witness_watch < 1) {
 		error = SYSCTL_OUT(req, w_notrunning, sizeof(w_notrunning));

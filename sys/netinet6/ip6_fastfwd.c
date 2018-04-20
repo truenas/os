@@ -97,7 +97,8 @@ ip6_tryforward(struct mbuf *m)
 	 * Fallback conditions to ip6_input for slow path processing.
 	 */
 	ip6 = mtod(m, struct ip6_hdr *);
-	if (ip6->ip6_nxt == IPPROTO_HOPOPTS ||
+	if ((m->m_flags & (M_BCAST | M_MCAST)) != 0 ||
+	    ip6->ip6_nxt == IPPROTO_HOPOPTS ||
 	    IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst) ||
 	    IN6_IS_ADDR_LINKLOCAL(&ip6->ip6_dst) ||
 	    IN6_IS_ADDR_LINKLOCAL(&ip6->ip6_src) ||
@@ -157,7 +158,7 @@ ip6_tryforward(struct mbuf *m)
 	 */
 	if (!PFIL_HOOKED(&V_inet6_pfil_hook))
 		goto passin;
-	if (pfil_run_hooks(&V_inet6_pfil_hook, &m, rcvif, PFIL_IN,
+	if (pfil_run_hooks(&V_inet6_pfil_hook, &m, rcvif, PFIL_IN, 0,
 	    NULL) != 0 || m == NULL)
 		goto dropin;
 	/*
@@ -201,7 +202,7 @@ passin:
 	if (!PFIL_HOOKED(&V_inet6_pfil_hook))
 		goto passout;
 	if (pfil_run_hooks(&V_inet6_pfil_hook, &m, nh.nh_ifp, PFIL_OUT,
-	    NULL) != 0 || m == NULL)
+	    PFIL_FWD, NULL) != 0 || m == NULL)
 		goto dropout;
 
 	/*

@@ -165,15 +165,15 @@ static void		 pf_tbladdr_copyout(struct pf_addr_wrap *);
  */
 #ifdef INET
 static int pf_check_in(void *arg, struct mbuf **m, struct ifnet *ifp,
-    int dir, struct inpcb *inp);
+    int dir, int flags, struct inpcb *inp);
 static int pf_check_out(void *arg, struct mbuf **m, struct ifnet *ifp,
-    int dir, struct inpcb *inp);
+    int dir, int flags, struct inpcb *inp);
 #endif
 #ifdef INET6
 static int pf_check6_in(void *arg, struct mbuf **m, struct ifnet *ifp,
-    int dir, struct inpcb *inp);
+    int dir, int flags, struct inpcb *inp);
 static int pf_check6_out(void *arg, struct mbuf **m, struct ifnet *ifp,
-    int dir, struct inpcb *inp);
+    int dir, int flags, struct inpcb *inp);
 #endif
 
 static int		hook_pf(void);
@@ -215,6 +215,8 @@ pfsync_clear_states_t		*pfsync_clear_states_ptr = NULL;
 pfsync_defer_t			*pfsync_defer_ptr = NULL;
 /* pflog */
 pflog_packet_t			*pflog_packet_ptr = NULL;
+
+extern u_long	pf_ioctl_maxcount;
 
 static void
 pfattach_vnet(void)
@@ -2530,13 +2532,16 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
-		totlen = io->pfrio_size * sizeof(struct pfr_table);
-		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
-		    M_TEMP, M_WAITOK);
-		if (! pfrts) {
+
+		if (io->pfrio_size < 0 || io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_table))) {
 			error = ENOMEM;
 			break;
 		}
+
+		totlen = io->pfrio_size * sizeof(struct pfr_table);
+		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
+		    M_TEMP, M_WAITOK);
 		error = copyin(io->pfrio_buffer, pfrts, totlen);
 		if (error) {
 			free(pfrts, M_TEMP);
@@ -2559,13 +2564,16 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
-		totlen = io->pfrio_size * sizeof(struct pfr_table);
-		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
-		    M_TEMP, M_WAITOK);
-		if (! pfrts) {
+
+		if (io->pfrio_size < 0 || io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_table))) {
 			error = ENOMEM;
 			break;
 		}
+
+		totlen = io->pfrio_size * sizeof(struct pfr_table);
+		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
+		    M_TEMP, M_WAITOK);
 		error = copyin(io->pfrio_buffer, pfrts, totlen);
 		if (error) {
 			free(pfrts, M_TEMP);
@@ -2582,20 +2590,25 @@ DIOCCHANGEADDR_error:
 	case DIOCRGETTABLES: {
 		struct pfioc_table *io = (struct pfioc_table *)addr;
 		struct pfr_table *pfrts;
-		size_t totlen;
+		size_t totlen, n;
 
 		if (io->pfrio_esize != sizeof(struct pfr_table)) {
 			error = ENODEV;
 			break;
 		}
+		PF_RULES_RLOCK();
+		n = pfr_table_count(&io->pfrio_table, io->pfrio_flags);
+		io->pfrio_size = min(io->pfrio_size, n);
+
 		totlen = io->pfrio_size * sizeof(struct pfr_table);
+
 		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
-		    M_TEMP, M_WAITOK);
-		if (! pfrts) {
+		    M_TEMP, M_NOWAIT);
+		if (pfrts == NULL) {
 			error = ENOMEM;
+			PF_RULES_RUNLOCK();
 			break;
 		}
-		PF_RULES_RLOCK();
 		error = pfr_get_tables(&io->pfrio_table, pfrts,
 		    &io->pfrio_size, io->pfrio_flags | PFR_FLAG_USERIOCTL);
 		PF_RULES_RUNLOCK();
@@ -2608,20 +2621,24 @@ DIOCCHANGEADDR_error:
 	case DIOCRGETTSTATS: {
 		struct pfioc_table *io = (struct pfioc_table *)addr;
 		struct pfr_tstats *pfrtstats;
-		size_t totlen;
+		size_t totlen, n;
 
 		if (io->pfrio_esize != sizeof(struct pfr_tstats)) {
 			error = ENODEV;
 			break;
 		}
+		PF_RULES_WLOCK();
+		n = pfr_table_count(&io->pfrio_table, io->pfrio_flags);
+		io->pfrio_size = min(io->pfrio_size, n);
+
 		totlen = io->pfrio_size * sizeof(struct pfr_tstats);
 		pfrtstats = mallocarray(io->pfrio_size,
-		    sizeof(struct pfr_tstats), M_TEMP, M_WAITOK);
-		if (! pfrtstats) {
+		    sizeof(struct pfr_tstats), M_TEMP, M_NOWAIT);
+		if (pfrtstats == NULL) {
 			error = ENOMEM;
+			PF_RULES_WUNLOCK();
 			break;
 		}
-		PF_RULES_WLOCK();
 		error = pfr_get_tstats(&io->pfrio_table, pfrtstats,
 		    &io->pfrio_size, io->pfrio_flags | PFR_FLAG_USERIOCTL);
 		PF_RULES_WUNLOCK();
@@ -2634,25 +2651,31 @@ DIOCCHANGEADDR_error:
 	case DIOCRCLRTSTATS: {
 		struct pfioc_table *io = (struct pfioc_table *)addr;
 		struct pfr_table *pfrts;
-		size_t totlen;
+		size_t totlen, n;
 
 		if (io->pfrio_esize != sizeof(struct pfr_table)) {
 			error = ENODEV;
 			break;
 		}
+
+		PF_RULES_WLOCK();
+		n = pfr_table_count(&io->pfrio_table, io->pfrio_flags);
+		io->pfrio_size = min(io->pfrio_size, n);
+
 		totlen = io->pfrio_size * sizeof(struct pfr_table);
 		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
-		    M_TEMP, M_WAITOK);
-		if (! pfrts) {
+		    M_TEMP, M_NOWAIT);
+		if (pfrts == NULL) {
 			error = ENOMEM;
+			PF_RULES_WUNLOCK();
 			break;
 		}
 		error = copyin(io->pfrio_buffer, pfrts, totlen);
 		if (error) {
 			free(pfrts, M_TEMP);
+			PF_RULES_WUNLOCK();
 			break;
 		}
-		PF_RULES_WLOCK();
 		error = pfr_clr_tstats(pfrts, io->pfrio_size,
 		    &io->pfrio_nzero, io->pfrio_flags | PFR_FLAG_USERIOCTL);
 		PF_RULES_WUNLOCK();
@@ -2663,25 +2686,31 @@ DIOCCHANGEADDR_error:
 	case DIOCRSETTFLAGS: {
 		struct pfioc_table *io = (struct pfioc_table *)addr;
 		struct pfr_table *pfrts;
-		size_t totlen;
+		size_t totlen, n;
 
 		if (io->pfrio_esize != sizeof(struct pfr_table)) {
 			error = ENODEV;
 			break;
 		}
+
+		PF_RULES_WLOCK();
+		n = pfr_table_count(&io->pfrio_table, io->pfrio_flags);
+		io->pfrio_size = min(io->pfrio_size, n);
+
 		totlen = io->pfrio_size * sizeof(struct pfr_table);
 		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
-		    M_TEMP, M_WAITOK);
-		if (! pfrts) {
+		    M_TEMP, M_NOWAIT);
+		if (pfrts == NULL) {
 			error = ENOMEM;
+			PF_RULES_WUNLOCK();
 			break;
 		}
 		error = copyin(io->pfrio_buffer, pfrts, totlen);
 		if (error) {
 			free(pfrts, M_TEMP);
+			PF_RULES_WUNLOCK();
 			break;
 		}
-		PF_RULES_WLOCK();
 		error = pfr_set_tflags(pfrts, io->pfrio_size,
 		    io->pfrio_setflag, io->pfrio_clrflag, &io->pfrio_nchange,
 		    &io->pfrio_ndel, io->pfrio_flags | PFR_FLAG_USERIOCTL);
@@ -2713,9 +2742,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_addr);
 		pfras = mallocarray(io->pfrio_size, sizeof(struct pfr_addr),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2745,9 +2780,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_addr);
 		pfras = mallocarray(io->pfrio_size, sizeof(struct pfr_addr),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2777,10 +2818,19 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 || io->pfrio_size2 < 0) {
+			error = EINVAL;
+			break;
+		}
 		count = max(io->pfrio_size, io->pfrio_size2);
+		if (count > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(count, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = count * sizeof(struct pfr_addr);
 		pfras = mallocarray(count, sizeof(struct pfr_addr), M_TEMP,
-		    M_WAITOK);
+		    M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2811,9 +2861,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_addr);
 		pfras = mallocarray(io->pfrio_size, sizeof(struct pfr_addr),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2837,9 +2893,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_astats))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_astats);
 		pfrastats = mallocarray(io->pfrio_size,
-		    sizeof(struct pfr_astats), M_TEMP, M_WAITOK);
+		    sizeof(struct pfr_astats), M_TEMP, M_NOWAIT);
 		if (! pfrastats) {
 			error = ENOMEM;
 			break;
@@ -2863,9 +2925,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_addr);
 		pfras = mallocarray(io->pfrio_size, sizeof(struct pfr_addr),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2895,9 +2963,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_addr);
 		pfras = mallocarray(io->pfrio_size, sizeof(struct pfr_addr),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2927,9 +3001,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->pfrio_size < 0 ||
+		    io->pfrio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfrio_size, sizeof(struct pfr_addr))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = io->pfrio_size * sizeof(struct pfr_addr);
 		pfras = mallocarray(io->pfrio_size, sizeof(struct pfr_addr),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! pfras) {
 			error = ENOMEM;
 			break;
@@ -2974,9 +3054,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->size < 0 ||
+		    io->size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->size, sizeof(struct pfioc_trans_e))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = sizeof(struct pfioc_trans_e) * io->size;
 		ioes = mallocarray(io->size, sizeof(struct pfioc_trans_e),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! ioes) {
 			error = ENOMEM;
 			break;
@@ -3045,9 +3131,15 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+		if (io->size < 0 ||
+		    io->size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->size, sizeof(struct pfioc_trans_e))) {
+			error = EINVAL;
+			break;
+		}
 		totlen = sizeof(struct pfioc_trans_e) * io->size;
 		ioes = mallocarray(io->size, sizeof(struct pfioc_trans_e),
-		    M_TEMP, M_WAITOK);
+		    M_TEMP, M_NOWAIT);
 		if (! ioes) {
 			error = ENOMEM;
 			break;
@@ -3116,10 +3208,18 @@ DIOCCHANGEADDR_error:
 			error = ENODEV;
 			break;
 		}
+
+		if (io->size < 0 ||
+		    io->size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->size, sizeof(struct pfioc_trans_e))) {
+			error = EINVAL;
+			break;
+		}
+
 		totlen = sizeof(struct pfioc_trans_e) * io->size;
 		ioes = mallocarray(io->size, sizeof(struct pfioc_trans_e),
-		    M_TEMP, M_WAITOK);
-		if (! ioes) {
+		    M_TEMP, M_NOWAIT);
+		if (ioes == NULL) {
 			error = ENOMEM;
 			break;
 		}
@@ -3322,13 +3422,21 @@ DIOCCHANGEADDR_error:
 			break;
 		}
 
+		if (io->pfiio_size < 0 ||
+		    io->pfiio_size > pf_ioctl_maxcount ||
+		    WOULD_OVERFLOW(io->pfiio_size, sizeof(struct pfi_kif))) {
+			error = EINVAL;
+			break;
+		}
+
 		bufsiz = io->pfiio_size * sizeof(struct pfi_kif);
 		ifstore = mallocarray(io->pfiio_size, sizeof(struct pfi_kif),
-		    M_TEMP, M_WAITOK);
-		if (! ifstore) {
+		    M_TEMP, M_NOWAIT);
+		if (ifstore == NULL) {
 			error = ENOMEM;
 			break;
 		}
+
 		PF_RULES_RLOCK();
 		pfi_get_ifaces(io->pfiio_name, ifstore, &io->pfiio_size);
 		PF_RULES_RUNLOCK();
@@ -3649,12 +3757,12 @@ shutdown_pf(void)
 
 #ifdef INET
 static int
-pf_check_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
+pf_check_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir, int flags,
     struct inpcb *inp)
 {
 	int chk;
 
-	chk = pf_test(PF_IN, ifp, m, inp);
+	chk = pf_test(PF_IN, flags, ifp, m, inp);
 	if (chk && *m) {
 		m_freem(*m);
 		*m = NULL;
@@ -3666,12 +3774,12 @@ pf_check_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
 }
 
 static int
-pf_check_out(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
+pf_check_out(void *arg, struct mbuf **m, struct ifnet *ifp, int dir, int flags,
     struct inpcb *inp)
 {
 	int chk;
 
-	chk = pf_test(PF_OUT, ifp, m, inp);
+	chk = pf_test(PF_OUT, flags, ifp, m, inp);
 	if (chk && *m) {
 		m_freem(*m);
 		*m = NULL;
@@ -3685,7 +3793,7 @@ pf_check_out(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
 
 #ifdef INET6
 static int
-pf_check6_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
+pf_check6_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir, int flags,
     struct inpcb *inp)
 {
 	int chk;
@@ -3696,7 +3804,7 @@ pf_check6_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
 	 * filtering we have change this to lo0 as it is the case in IPv4.
 	 */
 	CURVNET_SET(ifp->if_vnet);
-	chk = pf_test6(PF_IN, (*m)->m_flags & M_LOOP ? V_loif : ifp, m, inp);
+	chk = pf_test6(PF_IN, flags, (*m)->m_flags & M_LOOP ? V_loif : ifp, m, inp);
 	CURVNET_RESTORE();
 	if (chk && *m) {
 		m_freem(*m);
@@ -3708,13 +3816,13 @@ pf_check6_in(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
 }
 
 static int
-pf_check6_out(void *arg, struct mbuf **m, struct ifnet *ifp, int dir,
+pf_check6_out(void *arg, struct mbuf **m, struct ifnet *ifp, int dir, int flags,
     struct inpcb *inp)
 {
 	int chk;
 
 	CURVNET_SET(ifp->if_vnet);
-	chk = pf_test6(PF_OUT, ifp, m, inp);
+	chk = pf_test6(PF_OUT, flags, ifp, m, inp);
 	CURVNET_RESTORE();
 	if (chk && *m) {
 		m_freem(*m);
@@ -3743,22 +3851,22 @@ hook_pf(void)
 	pfh_inet = pfil_head_get(PFIL_TYPE_AF, AF_INET);
 	if (pfh_inet == NULL)
 		return (ESRCH); /* XXX */
-	pfil_add_hook(pf_check_in, NULL, PFIL_IN | PFIL_WAITOK, pfh_inet);
-	pfil_add_hook(pf_check_out, NULL, PFIL_OUT | PFIL_WAITOK, pfh_inet);
+	pfil_add_hook_flags(pf_check_in, NULL, PFIL_IN | PFIL_WAITOK, pfh_inet);
+	pfil_add_hook_flags(pf_check_out, NULL, PFIL_OUT | PFIL_WAITOK, pfh_inet);
 #endif
 #ifdef INET6
 	pfh_inet6 = pfil_head_get(PFIL_TYPE_AF, AF_INET6);
 	if (pfh_inet6 == NULL) {
 #ifdef INET
-		pfil_remove_hook(pf_check_in, NULL, PFIL_IN | PFIL_WAITOK,
+		pfil_remove_hook_flags(pf_check_in, NULL, PFIL_IN | PFIL_WAITOK,
 		    pfh_inet);
-		pfil_remove_hook(pf_check_out, NULL, PFIL_OUT | PFIL_WAITOK,
+		pfil_remove_hook_flags(pf_check_out, NULL, PFIL_OUT | PFIL_WAITOK,
 		    pfh_inet);
 #endif
 		return (ESRCH); /* XXX */
 	}
-	pfil_add_hook(pf_check6_in, NULL, PFIL_IN | PFIL_WAITOK, pfh_inet6);
-	pfil_add_hook(pf_check6_out, NULL, PFIL_OUT | PFIL_WAITOK, pfh_inet6);
+	pfil_add_hook_flags(pf_check6_in, NULL, PFIL_IN | PFIL_WAITOK, pfh_inet6);
+	pfil_add_hook_flags(pf_check6_out, NULL, PFIL_OUT | PFIL_WAITOK, pfh_inet6);
 #endif
 
 	V_pf_pfil_hooked = 1;
@@ -3782,18 +3890,18 @@ dehook_pf(void)
 	pfh_inet = pfil_head_get(PFIL_TYPE_AF, AF_INET);
 	if (pfh_inet == NULL)
 		return (ESRCH); /* XXX */
-	pfil_remove_hook(pf_check_in, NULL, PFIL_IN | PFIL_WAITOK,
+	pfil_remove_hook_flags(pf_check_in, NULL, PFIL_IN | PFIL_WAITOK,
 	    pfh_inet);
-	pfil_remove_hook(pf_check_out, NULL, PFIL_OUT | PFIL_WAITOK,
+	pfil_remove_hook_flags(pf_check_out, NULL, PFIL_OUT | PFIL_WAITOK,
 	    pfh_inet);
 #endif
 #ifdef INET6
 	pfh_inet6 = pfil_head_get(PFIL_TYPE_AF, AF_INET6);
 	if (pfh_inet6 == NULL)
 		return (ESRCH); /* XXX */
-	pfil_remove_hook(pf_check6_in, NULL, PFIL_IN | PFIL_WAITOK,
+	pfil_remove_hook_flags(pf_check6_in, NULL, PFIL_IN | PFIL_WAITOK,
 	    pfh_inet6);
-	pfil_remove_hook(pf_check6_out, NULL, PFIL_OUT | PFIL_WAITOK,
+	pfil_remove_hook_flags(pf_check6_out, NULL, PFIL_OUT | PFIL_WAITOK,
 	    pfh_inet6);
 #endif
 

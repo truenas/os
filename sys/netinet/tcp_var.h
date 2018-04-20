@@ -79,6 +79,8 @@ struct sackhint {
 	uint64_t	_pad[1];	/* TBD */
 };
 
+STAILQ_HEAD(tcp_log_stailq, tcp_log_mem);
+
 /*
  * Tcp control block, one per tcp; fields:
  * Organized for 16 byte cacheline efficiency.
@@ -88,6 +90,8 @@ struct tcpcb {
 	int	t_segqlen;		/* segment reassembly queue length */
 	int	t_dupacks;		/* consecutive dup acks recd */
 
+	struct mbuf      *t_in_pkt;	/* head of the input packet queue for the tcp_hpts system */
+	struct mbuf	 *t_tail_pkt;	/* tail of the input packet queue for the tcp_hpts system */
 	struct tcp_timer *t_timers;	/* All the TCP timers in one struct */
 
 	struct	inpcb *t_inpcb;		/* back pointer to internet pcb */
@@ -189,6 +193,13 @@ struct tcpcb {
 	u_int	t_tsomaxsegcount;	/* TSO maximum segment count */
 	u_int	t_tsomaxsegsize;	/* TSO maximum segment size in bytes */
 	u_int	t_flags2;		/* More tcpcb flags storage */
+	int	t_logstate;		/* State of "black box" logging */
+	struct tcp_log_stailq t_logs;	/* Log buffer */
+	int	t_lognum;		/* Number of log entries */
+	uint32_t t_logsn;		/* Log "serial number" */
+	struct tcp_log_id_node *t_lin;
+	struct tcp_log_id_bucket *t_lib;
+	const char *t_output_caller;	/* Function that called tcp_output */
 	struct tcp_function_block *t_fb;/* TCP function call block */
 	void	*t_fb_ptr;		/* Pointer to t_fb specific data */
 	uint8_t t_tfo_client_cookie_len; /* TCP Fast Open client cookie length */
@@ -248,14 +259,19 @@ struct tcptemp {
 struct tcp_function_block {
 	char tfb_tcp_block_name[TCP_FUNCTION_NAME_LEN_MAX];
 	int	(*tfb_tcp_output)(struct tcpcb *);
+	int	(*tfb_tcp_output_wtime)(struct tcpcb *, const struct timeval *);
 	void	(*tfb_tcp_do_segment)(struct mbuf *, struct tcphdr *,
 			    struct socket *, struct tcpcb *,
 			    int, int, uint8_t,
 			    int);
+	void	(*tfb_tcp_hpts_do_segment)(struct mbuf *, struct tcphdr *,
+			    struct socket *, struct tcpcb *,
+			    int, int, uint8_t,
+			    int, int, struct timeval *);
 	int     (*tfb_tcp_ctloutput)(struct socket *so, struct sockopt *sopt,
 			    struct inpcb *inp, struct tcpcb *tp);
 	/* Optional memory allocation/free routine */
-	void	(*tfb_tcp_fb_init)(struct tcpcb *);
+	int	(*tfb_tcp_fb_init)(struct tcpcb *);
 	void	(*tfb_tcp_fb_fini)(struct tcpcb *, int);
 	/* Optional timers, must define all if you define one */
 	int	(*tfb_tcp_timer_stop_all)(struct tcpcb *);
@@ -265,8 +281,10 @@ struct tcp_function_block {
 	void	(*tfb_tcp_timer_stop)(struct tcpcb *, uint32_t);
 	void	(*tfb_tcp_rexmit_tmr)(struct tcpcb *);
 	int	(*tfb_tcp_handoff_ok)(struct tcpcb *);
+	void	(*tfb_tcp_mtu_chg)(struct tcpcb *);
 	volatile uint32_t tfb_refcnt;
 	uint32_t  tfb_flags;
+	uint8_t	tfb_id;
 };
 
 struct tcp_function {
@@ -339,11 +357,12 @@ TAILQ_HEAD(tcp_funchead, tcp_function);
 #define	TCPOOB_HADDATA	0x02
 
 /*
- * Flags for PLPMTU handling, t_flags2
+ * Flags for the extended TCP flags field, t_flags2
  */
 #define	TF2_PLPMTU_BLACKHOLE	0x00000001 /* Possible PLPMTUD Black Hole. */
 #define	TF2_PLPMTU_PMTUD	0x00000002 /* Allowed to attempt PLPMTUD. */
 #define	TF2_PLPMTU_MAXSEGSNT	0x00000004 /* Last seg sent was full seg. */
+#define	TF2_LOG_AUTO		0x00000008 /* Session is auto-logging. */
 
 /*
  * Structure to hold TCP options that are only used during segment
@@ -654,6 +673,7 @@ struct xtcpcb {
 	size_t		xt_len;		/* length of this structure */
 	struct xinpcb	xt_inp;
 	char		xt_stack[TCP_FUNCTION_NAME_LEN_MAX];	/* (s) */
+	char		xt_logid[TCP_LOG_ID_LEN];	/* (s) */
 	int64_t		spare64[8];
 	int32_t		t_state;		/* (s,p) */
 	uint32_t	t_flags;		/* (s,p) */
@@ -666,12 +686,25 @@ struct xtcpcb {
 	int32_t		tt_keep;		/* (s) */
 	int32_t		tt_2msl;		/* (s) */
 	int32_t		tt_delack;		/* (s) */
+	int32_t		t_logstate;		/* (3) */
 	int32_t		spare32[32];
 } __aligned(8);
+
 #ifdef _KERNEL
 void	tcp_inptoxtp(const struct inpcb *, struct xtcpcb *);
 #endif
 #endif
+
+/*
+ * TCP function information (name-to-id mapping, aliases, and refcnt)
+ * exported to user-land via sysctl(3).
+ */
+struct tcp_function_info {
+	uint32_t	tfi_refcnt;
+	uint8_t		tfi_id;
+	char		tfi_name[TCP_FUNCTION_NAME_LEN_MAX];
+	char		tfi_alias[TCP_FUNCTION_NAME_LEN_MAX];
+};
 
 /*
  * Identifiers for TCP sysctl nodes
@@ -826,9 +859,12 @@ int register_tcp_functions_as_names(struct tcp_function_block *blk,
     int wait, const char *names[], int *num_names);
 int register_tcp_functions_as_name(struct tcp_function_block *blk,
     const char *name, int wait);
-int deregister_tcp_functions(struct tcp_function_block *blk);
+int deregister_tcp_functions(struct tcp_function_block *blk, bool quiesce,
+    bool force);
 struct tcp_function_block *find_and_ref_tcp_functions(struct tcp_function_set *fs);
-struct tcp_function_block *find_and_ref_tcp_fb(struct tcp_function_block *blk);
+void tcp_switch_back_to_default(struct tcpcb *tp);
+struct tcp_function_block *
+find_and_ref_tcp_fb(struct tcp_function_block *fs);
 int tcp_default_ctloutput(struct socket *so, struct sockopt *sopt, struct inpcb *inp, struct tcpcb *tp);
 
 uint32_t tcp_maxmtu(struct in_conninfo *, struct tcp_ifcap *);

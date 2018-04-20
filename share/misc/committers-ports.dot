@@ -100,6 +100,7 @@ eadler [label="Eitan Adler\neadler@FreeBSD.org\n2011/08/17"]
 edwin [label="Edwin Groothuis\nedwin@FreeBSD.org\n2002/10/22"]
 ehaupt [label="Emanuel Haupt\nehaupt@FreeBSD.org\n2005/10/03"]
 eik [label="Oliver Eikemeier\neik@FreeBSD.org\n2003/11/12"]
+ericbsd [label="Eric Turgeon\nericbsd@FreeBSD.org\n2018/03/17"]
 erwin [label="Erwin Lansing\nerwin@FreeBSD.org\n2003/06/04"]
 eugen [label="Eugene Grosbein\neugen@FreeBSD.org\n2017/03/04"]
 farrokhi [label="Babak Farrokhi\nfarrokhi@FreeBSD.org\n2006/11/07"]
@@ -176,6 +177,7 @@ martymac [label="Ganael Laplanche\nmartymac@FreeBSD.org\n2010/09/24"]
 mat [label="Mathieu Arnold\nmat@FreeBSD.org\n2003/08/15"]
 matthew [label="Matthew Seaman\nmatthew@FreeBSD.org\n2012/02/07"]
 mezz [label="Jeremy Messenger\nmezz@FreeBSD.org\n2004/04/30"]
+mfechner [label="Matthias Fechner\nmfechner@FreeBSD.org\n2018/03/01"]
 mharo [label="Michael Haro\nmharo@FreeBSD.org\n1999/04/13"]
 milki [label="Jonathan Chu\nmilki@FreeBSD.org\n2013/12/15"]
 misha [label="Mikhail Pchelin\nmisha@FreeBSD.org\n2016/11/15"]
@@ -306,6 +308,7 @@ bapt -> bdrewery
 bapt -> bofh
 bapt -> dumbbell
 bapt -> eadler
+bapt -> ericbsd
 bapt -> grembo
 bapt -> jbeich
 bapt -> jlaffaye
@@ -641,6 +644,7 @@ swills -> dch
 swills -> feld
 swills -> jmd
 swills -> jrm
+swills -> mfechner
 swills -> milki
 swills -> pclin
 swills -> rezny
@@ -678,6 +682,7 @@ tmclaugh -> xride
 
 tz -> joneum
 tz -> fernape
+tz -> mfechner
 
 vsevolod -> eugen
 
@@ -688,6 +693,7 @@ wen -> pawel
 wg -> alexey
 wg -> danilo
 wg -> dvl
+wg -> ericbsd
 wg -> misha
 wg -> nemysis
 
