@@ -58,7 +58,6 @@ __FBSDID("$FreeBSD$");
 
 extern uint32_t _end;
 
-static const uuid_t freebsd_ufs_uuid = GPT_ENT_TYPE_FREEBSD_UFS;
 static const char optstr[NOPT] = "DhaCcdgmnpqrsv"; /* Also 'P', 'S' */
 static const unsigned char flags[NOPT] = {
 	RBX_DUAL,
@@ -85,9 +84,6 @@ static struct dsk dsk;
 static char kname[1024];
 static int comspeed = SIOSPD;
 static struct bootinfo bootinfo;
-#ifdef LOADER_GELI_SUPPORT
-static struct geli_boot_args geliargs;
-#endif
 
 static vm_offset_t	high_heap_base;
 static uint32_t		bios_basemem, bios_extmem, high_heap_size;
@@ -102,27 +98,21 @@ static struct bios_smap smap;
 static char *heap_next;
 static char *heap_end;
 
+int main(void);
+
 static void load(void);
 static int parse_cmds(char *, int *);
-static int dskread(void *, daddr_t, unsigned);
-#ifdef LOADER_GELI_SUPPORT
-static int vdev_read(void *vdev __unused, void *priv, off_t off, void *buf,
-	size_t bytes);
-#endif
 
-#include "ufsread.c"
-#include "gpt.c"
-#ifdef LOADER_GELI_SUPPORT
-#include "geliboot.c"
-static char gelipw[GELI_PW_MAXLEN];
-static struct keybuf *gelibuf;
-#endif
+static uint8_t ls, dsk_meta;
+static uint32_t fs_off;
+
+#include "cd9660read.c"
 
 static inline int
-xfsread(ufs_ino_t inode, void *buf, size_t nbyte)
+xfsread(uint64_t inode, void *buf, size_t nbyte)
 {
 
-	if ((size_t)fsread(inode, buf, nbyte) != nbyte) {
+	if ((size_t)cd9660_fsread(inode, buf, nbyte) != nbyte) {
 		printf("Invalid %s\n", "format");
 		return (-1);
 	}
@@ -221,44 +211,13 @@ bios_getmem(void)
 	}
 }
 
-static int
-gptinit(void)
-{
-
-	if (gptread(&freebsd_ufs_uuid, &dsk, dmadat->secbuf) == -1) {
-		printf("%s: unable to load GPT\n", BOOTPROG);
-		return (-1);
-	}
-	if (gptfind(&freebsd_ufs_uuid, &dsk, dsk.part) == -1) {
-		printf("%s: no UFS partition was found\n", BOOTPROG);
-		return (-1);
-	}
-#ifdef LOADER_GELI_SUPPORT
-	if (geli_taste(vdev_read, &dsk, (gpttable[curent].ent_lba_end -
-	    gpttable[curent].ent_lba_start)) == 0) {
-		if (geli_havekey(&dsk) != 0 && geli_passphrase(gelipw,
-		    dsk.unit, 'p', curent + 1, &dsk) != 0) {
-			printf("%s: unable to decrypt GELI key\n", BOOTPROG);
-			return (-1);
-		}
-	}
-#endif
-
-	dsk_meta = 0;
-	return (0);
-}
-
-int main(void);
-
 int
 main(void)
 {
 	char cmd[512], cmdtmp[512];
 	ssize_t sz;
 	int autoboot, dskupdated;
-	ufs_ino_t ino;
-
-	dmadat = (void *)(roundup2(__base + (int32_t)&_end, 0x10000) - __base);
+	uint64_t ino;
 
 	bios_getmem();
 
@@ -266,7 +225,8 @@ main(void)
 		heap_end = PTOV(high_heap_base + high_heap_size);
 		heap_next = PTOV(high_heap_base);
 	} else {
-		heap_next = (char *)dmadat + sizeof(*dmadat);
+		heap_next = (char *)
+		    (roundup2(__base + (int32_t)&_end, 0x10000) - __base);
 		heap_end = (char *)PTOV(bios_basemem);
 	}
 	setheap(heap_next, heap_end);
@@ -285,29 +245,19 @@ main(void)
 	bootinfo.bi_memsizes_valid++;
 	bootinfo.bi_bios_dev = dsk.drive;
 
-#ifdef LOADER_GELI_SUPPORT
-	geli_init();
-#endif
-	/* Process configuration file */
-
-	if (gptinit() != 0)
-		return (-1);
-
 	autoboot = 1;
 	*cmd = '\0';
 
 	for (;;) {
 		*kname = '\0';
-		if ((ino = lookup(PATH_CONFIG)) ||
-		    (ino = lookup(PATH_DOTCONFIG))) {
-			sz = fsread(ino, cmd, sizeof(cmd) - 1);
+		if ((ino = cd9660_lookup(PATH_CONFIG)) ||
+		    (ino = cd9660_lookup(PATH_DOTCONFIG))) {
+			sz = cd9660_fsread(ino, cmd, sizeof(cmd) - 1);
 			cmd[(sz < 0) ? 0 : sz] = '\0';
 		}
 		if (*cmd != '\0') {
 			memcpy(cmdtmp, cmd, sizeof(cmdtmp));
 			if (parse_cmds(cmdtmp, &dskupdated))
-				break;
-			if (dskupdated && gptinit() != 0)
 				break;
 			if (!OPT_CHECK(RBX_QUIET))
 				printf("%s: %s", PATH_CONFIG, cmd);
@@ -332,9 +282,6 @@ main(void)
 		load();
 		memcpy(kname, PATH_KERNEL, sizeof(PATH_KERNEL));
 		load();
-		gptbootfailed(&dsk);
-		if (gptfind(&freebsd_ufs_uuid, &dsk, -1) == -1)
-			break;
 		dsk_meta = 0;
 	}
 
@@ -359,14 +306,12 @@ main(void)
 			putchar('\a');
 			continue;
 		}
-		if (dskupdated && gptinit() != 0)
-			continue;
 		load();
 	}
 	/* NOTREACHED */
 }
 
-/* XXX - Needed for btxld to link the boot2 binary; do not remove. */
+/* Needed so btxld can link us properly; do not remove. */
 void
 exit(int x)
 {
@@ -385,11 +330,11 @@ load(void)
 	static Elf32_Phdr ep[2];
 	static Elf32_Shdr es[2];
 	caddr_t p;
-	ufs_ino_t ino;
+	uint64_t ino;
 	uint32_t addr, x;
 	int fmt, i, j;
 
-	if (!(ino = lookup(kname))) {
+	if (!(ino = cd9660_lookup(kname))) {
 		if (!ls) {
 			printf("%s: No %s on %u:%s(%up%u)\n", BOOTPROG,
 			    kname, dsk.drive & DRV_MASK, dev_nm[dsk.type],
@@ -470,23 +415,9 @@ load(void)
 	bootinfo.bi_esymtab = VTOP(p);
 	bootinfo.bi_kernelname = VTOP(kname);
 	bootinfo.bi_bios_dev = dsk.drive;
-#ifdef LOADER_GELI_SUPPORT
-	geliargs.size = sizeof(geliargs);
-	explicit_bzero(gelipw, sizeof(gelipw));
-	gelibuf = malloc(sizeof(struct keybuf) +
-	    (GELI_MAX_KEYS * sizeof(struct keybuf_ent)));
-	geli_fill_keybuf(gelibuf);
-	geliargs.notapw = '\0';
-	geliargs.keybuf_sentinel = KEYBUF_SENTINEL;
-	geliargs.keybuf = gelibuf;
-#endif
 	__exec((caddr_t)addr, RB_BOOTINFO | (opts & RBX_MASK),
-	    MAKEBOOTDEV(dev_maj[dsk.type], dsk.part + 1, dsk.unit, 0xff),
-	    KARGS_FLAGS_EXTARG, 0, 0, VTOP(&bootinfo)
-#ifdef LOADER_GELI_SUPPORT
-	    , geliargs
-#endif
-	    );
+	    MAKEBOOTDEV(dev_maj[dsk.type], 0, dsk.unit, 0),
+	    KARGS_FLAGS_EXTARG, 0, 0, VTOP(&bootinfo));
 }
 
 static int
@@ -589,59 +520,3 @@ parse_cmds(char *cmdstr, int *dskupdated)
 	}
 	return (0);
 }
-
-static int
-dskread(void *buf, daddr_t lba, unsigned nblk)
-{
-	int err;
-
-	err = drvread(&dsk, buf, lba + dsk.start, nblk);
-
-#ifdef LOADER_GELI_SUPPORT
-	if (err == 0 && is_geli(&dsk) == 0) {
-		/* Decrypt */
-		if (geli_read(&dsk, lba * DEV_BSIZE, buf, nblk * DEV_BSIZE))
-			return (err);
-	}
-#endif
-
-	return (err);
-}
-
-#ifdef LOADER_GELI_SUPPORT
-/*
- * Read function compartible with the ZFS callback, required to keep the GELI
- * Implementation the same for both UFS and ZFS
- */
-static int
-vdev_read(void *vdev __unused, void *priv, off_t off, void *buf, size_t bytes)
-{
-	char *p;
-	daddr_t lba;
-	unsigned int nb;
-	struct dsk *dskp;
-
-	dskp = (struct dsk *)priv;
-
-	if ((off & (DEV_BSIZE - 1)) || (bytes & (DEV_BSIZE - 1)))
-		return (-1);
-
-	p = buf;
-	lba = off / DEV_BSIZE;
-	lba += dskp->start;
-
-	while (bytes > 0) {
-		nb = bytes / DEV_BSIZE;
-		if (nb > VBLKSIZE / DEV_BSIZE)
-			nb = VBLKSIZE / DEV_BSIZE;
-		if (drvread(dskp, dmadat->blkbuf, lba, nb))
-			return (-1);
-		memcpy(p, dmadat->blkbuf, nb * DEV_BSIZE);
-		p += nb * DEV_BSIZE;
-		lba += nb;
-		bytes -= nb * DEV_BSIZE;
-	}
-
-	return (0);
-}
-#endif /* LOADER_GELI_SUPPORT */
