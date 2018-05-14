@@ -393,7 +393,6 @@ zfs_rmnode(znode_t *zp)
 {
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
 	objset_t	*os = zfsvfs->z_os;
-	znode_t		*xzp = NULL;
 	dmu_tx_t	*tx;
 	uint64_t	acl_obj;
 	uint64_t	xattr_obj;
@@ -443,11 +442,8 @@ zfs_rmnode(znode_t *zp)
 	 */
 	error = sa_lookup(zp->z_sa_hdl, SA_ZPL_XATTR(zfsvfs),
 	    &xattr_obj, sizeof (xattr_obj));
-	if (error == 0 && xattr_obj) {
-		error = zfs_zget(zfsvfs, xattr_obj, &xzp);
-		ASSERT3S(error, ==, 0);
-		vn_lock(ZTOV(xzp), LK_EXCLUSIVE | LK_RETRY);
-	}
+	if (error)
+		xattr_obj = 0;
 
 	acl_obj = zfs_external_acl(zp);
 
@@ -457,10 +453,8 @@ zfs_rmnode(znode_t *zp)
 	tx = dmu_tx_create(os);
 	dmu_tx_hold_free(tx, zp->z_id, 0, DMU_OBJECT_END);
 	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
-	if (xzp) {
+	if (xattr_obj)
 		dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, TRUE, NULL);
-		dmu_tx_hold_sa(tx, xzp->z_sa_hdl, B_FALSE);
-	}
 	if (acl_obj)
 		dmu_tx_hold_free(tx, acl_obj, 0, DMU_OBJECT_END);
 
@@ -475,16 +469,13 @@ zfs_rmnode(znode_t *zp)
 		dmu_tx_abort(tx);
 		zfs_znode_dmu_fini(zp);
 		zfs_znode_free(zp);
-		goto out;
+		return;
 	}
 
-	if (xzp) {
-		ASSERT(error == 0);
-		xzp->z_unlinked = B_TRUE;	/* mark xzp for deletion */
-		xzp->z_links = 0;	/* no more links to it */
-		VERIFY(0 == sa_update(xzp->z_sa_hdl, SA_ZPL_LINKS(zfsvfs),
-		    &xzp->z_links, sizeof (xzp->z_links), tx));
-		zfs_unlinked_add(xzp, tx);
+	if (xattr_obj) {
+		/* Add extended attribute directory to the unlinked set. */
+		VERIFY3U(0, ==,
+		    zap_add_int(os, zfsvfs->z_unlinkedobj, xattr_obj, tx));
 	}
 
 	/* Remove this znode from the unlinked set */
@@ -494,9 +485,16 @@ zfs_rmnode(znode_t *zp)
 	zfs_znode_delete(zp, tx);
 
 	dmu_tx_commit(tx);
-out:
-	if (xzp)
-		vput(ZTOV(xzp));
+
+	if (xattr_obj) {
+		/*
+		 * We're using the FreeBSD taskqueue API here instead of
+		 * the Solaris taskq API since the FreeBSD API allows for a
+		 * task to be enqueued multiple times but executed once.
+		 */
+		taskqueue_enqueue(system_taskq->tq_queue,
+		    &zfsvfs->z_unlinked_drain_task);
+	}
 }
 
 static uint64_t
