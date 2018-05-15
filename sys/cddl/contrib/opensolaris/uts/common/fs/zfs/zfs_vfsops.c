@@ -102,6 +102,8 @@ static int zfs_fhtovp(vfs_t *vfsp, fid_t *fidp, int flags, vnode_t **vpp);
 static void zfs_objset_close(zfsvfs_t *zfsvfs);
 static void zfs_freevfs(vfs_t *vfsp);
 
+static task_fn_t zfsvfs_task_unlinked_drain;
+
 struct vfsops zfs_vfsops = {
 	.vfs_mount =		zfs_mount,
 	.vfs_unmount =		zfs_umount,
@@ -1023,6 +1025,8 @@ zfsvfs_create_impl(zfsvfs_t **zfvp, zfsvfs_t *zfsvfs, objset_t *os)
 	mutex_init(&zfsvfs->z_lock, NULL, MUTEX_DEFAULT, NULL);
 	list_create(&zfsvfs->z_all_znodes, sizeof (znode_t),
 	    offsetof(znode_t, z_link_node));
+	TASK_INIT(&zfsvfs->z_unlinked_drain_task, 0,
+	    zfsvfs_task_unlinked_drain, zfsvfs);
 #ifdef DIAGNOSTIC
 	rrm_init(&zfsvfs->z_teardown_lock, B_TRUE);
 #else
@@ -2018,6 +2022,11 @@ zfs_umount(vfs_t *vfsp, int fflag)
 	}
 #endif
 
+	while (taskqueue_cancel(system_taskq->tq_queue,
+	    &zfsvfs->z_unlinked_drain_task, NULL) != 0)
+		taskqueue_drain(system_taskq->tq_queue,
+		    &zfsvfs->z_unlinked_drain_task);
+
 	VERIFY(zfsvfs_teardown(zfsvfs, B_TRUE) == 0);
 	os = zfsvfs->z_os;
 
@@ -2562,3 +2571,10 @@ zfsvfs_update_fromname(const char *oldname, const char *newname)
 	mtx_unlock(&mountlist_mtx);
 }
 #endif
+
+static void
+zfsvfs_task_unlinked_drain(void *context, int pending __unused)
+{
+
+	zfs_unlinked_drain((zfsvfs_t *)context);
+}
