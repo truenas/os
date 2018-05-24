@@ -258,6 +258,12 @@
 #define	NFSX_V4SETTIME		(NFSX_UNSIGNED + NFSX_V4TIME)
 #define	NFSX_V4SESSIONID	16
 #define	NFSX_V4DEVICEID		16
+#define	NFSX_V4PNFSFH		(sizeof(fhandle_t) + 1)
+#define	NFSX_V4FILELAYOUT	(4 * NFSX_UNSIGNED + NFSX_V4DEVICEID +	\
+				 NFSX_HYPER + NFSM_RNDUP(NFSX_V4PNFSFH))
+#define	NFSX_V4FLEXLAYOUT(m)	(NFSX_HYPER + 3 * NFSX_UNSIGNED +		\
+    ((m) * (NFSX_V4DEVICEID + NFSX_STATEID + NFSM_RNDUP(NFSX_V4PNFSFH) +	\
+    8 * NFSX_UNSIGNED)))
 
 /* sizes common to multiple NFS versions */
 #define	NFSX_FHMAX		(NFSX_V4FHMAX)
@@ -637,6 +643,7 @@
 #define	NFSLAYOUT_NFSV4_1_FILES		0x1
 #define	NFSLAYOUT_OSD2_OBJECTS		0x2
 #define	NFSLAYOUT_BLOCK_VOLUME		0x3
+#define	NFSLAYOUT_FLEXFILE		0x4
 
 #define	NFSLAYOUTIOMODE_READ		1
 #define	NFSLAYOUTIOMODE_RW		2
@@ -649,7 +656,15 @@
 /* Flags for File Layout. */
 #define	NFSFLAYUTIL_DENSE		0x1
 #define	NFSFLAYUTIL_COMMIT_THRU_MDS	0x2
+#define	NFSFLAYUTIL_STRIPE_MASK		0xffffffc0
 
+/* Flags for Flex File Layout. */
+#define	NFSFLEXFLAG_NO_LAYOUTCOMMIT	0x00000001
+#define	NFSFLEXFLAG_NOIO_MDS		0x00000002
+#define	NFSFLEXFLAG_NO_READIO		0x00000004
+#define	NFSFLEXFLAG_WRITE_ONEMIRROR	0x00000008
+
+#if defined(_KERNEL) || defined(KERNEL)
 /* Conversion macros */
 #define	vtonfsv2_mode(t,m) 						\
 		txdr_unsigned(((t) == VFIFO) ? MAKEIMODE(VCHR, (m)) : 	\
@@ -799,6 +814,7 @@ struct nfsv3_sattr {
 	u_int32_t sa_mtimetype;
 	nfstime3  sa_mtime;
 };
+#endif	/* _KERNEL */
 
 /*
  * The attribute bits used for V4.
@@ -1026,7 +1042,8 @@ struct nfsv3_sattr {
  	NFSATTRBM_MOUNTEDONFILEID |					\
 	NFSATTRBM_QUOTAHARD |                        			\
     	NFSATTRBM_QUOTASOFT |                        			\
-    	NFSATTRBM_QUOTAUSED)
+    	NFSATTRBM_QUOTAUSED |						\
+	NFSATTRBM_FSLAYOUTTYPE)
 
 
 #ifdef QUOTA
@@ -1042,7 +1059,11 @@ struct nfsv3_sattr {
 #define	NFSATTRBIT_SUPP1	NFSATTRBIT_S1
 #endif
 
-#define	NFSATTRBIT_SUPP2	NFSATTRBM_SUPPATTREXCLCREAT
+#define	NFSATTRBIT_SUPP2						\
+	(NFSATTRBM_LAYOUTTYPE |						\
+	NFSATTRBM_LAYOUTBLKSIZE |					\
+	NFSATTRBM_LAYOUTALIGNMENT |					\
+	NFSATTRBM_SUPPATTREXCLCREAT)
 
 /*
  * NFSATTRBIT_SUPPSETONLY is the OR of NFSATTRBIT_TIMEACCESSSET and
@@ -1358,5 +1379,15 @@ struct nfsv4stateid {
 	u_int32_t	other[NFSX_STATEIDOTHER / NFSX_UNSIGNED];
 };
 typedef struct nfsv4stateid nfsv4stateid_t;
+
+/* Notify bits and notify bitmap size. */
+#define	NFSV4NOTIFY_CHANGE	1
+#define	NFSV4NOTIFY_DELETE	2
+#define	NFSV4_NOTIFYBITMAP	1	/* # of 32bit values needed for bits */
+
+/* Layoutreturn kinds. */
+#define	NFSV4LAYOUTRET_FILE	1
+#define	NFSV4LAYOUTRET_FSID	2
+#define	NFSV4LAYOUTRET_ALL	3
 
 #endif	/* _NFS_NFSPROTO_H_ */
