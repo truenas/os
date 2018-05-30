@@ -128,7 +128,7 @@ int nfsrv_checksetattr(vnode_t, struct nfsrv_descript *,
     nfsv4stateid_t *, struct nfsvattr *, nfsattrbit_t *, struct nfsexstuff *,
     NFSPROC_T *);
 int nfsrv_checkgetattr(struct nfsrv_descript *, vnode_t,
-    struct nfsvattr *, nfsattrbit_t *, NFSPROC_T *);
+    struct nfsvattr *, nfsattrbit_t *, struct ucred *, NFSPROC_T *);
 int nfsrv_nfsuserdport(u_short, NFSPROC_T *);
 void nfsrv_nfsuserddelport(void);
 void nfsrv_throwawayallstate(NFSPROC_T *);
