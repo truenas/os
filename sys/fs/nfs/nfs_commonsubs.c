@@ -68,11 +68,15 @@ gid_t nfsrv_defaultgid = GID_NOGROUP;
 int nfsrv_lease = NFSRV_LEASE;
 int ncl_mbuf_mlen = MLEN;
 int nfsd_enable_stringtouid = 0;
+int nfsrv_doflexfile = 0;
+int nfsrv_maxpnfsmirror = 1;
 static int nfs_enable_uidtostring = 0;
 static int nfs_suppress_32bits_warning = 0;
 NFSNAMEIDMUTEX;
 NFSSOCKMUTEX;
 extern int nfsrv_lughashsize;
+extern struct mtx nfsrv_dslock_mtx;
+extern struct nfsdevicehead nfsrv_devidhead;
 
 SYSCTL_DECL(_vfs_nfs);
 SYSCTL_INT(_vfs_nfs, OID_AUTO, enable_uidtostring, CTLFLAG_RW,
@@ -1798,6 +1802,42 @@ nfsv4_loadattr(struct nfsrv_descript *nd, vnode_t vp,
 			}
 			attrsum += cnt;
 			break;
+		case NFSATTRBIT_FSLAYOUTTYPE:
+		case NFSATTRBIT_LAYOUTTYPE:
+			NFSM_DISSECT(tl, u_int32_t *, NFSX_UNSIGNED);
+			attrsum += NFSX_UNSIGNED;
+			i = fxdr_unsigned(int, *tl);
+			if (i > 0) {
+				NFSM_DISSECT(tl, u_int32_t *, i *
+				    NFSX_UNSIGNED);
+				attrsum += i * NFSX_UNSIGNED;
+				j = fxdr_unsigned(int, *tl);
+				if (i == 1 && compare && !(*retcmpp) &&
+				    (((nfsrv_doflexfile != 0 ||
+				       nfsrv_maxpnfsmirror > 1) &&
+				      j != NFSLAYOUT_FLEXFILE) ||
+				    (nfsrv_doflexfile == 0 &&
+				     j != NFSLAYOUT_NFSV4_1_FILES)))
+					*retcmpp = NFSERR_NOTSAME;
+			}
+			NFSDDSLOCK();
+			if (TAILQ_EMPTY(&nfsrv_devidhead)) {
+				if (compare && !(*retcmpp) && i > 0)
+					*retcmpp = NFSERR_NOTSAME;
+			} else {
+				if (compare && !(*retcmpp) && i != 1)
+					*retcmpp = NFSERR_NOTSAME;
+			}
+			NFSDDSUNLOCK();
+			break;
+		case NFSATTRBIT_LAYOUTALIGNMENT:
+		case NFSATTRBIT_LAYOUTBLKSIZE:
+			NFSM_DISSECT(tl, u_int32_t *, NFSX_UNSIGNED);
+			attrsum += NFSX_UNSIGNED;
+			i = fxdr_unsigned(int, *tl);
+			if (compare && !(*retcmpp) && i != NFS_SRVMAXIO)
+				*retcmpp = NFSERR_NOTSAME;
+			break;
 		default:
 			printf("EEK! nfsv4_loadattr unknown attr=%d\n",
 				bitpos);
@@ -2543,6 +2583,35 @@ nfsv4_fillattr(struct nfsrv_descript *nd, struct mount *mp, vnode_t vp,
 			NFSCLRNOTSETABLE_ATTRBIT(&attrbits);
 			NFSCLRBIT_ATTRBIT(&attrbits, NFSATTRBIT_TIMEACCESSSET);
 			retnum += nfsrv_putattrbit(nd, &attrbits);
+			break;
+		case NFSATTRBIT_FSLAYOUTTYPE:
+		case NFSATTRBIT_LAYOUTTYPE:
+			NFSDDSLOCK();
+			if (TAILQ_EMPTY(&nfsrv_devidhead))
+				siz = 1;
+			else
+				siz = 2;
+			NFSDDSUNLOCK();
+			if (siz == 2) {
+				NFSM_BUILD(tl, u_int32_t *, 2 * NFSX_UNSIGNED);
+				*tl++ = txdr_unsigned(1);	/* One entry. */
+				if (nfsrv_doflexfile != 0 ||
+				    nfsrv_maxpnfsmirror > 1)
+					*tl = txdr_unsigned(NFSLAYOUT_FLEXFILE);
+				else
+					*tl = txdr_unsigned(
+					    NFSLAYOUT_NFSV4_1_FILES);
+			} else {
+				NFSM_BUILD(tl, u_int32_t *, NFSX_UNSIGNED);
+				*tl = 0;
+			}
+			retnum += siz * NFSX_UNSIGNED;
+			break;
+		case NFSATTRBIT_LAYOUTALIGNMENT:
+		case NFSATTRBIT_LAYOUTBLKSIZE:
+			NFSM_BUILD(tl, u_int32_t *, NFSX_UNSIGNED);
+			*tl = txdr_unsigned(NFS_SRVMAXIO);
+			retnum += NFSX_UNSIGNED;
 			break;
 		default:
 			printf("EEK! Bad V4 attribute bitpos=%d\n", bitpos);
@@ -3960,14 +4029,13 @@ newnfs_sndunlock(int *flagp)
 }
 
 APPLESTATIC int
-nfsv4_getipaddr(struct nfsrv_descript *nd, struct sockaddr_storage *sa,
-    int *isudp)
+nfsv4_getipaddr(struct nfsrv_descript *nd, struct sockaddr_in *sin,
+    struct sockaddr_in6 *sin6, sa_family_t *saf, int *isudp)
 {
-	struct sockaddr_in *sad;
-	struct sockaddr_in6 *sad6;
 	struct in_addr saddr;
 	uint32_t portnum, *tl;
-	int af = 0, i, j, k;
+	int i, j, k;
+	sa_family_t af = AF_UNSPEC;
 	char addr[64], protocol[5], *cp;
 	int cantparse = 0, error = 0;
 	uint16_t portv;
@@ -4045,20 +4113,20 @@ nfsv4_getipaddr(struct nfsrv_descript *nd, struct sockaddr_storage *sa,
 			cantparse = 1;
 		if (cantparse == 0) {
 			if (af == AF_INET) {
-				sad = (struct sockaddr_in *)sa;
-				if (inet_pton(af, addr, &sad->sin_addr) == 1) {
-					sad->sin_len = sizeof(*sad);
-					sad->sin_family = AF_INET;
-					sad->sin_port = htons(portv);
+				if (inet_pton(af, addr, &sin->sin_addr) == 1) {
+					sin->sin_len = sizeof(*sin);
+					sin->sin_family = AF_INET;
+					sin->sin_port = htons(portv);
+					*saf = af;
 					return (0);
 				}
 			} else {
-				sad6 = (struct sockaddr_in6 *)sa;
-				if (inet_pton(af, addr, &sad6->sin6_addr)
+				if (inet_pton(af, addr, &sin6->sin6_addr)
 				    == 1) {
-					sad6->sin6_len = sizeof(*sad6);
-					sad6->sin6_family = AF_INET6;
-					sad6->sin6_port = htons(portv);
+					sin6->sin6_len = sizeof(*sin6);
+					sin6->sin6_family = AF_INET6;
+					sin6->sin6_port = htons(portv);
+					*saf = af;
 					return (0);
 				}
 			}
