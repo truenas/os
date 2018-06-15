@@ -60,6 +60,7 @@ SUBDIR=	adduser \
 	nologin \
 	pciconf \
 	periodic \
+	pnfsdsfile \
 	pnfsdskill \
 	powerd \
 	procctl \
