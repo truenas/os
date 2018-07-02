@@ -29,11 +29,11 @@ menu-init     \ initialize the menu area (see `menu.4th')
 set menuset_name1="main"
 
 set mainmenu_init[1]="init_boot"
-set mainmenu_caption[1]="Boot FreeNAS [Enter]"
-set maintoggled_text[1]="Boot FreeNAS (Single User) [Enter]"
+set mainmenu_caption[1]="Boot FreeNAS Installer [Enter]"
+set maintoggled_text[1]="Boot FreeNAS Installer (Single User) [Enter]"
 set mainmenu_command[1]="boot"
-set mainansi_caption[1]="^[1mB^[moot FreeNAS ^[1m[Enter]^[m"
-set maintoggled_ansi[1]="Boot FreeNAS (Single User) ^[1m[Enter]^[m"
+set mainansi_caption[1]="^[1mB^[moot FreeNAS Installer ^[1m[Enter]^[m"
+set maintoggled_ansi[1]="Boot FreeNAS Installer (Single User) ^[1m[Enter]^[m"
 \ keycode set by init_boot
 
 \ Enable built-in "Reboot" trailing menuitem
