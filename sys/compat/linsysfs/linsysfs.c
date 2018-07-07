@@ -251,6 +251,7 @@ linsysfs_fill_vgapci(PFS_FILL_ARGS)
 	return (0);
 }
 
+#undef PCI_DEV
 #define PCI_DEV "pci"
 #define DRMN_DEV "drmn"
 static int
