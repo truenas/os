@@ -187,17 +187,17 @@ as follows:
 .Bd -literal -offset indent -compact
 nfs_server_enable="YES"
 nfsv4_server_enable="YES"
+.Ed
+.sp
+plus
+.sp
+.Bd -literal -offset indent -compact
 nfsuserd_enable="YES"
 .Ed
 .sp
-or start
-.Xr mountd 8
-and
-.Xr nfsd 8
-without the ``-o'' option, which would force use of the old server.
-The
-.Xr nfsuserd 8
-daemon must also be running.
+if the server is using the ``<user>@<domain>'' form of user/group strings or
+is using the ``-manage-gids'' option for
+.Xr nfsuserd 8 .
 .Pp
 You will also need to add at least one ``V4:'' line to the
 .Xr exports 5
