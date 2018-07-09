@@ -26,7 +26,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd February 23, 2018
+.Dd February 21, 2013
 .Dt CARP 4
 .Os
 .Sh NAME
@@ -102,13 +102,6 @@ Allow virtual hosts to preempt each other.
 When enabled, a vhid in a backup state would preempt a master that
 is announcing itself with a lower advskew.
 Disabled by default.
-.It Va net.inet.carp.dscp
-Set DSCP value in carp packet
-When enabled, set Class of Service to CS7 (network control) in outgoing
-carp packets.
-When disabled, Class of Service is set to TOS LOW_DELAY.
-TOS values were deprecated and replaced by DSCP in 1998.
-Enabled by default.
 .It Va net.inet.carp.log
 Determines what events relating to
 .Nm
