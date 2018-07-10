@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -301,7 +301,8 @@ int	ixl_aq_get_link_status(struct ixl_pf *,
 
 int	ixl_handle_nvmupd_cmd(struct ixl_pf *, struct ifdrv *);
 void	ixl_handle_empr_reset(struct ixl_pf *);
-int	ixl_rebuild_hw_structs_after_reset(struct ixl_pf *);
+int	ixl_prepare_for_reset(struct ixl_pf *pf, bool is_up);
+int	ixl_rebuild_hw_structs_after_reset(struct ixl_pf *, bool is_up);
 
 void	ixl_set_queue_rx_itr(struct ixl_queue *);
 void	ixl_set_queue_tx_itr(struct ixl_queue *);
@@ -344,6 +345,9 @@ void	ixl_free_mac_filters(struct ixl_vsi *vsi);
 void	ixl_update_vsi_stats(struct ixl_vsi *);
 void	ixl_vsi_reset_stats(struct ixl_vsi *);
 
+int	ixl_vsi_setup_queues(struct ixl_vsi *vsi);
+void	ixl_vsi_free_queues(struct ixl_vsi *vsi);
+
 /*
  * I2C Function prototypes
  */
@@ -354,5 +358,6 @@ s32	ixl_write_i2c_byte(struct ixl_pf *pf, u8 byte_offset,
 	    u8 dev_addr, u8 data);
 
 int	ixl_get_fw_lldp_status(struct ixl_pf *pf);
+int	ixl_attach_get_link_status(struct ixl_pf *);
 
 #endif /* _IXL_PF_H_ */

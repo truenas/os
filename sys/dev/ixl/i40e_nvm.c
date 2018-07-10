@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -504,9 +504,9 @@ enum i40e_status_code i40e_read_nvm_buffer(struct i40e_hw *hw, u16 offset,
 	} else {
 		ret_code = i40e_read_nvm_buffer_srctl(hw, offset, words, data);
 	}
-
 	return ret_code;
 }
+
 
 /**
  * i40e_write_nvm_aq - Writes Shadow RAM.
@@ -1291,6 +1291,7 @@ void i40e_nvmupd_clear_wait_state(struct i40e_hw *hw)
  * i40e_nvmupd_check_wait_event - handle NVM update operation events
  * @hw: pointer to the hardware structure
  * @opcode: the event that just happened
+ * @desc: AdminQ descriptor
  **/
 void i40e_nvmupd_check_wait_event(struct i40e_hw *hw, u16 opcode,
 				  struct i40e_aq_desc *desc)

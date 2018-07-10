@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -49,11 +49,11 @@
  *********************************************************************/
 #define IXL_DRIVER_VERSION_MAJOR	1
 #define IXL_DRIVER_VERSION_MINOR	9
-#define IXL_DRIVER_VERSION_BUILD	5
+#define IXL_DRIVER_VERSION_BUILD	9
 
 char ixl_driver_version[] = __XSTRING(IXL_DRIVER_VERSION_MAJOR) "."
 			    __XSTRING(IXL_DRIVER_VERSION_MINOR) "."
-			    __XSTRING(IXL_DRIVER_VERSION_BUILD);
+			    __XSTRING(IXL_DRIVER_VERSION_BUILD) "-k";
 
 /*********************************************************************
  *  PCI Device ID Table
@@ -105,7 +105,6 @@ static int      ixl_detach(device_t);
 static int      ixl_shutdown(device_t);
 
 static int	ixl_save_pf_tunables(struct ixl_pf *);
-static int	ixl_attach_get_link_status(struct ixl_pf *);
 
 /*********************************************************************
  *  FreeBSD Device Interface Entry Points
@@ -132,7 +131,7 @@ static driver_t ixl_driver = {
 devclass_t ixl_devclass;
 DRIVER_MODULE(ixl, pci, ixl_driver, ixl_devclass, 0, 0);
 
-MODULE_VERSION(ixl, 2);
+MODULE_VERSION(ixl, 1);
 
 MODULE_DEPEND(ixl, pci, 1, 1, 1);
 MODULE_DEPEND(ixl, ether, 1, 1, 1);
@@ -310,30 +309,6 @@ ixl_probe(device_t dev)
 		ent++;
 	}
 	return (ENXIO);
-}
-
-static int
-ixl_attach_get_link_status(struct ixl_pf *pf)
-{
-	struct i40e_hw *hw = &pf->hw;
-	device_t dev = pf->dev;
-	int error = 0;
-
-	if (((hw->aq.fw_maj_ver == 4) && (hw->aq.fw_min_ver < 33)) ||
-	    (hw->aq.fw_maj_ver < 4)) {
-		i40e_msec_delay(75);
-		error = i40e_aq_set_link_restart_an(hw, TRUE, NULL);
-		if (error) {
-			device_printf(dev, "link restart failed, aq_err=%d\n",
-			    pf->hw.aq.asq_last_status);
-			return error;
-		}
-	}
-
-	/* Determine link state */
-	hw->phy.get_link_info = TRUE;
-	i40e_get_link_status(hw, &pf->link_up);
-	return (0);
 }
 
 /*

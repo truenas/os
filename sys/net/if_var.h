@@ -313,7 +313,12 @@ struct ifnet {
 	 */
 	void	*if_pspare[3];		/* packet pacing / general use */
 	void	*if_hw_addr;		/* hardware link-level address */
-	int	if_ispare[4];		/* packet pacing / general use */
+
+	/* Ethernet PCP */
+	uint8_t if_pcp;
+
+	uint8_t if_bspare[3];
+	int	if_ispare[3];		/* packet pacing / general use */
 };
 
 /* for compatibility with other BSDs */
@@ -363,6 +368,8 @@ EVENTHANDLER_DECLARE(ifnet_link_event, ifnet_link_event_handler_t);
 /* Interface up/down event */
 #define IFNET_EVENT_UP		0
 #define IFNET_EVENT_DOWN	1
+#define IFNET_EVENT_PCP		2	/* priority code point, PCP */
+
 typedef void (*ifnet_event_fn)(void *, struct ifnet *ifp, int event);
 EVENTHANDLER_DECLARE(ifnet_event, ifnet_event_fn);
 #endif /* _SYS_EVENTHANDLER_H_ */

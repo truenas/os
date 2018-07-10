@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -204,14 +204,9 @@ enum i40e_admin_queue_opc {
 	i40e_aqc_opc_add_cloud_filters		= 0x025C,
 	i40e_aqc_opc_remove_cloud_filters	= 0x025D,
 	i40e_aqc_opc_clear_wol_switch_filters	= 0x025E,
-	i40e_aqc_opc_replace_cloud_filters	= 0x025F,
 
 	i40e_aqc_opc_add_mirror_rule	= 0x0260,
 	i40e_aqc_opc_delete_mirror_rule	= 0x0261,
-
-	/* Dynamic Device Personalization */
-	i40e_aqc_opc_write_personalization_profile	= 0x0270,
-	i40e_aqc_opc_get_personalization_profile_list	= 0x0271,
 
 	/* DCB commands */
 	i40e_aqc_opc_dcb_ignore_pfc	= 0x0301,
@@ -806,7 +801,35 @@ struct i40e_aqc_set_switch_config {
 	 */
 	__le16	first_tag;
 	__le16	second_tag;
-	u8	reserved[6];
+	/* Next byte is split into following:
+	 * Bit 7    : 0 : No action, 1: Switch to mode defined by bits 6:0
+	 * Bit 6    : 0 : Destination Port, 1: source port
+	 * Bit 5..4 : L4 type
+	 * 0: rsvd
+	 * 1: TCP
+	 * 2: UDP
+	 * 3: Both TCP and UDP
+	 * Bits 3:0 Mode
+	 * 0: default mode
+	 * 1: L4 port only mode
+	 * 2: non-tunneled mode
+	 * 3: tunneled mode
+	 */
+#define I40E_AQ_SET_SWITCH_BIT7_VALID		0x80
+
+#define I40E_AQ_SET_SWITCH_L4_SRC_PORT		0x40
+
+#define I40E_AQ_SET_SWITCH_L4_TYPE_RSVD		0x00
+#define I40E_AQ_SET_SWITCH_L4_TYPE_TCP		0x10
+#define I40E_AQ_SET_SWITCH_L4_TYPE_UDP		0x20
+#define I40E_AQ_SET_SWITCH_L4_TYPE_BOTH		0x30
+
+#define I40E_AQ_SET_SWITCH_MODE_DEFAULT		0x00
+#define I40E_AQ_SET_SWITCH_MODE_L4_PORT		0x01
+#define I40E_AQ_SET_SWITCH_MODE_NON_TUNNEL	0x02
+#define I40E_AQ_SET_SWITCH_MODE_TUNNEL		0x03
+	u8	mode;
+	u8	rsvd5[5];
 };
 
 I40E_CHECK_CMD_LENGTH(i40e_aqc_set_switch_config);
@@ -1359,9 +1382,7 @@ struct i40e_aqc_add_remove_cloud_filters {
 #define I40E_AQC_ADD_CLOUD_CMD_SEID_NUM_SHIFT	0
 #define I40E_AQC_ADD_CLOUD_CMD_SEID_NUM_MASK	(0x3FF << \
 					I40E_AQC_ADD_CLOUD_CMD_SEID_NUM_SHIFT)
-	u8	big_buffer_flag;
-#define I40E_AQC_ADD_REM_CLOUD_CMD_BIG_BUFFER	1
-	u8	reserved2[3];
+	u8	reserved2[4];
 	__le32	addr_high;
 	__le32	addr_low;
 };
@@ -1398,7 +1419,6 @@ struct i40e_aqc_add_remove_cloud_filters_element_data {
 #define I40E_AQC_ADD_CLOUD_FILTER_IMAC			0x000A
 #define I40E_AQC_ADD_CLOUD_FILTER_OMAC_TEN_ID_IMAC	0x000B
 #define I40E_AQC_ADD_CLOUD_FILTER_IIP			0x000C
-/* 0x0010 to 0x0017 is for custom filters */
 
 #define I40E_AQC_ADD_CLOUD_FLAGS_TO_QUEUE		0x0080
 #define I40E_AQC_ADD_CLOUD_VNK_SHIFT			6
@@ -1433,46 +1453,6 @@ struct i40e_aqc_add_remove_cloud_filters_element_data {
 	u8	response_reserved[7];
 };
 
-/* i40e_aqc_add_rm_cloud_filt_elem_ext is used when
- * I40E_AQC_ADD_REM_CLOUD_CMD_BIG_BUFFER flag is set. refer to
- * DCR288
- */
-struct i40e_aqc_add_rm_cloud_filt_elem_ext {
-	struct i40e_aqc_add_remove_cloud_filters_element_data element;
-	u16     general_fields[32];
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X10_WORD0	0
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X10_WORD1	1
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X10_WORD2	2
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X11_WORD0	3
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X11_WORD1	4
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X11_WORD2	5
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X12_WORD0	6
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X12_WORD1	7
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X12_WORD2	8
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X13_WORD0	9
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X13_WORD1	10
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X13_WORD2	11
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X14_WORD0	12
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X14_WORD1	13
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X14_WORD2	14
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD0	15
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD1	16
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD2	17
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD3	18
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD4	19
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD5	20
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD6	21
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X16_WORD7	22
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD0	23
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD1	24
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD2	25
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD3	26
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD4	27
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD5	28
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD6	29
-#define I40E_AQC_ADD_CLOUD_FV_FLU_0X17_WORD7	30
-};
-
 struct i40e_aqc_remove_cloud_filters_completion {
 	__le16 perfect_ovlan_used;
 	__le16 perfect_ovlan_free;
@@ -1483,54 +1463,6 @@ struct i40e_aqc_remove_cloud_filters_completion {
 };
 
 I40E_CHECK_CMD_LENGTH(i40e_aqc_remove_cloud_filters_completion);
-
-/* Replace filter Command 0x025F
- * uses the i40e_aqc_replace_cloud_filters,
- * and the generic indirect completion structure
- */
-struct i40e_filter_data {
-	u8 filter_type;
-	u8 input[3];
-};
-
-struct i40e_aqc_replace_cloud_filters_cmd {
-	u8	valid_flags;
-#define I40E_AQC_REPLACE_L1_FILTER		0x0
-#define I40E_AQC_REPLACE_CLOUD_FILTER		0x1
-#define I40E_AQC_GET_CLOUD_FILTERS		0x2
-#define I40E_AQC_MIRROR_CLOUD_FILTER		0x4
-#define I40E_AQC_HIGH_PRIORITY_CLOUD_FILTER	0x8
-	u8	old_filter_type;
-	u8	new_filter_type;
-	u8	tr_bit;
-	u8	reserved[4];
-	__le32 addr_high;
-	__le32 addr_low;
-};
-
-struct i40e_aqc_replace_cloud_filters_cmd_buf {
-	u8	data[32];
-/* Filter type INPUT codes*/
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_ENTRIES_MAX	3
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_VALIDATED	(1 << 7UL)
-
-/* Field Vector offsets */
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_MAC_DA		0
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_STAG_ETH		6
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_STAG		7
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_VLAN		8
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_STAG_OVLAN		9
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_STAG_IVLAN		10
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_TUNNLE_KEY		11
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_IMAC		12
-/* big FLU */
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_IP_DA		14
-/* big FLU */
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_OIP_DA		15
-
-#define I40E_AQC_REPLACE_CLOUD_CMD_INPUT_FV_INNER_VLAN		37
-	struct i40e_filter_data	filters[8];
-};
 
 /* Add Mirror Rule (indirect or direct 0x0260)
  * Delete Mirror Rule (indirect or direct 0x0261)
@@ -1566,36 +1498,6 @@ struct i40e_aqc_add_delete_mirror_rule_completion {
 };
 
 I40E_CHECK_CMD_LENGTH(i40e_aqc_add_delete_mirror_rule_completion);
-
-/* Dynamic Device Personalization */
-struct i40e_aqc_write_personalization_profile {
-	u8      flags;
-	u8      reserved[3];
-	__le32  profile_track_id;
-	__le32  addr_high;
-	__le32  addr_low;
-};
-
-I40E_CHECK_CMD_LENGTH(i40e_aqc_write_personalization_profile);
-
-struct i40e_aqc_write_ddp_resp {
-	__le32 error_offset;
-	__le32 error_info;
-	__le32 addr_high;
-	__le32 addr_low;
-};
-
-struct i40e_aqc_get_applied_profiles {
-	u8      flags;
-#define I40E_AQC_GET_DDP_GET_CONF	0x1
-#define I40E_AQC_GET_DDP_GET_RDPU_CONF	0x2
-	u8      rsv[3];
-	__le32  reserved;
-	__le32  addr_high;
-	__le32  addr_low;
-};
-
-I40E_CHECK_CMD_LENGTH(i40e_aqc_get_applied_profiles);
 
 /* DCB 0x03xx*/
 
@@ -1885,6 +1787,43 @@ enum i40e_aq_phy_type {
 	I40E_PHY_TYPE_EMPTY			= 0xFE,
 	I40E_PHY_TYPE_DEFAULT			= 0xFF,
 };
+
+#define I40E_PHY_TYPES_BITMASK (BIT_ULL(I40E_PHY_TYPE_SGMII) | \
+				BIT_ULL(I40E_PHY_TYPE_1000BASE_KX) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_KX4) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_KR) | \
+				BIT_ULL(I40E_PHY_TYPE_40GBASE_KR4) | \
+				BIT_ULL(I40E_PHY_TYPE_XAUI) | \
+				BIT_ULL(I40E_PHY_TYPE_XFI) | \
+				BIT_ULL(I40E_PHY_TYPE_SFI) | \
+				BIT_ULL(I40E_PHY_TYPE_XLAUI) | \
+				BIT_ULL(I40E_PHY_TYPE_XLPPI) | \
+				BIT_ULL(I40E_PHY_TYPE_40GBASE_CR4_CU) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_CR1_CU) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_AOC) | \
+				BIT_ULL(I40E_PHY_TYPE_40GBASE_AOC) | \
+				BIT_ULL(I40E_PHY_TYPE_UNRECOGNIZED) | \
+				BIT_ULL(I40E_PHY_TYPE_UNSUPPORTED) | \
+				BIT_ULL(I40E_PHY_TYPE_100BASE_TX) | \
+				BIT_ULL(I40E_PHY_TYPE_1000BASE_T) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_T) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_SR) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_LR) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_SFPP_CU) | \
+				BIT_ULL(I40E_PHY_TYPE_10GBASE_CR1) | \
+				BIT_ULL(I40E_PHY_TYPE_40GBASE_CR4) | \
+				BIT_ULL(I40E_PHY_TYPE_40GBASE_SR4) | \
+				BIT_ULL(I40E_PHY_TYPE_40GBASE_LR4) | \
+				BIT_ULL(I40E_PHY_TYPE_1000BASE_SX) | \
+				BIT_ULL(I40E_PHY_TYPE_1000BASE_LX) | \
+				BIT_ULL(I40E_PHY_TYPE_1000BASE_T_OPTICAL) | \
+				BIT_ULL(I40E_PHY_TYPE_20GBASE_KR2) | \
+				BIT_ULL(I40E_PHY_TYPE_25GBASE_KR) | \
+				BIT_ULL(I40E_PHY_TYPE_25GBASE_CR) | \
+				BIT_ULL(I40E_PHY_TYPE_25GBASE_SR) | \
+				BIT_ULL(I40E_PHY_TYPE_25GBASE_LR) | \
+				BIT_ULL(I40E_PHY_TYPE_25GBASE_AOC) | \
+				BIT_ULL(I40E_PHY_TYPE_25GBASE_ACC))
 
 #define I40E_LINK_SPEED_100MB_SHIFT	0x1
 #define I40E_LINK_SPEED_1000MB_SHIFT	0x2

@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -40,11 +40,11 @@
  *********************************************************************/
 #define IXLV_DRIVER_VERSION_MAJOR	1
 #define IXLV_DRIVER_VERSION_MINOR	5
-#define IXLV_DRIVER_VERSION_BUILD	2
+#define IXLV_DRIVER_VERSION_BUILD	4
 
 char ixlv_driver_version[] = __XSTRING(IXLV_DRIVER_VERSION_MAJOR) "."
 			     __XSTRING(IXLV_DRIVER_VERSION_MINOR) "."
-			     __XSTRING(IXLV_DRIVER_VERSION_BUILD);
+			     __XSTRING(IXLV_DRIVER_VERSION_BUILD) "-k";
 
 /*********************************************************************
  *  PCI Device ID Table
@@ -137,7 +137,7 @@ static void	ixlv_cap_txcsum_tso(struct ixl_vsi *,
 		    struct ifnet *, int);
 
 static char *ixlv_vc_speed_to_string(enum virtchnl_link_speed link_speed);
-static int ixlv_current_speed(SYSCTL_HANDLER_ARGS);
+static int ixlv_sysctl_current_speed(SYSCTL_HANDLER_ARGS);
 
 static void	ixlv_add_sysctls(struct ixlv_sc *);
 #ifdef IXL_DEBUG
@@ -397,7 +397,7 @@ ixlv_attach(device_t dev)
 	    sc->vf_res->rss_lut_size);
 #ifdef IXL_DEBUG
 	device_printf(dev, "Offload flags: 0x%b\n",
-	    sc->vf_res->vf_cap_flags, IXLV_PRINTF_vf_cap_flags);
+	    sc->vf_res->vf_offload_flags, IXLV_PRINTF_VF_OFFLOAD_FLAGS);
 #endif
 
 	/* got VF config message back from PF, now we can parse it */
@@ -432,6 +432,7 @@ ixlv_attach(device_t dev)
 
 	vsi->id = sc->vsi_res->vsi_id;
 	vsi->back = (void *)sc;
+	vsi->flags |= IXL_FLAGS_IS_VF | IXL_FLAGS_USES_MSIX;
 
 	ixl_vsi_setup_rings_size(vsi, ixlv_tx_ring_size, ixlv_rx_ring_size);
 
@@ -1577,7 +1578,11 @@ ixlv_setup_interface(device_t dev, struct ixlv_sc *sc)
 	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
 
 	ifp->if_mtu = ETHERMTU;
+#if __FreeBSD_version >= 1100000
 	ifp->if_baudrate = IF_Gbps(40);
+#else
+	if_initbaudrate(ifp, IF_Gbps(40));
+#endif
 	ifp->if_init = ixlv_init;
 	ifp->if_softc = vsi;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
@@ -2533,15 +2538,10 @@ ixlv_del_multi(struct ixl_vsi *vsi)
 static void
 ixlv_local_timer(void *arg)
 {
-	struct ixlv_sc	*sc = arg;
+	struct ixlv_sc		*sc = arg;
 	struct i40e_hw		*hw = &sc->hw;
 	struct ixl_vsi		*vsi = &sc->vsi;
-	struct ixl_queue	*que = vsi->queues;
-	device_t		dev = sc->dev;
-	struct tx_ring		*txr;
-	int			hung = 0;
-	u32			mask, val;
-	s32			timer, new_timer;
+	u32			val;
 
 	IXLV_CORE_LOCK_ASSERT(sc);
 
@@ -2555,7 +2555,7 @@ ixlv_local_timer(void *arg)
 
 	if (val != VIRTCHNL_VFR_VFACTIVE
 	    && val != VIRTCHNL_VFR_COMPLETED) {
-		DDPRINTF(dev, "reset in progress! (%d)", val);
+		DDPRINTF(sc->dev, "reset in progress! (%d)", val);
 		return;
 	}
 
@@ -2564,44 +2564,11 @@ ixlv_local_timer(void *arg)
 	/* clean and process any events */
 	taskqueue_enqueue(sc->tq, &sc->aq_irq);
 
-	/*
-	** Check status on the queues for a hang
-	*/
-	mask = (I40E_VFINT_DYN_CTLN1_INTENA_MASK |
-	    I40E_VFINT_DYN_CTLN1_SWINT_TRIG_MASK |
-	    I40E_VFINT_DYN_CTLN1_ITR_INDX_MASK);
-
-	for (int i = 0; i < vsi->num_queues; i++, que++) {
-		txr = &que->txr;
-		timer = atomic_load_acq_32(&txr->watchdog_timer);
-		if (timer > 0) {
-			new_timer = timer - hz;
-			if (new_timer <= 0) {
-				atomic_store_rel_32(&txr->watchdog_timer, -1);
-				device_printf(dev, "WARNING: queue %d "
-				    "appears to be hung!\n", que->me);
-				++hung;
-			} else {
-				/*
-				 * If this fails, that means something in the TX path has updated
-				 * the watchdog, so it means the TX path is still working and
-				 * the watchdog doesn't need to countdown.
-				 */
-				atomic_cmpset_rel_32(&txr->watchdog_timer, timer, new_timer);
-				/* Any queues with outstanding work get a sw irq */
-				wr32(hw, I40E_VFINT_DYN_CTLN1(que->me), mask);
-			}
-		}
-	}
 	/* Increment stat when a queue shows hung */
-	if (hung)
-		goto hung;
+	if (ixl_queue_hang_check(vsi))
+		sc->watchdog_events++;
 
 	callout_reset(&sc->timer, hz, ixlv_local_timer, sc);
-	return;
-
-hung:
-	sc->watchdog_events++;
 }
 
 /*
@@ -3022,10 +2989,10 @@ ixlv_add_sysctls(struct ixlv_sc *sc)
 	struct rx_ring *rxr;
 
 	/* Driver statistics sysctls */
-	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "watchdog_events",
+	SYSCTL_ADD_UQUAD(ctx, child, OID_AUTO, "watchdog_events",
 			CTLFLAG_RD, &sc->watchdog_events,
 			"Watchdog timeouts");
-	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "admin_irq",
+	SYSCTL_ADD_UQUAD(ctx, child, OID_AUTO, "admin_irq",
 			CTLFLAG_RD, &sc->admin_irq,
 			"Admin Queue IRQ Handled");
 
@@ -3038,7 +3005,7 @@ ixlv_add_sysctls(struct ixlv_sc *sc)
 
 	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "current_speed",
 			CTLTYPE_STRING | CTLFLAG_RD,
-			sc, 0, ixlv_current_speed,
+			sc, 0, ixlv_sysctl_current_speed,
 			"A", "Current Port Speed");
 
 	/* VSI statistics sysctls */
@@ -3172,6 +3139,7 @@ ixlv_free_filters(struct ixlv_sc *sc)
 		free(v, M_DEVBUF);
 	}
 	free(sc->vlan_filters, M_DEVBUF);
+	return;
 }
 
 static char *
@@ -3218,7 +3186,7 @@ ixlv_vc_speed_to_string(enum virtchnl_link_speed link_speed)
 }
 
 static int
-ixlv_current_speed(SYSCTL_HANDLER_ARGS)
+ixlv_sysctl_current_speed(SYSCTL_HANDLER_ARGS)
 {
 	struct ixlv_sc *sc = (struct ixlv_sc *)arg1;
 	int error = 0;

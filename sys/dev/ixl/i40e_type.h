@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -125,9 +125,6 @@ enum i40e_debug_mask {
 	I40E_DEBUG_DCB			= 0x00000400,
 	I40E_DEBUG_DIAG			= 0x00000800,
 	I40E_DEBUG_FD			= 0x00001000,
-	I40E_DEBUG_PACKAGE		= 0x00002000,
-
-	I40E_DEBUG_IWARP		= 0x00F00000,
 
 	I40E_DEBUG_AQ_MESSAGE		= 0x01000000,
 	I40E_DEBUG_AQ_DESCRIPTOR	= 0x02000000,
@@ -191,6 +188,7 @@ enum i40e_memcpy_type {
 	I40E_DMA_TO_NONDMA
 };
 
+
 /* These are structs for managing the hardware information and the operations.
  * The structures of function pointers are filled out at init time when we
  * know for sure exactly which hardware we're working with.  This gives us the
@@ -244,7 +242,6 @@ enum i40e_vsi_type {
 	I40E_VSI_MIRROR	= 5,
 	I40E_VSI_SRIOV	= 6,
 	I40E_VSI_FDIR	= 7,
-	I40E_VSI_IWARP	= 8,
 	I40E_VSI_TYPE_UNKNOWN
 };
 
@@ -367,6 +364,15 @@ struct i40e_hw_capabilities {
 #define I40E_NVM_IMAGE_TYPE_EVB		0x0
 #define I40E_NVM_IMAGE_TYPE_CLOUD	0x2
 #define I40E_NVM_IMAGE_TYPE_UDP_CLOUD	0x3
+
+	/* Cloud filter modes:
+	 * Mode1: Filter on L4 port only
+	 * Mode2: Filter for non-tunneled traffic
+	 * Mode3: Filter for tunnel traffic
+	 */
+#define I40E_CLOUD_FILTER_MODE1	0x6
+#define I40E_CLOUD_FILTER_MODE2	0x7
+#define I40E_CLOUD_FILTER_MODE3	0x8
 
 	u32  management_mode;
 	u32  mng_protocols_over_mctp;
@@ -538,6 +544,7 @@ struct i40e_nvm_access {
 #define I40E_MODULE_SFF_8472_COMP	0x5E
 #define I40E_MODULE_SFF_8472_SWAP	0x5C
 #define I40E_MODULE_SFF_ADDR_MODE	0x04
+#define I40E_MODULE_SFF_DIAG_CAPAB	0x40
 #define I40E_MODULE_TYPE_QSFP_PLUS	0x0D
 #define I40E_MODULE_TYPE_QSFP28		0x11
 #define I40E_MODULE_QSFP_MAX_LEN	640
@@ -1469,7 +1476,8 @@ struct i40e_hw_port_stats {
 #define I40E_SR_PE_IMAGE_PTR			0x0C
 #define I40E_SR_CSR_PROTECTED_LIST_PTR		0x0D
 #define I40E_SR_MNG_CONFIG_PTR			0x0E
-#define I40E_SR_EMP_MODULE_PTR			0x0F
+#define I40E_EMP_MODULE_PTR			0x0F
+#define I40E_SR_EMP_MODULE_PTR			0x48
 #define I40E_SR_PBA_FLAGS			0x15
 #define I40E_SR_PBA_BLOCK_PTR			0x16
 #define I40E_SR_BOOT_CONFIG_PTR			0x17
@@ -1512,6 +1520,9 @@ struct i40e_hw_port_stats {
 #define I40E_SR_CONTROL_WORD_1_MASK	(0x03 << I40E_SR_CONTROL_WORD_1_SHIFT)
 #define I40E_SR_CONTROL_WORD_1_NVM_BANK_VALID	BIT(5)
 #define I40E_SR_NVM_MAP_STRUCTURE_TYPE		BIT(12)
+#define I40E_PTR_TYPE				BIT(15)
+#define I40E_SR_OCP_CFG_WORD0			0x2B
+#define I40E_SR_OCP_ENABLED			BIT(15)
 
 /* Shadow RAM related */
 #define I40E_SR_SECTOR_SIZE_IN_WORDS	0x800
@@ -1627,7 +1638,8 @@ enum i40e_reset_type {
 };
 
 /* IEEE 802.1AB LLDP Agent Variables from NVM */
-#define I40E_NVM_LLDP_CFG_PTR		0xD
+#define I40E_NVM_LLDP_CFG_PTR   0x06
+#define I40E_SR_LLDP_CFG_PTR    0x31
 struct i40e_lldp_variables {
 	u16 length;
 	u16 adminstatus;
@@ -1686,106 +1698,4 @@ struct i40e_lldp_variables {
 #define I40E_FLEX_56_MASK		(0x1ULL << I40E_FLEX_56_SHIFT)
 #define I40E_FLEX_57_SHIFT		6
 #define I40E_FLEX_57_MASK		(0x1ULL << I40E_FLEX_57_SHIFT)
-
-/* Version format for Dynamic Device Personalization(DDP) */
-struct i40e_ddp_version {
-	u8 major;
-	u8 minor;
-	u8 update;
-	u8 draft;
-};
-
-#define I40E_DDP_NAME_SIZE	32
-
-/* Package header */
-struct i40e_package_header {
-	struct i40e_ddp_version version;
-	u32 segment_count;
-	u32 segment_offset[1];
-};
-
-/* Generic segment header */
-struct i40e_generic_seg_header {
-#define SEGMENT_TYPE_METADATA	0x00000001
-#define SEGMENT_TYPE_NOTES	0x00000002
-#define SEGMENT_TYPE_I40E	0x00000011
-#define SEGMENT_TYPE_X722	0x00000012
-	u32 type;
-	struct i40e_ddp_version version;
-	u32 size;
-	char name[I40E_DDP_NAME_SIZE];
-};
-
-struct i40e_metadata_segment {
-	struct i40e_generic_seg_header header;
-	struct i40e_ddp_version version;
-#define I40E_DDP_TRACKID_RDONLY		0
-#define I40E_DDP_TRACKID_INVALID	0xFFFFFFFF
-	u32 track_id;
-	char name[I40E_DDP_NAME_SIZE];
-};
-
-struct i40e_device_id_entry {
-	u32 vendor_dev_id;
-	u32 sub_vendor_dev_id;
-};
-
-struct i40e_profile_segment {
-	struct i40e_generic_seg_header header;
-	struct i40e_ddp_version version;
-	char name[I40E_DDP_NAME_SIZE];
-	u32 device_table_count;
-	struct i40e_device_id_entry device_table[1];
-};
-
-struct i40e_section_table {
-	u32 section_count;
-	u32 section_offset[1];
-};
-
-struct i40e_profile_section_header {
-	u16 tbl_size;
-	u16 data_end;
-	struct {
-#define SECTION_TYPE_INFO	0x00000010
-#define SECTION_TYPE_MMIO	0x00000800
-#define SECTION_TYPE_RB_MMIO	0x00001800
-#define SECTION_TYPE_AQ		0x00000801
-#define SECTION_TYPE_RB_AQ	0x00001801
-#define SECTION_TYPE_NOTE	0x80000000
-#define SECTION_TYPE_NAME	0x80000001
-#define SECTION_TYPE_PROTO	0x80000002
-#define SECTION_TYPE_PCTYPE	0x80000003
-#define SECTION_TYPE_PTYPE	0x80000004
-		u32 type;
-		u32 offset;
-		u32 size;
-	} section;
-};
-
-struct i40e_profile_tlv_section_record {
-	u8 rtype;
-	u8 type;
-	u16 len;
-	u8 data[12];
-};
-
-/* Generic AQ section in proflie */
-struct i40e_profile_aq_section {
-	u16 opcode;
-	u16 flags;
-	u8  param[16];
-	u16 datalen;
-	u8  data[1];
-};
-
-struct i40e_profile_info {
-	u32 track_id;
-	struct i40e_ddp_version version;
-	u8 op;
-#define I40E_DDP_ADD_TRACKID		0x01
-#define I40E_DDP_REMOVE_TRACKID	0x02
-	u8 reserved[7];
-	u8 name[I40E_DDP_NAME_SIZE];
-};
 #endif /* _I40E_TYPE_H_ */

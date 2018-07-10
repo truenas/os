@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2017, Intel Corporation
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -632,17 +632,17 @@ enum i40e_status_code i40e_init_adminq(struct i40e_hw *hw)
 		goto init_adminq_free_arq;
 
 	/* get the NVM version info */
-		i40e_read_nvm_word(hw, I40E_SR_NVM_DEV_STARTER_VERSION,
-				   &hw->nvm.version);
-		i40e_read_nvm_word(hw, I40E_SR_NVM_EETRACK_LO, &eetrack_lo);
-		i40e_read_nvm_word(hw, I40E_SR_NVM_EETRACK_HI, &eetrack_hi);
-		hw->nvm.eetrack = (eetrack_hi << 16) | eetrack_lo;
-		i40e_read_nvm_word(hw, I40E_SR_BOOT_CONFIG_PTR, &cfg_ptr);
-		i40e_read_nvm_word(hw, (cfg_ptr + I40E_NVM_OEM_VER_OFF),
-				   &oem_hi);
-		i40e_read_nvm_word(hw, (cfg_ptr + (I40E_NVM_OEM_VER_OFF + 1)),
-				   &oem_lo);
-		hw->nvm.oem_ver = ((u32)oem_hi << 16) | oem_lo;
+	i40e_read_nvm_word(hw, I40E_SR_NVM_DEV_STARTER_VERSION,
+			   &hw->nvm.version);
+	i40e_read_nvm_word(hw, I40E_SR_NVM_EETRACK_LO, &eetrack_lo);
+	i40e_read_nvm_word(hw, I40E_SR_NVM_EETRACK_HI, &eetrack_hi);
+	hw->nvm.eetrack = (eetrack_hi << 16) | eetrack_lo;
+	i40e_read_nvm_word(hw, I40E_SR_BOOT_CONFIG_PTR, &cfg_ptr);
+	i40e_read_nvm_word(hw, (cfg_ptr + I40E_NVM_OEM_VER_OFF),
+			   &oem_hi);
+	i40e_read_nvm_word(hw, (cfg_ptr + (I40E_NVM_OEM_VER_OFF + 1)),
+			   &oem_lo);
+	hw->nvm.oem_ver = ((u32)oem_hi << 16) | oem_lo;
 
 	/* The ability to RX (not drop) 802.1ad frames was added in API 1.7 */
 	if ((hw->aq.api_maj_ver > 1) ||
@@ -1031,7 +1031,7 @@ enum i40e_status_code i40e_clean_arq_element(struct i40e_hw *hw,
 	/* set next_to_use to head */
 	if (!i40e_is_vf(hw))
 		ntu = rd32(hw, hw->aq.arq.head) & I40E_PF_ARQH_ARQH_MASK;
-	if (i40e_is_vf(hw))
+	else
 		ntu = rd32(hw, hw->aq.arq.head) & I40E_VF_ARQH1_ARQH_MASK;
 	if (ntu == ntc) {
 		/* nothing to do - shouldn't need to update ring's values */

@@ -25,7 +25,7 @@
     <!-- Last rev: 288943 -->
 
     <copyright>
-      <year>2017</year>
+      <year>2018</year>
       <holder role="mailto:doc@FreeBSD.org">The &os; Documentation
 	Project</holder>
     </copyright>
@@ -195,6 +195,19 @@
 	been updated to include device model when the
 	<literal>-s</literal> flag is used.</para>
 
+      <para revision="322509">The &man.top.1; utility has been updated
+	to allow filtering on multiple user names when the
+	<literal>-U</literal> flag is used.</para>
+
+      <para revision="322525">The &man.bsdgrep.1; utility has been
+	updated to include a <literal>rgrep</literal> hard link to
+	&man.grep.1;, which when used is equivalent to
+	<literal>grep&nbsp;-r</literal>.</para>
+
+      <para revision="322555">The &man.bsdgrep.1; utility has been
+	updated to address various issues with pattern matching
+	behavior.</para>
+
       <para revision="322910">The &man.umount.8; utility has been
 	updated to include a new flag, <literal>-N</literal>, which
 	is used to forcefully unmount an <acronym>NFS</acronym>
@@ -204,6 +217,13 @@
 	to properly handle empty secondary group lists as an argument
 	to the <literal>-G</literal> flag when using the
 	<literal>usermod</literal> subcommand.</para>
+
+      <para revision="324124" contrib="sponsor"
+	sponsor="&chelsio;">The &man.getconf.1; utility has been
+	updated to include a new flag, <literal>-a</literal>, which
+	prints the name and value of all system or path configuration
+	values to &man.stdout.4; or optionally a file as an argument
+	to <literal>-a</literal>.</para>
 
       <para revision="324270">The &man.ps.1; utility has been updated
 	to reflect realtime and idle priorities in state flags.</para>
@@ -249,6 +269,11 @@
       <para revision="327592">The &man.mdmfs.8; utility has been
 	updated to support &man.tmpfs.5;.</para>
 
+      <para revision="327837">The &man.lint.1; utility is not longer
+	built by default.  The <literal>WITH_LINT</literal>
+	&man.src.conf.5; option has been added to enable building and
+	installing the utility.</para>
+
       <para revision="327871">The &man.cpucontrol.8; utility has been
 	updated to include a new flag, <literal>-e</literal>, which is
 	used to re-evaluate reported <acronym>CPU</acronym> features
@@ -261,6 +286,15 @@
 	  instability may be experienced if processor features are not
 	  identical across the system.</para>
       </note>
+
+      <para revision="328138">The &man.indent.1; utility has been
+	updated to respect the <literal>SIMPLE_BACKUP_SUFFIX</literal>
+	environment variable if set.</para>
+
+      <para revision="328139">The &man.du.1; utility has been updated
+	to include the <literal>--si</literal> long option, which is
+	used to display output in &quot;human-readable&quot; output in
+	powers of 1000.</para>
 
       <para revision="328140">The &man.df.1; utility has been updated
 	to include the <literal>--si</literal> long option, which is
@@ -329,6 +363,27 @@
 	sponsor="&netflix;">The &man.efibootmgr.8; utility has been
 	added, which is used to manipulate the <acronym>EFI</acronym>
 	boot manager.</para>
+
+      <para revision="332947">The &man.etdump.1; utility has been
+	added, which is used to view El Torito boot catalog
+	information.</para>
+
+      <para revision="322753">The &man.mount.8; utility has been
+	updated to allow fallback to mount media read-only if an
+	attempt to mount write-protected media read-write fails.  This
+	behavior is disabled by default, and can be requested with the
+	new <literal>autoro</literal> option.</para>
+
+      <para revision="332460" contrib="sponsor" sponsor="&ff;">The
+	&man.makefs.8; utility has been updated to default the block
+	and fragment sizes to match that of &man.newfs.8;, 32K and 4K,
+	respectively.</para>
+
+      <para revision="332929" contrib="sponsor" sponsor="&ff;">The
+	&man.pwd.mkdb.8; utility has been updated to emit a notice
+	that legacy database support will be removed effective
+	&os;&nbsp;12 when the <literal>-l</literal> flag is
+	used.</para>
     </sect2>
 
     <sect2 xml:id="userland-contrib">
@@ -342,6 +397,9 @@
 
       <para revision="322442"><application>Subversion</application>
 	has been updated to version 1.9.7.</para>
+
+      <para revision="328495">The &man.dtc.1; utility has been updated
+	to upstream commit 9ce35ff8.</para>
 
       <para revision="328874">The &man.file.1; utility has been
 	updated to version 5.32.</para>
@@ -364,11 +422,14 @@
       <para revision="331246">The <application>bmake</application>
 	utility has been updated to upstream version 20180222.</para>
 
+      <para revision="331465">The <acronym>BSD</acronym>-licensed
+	&man.diff.1; utility has been imported from OpenBSD, which is
+	installed if <literal>WITHOUT_GNU_DIFF</literal> is set in
+	&man.src.conf.5;, and otherwise not installed by
+	default.</para>
+
       <para revision="331638"><application>OpenSSL</application> has
 	been updated to version 1.0.2o.</para>
-
-      <para revision="331662">Timezone data files have been updated to
-	version 2018d.</para>
 
       <para revision="331838">The <application>clang</application>,
 	<application>llvm</application>,
@@ -377,6 +438,9 @@
 	<literal>compiler-rt</literal> utilities as well as
 	<literal>libc++</literal> have been updated to upstream
 	version 6.0.0.</para>
+
+      <para revision="333312">Timezone data files have been updated to
+	version 2018e.</para>
     </sect2>
 
     <sect2 xml:id="userland-installer">
@@ -506,6 +570,24 @@
       <para revision="331500">Support for the TAIO
 	<acronym>USB</acronym> multi-protocol adapter
 	(<acronym>TUMPA</acronym>) has been added.</para>
+
+      <para revision="331882" contrib="sponsor"
+	sponsor="&darpa_afrl;">The &man.cm.4; and &man.fpa.4; drivers
+	have been marked as deprecated, and will be removed in
+	&os;&nbsp;12.</para>
+
+      <para revision="333171">The &man.ixgb.4; driver has been marked
+	as deprecated, and will be removed in &os;&nbsp;12.</para>
+
+      <para revision="333367">The &man.nxge.4; driver has been marked
+	as deprecated, and will be removed in &os;&nbsp;12.</para>
+
+      <para revision="333412" contrib="sponsor" sponsor="&ff;">The
+	&man.lmc.4; driver has been marked as deprecated, and will be
+	removed in &os;&nbsp;12.</para>
+
+      <para revision="333738">The &man.vxge.4; driver has been marked
+	as deprecated, and will be removed in &os;&nbsp;12.</para>
     </sect2>
 
     <sect2 xml:id="hardware-virtualization">
@@ -549,7 +631,13 @@
     <sect2 xml:id="storage-geom">
       <title><literal>geom(4)</literal></title>
 
-      <para>&nbsp;</para>
+      <para revision="332519">The <literal>geom_aes</literal>,
+	<literal>geom_bsd</literal>, <literal>geom_mbr</literal>,
+	<literal>geom_sunlabel</literal> &man.geom.4; classes have
+	been marked as deprecated.  They have been replaced by the
+	<literal>geom_part</literal> class in &os;&nbsp;7, and removed
+	from the <literal>GENERIC</literal> kernel configurations in
+	&os;&nbsp;8, and will be removed in &os;&nbsp;12.</para>
     </sect2>
   </sect1>
 
@@ -646,6 +734,20 @@
 	keep their clocks synchronized using the Amazon Time Sync
 	Service, the <acronym>NTP</acronym> service internal to the
 	EC2&trade; infrastructure.</para>
+
+      <para revision="333410" contrib="sponsor" sponsor="&ff;">The
+	&arch.i386; memory stick image installer have been changed
+	to use the <acronym>MBR</acronym> partitioning scheme, which
+	addresses a boot issue from a <acronym>GPT</acronym> partition
+	scheme in non-<acronym>UEFI</acronym> mode.</para>
+
+      <para revision="333006" contrib="sponsor" sponsor="&ix;">The
+	&os; installation <acronym>ISO</acronym> medium creation tools
+	have been updated to generate hybrid images for &arch.amd64;,
+	supporting both <acronym>BIOS</acronym> and
+	<acronym>EFI</acronym>.  The <acronym>ISO</acronym> image can
+	now be written to a memory stick as well as being used as
+	a <acronym>CD</acronym> image.</para>
     </sect2>
   </sect1>
 </article>
