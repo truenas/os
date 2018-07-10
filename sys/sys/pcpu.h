@@ -81,7 +81,11 @@ extern uintptr_t dpcpu_off[];
  */
 #define	DPCPU_NAME(n)		pcpu_entry_##n
 #define	DPCPU_DECLARE(t, n)	extern t DPCPU_NAME(n)
-#define	DPCPU_DEFINE(t, n)	t DPCPU_NAME(n) __section(DPCPU_SETNAME) __used
+/* struct _hack is to stop this from being used with the static keyword. */
+#define	DPCPU_DEFINE(t, n)	\
+    struct _hack; t DPCPU_NAME(n) __section(DPCPU_SETNAME) __used
+#define	DPCPU_DEFINE_STATIC(t, n)	\
+    static t DPCPU_NAME(n) __section(DPCPU_SETNAME) __used
 
 /*
  * Accessors with a given base.
@@ -181,14 +185,6 @@ struct pcpu {
 	PCPU_MD_FIELDS;
 } __aligned(CACHE_LINE_SIZE);
 
-#ifdef CTASSERT
-/*
- * To minimize memory waste in per-cpu UMA zones, size of struct pcpu
- * should be denominator of PAGE_SIZE.
- */
-CTASSERT((PAGE_SIZE / sizeof(struct pcpu)) * sizeof(struct pcpu) == PAGE_SIZE);
-#endif
-
 #ifdef _KERNEL
 
 STAILQ_HEAD(cpuhead, pcpu);
@@ -203,19 +199,34 @@ extern struct pcpu *cpuid_to_pcpu[];
 #endif
 #define	curvidata	PCPU_GET(vidata)
 
+#define UMA_PCPU_ALLOC_SIZE		PAGE_SIZE
+
+#ifdef CTASSERT
+#if defined(__i386__) || defined(__amd64__)
+/* Required for counters(9) to work on x86. */
+CTASSERT(sizeof(struct pcpu) == UMA_PCPU_ALLOC_SIZE);
+#else
+/*
+ * To minimize memory waste in per-cpu UMA zones, size of struct pcpu
+ * should be denominator of PAGE_SIZE.
+ */
+CTASSERT((PAGE_SIZE / sizeof(struct pcpu)) * sizeof(struct pcpu) == PAGE_SIZE);
+#endif	/* UMA_PCPU_ALLOC_SIZE && x86 */
+#endif	/* CTASSERT */
+
 /* Accessor to elements allocated via UMA_ZONE_PCPU zone. */
 static inline void *
 zpcpu_get(void *base)
 {
 
-	return ((char *)(base) + sizeof(struct pcpu) * curcpu);
+	return ((char *)(base) + UMA_PCPU_ALLOC_SIZE * curcpu);
 }
 
 static inline void *
 zpcpu_get_cpu(void *base, int cpu)
 {
 
-	return ((char *)(base) + sizeof(struct pcpu) * cpu);
+	return ((char *)(base) + UMA_PCPU_ALLOC_SIZE * cpu);
 }
 
 /*

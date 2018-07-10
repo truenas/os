@@ -859,11 +859,11 @@ make_dev(struct cdevsw *devsw, int unit, uid_t uid, gid_t gid, int mode,
 {
 	struct cdev *dev;
 	va_list ap;
-	int res;
+	int res __unused;
 
 	va_start(ap, fmt);
 	res = make_dev_credv(0, &dev, devsw, unit, NULL, uid, gid, mode, fmt,
-	    ap);
+		      ap);
 	va_end(ap);
 	KASSERT(res == 0 && dev != NULL,
 	    ("make_dev: failed make_dev_credv (error=%d)", res));
@@ -876,7 +876,7 @@ make_dev_cred(struct cdevsw *devsw, int unit, struct ucred *cr, uid_t uid,
 {
 	struct cdev *dev;
 	va_list ap;
-	int res;
+	int res __unused;
 
 	va_start(ap, fmt);
 	res = make_dev_credv(0, &dev, devsw, unit, cr, uid, gid, mode, fmt, ap);
@@ -989,7 +989,7 @@ make_dev_alias(struct cdev *pdev, const char *fmt, ...)
 {
 	struct cdev *dev;
 	va_list ap;
-	int res;
+	int res __unused;
 
 	va_start(ap, fmt);
 	res = make_dev_alias_v(MAKEDEV_WAITOK, &dev, pdev, fmt, ap);

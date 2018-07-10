@@ -103,7 +103,6 @@ STAND_H_INC=ctype.h fcntl.h signal.h stdio.h stdlib.h
 OTHER_INC=stdarg.h errno.h stdint.h
 
 beforedepend:
-	echo beforedepend; \
 	mkdir -p ${FAKE_DIRS}; \
 	for i in ${SAFE_INCS}; do \
 		ln -sf ${SRCTOP}/include/$$i $$i; \
@@ -150,5 +149,15 @@ CFLAGS.bzipfs.c+= -I${SRCTOP}/contrib/bzip2
 # explicit_bzero
 .PATH: ${SYSDIR}/libkern
 SRCS+=  explicit_bzero.c
+
+# Maybe GELI
+.if ${MK_LOADER_GELI} == "yes"
+.include "${SASRC}/geli/Makefile.inc"
+.endif
+
+# Maybe ZFS
+.if ${MK_ZFS} == "yes"
+.include "${SASRC}/zfs/Makefile.inc"
+.endif
 
 .include <bsd.lib.mk>

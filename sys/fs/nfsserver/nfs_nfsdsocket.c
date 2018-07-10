@@ -52,6 +52,8 @@ extern struct nfsclienthashhead *nfsclienthash;
 extern int nfsrv_clienthashsize;
 extern int nfsrc_floodlevel, nfsrc_tcpsavedreplies;
 extern int nfsd_debuglevel;
+extern int nfsrv_layouthighwater;
+extern volatile int nfsrv_layoutcnt;
 NFSV4ROOTLOCKMUTEX;
 NFSSTATESPINLOCK;
 
@@ -178,7 +180,7 @@ int (*nfsrv4_ops0[NFSV41_NOPS])(struct nfsrv_descript *,
 	nfsrvd_write,
 	nfsrvd_releaselckown,
 	nfsrvd_notsupp,
-	nfsrvd_notsupp,
+	nfsrvd_bindconnsess,
 	nfsrvd_exchangeid,
 	nfsrvd_createsession,
 	nfsrvd_destroysession,
@@ -192,7 +194,7 @@ int (*nfsrv4_ops0[NFSV41_NOPS])(struct nfsrv_descript *,
 	nfsrvd_notsupp,
 	nfsrvd_sequence,
 	nfsrvd_notsupp,
-	nfsrvd_notsupp,
+	nfsrvd_teststateid,
 	nfsrvd_notsupp,
 	nfsrvd_destroyclientid,
 	nfsrvd_reclaimcomplete,
@@ -726,6 +728,10 @@ nfsrvd_compound(struct nfsrv_descript *nd, int isdgram, u_char *tag,
 	if (nfsrv_stablefirst.nsf_flags & NFSNSF_NOOPENS) {
 		nfsrv_throwawayopens(p);
 	}
+
+	/* Do a CBLAYOUTRECALL callback if over the high water mark. */
+	if (nfsrv_layoutcnt > nfsrv_layouthighwater)
+		nfsrv_recalloldlayout(p);
 
 	savevp = vp = NULL;
 	save_fsid.val[0] = save_fsid.val[1] = 0;

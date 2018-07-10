@@ -2215,7 +2215,7 @@ vm_map_madvise(
 	int behav)
 {
 	vm_map_entry_t current, entry;
-	int modify_map = 0;
+	bool modify_map;
 
 	/*
 	 * Some madvise calls directly modify the vm_map_entry, in which case
@@ -2232,19 +2232,20 @@ vm_map_madvise(
 	case MADV_NOCORE:
 	case MADV_CORE:
 		if (start == end)
-			return (KERN_SUCCESS);
-		modify_map = 1;
+			return (0);
+		modify_map = true;
 		vm_map_lock(map);
 		break;
 	case MADV_WILLNEED:
 	case MADV_DONTNEED:
 	case MADV_FREE:
 		if (start == end)
-			return (KERN_SUCCESS);
+			return (0);
+		modify_map = false;
 		vm_map_lock_read(map);
 		break;
 	default:
-		return (KERN_INVALID_ARGUMENT);
+		return (EINVAL);
 	}
 
 	/*
@@ -3154,11 +3155,17 @@ vm_map_delete(vm_map_t map, vm_offset_t start, vm_offset_t end)
 		 * Unwire before removing addresses from the pmap; otherwise,
 		 * unwiring will put the entries back in the pmap.
 		 */
-		if (entry->wired_count != 0) {
+		if (entry->wired_count != 0)
 			vm_map_entry_unwire(map, entry);
-		}
 
-		pmap_remove(map->pmap, entry->start, entry->end);
+		/*
+		 * Remove mappings for the pages, but only if the
+		 * mappings could exist.  For instance, it does not
+		 * make sense to call pmap_remove() for guard entries.
+		 */
+		if ((entry->eflags & MAP_ENTRY_IS_SUB_MAP) != 0 ||
+		    entry->object.vm_object != NULL)
+			pmap_remove(map->pmap, entry->start, entry->end);
 
 		/*
 		 * Delete the entry only after removing all pmap

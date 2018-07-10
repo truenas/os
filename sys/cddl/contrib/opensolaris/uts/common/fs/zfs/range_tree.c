@@ -159,20 +159,13 @@ range_tree_stat_decr(range_tree_t *rt, range_seg_t *rs)
 static int
 range_tree_seg_compare(const void *x1, const void *x2)
 {
-	const range_seg_t *r1 = x1;
-	const range_seg_t *r2 = x2;
+	const range_seg_t *r1 = (const range_seg_t *)x1;
+	const range_seg_t *r2 = (const range_seg_t *)x2;
 
-	if (r1->rs_start < r2->rs_start) {
-		if (r1->rs_end > r2->rs_start)
-			return (0);
-		return (-1);
-	}
-	if (r1->rs_start > r2->rs_start) {
-		if (r1->rs_start < r2->rs_end)
-			return (0);
-		return (1);
-	}
-	return (0);
+	ASSERT3U(r1->rs_start, <=, r1->rs_end);
+	ASSERT3U(r2->rs_start, <=, r2->rs_end);
+	
+	return ((r1->rs_start >= r2->rs_end) - (r1->rs_end <= r2->rs_start));
 }
 
 range_tree_t *
@@ -185,8 +178,8 @@ range_tree_create_impl(range_tree_ops_t *ops, void *arg,
 	    sizeof (range_seg_t), offsetof(range_seg_t, rs_node));
 
 	rt->rt_ops = ops;
-	rt->rt_gap = gap;
 	rt->rt_arg = arg;
+	rt->rt_gap = gap;
 	rt->rt_avl_compare = avl_compare;
 
 	if (rt->rt_ops != NULL && rt->rt_ops->rtop_create != NULL)
@@ -475,6 +468,26 @@ range_tree_remove_fill(range_tree_t *rt, uint64_t start, uint64_t size)
 	range_tree_remove_impl(rt, start, size, B_TRUE);
 }
 
+void
+range_tree_resize_segment(range_tree_t *rt, range_seg_t *rs,
+    uint64_t newstart, uint64_t newsize)
+{
+	int64_t delta = newsize - (rs->rs_end - rs->rs_start);
+
+	range_tree_stat_decr(rt, rs);
+	if (rt->rt_ops != NULL && rt->rt_ops->rtop_remove != NULL)
+		rt->rt_ops->rtop_remove(rt, rs, rt->rt_arg);
+
+	rs->rs_start = newstart;
+	rs->rs_end = newstart + newsize;
+
+	range_tree_stat_incr(rt, rs);
+	if (rt->rt_ops != NULL && rt->rt_ops->rtop_add != NULL)
+		rt->rt_ops->rtop_add(rt, rs, rt->rt_arg);
+
+	rt->rt_space += delta;
+}
+
 static range_seg_t *
 range_tree_find_impl(range_tree_t *rt, uint64_t start, uint64_t size)
 {
@@ -587,13 +600,6 @@ range_tree_space(range_tree_t *rt)
 	return (rt->rt_space);
 }
 
-boolean_t
-range_tree_is_empty(range_tree_t *rt)
-{
-	ASSERT(rt != NULL);
-	return (range_tree_space(rt) == 0);
-}
-
 /* Generic range tree functions for maintaining segments in an AVL tree. */
 void
 rt_avl_create(range_tree_t *rt, void *arg)
@@ -637,4 +643,11 @@ rt_avl_vacate(range_tree_t *rt, void *arg)
 	 * will be freed by the range tree, so we don't want to free them here.
 	 */
 	rt_avl_create(rt, arg);
+}
+
+boolean_t
+range_tree_is_empty(range_tree_t *rt)
+{
+	ASSERT(rt != NULL);
+	return (range_tree_space(rt) == 0);
 }

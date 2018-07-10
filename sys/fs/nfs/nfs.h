@@ -98,7 +98,7 @@
 #define	NFSSESSIONHASHSIZE	20	/* Size of server session hash table */
 #endif
 #define	NFSSTATEHASHSIZE	10	/* Size of server stateid hash table */
-#define	NFSLAYOUTHASHSIZE	100	/* Size of server layout hash table */
+#define	NFSLAYOUTHIGHWATER	1000000	/* Upper limit for # of layouts */
 #ifndef	NFSCLDELEGHIGHWATER
 #define	NFSCLDELEGHIGHWATER	10000	/* limit for client delegations */
 #endif
@@ -185,18 +185,29 @@ struct nfsd_nfsd_args {
 	int	dnshostlen;	/* Length of DNS names */
 	char	*dspath;	/* DS Mount path on MDS */
 	int	dspathlen;	/* Length of DS Mount path on MDS */
-	char	*mirror;	/* DS with same mirrorindex are mirrors */
-	int	mirrorlen;	/* Length of the mirrorindex array */
+	char	*mdspath;	/* MDS mount for DS path on MDS */
+	int	mdspathlen;	/* Length of MDS mount for DS path on MDS */
+	int	mirrorcnt;	/* Number of mirrors to create on DSs */
 };
 
 /*
- * NFSDEV_MIRRORSTR - string of digits that number the DSs 0->999.
- * (To support more than 1000 DSs on an MDS, this needs to be increased.)
- * NFSDEV_MAXMIRRORS - Maximum # of mirrors for a DS.
- * (Most will only have a single mirror, but this setting allows up to 3.)
+ * NFSDEV_MAXMIRRORS - Maximum level of mirroring for a DS.
+ * (Most will only put files on two DSs, but this setting allows up to 4.)
+ * NFSDEV_MAXVERS - maximum number of NFS versions supported by Flex File.
  */
-#define	NFSDEV_MIRRORSTR	3
 #define	NFSDEV_MAXMIRRORS	4
+#define	NFSDEV_MAXVERS		4
+
+struct nfsd_pnfsd_args {
+	int	op;		/* Which pNFSd op to perform. */
+	char	*mdspath;	/* Path of MDS file. */
+	char	*dspath;	/* Path of recovered DS mounted on dir. */
+	char	*curdspath;	/* Path of current DS mounted on dir. */
+};
+
+#define	PNFSDOP_DELDSSERVER	1
+#define	PNFSDOP_COPYMR		2
+#define	PNFSDOP_FORCEDELDS	3
 
 /* Old version. */
 struct nfsd_nfsd_oargs {
@@ -204,17 +215,6 @@ struct nfsd_nfsd_oargs {
 	int	minthreads;	/* minimum service thread count */
 	int	maxthreads;	/* maximum service thread count */
 };
-
-/*
- * NFSDEV_MIRRORSTR - string of digits that number the DSs 0->999.
- * (To support more than 1000 DSs on an MDS, this needs to be increased.)
- * NFSDEV_MAXMIRRORS - Maximum # of mirrors for a DS.
- * (Most will only have a single mirror, but this setting allows up to 3.)
- * NFSDEV_MAXVERS - maximum number of NFS versions supported by Flex File.
- */
-#define	NFSDEV_MIRRORSTR	3
-#define	NFSDEV_MAXMIRRORS	4
-#define	NFSDEV_MAXVERS		4
 
 /*
  * Arguments for use by the callback daemon.
@@ -328,6 +328,7 @@ struct nfsreferral {
 #define	LCL_ADMINREVOKED	0x00008000
 #define	LCL_RECLAIMCOMPLETE	0x00010000
 #define	LCL_NFSV41		0x00020000
+#define	LCL_DONEBINDCONN	0x00040000
 
 #define	LCL_GSS		LCL_KERBV	/* Or of all mechs */
 
@@ -683,6 +684,7 @@ struct nfsrv_descript {
 #define	ND_DSSERVER		0x40000000
 #define	ND_CURSTATEID		0x80000000
 #define	ND_SAVEDCURSTATEID	0x100000000
+#define	ND_HASSLOTID		0x200000000
 
 /*
  * ND_GSS should be the "or" of all GSS type authentications.

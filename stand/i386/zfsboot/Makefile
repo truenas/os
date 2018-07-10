@@ -34,15 +34,9 @@ CFLAGS+=-DBOOTPROG=\"zfsboot\" \
 	-I${BOOTSRC}/i386/boot2 \
 	-Wall -Waggregate-return -Wbad-function-cast -Wno-cast-align \
 	-Wmissing-declarations -Wmissing-prototypes -Wnested-externs \
-	-Wpointer-arith -Wshadow -Wstrict-prototypes -Wwrite-strings \
-	-Winline
+	-Wpointer-arith -Wshadow -Wstrict-prototypes -Wwrite-strings
 
 CFLAGS.gcc+=	--param max-inline-insns-single=100
-.if ${MACHINE} == "amd64"
-LIBZFSBOOT=${BOOTOBJ}/zfs32/libzfsboot.a
-.else
-LIBZFSBOOT=${BOOTOBJ}/zfs/libzfsboot.a
-.endif
 
 LD_FLAGS+=${LD_FLAGS_BIN}
 
@@ -83,7 +77,7 @@ zfsboot.bin: zfsboot.out
 	${OBJCOPY} -S -O binary zfsboot.out ${.TARGET}
 
 zfsboot.out: ${BTXCRT} zfsboot.o sio.o drv.o cons.o
-	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBZFSBOOT} ${LIBGELIBOOT} ${LIBSA32}
+	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBSA32}
 
 SRCS=	zfsboot.c
 

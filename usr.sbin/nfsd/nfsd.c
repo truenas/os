@@ -61,7 +61,6 @@ static const char rcsid[] =
 #include <rpc/rpc.h>
 #include <rpc/pmap_clnt.h>
 #include <rpcsvc/nfs_prot.h>
-#include <rpcsvc/mount.h>
 
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -87,7 +86,7 @@ static int	debug = 0;
 
 #define	NFSD_STABLERESTART	"/var/db/nfs-stablerestart"
 #define	NFSD_STABLEBACKUP	"/var/db/nfs-stablerestart.bak"
-#define	NFSD_VIRTUALHOST	"/etc/nfsd.virtualhost"
+#define	NFSD_VIRTUALHOST    "/etc/nfsd.virtualhost"
 #define	MAXNFSDCNT	256
 #define	DEFNFSDCNT	 4
 #define	NFS_VER2	 2
@@ -113,15 +112,8 @@ static struct option longopts[] = {
 	{ "minthreads", required_argument, &minthreads_set, 1 },
 	{ "maxthreads", required_argument, &maxthreads_set, 1 },
 	{ "pnfs", required_argument, NULL, 'p' },
+	{ "mirror", required_argument, NULL, 'm' },
 	{ NULL, 0, NULL, 0}
-};
-
-struct nfhret {
-	u_long		stat;
-	long		vers;
-	long		auth;
-	long		fhsize;
-	u_char		nfh[NFS3_FHSIZE];
 };
 
 static void	cleanup(int);
@@ -159,6 +151,8 @@ static void	parse_dsserver(const char *, struct nfsd_nfsd_args *);
  *	-t - support tcp nfs clients
  *	-u - support udp nfs clients
  *	-e - forces it to run a server that supports nfsv4
+ *	-p - enable a pNFS service
+ *	-m - set the mirroring level for a pNFS service
  * followed by "n" which is the number of nfsds' to fork off
  */
 int
@@ -187,16 +181,19 @@ main(int argc, char **argv)
 	pid_t pid;
 	struct nfsd_nfsd_args nfsdargs;
 
+	nfsdargs.mirrorcnt = 1;
+	nfsdargs.addr = NULL;
+	nfsdargs.addrlen = 0;
 	nfsdcnt = DEFNFSDCNT;
 	unregister = reregister = tcpflag = maxsock = 0;
 	bindanyflag = udpflag = connect_type_cnt = bindhostc = 0;
-	getopt_shortopts = "ah:n:rdtuep:";
+	getopt_shortopts = "ah:n:rdtuep:m:";
 	getopt_usage =
 	    "usage:\n"
 	    "  nfsd [-ardtue] [-h bindip]\n"
 	    "       [-n numservers] [--minthreads #] [--maxthreads #]\n"
 	    "       [-p/--pnfs dsserver0:/dsserver0-mounted-on-dir,...,"
-	    "dsserverN:/dsserverN-mounted-on-dir\n";
+	    "dsserverN:/dsserverN-mounted-on-dir] [-m mirrorlevel]\n";
 	while ((ch = getopt_long(argc, argv, getopt_shortopts, longopts,
 		    &longindex)) != -1)
 		switch (ch) {
@@ -233,6 +230,14 @@ main(int argc, char **argv)
 		case 'p':
 			/* Parse out the DS server host names and mount pts. */
 			parse_dsserver(optarg, &nfsdargs);
+			break;
+		case 'm':
+			/* Set the mirror level for a pNFS service. */
+			i = atoi(optarg);
+			if (i < 2 || i > NFSDEV_MAXMIRRORS)
+				errx(1, "Mirror level out of range 2<-->%d",
+				    NFSDEV_MAXMIRRORS);
+			nfsdargs.mirrorcnt = i;
 			break;
 		case 0:
 			lopt = longopts[longindex].name;
@@ -1196,20 +1201,18 @@ backup_stable(__unused int signo)
  * Parse the pNFS string and extract the DS servers and ports numbers.
  */
 static void
-parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
+parse_dsserver(const char *optionarg, struct nfsd_nfsd_args *nfsdargp)
 {
 	char *ad, *cp, *cp2, *dsaddr, *dshost, *dspath, *dsvol, nfsprt[9];
-	char *mirror, mirrorstr[NFSDEV_MIRRORSTR + 1], *cp3;
-	size_t adsiz, dsaddrcnt, dshostcnt, dspathcnt, ecode, hostsiz, pathsiz;
-	size_t mirrorcnt, mirrorstrsiz, mirrorindex;
-	size_t dsaddrsiz, dshostsiz, dspathsiz, nfsprtsiz, mirrorsiz;
+	char *mdspath, *mdsp;
+	int ecode;
+	u_int adsiz, dsaddrcnt, dshostcnt, dspathcnt, hostsiz, pathsiz;
+	u_int mdspathcnt;
+	size_t dsaddrsiz, dshostsiz, dspathsiz, nfsprtsiz, mdspathsiz;
 	struct addrinfo hints, *ai_tcp;
-	union {
-		struct sockaddr *sa;
-		struct sockaddr_in *sin;
-	} su;
+	struct sockaddr_in sin;
 
-	cp = strdup(dsoptarg);
+	cp = strdup(optionarg);
 	if (cp == NULL)
 		errx(1, "Out of memory");
 
@@ -1229,10 +1232,10 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 	dsaddr = malloc(dsaddrsiz);
 	if (dsaddr == NULL)
 		errx(1, "Out of memory");
-	mirrorsiz = 1024;
-	mirrorcnt = 0;
-	mirror = malloc(mirrorsiz);
-	if (mirror == NULL)
+	mdspathsiz = 1024;
+	mdspathcnt = 0;
+	mdspath = malloc(mdspathsiz);
+	if (mdspath == NULL)
 		errx(1, "Out of memory");
 
 	/* Put the NFS port# in "." form. */
@@ -1240,27 +1243,14 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 	nfsprtsiz = strlen(nfsprt);
 
 	ai_tcp = NULL;
-	mirrorindex = 0;
 	/* Loop around for each DS server name. */
 	do {
-		/*
-		 * If the next DS is separated from the current one with a '#',
-		 * it is a mirror. If the next DS is separated from the current
-		 * one with a ',', it is not a mirror of the previous DS.
-		 */
 		cp2 = strchr(cp, ',');
-		cp3 = strchr(cp, '#');
-		if (cp3 != NULL && (cp2 == NULL || cp3 < cp2))
-			cp2 = cp3;	/* A mirror of the previous DS. */
-		else
-			cp3 = NULL;	/* Not a mirror of the previous DS. */
 		if (cp2 != NULL) {
 			/* Not the last DS in the list. */
 			*cp2++ = '\0';
 			if (*cp2 == '\0')
 				usage();
-			if (cp3 == NULL)
-				mirrorindex++;	/* Increment if not a mirror. */
 		}
 
 		dsvol = strchr(cp, ':');
@@ -1268,7 +1258,14 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 			usage();
 		*dsvol++ = '\0';
 
-		printf("pnfs path=%s\n", dsvol);
+		/* Optional path for MDS file system to be stored on DS. */
+		mdsp = strchr(dsvol, '#');
+		if (mdsp != NULL) {
+			if (*(mdsp + 1) == '\0' || mdsp <= dsvol)
+				usage();
+			*mdsp++ = '\0';
+		}
+
 		/* Append this pathname to dspath. */
 		pathsiz = strlen(dsvol);
 		if (dspathcnt + pathsiz + 1 > dspathsiz) {
@@ -1279,6 +1276,23 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 		}
 		strcpy(&dspath[dspathcnt], dsvol);
 		dspathcnt += pathsiz + 1;
+
+		/* Append this pathname to mdspath. */
+		if (mdsp != NULL)
+			pathsiz = strlen(mdsp);
+		else
+			pathsiz = 0;
+		if (mdspathcnt + pathsiz + 1 > mdspathsiz) {
+			mdspathsiz *= 2;
+			mdspath = realloc(mdspath, mdspathsiz);
+			if (mdspath == NULL)
+				errx(1, "Out of memory");
+		}
+		if (mdsp != NULL)
+			strcpy(&mdspath[mdspathcnt], mdsp);
+		else
+			mdspath[mdspathcnt] = '\0';
+		mdspathcnt += pathsiz + 1;
 
 		if (ai_tcp != NULL)
 			freeaddrinfo(ai_tcp);
@@ -1293,12 +1307,14 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 		if (ecode != 0)
 			err(1, "getaddrinfo pnfs: %s %s", cp,
 			    gai_strerror(ecode));
-		su.sa = ai_tcp->ai_addr;
-		if (su.sin->sin_family != AF_INET)
+		if (ai_tcp->ai_addr->sa_family != AF_INET ||
+		    ai_tcp->ai_addrlen < sizeof(sin))
 			err(1, "getaddrinfo() returned non-INET address");
+		/* Mips cares about sockaddr_in alignment, so copy the addr. */
+		memcpy(&sin, ai_tcp->ai_addr, sizeof(sin));
 
 		/* Append this address to dsaddr. */
-		ad = inet_ntoa(su.sin->sin_addr);
+		ad = inet_ntoa(sin.sin_addr);
 		adsiz = strlen(ad);
 		if (dsaddrcnt + adsiz + nfsprtsiz + 1 > dsaddrsiz) {
 			dsaddrsiz *= 2;
@@ -1321,38 +1337,17 @@ parse_dsserver(const char *dsoptarg, struct nfsd_nfsd_args *nfsdargp)
 		strcpy(&dshost[dshostcnt], ai_tcp->ai_canonname);
 		dshostcnt += hostsiz + 1;
 
-		/* Append this mirrorindex to mirror. */
-		if (snprintf(mirrorstr, NFSDEV_MIRRORSTR + 1, "%zu",
-		    mirrorindex) > NFSDEV_MIRRORSTR)
-			errx(1, "Too many mirrors");
-		mirrorstrsiz = strlen(mirrorstr);
-		if (mirrorcnt + mirrorstrsiz + 1 > mirrorsiz) {
-			mirrorsiz *= 2;
-			mirror = realloc(mirror, mirrorsiz);
-			if (mirror == NULL)
-				errx(1, "Out of memory");
-		}
-		strcpy(&mirror[mirrorcnt], mirrorstr);
-		mirrorcnt += mirrorstrsiz + 1;
-
 		cp = cp2;
 	} while (cp != NULL);
 
-	/*
-	 * At the point, ai_tcp refers to the last DS server host and
-	 * sin is set to point to the sockaddr structure in it.
-	 * Set the port# for the DS Mount protocol and get the DS root FH.
-	 */
-	su.sin->sin_port = htons(2049);
 	nfsdargp->addr = dsaddr;
 	nfsdargp->addrlen = dsaddrcnt;
 	nfsdargp->dnshost = dshost;
 	nfsdargp->dnshostlen = dshostcnt;
 	nfsdargp->dspath = dspath;
 	nfsdargp->dspathlen = dspathcnt;
-	nfsdargp->mirror = mirror;
-	nfsdargp->mirrorlen = mirrorcnt;
+	nfsdargp->mdspath = mdspath;
+	nfsdargp->mdspathlen = mdspathcnt;
 	freeaddrinfo(ai_tcp);
 }
-
 

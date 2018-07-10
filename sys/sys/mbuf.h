@@ -304,7 +304,7 @@ struct mbuf {
 #define	M_MCAST		0x00000020 /* send/received as link-level multicast */
 #define	M_PROMISC	0x00000040 /* packet was not for us */
 #define	M_VLANTAG	0x00000080 /* ether_vtag is valid */
-#define	M_UNUSED_8	0x00000100 /* --available-- */
+#define	M_NOMAP		0x00000100 /* mbuf data is unmapped (soon from Drew) */
 #define	M_NOFREE	0x00000200 /* do not free mbuf, embedded in cluster */
 #define	M_TSTMP		0x00000400 /* rcv_tstmp field is valid */
 #define	M_TSTMP_HPREC	0x00000800 /* rcv_tstmp is high-prec, typically
@@ -1375,6 +1375,13 @@ mbuf_tstmp2timespec(struct mbuf *m, struct timespec *ts)
 	ts->tv_sec = m->m_pkthdr.rcv_tstmp / 1000000000;
 	ts->tv_nsec = m->m_pkthdr.rcv_tstmp % 1000000000;
 }
+#endif
+
+#ifdef NETDUMP
+/* Invoked from the netdump client code. */
+void	netdump_mbuf_drain(void);
+void	netdump_mbuf_dump(void);
+void	netdump_mbuf_reinit(int nmbuf, int nclust, int clsize);
 #endif
 
 #endif /* _KERNEL */

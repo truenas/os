@@ -47,9 +47,10 @@ LIST_HEAD(nfslockhead, nfslock);
 LIST_HEAD(nfslockhashhead, nfslockfile);
 LIST_HEAD(nfssessionhead, nfsdsession);
 LIST_HEAD(nfssessionhashhead, nfsdsession);
-LIST_HEAD(nfslayouthead, nfslayout);
+TAILQ_HEAD(nfslayouthead, nfslayout);
 SLIST_HEAD(nfsdsdirhead, nfsdsdir);
 TAILQ_HEAD(nfsdevicehead, nfsdevice);
+LIST_HEAD(nfsdontlisthead, nfsdontlist);
 
 /*
  * List head for nfsusrgrp.
@@ -127,16 +128,25 @@ struct nfsclient {
  * Malloc'd to correct size for the lay_xdr.
  */
 struct nfslayout {
-	LIST_ENTRY(nfslayout)	lay_list;
+	TAILQ_ENTRY(nfslayout)	lay_list;
 	nfsv4stateid_t		lay_stateid;
 	nfsquad_t		lay_clientid;
 	fhandle_t		lay_fh;
+	fsid_t			lay_fsid;
 	uint32_t		lay_layoutlen;
+	uint16_t		lay_mirrorcnt;
+	uint16_t		lay_trycnt;
 	uint16_t		lay_type;
-	uint8_t			lay_read;
-	uint8_t			lay_rw;
-	char			lay_xdr[0];
+	uint16_t		lay_flags;
+	uint32_t		lay_xdr[0];
 };
+
+/* Flags for lay_flags. */
+#define	NFSLAY_READ	0x0001
+#define	NFSLAY_RW	0x0002
+#define	NFSLAY_RECALL	0x0004
+#define	NFSLAY_RETURNED	0x0008
+#define	NFSLAY_CALLB	0x0010
 
 /*
  * Structure for an NFSv4.1 session.
@@ -182,7 +192,6 @@ struct nfsdsession {
  * - open file structures chained off an open_owner structure
  * - lock_owner structures chained off an open file structure
  * - delegated file structures chained off of nfsclient and nfslockfile
- * - pNFS layouts chained off of nfsclient and nfslockfile
  * - the ls_list field is used for the chain it is in
  * - the ls_head structure is used to chain off the sibling structure
  *   (it is a union between an nfsstate and nfslock structure head)
@@ -216,9 +225,8 @@ struct nfsstate {
 	struct nfslockfile	*ls_lfp;	/* Back pointer */
 	struct nfsrvcache	*ls_op;		/* Op cache reference */
 	struct nfsclient	*ls_clp;	/* Back pointer */
-	u_int32_t		ls_ownerlen;	/* Length of ls_owner */
+	u_short			ls_ownerlen;	/* Length of ls_owner */
 	u_char			ls_owner[1];	/* malloc'd the correct size */
-						/* Must be uint32_t * aligned */
 };
 #define	ls_lock			ls_head.lock
 #define	ls_open			ls_head.open
@@ -230,8 +238,6 @@ struct nfsstate {
 #define	ls_delegtime		ls_un.deleg.expiry
 #define	ls_delegtimelimit	ls_un.deleg.limit
 #define	ls_compref		ls_un.deleg.compref
-#define	ls_layout		ls_owner
-#define	ls_layoutlen		ls_ownerlen
 
 /*
  * Nfs lock structure.
@@ -282,7 +288,6 @@ struct nfsrollback {
 struct nfslockfile {
 	LIST_HEAD(, nfsstate)	lf_open;	/* Open list */
 	LIST_HEAD(, nfsstate)	lf_deleg;	/* Delegation list */
-	LIST_HEAD(, nfsstate)	lf_layout;	/* Layout list */
 	LIST_HEAD(, nfslock)	lf_lock;	/* Lock list */
 	LIST_HEAD(, nfslock)	lf_locallock;	/* Local lock list */
 	LIST_HEAD(, nfsrollback) lf_rollback;	/* Local lock rollback list */
@@ -334,17 +339,17 @@ void nfsrv_freedeleglist(struct nfsstatehead *);
  */
 struct nfsdevice {
 	TAILQ_ENTRY(nfsdevice)	nfsdev_list;
-	struct nfsdevicehead	nfsdev_mirrors;
 	vnode_t			nfsdev_dvp;
 	struct nfsmount		*nfsdev_nmp;
 	char			nfsdev_deviceid[NFSX_V4DEVICEID];
-	char			nfsdev_mirrorid[NFSDEV_MIRRORSTR + 1];
 	uint16_t		nfsdev_hostnamelen;
 	uint16_t		nfsdev_fileaddrlen;
 	uint16_t		nfsdev_flexaddrlen;
+	uint16_t		nfsdev_mdsisset;
 	char			*nfsdev_fileaddr;
 	char			*nfsdev_flexaddr;
 	char			*nfsdev_host;
+	fsid_t			nfsdev_mdsfsid;
 	uint32_t		nfsdev_nextdir;
 	vnode_t			nfsdev_dsdir[0];
 };
@@ -359,6 +364,19 @@ struct pnfsdsattr {
 	struct timespec	dsa_atime;
 	struct timespec	dsa_mtime;
 };
+
+/*
+ * This structure is a list element for a list the pNFS server uses to
+ * mark that the recovery of a mirror file is in progress.
+ */
+struct nfsdontlist {
+	LIST_ENTRY(nfsdontlist)	nfsmr_list;
+	uint32_t		nfsmr_flags;
+	fhandle_t		nfsmr_fh;
+};
+
+/* nfsmr_flags bits. */
+#define	NFSMR_DONTLAYOUT	0x00000001
 
 #endif	/* defined(_KERNEL) || defined(KERNEL) */
 

@@ -279,18 +279,10 @@
 #define	NFSX_STATFS(v3)		((v3) ? NFSX_V3STATFS : NFSX_V2STATFS)
 
 /*
- * XXX hacky hack XXX
- *
- * nfsd.c (with pNFS) requires fs/nfs/nfsproto.h to be included, which
- * it formerly  didn't. Now that this is so, it collides with
- * include/rpcsvc/nfs_pro.x (which translates to
- * include/rpcsvc/nfs_prot.h) and includes all of these remote procedure
- * call numbers. This is a hack for now just to get this to compile,
- * will fix it later.
+ * Beware.  NFSPROC_NULL and friends are defined in
+ * <rpcsvc/nfs_prot.h> as well and the numbers are different.
  */
-
-#ifndef NFSPROC_NULL
-
+#ifndef	NFSPROC_NULL
 /* nfs rpc procedure numbers (before version mapping) */
 #define	NFSPROC_NULL		0
 #define	NFSPROC_GETATTR		1
@@ -314,8 +306,7 @@
 #define	NFSPROC_FSINFO		19
 #define	NFSPROC_PATHCONF	20
 #define	NFSPROC_COMMIT		21
-
-#endif /* NFSPROC_NULL */
+#endif	/* NFSPROC_NULL */
 
 /*
  * The lower numbers -> 21 are used by NFSv2 and v3. These define higher
@@ -680,6 +671,15 @@
 #define	NFSFLEXFLAG_NOIO_MDS		0x00000002
 #define	NFSFLEXFLAG_NO_READIO		0x00000004
 #define	NFSFLEXFLAG_WRITE_ONEMIRROR	0x00000008
+
+/* Enum values for Bind Connection to Session. */
+#define	NFSCDFC4_FORE		0x1
+#define	NFSCDFC4_BACK		0x2
+#define	NFSCDFC4_FORE_OR_BOTH	0x3
+#define	NFSCDFC4_BACK_OR_BOTH	0x7
+#define	NFSCDFS4_FORE		0x1
+#define	NFSCDFS4_BACK		0x2
+#define	NFSCDFS4_BOTH		0x3
 
 #if defined(_KERNEL) || defined(KERNEL)
 /* Conversion macros */

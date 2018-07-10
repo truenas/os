@@ -1,4 +1,4 @@
-/*	$NetBSD: gzip.c,v 1.112 2017/08/23 13:04:17 christos Exp $	*/
+/*	$NetBSD: gzip.c,v 1.113 2018/06/12 00:42:17 kamil Exp $	*/
 
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-NetBSD
@@ -1429,6 +1429,7 @@ file_uncompress(char *file, char *outfile, size_t outsize)
 	unsigned char header1[4];
 	enum filetype method;
 	int fd, ofd, zfd = -1;
+	int error;
 	size_t in_size;
 #ifndef SMALL
 	ssize_t rv;
@@ -1601,14 +1602,21 @@ file_uncompress(char *file, char *outfile, size_t outsize)
 
 		size = zuncompress(in, out, NULL, 0, NULL);
 		/* need to fclose() if ferror() is true... */
-		if (ferror(in) | fclose(in)) {
-			maybe_warn("failed infile fclose");
-			unlink(outfile);
+		error = ferror(in);
+		if (error | fclose(in)) {
+			if (error)
+				maybe_warn("failed infile");
+			else
+				maybe_warn("failed infile fclose");
+			if (cflag == 0)
+				unlink(outfile);
 			(void)fclose(out);
+			goto lose;
 		}
 		if (fclose(out) != 0) {
 			maybe_warn("failed outfile fclose");
-			unlink(outfile);
+			if (cflag == 0)
+				unlink(outfile);
 			goto lose;
 		}
 		break;
@@ -2169,12 +2177,16 @@ print_list(int fd, off_t out, const char *outfile, time_t ts)
 				maybe_warnx("read of uncompressed size");
 
 			else {
-				usize = buf[4] | buf[5] << 8 |
-					buf[6] << 16 | buf[7] << 24;
+				usize = buf[4];
+				usize |= (unsigned int)buf[5] << 8;
+				usize |= (unsigned int)buf[6] << 16;
+				usize |= (unsigned int)buf[7] << 24;
 				in = (off_t)usize;
 #ifndef SMALL
-				crc = buf[0] | buf[1] << 8 |
-				      buf[2] << 16 | buf[3] << 24;
+				crc = buf[0];
+				crc |= (unsigned int)buf[1] << 8;
+				crc |= (unsigned int)buf[2] << 16;
+				crc |= (unsigned int)buf[3] << 24;
 #endif
 			}
 		}
