@@ -104,9 +104,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in_systm.h>
 #include <netinet/in_var.h>
 #include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
 #include <netinet/ip6.h>
-#include <netinet/icmp_var.h>
 #include <netinet/icmp6.h>
 #include <netinet/ip_var.h>
 #include <netinet/udp.h>
@@ -208,7 +206,6 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 	uint8_t nxt;
 
 	ifp = m->m_pkthdr.rcvif;
-	ip6 = mtod(m, struct ip6_hdr *);
 
 #ifndef PULLDOWN_TEST
 	IP6_EXTHDR_CHECK(m, off, sizeof(struct udphdr), IPPROTO_DONE);
@@ -218,6 +215,7 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 	IP6_EXTHDR_GET(uh, struct udphdr *, m, off, sizeof(*uh));
 	if (!uh)
 		return (IPPROTO_DONE);
+	ip6 = mtod(m, struct ip6_hdr *);
 #endif
 
 	UDPSTAT_INC(udps_ipackets);
@@ -465,8 +463,6 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 			goto badunlocked;
 		}
 		if (V_udp_blackhole)
-			goto badunlocked;
-		if (badport_bandlim(BANDLIM_ICMP6_UNREACH) < 0)
 			goto badunlocked;
 		icmp6_error(m, ICMP6_DST_UNREACH, ICMP6_DST_UNREACH_NOPORT, 0);
 		return (IPPROTO_DONE);

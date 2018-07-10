@@ -3428,6 +3428,8 @@ nfsrvd_opendowngrade(struct nfsrv_descript *nd, __unused int isdgram,
 
 	stp->ls_seq = fxdr_unsigned(u_int32_t, *tl++);
 	i = fxdr_unsigned(int, *tl++);
+	if ((nd->nd_flag & ND_NFSV41) != 0)
+		i &= ~NFSV4OPEN_WANTDELEGMASK;
 	switch (i) {
 	case NFSV4OPEN_ACCESSREAD:
 		stp->ls_flags = (NFSLCK_READACCESS | NFSLCK_DOWNGRADE);
@@ -3440,7 +3442,7 @@ nfsrvd_opendowngrade(struct nfsrv_descript *nd, __unused int isdgram,
 		    NFSLCK_DOWNGRADE);
 		break;
 	default:
-		nd->nd_repstat = NFSERR_BADXDR;
+		nd->nd_repstat = NFSERR_INVAL;
 	}
 	i = fxdr_unsigned(int, *tl);
 	switch (i) {
@@ -3456,7 +3458,7 @@ nfsrvd_opendowngrade(struct nfsrv_descript *nd, __unused int isdgram,
 		stp->ls_flags |= (NFSLCK_READDENY | NFSLCK_WRITEDENY);
 		break;
 	default:
-		nd->nd_repstat = NFSERR_BADXDR;
+		nd->nd_repstat = NFSERR_INVAL;
 	}
 
 	clientid.lval[0] = stp->ls_stateid.other[0];

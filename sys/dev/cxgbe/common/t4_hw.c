@@ -2958,7 +2958,7 @@ static int get_vpd_keyword_val(const u8 *vpd, const char *kw, int region)
  *	Reads card parameters stored in VPD EEPROM.
  */
 static int get_vpd_params(struct adapter *adapter, struct vpd_params *p,
-    u32 *buf)
+    uint16_t device_id, u32 *buf)
 {
 	int i, ret, addr;
 	int ec, sn, pn, na, md;
@@ -3026,12 +3026,16 @@ static int get_vpd_params(struct adapter *adapter, struct vpd_params *p,
 	memcpy(p->na, vpd + na, min(i, MACADDR_LEN));
 	strstrip((char *)p->na);
 
+	if (device_id & 0x80)
+		return 0;	/* Custom card */
+
 	md = get_vpd_keyword_val(vpd, "VF", 1);
 	if (md < 0) {
 		snprintf(p->md, sizeof(p->md), "unknown");
 	} else {
 		i = vpd[md - VPD_INFO_FLD_HDR_SIZE + 2];
 		memcpy(p->md, vpd + md, min(i, MD_LEN));
+		strstrip((char *)p->md);
 	}
 
 	return 0;
@@ -3716,27 +3720,28 @@ int t4_link_l1cfg(struct adapter *adap, unsigned int mbox, unsigned int port,
 		fec = FW_PORT_CAP_FEC_RS;
 	else if (lc->requested_fec & FEC_BASER_RS)
 		fec = FW_PORT_CAP_FEC_BASER_RS;
-	else if (lc->requested_fec & FEC_RESERVED)
-		fec = FW_PORT_CAP_FEC_RESERVED;
 
 	if (!(lc->supported & FW_PORT_CAP_ANEG) ||
 	    lc->requested_aneg == AUTONEG_DISABLE) {
 		aneg = 0;
 		switch (lc->requested_speed) {
-		case 100:
+		case 100000:
 			speed = FW_PORT_CAP_SPEED_100G;
 			break;
-		case 40:
+		case 40000:
 			speed = FW_PORT_CAP_SPEED_40G;
 			break;
-		case 25:
+		case 25000:
 			speed = FW_PORT_CAP_SPEED_25G;
 			break;
-		case 10:
+		case 10000:
 			speed = FW_PORT_CAP_SPEED_10G;
 			break;
-		case 1:
+		case 1000:
 			speed = FW_PORT_CAP_SPEED_1G;
+			break;
+		case 100:
+			speed = FW_PORT_CAP_SPEED_100M;
 			break;
 		default:
 			return -EINVAL;
@@ -7711,11 +7716,9 @@ static void handle_port_info(struct port_info *pi, const struct fw_port_info *p)
 
 	fec = 0;
 	if (lc->advertising & FW_PORT_CAP_FEC_RS)
-		fec |= FEC_RS;
-	if (lc->advertising & FW_PORT_CAP_FEC_BASER_RS)
-		fec |= FEC_BASER_RS;
-	if (lc->advertising & FW_PORT_CAP_FEC_RESERVED)
-		fec |= FEC_RESERVED;
+		fec = FEC_RS;
+	else if (lc->advertising & FW_PORT_CAP_FEC_BASER_RS)
+		fec = FEC_BASER_RS;
 	lc->fec = fec;
 }
 
@@ -7776,14 +7779,16 @@ int t4_handle_fw_rpl(struct adapter *adap, const __be64 *rpl)
 		}
 
 		lc = &pi->link_cfg;
+		PORT_LOCK(pi);
 		old_lc = &pi->old_link_cfg;
 		old_ptype = pi->port_type;
 		old_mtype = pi->mod_type;
-
 		handle_port_info(pi, &p->u.info);
+		PORT_UNLOCK(pi);
 		if (old_ptype != pi->port_type || old_mtype != pi->mod_type) {
 			t4_os_portmod_changed(pi);
 		}
+		PORT_LOCK(pi);
 		if (old_lc->link_ok != lc->link_ok ||
 		    old_lc->speed != lc->speed ||
 		    old_lc->fec != lc->fec ||
@@ -7791,6 +7796,7 @@ int t4_handle_fw_rpl(struct adapter *adap, const __be64 *rpl)
 			t4_os_link_changed(pi);
 			*old_lc = *lc;
 		}
+		PORT_UNLOCK(pi);
 	} else {
 		CH_WARN_RATELIMIT(adap, "Unknown firmware reply %d\n", opcode);
 		return -EINVAL;
@@ -7896,6 +7902,44 @@ int t4_get_flash_params(struct adapter *adapter)
 
 		default:
 			CH_ERR(adapter, "Micron Flash Part has bad size, "
+			       "ID = %#x, Density code = %#x\n",
+			       flashid, density);
+			return -EINVAL;
+		}
+		break;
+	}
+
+	case 0x9d: { /* ISSI -- Integrated Silicon Solution, Inc. */
+		/*
+		 * This Density -> Size decoding table is taken from ISSI
+		 * Data Sheets.
+		 */
+		density = (flashid >> 16) & 0xff;
+		switch (density) {
+		case 0x16: size = 1 << 25; break; /*  32MB */
+		case 0x17: size = 1 << 26; break; /*  64MB */
+
+		default:
+			CH_ERR(adapter, "ISSI Flash Part has bad size, "
+			       "ID = %#x, Density code = %#x\n",
+			       flashid, density);
+			return -EINVAL;
+		}
+		break;
+	}
+
+	case 0xc2: { /* Macronix */
+		/*
+		 * This Density -> Size decoding table is taken from Macronix
+		 * Data Sheets.
+		 */
+		density = (flashid >> 16) & 0xff;
+		switch (density) {
+		case 0x17: size = 1 << 23; break; /*   8MB */
+		case 0x18: size = 1 << 24; break; /*  16MB */
+
+		default:
+			CH_ERR(adapter, "Macronix Flash Part has bad size, "
 			       "ID = %#x, Density code = %#x\n",
 			       flashid, density);
 			return -EINVAL;
@@ -8051,10 +8095,6 @@ int t4_prep_adapter(struct adapter *adapter, u32 *buf)
 	if (ret < 0)
 		return ret;
 
-	ret = get_vpd_params(adapter, &adapter->params.vpd, buf);
-	if (ret < 0)
-		return ret;
-
 	/* Cards with real ASICs have the chipid in the PCIe device id */
 	t4_os_pci_read_cfg2(adapter, PCI_DEVICE_ID, &device_id);
 	if (device_id >> 12 == chip_id(adapter))
@@ -8064,6 +8104,10 @@ int t4_prep_adapter(struct adapter *adapter, u32 *buf)
 		adapter->params.fpga = 1;
 		adapter->params.cim_la_size = 2 * CIMLA_SIZE;
 	}
+
+	ret = get_vpd_params(adapter, &adapter->params.vpd, device_id, buf);
+	if (ret < 0)
+		return ret;
 
 	init_cong_ctrl(adapter->params.a_wnd, adapter->params.b_wnd);
 
