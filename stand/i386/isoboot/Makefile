@@ -36,6 +36,9 @@ CFLAGS+=-DBOOTPROG=\"isoboot\" \
 	-Winline -Wno-pointer-sign
 
 CFLAGS.gcc+=	--param max-inline-insns-single=100
+.if ${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} <= 40201
+CFLAGS.gcc+=	-Wno-uninitialized
+.endif
 CFLAGS.clang+=  -Oz ${CLANG_OPT_SMALL}
 
 LD_FLAGS+=${LD_FLAGS_BIN}
@@ -63,6 +66,6 @@ isoboot.bin: isoboot.out
 	${OBJCOPY} -S -O binary isoboot.out ${.TARGET}
 
 isoboot.out: ${BTXCRT} isoboot.o sio.o crc32.o drv.o cons.o ${OPENCRYPTO_XTS}
-	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBGELIBOOT} ${LIBSA32}
+	${LD} ${LD_FLAGS} -Ttext ${ORG2} -o ${.TARGET} ${.ALLSRC} ${LIBSA32}
 
 .include <bsd.prog.mk>

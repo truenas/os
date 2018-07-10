@@ -97,7 +97,7 @@ copyout_init_tramp(void)
 	    (uintptr_t)suword_fast + setidt_disp);
 }
 
-static int
+int
 cp_slow0(vm_offset_t uva, size_t len, bool write,
     void (*f)(vm_offset_t, void *), void *arg)
 {
@@ -140,11 +140,7 @@ cp_slow0(vm_offset_t uva, size_t len, bool write,
 		sx_xunlock(&pc->pc_copyout_slock);
 	else
 		mtx_unlock(&pc->pc_copyout_mlock);
-	for (i = 0; i < plen; i++) {
-		vm_page_lock(m[i]);
-		vm_page_unhold(m[i]);
-		vm_page_unlock(m[i]);
-	}
+	vm_page_unhold_pages(m, plen);
 	return (error);
 }
 
@@ -226,7 +222,7 @@ copyin(const void *udaddr, void *kaddr, size_t len)
 
 	if ((uintptr_t)udaddr + len < (uintptr_t)udaddr ||
 	    (uintptr_t)udaddr + len > VM_MAXUSER_ADDRESS)
-		return (-1);
+		return (EFAULT);
 	if (len == 0 || (fast_copyout && len <= TRAMP_COPYOUT_SZ &&
 	    copyin_fast_tramp(udaddr, kaddr, len, KCR3) == 0))
 		return (0);
@@ -261,7 +257,7 @@ copyout(const void *kaddr, void *udaddr, size_t len)
 
 	if ((uintptr_t)udaddr + len < (uintptr_t)udaddr ||
 	    (uintptr_t)udaddr + len > VM_MAXUSER_ADDRESS)
-		return (-1);
+		return (EFAULT);
 	if (len == 0 || (fast_copyout && len <= TRAMP_COPYOUT_SZ &&
 	    copyout_fast_tramp(kaddr, udaddr, len, KCR3) == 0))
 		return (0);

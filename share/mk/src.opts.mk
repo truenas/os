@@ -160,6 +160,7 @@ __DEFAULT_YES_OPTIONS = \
     RESCUE \
     ROUTED \
     SENDMAIL \
+    SERVICESDB \
     SETUID_LOGIN \
     SHAREDOCS \
     SOURCELESS \
@@ -168,6 +169,7 @@ __DEFAULT_YES_OPTIONS = \
     SVNLITE \
     SYSCONS \
     SYSTEM_COMPILER \
+    SYSTEM_LINKER \
     TALK \
     TCP_WRAPPERS \
     TCSH \
@@ -187,7 +189,6 @@ __DEFAULT_YES_OPTIONS = \
 
 __DEFAULT_NO_OPTIONS = \
     BSD_GREP \
-    BSD_GREP_FASTMATCH \
     CLANG_EXTRAS \
     DTRACE_TESTS \
     GNU_GREP_COMPAT \
@@ -207,6 +208,28 @@ __DEFAULT_NO_OPTIONS = \
     ZONEINFO_LEAPSECONDS_SUPPORT \
     ZONEINFO_OLD_TIMEZONES_SUPPORT \
 
+# LEFT/RIGHT. Left options which default to "yes" unless their corresponding
+# RIGHT option is disabled.
+__DEFAULT_DEPENDENT_OPTIONS= \
+	CLANG_FULL/CLANG \
+	LLVM_TARGET_ALL/CLANG \
+
+# MK_*_SUPPORT options which default to "yes" unless their corresponding
+# MK_* variable is set to "no".
+#
+.for var in \
+    BLACKLIST \
+    BZIP2 \
+    INET \
+    INET6 \
+    KERBEROS \
+    KVM \
+    NETGRAPH \
+    PAM \
+    TESTS \
+    WIRELESS
+__DEFAULT_DEPENDENT_OPTIONS+= ${var}_SUPPORT/${var}
+.endfor
 
 #
 # Default behaviour of some options depends on the architecture.  Unfortunately
@@ -228,6 +251,29 @@ __TT=${TARGET}
 __TT=${MACHINE}
 .endif
 
+# All supported backends for LLVM_TARGET_XXX
+__LLVM_TARGETS= \
+		aarch64 \
+		arm \
+		mips \
+		powerpc \
+		sparc \
+		x86
+__LLVM_TARGET_FILT=	C/(amd64|i386)/x86/:S/sparc64/sparc/:S/arm64/aarch64/
+.for __llt in ${__LLVM_TARGETS}
+# Default the given TARGET's LLVM_TARGET support to the value of MK_CLANG.
+.if ${__TT:${__LLVM_TARGET_FILT}} == ${__llt}
+__DEFAULT_DEPENDENT_OPTIONS+=	LLVM_TARGET_${__llt:${__LLVM_TARGET_FILT}:tu}/CLANG
+# aarch64 needs arm for -m32 support.
+.elif ${__TT} == "arm64" && ${__llt} == "arm"
+__DEFAULT_DEPENDENT_OPTIONS+=	LLVM_TARGET_ARM/LLVM_TARGET_AARCH64
+# Default the rest of the LLVM_TARGETs to the value of MK_LLVM_TARGET_ALL
+# which is based on MK_CLANG.
+.else
+__DEFAULT_DEPENDENT_OPTIONS+=	LLVM_TARGET_${__llt:${__LLVM_TARGET_FILT}:tu}/LLVM_TARGET_ALL
+.endif
+.endfor
+
 .include <bsd.compiler.mk>
 # If the compiler is not C++11 capable, disable Clang and use GCC instead.
 # This means that architectures that have GCC 4.2 as default can not
@@ -236,18 +282,18 @@ __TT=${MACHINE}
 .if ${COMPILER_FEATURES:Mc++11} && (${__T} == "aarch64" || \
     ${__T} == "amd64" || ${__TT} == "arm" || ${__T} == "i386")
 # Clang is enabled, and will be installed as the default /usr/bin/cc.
-__DEFAULT_YES_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_FULL CLANG_IS_CC LLD
+__DEFAULT_YES_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_IS_CC LLD
 __DEFAULT_NO_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX GPL_DTC
 .elif ${COMPILER_FEATURES:Mc++11} && ${__T:Mriscv*} == "" && ${__T} != "sparc64"
 # If an external compiler that supports C++11 is used as ${CC} and Clang
 # supports the target, then Clang is enabled but GCC is installed as the
 # default /usr/bin/cc.
-__DEFAULT_YES_OPTIONS+=CLANG CLANG_FULL GCC GCC_BOOTSTRAP GNUCXX GPL_DTC
-__DEFAULT_NO_OPTIONS+=CLANG_BOOTSTRAP CLANG_IS_CC LLD
+__DEFAULT_YES_OPTIONS+=CLANG GCC GCC_BOOTSTRAP GNUCXX GPL_DTC LLD
+__DEFAULT_NO_OPTIONS+=CLANG_BOOTSTRAP CLANG_IS_CC
 .else
 # Everything else disables Clang, and uses GCC instead.
 __DEFAULT_YES_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX GPL_DTC
-__DEFAULT_NO_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_FULL CLANG_IS_CC LLD
+__DEFAULT_NO_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_IS_CC LLD
 .endif
 # In-tree binutils/gcc are older versions without modern architecture support.
 .if ${__T} == "aarch64" || ${__T:Mriscv*} != ""
@@ -264,11 +310,8 @@ __DEFAULT_YES_OPTIONS+=LLVM_LIBUNWIND
 .else
 __DEFAULT_NO_OPTIONS+=LLVM_LIBUNWIND
 .endif
-.if ${__T} == "aarch64"
+.if ${__T} == "aarch64" || ${__T} == "amd64"
 __DEFAULT_YES_OPTIONS+=LLD_BOOTSTRAP LLD_IS_LD
-.elif ${__T} == "amd64"
-__DEFAULT_YES_OPTIONS+=LLD_BOOTSTRAP
-__DEFAULT_NO_OPTIONS+=LLD_IS_LD
 .else
 __DEFAULT_NO_OPTIONS+=LLD_BOOTSTRAP LLD_IS_LD
 .endif
@@ -324,6 +367,13 @@ __DEFAULT_YES_OPTIONS+=MLX5TOOL
 .else
 __DEFAULT_NO_OPTIONS+=CXGBETOOL
 __DEFAULT_NO_OPTIONS+=MLX5TOOL
+.endif
+
+# NVME is only x86 and powerpc64
+.if ${__T} == "amd64" || ${__T} == "i386" || ${__T} == "powerpc64"
+__DEFAULT_YES_OPTIONS+=NVME
+.else
+__DEFAULT_NO_OPTIONS+=NVME
 .endif
 
 .include <bsd.mkopt.mk>
@@ -425,6 +475,11 @@ MK_KERBEROS:=	no
 MK_AUTHPF:=	no
 .endif
 
+.if ${MK_PORTSNAP} == "no"
+# freebsd-update depends on phttpget from portsnap
+MK_FREEBSD_UPDATE:=	no
+.endif
+
 .if ${MK_TESTS} == "no"
 MK_DTRACE_TESTS:= no
 .endif
@@ -476,28 +531,6 @@ MK_${vv:H}:=	${MK_${vv:T}}
 #
 # Set defaults for the MK_*_SUPPORT variables.
 #
-
-#
-# MK_*_SUPPORT options which default to "yes" unless their corresponding
-# MK_* variable is set to "no".
-#
-.for var in \
-    BLACKLIST \
-    BZIP2 \
-    INET \
-    INET6 \
-    KERBEROS \
-    KVM \
-    NETGRAPH \
-    PAM \
-    TESTS \
-    WIRELESS
-.if defined(WITHOUT_${var}_SUPPORT) || ${MK_${var}} == "no"
-MK_${var}_SUPPORT:= no
-.else
-MK_${var}_SUPPORT:= yes
-.endif
-.endfor
 
 .if !${COMPILER_FEATURES:Mc++11}
 MK_LLDB:=	no

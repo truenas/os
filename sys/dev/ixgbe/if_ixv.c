@@ -143,6 +143,8 @@ static driver_t ixv_driver = {
 
 devclass_t ixv_devclass;
 DRIVER_MODULE(ixv, pci, ixv_driver, ixv_devclass, 0, 0);
+MODULE_PNP_INFO("U16:vendor;U16:device", pci, ixv, ixv_vendor_info_array,
+    sizeof(ixv_vendor_info_array[0]), nitems(ixv_vendor_info_array) - 1);
 MODULE_DEPEND(ixv, pci, 1, 1, 1);
 MODULE_DEPEND(ixv, ether, 1, 1, 1);
 #ifdef DEV_NETMAP
@@ -846,7 +848,7 @@ ixv_if_multi_set(if_ctx_t ctx)
 
 	IOCTL_DEBUGOUT("ixv_if_multi_set: begin");
 
-	TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
+	CK_STAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
 		if (ifma->ifma_addr->sa_family != AF_LINK)
 			continue;
 		bcopy(LLADDR((struct sockaddr_dl *)ifma->ifma_addr),

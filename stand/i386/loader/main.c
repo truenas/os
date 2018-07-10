@@ -49,7 +49,7 @@ __FBSDID("$FreeBSD$");
 #include "btxv86.h"
 
 #ifdef LOADER_ZFS_SUPPORT
-#include "../zfs/libzfs.h"
+#include "libzfs.h"
 #endif
 
 CTASSERT(sizeof(struct bootargs) == BOOTARGS_SIZE);
@@ -78,9 +78,6 @@ struct geli_boot_args	*gargs;
 struct zfs_boot_args	*zargs;
 static void		i386_zfs_probe(void);
 #endif
-
-/* from vers.c */
-extern	char bootprog_info[];
 
 /* XXX debugging */
 extern char end[];

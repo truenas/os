@@ -337,6 +337,7 @@ swcr_authprepare(struct auth_hash *axf, struct swcr_data *sw, u_char *key,
 	switch (axf->type) {
 	case CRYPTO_MD5_HMAC:
 	case CRYPTO_SHA1_HMAC:
+	case CRYPTO_SHA2_224_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
 	case CRYPTO_SHA2_384_HMAC:
 	case CRYPTO_SHA2_512_HMAC:
@@ -420,8 +421,17 @@ swcr_authcompute(struct cryptodesc *crd, struct swcr_data *sw, caddr_t buf,
 		return err;
 
 	switch (sw->sw_alg) {
+	case CRYPTO_SHA1:
+	case CRYPTO_SHA2_224:
+	case CRYPTO_SHA2_256:
+	case CRYPTO_SHA2_384:
+	case CRYPTO_SHA2_512:
+		axf->Final(aalg, &ctx);
+		break;
+
 	case CRYPTO_MD5_HMAC:
 	case CRYPTO_SHA1_HMAC:
+	case CRYPTO_SHA2_224_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
 	case CRYPTO_SHA2_384_HMAC:
 	case CRYPTO_SHA2_512_HMAC:
@@ -853,6 +863,9 @@ swcr_newsession(device_t dev, u_int32_t *sid, struct cryptoini *cri)
 		case CRYPTO_SHA1_HMAC:
 			axf = &auth_hash_hmac_sha1;
 			goto authcommon;
+		case CRYPTO_SHA2_224_HMAC:
+			axf = &auth_hash_hmac_sha2_224;
+			goto authcommon;
 		case CRYPTO_SHA2_256_HMAC:
 			axf = &auth_hash_hmac_sha2_256;
 			goto authcommon;
@@ -929,9 +942,23 @@ swcr_newsession(device_t dev, u_int32_t *sid, struct cryptoini *cri)
 		case CRYPTO_MD5:
 			axf = &auth_hash_md5;
 			goto auth3common;
+#endif
 
 		case CRYPTO_SHA1:
 			axf = &auth_hash_sha1;
+			goto auth3common;
+		case CRYPTO_SHA2_224:
+			axf = &auth_hash_sha2_224;
+			goto auth3common;
+		case CRYPTO_SHA2_256:
+			axf = &auth_hash_sha2_256;
+			goto auth3common;
+		case CRYPTO_SHA2_384:
+			axf = &auth_hash_sha2_384;
+			goto auth3common;
+		case CRYPTO_SHA2_512:
+			axf = &auth_hash_sha2_512;
+
 		auth3common:
 			(*swd)->sw_ictx = malloc(axf->ctxsize, M_CRYPTO_DATA,
 			    M_NOWAIT);
@@ -945,7 +972,6 @@ swcr_newsession(device_t dev, u_int32_t *sid, struct cryptoini *cri)
 			(*swd)->sw_mlen = cri->cri_mlen;
 			(*swd)->sw_axf = axf;
 			break;
-#endif
 
 		case CRYPTO_AES_128_NIST_GMAC:
 			axf = &auth_hash_nist_gmac_aes_128;
@@ -1069,6 +1095,7 @@ swcr_freesession_locked(device_t dev, u_int64_t tid)
 
 		case CRYPTO_MD5_HMAC:
 		case CRYPTO_SHA1_HMAC:
+		case CRYPTO_SHA2_224_HMAC:
 		case CRYPTO_SHA2_256_HMAC:
 		case CRYPTO_SHA2_384_HMAC:
 		case CRYPTO_SHA2_512_HMAC:
@@ -1104,6 +1131,10 @@ swcr_freesession_locked(device_t dev, u_int64_t tid)
 		case CRYPTO_BLAKE2S:
 		case CRYPTO_MD5:
 		case CRYPTO_SHA1:
+		case CRYPTO_SHA2_224:
+		case CRYPTO_SHA2_256:
+		case CRYPTO_SHA2_384:
+		case CRYPTO_SHA2_512:
 			axf = swd->sw_axf;
 
 			if (swd->sw_ictx) {
@@ -1200,6 +1231,7 @@ swcr_process(device_t dev, struct cryptop *crp, int hint)
 			break;
 		case CRYPTO_MD5_HMAC:
 		case CRYPTO_SHA1_HMAC:
+		case CRYPTO_SHA2_224_HMAC:
 		case CRYPTO_SHA2_256_HMAC:
 		case CRYPTO_SHA2_384_HMAC:
 		case CRYPTO_SHA2_512_HMAC:
@@ -1209,6 +1241,10 @@ swcr_process(device_t dev, struct cryptop *crp, int hint)
 		case CRYPTO_SHA1_KPDK:
 		case CRYPTO_MD5:
 		case CRYPTO_SHA1:
+		case CRYPTO_SHA2_224:
+		case CRYPTO_SHA2_256:
+		case CRYPTO_SHA2_384:
+		case CRYPTO_SHA2_512:
 		case CRYPTO_BLAKE2B:
 		case CRYPTO_BLAKE2S:
 			if ((crp->crp_etype = swcr_authcompute(crd, sw,
@@ -1283,6 +1319,7 @@ swcr_attach(device_t dev)
 	REGISTER(CRYPTO_NULL_CBC);
 	REGISTER(CRYPTO_MD5_HMAC);
 	REGISTER(CRYPTO_SHA1_HMAC);
+	REGISTER(CRYPTO_SHA2_224_HMAC);
 	REGISTER(CRYPTO_SHA2_256_HMAC);
 	REGISTER(CRYPTO_SHA2_384_HMAC);
 	REGISTER(CRYPTO_SHA2_512_HMAC);
@@ -1292,6 +1329,10 @@ swcr_attach(device_t dev)
 	REGISTER(CRYPTO_SHA1_KPDK);
 	REGISTER(CRYPTO_MD5);
 	REGISTER(CRYPTO_SHA1);
+	REGISTER(CRYPTO_SHA2_224);
+	REGISTER(CRYPTO_SHA2_256);
+	REGISTER(CRYPTO_SHA2_384);
+	REGISTER(CRYPTO_SHA2_512);
 	REGISTER(CRYPTO_RIJNDAEL128_CBC);
 	REGISTER(CRYPTO_AES_XTS);
 	REGISTER(CRYPTO_AES_ICM);

@@ -1972,6 +1972,7 @@ static void
 copy_ostat(struct stat *in, struct ostat32 *out)
 {
 
+	bzero(out, sizeof(*out));
 	CP(*in, *out, st_dev);
 	CP(*in, *out, st_ino);
 	CP(*in, *out, st_mode);
@@ -1979,7 +1980,7 @@ copy_ostat(struct stat *in, struct ostat32 *out)
 	CP(*in, *out, st_uid);
 	CP(*in, *out, st_gid);
 	CP(*in, *out, st_rdev);
-	CP(*in, *out, st_size);
+	out->st_size = MIN(in->st_size, INT32_MAX);
 	TS_CP(*in, *out, st_atim);
 	TS_CP(*in, *out, st_mtim);
 	TS_CP(*in, *out, st_ctim);
@@ -2126,11 +2127,27 @@ freebsd11_cvtstat32(struct stat *in, struct freebsd11_stat32 *out)
 			break;
 		}
 	}
-	CP(*in, *out, st_dev);
+	out->st_dev = in->st_dev;
+	if (out->st_dev != in->st_dev) {
+		switch (ino64_trunc_error) {
+		default:
+			break;
+		case 1:
+			return (EOVERFLOW);
+		}
+	}
 	CP(*in, *out, st_mode);
 	CP(*in, *out, st_uid);
 	CP(*in, *out, st_gid);
-	CP(*in, *out, st_rdev);
+	out->st_rdev = in->st_rdev;
+	if (out->st_rdev != in->st_rdev) {
+		switch (ino64_trunc_error) {
+		default:
+			break;
+		case 1:
+			return (EOVERFLOW);
+		}
+	}
 	TS_CP(*in, *out, st_atim);
 	TS_CP(*in, *out, st_mtim);
 	TS_CP(*in, *out, st_ctim);
@@ -2263,7 +2280,7 @@ freebsd32_sysctl(struct thread *td, struct freebsd32_sysctl_args *uap)
 	error = userland_sysctl(td, name, uap->namelen,
 		uap->old, &oldlen, 1,
 		uap->new, uap->newlen, &j, SCTL_MASK32);
-	if (error && error != ENOMEM)
+	if (error)
 		return (error);
 	if (uap->oldlenp)
 		suword32(uap->oldlenp, j);
@@ -3378,13 +3395,13 @@ freebsd32_procctl(struct thread *td, struct freebsd32_procctl_args *uap)
 	case PROC_TRAPCAP_STATUS:
 		data = &flags;
 		break;
-	case PROC_PDEATHSIG_SET:
+	case PROC_PDEATHSIG_CTL:
 		error = copyin(uap->data, &signum, sizeof(signum));
 		if (error != 0)
 			return (error);
 		data = &signum;
 		break;
-	case PROC_PDEATHSIG_GET:
+	case PROC_PDEATHSIG_STATUS:
 		data = &signum;
 		break;
 	default:
@@ -3407,7 +3424,7 @@ freebsd32_procctl(struct thread *td, struct freebsd32_procctl_args *uap)
 		if (error == 0)
 			error = copyout(&flags, uap->data, sizeof(flags));
 		break;
-	case PROC_PDEATHSIG_GET:
+	case PROC_PDEATHSIG_STATUS:
 		if (error == 0)
 			error = copyout(&signum, uap->data, sizeof(signum));
 		break;

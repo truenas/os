@@ -321,7 +321,6 @@ proc_iop(struct thread *td, struct proc *p, vm_offset_t va, void *buf,
 	struct iovec iov;
 	struct uio uio;
 	ssize_t slen;
-	int error;
 
 	MPASS(len < SSIZE_MAX);
 	slen = (ssize_t)len;
@@ -335,7 +334,7 @@ proc_iop(struct thread *td, struct proc *p, vm_offset_t va, void *buf,
 	uio.uio_segflg = UIO_SYSSPACE;
 	uio.uio_rw = rw;
 	uio.uio_td = td;
-	error = proc_rwmem(p, &uio);
+	proc_rwmem(p, &uio);
 	if (uio.uio_resid == slen)
 		return (-1);
 	return (slen - uio.uio_resid);
@@ -689,6 +688,7 @@ void
 proc_set_traced(struct proc *p, bool stop)
 {
 
+	sx_assert(&proctree_lock, SX_XLOCKED);
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	p->p_flag |= P_TRACED;
 	if (stop)

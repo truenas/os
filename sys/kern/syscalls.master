@@ -118,8 +118,7 @@
 15	AUE_CHMOD	STD	{ int chmod(_In_z_ char *path, int mode); }
 16	AUE_CHOWN	STD	{ int chown(_In_z_ char *path, \
 				    int uid, int gid); }
-17	AUE_NULL	STD	{ int obreak(_In_ char *nsize); } break \
-				    obreak_args int
+17	AUE_NULL	STD	{ caddr_t break(_In_ char *nsize); }
 18	AUE_GETFSSTAT	COMPAT4	{ int getfsstat( \
 				    _Out_writes_bytes_opt_(bufsize) \
 				    struct ostatfs *buf, \
@@ -210,8 +209,7 @@
 				    _In_z_ char *fname, \
 				    _In_z_ char **argv, \
 				    _In_z_ char **envv); }
-60	AUE_UMASK	STD	{ int umask(int newmask); } umask umask_args \
-				    int
+60	AUE_UMASK	STD	{ int umask(int newmask); }
 61	AUE_CHROOT	STD	{ int chroot(_In_z_ char *path); }
 62	AUE_FSTAT	COMPAT	{ int fstat(int fd, _Out_ struct ostat *sb); }
 63	AUE_NULL	COMPAT	{ int getkerninfo(int op, \
@@ -229,8 +227,7 @@
 70	AUE_SSTK	STD	{ int sstk(int incr); }
 71	AUE_MMAP	COMPAT	{ int mmap(_In_ void *addr, int len, int prot, \
 				    int flags, int fd, long pos); }
-72	AUE_O_VADVISE	STD	{ int ovadvise(int anom); } vadvise \
-				    ovadvise_args int
+72	AUE_O_VADVISE	COMPAT11	{ int vadvise(int anom); }
 73	AUE_MUNMAP	STD	{ int munmap(_In_ void *addr, size_t len); }
 74	AUE_MPROTECT	STD	{ int mprotect(_In_ void *addr, \
 				    size_t len, int prot); }
