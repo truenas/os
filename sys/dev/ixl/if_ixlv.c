@@ -1,6 +1,6 @@
 /******************************************************************************
 
-  Copyright (c) 2013-2017, Intel Corporation 
+  Copyright (c) 2013-2015, Intel Corporation 
   All rights reserved.
   
   Redistribution and use in source and binary forms, with or without 
@@ -38,13 +38,7 @@
 /*********************************************************************
  *  Driver version
  *********************************************************************/
-#define IXLV_DRIVER_VERSION_MAJOR	1
-#define IXLV_DRIVER_VERSION_MINOR	5
-#define IXLV_DRIVER_VERSION_BUILD	2
-
-char ixlv_driver_version[] = __XSTRING(IXLV_DRIVER_VERSION_MAJOR) "."
-			     __XSTRING(IXLV_DRIVER_VERSION_MINOR) "."
-			     __XSTRING(IXLV_DRIVER_VERSION_BUILD);
+char ixlv_driver_version[] = "1.4.12-k";
 
 /*********************************************************************
  *  PCI Device ID Table
@@ -60,7 +54,7 @@ static ixl_vendor_info_t ixlv_vendor_info_array[] =
 {
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_VF, 0, 0, 0},
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_X722_VF, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_ADAPTIVE_VF, 0, 0, 0},
+	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_X722_A0_VF, 0, 0, 0},
 	/* required last entry */
 	{0, 0, 0, 0, 0}
 };
@@ -70,7 +64,7 @@ static ixl_vendor_info_t ixlv_vendor_info_array[] =
  *********************************************************************/
 
 static char    *ixlv_strings[] = {
-	"Intel(R) Ethernet Connection 700 Series VF Driver"
+	"Intel(R) Ethernet Connection XL710/X722 VF Driver"
 };
 
 
@@ -92,7 +86,6 @@ static void	ixlv_config_rss(struct ixlv_sc *);
 static void	ixlv_stop(struct ixlv_sc *);
 static void	ixlv_add_multi(struct ixl_vsi *);
 static void	ixlv_del_multi(struct ixl_vsi *);
-static void	ixlv_free_queue(struct ixlv_sc *sc, struct ixl_queue *que);
 static void	ixlv_free_queues(struct ixl_vsi *);
 static int	ixlv_setup_interface(device_t, struct ixlv_sc *);
 static int	ixlv_teardown_adminq_msix(struct ixlv_sc *);
@@ -136,9 +129,6 @@ static int	ixlv_vf_config(struct ixlv_sc *);
 static void	ixlv_cap_txcsum_tso(struct ixl_vsi *,
 		    struct ifnet *, int);
 
-static char *ixlv_vc_speed_to_string(enum virtchnl_link_speed link_speed);
-static int ixlv_current_speed(SYSCTL_HANDLER_ARGS);
-
 static void	ixlv_add_sysctls(struct ixlv_sc *);
 #ifdef IXL_DEBUG
 static int 	ixlv_sysctl_qtx_tail_handler(SYSCTL_HANDLER_ARGS);
@@ -177,17 +167,12 @@ static SYSCTL_NODE(_hw, OID_AUTO, ixlv, CTLFLAG_RD, 0,
 
 /*
 ** Number of descriptors per ring:
-** - TX and RX sizes are independently configurable
+**   - TX and RX are the same size
 */
-static int ixlv_tx_ring_size = IXL_DEFAULT_RING;
-TUNABLE_INT("hw.ixlv.tx_ring_size", &ixlv_tx_ring_size);
-SYSCTL_INT(_hw_ixlv, OID_AUTO, tx_ring_size, CTLFLAG_RDTUN,
-    &ixlv_tx_ring_size, 0, "TX Descriptor Ring Size");
-
-static int ixlv_rx_ring_size = IXL_DEFAULT_RING;
-TUNABLE_INT("hw.ixlv.rx_ring_size", &ixlv_rx_ring_size);
-SYSCTL_INT(_hw_ixlv, OID_AUTO, rx_ring_size, CTLFLAG_RDTUN,
-    &ixlv_rx_ring_size, 0, "TX Descriptor Ring Size");
+static int ixlv_ringsz = IXL_DEFAULT_RING;
+TUNABLE_INT("hw.ixlv.ringsz", &ixlv_ringsz);
+SYSCTL_INT(_hw_ixlv, OID_AUTO, ring_size, CTLFLAG_RDTUN,
+    &ixlv_ringsz, 0, "Descriptor Ring Size");
 
 /* Set to zero to auto calculate  */
 int ixlv_max_queues = 0;
@@ -205,17 +190,6 @@ static int ixlv_txbrsz = DEFAULT_TXBRSZ;
 TUNABLE_INT("hw.ixlv.txbrsz", &ixlv_txbrsz);
 SYSCTL_INT(_hw_ixlv, OID_AUTO, txbr_size, CTLFLAG_RDTUN,
     &ixlv_txbrsz, 0, "TX Buf Ring Size");
-
-/*
- * Different method for processing TX descriptor
- * completion.
- */
-static int ixlv_enable_head_writeback = 0;
-TUNABLE_INT("hw.ixlv.enable_head_writeback",
-    &ixlv_enable_head_writeback);
-SYSCTL_INT(_hw_ixlv, OID_AUTO, enable_head_writeback, CTLFLAG_RDTUN,
-    &ixlv_enable_head_writeback, 0,
-    "For detecting last completed TX descriptor by hardware, use value written by HW instead of checking descriptors");
 
 /*
 ** Controls for Interrupt Throttling
@@ -327,9 +301,6 @@ ixlv_attach(device_t dev)
 	/* Allocate filter lists */
 	ixlv_init_filters(sc);
 
-	/* Save this tunable */
-	vsi->enable_head_writeback = ixlv_enable_head_writeback;
-
 	/* Core Lock Init */
 	mtx_init(&sc->mtx, device_get_nameunit(dev),
 	    "IXL SC Lock", MTX_DEF);
@@ -397,7 +368,7 @@ ixlv_attach(device_t dev)
 	    sc->vf_res->rss_lut_size);
 #ifdef IXL_DEBUG
 	device_printf(dev, "Offload flags: 0x%b\n",
-	    sc->vf_res->vf_cap_flags, IXLV_PRINTF_vf_cap_flags);
+	    sc->vf_res->vf_offload_flags, IXLV_PRINTF_VF_OFFLOAD_FLAGS);
 #endif
 
 	/* got VF config message back from PF, now we can parse it */
@@ -432,8 +403,7 @@ ixlv_attach(device_t dev)
 
 	vsi->id = sc->vsi_res->vsi_id;
 	vsi->back = (void *)sc;
-
-	ixl_vsi_setup_rings_size(vsi, ixlv_tx_ring_size, ixlv_rx_ring_size);
+	sc->link_up = TRUE;
 
 	/* This allocates the memory and early settings */
 	if (ixlv_setup_queues(sc) != 0) {
@@ -443,16 +413,6 @@ ixlv_attach(device_t dev)
 		goto out;
 	}
 
-	/* Do queue interrupt setup */
-	if (ixlv_assign_msix(sc) != 0) {
-		device_printf(dev, "%s: allocating queue interrupts failed!\n",
-		    __func__);
-		error = ENXIO;
-		goto out;
-	}
-
-	INIT_DBG_DEV(dev, "Queue memory and interrupts setup");
-
 	/* Setup the stack interface */
 	if (ixlv_setup_interface(dev, sc) != 0) {
 		device_printf(dev, "%s: setup interface failed!\n",
@@ -461,13 +421,18 @@ ixlv_attach(device_t dev)
 		goto out;
 	}
 
-	INIT_DBG_DEV(dev, "Interface setup complete");
+	INIT_DBG_DEV(dev, "Queue memory and interface setup");
+
+	/* Do queue interrupt setup */
+	if (ixlv_assign_msix(sc) != 0) {
+		device_printf(dev, "%s: allocating queue interrupts failed!\n",
+		    __func__);
+		error = ENXIO;
+		goto out;
+	}
 
 	/* Start AdminQ taskqueue */
 	ixlv_init_taskqueue(sc);
-
-	/* We expect a link state message, so schedule the AdminQ task now */
-	taskqueue_enqueue(sc->tq, &sc->aq_irq);
 
 	/* Initialize stats */
 	bzero(&sc->vsi.eth_stats, sizeof(struct i40e_eth_stats));
@@ -492,7 +457,6 @@ ixlv_attach(device_t dev)
 
 out:
 	ixlv_free_queues(vsi);
-	ixlv_teardown_adminq_msix(sc);
 err_res_buf:
 	free(sc->vf_res, M_DEVBUF);
 err_aq:
@@ -532,9 +496,6 @@ ixlv_detach(device_t dev)
 		return (EBUSY);
 	}
 
-	/* Remove all the media and link information */
-	ifmedia_removeall(&sc->media);
-
 	/* Stop driver */
 	ether_ifdetach(vsi->ifp);
 	if (vsi->ifp->if_drv_flags & IFF_DRV_RUNNING) {
@@ -565,8 +526,8 @@ ixlv_detach(device_t dev)
 
 	if_free(vsi->ifp);
 	free(sc->vf_res, M_DEVBUF);
-	ixlv_free_queues(vsi);
 	ixlv_free_pci_resources(sc);
+	ixlv_free_queues(vsi);
 	ixlv_free_filters(sc);
 
 	bus_generic_detach(dev);
@@ -1178,8 +1139,8 @@ retry_config:
 	    retried + 1);
 
 	if (!sc->vf_res) {
-		bufsz = sizeof(struct virtchnl_vf_resource) +
-		    (I40E_MAX_VF_VSI * sizeof(struct virtchnl_vsi_resource));
+		bufsz = sizeof(struct i40e_virtchnl_vf_resource) +
+		    (I40E_MAX_VF_VSI * sizeof(struct i40e_virtchnl_vsi_resource));
 		sc->vf_res = malloc(bufsz, M_DEVBUF, M_NOWAIT);
 		if (!sc->vf_res) {
 			device_printf(dev,
@@ -1358,10 +1319,29 @@ ixlv_allocate_pci_resources(struct ixlv_sc *sc)
 	sc->osdep.mem_bus_space_size = rman_get_size(sc->pci_mem);
 	sc->osdep.flush_reg = I40E_VFGEN_RSTAT;
 	sc->hw.hw_addr = (u8 *) &sc->osdep.mem_bus_space_handle;
+
 	sc->hw.back = &sc->osdep;
 
-	ixl_set_busmaster(dev);
-	ixl_set_msix_enable(dev);
+	/*
+	** Explicitly set the guest PCI BUSMASTER capability
+	** and we must rewrite the ENABLE in the MSIX control
+	** register again at this point to cause the host to
+	** successfully initialize us.
+	**
+	** This must be set before accessing any registers.
+	*/
+	{
+		u16 pci_cmd_word;
+		int msix_ctrl;
+		pci_cmd_word = pci_read_config(dev, PCIR_COMMAND, 2);
+		pci_cmd_word |= PCIM_CMD_BUSMASTEREN;
+		pci_write_config(dev, PCIR_COMMAND, pci_cmd_word, 2);
+		pci_find_cap(dev, PCIY_MSIX, &rid);
+		rid += PCIR_MSIX_CTRL;
+		msix_ctrl = pci_read_config(dev, rid, 2);
+		msix_ctrl |= PCIM_MSIXCTRL_MSIX_ENABLE;
+		pci_write_config(dev, rid, msix_ctrl, 2);
+	}
 
 	/* Disable adminq interrupts (just in case) */
 	ixlv_disable_adminq_irq(&sc->hw);
@@ -1369,37 +1349,33 @@ ixlv_allocate_pci_resources(struct ixlv_sc *sc)
 	return (0);
 }
 
-/*
- * Free MSI-X related resources for a single queue
- */
 static void
-ixlv_free_msix_resources(struct ixlv_sc *sc, struct ixl_queue *que)
+ixlv_free_pci_resources(struct ixlv_sc *sc)
 {
+	struct ixl_vsi         *vsi = &sc->vsi;
+	struct ixl_queue       *que = vsi->queues;
 	device_t                dev = sc->dev;
+
+	/* We may get here before stations are setup */
+	if (que == NULL)
+		goto early;
 
 	/*
 	**  Release all msix queue resources:
 	*/
-	if (que->tag != NULL) {
-		bus_teardown_intr(dev, que->res, que->tag);
-		que->tag = NULL;
-	}
-	if (que->res != NULL) {
+	for (int i = 0; i < vsi->num_queues; i++, que++) {
 		int rid = que->msix + 1;
-		bus_release_resource(dev, SYS_RES_IRQ, rid, que->res);
-		que->res = NULL;
+		if (que->tag != NULL) {
+			bus_teardown_intr(dev, que->res, que->tag);
+			que->tag = NULL;
+		}
+		if (que->res != NULL) {
+			bus_release_resource(dev, SYS_RES_IRQ, rid, que->res);
+			que->res = NULL;
+		}
 	}
-	if (que->tq != NULL) {
-		taskqueue_free(que->tq);
-		que->tq = NULL;
-	}
-}
-
-static void
-ixlv_free_pci_resources(struct ixlv_sc *sc)
-{
-	device_t                dev = sc->dev;
-
+        
+early:
 	pci_release_msi(dev);
 
 	if (sc->msix_mem != NULL)
@@ -1462,7 +1438,7 @@ ixlv_assign_msix(struct ixlv_sc *sc)
 		    INTR_TYPE_NET | INTR_MPSAFE, NULL,
 		    ixlv_msix_que, que, &que->tag);
 		if (error) {
-			que->tag = NULL;
+			que->res = NULL;
 			device_printf(dev, "Failed to register que handler");
 			return (error);
 		}
@@ -1543,8 +1519,8 @@ ixlv_reset_complete(struct i40e_hw *hw)
 		reg = rd32(hw, I40E_VFGEN_RSTAT) &
 		    I40E_VFGEN_RSTAT_VFR_STATE_MASK;
 
-                if ((reg == VIRTCHNL_VFR_VFACTIVE) ||
-		    (reg == VIRTCHNL_VFR_COMPLETED))
+                if ((reg == I40E_VFR_VFACTIVE) ||
+		    (reg == I40E_VFR_COMPLETED))
 			return (0);
 		i40e_msec_pause(100);
 	}
@@ -1590,17 +1566,13 @@ ixlv_setup_interface(device_t dev, struct ixlv_sc *sc)
 	ifp->if_transmit = ixl_mq_start;
 
 	ifp->if_qflush = ixl_qflush;
-	ifp->if_snd.ifq_maxlen = que->num_tx_desc - 2;
+	ifp->if_snd.ifq_maxlen = que->num_desc - 2;
 
 	ether_ifattach(ifp, sc->hw.mac.addr);
 
 	vsi->max_frame_size =
 	    ifp->if_mtu + ETHER_HDR_LEN + ETHER_CRC_LEN
 	    + ETHER_VLAN_ENCAP_LEN;
-
-	ifp->if_hw_tsomax = IP_MAXPACKET - (ETHER_HDR_LEN + ETHER_CRC_LEN);
-	ifp->if_hw_tsomaxsegcount = IXL_MAX_TSO_SEGS;
-	ifp->if_hw_tsomaxsegsize = IXL_MAX_DMA_SEG_SIZE;
 
 	/*
 	 * Tell the upper layer(s) we support long frames.
@@ -1636,128 +1608,13 @@ ixlv_setup_interface(device_t dev, struct ixlv_sc *sc)
 	ifmedia_init(&sc->media, IFM_IMASK, ixlv_media_change,
 		     ixlv_media_status);
 
-	/* Media types based on reported link speed over AdminQ */
-	ifmedia_add(&sc->media, IFM_ETHER | IFM_100_TX, 0, NULL);
-	ifmedia_add(&sc->media, IFM_ETHER | IFM_1000_T, 0, NULL);
-	ifmedia_add(&sc->media, IFM_ETHER | IFM_10G_SR, 0, NULL);
-	ifmedia_add(&sc->media, IFM_ETHER | IFM_25G_SR, 0, NULL);
-	ifmedia_add(&sc->media, IFM_ETHER | IFM_40G_SR4, 0, NULL);
+	// JFV Add media types later?
 
 	ifmedia_add(&sc->media, IFM_ETHER | IFM_AUTO, 0, NULL);
 	ifmedia_set(&sc->media, IFM_ETHER | IFM_AUTO);
 
 	INIT_DBG_DEV(dev, "end");
 	return (0);
-}
-
-/*
-** Allocate and setup a single queue
-*/
-static int
-ixlv_setup_queue(struct ixlv_sc *sc, struct ixl_queue *que)
-{
-	device_t		dev = sc->dev;
-	struct tx_ring		*txr;
-	struct rx_ring		*rxr;
-	int 			rsize, tsize;
-	int			error = I40E_SUCCESS;
-
-	txr = &que->txr;
-	txr->que = que;
-	txr->tail = I40E_QTX_TAIL1(que->me);
-	/* Initialize the TX lock */
-	snprintf(txr->mtx_name, sizeof(txr->mtx_name), "%s:tx(%d)",
-	    device_get_nameunit(dev), que->me);
-	mtx_init(&txr->mtx, txr->mtx_name, NULL, MTX_DEF);
-	/*
-	 * Create the TX descriptor ring
-	 *
-	 * In Head Writeback mode, the descriptor ring is one bigger
-	 * than the number of descriptors for space for the HW to
-	 * write back index of last completed descriptor.
-	 */
-	if (sc->vsi.enable_head_writeback) {
-		tsize = roundup2((que->num_tx_desc *
-		    sizeof(struct i40e_tx_desc)) +
-		    sizeof(u32), DBA_ALIGN);
-	} else {
-		tsize = roundup2((que->num_tx_desc *
-		    sizeof(struct i40e_tx_desc)), DBA_ALIGN);
-	}
-	if (i40e_allocate_dma_mem(&sc->hw,
-	    &txr->dma, i40e_mem_reserved, tsize, DBA_ALIGN)) {
-		device_printf(dev,
-		    "Unable to allocate TX Descriptor memory\n");
-		error = ENOMEM;
-		goto err_destroy_tx_mtx;
-	}
-	txr->base = (struct i40e_tx_desc *)txr->dma.va;
-	bzero((void *)txr->base, tsize);
-	/* Now allocate transmit soft structs for the ring */
-	if (ixl_allocate_tx_data(que)) {
-		device_printf(dev,
-		    "Critical Failure setting up TX structures\n");
-		error = ENOMEM;
-		goto err_free_tx_dma;
-	}
-	/* Allocate a buf ring */
-	txr->br = buf_ring_alloc(ixlv_txbrsz, M_DEVBUF,
-	    M_WAITOK, &txr->mtx);
-	if (txr->br == NULL) {
-		device_printf(dev,
-		    "Critical Failure setting up TX buf ring\n");
-		error = ENOMEM;
-		goto err_free_tx_data;
-	}
-
-	/*
-	 * Next the RX queues...
-	 */
-	rsize = roundup2(que->num_rx_desc *
-	    sizeof(union i40e_rx_desc), DBA_ALIGN);
-	rxr = &que->rxr;
-	rxr->que = que;
-	rxr->tail = I40E_QRX_TAIL1(que->me);
-
-	/* Initialize the RX side lock */
-	snprintf(rxr->mtx_name, sizeof(rxr->mtx_name), "%s:rx(%d)",
-	    device_get_nameunit(dev), que->me);
-	mtx_init(&rxr->mtx, rxr->mtx_name, NULL, MTX_DEF);
-
-	if (i40e_allocate_dma_mem(&sc->hw,
-	    &rxr->dma, i40e_mem_reserved, rsize, 4096)) { //JFV - should this be DBA?
-		device_printf(dev,
-		    "Unable to allocate RX Descriptor memory\n");
-		error = ENOMEM;
-		goto err_destroy_rx_mtx;
-	}
-	rxr->base = (union i40e_rx_desc *)rxr->dma.va;
-	bzero((void *)rxr->base, rsize);
-
-	/* Allocate receive soft structs for the ring */
-	if (ixl_allocate_rx_data(que)) {
-		device_printf(dev,
-		    "Critical Failure setting up receive structs\n");
-		error = ENOMEM;
-		goto err_free_rx_dma;
-	}
-
-	return (0);
-
-err_free_rx_dma:
-	i40e_free_dma_mem(&sc->hw, &rxr->dma);
-err_destroy_rx_mtx:
-	mtx_destroy(&rxr->mtx);
-	/* err_free_tx_buf_ring */
-	buf_ring_free(txr->br, M_DEVBUF);
-err_free_tx_data:
-	ixl_free_que_tx(que);
-err_free_tx_dma:
-	i40e_free_dma_mem(&sc->hw, &txr->dma);
-err_destroy_tx_mtx:
-	mtx_destroy(&txr->mtx);
-
-	return (error);
 }
 
 /*
@@ -1769,7 +1626,9 @@ ixlv_setup_queues(struct ixlv_sc *sc)
 	device_t		dev = sc->dev;
 	struct ixl_vsi		*vsi;
 	struct ixl_queue	*que;
-	int			i;
+	struct tx_ring		*txr;
+	struct rx_ring		*rxr;
+	int 			rsize, tsize;
 	int			error = I40E_SUCCESS;
 
 	vsi = &sc->vsi;
@@ -1782,30 +1641,104 @@ ixlv_setup_queues(struct ixlv_sc *sc)
 		(struct ixl_queue *) malloc(sizeof(struct ixl_queue) *
 		vsi->num_queues, M_DEVBUF, M_NOWAIT | M_ZERO))) {
 			device_printf(dev, "Unable to allocate queue memory\n");
-			return ENOMEM;
+			error = ENOMEM;
+			goto early;
 	}
 
-	for (i = 0; i < vsi->num_queues; i++) {
+	for (int i = 0; i < vsi->num_queues; i++) {
 		que = &vsi->queues[i];
-		que->num_tx_desc = vsi->num_tx_desc;
-		que->num_rx_desc = vsi->num_rx_desc;
+		que->num_desc = ixlv_ringsz;
 		que->me = i;
 		que->vsi = vsi;
 
-		if (ixlv_setup_queue(sc, que)) {
+		txr = &que->txr;
+		txr->que = que;
+		txr->tail = I40E_QTX_TAIL1(que->me);
+		/* Initialize the TX lock */
+		snprintf(txr->mtx_name, sizeof(txr->mtx_name), "%s:tx(%d)",
+		    device_get_nameunit(dev), que->me);
+		mtx_init(&txr->mtx, txr->mtx_name, NULL, MTX_DEF);
+		/*
+		** Create the TX descriptor ring, the extra int is
+		** added as the location for HEAD WB.
+		*/
+		tsize = roundup2((que->num_desc *
+		    sizeof(struct i40e_tx_desc)) +
+		    sizeof(u32), DBA_ALIGN);
+		if (i40e_allocate_dma_mem(&sc->hw,
+		    &txr->dma, i40e_mem_reserved, tsize, DBA_ALIGN)) {
+			device_printf(dev,
+			    "Unable to allocate TX Descriptor memory\n");
 			error = ENOMEM;
-			goto err_free_queues;
+			goto fail;
+		}
+		txr->base = (struct i40e_tx_desc *)txr->dma.va;
+		bzero((void *)txr->base, tsize);
+		/* Now allocate transmit soft structs for the ring */
+		if (ixl_allocate_tx_data(que)) {
+			device_printf(dev,
+			    "Critical Failure setting up TX structures\n");
+			error = ENOMEM;
+			goto fail;
+		}
+		/* Allocate a buf ring */
+		txr->br = buf_ring_alloc(ixlv_txbrsz, M_DEVBUF,
+		    M_WAITOK, &txr->mtx);
+		if (txr->br == NULL) {
+			device_printf(dev,
+			    "Critical Failure setting up TX buf ring\n");
+			error = ENOMEM;
+			goto fail;
+		}
+
+		/*
+		 * Next the RX queues...
+		 */ 
+		rsize = roundup2(que->num_desc *
+		    sizeof(union i40e_rx_desc), DBA_ALIGN);
+		rxr = &que->rxr;
+		rxr->que = que;
+		rxr->tail = I40E_QRX_TAIL1(que->me);
+
+		/* Initialize the RX side lock */
+		snprintf(rxr->mtx_name, sizeof(rxr->mtx_name), "%s:rx(%d)",
+		    device_get_nameunit(dev), que->me);
+		mtx_init(&rxr->mtx, rxr->mtx_name, NULL, MTX_DEF);
+
+		if (i40e_allocate_dma_mem(&sc->hw,
+		    &rxr->dma, i40e_mem_reserved, rsize, 4096)) { //JFV - should this be DBA?
+			device_printf(dev,
+			    "Unable to allocate RX Descriptor memory\n");
+			error = ENOMEM;
+			goto fail;
+		}
+		rxr->base = (union i40e_rx_desc *)rxr->dma.va;
+		bzero((void *)rxr->base, rsize);
+
+		/* Allocate receive soft structs for the ring */
+		if (ixl_allocate_rx_data(que)) {
+			device_printf(dev,
+			    "Critical Failure setting up receive structs\n");
+			error = ENOMEM;
+			goto fail;
 		}
 	}
 
 	return (0);
 
-err_free_queues:
-	while (i--)
-		ixlv_free_queue(sc, &vsi->queues[i]);
-
+fail:
+	for (int i = 0; i < vsi->num_queues; i++) {
+		que = &vsi->queues[i];
+		rxr = &que->rxr;
+		txr = &que->txr;
+		if (rxr->base)
+			i40e_free_dma_mem(&sc->hw, &rxr->dma);
+		if (txr->base)
+			i40e_free_dma_mem(&sc->hw, &txr->dma);
+	}
 	free(vsi->queues, M_DEVBUF);
 
+early:
 	return (error);
 }
 
@@ -2323,34 +2256,6 @@ ixlv_media_status(struct ifnet * ifp, struct ifmediareq * ifmr)
 	ifmr->ifm_status |= IFM_ACTIVE;
 	/* Hardware is always full-duplex */
 	ifmr->ifm_active |= IFM_FDX;
-
-	/* Based on the link speed reported by the PF over the AdminQ, choose a
-	 * PHY type to report. This isn't 100% correct since we don't really
-	 * know the underlying PHY type of the PF, but at least we can report
-	 * a valid link speed...
-	 */
-	switch (sc->link_speed) {
-	case VIRTCHNL_LINK_SPEED_100MB:
-		ifmr->ifm_active |= IFM_100_TX;
-		break;
-	case VIRTCHNL_LINK_SPEED_1GB:
-		ifmr->ifm_active |= IFM_1000_T;
-		break;
-	case VIRTCHNL_LINK_SPEED_10GB:
-		ifmr->ifm_active |= IFM_10G_SR;
-		break;
-	case VIRTCHNL_LINK_SPEED_20GB:
-	case VIRTCHNL_LINK_SPEED_25GB:
-		ifmr->ifm_active |= IFM_25G_SR;
-		break;
-	case VIRTCHNL_LINK_SPEED_40GB:
-		ifmr->ifm_active |= IFM_40G_SR4;
-		break;
-	default:
-		ifmr->ifm_active |= IFM_UNKNOWN;
-		break;
-	}
-
 	mtx_unlock(&sc->mtx);
 	INIT_DBG_IF(ifp, "end");
 	return;
@@ -2375,10 +2280,8 @@ ixlv_media_change(struct ifnet * ifp)
 	if (IFM_TYPE(ifm->ifm_media) != IFM_ETHER)
 		return (EINVAL);
 
-	if_printf(ifp, "Changing speed is not supported\n");
-
 	INIT_DBG_IF(ifp, "end");
-	return (ENODEV);
+	return (0);
 }
 
 
@@ -2440,7 +2343,7 @@ ixlv_add_multi(struct ixl_vsi *vsi)
 	if (__predict_false(mcnt >= MAX_MULTICAST_ADDR)) {
 		/* delete all multicast filters */
 		ixlv_init_multi(vsi);
-		sc->promiscuous_flags |= FLAG_VF_MULTICAST_PROMISC;
+		sc->promiscuous_flags |= I40E_FLAG_VF_MULTICAST_PROMISC;
 		ixl_vc_enqueue(&sc->vc_mgr, &sc->add_multi_cmd,
 		    IXLV_FLAG_AQ_CONFIGURE_PROMISC, ixl_init_cmd_complete,
 		    sc);
@@ -2553,8 +2456,8 @@ ixlv_local_timer(void *arg)
 	val = rd32(hw, I40E_VFGEN_RSTAT) &
 	    I40E_VFGEN_RSTAT_VFR_STATE_MASK;
 
-	if (val != VIRTCHNL_VFR_VFACTIVE
-	    && val != VIRTCHNL_VFR_COMPLETED) {
+	if (val != I40E_VFR_VFACTIVE
+	    && val != I40E_VFR_COMPLETED) {
 		DDPRINTF(dev, "reset in progress! (%d)", val);
 		return;
 	}
@@ -2593,7 +2496,7 @@ ixlv_local_timer(void *arg)
 			}
 		}
 	}
-	/* Increment stat when a queue shows hung */
+	/* Reset when a queue shows hung */
 	if (hung)
 		goto hung;
 
@@ -2601,7 +2504,11 @@ ixlv_local_timer(void *arg)
 	return;
 
 hung:
+	device_printf(dev, "WARNING: Resetting!\n");
+	sc->init_state = IXLV_RESET_REQUIRED;
 	sc->watchdog_events++;
+	ixlv_stop(sc);
+	ixlv_init_locked(sc);
 }
 
 /*
@@ -2618,8 +2525,8 @@ ixlv_update_link_status(struct ixlv_sc *sc)
 	if (sc->link_up){ 
 		if (vsi->link_active == FALSE) {
 			if (bootverbose)
-				if_printf(ifp,"Link is Up, %s\n",
-				    ixlv_vc_speed_to_string(sc->link_speed));
+				if_printf(ifp,"Link is Up, %d Gbps\n",
+				    (sc->link_speed == I40E_LINK_SPEED_40GB) ? 40:10);
 			vsi->link_active = TRUE;
 			if_link_state_change(ifp, LINK_STATE_UP);
 		}
@@ -2667,33 +2574,6 @@ ixlv_stop(struct ixlv_sc *sc)
 	INIT_DBG_IF(ifp, "end");
 }
 
-/* Free a single queue struct */
-static void
-ixlv_free_queue(struct ixlv_sc *sc, struct ixl_queue *que)
-{
-	struct tx_ring *txr = &que->txr;
-	struct rx_ring *rxr = &que->rxr;
-
-	if (!mtx_initialized(&txr->mtx)) /* uninitialized */
-		return;
-	IXL_TX_LOCK(txr);
-	if (txr->br)
-		buf_ring_free(txr->br, M_DEVBUF);
-	ixl_free_que_tx(que);
-	if (txr->base)
-		i40e_free_dma_mem(&sc->hw, &txr->dma);
-	IXL_TX_UNLOCK(txr);
-	IXL_TX_LOCK_DESTROY(txr);
-
-	if (!mtx_initialized(&rxr->mtx)) /* uninitialized */
-		return;
-	IXL_RX_LOCK(rxr);
-	ixl_free_que_rx(que);
-	if (rxr->base)
-		i40e_free_dma_mem(&sc->hw, &rxr->dma);
-	IXL_RX_UNLOCK(rxr);
-	IXL_RX_LOCK_DESTROY(rxr);
-}
 
 /*********************************************************************
  *
@@ -2707,12 +2587,28 @@ ixlv_free_queues(struct ixl_vsi *vsi)
 	struct ixl_queue	*que = vsi->queues;
 
 	for (int i = 0; i < vsi->num_queues; i++, que++) {
-		/* First, free the MSI-X resources */
-		ixlv_free_msix_resources(sc, que);
-		/* Then free other queue data */
-		ixlv_free_queue(sc, que);
-	}
+		struct tx_ring *txr = &que->txr;
+		struct rx_ring *rxr = &que->rxr;
+	
+		if (!mtx_initialized(&txr->mtx)) /* uninitialized */
+			continue;
+		IXL_TX_LOCK(txr);
+		ixl_free_que_tx(que);
+		if (txr->base)
+			i40e_free_dma_mem(&sc->hw, &txr->dma);
+		IXL_TX_UNLOCK(txr);
+		IXL_TX_LOCK_DESTROY(txr);
 
+		if (!mtx_initialized(&rxr->mtx)) /* uninitialized */
+			continue;
+		IXL_RX_LOCK(rxr);
+		ixl_free_que_rx(que);
+		if (rxr->base)
+			i40e_free_dma_mem(&sc->hw, &rxr->dma);
+		IXL_RX_UNLOCK(rxr);
+		IXL_RX_LOCK_DESTROY(rxr);
+		
+	}
 	free(vsi->queues, M_DEVBUF);
 }
 
@@ -2821,10 +2717,10 @@ ixlv_config_rss_pf(struct ixlv_sc *sc)
 static void
 ixlv_config_rss(struct ixlv_sc *sc)
 {
-	if (sc->vf_res->vf_cap_flags & VIRTCHNL_VF_OFFLOAD_RSS_REG) {
+	if (sc->vf_res->vf_offload_flags & I40E_VIRTCHNL_VF_OFFLOAD_RSS_REG) {
 		DDPRINTF(sc->dev, "Setting up RSS using VF registers...");
 		ixlv_config_rss_reg(sc);
-	} else if (sc->vf_res->vf_cap_flags & VIRTCHNL_VF_OFFLOAD_RSS_PF) {
+	} else if (sc->vf_res->vf_offload_flags & I40E_VIRTCHNL_VF_OFFLOAD_RSS_PF) {
 		DDPRINTF(sc->dev, "Setting up RSS using messages to PF...");
 		ixlv_config_rss_pf(sc);
 	} else
@@ -2928,7 +2824,7 @@ ixlv_do_adminq_locked(struct ixlv_sc *sc)
 {
 	struct i40e_hw			*hw = &sc->hw;
 	struct i40e_arq_event_info	event;
-	struct virtchnl_msg	*v_msg;
+	struct i40e_virtchnl_msg	*v_msg;
 	device_t			dev = sc->dev;
 	u16				result = 0;
 	u32				reg, oldreg;
@@ -2939,7 +2835,7 @@ ixlv_do_adminq_locked(struct ixlv_sc *sc)
 
 	event.buf_len = IXL_AQ_BUF_SZ;
         event.msg_buf = sc->aq_buffer;
-	v_msg = (struct virtchnl_msg *)&event.desc;
+	v_msg = (struct i40e_virtchnl_msg *)&event.desc;
 
 	do {
 		ret = i40e_clean_arq_element(hw, &event, &result);
@@ -3028,18 +2924,6 @@ ixlv_add_sysctls(struct ixlv_sc *sc)
 	SYSCTL_ADD_ULONG(ctx, child, OID_AUTO, "admin_irq",
 			CTLFLAG_RD, &sc->admin_irq,
 			"Admin Queue IRQ Handled");
-
-	SYSCTL_ADD_INT(ctx, child, OID_AUTO, "tx_ring_size",
-			CTLFLAG_RD, &vsi->num_tx_desc, 0,
-			"TX ring size");
-	SYSCTL_ADD_INT(ctx, child, OID_AUTO, "rx_ring_size",
-			CTLFLAG_RD, &vsi->num_rx_desc, 0,
-			"RX ring size");
-
-	SYSCTL_ADD_PROC(ctx, child, OID_AUTO, "current_speed",
-			CTLTYPE_STRING | CTLFLAG_RD,
-			sc, 0, ixlv_current_speed,
-			"A", "Current Port Speed");
 
 	/* VSI statistics sysctls */
 	vsi_node = SYSCTL_ADD_NODE(ctx, child, OID_AUTO, "vsi",
@@ -3165,68 +3049,12 @@ ixlv_free_filters(struct ixlv_sc *sc)
 		SLIST_REMOVE_HEAD(sc->mac_filters, next);
 		free(f, M_DEVBUF);
 	}
-	free(sc->mac_filters, M_DEVBUF);
 	while (!SLIST_EMPTY(sc->vlan_filters)) {
 		v = SLIST_FIRST(sc->vlan_filters);
 		SLIST_REMOVE_HEAD(sc->vlan_filters, next);
 		free(v, M_DEVBUF);
 	}
-	free(sc->vlan_filters, M_DEVBUF);
-}
-
-static char *
-ixlv_vc_speed_to_string(enum virtchnl_link_speed link_speed)
-{
-	int index;
-
-	char *speeds[] = {
-		"Unknown",
-		"100 Mbps",
-		"1 Gbps",
-		"10 Gbps",
-		"40 Gbps",
-		"20 Gbps",
-		"25 Gbps",
-	};
-
-	switch (link_speed) {
-	case VIRTCHNL_LINK_SPEED_100MB:
-		index = 1;
-		break;
-	case VIRTCHNL_LINK_SPEED_1GB:
-		index = 2;
-		break;
-	case VIRTCHNL_LINK_SPEED_10GB:
-		index = 3;
-		break;
-	case VIRTCHNL_LINK_SPEED_40GB:
-		index = 4;
-		break;
-	case VIRTCHNL_LINK_SPEED_20GB:
-		index = 5;
-		break;
-	case VIRTCHNL_LINK_SPEED_25GB:
-		index = 6;
-		break;
-	case VIRTCHNL_LINK_SPEED_UNKNOWN:
-	default:
-		index = 0;
-		break;
-	}
-
-	return speeds[index];
-}
-
-static int
-ixlv_current_speed(SYSCTL_HANDLER_ARGS)
-{
-	struct ixlv_sc *sc = (struct ixlv_sc *)arg1;
-	int error = 0;
-
-	error = sysctl_handle_string(oidp,
-	  ixlv_vc_speed_to_string(sc->link_speed),
-	  8, req);
-	return (error);
+	return;
 }
 
 #ifdef IXL_DEBUG

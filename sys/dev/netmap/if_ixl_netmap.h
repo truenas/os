@@ -132,8 +132,8 @@ ixl_netmap_attach(struct ixl_vsi *vsi)
 	// XXX check that queues is set.
 	printf("queues is %p\n", vsi->queues);
 	if (vsi->queues) {
-		na.num_tx_desc = vsi->queues[0].num_tx_desc;
-		na.num_rx_desc = vsi->queues[0].num_rx_desc;
+		na.num_tx_desc = vsi->queues[0].num_desc;
+		na.num_rx_desc = vsi->queues[0].num_desc;
 	}
 	na.nm_txsync = ixl_netmap_txsync;
 	na.nm_rxsync = ixl_netmap_rxsync;
@@ -266,7 +266,7 @@ ixl_netmap_txsync(struct netmap_kring *kring, int flags)
 	/*
 	 * Second part: reclaim buffers for completed transmissions.
 	 */
-	nic_i = LE32_TO_CPU(*(volatile __le32 *)&txr->base[que->num_tx_desc]);
+	nic_i = LE32_TO_CPU(*(volatile __le32 *)&txr->base[que->num_desc]);
 	if (nic_i != txr->next_to_clean) {
 		/* some tx completed, increment avail */
 		txr->next_to_clean = nic_i;
