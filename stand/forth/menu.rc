@@ -29,12 +29,19 @@ menu-init     \ initialize the menu area (see `menu.4th')
 set menuset_name1="main"
 
 set mainmenu_init[1]="init_boot"
-set mainmenu_caption[1]="Boot FreeNAS [Enter]"
-set maintoggled_text[1]="Boot FreeNAS (Single User) [Enter]"
+set mainmenu_caption[1]="Boot ${product_name} [Enter]"
+set maintoggled_text[1]="Boot ${product_name} (Single User) [Enter]"
 set mainmenu_command[1]="boot"
-set mainansi_caption[1]="^[1mB^[moot FreeNAS ^[1m[Enter]^[m"
-set maintoggled_ansi[1]="Boot FreeNAS (Single User) ^[1m[Enter]^[m"
+set mainansi_caption[1]="^[1mB^[moot ${product_name} ^[1m[Enter]^[m"
+set maintoggled_ansi[1]="Boot ${product_name} (Single User) ^[1m[Enter]^[m"
 \ keycode set by init_boot
+
+set mainmenu_init[2]="init_serialboot"
+set mainmenu_caption[2]="Boot ${product_name} (Serial Console)"
+set maintoggled_text[2]="Boot ${product_name} (Serial Console, Single User)"
+set mainmenu_command[2]="serialboot"
+set mainansi_caption[2]="${mainmenu_caption[2]}"
+set maintoggled_ansi[2]="${maintoggled_text[2]}"
 
 \ Enable built-in "Reboot" trailing menuitem
 \ NOTE: appears before menu_options if configured
@@ -44,18 +51,18 @@ set maintoggled_ansi[1]="Boot FreeNAS (Single User) ^[1m[Enter]^[m"
 \ Enable "Options:" separator. When set to a numerical value (1-8), a visual
 \ separator is inserted before that menuitem number.
 \ 
-set mainmenu_options=2
+set mainmenu_options=3
 
-set mainmenu_caption[2]="Configure Boot [O]ptions..."
-set mainmenu_command[2]="2 goto_menu"
-set mainmenu_keycode[2]=111
-set mainansi_caption[2]="Configure Boot ^[1mO^[mptions..."
+set mainmenu_caption[3]="Configure Boot [O]ptions..."
+set mainmenu_command[3]="2 goto_menu"
+set mainmenu_keycode[3]=111
+set mainansi_caption[3]="Configure Boot ^[1mO^[mptions..."
 
 s" currdev" getenv dup 0> [if] drop 4 s" zfs:" compare 0= [if]
-    set mainmenu_caption[3]="Select Boot [E]nvironment..."
-    set mainmenu_command[3]="3 goto_menu"
-    set mainmenu_keycode[3]=101
-    set mainansi_caption[3]="Select Boot ^[1mE^[37mnvironment..."
+    set mainmenu_caption[4]="Select Boot [E]nvironment..."
+    set mainmenu_command[4]="3 goto_menu"
+    set mainmenu_keycode[4]=101
+    set mainansi_caption[4]="Select Boot ^[1mE^[37mnvironment..."
 [then] [else] drop [then]
 
 
