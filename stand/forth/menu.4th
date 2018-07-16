@@ -42,7 +42,7 @@ f_double        \ Set frames to double (see frames.4th). Replace with
 46 constant dot \ ASCII definition of a period (in decimal)
 
  5 constant menu_default_x         \ default column position of timeout
-10 constant menu_default_y         \ default row position of timeout msg
+ 9 constant menu_default_y         \ default row position of timeout msg
  4 constant menu_timeout_default_x \ default column position of timeout
 23 constant menu_timeout_default_y \ default row position of timeout msg
 10 constant menu_timeout_default   \ default timeout (in seconds)
@@ -1033,7 +1033,7 @@ only forth definitions also menu-infrastructure
 		drop FALSE \ don't draw a box
 	( 4 ) then ( 3 ) then ( 2 )  then ( 1 ) then
 	if
-		75 13 menuX @ 3 - menuY @ 1- box \ Draw frame (w,h,x,y)
+		75 14 menuX @ 3 - menuY @ 1- box \ Draw frame (w,h,x,y)
 	then
 
 	0 25 at-xy \ Move cursor to the bottom for output
