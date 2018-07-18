@@ -121,15 +121,10 @@ set optionsmenu_kernel=5
 set optionsmenu_command[5]="cycle_kernel"
 set optionsmenu_keycode[5]=107
 
-set optionsmenu_caption[6]="[T]est RAM (memtest86+)"
-set optionsmenu_command[6]="boot_memtest"
-set optionsmenu_keycode[6]=116
-set optionsansi_caption[6]="^[1mT^[mest RAM (memtest86+)"
-
-set optionsmenu_caption[7]="[Esc]ape to loader prompt"
-set optionsmenu_command[7]="goto_prompt"
-set optionsmenu_keycode[7]=27
-set optionsansi_caption[7]="^[1m[Esc]^[mape to loader prompt"
+set optionsmenu_caption[6]="[Esc]ape to loader prompt"
+set optionsmenu_command[6]="goto_prompt"
+set optionsmenu_keycode[6]=27
+set optionsansi_caption[6]="^[1m[Esc]^[mape to loader prompt"
 
 \ 
 \ BOOT ENVIRONMENT MENU

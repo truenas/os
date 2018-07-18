@@ -262,19 +262,6 @@ also menu-namespace also menu-command-helpers
 	TRUE \ loop menu again
 ;
 
-\
-\ Boot memtest86+
-\
-
-: boot_memtest ( N -- N FALSE )
-
-	s" unload" evaluate
-	s" load /boot/opt/memtest86+" evaluate
-	s" boot" evaluate
-
-	FALSE
-;
-
 \ 
 \ Escape to Prompt
 \ 
