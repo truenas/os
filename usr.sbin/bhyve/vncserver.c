@@ -451,6 +451,5 @@ vncserver_init(char *hostname, int port, int wait, char *password, int webserver
 		pthread_mutex_unlock(&sc->vs_mtx);
 	}
 
-	free(sc);
 	return (0);
 }
