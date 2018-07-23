@@ -180,8 +180,6 @@ vncserver_send_screen(struct vncserver_softc *sc, int all)
 
 	console_refresh();
 
-	pthread_mutex_unlock(&sc->vs_mtx);
-
 	pthread_mutex_lock(&sc->vs_mtx);
 	if (sc->vs_sending) {
 		pthread_mutex_unlock(&sc->vs_mtx);
@@ -438,10 +436,11 @@ vncserver_init(char *hostname, int port, int wait, char *password, int webserver
         }
         */
 
+	vnc_init_server(sc, hostname);
+
 	pthread_create(&sc->vs_tid, NULL, vncserver_thr, sc);
 	pthread_set_name_np(sc->vs_tid, "vncserver");
 
-	vnc_init_server(sc, hostname);
 	vnc_event_loop(-1, true);
 
 	if (wait) {
