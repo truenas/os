@@ -359,7 +359,7 @@ static int nfsrv_nonidempotent[NFS_V3NPROCS] = {
  * This static array indicates whether or not the RPC modifies the
  * file system.
  */
-static int nfs_writerpc[NFS_NPROCS] = { 0, 0, 1, 0, 0, 0, 0,
+int nfsrv_writerpc[NFS_NPROCS] = { 0, 0, 1, 0, 0, 0, 0,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
 
@@ -515,10 +515,10 @@ nfsrvd_dorpc(struct nfsrv_descript *nd, int isdgram, u_char *tag, int taglen,
 				lktype = LK_EXCLUSIVE;
 			if (nd->nd_flag & ND_PUBLOOKUP)
 				nfsd_fhtovp(nd, &nfs_pubfh, lktype, &vp, &nes,
-				    &mp, nfs_writerpc[nd->nd_procnum], p);
+				    &mp, nfsrv_writerpc[nd->nd_procnum], p);
 			else
 				nfsd_fhtovp(nd, &fh, lktype, &vp, &nes,
-				    &mp, nfs_writerpc[nd->nd_procnum], p);
+				    &mp, nfsrv_writerpc[nd->nd_procnum], p);
 			if (nd->nd_repstat == NFSERR_PROGNOTV4)
 				goto out;
 		}
@@ -543,7 +543,7 @@ nfsrvd_dorpc(struct nfsrv_descript *nd, int isdgram, u_char *tag, int taglen,
 		nfsrvd_statstart(nfsv3to4op[nd->nd_procnum], /*now*/ NULL);
 		nfsrvd_statend(nfsv3to4op[nd->nd_procnum], /*bytes*/ 0,
 		   /*now*/ NULL, /*then*/ NULL);
-		if (mp != NULL && nfs_writerpc[nd->nd_procnum] != 0)
+		if (mp != NULL && nfsrv_writerpc[nd->nd_procnum] != 0)
 			vn_finished_write(mp);
 		goto out;
 	}
@@ -574,7 +574,7 @@ nfsrvd_dorpc(struct nfsrv_descript *nd, int isdgram, u_char *tag, int taglen,
 			error = (*(nfsrv3_procs0[nd->nd_procnum]))(nd, isdgram,
 			    vp, p, &nes);
 		}
-		if (mp != NULL && nfs_writerpc[nd->nd_procnum] != 0)
+		if (mp != NULL && nfsrv_writerpc[nd->nd_procnum] != 0)
 			vn_finished_write(mp);
 
 		nfsrvd_statend(nfsv3to4op[nd->nd_procnum], /*bytes*/ 0,
