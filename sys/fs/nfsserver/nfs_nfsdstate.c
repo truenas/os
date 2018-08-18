@@ -7978,7 +7978,7 @@ nfsrv_copymr(vnode_t vp, vnode_t fvp, vnode_t dvp, struct nfsdevice *ds,
 	struct nfslayouthash *lhyp;
 	struct nfslayout *lyp, *nlyp;
 	struct nfslayouthead thl;
-	struct mount *mp;
+	struct mount *mp, *tvmp;
 	struct acl *aclp;
 	struct vattr va;
 	struct timespec mtime;
@@ -8041,6 +8041,7 @@ nfsrv_copymr(vnode_t vp, vnode_t fvp, vnode_t dvp, struct nfsdevice *ds,
 	NFSDRECALLUNLOCK();
 
 	ret = 0;
+	mp = tvmp = NULL;
 	didprintf = 0;
 	TAILQ_INIT(&thl);
 	/* Unlock the MDS vp, so that a LayoutReturn can be done on it. */
@@ -8115,6 +8116,20 @@ tryagain2:
 		nfsrv_freelayout(&thl, lyp);
 
 	/*
+	 * Do the vn_start_write() calls here, before the MDS vnode is
+	 * locked and the tvp is created (locked) in the NFS file system
+	 * that dvp is in.
+	 * For tvmp, this probably isn't necessary, since it will be an
+	 * NFS mount and they are not suspendable at this time.
+	 */
+	if (ret == 0)
+		ret = vn_start_write(vp, &mp, V_WAIT | PCATCH);
+	if (ret == 0) {
+		tvmp = dvp->v_mount;
+		ret = vn_start_write(NULL, &tvmp, V_WAIT | PCATCH);
+	}
+
+	/*
 	 * LK_EXCLUSIVE lock the MDS vnode, so that any
 	 * proxied writes through the MDS will be blocked until we have
 	 * completed the copy and update of the extended attributes.
@@ -8122,7 +8137,7 @@ tryagain2:
 	 * changed until the copy is complete.
 	 */
 	NFSVOPLOCK(vp, LK_EXCLUSIVE | LK_RETRY);
-	if ((vp->v_iflag & VI_DOOMED) != 0) {
+	if (ret == 0 && (vp->v_iflag & VI_DOOMED) != 0) {
 		NFSD_DEBUG(4, "nfsrv_copymr: lk_exclusive doomed\n");
 		ret = ESTALE;
 	}
@@ -8147,10 +8162,7 @@ tryagain2:
 			nfsrv_zeropnfsdat = malloc(PNFSDS_COPYSIZ, M_TEMP,
 			    M_WAITOK | M_ZERO);
 		rdpos = wrpos = 0;
-		mp = NULL;
-		ret = vn_start_write(tvp, &mp, V_WAIT | PCATCH);
-		if (ret == 0)
-			ret = VOP_GETATTR(fvp, &va, cred);
+		ret = VOP_GETATTR(fvp, &va, cred);
 		aresid = 0;
 		while (ret == 0 && aresid == 0) {
 			ret = vn_rdwr(UIO_READ, fvp, dat, PNFSDS_COPYSIZ,
@@ -8190,8 +8202,6 @@ tryagain2:
 				ret = 0;
 		}
 
-		if (mp != NULL)
-			vn_finished_write(mp);
 		if (ret == 0)
 			ret = VOP_FSYNC(tvp, MNT_WAIT, p);
 
@@ -8209,18 +8219,16 @@ tryagain2:
 		acl_free(aclp);
 		free(dat, M_TEMP);
 	}
+	if (tvmp != NULL)
+		vn_finished_write(tvmp);
 
 	/* Update the extended attributes for the newly created DS file. */
-	if (ret == 0) {
-		mp = NULL;
-		ret = vn_start_write(vp, &mp, V_WAIT | PCATCH);
-		if (ret == 0)
-			ret = vn_extattr_set(vp, IO_NODELOCKED,
-			    EXTATTR_NAMESPACE_SYSTEM, "pnfsd.dsfile",
-			    sizeof(*wpf) * mirrorcnt, (char *)wpf, p);
-		if (mp != NULL)
-			vn_finished_write(mp);
-	}
+	if (ret == 0)
+		ret = vn_extattr_set(vp, IO_NODELOCKED,
+		    EXTATTR_NAMESPACE_SYSTEM, "pnfsd.dsfile",
+		    sizeof(*wpf) * mirrorcnt, (char *)wpf, p);
+	if (mp != NULL)
+		vn_finished_write(mp);
 
 	/* Get rid of the dontlist entry, so that Layouts can be issued. */
 	NFSDDONTLISTLOCK();
