@@ -281,6 +281,7 @@ zfs_unlinked_drain(zfsvfs_t *zfsvfs)
 	zap_attribute_t zap;
 	dmu_object_info_t doi;
 	znode_t		*zp;
+	dmu_tx_t	*tx;
 	int		error;
 
 	/*
@@ -317,6 +318,26 @@ zfs_unlinked_drain(zfsvfs_t *zfsvfs)
 			continue;
 
 		vn_lock(ZTOV(zp), LK_EXCLUSIVE | LK_RETRY);
+#if defined(__FreeBSD__)
+		/*
+		 * Due to changes in zfs_rmnode we need to make sure the
+		 * link count is set to zero here.
+		 */
+		if (zp->z_links != 0) {
+			tx = dmu_tx_create(zfsvfs->z_os);
+			dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
+			error = dmu_tx_assign(tx, TXG_WAIT);
+			if (error != 0) {
+				dmu_tx_abort(tx);
+				vput(ZTOV(zp));
+				continue;
+			}
+			zp->z_links = 0;
+			VERIFY0(sa_update(zp->z_sa_hdl, SA_ZPL_LINKS(zfsvfs),
+			    &zp->z_links, sizeof (zp->z_links), tx));
+			dmu_tx_commit(tx);
+		}
+#endif
 		zp->z_unlinked = B_TRUE;
 		vput(ZTOV(zp));
 	}
