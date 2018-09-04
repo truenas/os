@@ -38,7 +38,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/conf.h>
 #include <sys/malloc.h>
 #include <sys/linker.h>
+#include <sys/priv.h>
 #include <sys/rman.h>
+#include <sys/sbuf.h>
 #include <sys/sysctl.h>
 #include <sys/uio.h>
 #include <sys/vmmeter.h>
@@ -363,6 +365,218 @@ struct nvdimm_child {
 	uint64_t size;
 };
 
+/* 2f10e7a4-9e91-11e4-89d3-123b93f75cba */
+static const uint8_t nvdimm_root_dsm_guid[] = {
+	0xa4, 0xe7, 0x10, 0x2f,
+	0x91, 0x9e,
+	0xe4, 0x11,
+	0x89, 0xd3,
+	0x12, 0x3b, 0x93, 0xf7, 0x5c, 0xba
+};
+
+/* 1ee68b36-d4bd-4a1a-9a16-4f8e53d46e05 */
+static const uint8_t nvdimm_dsm_guid1[] = {
+	0x36, 0x8b, 0xe6, 0x1e,
+	0xbd, 0xd4,
+	0x1a, 0x4a,
+	0x9a, 0x16,
+	0x4f, 0x8e, 0x53, 0xd4, 0x6e, 0x05
+};
+
+/* 4309ac30-0d11-11e4-9191-0800200c9a66 */
+static const uint8_t nvdimm_dsm_guid2[] = {
+	0x30, 0xac, 0x09, 0x43,
+	0x11, 0x0d,
+	0xe4, 0x11,
+	0x91, 0x91,
+	0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66
+};
+
+static ACPI_OBJECT *
+evaluate_dsm(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func)
+{
+	ACPI_BUFFER output = { ACPI_ALLOCATE_BUFFER, NULL };
+	ACPI_OBJECT_LIST input;
+	ACPI_OBJECT params[4];
+	int ret = 0;
+
+	input.Count = 4;
+	input.Pointer = params;
+	params[0].Type = ACPI_TYPE_BUFFER;
+	params[0].Buffer.Length = 16;
+	params[0].Buffer.Pointer = __DECONST(char *, uuid);
+	params[1].Type = ACPI_TYPE_INTEGER;
+	params[1].Integer.Value = rev;
+	params[2].Type = ACPI_TYPE_INTEGER;
+	params[2].Integer.Value = func;
+	params[3].Type = ACPI_TYPE_PACKAGE;
+	params[3].Package.Count = 0;
+	params[3].Package.Elements = NULL;
+
+	ret = AcpiEvaluateObject(handle, "_DSM", &input, &output);
+	if (ACPI_FAILURE(ret))
+		return (NULL);
+
+	return ((ACPI_OBJECT *)output.Pointer);
+}
+
+static int
+evaluate_dsm_int(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func,
+    uint64_t *resp)
+{
+	ACPI_OBJECT *obj;
+	uint64_t result;
+	int i, ret = 0;
+
+	obj = evaluate_dsm(handle, uuid, rev, func);
+	if (obj == NULL)
+		return (ENXIO);
+
+	result = 0;
+	switch (obj->Type) {
+	case ACPI_TYPE_INTEGER:
+		result = obj->Integer.Value;
+		break;
+	case ACPI_TYPE_BUFFER:
+		for (i = 0; i < obj->Buffer.Length && i < 8; i++)
+			result |= (((uint64_t)obj->Buffer.Pointer[i]) << (i * 8));
+		break;
+	default:
+		ret = EINVAL;
+		break;
+	}
+
+	AcpiOsFree(obj);
+	if (ret == 0 && resp != NULL)
+		*resp = result;
+	return (ret);
+}
+
+static int
+nvdimm_sysctl_raw(SYSCTL_HANDLER_ARGS)
+{
+	device_t dev = arg1;
+	ACPI_OBJECT *obj;
+	struct nvdimm_child *ivar;
+	int error;
+
+	error = priv_check(req->td, PRIV_SYSCTL_DEBUG);
+	if (error)
+		return (error);
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, arg2);
+	if (obj == NULL)
+		return (ENXIO);
+	if (obj->Type != ACPI_TYPE_BUFFER) {
+		AcpiOsFree(obj);
+		return (EINVAL);
+	}
+
+	error = SYSCTL_OUT(req, obj->Buffer.Pointer, obj->Buffer.Length);
+
+	AcpiOsFree(obj);
+	if (error || !req->newptr)
+		return (error);
+	return (EINVAL);
+}
+
+static int
+nvdimm_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	device_t dev = arg1;
+	ACPI_OBJECT *obj;
+	struct nvdimm_child *ivar;
+	struct sbuf sb;
+	int error;
+
+	error = priv_check(req->td, PRIV_SYSCTL_DEBUG);
+	if (error)
+		return (error);
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, arg2);
+	if (obj == NULL)
+		return (ENXIO);
+	if (obj->Type != ACPI_TYPE_BUFFER || obj->Buffer.Length < 4) {
+		AcpiOsFree(obj);
+		return (EINVAL);
+	}
+	if (obj->Buffer.Pointer[0] != 0) {
+		AcpiOsFree(obj);
+		return (EIO);
+	}
+
+	sbuf_new_for_sysctl(&sb, NULL, 32, req);
+	if (arg2 == 10) {
+		sbuf_printf(&sb, "Critical Health Info: 0x%b",
+		    obj->Buffer.Pointer[4],
+		    "\020"
+		    "\001PERSISTENCY_LOST_ERROR"
+		    "\002WARNING_THRESHOLD_EXCEEDED"
+		    "\003PERSISTENCY_RESTORED"
+		    "\004BELOW_WARNING_THRESHOLD"
+		    "\005PERMANENT_HARDWARE_FAILURE"
+		    "\006EVENT_N_LOW");
+	} else if (arg2 == 11) {
+		sbuf_printf(&sb, "Module Health: 0x%b\n",
+		    ((uint16_t)obj->Buffer.Pointer[5] << 8) | obj->Buffer.Pointer[4],
+		    "\020"
+		    "\001VOLTAGE_REGULATOR_FAILED"
+		    "\002VDD_LOST"
+		    "\003VPP_LOST"
+		    "\004VTT_LOST"
+		    "\005DRAM_NOT_SELF_REFRESH"
+		    "\006CONTROLLER_HARDWARE_ERROR"
+		    "\007NVM_CONTROLLER_ERROR"
+		    "\010NVM_LIFETIME_ERROR"
+		    "\011NOT_ENOUGH_ENERGY_FOR_CSAVE"
+		    "\012INVALID_FIRMWARE_ERROR"
+		    "\013CONFIG_DATA_ERROR"
+		    "\014NO_ES_PRESENT"
+		    "\015ES_POLICY_NOT_SET"
+		    "\016ES_HARDWARE_FAILURE"
+		    "\017ES_HEALTH_ASSESSMENT_ERROR");
+		sbuf_printf(&sb, "Module Current Temperature: %d C\n",
+		    ((uint16_t)obj->Buffer.Pointer[7] << 8) | obj->Buffer.Pointer[6]);
+		sbuf_printf(&sb, "Error Threshold Status: 0x%x\n",
+		    obj->Buffer.Pointer[8]);
+		sbuf_printf(&sb, "Warning Threshold Status: 0x%x\n",
+		    obj->Buffer.Pointer[9]);
+		sbuf_printf(&sb, "NVM Lifetime: %d%%\n",
+		    obj->Buffer.Pointer[10]);
+		sbuf_printf(&sb, "Count of DRAM Uncorrectable ECC Errors: %d\n",
+		    obj->Buffer.Pointer[11]);
+		sbuf_printf(&sb, "Count of DRAM Correctable ECC Error Above Threshold Events: %d",
+		    obj->Buffer.Pointer[12]);
+	} else if (arg2 == 12) {
+		sbuf_printf(&sb, "ES Lifetime Percentage: %d%%\n",
+		    obj->Buffer.Pointer[4]);
+		sbuf_printf(&sb, "ES Current Temperature: %d C\n",
+		    ((uint16_t)obj->Buffer.Pointer[6] << 8) | obj->Buffer.Pointer[5]);
+		sbuf_printf(&sb, "Total Runtime: %d",
+		    ((uint32_t)obj->Buffer.Pointer[10] << 24) |
+		    ((uint32_t)obj->Buffer.Pointer[9] << 16) |
+		    ((uint32_t)obj->Buffer.Pointer[8] << 8) | obj->Buffer.Pointer[7]);
+	}
+	AcpiOsFree(obj);
+
+	error = sbuf_finish(&sb);
+	sbuf_delete(&sb);
+
+	if (error || !req->newptr)
+		return (error);
+	return (EINVAL);
+}
+
+static void
+nvdimm_notify(ACPI_HANDLE handle, UINT32 notify, void *context)
+{
+	device_t dev = context;
+
+	device_printf(dev, "NOTIFY %x\n", notify);
+}
+
 static int
 nvdimm_probe(device_t dev)
 {
@@ -384,6 +598,46 @@ nvdimm_probe(device_t dev)
 static int
 nvdimm_attach(device_t dev)
 {
+	struct sysctl_ctx_list *ctx = device_get_sysctl_ctx(dev);
+	struct sysctl_oid *tree = device_get_sysctl_tree(dev);
+	struct nvdimm_child *ivar;
+	char buf[16];
+	uint64_t val;
+	ACPI_STATUS status;
+	int i;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+
+	status = AcpiInstallNotifyHandler(ivar->handle, ACPI_DEVICE_NOTIFY,
+	    nvdimm_notify, dev);
+	if (ACPI_FAILURE(status))
+		device_printf(dev, "failed to install notify handler\n");
+
+	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid1, 1, 0, &val) == 0
+	    && val > 1) {
+		if (bootverbose)
+			device_printf(dev, "Microsoft _DSM supported (0x%jx)\n", val);
+		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+		    "critical_health", CTLFLAG_RD | CTLTYPE_STRING, dev, 10,
+		    nvdimm_sysctl, "A", "Get Critical Health Info");
+		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+		    "nvdimm_health", CTLFLAG_RD | CTLTYPE_STRING, dev, 11,
+		    nvdimm_sysctl, "A", "Get NVDIMM-N Health Info");
+		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+		    "es_health", CTLFLAG_RD | CTLTYPE_STRING, dev, 12,
+		    nvdimm_sysctl, "A", "Get Energy Source Health Info");
+		for (i = 0; i < 32; i++) {
+			snprintf(buf, sizeof(buf), "func%d", i);
+			SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+			    buf, CTLFLAG_RD | CTLTYPE_OPAQUE, dev, i,
+			    nvdimm_sysctl_raw, "S", "Raw result of function call");
+		}
+	}
+	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid2, 1, 0, &val) == 0
+	    && val > 1) {
+		if (bootverbose)
+			device_printf(dev, "Intel _DSM supported (0x%jx)\n", val);
+	}
 
 	return (0);
 }
@@ -391,6 +645,12 @@ nvdimm_attach(device_t dev)
 static int
 nvdimm_detach(device_t dev)
 {
+	struct nvdimm_child *ivar;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+
+	AcpiRemoveNotifyHandler(ivar->handle, ACPI_DEVICE_NOTIFY,
+	    nvdimm_notify);
 
 	return (0);
 }
@@ -417,6 +677,14 @@ static uint8_t pmem_uuid[ACPI_UUID_LENGTH] = {
 	0x79, 0xd3, 0xf0, 0x66, 0xf3, 0xb4, 0x74, 0x40,
 	0xac, 0x43, 0x0d, 0x33, 0x18, 0xb7, 0x8c, 0xdb
 };
+
+static void
+nvdimm_root_notify(ACPI_HANDLE handle, UINT32 notify, void *context)
+{
+	device_t dev = context;
+
+	device_printf(dev, "NOTIFY %x\n", notify);
+}
 
 static int
 nvdimm_root_probe(device_t dev)
@@ -527,6 +795,7 @@ nvdimm_root_attach(device_t dev)
 	struct nvdimm_root_walk_ctx wctx;
 	struct nvdimm_child	*ivar;
 	device_t	child;
+	uint64_t	val;
 	int		error, sai, san = 0, mmn = 0;
 
 	/* Search for NFIT table. */
@@ -587,9 +856,20 @@ nvdimm_root_attach(device_t dev)
 
 	AcpiPutTable((ACPI_TABLE_HEADER *)nfit);
 
+	if (evaluate_dsm_int(acpi_get_handle(dev), nvdimm_root_dsm_guid, 1, 0, &val) == 0
+	    && val > 1) {
+		if (bootverbose)
+			device_printf(dev, "_DSM supported (0x%jx)\n", val);
+	}
+
 	error = bus_generic_attach(dev);
 	if (error != 0)
 		device_printf(dev, "bus_generic_attach failed\n");
+
+	status = AcpiInstallNotifyHandler(acpi_get_handle(dev), ACPI_DEVICE_NOTIFY,
+	    nvdimm_root_notify, dev);
+	if (ACPI_FAILURE(status))
+		device_printf(dev, "failed to install notify handler\n");
 
 	return (0);
 }
@@ -597,6 +877,9 @@ nvdimm_root_attach(device_t dev)
 static int
 nvdimm_root_detach(device_t dev)
 {
+
+	AcpiRemoveNotifyHandler(acpi_get_handle(dev), ACPI_DEVICE_NOTIFY,
+	    nvdimm_root_notify);
 
 	device_delete_children(dev);
 	return (0);
