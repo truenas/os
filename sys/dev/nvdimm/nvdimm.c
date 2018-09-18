@@ -618,18 +618,22 @@ nvdimm_attach(device_t dev)
 		if (bootverbose)
 			device_printf(dev, "Microsoft _DSM supported (0x%jx)\n", val);
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
-		    "critical_health", CTLFLAG_RD | CTLTYPE_STRING, dev, 10,
+		    "critical_health", CTLFLAG_RD | CTLTYPE_STRING |
+		    CTLFLAG_MPSAFE, dev, 10,
 		    nvdimm_sysctl, "A", "Get Critical Health Info");
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
-		    "nvdimm_health", CTLFLAG_RD | CTLTYPE_STRING, dev, 11,
+		    "nvdimm_health", CTLFLAG_RD | CTLTYPE_STRING |
+		    CTLFLAG_MPSAFE, dev, 11,
 		    nvdimm_sysctl, "A", "Get NVDIMM-N Health Info");
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
-		    "es_health", CTLFLAG_RD | CTLTYPE_STRING, dev, 12,
+		    "es_health", CTLFLAG_RD | CTLTYPE_STRING |
+		    CTLFLAG_MPSAFE, dev, 12,
 		    nvdimm_sysctl, "A", "Get Energy Source Health Info");
 		for (i = 0; i < 32; i++) {
 			snprintf(buf, sizeof(buf), "func%d", i);
 			SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
-			    buf, CTLFLAG_RD | CTLTYPE_OPAQUE, dev, i,
+			    buf, CTLFLAG_RD | CTLTYPE_OPAQUE |
+			    CTLFLAG_MPSAFE | CTLFLAG_SKIP, dev, i,
 			    nvdimm_sysctl_raw, "S", "Raw result of function call");
 		}
 	}
