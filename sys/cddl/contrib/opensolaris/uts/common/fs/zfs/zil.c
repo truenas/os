@@ -1261,7 +1261,7 @@ uint64_t zil_block_buckets[] = {
  * Calls are serialized.
  */
 static lwb_t *
-zil_lwb_write_issue(zilog_t *zilog, lwb_t *lwb, boolean_t last)
+zil_lwb_write_issue(zilog_t *zilog, lwb_t *lwb)
 {
 	lwb_t *nlwb = NULL;
 	zil_chain_t *zilc;
@@ -1381,8 +1381,6 @@ zil_lwb_write_issue(zilog_t *zilog, lwb_t *lwb, boolean_t last)
 	lwb->lwb_issued_timestamp = gethrtime();
 	lwb->lwb_state = LWB_STATE_ISSUED;
 
-	if (last)
-		lwb->lwb_write_zio->io_pipeline &= ~ZIO_STAGE_ISSUE_ASYNC;
 	zio_nowait(lwb->lwb_root_zio);
 	zio_nowait(lwb->lwb_write_zio);
 
@@ -1451,7 +1449,7 @@ cont:
 	if (reclen > lwb_sp || (reclen + dlen > lwb_sp &&
 	    lwb_sp < ZIL_MAX_WASTE_SPACE && (dlen % ZIL_MAX_LOG_DATA == 0 ||
 	    lwb_sp < reclen + dlen % ZIL_MAX_LOG_DATA))) {
-		lwb = zil_lwb_write_issue(zilog, lwb, B_FALSE);
+		lwb = zil_lwb_write_issue(zilog, lwb);
 		if (lwb == NULL)
 			return (NULL);
 		zil_lwb_write_open(zilog, lwb);
@@ -2309,7 +2307,7 @@ zil_commit_waiter_timeout(zilog_t *zilog, zil_commit_waiter_t *zcw)
 	 * since we've reached the commit waiter's timeout and it still
 	 * hasn't been issued.
 	 */
-	lwb_t *nlwb = zil_lwb_write_issue(zilog, lwb, B_TRUE);
+	lwb_t *nlwb = zil_lwb_write_issue(zilog, lwb);
 
 	ASSERT3S(lwb->lwb_state, !=, LWB_STATE_OPENED);
 
