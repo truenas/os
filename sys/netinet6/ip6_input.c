@@ -718,13 +718,15 @@ ip6_input(struct mbuf *m)
 #endif
 	/*
 	 * Try to forward the packet, but if we fail continue.
+	 * ip6_tryforward() does not generate redirects, so fall
+	 * through to normal processing if redirects are required.
 	 * ip6_tryforward() does inbound and outbound packet firewall
 	 * processing. If firewall has decided that destination becomes
 	 * our local address, it sets M_FASTFWD_OURS flag. In this
 	 * case skip another inbound firewall processing and update
 	 * ip6 pointer.
 	 */
-	if (V_ip6_forwarding != 0
+	if (V_ip6_forwarding != 0 && V_ip6_sendredirects == 0
 #if defined(IPSEC) || defined(IPSEC_SUPPORT)
 	    && (!IPSEC_ENABLED(ipv6) ||
 	    IPSEC_CAPS(ipv6, m, IPSEC_CAP_OPERABLE) == 0)
@@ -1211,13 +1213,48 @@ ip6_savecontrol_v4(struct inpcb *inp, struct mbuf *m, struct mbuf **mp,
 
 #ifdef SO_TIMESTAMP
 	if ((inp->inp_socket->so_options & SO_TIMESTAMP) != 0) {
-		struct timeval tv;
+		union {
+			struct timeval tv;
+			struct bintime bt;
+			struct timespec ts;
+		} t;
 
-		microtime(&tv);
-		*mp = sbcreatecontrol((caddr_t) &tv, sizeof(tv),
-		    SCM_TIMESTAMP, SOL_SOCKET);
-		if (*mp)
-			mp = &(*mp)->m_next;
+		switch (inp->inp_socket->so_ts_clock) {
+		case SO_TS_REALTIME_MICRO:
+			microtime(&t.tv);
+			*mp = sbcreatecontrol((caddr_t) &t.tv, sizeof(t.tv),
+			    SCM_TIMESTAMP, SOL_SOCKET);
+			if (*mp)
+				mp = &(*mp)->m_next;
+			break;
+
+		case SO_TS_BINTIME:
+			bintime(&t.bt);
+			*mp = sbcreatecontrol((caddr_t)&t.bt, sizeof(t.bt),
+			    SCM_BINTIME, SOL_SOCKET);
+			if (*mp)
+				mp = &(*mp)->m_next;
+			break;
+
+		case SO_TS_REALTIME:
+			nanotime(&t.ts);
+			*mp = sbcreatecontrol((caddr_t)&t.ts, sizeof(t.ts),
+			    SCM_REALTIME, SOL_SOCKET);
+			if (*mp)
+				mp = &(*mp)->m_next;
+			break;
+
+		case SO_TS_MONOTONIC:
+			nanouptime(&t.ts);
+			*mp = sbcreatecontrol((caddr_t)&t.ts, sizeof(t.ts),
+			    SCM_MONOTONIC, SOL_SOCKET);
+			if (*mp)
+				mp = &(*mp)->m_next;
+			break;
+
+		default:
+			panic("unknown (corrupted) so_ts_clock");
+		}
 	}
 #endif
 

@@ -118,13 +118,26 @@ create_sparse_file(const char *path, const struct sparse *s)
 	assert(handle != INVALID_HANDLE_VALUE);
 	assert(DeviceIoControl(handle, FSCTL_SET_SPARSE, NULL, 0,
 	    NULL, 0, &dmy, NULL) != 0);
+
+	size_t offsetSoFar = 0;
+
 	while (s->type != END) {
 		if (s->type == HOLE) {
-			LARGE_INTEGER distance;
+			LARGE_INTEGER fileOffset, beyondOffset, distanceToMove;
+			fileOffset.QuadPart = offsetSoFar;
+			beyondOffset.QuadPart = offsetSoFar + s->size;
+			distanceToMove.QuadPart = s->size;
 
-			distance.QuadPart = s->size;
-			assert(SetFilePointerEx(handle, distance,
-			    NULL, FILE_CURRENT) != 0);
+			FILE_ZERO_DATA_INFORMATION zeroInformation;
+			zeroInformation.FileOffset = fileOffset;
+			zeroInformation.BeyondFinalZero = beyondOffset;
+
+			DWORD bytesReturned;
+			assert(SetFilePointerEx(handle, distanceToMove,
+				NULL, FILE_CURRENT) != 0);
+			assert(SetEndOfFile(handle) != 0);
+			assert(DeviceIoControl(handle, FSCTL_SET_ZERO_DATA, &zeroInformation,
+				sizeof(FILE_ZERO_DATA_INFORMATION), NULL, 0, &bytesReturned, NULL) != 0);
 		} else {
 			DWORD w, wr;
 			size_t size;
@@ -139,6 +152,7 @@ create_sparse_file(const char *path, const struct sparse *s)
 				size -= wr;
 			}
 		}
+		offsetSoFar += s->size;
 		s++;
 	}
 	assertEqualInt(CloseHandle(handle), 1);
@@ -408,6 +422,7 @@ verify_sparse_file(struct archive *a, const char *path,
 	assert(sparse->type == END);
 	assertEqualInt(expected_offset, archive_entry_size(ae));
 
+	failure(path);
 	assertEqualInt(holes_seen, expected_holes);
 
 	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
@@ -443,6 +458,7 @@ verify_sparse_file2(struct archive *a, const char *path,
 	/* Verify the number of holes only, not its offset nor its
 	 * length because those alignments are deeply dependence on
 	 * its filesystem. */ 
+	failure(path);
 	assertEqualInt(blocks, archive_entry_sparse_count(ae));
 	archive_entry_free(ae);
 }
@@ -484,10 +500,15 @@ DEFINE_TEST(test_sparse_basic)
 	 * on all platform.
 	 */
 	const struct sparse sparse_file0[] = {
+		// 0             // 1024
 		{ DATA,	 1024 }, { HOLE,   2048000 },
+		// 2049024       // 2051072
 		{ DATA,	 2048 }, { HOLE,   2048000 },
+		// 4099072       // 4103168
 		{ DATA,	 4096 }, { HOLE,  20480000 },
+		// 24583168      // 24591360
 		{ DATA,	 8192 }, { HOLE, 204800000 },
+		// 229391360     // 229391361
 		{ DATA,     1 }, { END,	0 }
 	};
 	const struct sparse sparse_file1[] = {

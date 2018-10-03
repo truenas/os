@@ -128,10 +128,13 @@ u_##TYPE	atomic_load_acq_##TYPE(volatile u_##TYPE *p)
 void		atomic_store_rel_##TYPE(volatile u_##TYPE *p, u_##TYPE v)
 
 int		atomic_cmpset_64(volatile uint64_t *, uint64_t, uint64_t);
+int		atomic_fcmpset_64(volatile uint64_t *, uint64_t *, uint64_t);
 uint64_t	atomic_load_acq_64(volatile uint64_t *);
 void		atomic_store_rel_64(volatile uint64_t *, uint64_t);
 uint64_t	atomic_swap_64(volatile uint64_t *, uint64_t);
 uint64_t	atomic_fetchadd_64(volatile uint64_t *, uint64_t);
+void		atomic_add_64(volatile uint64_t *, uint64_t);
+void		atomic_subtract_64(volatile uint64_t *, uint64_t);
 
 #else /* !KLD_MODULE && __GNUCLIKE_ASM */
 
@@ -362,6 +365,8 @@ atomic_thread_fence_seq_cst(void)
 #ifdef WANT_FUNCTIONS
 int		atomic_cmpset_64_i386(volatile uint64_t *, uint64_t, uint64_t);
 int		atomic_cmpset_64_i586(volatile uint64_t *, uint64_t, uint64_t);
+int		atomic_fcmpset_64_i386(volatile uint64_t *, uint64_t *, uint64_t);
+int		atomic_fcmpset_64_i586(volatile uint64_t *, uint64_t *, uint64_t);
 uint64_t	atomic_load_acq_64_i386(volatile uint64_t *);
 uint64_t	atomic_load_acq_64_i586(volatile uint64_t *);
 void		atomic_store_rel_64_i386(volatile uint64_t *, uint64_t);
@@ -398,6 +403,18 @@ atomic_cmpset_64_i386(volatile uint64_t *dst, uint64_t expect, uint64_t src)
 	  "r" ((uint32_t)(src >> 32))	/* 5 */
 	: "memory", "cc");
 	return (res);
+}
+
+static __inline int
+atomic_fcmpset_64_i386(volatile uint64_t *dst, uint64_t *expect, uint64_t src)
+{
+
+	if (atomic_cmpset_64_i386(dst, *expect, src)) {
+		return (1);
+	} else {
+		*expect = *dst;
+		return (0);
+	}
 }
 
 static __inline uint64_t
@@ -479,6 +496,24 @@ atomic_cmpset_64_i586(volatile uint64_t *dst, uint64_t expect, uint64_t src)
 	return (res);
 }
 
+static __inline int
+atomic_fcmpset_64_i586(volatile uint64_t *dst, uint64_t *expect, uint64_t src)
+{
+	u_char res;
+
+	__asm __volatile(
+	"	" MPLOCKED "		"
+	"	cmpxchg8b %1 ;		"
+	"	sete	%0"
+	: "=q" (res),			/* 0 */
+	  "+m" (*dst),			/* 1 */
+	  "+A" (*expect)		/* 2 */
+	: "b" ((uint32_t)src),		/* 3 */
+	  "c" ((uint32_t)(src >> 32))	/* 4 */
+	: "memory", "cc");
+	return (res);
+}
+
 static __inline uint64_t
 atomic_load_acq_64_i586(volatile uint64_t *p)
 {
@@ -538,6 +573,16 @@ atomic_cmpset_64(volatile uint64_t *dst, uint64_t expect, uint64_t src)
 		return (atomic_cmpset_64_i586(dst, expect, src));
 }
 
+static __inline int
+atomic_fcmpset_64(volatile uint64_t *dst, uint64_t *expect, uint64_t src)
+{
+
+  	if ((cpu_feature & CPUID_CX8) == 0)
+		return (atomic_fcmpset_64_i386(dst, expect, src));
+	else
+		return (atomic_fcmpset_64_i586(dst, expect, src));
+}
+
 static __inline uint64_t
 atomic_load_acq_64(volatile uint64_t *p)
 {
@@ -576,6 +621,30 @@ atomic_fetchadd_64(volatile uint64_t *p, uint64_t v)
 		uint64_t t = *p;
 		if (atomic_cmpset_64(p, t, t + v))
 			return (t);
+	}
+}
+
+static __inline void
+atomic_add_64(volatile uint64_t *p, uint64_t v)
+{
+	uint64_t t;
+
+	for (;;) {
+		t = *p;
+		if (atomic_cmpset_64(p, t, t + v))
+			break;
+	}
+}
+
+static __inline void
+atomic_subtract_64(volatile uint64_t *p, uint64_t v)
+{
+	uint64_t t;
+
+	for (;;) {
+		t = *p;
+		if (atomic_cmpset_64(p, t, t - v))
+			break;
 	}
 }
 
@@ -624,6 +693,14 @@ atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src)
 {
 
 	return (atomic_cmpset_int((volatile u_int *)dst, (u_int)expect,
+	    (u_int)src));
+}
+
+static __inline int
+atomic_fcmpset_long(volatile u_long *dst, u_long *expect, u_long src)
+{
+
+	return (atomic_fcmpset_int((volatile u_int *)dst, (u_int *)expect,
 	    (u_int)src));
 }
 
@@ -802,6 +879,18 @@ u_long	atomic_swap_long(volatile u_long *p, u_long v);
 #define	atomic_fetchadd_32	atomic_fetchadd_int
 #define	atomic_testandset_32	atomic_testandset_int
 #define	atomic_testandclear_32	atomic_testandclear_int
+
+/* Operations on 64-bit quad words. */
+#define	atomic_cmpset_acq_64 atomic_cmpset_64
+#define	atomic_cmpset_rel_64 atomic_cmpset_64
+#define	atomic_fcmpset_acq_64 atomic_fcmpset_64
+#define	atomic_fcmpset_rel_64 atomic_fcmpset_64
+#define	atomic_fetchadd_acq_64	atomic_fetchadd_64
+#define	atomic_fetchadd_rel_64	atomic_fetchadd_64
+#define	atomic_add_acq_64 atomic_add_64
+#define	atomic_add_rel_64 atomic_add_64
+#define	atomic_subtract_acq_64 atomic_subtract_64
+#define	atomic_subtract_rel_64 atomic_subtract_64
 
 /* Operations on pointers. */
 #define	atomic_set_ptr(p, v) \

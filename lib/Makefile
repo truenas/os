@@ -156,6 +156,9 @@ SUBDIR_DEPEND_libtacplus= libmd
 SUBDIR_DEPEND_libulog= libmd
 SUBDIR_DEPEND_libunbound= ${_libldns}
 SUBDIR_DEPEND_liblzma= ${_libthr}
+.if ${MK_OFED} != "no"
+SUBDIR_DEPEND_libpcap= ofed
+.endif
 
 # NB: keep these sorted by MK_* knobs
 
@@ -285,6 +288,7 @@ _libdl=		libdl
 _libproc=	libproc
 _librtld_db=	librtld_db
 .endif
+SUBDIR.${MK_OFED}+=	ofed
 
 .if ${MK_OPENSSL} != "no"
 _libmp=		libmp

@@ -177,6 +177,7 @@ DEPEND_MP?=	-MP
 # avoid collisions.
 DEPEND_FILTER=	C,/,_,g
 DEPENDSRCS=	${SRCS:M*.[cSC]} ${SRCS:M*.cxx} ${SRCS:M*.cpp} ${SRCS:M*.cc}
+DEPENDSRCS+=	${DPSRCS:M*.[cSC]} ${SRCS:M*.cxx} ${SRCS:M*.cpp} ${SRCS:M*.cc}
 .if !empty(DEPENDSRCS)
 DEPENDOBJS+=	${DEPENDSRCS:R:S,$,.o,}
 .endif
@@ -226,10 +227,14 @@ afterdepend: beforedepend
 # mimicing what bmake's meta_name() does and adding in the full path
 # as well to ensure that the expected meta file is read.
 .if ${__obj:M*/*}
+.if ${MAKE_VERSION} < 20171028
 _meta_obj=	${.OBJDIR:C,/,_,g}_${__obj:C,/,_,g}.meta
 .else
+_meta_obj=	${__obj:C,/,_,g}.meta
+.endif	# ${MAKE_VERSION} < 20171028
+.else
 _meta_obj=	${__obj}.meta
-.endif
+.endif	# ${__obj:M*/*}
 _dep_obj=	${DEPENDFILE}.${__obj:${DEPEND_FILTER}}
 .if (defined(_meta_filemon) && !exists(${.OBJDIR}/${_meta_obj})) || \
     (!defined(_meta_filemon) && !exists(${.OBJDIR}/${_dep_obj}))
@@ -260,13 +265,12 @@ depend: beforedepend ${DEPENDFILE} afterdepend
 # Tell bmake not to look for generated files via .PATH
 .NOPATH: ${DEPENDFILE} ${DEPENDFILES_OBJS}
 
-DPSRCS+= ${SRCS}
 # A .depend file will only be generated if there are commands in
 # beforedepend/_EXTRADEPEND/afterdepend  The _EXTRADEPEND target is
 # ignored if using meta+filemon since it handles all dependencies.  The other
 # targets are kept as they be used for generating something.  The target is
 # kept to allow 'make depend' to generate files.
-${DEPENDFILE}: ${DPSRCS}
+${DEPENDFILE}: ${SRCS} ${DPSRCS}
 .if exists(${.OBJDIR}/${DEPENDFILE}) || \
     ((commands(beforedepend) || \
     (!defined(_meta_filemon) && commands(_EXTRADEPEND)) || \

@@ -497,11 +497,31 @@ zfs_rmnode(znode_t *zp)
 		return;
 	}
 
+#if defined(__FreeBSD__)
+	/*
+	 * FreeBSD's implemention of zfs_zget requires a vnode to back it.
+	 * This means that we could end up calling into getnewvnode while
+	 * calling zfs_rmnode as a result of a prior call to getnewvnode
+	 * trying to clear vnodes out of the cache. If this repeats we can
+	 * recurse enough that we overflow our stack. To avoid this, we
+	 * avoid calling zfs_zget on the xattr znode and instead simply add
+	 * it to the unlinked set and schedule a call to zfs_unlinked_drain.
+	 */
 	if (xattr_obj) {
 		/* Add extended attribute directory to the unlinked set. */
 		VERIFY3U(0, ==,
 		    zap_add_int(os, zfsvfs->z_unlinkedobj, xattr_obj, tx));
 	}
+#else
+	if (xzp) {
+		ASSERT(error == 0);
+		xzp->z_unlinked = B_TRUE;	/* mark xzp for deletion */
+		xzp->z_links = 0;	/* no more links to it */
+		VERIFY(0 == sa_update(xzp->z_sa_hdl, SA_ZPL_LINKS(zfsvfs),
+		    &xzp->z_links, sizeof (xzp->z_links), tx));
+		zfs_unlinked_add(xzp, tx);
+	}
+#endif
 
 	/* Remove this znode from the unlinked set */
 	VERIFY3U(0, ==,

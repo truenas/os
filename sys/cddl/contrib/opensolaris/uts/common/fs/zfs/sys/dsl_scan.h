@@ -106,6 +106,7 @@ typedef enum dsl_scan_flags {
  */
 typedef struct dsl_scan {
 	struct dsl_pool *scn_dp;
+
 	uint64_t scn_restart_txg;
 	uint64_t scn_done_txg;
 	uint64_t scn_sync_start_time;
@@ -116,7 +117,6 @@ typedef struct dsl_scan {
 	boolean_t scn_async_destroying;
 	boolean_t scn_async_stalled;
 	uint64_t  scn_async_block_min_time_ms;
-
 	/* flags and stats for controlling scan state */
 	boolean_t scn_is_sorted;	/* doing sequential scan */
 	boolean_t scn_clearing;		/* scan is issuing sequential extents */

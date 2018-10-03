@@ -130,6 +130,39 @@ arm_install_base() {
 	return 0
 }
 
+arm_install_boot() {
+	FATMOUNT="${DESTDIR%${KERNEL}}/fat"
+	UFSMOUNT="${DESTDIR%${KERNEL}}/ufs"
+	chroot ${CHROOTDIR} mkdir -p "${FATMOUNT}" "${UFSMOUNT}"
+	chroot ${CHROOTDIR} mount_msdosfs /dev/${mddev}s1 ${FATMOUNT}
+	chroot ${CHROOTDIR} mount /dev/${mddev}s2a ${UFSMOUNT}
+
+	if [ "${EMBEDDED_TARGET}" == "arm" ]; then
+	chroot ${CHROOTDIR} cp -p ${UFSMOUNT}/boot/ubldr.bin \
+		${FATMOUNT}/ubldr.bin
+	fi
+
+	# Ensure the correct .OBJDIR is used for BOOTFILES.
+	_OBJDIR="$(chroot ${CHROOTDIR} make -C /usr/src -V .OBJDIR)"
+	if [ -d "/${CHROOTDIR}/${_OBJDIR%%/usr/src}/${EMBEDDED_TARGET}.${EMBEDDED_TARGET_ARCH}/usr/src/stand" ]; then
+		BOOTFILES=/${_OBJDIR%%/usr/src}/${EMBEDDED_TARGET}.${EMBEDDED_TARGET_ARCH}/usr/src/stand
+	else
+		BOOTFILES=/${_OBJDIR}/stand
+	fi
+	BOOTFILES="$(chroot ${CHROOTDIR} realpath ${BOOTFILES})"
+
+	chroot ${CHROOTDIR} mkdir -p ${FATMOUNT}/EFI/BOOT
+	chroot ${CHROOTDIR} cp -p ${BOOTFILES}/efi/loader/loader.efi \
+		${FATMOUNT}/EFI/BOOT/$(efi_boot_name ${EMBEDDED_TARGET})
+
+	chroot ${CHROOTDIR} touch ${UFSMOUNT}/firstboot
+	sync
+	umount_loop ${CHROOTDIR}/${FATMOUNT}
+	umount_loop ${CHROOTDIR}/${UFSMOUNT}
+	chroot ${CHROOTDIR} rmdir ${FATMOUNT}
+	chroot ${CHROOTDIR} rmdir ${UFSMOUNT}
+}
+
 arm_install_uboot() {
 	# Override in the arm/KERNEL.conf file.
 

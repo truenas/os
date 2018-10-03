@@ -265,7 +265,6 @@ proc_init(void *mem, int size, int flags)
 	mtx_init(&p->p_itimmtx, "pitiml", NULL, MTX_SPIN | MTX_NEW);
 	mtx_init(&p->p_profmtx, "pprofl", NULL, MTX_SPIN | MTX_NEW);
 	cv_init(&p->p_pwait, "ppwait");
-	cv_init(&p->p_dbgwait, "dbgwait");
 	TAILQ_INIT(&p->p_threads);	     /* all threads in proc */
 	EVENTHANDLER_DIRECT_INVOKE(process_init, p);
 	p->p_stats = pstats_alloc();
@@ -1946,11 +1945,20 @@ sysctl_kern_proc_args(SYSCTL_HANDLER_ARGS)
 
 	if (req->newlen > ps_arg_cache_limit - sizeof(struct pargs))
 		return (ENOMEM);
-	newpa = pargs_alloc(req->newlen);
-	error = SYSCTL_IN(req, newpa->ar_args, req->newlen);
-	if (error != 0) {
-		pargs_free(newpa);
-		return (error);
+
+	if (req->newlen == 0) {
+		/*
+		 * Clear the argument pointer, so that we'll fetch arguments
+		 * with proc_getargv() until further notice.
+		 */
+		newpa = NULL;
+	} else {
+		newpa = pargs_alloc(req->newlen);
+		error = SYSCTL_IN(req, newpa->ar_args, req->newlen);
+		if (error != 0) {
+			pargs_free(newpa);
+			return (error);
+		}
 	}
 	PROC_LOCK(p);
 	pa = p->p_args;

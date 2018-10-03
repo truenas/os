@@ -30,9 +30,10 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $FreeBSD$
  */
+
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
 
 #include "core_priv.h"
 
@@ -146,16 +147,6 @@ roce_gid_enum_netdev_default(struct ib_device *ib_dev,
 				     IB_CACHE_GID_DEFAULT_MODE_SET);
 
 	return (hweight_long(gid_type_mask));
-}
-
-#define ETH_IPOIB_DRV_NAME	"ib"
-
-static inline int
-is_eth_ipoib_intf(struct net_device *dev)
-{
-	if (strcmp(dev->if_dname, ETH_IPOIB_DRV_NAME))
-		return 0;
-	return 1;
 }
 
 static void
@@ -321,15 +312,15 @@ roce_gid_queue_scan_event(struct net_device *ndev)
 	struct roce_netdev_event_work *work;
 
 retry:
-	if (is_eth_ipoib_intf(ndev))
-		return;
-
-	if (ndev->if_type != IFT_ETHER) {
-		if (ndev->if_type == IFT_L2VLAN) {
-			ndev = rdma_vlan_dev_real_dev(ndev);
-			if (ndev != NULL)
-				goto retry;
-		}
+	switch (ndev->if_type) {
+	case IFT_ETHER:
+		break;
+	case IFT_L2VLAN:
+		ndev = rdma_vlan_dev_real_dev(ndev);
+		if (ndev != NULL)
+			goto retry;
+		/* FALLTHROUGH */
+	default:
 		return;
 	}
 
@@ -402,6 +393,19 @@ static struct notifier_block nb_inetaddr = {
 	.notifier_call = inetaddr_event
 };
 
+static eventhandler_tag eh_ifnet_event;
+
+static void
+roce_ifnet_event(void *arg, struct ifnet *ifp, int event)
+{
+	if (event != IFNET_EVENT_PCP || is_vlan_dev(ifp))
+		return;
+
+	/* make sure GID table is reloaded */
+	roce_gid_delete_all_event(ifp);
+	roce_gid_queue_scan_event(ifp);
+}
+
 static void
 roce_rescan_device_handler(struct work_struct *_work)
 {
@@ -445,11 +449,18 @@ int __init roce_gid_mgmt_init(void)
 	 */
 	register_netdevice_notifier(&nb_inetaddr);
 
+	eh_ifnet_event = EVENTHANDLER_REGISTER(ifnet_event,
+	    roce_ifnet_event, NULL, EVENTHANDLER_PRI_ANY);
+
 	return 0;
 }
 
 void __exit roce_gid_mgmt_cleanup(void)
 {
+
+	if (eh_ifnet_event != NULL)
+		EVENTHANDLER_DEREGISTER(ifnet_event, eh_ifnet_event);
+
 	unregister_inetaddr_notifier(&nb_inetaddr);
 	unregister_netdevice_notifier(&nb_inetaddr);
 

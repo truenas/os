@@ -420,6 +420,10 @@
         ..
         aio
         ..
+        audit
+        ..
+        auditpipe
+        ..
         capsicum
         ..
         fifo
@@ -696,6 +700,8 @@
             regress.multitest.out
             ..
         ..
+        seq
+        ..
         soelim
         ..
         stat
@@ -743,6 +749,8 @@
         newsyslog
         ..
         nmtree
+        ..
+        praudit
         ..
         pw
         ..

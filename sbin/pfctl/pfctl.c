@@ -69,7 +69,7 @@ int	 pfctl_disable(int, int);
 int	 pfctl_clear_stats(int, int);
 int	 pfctl_get_skip_ifaces(void);
 int	 pfctl_check_skip_ifaces(char *);
-int	 pfctl_clear_skip_ifaces(struct pfctl *);
+int	 pfctl_adjust_skip_ifaces(struct pfctl *);
 int	 pfctl_clear_interface_flags(int, int);
 int	 pfctl_clear_rules(int, int, char *);
 int	 pfctl_clear_nat(int, int, char *);
@@ -96,6 +96,7 @@ int	 pfctl_show_nat(int, int, char *);
 int	 pfctl_show_src_nodes(int, int);
 int	 pfctl_show_states(int, const char *, int);
 int	 pfctl_show_status(int, int);
+int	 pfctl_show_running(int);
 int	 pfctl_show_timeouts(int, int);
 int	 pfctl_show_limits(int, int);
 void	 pfctl_debug(int, u_int32_t, int);
@@ -217,7 +218,7 @@ static const char *clearopt_list[] = {
 static const char *showopt_list[] = {
 	"nat", "queue", "rules", "Anchors", "Sources", "states", "info",
 	"Interfaces", "labels", "timeouts", "memory", "Tables", "osfp",
-	"all", NULL
+	"Running", "all", NULL
 };
 
 static const char *tblcmdopt_list[] = {
@@ -318,21 +319,66 @@ int
 pfctl_check_skip_ifaces(char *ifname)
 {
 	struct pfi_kif		*p;
+	struct node_host	*h = NULL, *n = NULL;
 
-	PFRB_FOREACH(p, &skip_b)
-		if ((p->pfik_flags & PFI_IFLAG_SKIP) && !strcmp(ifname, p->pfik_name))
+	PFRB_FOREACH(p, &skip_b) {
+		if (!strcmp(ifname, p->pfik_name) &&
+		    (p->pfik_flags & PFI_IFLAG_SKIP))
 			p->pfik_flags &= ~PFI_IFLAG_SKIP;
+		if (!strcmp(ifname, p->pfik_name) && p->pfik_group != NULL) {
+			if ((h = ifa_grouplookup(p->pfik_name, 0)) == NULL)
+				continue;
+
+			for (n = h; n != NULL; n = n->next) {
+				if (p->pfik_ifp == NULL)
+					continue;
+				if (strncmp(p->pfik_name, ifname, IFNAMSIZ))
+					continue;
+
+				p->pfik_flags &= ~PFI_IFLAG_SKIP;
+			}
+		}
+	}
 	return (0);
 }
 
 int
-pfctl_clear_skip_ifaces(struct pfctl *pf)
+pfctl_adjust_skip_ifaces(struct pfctl *pf)
 {
-	struct pfi_kif		*p;
+	struct pfi_kif		*p, *pp;
+	struct node_host	*h = NULL, *n = NULL;
 
-	PFRB_FOREACH(p, &skip_b)
-		if (p->pfik_flags & PFI_IFLAG_SKIP)
-			pfctl_set_interface_flags(pf, p->pfik_name, PFI_IFLAG_SKIP, 0);
+	PFRB_FOREACH(p, &skip_b) {
+		if (p->pfik_group == NULL || !(p->pfik_flags & PFI_IFLAG_SKIP))
+			continue;
+
+		pfctl_set_interface_flags(pf, p->pfik_name, PFI_IFLAG_SKIP, 0);
+		if ((h = ifa_grouplookup(p->pfik_name, 0)) == NULL)
+			continue;
+
+		for (n = h; n != NULL; n = n->next)
+			PFRB_FOREACH(pp, &skip_b) {
+				if (pp->pfik_ifp == NULL)
+					continue;
+
+				if (strncmp(pp->pfik_name, n->ifname, IFNAMSIZ))
+					continue;
+
+				if (!(pp->pfik_flags & PFI_IFLAG_SKIP))
+					pfctl_set_interface_flags(pf,
+					    pp->pfik_name, PFI_IFLAG_SKIP, 1);
+				if (pp->pfik_flags & PFI_IFLAG_SKIP)
+					pp->pfik_flags &= ~PFI_IFLAG_SKIP;
+			}
+	}
+
+	PFRB_FOREACH(p, &skip_b) {
+		if (p->pfik_ifp == NULL || ! (p->pfik_flags & PFI_IFLAG_SKIP))
+			continue;
+
+		pfctl_set_interface_flags(pf, p->pfik_name, PFI_IFLAG_SKIP, 0);
+	}
+
 	return (0);
 }
 
@@ -1155,6 +1201,20 @@ pfctl_show_status(int dev, int opts)
 }
 
 int
+pfctl_show_running(int dev)
+{
+	struct pf_status status;
+
+	if (ioctl(dev, DIOCGETSTATUS, &status)) {
+		warn("DIOCGETSTATUS");
+		return (-1);
+	}
+
+	print_running(&status);
+	return (!status.running);
+}
+
+int
 pfctl_show_timeouts(int dev, int opts)
 {
 	struct pfioc_tm pt;
@@ -1522,7 +1582,7 @@ pfctl_rules(int dev, char *filename, int opts, int optimize,
 			goto _error;
 	}
 	if (loadopt & PFCTL_FLAG_OPTION)
-		pfctl_clear_skip_ifaces(&pf);
+		pfctl_adjust_skip_ifaces(&pf);
 
 	if ((pf.loadopt & PFCTL_FLAG_FILTER &&
 	    (pfctl_load_ruleset(&pf, path, rs, PF_RULESET_SCRUB, 0))) ||
@@ -2272,6 +2332,9 @@ main(int argc, char *argv[])
 		case 'i':
 			pfctl_show_status(dev, opts);
 			break;
+		case 'R':
+			error = pfctl_show_running(dev);
+			break;
 		case 't':
 			pfctl_show_timeouts(dev, opts);
 			break;
@@ -2389,7 +2452,7 @@ main(int argc, char *argv[])
 	}
 
 	if ((rulesopt != NULL) && (loadopt & PFCTL_FLAG_OPTION) &&
-	    !anchorname[0])
+	    !anchorname[0] && !(opts & PF_OPT_NOACTION))
 		if (pfctl_get_skip_ifaces())
 			error = 1;
 

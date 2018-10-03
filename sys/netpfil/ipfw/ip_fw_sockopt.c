@@ -299,10 +299,8 @@ ipfw_init_skipto_cache(struct ip_fw_chain *chain)
 {
 	int *idxmap, *idxmap_back;
 
-	idxmap = malloc(65536 * sizeof(uint32_t *), M_IPFW,
-	    M_WAITOK | M_ZERO);
-	idxmap_back = malloc(65536 * sizeof(uint32_t *), M_IPFW,
-	    M_WAITOK | M_ZERO);
+	idxmap = malloc(65536 * sizeof(int), M_IPFW, M_WAITOK | M_ZERO);
+	idxmap_back = malloc(65536 * sizeof(int), M_IPFW, M_WAITOK);
 
 	/*
 	 * Note we may be called at any time after initialization,
@@ -1748,6 +1746,7 @@ check_ipfw_rule_body(ipfw_insn *cmd, int cmd_len, struct rule_check_info *ci)
 #endif
 		case O_IP4:
 		case O_TAG:
+		case O_SKIP_ACTION:
 			if (cmdlen != F_INSN_SIZE(ipfw_insn))
 				goto bad_size;
 			break;

@@ -27,7 +27,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#define BXE_DRIVER_VERSION "1.78.90"
+#define BXE_DRIVER_VERSION "1.78.91"
 
 #include "bxe.h"
 #include "ecore_sp.h"
@@ -4392,6 +4392,8 @@ bxe_nic_unload(struct bxe_softc *sc,
 
     BLOGD(sc, DBG_LOAD, "Ended NIC unload\n");
 
+    bxe_link_report(sc);
+
     return (0);
 }
 
@@ -4437,30 +4439,39 @@ bxe_ifmedia_status(struct ifnet *ifp, struct ifmediareq *ifmr)
 {
     struct bxe_softc *sc = if_getsoftc(ifp);
 
+    /* Bug 165447: the 'ifconfig' tool skips printing of the "status: ..."
+       line if the IFM_AVALID flag is *NOT* set. So we need to set this
+       flag unconditionally (irrespective of the admininistrative
+       'up/down' state of the interface) to ensure that that line is always
+       displayed.
+    */
+    ifmr->ifm_status = IFM_AVALID;
+
+    /* Setup the default interface info. */
+    ifmr->ifm_active = IFM_ETHER;
+
     /* Report link down if the driver isn't running. */
-    if ((if_getdrvflags(ifp) & IFF_DRV_RUNNING) == 0) {
+    if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0) {
         ifmr->ifm_active |= IFM_NONE;
+        BLOGD(sc, DBG_PHY, "in %s : nic still not loaded fully\n", __func__);
+        BLOGD(sc, DBG_PHY, "in %s : link_up (1) : %d\n",
+                __func__, sc->link_vars.link_up);
         return;
     }
 
-    /* Setup the default interface info. */
-    ifmr->ifm_status = IFM_AVALID;
-    ifmr->ifm_active = IFM_ETHER;
 
     if (sc->link_vars.link_up) {
         ifmr->ifm_status |= IFM_ACTIVE;
+        ifmr->ifm_active |= IFM_FDX;
     } else {
         ifmr->ifm_active |= IFM_NONE;
+        BLOGD(sc, DBG_PHY, "in %s : setting IFM_NONE\n",
+                __func__);
         return;
     }
 
     ifmr->ifm_active |= sc->media;
-
-    if (sc->link_vars.duplex == DUPLEX_FULL) {
-        ifmr->ifm_active |= IFM_FDX;
-    } else {
-        ifmr->ifm_active |= IFM_HDX;
-    }
+    return;
 }
 
 static void
@@ -7034,7 +7045,7 @@ bxe_link_attn(struct bxe_softc *sc)
 
     /* Make sure that we are synced with the current statistics */
     bxe_stats_handle(sc, STATS_EVENT_STOP);
-	BLOGI(sc, "link_vars phy_flags : %x\n", sc->link_vars.phy_flags);
+    BLOGD(sc, DBG_LOAD, "link_vars phy_flags : %x\n", sc->link_vars.phy_flags);
     elink_link_update(&sc->link_params, &sc->link_vars);
 
     if (sc->link_vars.link_up) {
@@ -9123,11 +9134,16 @@ bxe_interrupt_detach(struct bxe_softc *sc)
             while (taskqueue_cancel_timeout(fp->tq, &fp->tx_timeout_task,
                 NULL))
                 taskqueue_drain_timeout(fp->tq, &fp->tx_timeout_task);
-            taskqueue_free(fp->tq);
-            fp->tq = NULL;
+        }
+
+        for (i = 0; i < sc->num_queues; i++) {
+            fp = &sc->fp[i];
+            if (fp->tq != NULL) {
+                taskqueue_free(fp->tq);
+                fp->tq = NULL;
+            }
         }
     }
-
 
     if (sc->sp_tq) {
         taskqueue_drain(sc->sp_tq, &sc->sp_tq_task);
@@ -11991,61 +12007,78 @@ bxe_initial_phy_init(struct bxe_softc *sc,
 }
 
 /* must be called under IF_ADDR_LOCK */
-
 static int
-bxe_set_mc_list(struct bxe_softc *sc)
+bxe_init_mcast_macs_list(struct bxe_softc                 *sc,
+                         struct ecore_mcast_ramrod_params *p)
 {
-    struct ecore_mcast_ramrod_params rparam = { NULL };
-    int rc = 0;
-    int mc_count = 0;
-    int mcnt, i;
-    struct ecore_mcast_list_elem *mc_mac, *mc_mac_start;
-    unsigned char *mta;
     if_t ifp = sc->ifp;
+    int mc_count = 0;
+    struct ifmultiaddr *ifma;
+    struct ecore_mcast_list_elem *mc_mac;
 
-    mc_count = if_multiaddr_count(ifp, -1);/* XXX they don't have a limit */
-    if (!mc_count)
-        return (0);
+    TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
+        if (ifma->ifma_addr->sa_family != AF_LINK) {
+            continue;
+        }
 
-    mta = malloc(sizeof(unsigned char) * ETHER_ADDR_LEN *
-            mc_count, M_DEVBUF, M_NOWAIT);
-
-    if(mta == NULL) {
-        BLOGE(sc, "Failed to allocate temp mcast list\n");
-        return (-1);
+        mc_count++;
     }
-    bzero(mta, (sizeof(unsigned char) * ETHER_ADDR_LEN * mc_count));
-    
-    mc_mac = malloc(sizeof(*mc_mac) * mc_count, M_DEVBUF, (M_NOWAIT | M_ZERO));
-    mc_mac_start = mc_mac;
 
+    ECORE_LIST_INIT(&p->mcast_list);
+    p->mcast_list_len = 0;
+
+    if (!mc_count) {
+        return (0);
+    }
+
+    mc_mac = malloc(sizeof(*mc_mac) * mc_count, M_DEVBUF,
+                    (M_NOWAIT | M_ZERO));
     if (!mc_mac) {
-        free(mta, M_DEVBUF);
         BLOGE(sc, "Failed to allocate temp mcast list\n");
         return (-1);
     }
     bzero(mc_mac, (sizeof(*mc_mac) * mc_count));
 
-    /* mta and mcnt not expected to be  different */
-    if_multiaddr_array(ifp, mta, &mcnt, mc_count);
+    TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
+        if (ifma->ifma_addr->sa_family != AF_LINK) {
+            continue;
+        }
 
-
-    rparam.mcast_obj = &sc->mcast_obj;
-    ECORE_LIST_INIT(&rparam.mcast_list);
-
-    for(i=0; i< mcnt; i++) {
-
-        mc_mac->mac = (uint8_t *)(mta + (i * ETHER_ADDR_LEN));
-        ECORE_LIST_PUSH_TAIL(&mc_mac->link, &rparam.mcast_list);
+        mc_mac->mac = (uint8_t *)LLADDR((struct sockaddr_dl *)ifma->ifma_addr);
+        ECORE_LIST_PUSH_TAIL(&mc_mac->link, &p->mcast_list);
 
         BLOGD(sc, DBG_LOAD,
-              "Setting MCAST %02X:%02X:%02X:%02X:%02X:%02X\n",
+              "Setting MCAST %02X:%02X:%02X:%02X:%02X:%02X and mc_count %d\n",
               mc_mac->mac[0], mc_mac->mac[1], mc_mac->mac[2],
-              mc_mac->mac[3], mc_mac->mac[4], mc_mac->mac[5]);
-
-        mc_mac++;
+              mc_mac->mac[3], mc_mac->mac[4], mc_mac->mac[5], mc_count);
+       mc_mac++;
     }
-    rparam.mcast_list_len = mc_count;
+
+    p->mcast_list_len = mc_count;
+
+    return (0);
+}
+
+static void
+bxe_free_mcast_macs_list(struct ecore_mcast_ramrod_params *p)
+{
+    struct ecore_mcast_list_elem *mc_mac =
+        ECORE_LIST_FIRST_ENTRY(&p->mcast_list,
+                               struct ecore_mcast_list_elem,
+                               link);
+
+    if (mc_mac) {
+        /* only a single free as all mc_macs are in the same heap array */
+        free(mc_mac, M_DEVBUF);
+    }
+}
+static int
+bxe_set_mc_list(struct bxe_softc *sc)
+{
+    struct ecore_mcast_ramrod_params rparam = { NULL };
+    int rc = 0;
+
+    rparam.mcast_obj = &sc->mcast_obj;
 
     BXE_MCAST_LOCK(sc);
 
@@ -12053,9 +12086,16 @@ bxe_set_mc_list(struct bxe_softc *sc)
     rc = ecore_config_mcast(sc, &rparam, ECORE_MCAST_CMD_DEL);
     if (rc < 0) {
         BLOGE(sc, "Failed to clear multicast configuration: %d\n", rc);
+        /* Manual backport parts of FreeBSD upstream r284470. */
         BXE_MCAST_UNLOCK(sc);
-    	free(mc_mac_start, M_DEVBUF);
-        free(mta, M_DEVBUF);
+        return (rc);
+    }
+
+    /* configure a new MACs list */
+    rc = bxe_init_mcast_macs_list(sc, &rparam);
+    if (rc) {
+        BLOGE(sc, "Failed to create mcast MACs list (%d)\n", rc);
+        BXE_MCAST_UNLOCK(sc);
         return (rc);
     }
 
@@ -12065,10 +12105,9 @@ bxe_set_mc_list(struct bxe_softc *sc)
         BLOGE(sc, "Failed to set new mcast config (%d)\n", rc);
     }
 
-    BXE_MCAST_UNLOCK(sc);
+    bxe_free_mcast_macs_list(&rparam);
 
-    free(mc_mac_start, M_DEVBUF);
-    free(mta, M_DEVBUF);
+    BXE_MCAST_UNLOCK(sc);
 
     return (rc);
 }
@@ -12819,12 +12858,12 @@ bxe_allocate_bars(struct bxe_softc *sc)
         sc->bar[i].handle = rman_get_bushandle(sc->bar[i].resource);
         sc->bar[i].kva    = (vm_offset_t)rman_get_virtual(sc->bar[i].resource);
 
-        BLOGI(sc, "PCI BAR%d [%02x] memory allocated: %p-%p (%jd) -> %p\n",
+        BLOGI(sc, "PCI BAR%d [%02x] memory allocated: %#jx-%#jx (%jd) -> %#jx\n",
               i, PCIR_BAR(i),
-              (void *)rman_get_start(sc->bar[i].resource),
-              (void *)rman_get_end(sc->bar[i].resource),
+              rman_get_start(sc->bar[i].resource),
+              rman_get_end(sc->bar[i].resource),
               rman_get_size(sc->bar[i].resource),
-              (void *)sc->bar[i].kva);
+              (uintmax_t)sc->bar[i].kva);
     }
 
     return (0);

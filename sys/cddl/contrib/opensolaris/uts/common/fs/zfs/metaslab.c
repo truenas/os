@@ -541,8 +541,8 @@ metaslab_class_expandable_space(metaslab_class_t *mc)
 static int
 metaslab_compare(const void *x1, const void *x2)
 {
-	const metaslab_t *m1 = x1;
-	const metaslab_t *m2 = x2;
+	const metaslab_t *m1 = (const metaslab_t *)x1;
+	const metaslab_t *m2 = (const metaslab_t *)x2;
 
 	int sort1 = 0;
 	int sort2 = 0;
@@ -568,22 +568,13 @@ metaslab_compare(const void *x1, const void *x2)
 	if (sort1 > sort2)
 		return (1);
 
-	if (m1->ms_weight < m2->ms_weight)
-		return (1);
-	if (m1->ms_weight > m2->ms_weight)
-		return (-1);
+	int cmp = AVL_CMP(m2->ms_weight, m1->ms_weight);
+	if (likely(cmp))
+		return (cmp);
 
-	/*
-	 * If the weights are identical, use the offset to force uniqueness.
-	 */
-	if (m1->ms_start < m2->ms_start)
-		return (-1);
-	if (m1->ms_start > m2->ms_start)
-		return (1);
+	IMPLY(AVL_CMP(m1->ms_start, m2->ms_start) == 0, m1 == m2);
 
-	ASSERT3P(m1, ==, m2);
-
-	return (0);
+	return (AVL_CMP(m1->ms_start, m2->ms_start));
 }
 
 /*
@@ -725,6 +716,8 @@ metaslab_group_create(metaslab_class_t *mc, vdev_t *vd, int allocators)
 
 	mg = kmem_zalloc(sizeof (metaslab_group_t), KM_SLEEP);
 	mutex_init(&mg->mg_lock, NULL, MUTEX_DEFAULT, NULL);
+	mutex_init(&mg->mg_ms_initialize_lock, NULL, MUTEX_DEFAULT, NULL);
+	cv_init(&mg->mg_ms_initialize_cv, NULL, CV_DEFAULT, NULL);
 	mg->mg_primaries = kmem_zalloc(allocators * sizeof (metaslab_t *),
 	    KM_SLEEP);
 	mg->mg_secondaries = kmem_zalloc(allocators * sizeof (metaslab_t *),
@@ -771,6 +764,8 @@ metaslab_group_destroy(metaslab_group_t *mg)
 	kmem_free(mg->mg_secondaries, mg->mg_allocators *
 	    sizeof (metaslab_t *));
 	mutex_destroy(&mg->mg_lock);
+	mutex_destroy(&mg->mg_ms_initialize_lock);
+	cv_destroy(&mg->mg_ms_initialize_cv);
 
 	for (int i = 0; i < mg->mg_allocators; i++) {
 		refcount_destroy(&mg->mg_alloc_queue_depth[i]);
@@ -1198,18 +1193,14 @@ metaslab_rangesize_compare(const void *x1, const void *x2)
 	uint64_t rs_size1 = r1->rs_end - r1->rs_start;
 	uint64_t rs_size2 = r2->rs_end - r2->rs_start;
 
-	if (rs_size1 < rs_size2)
-		return (-1);
-	if (rs_size1 > rs_size2)
-		return (1);
+	int cmp = AVL_CMP(rs_size1, rs_size2);
+	if (likely(cmp))
+		return (cmp);
 
 	if (r1->rs_start < r2->rs_start)
 		return (-1);
 
-	if (r1->rs_start > r2->rs_start)
-		return (1);
-
-	return (0);
+	return (AVL_CMP(r1->rs_start, r2->rs_start));
 }
 
 /*
@@ -1561,6 +1552,7 @@ metaslab_init(metaslab_group_t *mg, uint64_t id, uint64_t object, uint64_t txg,
 	mutex_init(&ms->ms_lock, NULL, MUTEX_DEFAULT, NULL);
 	mutex_init(&ms->ms_sync_lock, NULL, MUTEX_DEFAULT, NULL);
 	cv_init(&ms->ms_load_cv, NULL, CV_DEFAULT, NULL);
+
 	ms->ms_id = id;
 	ms->ms_start = id << vd->vdev_ms_shift;
 	ms->ms_size = 1ULL << vd->vdev_ms_shift;
@@ -1754,7 +1746,7 @@ metaslab_set_fragmentation(metaslab_t *msp)
 		if (spa_writeable(spa) && txg < spa_final_dirty_txg(spa)) {
 			msp->ms_condense_wanted = B_TRUE;
 			vdev_dirty(vd, VDD_METASLAB, msp, txg + 1);
-			spa_dbgmsg(spa, "txg %llu, requesting force condense: "
+			zfs_dbgmsg("txg %llu, requesting force condense: "
 			    "ms_id %llu, vdev_id %llu", txg, msp->ms_id,
 			    vd->vdev_id);
 		}
@@ -2269,17 +2261,6 @@ metaslab_group_preload(metaslab_group_t *mg)
  *
  * 3. The on-disk size of the space map should actually decrease.
  *
- * Checking the first condition is tricky since we don't want to walk
- * the entire AVL tree calculating the estimated on-disk size. Instead we
- * use the size-ordered range tree in the metaslab and calculate the
- * size required to write out the largest segment in our free tree. If the
- * size required to represent that segment on disk is larger than the space
- * map object then we avoid condensing this map.
- *
- * To determine the second criterion we use a best-case estimate and assume
- * each segment can be represented on-disk as a single 64-bit entry. We refer
- * to this best-case estimate as the space map's minimal form.
- *
  * Unfortunately, we cannot compute the on-disk size of the space map in this
  * context because we cannot accurately compute the effects of compression, etc.
  * Instead, we apply the heuristic described in the block comment for
@@ -2290,9 +2271,6 @@ static boolean_t
 metaslab_should_condense(metaslab_t *msp)
 {
 	space_map_t *sm = msp->ms_sm;
-	range_seg_t *rs;
-	uint64_t size, entries, segsz, object_size, optimal_size, record_size;
-	dmu_object_info_t doi;
 	vdev_t *vd = msp->ms_group->mg_vd;
 	uint64_t vdev_blocksize = 1 << vd->vdev_ashift;
 	uint64_t current_txg = spa_syncing_txg(vd->vdev_spa);
@@ -2318,34 +2296,22 @@ metaslab_should_condense(metaslab_t *msp)
 	msp->ms_condense_checked_txg = current_txg;
 
 	/*
-	 * Use the ms_allocatable_by_size range tree, which is ordered by
-	 * size, to obtain the largest segment in the free tree. We always
-	 * condense metaslabs that are empty and metaslabs for which a
-	 * condense request has been made.
+	 * We always condense metaslabs that are empty and metaslabs for
+	 * which a condense request has been made.
 	 */
-	rs = avl_last(&msp->ms_allocatable_by_size);
-	if (rs == NULL || msp->ms_condense_wanted)
+	if (avl_is_empty(&msp->ms_allocatable_by_size) ||
+	    msp->ms_condense_wanted)
 		return (B_TRUE);
 
-	/*
-	 * Calculate the number of 64-bit entries this segment would
-	 * require when written to disk. If this single segment would be
-	 * larger on-disk than the entire current on-disk structure, then
-	 * clearly condensing will increase the on-disk structure size.
-	 */
-	size = (rs->rs_end - rs->rs_start) >> sm->sm_shift;
-	entries = size / (MIN(size, SM_RUN_MAX));
-	segsz = entries * sizeof (uint64_t);
+	uint64_t object_size = space_map_length(msp->ms_sm);
+	uint64_t optimal_size = space_map_estimate_optimal_size(sm,
+	    msp->ms_allocatable, SM_NO_VDEVID);
 
-	optimal_size =
-	    sizeof (uint64_t) * avl_numnodes(&msp->ms_allocatable->rt_root);
-	object_size = space_map_length(msp->ms_sm);
-
+	dmu_object_info_t doi;
 	dmu_object_info_from_db(sm->sm_dbuf, &doi);
-	record_size = MAX(doi.doi_data_block_size, vdev_blocksize);
+	uint64_t record_size = MAX(doi.doi_data_block_size, vdev_blocksize);
 
-	return (segsz <= object_size &&
-	    object_size >= (optimal_size * zfs_condense_pct / 100) &&
+	return (object_size >= (optimal_size * zfs_condense_pct / 100) &&
 	    object_size > zfs_metaslab_condense_block_threshold * record_size);
 }
 
@@ -2420,11 +2386,11 @@ metaslab_condense(metaslab_t *msp, uint64_t txg, dmu_tx_t *tx)
 	 * optimal, this is typically close to optimal, and much cheaper to
 	 * compute.
 	 */
-	space_map_write(sm, condense_tree, SM_ALLOC, tx);
+	space_map_write(sm, condense_tree, SM_ALLOC, SM_NO_VDEVID, tx);
 	range_tree_vacate(condense_tree, NULL, NULL);
 	range_tree_destroy(condense_tree);
 
-	space_map_write(sm, msp->ms_allocatable, SM_FREE, tx);
+	space_map_write(sm, msp->ms_allocatable, SM_FREE, SM_NO_VDEVID, tx);
 	mutex_enter(&msp->ms_lock);
 	msp->ms_condensing = B_FALSE;
 }
@@ -2536,8 +2502,10 @@ metaslab_sync(metaslab_t *msp, uint64_t txg)
 		metaslab_condense(msp, txg, tx);
 	} else {
 		mutex_exit(&msp->ms_lock);
-		space_map_write(msp->ms_sm, alloctree, SM_ALLOC, tx);
-		space_map_write(msp->ms_sm, msp->ms_freeing, SM_FREE, tx);
+		space_map_write(msp->ms_sm, alloctree, SM_ALLOC,
+		    SM_NO_VDEVID, tx);
+		space_map_write(msp->ms_sm, msp->ms_freeing, SM_FREE,
+		    SM_NO_VDEVID, tx);
 		mutex_enter(&msp->ms_lock);
 	}
 
@@ -2552,7 +2520,7 @@ metaslab_sync(metaslab_t *msp, uint64_t txg)
 		 */
 		mutex_exit(&msp->ms_lock);
 		space_map_write(vd->vdev_checkpoint_sm,
-		    msp->ms_checkpointing, SM_FREE, tx);
+		    msp->ms_checkpointing, SM_FREE, SM_NO_VDEVID, tx);
 		mutex_enter(&msp->ms_lock);
 		space_map_update(vd->vdev_checkpoint_sm);
 
@@ -2762,6 +2730,7 @@ metaslab_sync_done(metaslab_t *msp, uint64_t txg)
 	 * from it in 'metaslab_unload_delay' txgs, then unload it.
 	 */
 	if (msp->ms_loaded &&
+	    msp->ms_initializing == 0 &&
 	    msp->ms_selected_txg + metaslab_unload_delay < txg) {
 		for (int t = 1; t < TXG_CONCURRENT_STATES; t++) {
 			VERIFY0(range_tree_space(
@@ -3011,6 +2980,7 @@ metaslab_block_alloc(metaslab_t *msp, uint64_t size, uint64_t txg)
 	metaslab_class_t *mc = msp->ms_group->mg_class;
 
 	VERIFY(!msp->ms_condensing);
+	VERIFY0(msp->ms_initializing);
 
 	start = mc->mc_ops->msop_alloc(msp, size);
 	if (start != -1ULL) {
@@ -3071,9 +3041,10 @@ find_valid_metaslab(metaslab_group_t *mg, uint64_t activation_weight,
 		}
 
 		/*
-		 * If the selected metaslab is condensing, skip it.
+		 * If the selected metaslab is condensing or being
+		 * initialized, skip it.
 		 */
-		if (msp->ms_condensing)
+		if (msp->ms_condensing || msp->ms_initializing > 0)
 			continue;
 
 		*was_active = msp->ms_allocator != -1;
@@ -3236,11 +3207,20 @@ metaslab_group_alloc_normal(metaslab_group_t *mg, zio_alloc_list_t *zal,
 		/*
 		 * If this metaslab is currently condensing then pick again as
 		 * we can't manipulate this metaslab until it's committed
-		 * to disk.
+		 * to disk. If this metaslab is being initialized, we shouldn't
+		 * allocate from it since the allocated region might be
+		 * overwritten after allocation.
 		 */
 		if (msp->ms_condensing) {
 			metaslab_trace_add(zal, mg, msp, asize, d,
 			    TRACE_CONDENSING, allocator);
+			metaslab_passivate(msp, msp->ms_weight &
+			    ~METASLAB_ACTIVE_MASK);
+			mutex_exit(&msp->ms_lock);
+			continue;
+		} else if (msp->ms_initializing > 0) {
+			metaslab_trace_add(zal, mg, msp, asize, d,
+			    TRACE_INITIALIZING, allocator);
 			metaslab_passivate(msp, msp->ms_weight &
 			    ~METASLAB_ACTIVE_MASK);
 			mutex_exit(&msp->ms_lock);
@@ -3625,7 +3605,7 @@ metaslab_free_impl(vdev_t *vd, uint64_t offset, uint64_t size,
 		return;
 
 	if (spa->spa_vdev_removal != NULL &&
-	    spa->spa_vdev_removal->svr_vdev == vd &&
+	    spa->spa_vdev_removal->svr_vdev_id == vd->vdev_id &&
 	    vdev_is_concrete(vd)) {
 		/*
 		 * Note: we check if the vdev is concrete because when

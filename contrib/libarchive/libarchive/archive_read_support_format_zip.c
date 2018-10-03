@@ -511,7 +511,13 @@ process_extra(struct archive_read *a, const char *p, size_t extra_length, struct
 		case 0x5455:
 		{
 			/* Extended time field "UT". */
-			int flags = p[offset];
+			int flags;
+			if (datasize == 0) {
+				archive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,
+				    "Incomplete extended time field");
+				return ARCHIVE_FAILED;
+			}
+			flags = p[offset];
 			offset++;
 			datasize--;
 			/* Flag bits indicate which dates are present. */
@@ -2702,6 +2708,11 @@ slurp_central_directory(struct archive_read *a, struct zip *zip)
 			return ARCHIVE_FATAL;
 
 		zip_entry = calloc(1, sizeof(struct zip_entry));
+		if (zip_entry == NULL) {
+			archive_set_error(&a->archive, ENOMEM,
+				"Can't allocate zip entry");
+			return ARCHIVE_FATAL;
+		}
 		zip_entry->next = zip->zip_entries;
 		zip_entry->flags |= LA_FROM_CENTRAL_DIRECTORY;
 		zip->zip_entries = zip_entry;

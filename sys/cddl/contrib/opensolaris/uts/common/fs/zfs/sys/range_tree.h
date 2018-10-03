@@ -48,14 +48,12 @@ typedef struct range_tree_ops range_tree_ops_t;
 typedef struct range_tree {
 	avl_tree_t	rt_root;	/* offset-ordered segment AVL tree */
 	uint64_t	rt_space;	/* sum of all segments in the map */
-	uint64_t	rt_gap;		/* allowable inter-segment gap */
 	range_tree_ops_t *rt_ops;
+	void		*rt_arg;
 
 	/* rt_avl_compare should only be set it rt_arg is an AVL tree */
-	void		*rt_arg;
+	uint64_t	rt_gap;		/* allowable inter-segment gap */
 	int (*rt_avl_compare)(const void *, const void *);
-
-
 	/*
 	 * The rt_histogram maintains a histogram of ranges. Each bucket,
 	 * rt_histogram[i], contains the number of ranges whose size is:
@@ -85,7 +83,7 @@ typedef void range_tree_func_t(void *arg, uint64_t start, uint64_t size);
 void range_tree_init(void);
 void range_tree_fini(void);
 range_tree_t *range_tree_create_impl(range_tree_ops_t *ops, void *arg,
-    int (*avl_compare) (const void *, const void *), uint64_t gap);
+    int (*avl_compare)(const void*, const void*), uint64_t gap);
 range_tree_t *range_tree_create(range_tree_ops_t *ops, void *arg);
 void range_tree_destroy(range_tree_t *rt);
 boolean_t range_tree_contains(range_tree_t *rt, uint64_t start, uint64_t size);
@@ -97,6 +95,9 @@ boolean_t range_tree_is_empty(range_tree_t *rt);
 void range_tree_verify(range_tree_t *rt, uint64_t start, uint64_t size);
 void range_tree_swap(range_tree_t **rtsrc, range_tree_t **rtdst);
 void range_tree_stat_verify(range_tree_t *rt);
+uint64_t range_tree_min(range_tree_t *rt);
+uint64_t range_tree_max(range_tree_t *rt);
+uint64_t range_tree_span(range_tree_t *rt);
 
 void range_tree_add(void *arg, uint64_t start, uint64_t size);
 void range_tree_remove(void *arg, uint64_t start, uint64_t size);

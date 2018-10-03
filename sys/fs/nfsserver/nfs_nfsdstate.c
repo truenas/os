@@ -152,6 +152,7 @@ static int nfsrv_cbcallargs(struct nfsrv_descript *nd, struct nfsclient *clp,
 static u_int32_t nfsrv_nextclientindex(void);
 static u_int32_t nfsrv_nextstateindex(struct nfsclient *clp);
 static void nfsrv_markstable(struct nfsclient *clp);
+static void nfsrv_markreclaim(struct nfsclient *clp);
 static int nfsrv_checkstable(struct nfsclient *clp);
 static int nfsrv_clientconflict(struct nfsclient *clp, int *haslockp, struct 
     vnode *vp, NFSPROC_T *p);
@@ -663,10 +664,11 @@ nfsrv_getclient(nfsquad_t clientid, int opflags, struct nfsclient **clpp,
 		    if (nsep != NULL) {
 			/* Hold a reference on the xprt for a backchannel. */
 			if ((nsep->sess_crflags & NFSV4CRSESS_CONNBACKCHAN)
-			    != 0 && clp->lc_req.nr_client == NULL) {
-			    clp->lc_req.nr_client = (struct __rpc_client *)
-				clnt_bck_create(nd->nd_xprt->xp_socket,
-				cbprogram, NFSV4_CBVERS);
+			    != 0) {
+			    if (clp->lc_req.nr_client == NULL)
+				clp->lc_req.nr_client = (struct __rpc_client *)
+				    clnt_bck_create(nd->nd_xprt->xp_socket,
+				    cbprogram, NFSV4_CBVERS);
 			    if (clp->lc_req.nr_client != NULL) {
 				SVC_ACQUIRE(nd->nd_xprt);
 				nd->nd_xprt->xp_p2 =
@@ -3064,7 +3066,13 @@ tryagain:
 		    /*
 		     * This is where we can choose to issue a delegation.
 		     */
-		    if (delegate == 0 || writedeleg == 0 ||
+		    if ((new_stp->ls_flags & NFSLCK_WANTNODELEG) != 0)
+			*rflagsp |= NFSV4OPEN_WDNOTWANTED;
+		    else if (nfsrv_issuedelegs == 0)
+			*rflagsp |= NFSV4OPEN_WDSUPPFTYPE;
+		    else if (NFSRV_V4DELEGLIMIT(nfsrv_delegatecnt))
+			*rflagsp |= NFSV4OPEN_WDRESOURCE;
+		    else if (delegate == 0 || writedeleg == 0 ||
 			NFSVNO_EXRDONLY(exp) || (readonly != 0 &&
 			nfsrv_writedelegifpos == 0) ||
 			!NFSVNO_DELEGOK(vp) ||
@@ -3072,11 +3080,6 @@ tryagain:
 			(clp->lc_flags & (LCL_CALLBACKSON | LCL_CBDOWN)) !=
 			 LCL_CALLBACKSON)
 			*rflagsp |= NFSV4OPEN_WDCONTENTION;
-		    else if (nfsrv_issuedelegs == 0 ||
-			NFSRV_V4DELEGLIMIT(nfsrv_delegatecnt))
-			*rflagsp |= NFSV4OPEN_WDRESOURCE;
-		    else if ((new_stp->ls_flags & NFSLCK_WANTNODELEG) != 0)
-			*rflagsp |= NFSV4OPEN_WDNOTWANTED;
 		    else {
 			new_deleg->ls_stateid.seqid = delegstateidp->seqid = 1;
 			new_deleg->ls_stateid.other[0] = delegstateidp->other[0]
@@ -3127,16 +3130,17 @@ tryagain:
 		    /*
 		     * This is where we can choose to issue a delegation.
 		     */
-		    if (delegate == 0 || (writedeleg == 0 && readonly == 0) ||
-			!NFSVNO_DELEGOK(vp) ||
+		    if ((new_stp->ls_flags & NFSLCK_WANTNODELEG) != 0)
+			*rflagsp |= NFSV4OPEN_WDNOTWANTED;
+		    else if (nfsrv_issuedelegs == 0)
+			*rflagsp |= NFSV4OPEN_WDSUPPFTYPE;
+		    else if (NFSRV_V4DELEGLIMIT(nfsrv_delegatecnt))
+			*rflagsp |= NFSV4OPEN_WDRESOURCE;
+		    else if (delegate == 0 || (writedeleg == 0 &&
+			readonly == 0) || !NFSVNO_DELEGOK(vp) ||
 			(clp->lc_flags & (LCL_CALLBACKSON | LCL_CBDOWN)) !=
 			 LCL_CALLBACKSON)
 			*rflagsp |= NFSV4OPEN_WDCONTENTION;
-		    else if (nfsrv_issuedelegs == 0 ||
-			NFSRV_V4DELEGLIMIT(nfsrv_delegatecnt))
-			*rflagsp |= NFSV4OPEN_WDRESOURCE;
-		    else if ((new_stp->ls_flags & NFSLCK_WANTNODELEG) != 0)
-			*rflagsp |= NFSV4OPEN_WDNOTWANTED;
 		    else {
 			new_deleg->ls_stateid.seqid = delegstateidp->seqid = 1;
 			new_deleg->ls_stateid.other[0] = delegstateidp->other[0]
@@ -4145,7 +4149,26 @@ static int
 nfsrv_checkgrace(struct nfsrv_descript *nd, struct nfsclient *clp,
     u_int32_t flags)
 {
-	int error = 0;
+	int error = 0, notreclaimed;
+	struct nfsrv_stable *sp;
+
+	if ((nfsrv_stablefirst.nsf_flags & (NFSNSF_UPDATEDONE |
+	     NFSNSF_GRACEOVER)) == 0) {
+		/*
+		 * First, check to see if all of the clients have done a
+		 * ReclaimComplete.  If so, grace can end now.
+		 */
+		notreclaimed = 0;
+		LIST_FOREACH(sp, &nfsrv_stablefirst.nsf_head, nst_list) {
+			if ((sp->nst_flag & NFSNST_RECLAIMED) == 0) {
+				notreclaimed = 1;
+				break;
+			}
+		}
+		if (notreclaimed == 0)
+			nfsrv_stablefirst.nsf_flags |= (NFSNSF_GRACEOVER |
+			    NFSNSF_NEEDLOCK);
+	}
 
 	if ((nfsrv_stablefirst.nsf_flags & NFSNSF_GRACEOVER) != 0) {
 		if (flags & NFSLCK_RECLAIM) {
@@ -4289,9 +4312,10 @@ nfsrv_docallback(struct nfsclient *clp, int procnum,
 	 */
 	(void) newnfs_sndlock(&clp->lc_req.nr_lock);
 	if (clp->lc_req.nr_client == NULL) {
-		if ((clp->lc_flags & LCL_NFSV41) != 0)
+		if ((clp->lc_flags & LCL_NFSV41) != 0) {
 			error = ECONNREFUSED;
-		else if (nd->nd_procnum == NFSV4PROC_CBNULL)
+			nfsrv_freesession(sep, NULL);
+		} else if (nd->nd_procnum == NFSV4PROC_CBNULL)
 			error = newnfs_connect(NULL, &clp->lc_req, cred,
 			    NULL, 1);
 		else
@@ -4800,6 +4824,32 @@ nfsrv_markstable(struct nfsclient *clp)
 	 */
 	sp->nst_flag |= NFSNST_GOTSTATE;
 	sp->nst_clp = clp;
+}
+
+/*
+ * This function is called when a NFSv4.1 client does a ReclaimComplete.
+ * Very similar to nfsrv_markstable(), except for the flag being set.
+ */
+static void
+nfsrv_markreclaim(struct nfsclient *clp)
+{
+	struct nfsrv_stable *sp;
+
+	/*
+	 * First find the client structure.
+	 */
+	LIST_FOREACH(sp, &nfsrv_stablefirst.nsf_head, nst_list) {
+		if (sp->nst_len == clp->lc_idlen &&
+		    !NFSBCMP(sp->nst_client, clp->lc_id, sp->nst_len))
+			break;
+	}
+	if (sp == LIST_END(&nfsrv_stablefirst.nsf_head))
+		return;
+
+	/*
+	 * Now, just set the flag.
+	 */
+	sp->nst_flag |= NFSNST_RECLAIMED;
 }
 
 /*
@@ -5912,9 +5962,18 @@ nfsrv_checksequence(struct nfsrv_descript *nd, uint32_t sequenceid,
 	/*
 	 * If this session handles the backchannel, save the nd_xprt for this
 	 * RPC, since this is the one being used.
+	 * RFC-5661 specifies that the fore channel will be implicitly
+	 * bound by a Sequence operation.  However, since some NFSv4.1 clients
+	 * erroneously assumed that the back channel would be implicitly
+	 * bound as well, do the implicit binding unless a
+	 * BindConnectiontoSession has already been done on the session.
 	 */
 	if (sep->sess_clp->lc_req.nr_client != NULL &&
-	    (sep->sess_crflags & NFSV4CRSESS_CONNBACKCHAN) != 0) {
+	    sep->sess_cbsess.nfsess_xprt != nd->nd_xprt &&
+	    (sep->sess_crflags & NFSV4CRSESS_CONNBACKCHAN) != 0 &&
+	    (sep->sess_clp->lc_flags & LCL_DONEBINDCONN) == 0) {
+		NFSD_DEBUG(2,
+		    "nfsrv_checksequence: implicit back channel bind\n");
 		savxprt = sep->sess_cbsess.nfsess_xprt;
 		SVC_ACQUIRE(nd->nd_xprt);
 		nd->nd_xprt->xp_p2 =
@@ -5944,7 +6003,7 @@ nfsrv_checksequence(struct nfsrv_descript *nd, uint32_t sequenceid,
  * Check/set reclaim complete for this session/clientid.
  */
 int
-nfsrv_checkreclaimcomplete(struct nfsrv_descript *nd)
+nfsrv_checkreclaimcomplete(struct nfsrv_descript *nd, int onefs)
 {
 	struct nfsdsession *sep;
 	struct nfssessionhash *shp;
@@ -5960,11 +6019,15 @@ nfsrv_checkreclaimcomplete(struct nfsrv_descript *nd)
 		return (NFSERR_BADSESSION);
 	}
 
-	/* Check to see if reclaim complete has already happened. */
-	if ((sep->sess_clp->lc_flags & LCL_RECLAIMCOMPLETE) != 0)
+	if (onefs != 0)
+		sep->sess_clp->lc_flags |= LCL_RECLAIMONEFS;
+		/* Check to see if reclaim complete has already happened. */
+	else if ((sep->sess_clp->lc_flags & LCL_RECLAIMCOMPLETE) != 0)
 		error = NFSERR_COMPLETEALREADY;
-	else
+	else {
 		sep->sess_clp->lc_flags |= LCL_RECLAIMCOMPLETE;
+		nfsrv_markreclaim(sep->sess_clp);
+	}
 	NFSUNLOCKSESSION(shp);
 	NFSUNLOCKSTATE();
 	return (error);
@@ -6046,6 +6109,80 @@ nfsrv_destroysession(struct nfsrv_descript *nd, uint8_t *sessionid)
 }
 
 /*
+ * Bind a connection to a session.
+ * For now, only certain variants are supported, since the current session
+ * structure can only handle a single backchannel entry, which will be
+ * applied to all connections if it is set.
+ */
+int
+nfsrv_bindconnsess(struct nfsrv_descript *nd, uint8_t *sessionid, int *foreaftp)
+{
+	struct nfssessionhash *shp;
+	struct nfsdsession *sep;
+	struct nfsclient *clp;
+	SVCXPRT *savxprt;
+	int error;
+
+	error = 0;
+	shp = NFSSESSIONHASH(sessionid);
+	NFSLOCKSTATE();
+	NFSLOCKSESSION(shp);
+	sep = nfsrv_findsession(sessionid);
+	if (sep != NULL) {
+		clp = sep->sess_clp;
+		if (*foreaftp == NFSCDFC4_BACK ||
+		    *foreaftp == NFSCDFC4_BACK_OR_BOTH ||
+		    *foreaftp == NFSCDFC4_FORE_OR_BOTH) {
+			/* Try to set up a backchannel. */
+			if (clp->lc_req.nr_client == NULL) {
+				NFSD_DEBUG(2, "nfsrv_bindconnsess: acquire "
+				    "backchannel\n");
+				clp->lc_req.nr_client = (struct __rpc_client *)
+				    clnt_bck_create(nd->nd_xprt->xp_socket,
+				    sep->sess_cbprogram, NFSV4_CBVERS);
+			}
+			if (clp->lc_req.nr_client != NULL) {
+				NFSD_DEBUG(2, "nfsrv_bindconnsess: set up "
+				    "backchannel\n");
+				savxprt = sep->sess_cbsess.nfsess_xprt;
+				SVC_ACQUIRE(nd->nd_xprt);
+				nd->nd_xprt->xp_p2 =
+				    clp->lc_req.nr_client->cl_private;
+				/* Disable idle timeout. */
+				nd->nd_xprt->xp_idletimeout = 0;
+				sep->sess_cbsess.nfsess_xprt = nd->nd_xprt;
+				if (savxprt != NULL)
+					SVC_RELEASE(savxprt);
+				sep->sess_crflags |= NFSV4CRSESS_CONNBACKCHAN;
+				clp->lc_flags |= LCL_DONEBINDCONN;
+				if (*foreaftp == NFSCDFS4_BACK)
+					*foreaftp = NFSCDFS4_BACK;
+				else
+					*foreaftp = NFSCDFS4_BOTH;
+			} else if (*foreaftp != NFSCDFC4_BACK) {
+				NFSD_DEBUG(2, "nfsrv_bindconnsess: can't set "
+				    "up backchannel\n");
+				sep->sess_crflags &= ~NFSV4CRSESS_CONNBACKCHAN;
+				clp->lc_flags |= LCL_DONEBINDCONN;
+				*foreaftp = NFSCDFS4_FORE;
+			} else {
+				error = NFSERR_NOTSUPP;
+				printf("nfsrv_bindconnsess: Can't add "
+				    "backchannel\n");
+			}
+		} else {
+			NFSD_DEBUG(2, "nfsrv_bindconnsess: Set forechannel\n");
+			clp->lc_flags |= LCL_DONEBINDCONN;
+			*foreaftp = NFSCDFS4_FORE;
+		}
+	} else
+		error = NFSERR_BADSESSION;
+	NFSUNLOCKSESSION(shp);
+	NFSUNLOCKSTATE();
+	return (error);
+}
+
+/*
  * Free up a session structure.
  */
 static int
@@ -6068,7 +6205,7 @@ nfsrv_freesession(struct nfsdsession *sep, uint8_t *sessionid)
 		if (sep->sess_refcnt > 0) {
 			NFSUNLOCKSESSION(shp);
 			NFSUNLOCKSTATE();
-			return (0);
+			return (NFSERR_BACKCHANBUSY);
 		}
 		LIST_REMOVE(sep, sess_hash);
 		LIST_REMOVE(sep, sess_list);
@@ -6131,6 +6268,32 @@ nfsrv_freestateid(struct nfsrv_descript *nd, nfsv4stateid_t *stateidp,
 		error = NFSERR_LOCKSHELD;
 	if (error == 0)
 		nfsrv_freelockowner(stp, NULL, 0, p);
+	NFSUNLOCKSTATE();
+	return (error);
+}
+
+/*
+ * Test a stateid.
+ */
+int
+nfsrv_teststateid(struct nfsrv_descript *nd, nfsv4stateid_t *stateidp,
+    NFSPROC_T *p)
+{
+	struct nfsclient *clp;
+	struct nfsstate *stp;
+	int error;
+
+	NFSLOCKSTATE();
+	/*
+	 * Look up the stateid
+	 */
+	error = nfsrv_getclient((nfsquad_t)((u_quad_t)0), CLOPS_RENEW, &clp,
+	    NULL, (nfsquad_t)((u_quad_t)0), 0, nd, p);
+	if (error == 0)
+		error = nfsrv_getstate(clp, stateidp, 0, &stp);
+	if (error == 0 && stateidp->seqid != 0 &&
+	    SEQ_LT(stateidp->seqid, stp->ls_stateid.seqid))
+		error = NFSERR_OLDSTATEID;
 	NFSUNLOCKSTATE();
 	return (error);
 }

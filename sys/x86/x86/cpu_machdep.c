@@ -739,6 +739,13 @@ cpu_idle_tun(void *unused __unused)
 
 	if (TUNABLE_STR_FETCH("machdep.idle", tunvar, sizeof(tunvar)))
 		cpu_idle_selector(tunvar);
+	else if (cpu_vendor_id == CPU_VENDOR_AMD &&
+	    CPUID_TO_FAMILY(cpu_id) == 0x17 && CPUID_TO_MODEL(cpu_id) == 0x1) {
+		/* Ryzen erratas 1057, 1109. */
+		cpu_idle_selector("hlt");
+		idle_mwait = 0;
+	}
+
 	if (cpu_vendor_id == CPU_VENDOR_INTEL && cpu_id == 0x506c9) {
 		/*
 		 * Apollo Lake errata APL31 (public errata APL30).
@@ -756,7 +763,7 @@ SYSINIT(cpu_idle_tun, SI_SUB_CPU, SI_ORDER_MIDDLE, cpu_idle_tun, NULL);
 static int panic_on_nmi = 1;
 SYSCTL_INT(_machdep, OID_AUTO, panic_on_nmi, CTLFLAG_RWTUN,
     &panic_on_nmi, 0,
-    "Panic on NMI");
+    "Panic on NMI raised by hardware failure");
 int nmi_is_broadcast = 1;
 SYSCTL_INT(_machdep, OID_AUTO, nmi_is_broadcast, CTLFLAG_RWTUN,
     &nmi_is_broadcast, 0,
@@ -765,36 +772,37 @@ SYSCTL_INT(_machdep, OID_AUTO, nmi_is_broadcast, CTLFLAG_RWTUN,
 int kdb_on_nmi = 1;
 SYSCTL_INT(_machdep, OID_AUTO, kdb_on_nmi, CTLFLAG_RWTUN,
     &kdb_on_nmi, 0,
-    "Go to KDB on NMI");
+    "Go to KDB on NMI with unknown source");
 #endif
 
-#ifdef DEV_ISA
 void
 nmi_call_kdb(u_int cpu, u_int type, struct trapframe *frame)
 {
+	bool claimed = false;
 
+#ifdef DEV_ISA
 	/* machine/parity/power fail/"kitchen sink" faults */
-	if (isa_nmi(frame->tf_err) == 0) {
+	if (isa_nmi(frame->tf_err)) {
+		claimed = true;
+		if (panic_on_nmi)
+			panic("NMI indicates hardware failure");
+	}
+#endif /* DEV_ISA */
 #ifdef KDB
+	if (!claimed && kdb_on_nmi) {
 		/*
 		 * NMI can be hooked up to a pushbutton for debugging.
 		 */
-		if (kdb_on_nmi) {
-			printf("NMI/cpu%d ... going to debugger\n", cpu);
-			kdb_trap(type, 0, frame);
-		}
-#endif /* KDB */
-	} else if (panic_on_nmi) {
-		panic("NMI indicates hardware failure");
+		printf("NMI/cpu%d ... going to debugger\n", cpu);
+		kdb_trap(type, 0, frame);
 	}
+#endif /* KDB */
 }
-#endif
 
 void
 nmi_handle_intr(u_int type, struct trapframe *frame)
 {
 
-#ifdef DEV_ISA
 #ifdef SMP
 	if (nmi_is_broadcast) {
 		nmi_call_kdb_smp(type, frame);
@@ -802,7 +810,6 @@ nmi_handle_intr(u_int type, struct trapframe *frame)
 	}
 #endif
 	nmi_call_kdb(PCPU_GET(cpuid), type, frame);
-#endif
 }
 
 int hw_ibrs_active;

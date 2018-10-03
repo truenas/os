@@ -6,7 +6,7 @@ COMMON ITEMS: section later in the file.  These instructions assume that you
 basically know what you are doing.  If not, then please consult the FreeBSD
 handbook:
 
-    https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/updating-src.html
+    https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/makeworld.html
 
 Items affecting the ports and packages system can be found in
 /usr/ports/UPDATING.  Please read that file before running portupgrade.
@@ -15,6 +15,21 @@ NOTE: FreeBSD has switched from gcc to clang. If you have trouble bootstrapping
 from older versions of FreeBSD, try WITHOUT_CLANG and WITH_GCC to bootstrap to
 the tip of head, and then rebuild without this option. The bootstrap process
 from older version of current across the gcc/clang cutover is a bit fragile.
+
+20180818:
+	WITH_OFED option now only enables the build for the OFED libraries
+	and some fundamental client utilities.  OpenSM and rest of the
+	debugging tools are enabled by WITH_OFED_EXTRA build switch.
+	WITH_OFED is turned on by default on amd64.
+
+20180714:
+	Clang, llvm, lld, lldb, compiler-rt and libc++ have been upgraded to
+	6.0.1.  Please see the 20141231 entry below for information about
+	prerequisites and upgrading, if you are not already using clang 3.5.0
+	or higher.
+
+20180601:
+	The releng/11.2 branch has been created from stable/11@r334458.
 
 20180504:
 	The tz database (tzdb) has been updated to 2018e.  This version more
@@ -81,6 +96,9 @@ from older version of current across the gcc/clang cutover is a bit fragile.
 	forground mode (i.e., do not use the -p or -y options). As it
 	starts, fsck will ask ``SAVE DATA TO FIND ALTERNATE SUPERBLOCKS''
 	to which you should answer yes.
+
+20170629:
+	The releng/11.1 branch has been created from stable/11@r320475.
 
 20170518:
 	arm64 builds now use the base system LLD 4.0.0 linker by default,
@@ -168,6 +186,12 @@ from older version of current across the gcc/clang cutover is a bit fragile.
 	to use an extension of .pico instead.  The purpose of this change is
 	to avoid a name clash with shared libraries on case-insensitive file
 	systems.  On those file systems, foo.So is the same file as foo.so.
+
+20160811:
+	The releng/11.0 branch has been created from stable/11@r303970.
+
+20160708:
+	The stable/11 branch has been created from head@r302406.
 
 20160622:
 	The libc stub for the pipe(2) system call has been replaced with

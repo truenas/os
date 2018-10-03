@@ -101,10 +101,9 @@ SYSCTL_PROC(_compat_linux, OID_AUTO, debug,
 #endif
 
 /*
- * Allow the this functions to use the ldebug() facility
- * even though they are not syscalls themselves. Map them
- * to syscall 0. This is slightly less bogus than using
- * ldebug(sigreturn).
+ * Allow the sendsig functions to use the ldebug() facility even though they
+ * are not syscalls themselves.  Map them to syscall 0.  This is slightly less
+ * bogus than using ldebug(sigreturn).
  */
 #define	LINUX_SYS_linux_rt_sendsig	0
 
@@ -253,11 +252,11 @@ linux_set_syscall_retval(struct thread *td, int error)
 
 	/*
 	 * On Linux only %rcx and %r11 values are not preserved across
-	 * the syscall.
-	 * So, do not clobber %rdx and %r10
+	 * the syscall.  So, do not clobber %rdx and %r10.
 	 */
 	td->td_retval[1] = frame->tf_rdx;
-	frame->tf_r10 = frame->tf_rcx;
+	if (error != EJUSTRETURN)
+		frame->tf_r10 = frame->tf_rcx;
 
 	cpu_set_syscall_retval(td, error);
 
@@ -335,9 +334,7 @@ linux_copyout_strings(struct image_params *imgp)
 	size_t execpath_len;
 	struct proc *p;
 
-	/*
-	 * Calculate string base and vector table pointers.
-	 */
+	/* Calculate string base and vector table pointers. */
 	if (imgp->execpath != NULL && imgp->auxargs != NULL)
 		execpath_len = strlen(imgp->execpath) + 1;
 	else
@@ -345,7 +342,7 @@ linux_copyout_strings(struct image_params *imgp)
 
 	p = imgp->proc;
 	arginfo = (struct ps_strings *)p->p_sysent->sv_psstrings;
-	destp =	(caddr_t)arginfo - SPARE_USRSPACE -
+	destp = (caddr_t)arginfo - SPARE_USRSPACE -
 	    roundup(sizeof(canary), sizeof(char *)) -
 	    roundup(execpath_len, sizeof(char *)) -
 	    roundup(ARG_MAX - imgp->args->stringspace, sizeof(char *));
@@ -355,67 +352,44 @@ linux_copyout_strings(struct image_params *imgp)
 		copyout(imgp->execpath, (void *)imgp->execpathp, execpath_len);
 	}
 
-	/*
-	 * Prepare the canary for SSP.
-	 */
+	/* Prepare the canary for SSP. */
 	arc4rand(canary, sizeof(canary), 0);
 	imgp->canary = (uintptr_t)arginfo -
 	    roundup(execpath_len, sizeof(char *)) -
 	    roundup(sizeof(canary), sizeof(char *));
 	copyout(canary, (void *)imgp->canary, sizeof(canary));
 
-	/*
-	 * If we have a valid auxargs ptr, prepare some room
-	 * on the stack.
-	 */
+	vectp = (char **)destp;
 	if (imgp->auxargs) {
 		/*
-		 * 'AT_COUNT*2' is size for the ELF Auxargs data. This is for
-		 * lower compatibility.
+		 * Allocate room on the stack for the ELF auxargs
+		 * array.  It has LINUX_AT_COUNT entries.
 		 */
-		imgp->auxarg_size = (imgp->auxarg_size) ? imgp->auxarg_size :
-		    (LINUX_AT_COUNT * 2);
-
-		/*
-		 * The '+ 2' is for the null pointers at the end of each of
-		 * the arg and env vector sets,and imgp->auxarg_size is room
-		 * for argument of Runtime loader.
-		 */
-		vectp = (char **)(destp - (imgp->args->argc +
-		    imgp->args->envc + 2 + imgp->auxarg_size) * sizeof(char *));
-
-	} else {
-		/*
-		 * The '+ 2' is for the null pointers at the end of each of
-		 * the arg and env vector sets
-		 */
-		vectp = (char **)(destp - (imgp->args->argc +
-		    imgp->args->envc + 2) * sizeof(char *));
+		vectp -= howmany(LINUX_AT_COUNT * sizeof(Elf64_Auxinfo),
+		    sizeof(*vectp));
 	}
 
 	/*
-	 * vectp also becomes our initial stack base
+	 * Allocate room for the argv[] and env vectors including the
+	 * terminating NULL pointers.
 	 */
+	vectp -= imgp->args->argc + 1 + imgp->args->envc + 1;
+
+	/* vectp also becomes our initial stack base. */
 	stack_base = (register_t *)vectp;
 
 	stringp = imgp->args->begin_argv;
 	argc = imgp->args->argc;
 	envc = imgp->args->envc;
 
-	/*
-	 * Copy out strings - arguments and environment.
-	 */
+	/* Copy out strings - arguments and environment. */
 	copyout(stringp, destp, ARG_MAX - imgp->args->stringspace);
 
-	/*
-	 * Fill in "ps_strings" struct for ps, w, etc.
-	 */
+	/* Fill in "ps_strings" struct for ps, w, etc. */
 	suword(&arginfo->ps_argvstr, (long)(intptr_t)vectp);
 	suword(&arginfo->ps_nargvstr, argc);
 
-	/*
-	 * Fill in argument portion of vector table.
-	 */
+	/* Fill in argument portion of vector table. */
 	for (; argc > 0; --argc) {
 		suword(vectp++, (long)(intptr_t)destp);
 		while (*stringp++ != 0)
@@ -423,15 +397,13 @@ linux_copyout_strings(struct image_params *imgp)
 		destp++;
 	}
 
-	/* a null vector table pointer separates the argp's from the envp's */
+	/* A null vector table pointer separates the argp's from the envp's. */
 	suword(vectp++, 0);
 
 	suword(&arginfo->ps_envstr, (long)(intptr_t)vectp);
 	suword(&arginfo->ps_nenvstr, envc);
 
-	/*
-	 * Fill in environment portion of vector table.
-	 */
+	/* Fill in environment portion of vector table. */
 	for (; envc > 0; --envc) {
 		suword(vectp++, (long)(intptr_t)destp);
 		while (*stringp++ != 0)
@@ -439,7 +411,7 @@ linux_copyout_strings(struct image_params *imgp)
 		destp++;
 	}
 
-	/* end of vector table is a null pointer */
+	/* The end of the vector table is a null pointer. */
 	suword(vectp, 0);
 	return (stack_base);
 }
@@ -450,8 +422,12 @@ linux_copyout_strings(struct image_params *imgp)
 static void
 linux_exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
 {
-	struct trapframe *regs = td->td_frame;
-	struct pcb *pcb = td->td_pcb;
+	struct trapframe *regs;
+	struct pcb *pcb;
+	register_t saved_rflags;
+
+	regs = td->td_frame;
+	pcb = td->td_pcb;
 
 	mtx_lock(&dt_lock);
 	if (td->td_proc->p_md.md_ldt != NULL)
@@ -465,10 +441,11 @@ linux_exec_setregs(struct thread *td, struct image_params *imgp, u_long stack)
 	pcb->pcb_initial_fpucw = __LINUX_NPXCW__;
 	set_pcb_flags(pcb, PCB_FULL_IRET);
 
+	saved_rflags = regs->tf_rflags & PSL_T;
 	bzero((char *)regs, sizeof(struct trapframe));
 	regs->tf_rip = imgp->entry_addr;
 	regs->tf_rsp = stack;
-	regs->tf_rflags = PSL_USER | (regs->tf_rflags & PSL_T);
+	regs->tf_rflags = PSL_USER | saved_rflags;
 	regs->tf_ss = _udatasel;
 	regs->tf_cs = _ucodesel;
 	regs->tf_ds = _udatasel;
@@ -684,12 +661,10 @@ linux_rt_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	regs->tf_rdx = (register_t)&sfp->sf_sc;	/* arg 3 in %rdx */
 
 	sf.sf_handler = catcher;
-	/* Fill in POSIX parts */
+	/* Fill in POSIX parts. */
 	ksiginfo_to_lsiginfo(ksi, &sf.sf_si, sig);
 
-	/*
-	 * Copy the sigframe out to the user's stack.
-	 */
+	/* Copy the sigframe out to the user's stack. */
 	if (copyout(&sf, sfp, sizeof(*sfp)) != 0) {
 #ifdef DEBUG
 		printf("process %ld has trashed its stack\n", (long)p->p_pid);
@@ -765,7 +740,7 @@ linux_vsyscall(struct thread *td)
 
 	frame = td->td_frame;
 
-	/* Check %rip for vsyscall area */
+	/* Check %rip for vsyscall area. */
 	if (__predict_true(frame->tf_rip < LINUX_VSYSCALL_START))
 		return (EINVAL);
 	if ((frame->tf_rip & (LINUX_VSYSCALL_SZ - 1)) != 0)
@@ -776,7 +751,7 @@ linux_vsyscall(struct thread *td)
 
 	/*
 	 * vsyscall called as callq *(%rax), so we must
-	 * use return address from %rsp and also fixup %rsp
+	 * use return address from %rsp and also fixup %rsp.
 	 */
 	error = copyin((void *)frame->tf_rsp, &retqaddr, sizeof(retqaddr));
 	if (error)

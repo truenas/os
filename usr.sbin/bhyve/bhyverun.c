@@ -115,14 +115,14 @@ static void vm_loop(struct vmctx *ctx, int vcpu, uint64_t rip);
 static struct vm_exit vmexit[VM_MAXCPU];
 
 struct bhyvestats {
-        uint64_t        vmexit_bogus;
+	uint64_t	vmexit_bogus;
 	uint64_t	vmexit_reqidle;
-        uint64_t        vmexit_hlt;
-        uint64_t        vmexit_pause;
-        uint64_t        vmexit_mtrap;
-        uint64_t        vmexit_inst_emul;
-        uint64_t        cpu_switch_rotate;
-        uint64_t        cpu_switch_direct;
+	uint64_t	vmexit_hlt;
+	uint64_t	vmexit_pause;
+	uint64_t	vmexit_mtrap;
+	uint64_t	vmexit_inst_emul;
+	uint64_t	cpu_switch_rotate;
+	uint64_t	cpu_switch_direct;
 } stats;
 
 struct mt_vmm_info {
@@ -354,7 +354,7 @@ vmexit_handle_notify(struct vmctx *ctx, struct vm_exit *vme, int *pvcpu,
 	 * put guest-driven debug here
 	 */
 #endif
-        return (VMEXIT_CONTINUE);
+	return (VMEXIT_CONTINUE);
 }
 
 static int
@@ -1026,6 +1026,11 @@ main(int argc, char *argv[])
 	if (lpc_bootrom())
 		fwctl_init();
 
+	/*
+	 * Change the proc title to include the VM name.
+	 */
+	setproctitle("%s", vmname);
+
 #ifndef WITHOUT_CAPSICUM
 	bhyve_caph_cache_catpages();
 
@@ -1036,11 +1041,6 @@ main(int argc, char *argv[])
 		errx(EX_OSERR, "cap_enter() failed");
 #endif
 
-	/*
-	 * Change the proc title to include the VM name.
-	 */
-	setproctitle("%s", vmname); 
-	
 	/*
 	 * Add CPU 0
 	 */

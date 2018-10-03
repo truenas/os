@@ -39,11 +39,13 @@ extern struct s_appends *appends;
 extern regmatch_t *match;
 extern size_t maxnsub;
 extern u_long linenum;
-extern int appendnum;
+extern unsigned int appendnum;
 extern int aflag, eflag, nflag;
 extern const char *fname, *outfname;
 extern FILE *infile, *outfile;
 extern int rflags;	/* regex flags to use */
+extern const char *inplace;
+extern int quit;
 
 void	 cfclose(struct s_command *, struct s_command *);
 void	 compile(void);

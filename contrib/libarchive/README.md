@@ -78,7 +78,6 @@ Currently, the library automatically detects and reads the following fomats:
   * POSIX pax interchange format
   * POSIX octet-oriented cpio
   * SVR4 ASCII cpio
-  * POSIX octet-oriented cpio
   * Binary cpio (big-endian or little-endian)
   * ISO9660 CD-ROM images (with optional Rockridge or Joliet extensions)
   * ZIP archives (with uncompressed or "deflate" compressed entries, including support for encrypted Zip archives)
@@ -99,6 +98,7 @@ The library also detects and handles any of the following before evaluating the 
   * lzma, lzip, and xz compression
   * lz4 compression
   * lzop compression
+  * zstandard compression
 
 The library can create archives in any of the following formats:
   * POSIX ustar
@@ -125,6 +125,7 @@ When creating archives, the result can be filtered with any of the following:
   * lzma, lzip, and xz compression
   * lz4 compression
   * lzop compression
+  * zstandard compression
 
 ## Notes about the Library Design
 
@@ -159,7 +160,7 @@ questions we are asked about libarchive:
 
 * On read, compression and format are always detected automatically.
 
-* The same API is used for all formats; in particular, it's very
+* The same API is used for all formats; it should be very
   easy for software using libarchive to transparently handle
   any of libarchive's archiving formats.
 

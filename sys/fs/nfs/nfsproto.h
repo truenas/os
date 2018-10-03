@@ -575,6 +575,7 @@
 #define	NFSV4OPEN_WDRESOURCE		0x00080000
 #define	NFSV4OPEN_WDCONTENTION		0x00100000
 #define	NFSV4OPEN_WDNOTWANTED		0x00200000
+#define	NFSV4OPEN_WDSUPPFTYPE		0x00400000
 
 /*
  * NFS V4 File Handle types
@@ -678,6 +679,15 @@
 #define	NFSFLEXFLAG_NOIO_MDS		0x00000002
 #define	NFSFLEXFLAG_NO_READIO		0x00000004
 #define	NFSFLEXFLAG_WRITE_ONEMIRROR	0x00000008
+
+/* Enum values for Bind Connection to Session. */
+#define	NFSCDFC4_FORE		0x1
+#define	NFSCDFC4_BACK		0x2
+#define	NFSCDFC4_FORE_OR_BOTH	0x3
+#define	NFSCDFC4_BACK_OR_BOTH	0x7
+#define	NFSCDFS4_FORE		0x1
+#define	NFSCDFS4_BACK		0x2
+#define	NFSCDFS4_BOTH		0x3
 
 #if defined(_KERNEL) || defined(KERNEL)
 /* Conversion macros */
