@@ -633,7 +633,6 @@ spa_condense_indirect_thread(void *arg, zthr_t *zthr)
 	    ZFS_SPACE_CHECK_EXTRA_RESERVED));
 
 	return (0);
-	thread_exit();
 }
 
 /*
@@ -1064,6 +1063,9 @@ vdev_indirect_child_io_done(zio_t *zio)
 	pio->io_error = zio_worst_error(pio->io_error, zio->io_error);
 	mutex_exit(&pio->io_lock);
 
+#ifdef __FreeBSD__
+	if (zio->io_abd != NULL)
+#endif
 	abd_put(zio->io_abd);
 }
 
@@ -1079,6 +1081,9 @@ vdev_indirect_io_start_cb(uint64_t split_offset, vdev_t *vd, uint64_t offset,
 		return;
 
 	zio_nowait(zio_vdev_child_io(zio, NULL, vd, offset,
+#ifdef __FreeBSD__
+	    zio->io_abd == NULL ? NULL :
+#endif
 	    abd_get_offset(zio->io_abd, split_offset),
 	    size, zio->io_type, zio->io_priority,
 	    0, vdev_indirect_child_io_done, zio));
@@ -1090,8 +1095,12 @@ vdev_indirect_io_start(zio_t *zio)
 	spa_t *spa = zio->io_spa;
 
 	ASSERT(spa_config_held(spa, SCL_ALL, RW_READER) != 0);
+#ifdef __FreeBSD__
+	if (zio->io_type == ZIO_TYPE_WRITE) {
+#else
 	if (zio->io_type != ZIO_TYPE_READ) {
 		ASSERT3U(zio->io_type, ==, ZIO_TYPE_WRITE);
+#endif
 		ASSERT((zio->io_flags &
 		    (ZIO_FLAG_SELF_HEAL | ZIO_FLAG_INDUCE_DAMAGE)) != 0);
 	}
