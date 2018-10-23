@@ -74,6 +74,7 @@ struct cpl_set_tcb_rpl;
 #include <linux/inetdevice.h>
 #include <linux/if_vlan.h>
 #include <net/netevent.h>
+#include <rdma/rdma_cm.h>
 
 static spinlock_t req_lock;
 static TAILQ_HEAD(c4iw_ep_list, c4iw_ep_common) req_list;
@@ -337,23 +338,27 @@ find_real_listen_ep(struct c4iw_listen_ep *master_lep, struct socket *so)
 {
 	struct adapter *adap = NULL;
 	struct c4iw_listen_ep *lep = NULL;
-	struct sockaddr_storage remote = { 0 };
-	struct ifnet *new_conn_ifp = NULL;
+	struct ifnet *ifp = NULL, *hw_ifp = NULL;
 	struct listen_port_info *port_info = NULL;
-	int err = 0, i = 0,
-	    found_portinfo = 0, found_lep = 0;
+	int i = 0, found_portinfo = 0, found_lep = 0;
 	uint16_t port;
 
-	/* STEP 1: get 'ifnet' based on socket's remote address */
-	GET_REMOTE_ADDR(&remote, so);
-
-	err = get_ifnet_from_raddr(&remote, &new_conn_ifp);
-	if (err) {
-		CTR4(KTR_IW_CXGBE, "%s: Failed to get ifnet, sock %p, "
-				"master_lep %p err %d",
-				__func__, so, master_lep, err);
-		return (NULL);
-	}
+	/*
+	 * STEP 1: Figure out 'ifp' of the physical interface, not pseudo
+	 * interfaces like vlan, lagg, etc..
+	 * TBD: lagg support, lagg + vlan support.
+	 */
+	ifp = TOEPCB(so)->l2te->ifp;
+	if (ifp->if_type == IFT_L2VLAN) {
+		hw_ifp = VLAN_TRUNKDEV(ifp);
+		if (hw_ifp == NULL) {
+			CTR4(KTR_IW_CXGBE, "%s: Failed to get parent ifnet of "
+				"vlan ifnet %p, sock %p, master_lep %p",
+				__func__, ifp, so, master_lep);
+			return (NULL);
+		}
+	} else
+		hw_ifp = ifp;
 
 	/* STEP 2: Find 'port_info' with listener local port address. */
 	port = (master_lep->com.local_addr.ss_family == AF_INET) ?
@@ -377,7 +382,7 @@ find_real_listen_ep(struct c4iw_listen_ep *master_lep, struct socket *so)
 	list_for_each_entry(lep, &port_info->lep_list, listen_ep_list) {
 		adap = lep->com.dev->rdev.adap;
 		for_each_port(adap, i) {
-			if (new_conn_ifp == adap->port[i]->vi[0].ifp) {
+			if (hw_ifp == adap->port[i]->vi[0].ifp) {
 				found_lep =1;
 				goto out;
 			}
@@ -1191,7 +1196,7 @@ static int enable_tcp_window_scaling = 1;
 SYSCTL_INT(_hw_iw_cxgbe, OID_AUTO, enable_tcp_window_scaling, CTLFLAG_RWTUN, &enable_tcp_window_scaling, 0,
 		"Enable tcp window scaling (default = 1)");
 
-int c4iw_debug = 1;
+int c4iw_debug = 0;
 SYSCTL_INT(_hw_iw_cxgbe, OID_AUTO, c4iw_debug, CTLFLAG_RWTUN, &c4iw_debug, 0,
 		"Enable debug logging (default = 0)");
 
@@ -2510,6 +2515,10 @@ int c4iw_connect(struct iw_cm_id *cm_id, struct iw_cm_conn_param *conn_param)
 	struct c4iw_dev *dev = to_c4iw_dev(cm_id->device);
 	struct c4iw_ep *ep = NULL;
 	struct ifnet    *nh_ifp;        /* Logical egress interface */
+#ifdef VIMAGE
+	struct rdma_cm_id *rdma_id = (struct rdma_cm_id*)cm_id->context;
+	struct vnet *vnet = rdma_id->route.addr.dev_addr.net;
+#endif
 
 	CTR2(KTR_IW_CXGBE, "%s:ccB %p", __func__, cm_id);
 
@@ -2555,7 +2564,10 @@ int c4iw_connect(struct iw_cm_id *cm_id, struct iw_cm_conn_param *conn_param)
 	ref_qp(ep);
 	ep->com.thread = curthread;
 
+	CURVNET_SET(vnet);
 	err = get_ifnet_from_raddr(&cm_id->remote_addr, &nh_ifp);
+	CURVNET_RESTORE();
+
 	if (err) {
 
 		CTR2(KTR_IW_CXGBE, "%s:cc7 %p", __func__, ep);
@@ -2798,7 +2810,10 @@ int c4iw_ep_disconnect(struct c4iw_ep *ep, int abrupt, gfp_t gfp)
 
 			if (!ep->parent_ep)
 				ep->com.state = MORIBUND;
+
+			CURVNET_SET(ep->com.so->so_vnet);
 			sodisconnect(ep->com.so);
+			CURVNET_RESTORE();
 		}
 
 	}

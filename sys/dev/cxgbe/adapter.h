@@ -70,7 +70,7 @@ prefetch(void *x)
 	__asm volatile("prefetcht0 %0" :: "m" (*(unsigned long *)x));
 }
 #else
-#define prefetch(x)
+#define prefetch(x) __builtin_prefetch(x)
 #endif
 
 #ifndef SYSCTL_ADD_UQUAD
@@ -289,7 +289,6 @@ struct port_info {
 	uint8_t  rx_e_chan_map;	/* rx TP e-channel bitmap */
 
 	struct link_config link_cfg;
-	struct link_config old_link_cfg;
 	struct ifmedia media;
 
 	struct timeval last_refreshed;
@@ -422,7 +421,7 @@ struct sge_eq {
 	struct mtx eq_lock;
 
 	struct tx_desc *desc;	/* KVA of descriptor ring */
-	uint16_t doorbells;
+	uint8_t doorbells;
 	volatile uint32_t *udb;	/* KVA of doorbell (lies within BAR2) */
 	u_int udb_qid;		/* relative qid within the doorbell page */
 	uint16_t sidx;		/* index of the entry with the status page */
@@ -692,7 +691,7 @@ struct sge_nm_txq {
 	uint16_t equiqidx;	/* EQUIQ last requested at this pidx */
 	uint16_t equeqidx;	/* EQUEQ last requested at this pidx */
 	uint16_t dbidx;		/* pidx of the most recent doorbell */
-	uint16_t doorbells;
+	uint8_t doorbells;
 	volatile uint32_t *udb;
 	u_int udb_qid;
 	u_int cntxt_id;
@@ -804,7 +803,7 @@ struct adapter {
 	struct l2t_data *l2t;	/* L2 table */
 	struct tid_info tids;
 
-	uint16_t doorbells;
+	uint8_t doorbells;
 	int offload_map;	/* ports with IFCAP_TOE enabled */
 	int active_ulds;	/* ULDs activated on this adapter */
 	int flags;
@@ -1050,52 +1049,6 @@ t4_os_set_hw_addr(struct port_info *pi, uint8_t hw_addr[])
 {
 
 	bcopy(hw_addr, pi->vi[0].hw_addr, ETHER_ADDR_LEN);
-}
-
-static inline bool
-is_10G_port(const struct port_info *pi)
-{
-
-	return ((pi->link_cfg.supported & FW_PORT_CAP_SPEED_10G) != 0);
-}
-
-static inline bool
-is_25G_port(const struct port_info *pi)
-{
-
-	return ((pi->link_cfg.supported & FW_PORT_CAP_SPEED_25G) != 0);
-}
-
-static inline bool
-is_40G_port(const struct port_info *pi)
-{
-
-	return ((pi->link_cfg.supported & FW_PORT_CAP_SPEED_40G) != 0);
-}
-
-static inline bool
-is_100G_port(const struct port_info *pi)
-{
-
-	return ((pi->link_cfg.supported & FW_PORT_CAP_SPEED_100G) != 0);
-}
-
-static inline int
-port_top_speed(const struct port_info *pi)
-{
-
-	if (pi->link_cfg.supported & FW_PORT_CAP_SPEED_100G)
-		return (100);
-	if (pi->link_cfg.supported & FW_PORT_CAP_SPEED_40G)
-		return (40);
-	if (pi->link_cfg.supported & FW_PORT_CAP_SPEED_25G)
-		return (25);
-	if (pi->link_cfg.supported & FW_PORT_CAP_SPEED_10G)
-		return (10);
-	if (pi->link_cfg.supported & FW_PORT_CAP_SPEED_1G)
-		return (1);
-
-	return (0);
 }
 
 static inline int

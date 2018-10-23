@@ -260,6 +260,8 @@ assign_rxopt(struct tcpcb *tp, unsigned int opt)
 		n = sizeof(struct ip6_hdr) + sizeof(struct tcphdr);
 	else
 		n = sizeof(struct ip) + sizeof(struct tcphdr);
+	if (V_tcp_do_rfc1323)
+		n += TCPOLEN_TSTAMP_APPA;
 	tp->t_maxseg = sc->params.mtus[G_TCPOPT_MSS(opt)] - n;
 
 	CTR4(KTR_CXGBE, "%s: tid %d, mtu_idx %u (%u)", __func__, toep->tid,
@@ -524,7 +526,7 @@ write_tx_wr(void *dst, struct toepcb *toep, unsigned int immdlen,
 	if (txalign > 0) {
 		struct tcpcb *tp = intotcpcb(toep->inp);
 
-		if (plen < 2 * tp->t_maxseg || is_10G_port(toep->vi->pi))
+		if (plen < 2 * tp->t_maxseg)
 			txwr->lsodisable_to_flags |=
 			    htobe32(F_FW_OFLD_TX_DATA_WR_LSODISABLE);
 		else

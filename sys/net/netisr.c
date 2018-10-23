@@ -1308,6 +1308,7 @@ netisr_init(void *arg)
 		netisr_start_swi(pc->pc_cpuid, pc);
 	}
 #else
+	KASSERT(curcpu == 0, ("%s: not on CPU 0", __func__));
 	netisr_start_swi(curcpu, pcpu_find(curcpu));
 #endif
 }

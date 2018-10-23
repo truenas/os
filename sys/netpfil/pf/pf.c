@@ -1454,9 +1454,11 @@ pf_purge_thread(void *unused __unused)
 	VNET_ITERATOR_DECL(vnet_iter);
 	u_int idx = 0;
 
+	PF_RULES_RLOCK_TRACKER;
+
 	for (;;) {
 		PF_RULES_RLOCK();
-		rw_sleep(pf_purge_thread, &pf_rules_lock, 0, "pftm", hz / 10);
+		rm_sleep(pf_purge_thread, &pf_rules_lock, 0, "pftm", hz / 10);
 		PF_RULES_RUNLOCK();
 
 		VNET_LIST_RLOCK();
@@ -1705,24 +1707,28 @@ pf_purge_expired_states(u_int i, int maxcheck)
 	while (maxcheck > 0) {
 
 		ih = &V_pf_idhash[i];
+
+		/* only take the lock if we expect to do work */
+		if (!LIST_EMPTY(&ih->states)) {
 relock:
-		PF_HASHROW_LOCK(ih);
-		LIST_FOREACH(s, &ih->states, entry) {
-			if (pf_state_expires(s) <= time_uptime) {
-				V_pf_status.states -=
-				    pf_unlink_state(s, PF_ENTER_LOCKED);
-				goto relock;
+			PF_HASHROW_LOCK(ih);
+			LIST_FOREACH(s, &ih->states, entry) {
+				if (pf_state_expires(s) <= time_uptime) {
+					V_pf_status.states -=
+					    pf_unlink_state(s, PF_ENTER_LOCKED);
+					goto relock;
+				}
+				s->rule.ptr->rule_flag |= PFRULE_REFS;
+				if (s->nat_rule.ptr != NULL)
+					s->nat_rule.ptr->rule_flag |= PFRULE_REFS;
+				if (s->anchor.ptr != NULL)
+					s->anchor.ptr->rule_flag |= PFRULE_REFS;
+				s->kif->pfik_flags |= PFI_IFLAG_REFS;
+				if (s->rt_kif)
+					s->rt_kif->pfik_flags |= PFI_IFLAG_REFS;
 			}
-			s->rule.ptr->rule_flag |= PFRULE_REFS;
-			if (s->nat_rule.ptr != NULL)
-				s->nat_rule.ptr->rule_flag |= PFRULE_REFS;
-			if (s->anchor.ptr != NULL)
-				s->anchor.ptr->rule_flag |= PFRULE_REFS;
-			s->kif->pfik_flags |= PFI_IFLAG_REFS;
-			if (s->rt_kif)
-				s->rt_kif->pfik_flags |= PFI_IFLAG_REFS;
+			PF_HASHROW_UNLOCK(ih);
 		}
-		PF_HASHROW_UNLOCK(ih);
 
 		/* Return when we hit end of hash. */
 		if (++i > pf_hashmask) {
@@ -5908,6 +5914,8 @@ pf_test(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb *
 	struct pf_pdesc		 pd;
 	int			 off, dirndx, pqid = 0;
 
+	PF_RULES_RLOCK_TRACKER;
+
 	M_ASSERTPKTHDR(m);
 
 	if (!V_pf_status.running)
@@ -6295,6 +6303,7 @@ pf_test6(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb 
 	struct pf_pdesc		 pd;
 	int			 off, terminal = 0, dirndx, rh_cnt = 0, pqid = 0;
 
+	PF_RULES_RLOCK_TRACKER;
 	M_ASSERTPKTHDR(m);
 
 	if (!V_pf_status.running)
