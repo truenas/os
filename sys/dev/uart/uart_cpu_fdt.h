@@ -54,5 +54,6 @@ int uart_cpu_fdt_probe(struct uart_class **, bus_space_tag_t *,
     bus_space_handle_t *, int *, u_int *, u_int *);
 int uart_fdt_get_clock(phandle_t node, pcell_t *cell);
 int uart_fdt_get_shift(phandle_t node, pcell_t *cell);
+int uart_fdt_get_io_width(phandle_t node, pcell_t *cell);
 
 #endif /* _DEV_UART_CPU_FDT_H_ */

@@ -1,9 +1,10 @@
 /*-
- * Copyright (c) 2014 Robert N. M. Watson
+ * Copyright (c) 2015 Michal Meloun
+ * Copyright (c) 2016 The FreeBSD Foundation
  * All rights reserved.
  *
- * This software was developed at the University of Cambridge Computer
- * Laboratory with support from a grant from Google, Inc.
+ * This software was developed by Andrew Turner under
+ * sponsorship from the FreeBSD Foundation.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,17 +30,40 @@
  * $FreeBSD$
  */
 
+#ifndef _DEV_UART_CPU_ACPI_H_
+#define _DEV_UART_CPU_ACPI_H_
+
+#include <sys/linker_set.h>
+
+struct uart_class;
+
+struct acpi_uart_compat_data {
+	const char *cd_hid;
+	struct uart_class *cd_class;
+
+	uint16_t cd_port_subtype;
+	int cd_regshft;
+	int cd_regiowidth;
+	int cd_rclk;
+	int cd_quirks;
+	const char *cd_desc;
+};
+
 /*
- * Historically, the key userspace and kernel Capsicum definitions were found
- * in this file.  However, it conflicted with POSIX.1e's capability.h, so has
- * been renamed capsicum.h.  The file remains for backwards compatibility
- * reasons as a nested include.  It is expected to be removed before
- * FreeBSD 13.
+ * If your UART driver implements only uart_class and uses uart_cpu_acpi.c
+ * for device instantiation, then use UART_ACPI_CLASS_AND_DEVICE for its
+ * declaration
  */
-#ifndef _SYS_CAPABILITY_H_
-#define	_SYS_CAPABILITY_H_
+SET_DECLARE(uart_acpi_class_and_device_set, struct acpi_uart_compat_data);
+#define UART_ACPI_CLASS_AND_DEVICE(data)				\
+	DATA_SET(uart_acpi_class_and_device_set, data)
 
-#warning this file includes <sys/capability.h> which is deprecated
-#include <sys/capsicum.h>
+/*
+ * If your UART driver implements uart_class and custom device layer,
+ * then use UART_ACPI_CLASS for its declaration
+ */
+SET_DECLARE(uart_acpi_class_set, struct acpi_uart_compat_data);
+#define UART_ACPI_CLASS(data)				\
+	DATA_SET(uart_acpi_class_set, data)
 
-#endif /* !_SYS_CAPABILITY_H_ */
+#endif /* _DEV_UART_CPU_ACPI_H_ */

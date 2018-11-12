@@ -3,4 +3,4 @@
  */
 /* $FreeBSD$ */
 
-#include <x86/intr_machdep.h>
+#include <x86/acpica_machdep.h>
