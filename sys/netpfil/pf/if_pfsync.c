@@ -279,6 +279,7 @@ static void	pfsync_bulk_status(u_int8_t);
 static void	pfsync_bulk_update(void *);
 static void	pfsync_bulk_fail(void *);
 
+static void	pfsync_detach_ifnet(struct ifnet *);
 #ifdef IPSEC
 static void	pfsync_update_net_tdb(struct pfsync_tdb *);
 #endif
@@ -2288,6 +2289,29 @@ pfsync_multicast_cleanup(struct pfsync_softc *sc)
 	imo->imo_multicast_ifp = NULL;
 }
 
+void
+pfsync_detach_ifnet(struct ifnet *ifp)
+{
+	struct pfsync_softc *sc = V_pfsyncif;
+
+	if (sc == NULL)
+		return;
+
+	PFSYNC_LOCK(sc);
+
+	if (sc->sc_sync_if == ifp) {
+		/* We don't need mutlicast cleanup here, because the interface
+		 * is going away. We do need to ensure we don't try to do
+		 * cleanup later.
+		 */
+		sc->sc_imo.imo_membership = NULL;
+		sc->sc_imo.imo_multicast_ifp = NULL;
+		sc->sc_sync_if = NULL;
+	}
+
+	PFSYNC_UNLOCK(sc);
+}
+
 #ifdef INET
 extern  struct domain inetdomain;
 static struct protosw in_pfsync_protosw = {
@@ -2371,6 +2395,8 @@ pfsync_init()
 #ifdef INET
 	int error;
 
+	pfsync_detach_ifnet_ptr = pfsync_detach_ifnet;
+
 	error = pf_proto_register(PF_INET, &in_pfsync_protosw);
 	if (error)
 		return (error);
@@ -2387,6 +2413,7 @@ pfsync_init()
 static void
 pfsync_uninit()
 {
+	pfsync_detach_ifnet_ptr = NULL;
 
 #ifdef INET
 	ipproto_unregister(IPPROTO_PFSYNC);
