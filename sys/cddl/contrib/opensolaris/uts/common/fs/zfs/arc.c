@@ -390,7 +390,7 @@ static void
 arc_free_target_init(void *unused __unused)
 {
 
-	zfs_arc_free_target = vm_pageout_wakeup_thresh;
+	zfs_arc_free_target = vm_cnt.v_free_target;
 }
 SYSINIT(arc_free_target_init, SI_SUB_KTHREAD_PAGE, SI_ORDER_ANY,
     arc_free_target_init, NULL);
@@ -4244,7 +4244,7 @@ arc_flush(spa_t *spa, boolean_t retry)
 	(void) arc_flush_state(arc_mfu_ghost, guid, ARC_BUFC_METADATA, retry);
 }
 
-void
+uint64_t
 arc_shrink(int64_t to_free)
 {
 	uint64_t asize = aggsum_value(&arc_size);
@@ -4272,8 +4272,9 @@ arc_shrink(int64_t to_free)
 	if (asize > arc_c) {
 		DTRACE_PROBE2(arc__shrink_adjust, uint64_t, asize,
 			uint64_t, arc_c);
-		(void) arc_adjust();
+		return (arc_adjust());
 	}
+	return (0);
 }
 
 typedef enum free_memory_reason_t {
@@ -4615,7 +4616,7 @@ arc_reclaim_thread(void *unused __unused)
 				to_free = MAX(to_free, ptob(needfree));
 #endif
 #endif
-				arc_shrink(to_free);
+				evicted += arc_shrink(to_free);
 			}
 		} else if (free_memory < arc_c >> arc_no_grow_shift) {
 			arc_no_grow = B_TRUE;
