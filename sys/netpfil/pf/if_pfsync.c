@@ -279,6 +279,7 @@ static void	pfsync_bulk_status(u_int8_t);
 static void	pfsync_bulk_update(void *);
 static void	pfsync_bulk_fail(void *);
 
+static void	pfsync_detach_ifnet(struct ifnet *);
 #ifdef IPSEC
 static void	pfsync_update_net_tdb(struct pfsync_tdb *);
 #endif
@@ -1360,10 +1361,10 @@ pfsyncioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		sc->sc_maxupdates = pfsyncr.pfsyncr_maxupdates;
 		if (pfsyncr.pfsyncr_defer) {
 			sc->sc_flags |= PFSYNCF_DEFER;
-			pfsync_defer_ptr = pfsync_defer;
+			V_pfsync_defer_ptr = pfsync_defer;
 		} else {
 			sc->sc_flags &= ~PFSYNCF_DEFER;
-			pfsync_defer_ptr = NULL;
+			V_pfsync_defer_ptr = NULL;
 		}
 
 		if (sifp == NULL) {
@@ -1391,6 +1392,7 @@ pfsyncioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			if (error) {
 				if_rele(sifp);
 				free(mship, M_PFSYNC);
+				PFSYNC_UNLOCK(sc);
 				return (error);
 			}
 		}
@@ -2290,6 +2292,29 @@ pfsync_multicast_cleanup(struct pfsync_softc *sc)
 	imo->imo_multicast_ifp = NULL;
 }
 
+void
+pfsync_detach_ifnet(struct ifnet *ifp)
+{
+	struct pfsync_softc *sc = V_pfsyncif;
+
+	if (sc == NULL)
+		return;
+
+	PFSYNC_LOCK(sc);
+
+	if (sc->sc_sync_if == ifp) {
+		/* We don't need mutlicast cleanup here, because the interface
+		 * is going away. We do need to ensure we don't try to do
+		 * cleanup later.
+		 */
+		sc->sc_imo.imo_membership = NULL;
+		sc->sc_imo.imo_multicast_ifp = NULL;
+		sc->sc_sync_if = NULL;
+	}
+
+	PFSYNC_UNLOCK(sc);
+}
+
 #ifdef INET
 extern  struct domain inetdomain;
 static struct protosw in_pfsync_protosw = {
@@ -2309,12 +2334,12 @@ pfsync_pointers_init()
 {
 
 	PF_RULES_WLOCK();
-	pfsync_state_import_ptr = pfsync_state_import;
-	pfsync_insert_state_ptr = pfsync_insert_state;
-	pfsync_update_state_ptr = pfsync_update_state;
-	pfsync_delete_state_ptr = pfsync_delete_state;
-	pfsync_clear_states_ptr = pfsync_clear_states;
-	pfsync_defer_ptr = pfsync_defer;
+	V_pfsync_state_import_ptr = pfsync_state_import;
+	V_pfsync_insert_state_ptr = pfsync_insert_state;
+	V_pfsync_update_state_ptr = pfsync_update_state;
+	V_pfsync_delete_state_ptr = pfsync_delete_state;
+	V_pfsync_clear_states_ptr = pfsync_clear_states;
+	V_pfsync_defer_ptr = pfsync_defer;
 	PF_RULES_WUNLOCK();
 }
 
@@ -2323,12 +2348,12 @@ pfsync_pointers_uninit()
 {
 
 	PF_RULES_WLOCK();
-	pfsync_state_import_ptr = NULL;
-	pfsync_insert_state_ptr = NULL;
-	pfsync_update_state_ptr = NULL;
-	pfsync_delete_state_ptr = NULL;
-	pfsync_clear_states_ptr = NULL;
-	pfsync_defer_ptr = NULL;
+	V_pfsync_state_import_ptr = NULL;
+	V_pfsync_insert_state_ptr = NULL;
+	V_pfsync_update_state_ptr = NULL;
+	V_pfsync_delete_state_ptr = NULL;
+	V_pfsync_clear_states_ptr = NULL;
+	V_pfsync_defer_ptr = NULL;
 	PF_RULES_WUNLOCK();
 }
 
@@ -2345,6 +2370,8 @@ vnet_pfsync_init(const void *unused __unused)
 		if_clone_detach(V_pfsync_cloner);
 		log(LOG_INFO, "swi_add() failed in %s\n", __func__);
 	}
+
+	pfsync_pointers_init();
 }
 VNET_SYSINIT(vnet_pfsync_init, SI_SUB_PROTO_FIREWALL, SI_ORDER_ANY,
     vnet_pfsync_init, NULL);
@@ -2353,14 +2380,13 @@ static void
 vnet_pfsync_uninit(const void *unused __unused)
 {
 
+	pfsync_pointers_uninit();
+
 	if_clone_detach(V_pfsync_cloner);
 	swi_remove(V_pfsync_swi_cookie);
 }
-/*
- * Detach after pf is gone; otherwise we might touch pfsync memory
- * from within pf after freeing pfsync.
- */
-VNET_SYSUNINIT(vnet_pfsync_uninit, SI_SUB_INIT_IF, SI_ORDER_SECOND,
+
+VNET_SYSUNINIT(vnet_pfsync_uninit, SI_SUB_PROTO_FIREWALL, SI_ORDER_FOURTH,
     vnet_pfsync_uninit, NULL);
 
 static int
@@ -2368,6 +2394,8 @@ pfsync_init()
 {
 #ifdef INET
 	int error;
+
+	pfsync_detach_ifnet_ptr = pfsync_detach_ifnet;
 
 	error = pf_proto_register(PF_INET, &in_pfsync_protosw);
 	if (error)
@@ -2378,7 +2406,6 @@ pfsync_init()
 		return (error);
 	}
 #endif
-	pfsync_pointers_init();
 
 	return (0);
 }
@@ -2386,8 +2413,7 @@ pfsync_init()
 static void
 pfsync_uninit()
 {
-
-	pfsync_pointers_uninit();
+	pfsync_detach_ifnet_ptr = NULL;
 
 #ifdef INET
 	ipproto_unregister(IPPROTO_PFSYNC);
@@ -2403,12 +2429,6 @@ pfsync_modevent(module_t mod, int type, void *data)
 	switch (type) {
 	case MOD_LOAD:
 		error = pfsync_init();
-		break;
-	case MOD_QUIESCE:
-		/*
-		 * Module should not be unloaded due to race conditions.
-		 */
-		error = EBUSY;
 		break;
 	case MOD_UNLOAD:
 		pfsync_uninit();

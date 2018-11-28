@@ -733,7 +733,8 @@ vmx_init(int ipinum)
 		return (error);
 	}
 
-	guest_l1d_flush = (cpu_ia32_arch_caps & IA32_ARCH_CAP_RDCL_NO) == 0;
+	guest_l1d_flush = (cpu_ia32_arch_caps &
+	    IA32_ARCH_CAP_SKIP_L1DFL_VMENTRY) == 0;
 	TUNABLE_INT_FETCH("hw.vmm.l1d_flush", &guest_l1d_flush);
 
 	/*
@@ -2701,6 +2702,8 @@ vmx_run(void *arg, int vcpu, register_t rip, pmap_t pmap,
 	struct vm_exit *vmexit;
 	struct vlapic *vlapic;
 	uint32_t exit_reason;
+	struct region_descriptor gdtr, idtr;
+	uint16_t ldt_sel;
 
 	vmx = arg;
 	vm = vmx->vm;
@@ -2786,10 +2789,30 @@ vmx_run(void *arg, int vcpu, register_t rip, pmap_t pmap,
 			break;
 		}
 
+		/*
+		 * VM exits restore the base address but not the
+		 * limits of GDTR and IDTR.  The VMCS only stores the
+		 * base address, so VM exits set the limits to 0xffff.
+		 * Save and restore the full GDTR and IDTR to restore
+		 * the limits.
+		 *
+		 * The VMCS does not save the LDTR at all, and VM
+		 * exits clear LDTR as if a NULL selector were loaded.
+		 * The userspace hypervisor probably doesn't use a
+		 * LDT, but save and restore it to be safe.
+		 */
+		sgdt(&gdtr);
+		sidt(&idtr);
+		ldt_sel = sldt();
+
 		vmx_run_trace(vmx, vcpu);
 		vmx_dr_enter_guest(vmxctx);
 		rc = vmx_enter_guest(vmxctx, vmx, launched);
 		vmx_dr_leave_guest(vmxctx);
+
+		bare_lgdt(&gdtr);
+		lidt(&idtr);
+		lldt(ldt_sel);
 
 		/* Collect some information for VM exit processing */
 		vmexit->rip = rip = vmcs_guest_rip();

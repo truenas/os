@@ -33,8 +33,9 @@
 
 #include <sys/param.h>
 #include <sys/mman.h>
-#include <machine/sysarch.h>
 #include <machine/cpufunc.h>
+#include <machine/specialreg.h>
+#include <machine/sysarch.h>
 
 #include <dlfcn.h>
 #include <err.h>
@@ -135,6 +136,9 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 	int r;
 
 	r = -1;
+	symval = 0;
+	def = NULL;
+
 	/*
 	 * The dynamic loader may be called from a thread, we have
 	 * limited amounts of stack available so we cannot use alloca().
@@ -490,17 +494,26 @@ pre_init(void)
 
 }
 
+int __getosreldate(void);
+
 void
 allocate_initial_tls(Obj_Entry *objs)
 {
-    /*
-     * Fix the size of the static TLS block by using the maximum
-     * offset allocated so far and adding a bit for dynamic modules to
-     * use.
-     */
-    tls_static_space = tls_last_offset + RTLD_STATIC_TLS_EXTRA;
-    amd64_set_fsbase(allocate_tls(objs, 0,
-				  3*sizeof(Elf_Addr), sizeof(Elf_Addr)));
+	void *addr;
+
+	/*
+	 * Fix the size of the static TLS block by using the maximum
+	 * offset allocated so far and adding a bit for dynamic
+	 * modules to use.
+	 */
+	tls_static_space = tls_last_offset + RTLD_STATIC_TLS_EXTRA;
+
+	addr = allocate_tls(objs, 0, 3 * sizeof(Elf_Addr), sizeof(Elf_Addr));
+	if (__getosreldate() >= P_OSREL_WRFSBASE &&
+	    (cpu_stdext_feature & CPUID_STDEXT_FSGSBASE) != 0)
+		wrfsbase((uintptr_t)addr);
+	else
+		sysarch(AMD64_SET_FSBASE, &addr);
 }
 
 void *__tls_get_addr(tls_index *ti)

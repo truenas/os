@@ -498,8 +498,9 @@ knote_fork(struct knlist *list, int pid)
 
 	if (list == NULL)
 		return;
-	list->kl_lock(list->kl_lockarg);
 
+	memset(&kev, 0, sizeof(kev));
+	list->kl_lock(list->kl_lockarg);
 	SLIST_FOREACH(kn, &list->kl_list, kn_selnext) {
 		kq = kn->kn_kq;
 		KQ_LOCK(kq);
@@ -565,10 +566,10 @@ knote_fork(struct knlist *list, int pid)
 			kn->kn_fflags |= NOTE_TRACKERR;
 		if (kn->kn_fop->f_event(kn, NOTE_FORK))
 			KNOTE_ACTIVATE(kn, 0);
+		list->kl_lock(list->kl_lockarg);
 		KQ_LOCK(kq);
 		kn->kn_status &= ~KN_INFLUX;
 		KQ_UNLOCK_FLUX(kq);
-		list->kl_lock(list->kl_lockarg);
 	}
 	list->kl_unlock(list->kl_lockarg);
 }
@@ -1318,8 +1319,11 @@ findkn:
 					break;
 		}
 	} else {
-		if ((kev->flags & EV_ADD) == EV_ADD)
-			kqueue_expand(kq, fops, kev->ident, waitok);
+		if ((kev->flags & EV_ADD) == EV_ADD) {
+			error = kqueue_expand(kq, fops, kev->ident, waitok);
+			if (error != 0)
+				goto done;
+		}
 
 		KQ_LOCK(kq);
 
@@ -1391,6 +1395,8 @@ findkn:
 			kn->kn_kevent.flags &= ~(EV_ADD | EV_DELETE |
 			    EV_ENABLE | EV_DISABLE | EV_FORCEONESHOT);
 			kn->kn_status = KN_INFLUX|KN_DETACHED;
+			if ((kev->flags & EV_DISABLE) != 0)
+				kn->kn_status |= KN_DISABLED;
 
 			error = knote_attach(kn, kq);
 			KQ_UNLOCK(kq);
@@ -1427,6 +1433,11 @@ findkn:
 		KNOTE_ACTIVATE(kn, 1);
 	}
 
+	if ((kev->flags & EV_ENABLE) != 0)
+		kn->kn_status &= ~KN_DISABLED;
+	else if ((kev->flags & EV_DISABLE) != 0)
+		kn->kn_status |= KN_DISABLED;
+
 	/*
 	 * The user may change some filter values after the initial EV_ADD,
 	 * but doing so will not reset any filter which has already been
@@ -1443,19 +1454,17 @@ findkn:
 		kn->kn_sdata = kev->data;
 	}
 
+done_ev_add:
 	/*
 	 * We can get here with kn->kn_knlist == NULL.  This can happen when
 	 * the initial attach event decides that the event is "completed" 
-	 * already.  i.e. filt_procattach is called on a zombie process.  It
-	 * will call filt_proc which will remove it from the list, and NULL
+	 * already, e.g., filt_procattach() is called on a zombie process.  It
+	 * will call filt_proc() which will remove it from the list, and NULL
 	 * kn_knlist.
+	 *
+	 * KN_DISABLED will be stable while the knote is in flux, so the
+	 * unlocked read will not race with an update.
 	 */
-done_ev_add:
-	if ((kev->flags & EV_ENABLE) != 0)
-		kn->kn_status &= ~KN_DISABLED;
-	else if ((kev->flags & EV_DISABLE) != 0)
-		kn->kn_status |= KN_DISABLED;
-
 	if ((kn->kn_status & KN_DISABLED) == 0)
 		event = kn->kn_fop->f_event(kn, 0);
 	else
@@ -1549,12 +1558,12 @@ kqueue_expand(struct kqueue *kq, struct filterops *fops, uintptr_t ident,
 {
 	struct klist *list, *tmp_knhash, *to_free;
 	u_long tmp_knhashmask;
-	int size;
-	int fd;
+	int error, fd, size;
 	int mflag = waitok ? M_WAITOK : M_NOWAIT;
 
 	KQ_NOTOWNED(kq);
 
+	error = 0;
 	to_free = NULL;
 	if (fops->f_isfd) {
 		fd = ident;
@@ -1566,9 +1575,11 @@ kqueue_expand(struct kqueue *kq, struct filterops *fops, uintptr_t ident,
 			if (list == NULL)
 				return ENOMEM;
 			KQ_LOCK(kq);
-			if (kq->kq_knlistsize > fd) {
+			if ((kq->kq_state & KQ_CLOSING) != 0) {
 				to_free = list;
-				list = NULL;
+				error = EBADF;
+			} else if (kq->kq_knlistsize > fd) {
+				to_free = list;
 			} else {
 				if (kq->kq_knlist != NULL) {
 					bcopy(kq->kq_knlist, list,
@@ -1589,9 +1600,12 @@ kqueue_expand(struct kqueue *kq, struct filterops *fops, uintptr_t ident,
 			tmp_knhash = hashinit(KN_HASHSIZE, M_KQUEUE,
 			    &tmp_knhashmask);
 			if (tmp_knhash == NULL)
-				return ENOMEM;
+				return (ENOMEM);
 			KQ_LOCK(kq);
-			if (kq->kq_knhashmask == 0) {
+			if ((kq->kq_state & KQ_CLOSING) != 0) {
+				to_free = tmp_knhash;
+				error = EBADF;
+			} else if (kq->kq_knhashmask == 0) {
 				kq->kq_knhash = tmp_knhash;
 				kq->kq_knhashmask = tmp_knhashmask;
 			} else {
@@ -1603,7 +1617,7 @@ kqueue_expand(struct kqueue *kq, struct filterops *fops, uintptr_t ident,
 	free(to_free, M_KQUEUE);
 
 	KQ_NOTOWNED(kq);
-	return 0;
+	return (error);
 }
 
 static void
@@ -2464,6 +2478,8 @@ knote_attach(struct knote *kn, struct kqueue *kq)
 	KASSERT(kn->kn_status & KN_INFLUX, ("knote not marked INFLUX"));
 	KQ_OWNED(kq);
 
+	if ((kq->kq_state & KQ_CLOSING) != 0)
+		return (EBADF);
 	if (kn->kn_fop->f_isfd) {
 		if (kn->kn_id >= kq->kq_knlistsize)
 			return (ENOMEM);
