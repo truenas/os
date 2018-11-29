@@ -304,6 +304,8 @@ vm_page_blacklist_add(vm_paddr_t pa, bool verbose)
 
 	mtx_lock(&vm_page_queue_free_mtx);
 	ret = vm_phys_unfree_page(m);
+	if (ret != 0)
+		vm_phys_freecnt_adj(m, -1);
 	mtx_unlock(&vm_page_queue_free_mtx);
 	if (ret) {
 		TAILQ_INSERT_TAIL(&blacklist_head, m, listq);
