@@ -307,7 +307,7 @@ vm_page_blacklist_add(vm_paddr_t pa, bool verbose)
 	if (ret != 0)
 		vm_phys_freecnt_adj(m, -1);
 	mtx_unlock(&vm_page_queue_free_mtx);
-	if (ret) {
+	if (ret != 0) {
 		TAILQ_INSERT_TAIL(&blacklist_head, m, listq);
 		if (verbose)
 			printf("Skipping page with pa 0x%jx\n", (uintmax_t)pa);
