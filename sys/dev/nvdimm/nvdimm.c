@@ -363,6 +363,7 @@ struct nvdimm_child {
 	int domain;
 	int interleave;
 	uint64_t size;
+	uint64_t arg3;
 };
 
 /* 2f10e7a4-9e91-11e4-89d3-123b93f75cba */
@@ -393,7 +394,8 @@ static const uint8_t nvdimm_dsm_guid2[] = {
 };
 
 static ACPI_OBJECT *
-evaluate_dsm(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func)
+evaluate_dsm(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func,
+    ACPI_OBJECT *package)
 {
 	ACPI_BUFFER output = { ACPI_ALLOCATE_BUFFER, NULL };
 	ACPI_OBJECT_LIST input;
@@ -409,9 +411,13 @@ evaluate_dsm(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func)
 	params[1].Integer.Value = rev;
 	params[2].Type = ACPI_TYPE_INTEGER;
 	params[2].Integer.Value = func;
-	params[3].Type = ACPI_TYPE_PACKAGE;
-	params[3].Package.Count = 0;
-	params[3].Package.Elements = NULL;
+	if (package) {
+		params[3] = *package;
+	} else {
+		params[3].Type = ACPI_TYPE_PACKAGE;
+		params[3].Package.Count = 0;
+		params[3].Package.Elements = NULL;
+	}
 
 	ret = AcpiEvaluateObject(handle, "_DSM", &input, &output);
 	if (ACPI_FAILURE(ret))
@@ -422,13 +428,13 @@ evaluate_dsm(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func)
 
 static int
 evaluate_dsm_int(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func,
-    uint64_t *resp)
+    ACPI_OBJECT *package, uint64_t *resp)
 {
 	ACPI_OBJECT *obj;
 	uint64_t result;
 	int i, ret = 0;
 
-	obj = evaluate_dsm(handle, uuid, rev, func);
+	obj = evaluate_dsm(handle, uuid, rev, func, package);
 	if (obj == NULL)
 		return (ENXIO);
 
@@ -456,7 +462,7 @@ static int
 nvdimm_sysctl_raw(SYSCTL_HANDLER_ARGS)
 {
 	device_t dev = arg1;
-	ACPI_OBJECT *obj;
+	ACPI_OBJECT *obj, arg, argb;
 	struct nvdimm_child *ivar;
 	int error;
 
@@ -465,7 +471,14 @@ nvdimm_sysctl_raw(SYSCTL_HANDLER_ARGS)
 		return (error);
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
-	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, arg2);
+	argb.Type = ACPI_TYPE_BUFFER;
+	argb.Buffer.Pointer = (void *)&ivar->arg3;
+	argb.Buffer.Length = sizeof(ivar->arg3);
+	arg.Type = ACPI_TYPE_PACKAGE;
+	arg.Package.Count = 1;
+	arg.Package.Elements = &argb;
+	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, arg2,
+	    ivar->arg3 != UINT64_MAX ? &arg : NULL);
 	if (obj == NULL)
 		return (ENXIO);
 	if (obj->Type != ACPI_TYPE_BUFFER) {
@@ -476,6 +489,101 @@ nvdimm_sysctl_raw(SYSCTL_HANDLER_ARGS)
 	error = SYSCTL_OUT(req, obj->Buffer.Pointer, obj->Buffer.Length);
 
 	AcpiOsFree(obj);
+	if (error || !req->newptr)
+		return (error);
+	return (EINVAL);
+}
+
+static int
+nvdimm_read_i2c(device_t dev, int page, int off)
+{
+	ACPI_OBJECT *obj, arg, argb;
+	struct nvdimm_child *ivar;
+	int retval;
+	uint8_t buf[2], *res;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+	buf[0] = page;
+	buf[1] = off;
+	argb.Type = ACPI_TYPE_BUFFER;
+	argb.Buffer.Pointer = (void *)&buf;
+	argb.Buffer.Length = 2;
+	arg.Type = ACPI_TYPE_PACKAGE;
+	arg.Package.Count = 1;
+	arg.Package.Elements = &argb;
+	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, 27, &arg);
+	if (obj == NULL)
+		return (-1);
+	if (obj->Type != ACPI_TYPE_BUFFER || obj->Buffer.Length < 5) {
+		AcpiOsFree(obj);
+		return (-1);
+	}
+	res = obj->Buffer.Pointer;
+	if (res[0] != 0 || res[1] != 0 || res[2] != 0 || res[3] != 0) {
+		AcpiOsFree(obj);
+		return (-1);
+	}
+	retval = res[4];
+	AcpiOsFree(obj);
+	return (retval);
+}
+
+static int
+nvdimm_sysctl_dump_i2c(SYSCTL_HANDLER_ARGS)
+{
+	device_t dev = arg1;
+	struct nvdimm_child *ivar;
+	int error, page, off, val, snp, vsp, vnp;
+	struct sbuf sb;
+
+	error = priv_check(req->td, PRIV_SYSCTL_DEBUG);
+	if (error)
+		return (error);
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+
+	snp = nvdimm_read_i2c(dev, 0, 1);
+	if (snp < 0)
+		return (EINVAL);
+	vsp = nvdimm_read_i2c(dev, 0, 2);
+	if (vsp < 0)
+		return (EINVAL);
+	vnp = nvdimm_read_i2c(dev, 0, 3);
+	if (vnp < 0)
+		return (EINVAL);
+
+	sbuf_new_for_sysctl(&sb, NULL, 65536, req);
+
+	sbuf_printf(&sb, "STD_NUM_PAGES: %d\n", snp);
+	sbuf_printf(&sb, "VENDOR_START_PAGES: %d\n", vsp);
+	sbuf_printf(&sb, "VENDOR_NUM_PAGES: %d\n", vnp);
+
+	for (page = 0; page < snp; page++) {
+		sbuf_printf(&sb, "Page 0x%02x:\n", page);
+		for (off = 0; off < 256; off++) {
+			val = nvdimm_read_i2c(dev, page, off);
+			if (val < 0)
+				break;
+			sbuf_printf(&sb, " %02x", val);
+			if ((off % 16) == 15)
+				sbuf_printf(&sb, "\n");
+		}
+	}
+	for (page = vsp; page < vsp+vnp; page++) {
+		sbuf_printf(&sb, "Page 0x%02x:\n", page);
+		for (off = 0; off < 256; off++) {
+			val = nvdimm_read_i2c(dev, page, off);
+			if (val < 0)
+				break;
+			sbuf_printf(&sb, " %02x", val);
+			if ((off % 16) == 15)
+				sbuf_printf(&sb, "\n");
+		}
+	}
+
+	error = sbuf_finish(&sb);
+	sbuf_delete(&sb);
+
 	if (error || !req->newptr)
 		return (error);
 	return (EINVAL);
@@ -495,7 +603,7 @@ nvdimm_sysctl(SYSCTL_HANDLER_ARGS)
 		return (error);
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
-	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, arg2);
+	obj = evaluate_dsm(ivar->handle, nvdimm_dsm_guid1, 1, arg2, NULL);
 	if (obj == NULL)
 		return (ENXIO);
 	if (obj->Type != ACPI_TYPE_BUFFER || obj->Buffer.Length < 4) {
@@ -607,13 +715,14 @@ nvdimm_attach(device_t dev)
 	int i;
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+	ivar->arg3 = UINT64_MAX;
 
 	status = AcpiInstallNotifyHandler(ivar->handle, ACPI_DEVICE_NOTIFY,
 	    nvdimm_notify, dev);
 	if (ACPI_FAILURE(status))
 		device_printf(dev, "failed to install notify handler\n");
 
-	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid1, 1, 0, &val) == 0
+	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid1, 1, 0, NULL, &val) == 0
 	    && val > 1) {
 		if (bootverbose)
 			device_printf(dev, "Microsoft _DSM supported (0x%jx)\n", val);
@@ -629,6 +738,13 @@ nvdimm_attach(device_t dev)
 		    "es_health", CTLFLAG_RD | CTLTYPE_STRING |
 		    CTLFLAG_MPSAFE, dev, 12,
 		    nvdimm_sysctl, "A", "Get Energy Source Health Info");
+		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+		    "dump_i2c", CTLFLAG_RD | CTLTYPE_STRING |
+		    CTLFLAG_MPSAFE | CTLFLAG_SKIP, dev, 0,
+		    nvdimm_sysctl_dump_i2c, "A", "Dump all i2c pages");
+		SYSCTL_ADD_QUAD(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+		    "arg3", CTLFLAG_RW,
+		    &ivar->arg3, "Argument 3 for raw function calls");
 		for (i = 0; i < 32; i++) {
 			snprintf(buf, sizeof(buf), "func%d", i);
 			SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
@@ -637,7 +753,7 @@ nvdimm_attach(device_t dev)
 			    nvdimm_sysctl_raw, "S", "Raw result of function call");
 		}
 	}
-	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid2, 1, 0, &val) == 0
+	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid2, 1, 0, NULL, &val) == 0
 	    && val > 1) {
 		if (bootverbose)
 			device_printf(dev, "Intel _DSM supported (0x%jx)\n", val);
@@ -860,7 +976,7 @@ nvdimm_root_attach(device_t dev)
 
 	AcpiPutTable((ACPI_TABLE_HEADER *)nfit);
 
-	if (evaluate_dsm_int(acpi_get_handle(dev), nvdimm_root_dsm_guid, 1, 0, &val) == 0
+	if (evaluate_dsm_int(acpi_get_handle(dev), nvdimm_root_dsm_guid, 1, 0, NULL, &val) == 0
 	    && val > 1) {
 		if (bootverbose)
 			device_printf(dev, "_DSM supported (0x%jx)\n", val);
