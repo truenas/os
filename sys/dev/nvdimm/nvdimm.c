@@ -647,10 +647,18 @@ nvdimm_sysctl(SYSCTL_HANDLER_ARGS)
 		    "\017ES_HEALTH_ASSESSMENT_ERROR");
 		sbuf_printf(&sb, "Module Current Temperature: %d C\n",
 		    ((uint16_t)obj->Buffer.Pointer[7] << 8) | obj->Buffer.Pointer[6]);
-		sbuf_printf(&sb, "Error Threshold Status: 0x%x\n",
-		    obj->Buffer.Pointer[8]);
-		sbuf_printf(&sb, "Warning Threshold Status: 0x%x\n",
-		    obj->Buffer.Pointer[9]);
+		sbuf_printf(&sb, "Error Threshold Status: 0x%b\n",
+		    obj->Buffer.Pointer[8],
+		    "\020"
+		    "\001NVM_LIFETIME_ERROR"
+		    "\002ES_LIFETIME_ERROR"
+		    "\003ES_TEMP_ERROR");
+		sbuf_printf(&sb, "Warning Threshold Status: 0x%b\n",
+		    obj->Buffer.Pointer[9],
+		    "\020"
+		    "\001NVM_LIFETIME_WARNING"
+		    "\002ES_LIFETIME_WARNING"
+		    "\003ES_TEMP_WARNING");
 		sbuf_printf(&sb, "NVM Lifetime: %d%%\n",
 		    obj->Buffer.Pointer[10]);
 		sbuf_printf(&sb, "Count of DRAM Uncorrectable ECC Errors: %d\n",
@@ -743,7 +751,7 @@ nvdimm_attach(device_t dev)
 		    CTLFLAG_MPSAFE | CTLFLAG_SKIP, dev, 0,
 		    nvdimm_sysctl_dump_i2c, "A", "Dump all i2c pages");
 		SYSCTL_ADD_QUAD(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
-		    "arg3", CTLFLAG_RW,
+		    "arg3", CTLFLAG_RW | CTLFLAG_SKIP,
 		    &ivar->arg3, "Argument 3 for raw function calls");
 		for (i = 0; i < 32; i++) {
 			snprintf(buf, sizeof(buf), "func%d", i);
