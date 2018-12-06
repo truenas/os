@@ -1024,8 +1024,8 @@ mntsrv(struct svc_req *rqstp, SVCXPRT *transp)
 	case MOUNTPROC_MNT:
 	case MOUNTPROC_UMNT:
 	case MOUNTPROC_UMNTALL:
-		lookup_failed = getnameinfo(saddr, saddr->sa_len, host, sizeof host, 
-		    NULL, 0, 0);
+		lookup_failed = getnameinfo(saddr, saddr->sa_len, host,
+		    sizeof host, NULL, 0, 0);
 	}
 	getnameinfo(saddr, saddr->sa_len, numerichost,
 	    sizeof numerichost, NULL, 0, NI_NUMERICHOST);
