@@ -97,6 +97,7 @@
 #endif
 #define	NFSSTATEHASHSIZE	10	/* Size of server stateid hash table */
 #define	NFSLAYOUTHASHSIZE	100	/* Size of server layout hash table */
+#define	NFSLAYOUTHIGHWATER	1000000	/* Upper limit for # of layouts */
 #ifndef	NFSCLDELEGHIGHWATER
 #define	NFSCLDELEGHIGHWATER	10000	/* limit for client delegations */
 #endif
@@ -183,6 +184,7 @@ struct nfsd_nfsd_args {
 	int	dnshostlen;	/* Length of DNS names */
 	char	*dspath;	/* DS Mount path on MDS */
 	int	dspathlen;	/* Length of DS Mount path on MDS */
+	int	mirrorcnt;	/* Number of mirrors to create on DSs */
 	char	*mirror;	/* DS with same mirrorindex are mirrors */
 	int	mirrorlen;	/* Length of the mirrorindex array */
 };
@@ -197,6 +199,16 @@ struct nfsd_nfsd_args {
 #define	NFSDEV_MIRRORSTR	3
 #define	NFSDEV_MAXMIRRORS	4
 #define	NFSDEV_MAXVERS		4
+
+struct nfsd_pnfsd_args {
+	int	op;		/* Which pNFSd op to perform. */
+	char	*mdspath;	/* Path of MDS file. */
+	char	*dspath;	/* Path of recovered DS mounted on dir. */
+	char	*curdspath;	/* Path of current DS mounted on dir. */
+};
+
+#define	PNFSDOP_DELDSSERVER	1
+#define	PNFSDOP_COPYMR		2
 
 /* Old version. */
 struct nfsd_nfsd_oargs {

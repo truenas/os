@@ -69,20 +69,26 @@ int nfsrv_lease = NFSRV_LEASE;
 int ncl_mbuf_mlen = MLEN;
 int nfsd_enable_stringtouid = 0;
 int nfsrv_doflexfile = 0;
-int nfsrv_maxpnfsmirror = 1;
 static int nfs_enable_uidtostring = 0;
 static int nfs_suppress_32bits_warning = 0;
 NFSNAMEIDMUTEX;
 NFSSOCKMUTEX;
 extern int nfsrv_lughashsize;
 extern struct mtx nfsrv_dslock_mtx;
+extern volatile int nfsrv_devidcnt;
+extern int nfscl_debuglevel;
 extern struct nfsdevicehead nfsrv_devidhead;
 
 SYSCTL_DECL(_vfs_nfs);
 SYSCTL_INT(_vfs_nfs, OID_AUTO, enable_uidtostring, CTLFLAG_RW,
     &nfs_enable_uidtostring, 0, "Make nfs always send numeric owner_names");
+
 SYSCTL_INT(_vfs_nfs, OID_AUTO, suppress_32bits_warning, CTLFLAG_RW,
     &nfs_suppress_32bits_warning, 0, "Suppress \"> 32 bits\" warnings");
+
+int nfsrv_maxpnfsmirror = 1;
+SYSCTL_INT(_vfs_nfs, OID_AUTO, pnfsmirror, CTLFLAG_RD,
+    &nfsrv_maxpnfsmirror, 0, "Mirror level for pNFS service");
 
 /*
  * This array of structures indicates, for V4:
@@ -1824,15 +1830,13 @@ nfsv4_loadattr(struct nfsrv_descript *nd, vnode_t vp,
 				     j != NFSLAYOUT_NFSV4_1_FILES)))
 					*retcmpp = NFSERR_NOTSAME;
 			}
-			NFSDDSLOCK();
-			if (TAILQ_EMPTY(&nfsrv_devidhead)) {
+			if (nfsrv_devidcnt == 0) {
 				if (compare && !(*retcmpp) && i > 0)
 					*retcmpp = NFSERR_NOTSAME;
 			} else {
 				if (compare && !(*retcmpp) && i != 1)
 					*retcmpp = NFSERR_NOTSAME;
 			}
-			NFSDDSUNLOCK();
 			break;
 		case NFSATTRBIT_LAYOUTALIGNMENT:
 		case NFSATTRBIT_LAYOUTBLKSIZE:
@@ -2098,7 +2102,8 @@ APPLESTATIC int
 nfsv4_fillattr(struct nfsrv_descript *nd, struct mount *mp, vnode_t vp,
     NFSACL_T *saclp, struct vattr *vap, fhandle_t *fhp, int rderror,
     nfsattrbit_t *attrbitp, struct ucred *cred, NFSPROC_T *p, int isdgram,
-    int reterr, int supports_nfsv4acls, int at_root, uint64_t mounted_on_fileno)
+    int reterr, int supports_nfsv4acls, int at_root, uint64_t mounted_on_fileno,
+    struct statfs *pnfssf)
 {
 	int bitpos, retnum = 0;
 	u_int32_t *tl;
@@ -2500,25 +2505,45 @@ nfsv4_fillattr(struct nfsrv_descript *nd, struct mount *mp, vnode_t vp,
 			break;
 		case NFSATTRBIT_SPACEAVAIL:
 			NFSM_BUILD(tl, u_int32_t *, NFSX_HYPER);
-			if (priv_check_cred(cred, PRIV_VFS_BLOCKRESERVE, 0))
-				uquad = (u_int64_t)fs->f_bfree;
+			if (priv_check_cred(cred, PRIV_VFS_BLOCKRESERVE, 0)) {
+				if (pnfssf != NULL)
+					uquad = (u_int64_t)pnfssf->f_bfree;
+				else
+					uquad = (u_int64_t)fs->f_bfree;
+			} else {
+				if (pnfssf != NULL)
+					uquad = (u_int64_t)pnfssf->f_bavail;
+				else
+					uquad = (u_int64_t)fs->f_bavail;
+			}
+			if (pnfssf != NULL)
+				uquad *= pnfssf->f_bsize;
 			else
-				uquad = (u_int64_t)fs->f_bavail;
-			uquad *= fs->f_bsize;
+				uquad *= fs->f_bsize;
 			txdr_hyper(uquad, tl);
 			retnum += NFSX_HYPER;
 			break;
 		case NFSATTRBIT_SPACEFREE:
 			NFSM_BUILD(tl, u_int32_t *, NFSX_HYPER);
-			uquad = (u_int64_t)fs->f_bfree;
-			uquad *= fs->f_bsize;
+			if (pnfssf != NULL) {
+				uquad = (u_int64_t)pnfssf->f_bfree;
+				uquad *= pnfssf->f_bsize;
+			} else {
+				uquad = (u_int64_t)fs->f_bfree;
+				uquad *= fs->f_bsize;
+			}
 			txdr_hyper(uquad, tl);
 			retnum += NFSX_HYPER;
 			break;
 		case NFSATTRBIT_SPACETOTAL:
 			NFSM_BUILD(tl, u_int32_t *, NFSX_HYPER);
-			uquad = (u_int64_t)fs->f_blocks;
-			uquad *= fs->f_bsize;
+			if (pnfssf != NULL) {
+				uquad = (u_int64_t)pnfssf->f_blocks;
+				uquad *= pnfssf->f_bsize;
+			} else {
+				uquad = (u_int64_t)fs->f_blocks;
+				uquad *= fs->f_bsize;
+			}
 			txdr_hyper(uquad, tl);
 			retnum += NFSX_HYPER;
 			break;
@@ -2590,21 +2615,19 @@ nfsv4_fillattr(struct nfsrv_descript *nd, struct mount *mp, vnode_t vp,
 			break;
 		case NFSATTRBIT_FSLAYOUTTYPE:
 		case NFSATTRBIT_LAYOUTTYPE:
-			NFSDDSLOCK();
-			if (TAILQ_EMPTY(&nfsrv_devidhead))
+			if (nfsrv_devidcnt == 0)
 				siz = 1;
 			else
 				siz = 2;
-			NFSDDSUNLOCK();
 			if (siz == 2) {
 				NFSM_BUILD(tl, u_int32_t *, 2 * NFSX_UNSIGNED);
-				*tl++ = txdr_unsigned(1);	/* One entry. */
+				*tl++ = txdr_unsigned(1);       /* One entry. */
 				if (nfsrv_doflexfile != 0 ||
 				    nfsrv_maxpnfsmirror > 1)
 					*tl = txdr_unsigned(NFSLAYOUT_FLEXFILE);
 				else
 					*tl = txdr_unsigned(
-					    NFSLAYOUT_NFSV4_1_FILES);
+						NFSLAYOUT_NFSV4_1_FILES);
 			} else {
 				NFSM_BUILD(tl, u_int32_t *, NFSX_UNSIGNED);
 				*tl = 0;
@@ -4333,3 +4356,37 @@ nfsv4_freeslot(struct nfsclsession *sep, int slot)
 	mtx_unlock(&sep->nfsess_mtx);
 }
 
+/*
+ * Search for a matching pnfsd mirror device structure, base on the nmp arg.
+ * Return one if found, NULL otherwise.
+ */
+struct nfsdevice *
+nfsv4_findmirror(struct nfsmount *nmp)
+{
+	struct nfsdevice *ds, *fndds;
+	int fndmirror;
+
+	mtx_assert(NFSDDSMUTEXPTR, MA_OWNED);
+	/*
+	 * Search the DS server list for a match with nmp.
+	 * Remove the DS entry if found and there is a mirror.
+	 */
+	fndds = NULL;
+	fndmirror = 0;
+	if (nfsrv_devidcnt == 0)
+		return (fndds);
+	TAILQ_FOREACH(ds, &nfsrv_devidhead, nfsdev_list) {
+		if (ds->nfsdev_nmp == nmp) {
+			NFSCL_DEBUG(4, "fnd main ds\n");
+			fndds = ds;
+		} else if (ds->nfsdev_nmp != NULL)
+			fndmirror = 1;
+		if (fndds != NULL && fndmirror != 0)
+			break;
+	}
+	if (fndmirror == 0) {
+		NFSCL_DEBUG(4, "no mirror for DS\n");
+		return (NULL);
+	}
+	return (fndds);
+}

@@ -710,25 +710,18 @@ void nfsrvd_rcv(struct socket *, void *, int);
 #define	NFSSESSIONMUTEXPTR(s)	(&((s)->mtx))
 #define	NFSLOCKSESSION(s)	mtx_lock(&((s)->mtx))
 #define	NFSUNLOCKSESSION(s)	mtx_unlock(&((s)->mtx))
+#define	NFSLAYOUTMUTEXPTR(l)	(&((l)->mtx))
 #define	NFSLOCKLAYOUT(l)	mtx_lock(&((l)->mtx))
 #define	NFSUNLOCKLAYOUT(l)	mtx_unlock(&((l)->mtx))
+#define	NFSDDSMUTEXPTR		(&nfsrv_dslock_mtx)
 #define	NFSDDSLOCK()		mtx_lock(&nfsrv_dslock_mtx)
 #define	NFSDDSUNLOCK()		mtx_unlock(&nfsrv_dslock_mtx)
-#define	NFSDSCLOCKMUTEXPTR	(&nfsrv_dsclock_mtx)
-#define	NFSDSCLOCK()		mtx_lock(&nfsrv_dsclock_mtx)
-#define	NFSDSCUNLOCK()		mtx_unlock(&nfsrv_dsclock_mtx)
-#define	NFSDSRMLOCKMUTEXPTR	(&nfsrv_dsrmlock_mtx)
-#define	NFSDSRMLOCK()		mtx_lock(&nfsrv_dsrmlock_mtx)
-#define	NFSDSRMUNLOCK()		mtx_unlock(&nfsrv_dsrmlock_mtx)
-#define	NFSDWRPCLOCKMUTEXPTR	(&nfsrv_dwrpclock_mtx)
-#define	NFSDWRPCLOCK()		mtx_lock(&nfsrv_dwrpclock_mtx)
-#define	NFSDWRPCUNLOCK()	mtx_unlock(&nfsrv_dwrpclock_mtx)
-#define	NFSDSRPCLOCKMUTEXPTR	(&nfsrv_dsrpclock_mtx)
-#define	NFSDSRPCLOCK()		mtx_lock(&nfsrv_dsrpclock_mtx)
-#define	NFSDSRPCUNLOCK()	mtx_unlock(&nfsrv_dsrpclock_mtx)
-#define	NFSDARPCLOCKMUTEXPTR	(&nfsrv_darpclock_mtx)
-#define	NFSDARPCLOCK()		mtx_lock(&nfsrv_darpclock_mtx)
-#define	NFSDARPCUNLOCK()	mtx_unlock(&nfsrv_darpclock_mtx)
+#define	NFSDDONTLISTMUTEXPTR	(&nfsrv_dontlistlock_mtx)               
+#define	NFSDDONTLISTLOCK()	mtx_lock(&nfsrv_dontlistlock_mtx)       
+#define	NFSDDONTLISTUNLOCK()	mtx_unlock(&nfsrv_dontlistlock_mtx)     
+#define	NFSDRECALLMUTEXPTR	(&nfsrv_recalllock_mtx)                 
+#define	NFSDRECALLLOCK()	mtx_lock(&nfsrv_recalllock_mtx)         
+#define	NFSDRECALLUNLOCK()	mtx_unlock(&nfsrv_recalllock_mtx)       
 
 /*
  * Use these macros to initialize/free a mutex.
@@ -1066,6 +1059,15 @@ struct nfsreq {
  * used in both places that call getnewvnode().
  */
 extern const char nfs_vnode_tag[];
+
+/*
+ * Check for the errors that indicate a DS should be disabled.
+ * ENXIO indicates that the krpc cannot do an RPC on the DS.
+ * EIO is returned by the RPC as an indication of I/O problems on the
+ * server.
+ * Are there other fatal errors?
+ */
+#define        nfsds_failerr(e)        ((e) == ENXIO || (e) == EIO)            
 
 #endif	/* _KERNEL */
 

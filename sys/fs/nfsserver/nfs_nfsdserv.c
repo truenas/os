@@ -56,7 +56,8 @@ extern int nfsrv_enable_crossmntpt;
 extern int nfsrv_statehashsize;
 extern int nfsrv_layouthashsize;
 extern time_t nfsdev_time;
-extern struct nfsdevicehead nfsrv_devidhead;
+extern volatile int nfsrv_devidcnt;
+
 extern int nfsd_debuglevel;
 extern u_long sb_max_adj;
 extern int nfsrv_pnfsatime;
@@ -252,7 +253,7 @@ nfsrvd_getattr(struct nfsrv_descript *nd, int isdgram,
 				nd->nd_repstat = nfsvno_getfh(vp, &fh, p);
 			if (!nd->nd_repstat)
 				nd->nd_repstat = nfsrv_checkgetattr(nd, vp,
-				    &nva, &attrbits, nd->nd_cred, p);
+				    &nva, &attrbits, p);
 			if (nd->nd_repstat == 0) {
 				supports_nfsv4acls = nfs_supportsnfsv4acls(vp);
 				mp = vp->v_mount;
@@ -4001,7 +4002,7 @@ nfsrvd_exchangeid(struct nfsrv_descript *nd, __unused int isdgram,
 		confirm.lval[1] = 1;
 	else
 		confirm.lval[1] = 0;
-	if (TAILQ_EMPTY(&nfsrv_devidhead))
+	if (nfsrv_devidcnt == 0)
 		v41flags = NFSV4EXCH_USENONPNFS | NFSV4EXCH_USEPNFSDS;
  	else
  		v41flags = NFSV4EXCH_USEPNFSMDS;
@@ -4571,11 +4572,10 @@ APPLESTATIC int
 nfsrvd_layoutreturn(struct nfsrv_descript *nd, __unused int isdgram,
     vnode_t vp, NFSPROC_T *p, struct nfsexstuff *exp)
 {
-	uint32_t *tl;
+	uint32_t *tl, *layp;
 	nfsv4stateid_t stateid;
 	int error = 0, fnd, kind, layouttype, iomode, maxcnt, reclaim;
 	uint64_t offset, len;
-	char *layp;
 
 	layp = NULL;
 	if (nfs_rootfhset == 0 || nfsd_checkrootexp(nd) != 0) {
@@ -4616,7 +4616,7 @@ nfsrvd_layoutreturn(struct nfsrv_descript *nd, __unused int isdgram,
 		maxcnt = fxdr_unsigned(int, *tl);
 		if (maxcnt > 0) {
 			layp = malloc(maxcnt + 1, M_TEMP, M_WAITOK);
-			error = nfsrv_mtostr(nd, layp, maxcnt);
+			error = nfsrv_mtostr(nd, (char*)layp, maxcnt);
 			if (error != 0)
 				goto nfsmout;
 		}

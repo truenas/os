@@ -57,6 +57,8 @@ extern uid_t nfsrv_defaultuid;
 extern gid_t nfsrv_defaultgid;
 
 char nfs_v2pubfh[NFSX_V2FH];
+struct nfsdontlisthead nfsrv_dontlisthead;
+struct nfslayouthead nfsrv_recalllisthead;
 static nfstype newnfsv2_type[9] = { NFNON, NFREG, NFDIR, NFBLK, NFCHR, NFLNK,
     NFNON, NFCHR, NFNON };
 extern nfstype nfsv34_type[9];
@@ -2066,9 +2068,11 @@ nfsd_init(void)
 	    nfsrv_layouthashsize, M_NFSDSESSION, M_WAITOK | M_ZERO);
 	for (i = 0; i < nfsrv_layouthashsize; i++) {
 		mtx_init(&nfslayouthash[i].mtx, "nfslm", NULL, MTX_DEF);
-		LIST_INIT(&nfslayouthash[i].list);
+		TAILQ_INIT(&nfslayouthash[i].list);
 	}
 
+	LIST_INIT(&nfsrv_dontlisthead);
+	TAILQ_INIT(&nfsrv_recalllisthead);
 	/* and the v2 pubfh should be all zeros */
 	NFSBZERO(nfs_v2pubfh, NFSX_V2FH);
 }

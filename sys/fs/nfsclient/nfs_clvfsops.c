@@ -84,6 +84,7 @@ extern enum nfsiod_state ncl_iodwant[NFS_MAXASYNCDAEMON];
 extern struct nfsmount *ncl_iodmount[NFS_MAXASYNCDAEMON];
 extern struct mtx ncl_iod_mutex;
 NFSCLSTATEMUTEX;
+extern struct mtx nfsrv_dslock_mtx;
 
 MALLOC_DEFINE(M_NEWNFSREQ, "newnfsclient_req", "NFS request header");
 MALLOC_DEFINE(M_NEWNFSMNT, "newnfsmnt", "NFS mount struct");
@@ -1670,6 +1671,7 @@ nfs_unmount(struct mount *mp, int mntflags)
 	if (mntflags & MNT_FORCE)
 		flags |= FORCECLOSE;
 	nmp = VFSTONFS(mp);
+	error = 0;
 	/*
 	 * Goes something like this..
 	 * - Call vflush() to clear out vnodes for this filesystem
@@ -1678,6 +1680,12 @@ nfs_unmount(struct mount *mp, int mntflags)
 	 */
 	/* In the forced case, cancel any outstanding requests. */
 	if (mntflags & MNT_FORCE) {
+		NFSDDSLOCK();
+		if (nfsv4_findmirror(nmp) != NULL)
+			error = ENXIO;
+		NFSDDSUNLOCK();
+		if (error)
+			goto out;
 		error = newnfs_nmcancelreqs(nmp);
 		if (error)
 			goto out;
