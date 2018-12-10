@@ -60,6 +60,7 @@ SUBDIR=	adduser \
 	nologin \
 	pciconf \
 	periodic \
+	pnfsdscopymr \
 	pnfsdsfile \
 	pnfsdskill \
 	powerd \
