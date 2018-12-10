@@ -608,7 +608,7 @@ void nfscl_rellayout(struct nfscllayout *, int);
 struct nfscldevinfo *nfscl_getdevinfo(struct nfsclclient *, uint8_t *,
     struct nfscldevinfo *);
 void nfscl_reldevinfo(struct nfscldevinfo *);
-int nfscl_adddevinfo(struct nfsmount *, struct nfscldevinfo *,
+int nfscl_adddevinfo(struct nfsmount *, struct nfscldevinfo *, int,
     struct nfsclflayout *);
 void nfscl_freelayout(struct nfscllayout *);
 void nfscl_freeflayout(struct nfsclflayout *);
