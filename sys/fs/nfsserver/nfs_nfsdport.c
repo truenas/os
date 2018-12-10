@@ -2107,6 +2107,7 @@ nfsrvd_readdirplus(struct nfsrv_descript *nd, int isdgram,
 	}
 	fullsiz = siz;
 	nd->nd_repstat = getret = nfsvno_getattr(vp, &at, nd, p, 1, NULL);
+#if 0
 	if (!nd->nd_repstat) {
 	    if (off && verf != at.na_filerev) {
 		/*
