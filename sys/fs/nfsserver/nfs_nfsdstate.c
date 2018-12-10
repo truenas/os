@@ -7486,7 +7486,7 @@ out:
  * Look up the mount path for the DS server and delete it.
  */
 int
-nfsrv_deldsserver(char *dspathp, NFSPROC_T *p)
+nfsrv_deldsserver(int op, char *dspathp, NFSPROC_T *p)
 {
 	struct mount *mp;
 	struct nfsmount *nmp;
@@ -7528,7 +7528,7 @@ nfsrv_deldsserver(char *dspathp, NFSPROC_T *p)
 	mtx_unlock(&mountlist_mtx);
 
 	if (nmp != NULL) {
-		ds = nfsrv_deldsnmp(nmp, p);
+		ds = nfsrv_deldsnmp(op, nmp, p);
 		NFSD_DEBUG(4, "deldsnmp=%p\n", ds);
 		if (ds != NULL) {
 			nfsrv_killrpcs(nmp);
@@ -7548,20 +7548,26 @@ nfsrv_deldsserver(char *dspathp, NFSPROC_T *p)
  * Search for and remove a DS entry which matches the "nmp" argument.
  * The nfsdevice structure pointer is returned so that the caller can
  * free it via nfsrv_freeonedevid().
+ * For the forced case, do not try to do LayoutRecalls, since the server
+ * must be shut down now anyhow.
  */
 struct nfsdevice *
-nfsrv_deldsnmp(struct nfsmount *nmp, NFSPROC_T *p)
+nfsrv_deldsnmp(int op, struct nfsmount *nmp, NFSPROC_T *p)
 {
 	struct nfsdevice *fndds;
 
 	NFSD_DEBUG(4, "deldsdvp\n");
 	NFSDDSLOCK();
-	fndds = nfsrv_findmirroredds(nmp);
+	if (op == PNFSDOP_FORCEDELDS)
+		fndds = nfsv4_findmirror(nmp);
+	else
+		fndds = nfsrv_findmirroredds(nmp);
 	if (fndds != NULL)
 		nfsrv_deleteds(fndds);
 	NFSDDSUNLOCK();
 	if (fndds != NULL) {
-		nfsrv_flexmirrordel(fndds->nfsdev_deviceid, p);
+		if (op != PNFSDOP_FORCEDELDS)
+			nfsrv_flexmirrordel(fndds->nfsdev_deviceid, p);
 		printf("pNFS server: mirror %s failed\n", fndds->nfsdev_host);
 	}
 	return (fndds);

@@ -211,6 +211,7 @@ struct nfsd_pnfsd_args {
 
 #define	PNFSDOP_DELDSSERVER	1
 #define	PNFSDOP_COPYMR		2
+#define	PNFSDOP_FORCEDELDS	3
 
 /* Old version. */
 struct nfsd_nfsd_oargs {
