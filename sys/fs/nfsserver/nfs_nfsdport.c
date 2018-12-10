@@ -2123,6 +2123,7 @@ nfsrvd_readdirplus(struct nfsrv_descript *nd, int isdgram,
 		}
 	    }
 	}
+#endif
 	if (!nd->nd_repstat && vp->v_type != VDIR)
 		nd->nd_repstat = NFSERR_NOTDIR;
 	if (!nd->nd_repstat && cnt == 0)
