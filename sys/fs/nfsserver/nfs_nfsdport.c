@@ -2028,6 +2028,7 @@ again:
 				NFSM_BUILD(tl, u_int32_t *, NFSX_UNSIGNED);
 			*tl = txdr_unsigned(*cookiep);
 		}
+invalid:
 		cpos += dp->d_reclen;
 		dp = (struct dirent *)cpos;
 		cookiep++;
