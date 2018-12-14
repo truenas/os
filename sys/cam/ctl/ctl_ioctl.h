@@ -67,7 +67,7 @@
 #define	CTL_MINOR	225
 
 /* Legacy statistics accumulated for every port for every LU. */
-#define CTL_LEGACY_STATS	1
+//#define CTL_LEGACY_STATS	1
 
 typedef enum {
 	CTL_DELAY_TYPE_NONE,
