@@ -1574,9 +1574,12 @@ static void mlx4_en_restart(struct work_struct *work)
 	if (priv->blocked == 0 || priv->port_up == 0)
 		return;
 	for (i = 0; i < priv->tx_ring_num; i++) {
+		int watchdog_time;
+
 		ring = priv->tx_ring[i];
-		if (ring->blocked &&
-				ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
+		watchdog_time = READ_ONCE(ring->watchdog_time);
+		if (watchdog_time != 0 &&
+		    time_after(ticks, ring->watchdog_time))
 			goto reset;
 	}
 	return;
@@ -1678,7 +1681,7 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		if (priv->rx_ring[i])
 			mlx4_en_destroy_rx_ring(priv, &priv->rx_ring[i],
-				priv->prof->rx_ring_size, priv->stride);
+				priv->prof->rx_ring_size);
 		if (priv->rx_cq[i])
 			mlx4_en_destroy_cq(priv, &priv->rx_cq[i]);
 	}
@@ -1729,8 +1732,7 @@ err:
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		if (priv->rx_ring[i])
 			mlx4_en_destroy_rx_ring(priv, &priv->rx_ring[i],
-						prof->rx_ring_size,
-						priv->stride);
+						prof->rx_ring_size);
 		if (priv->rx_cq[i])
 			mlx4_en_destroy_cq(priv, &priv->rx_cq[i]);
 	}
@@ -2231,9 +2233,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
                 err = -EINVAL;
                 goto out;
         }
-
-	priv->stride = roundup_pow_of_two(sizeof(struct mlx4_en_rx_desc) +
-					  DS_SIZE);
 
 	mlx4_en_sysctl_conf(priv);
 
