@@ -4783,7 +4783,7 @@ nfscl_errmap(struct nfsrv_descript *nd, u_int32_t minorvers)
  */
 APPLESTATIC int
 nfscl_layout(struct nfsmount *nmp, vnode_t vp, u_int8_t *fhp, int fhlen,
-    nfsv4stateid_t *stateidp, int layouttype, int retonclose,
+    nfsv4stateid_t *stateidp, int retonclose,
     struct nfsclflayouthead *fhlp, struct nfscllayout **lypp,
     struct ucred *cred, NFSPROC_T *p)
 {
@@ -4835,12 +4835,8 @@ nfscl_layout(struct nfsmount *nmp, vnode_t vp, u_int8_t *fhp, int fhlen,
 			lyp->nfsly_filesid[0] = np->n_vattr.na_filesid[0];
 			lyp->nfsly_filesid[1] = np->n_vattr.na_filesid[1];
 			lyp->nfsly_clp = clp;
-			if (layouttype == NFSLAYOUT_FLEXFILE)
-				lyp->nfsly_flags = NFSLY_FLEXFILE;
-			else
-				lyp->nfsly_flags = NFSLY_FILES;
-			if (retonclose != 0)
-				lyp->nfsly_flags |= NFSLY_RETONCLOSE;
+			lyp->nfsly_flags = (retonclose != 0) ?
+			    (NFSLY_FILES | NFSLY_RETONCLOSE) : NFSLY_FILES;
 			lyp->nfsly_fhlen = fhlen;
 			NFSBCOPY(fhp, lyp->nfsly_fh, fhlen);
 			TAILQ_INSERT_HEAD(&clp->nfsc_layout, lyp, nfsly_list);
@@ -5083,7 +5079,6 @@ nfscl_adddevinfo(struct nfsmount *nmp, struct nfscldevinfo *dip,
 {
 	struct nfsclclient *clp;
 	struct nfscldevinfo *tdip;
-	uint8_t *dev;
 
 	NFSLOCKCLSTATE();
 	clp = nmp->nm_clp;
@@ -5093,11 +5088,7 @@ nfscl_adddevinfo(struct nfsmount *nmp, struct nfscldevinfo *dip,
 			free(dip, M_NFSDEVINFO);
 		return (ENODEV);
 	}
-	if ((flp->nfsfl_flags & NFSFL_FILE) != 0)
-		dev = flp->nfsfl_dev;
-	else
-		dev = flp->nfsfl_ffm[0].dev;
-	tdip = nfscl_finddevinfo(clp, dev);
+	tdip = nfscl_finddevinfo(clp, flp->nfsfl_dev);
 	if (tdip != NULL) {
 		tdip->nfsdi_layoutrefs++;
 		flp->nfsfl_devp = tdip;
@@ -5149,15 +5140,10 @@ nfscl_freelayout(struct nfscllayout *layp)
 APPLESTATIC void
 nfscl_freeflayout(struct nfsclflayout *flp)
 {
-	int i, j;
+	int i;
 
-	if ((flp->nfsfl_flags & NFSFL_FILE) != 0)
-		for (i = 0; i < flp->nfsfl_fhcnt; i++)
-			free(flp->nfsfl_fh[i], M_NFSFH);
-	if ((flp->nfsfl_flags & NFSFL_FLEXFILE) != 0)
-		for (i = 0; i < flp->nfsfl_mirrorcnt; i++)
-			for (j = 0; j < flp->nfsfl_ffm[i].fhcnt; j++)
-				free(flp->nfsfl_ffm[i].fh[j], M_NFSFH);
+	for (i = 0; i < flp->nfsfl_fhcnt; i++)
+		free(flp->nfsfl_fh[i], M_NFSFH);
 	if (flp->nfsfl_devp != NULL)
 		flp->nfsfl_devp->nfsdi_layoutrefs--;
 	free(flp, M_NFSFLAYOUT);
@@ -5249,20 +5235,15 @@ nfscl_layoutreturn(struct nfsmount *nmp, struct nfscllayout *lyp,
 {
 	struct nfsclrecalllayout *rp;
 	nfsv4stateid_t stateid;
-	int layouttype;
 
 	NFSBCOPY(lyp->nfsly_stateid.other, stateid.other, NFSX_STATEIDOTHER);
 	stateid.seqid = lyp->nfsly_stateid.seqid;
-	if ((lyp->nfsly_flags & NFSLY_FILES) != 0)
-		layouttype = NFSLAYOUT_NFSV4_1_FILES;
-	else
-		layouttype = NFSLAYOUT_FLEXFILE;
 	LIST_FOREACH(rp, &lyp->nfsly_recall, nfsrecly_list) {
 		(void)nfsrpc_layoutreturn(nmp, lyp->nfsly_fh,
-		    lyp->nfsly_fhlen, 0, layouttype,
+		    lyp->nfsly_fhlen, 0, NFSLAYOUT_NFSV4_1_FILES,
 		    rp->nfsrecly_iomode, rp->nfsrecly_recalltype,
 		    rp->nfsrecly_off, rp->nfsrecly_len,
-		    &stateid, cred, p, NULL);
+		    &stateid, 0, NULL, cred, p, NULL);
 	}
 }
 
@@ -5275,27 +5256,15 @@ nfscl_dolayoutcommit(struct nfsmount *nmp, struct nfscllayout *lyp,
 {
 	struct nfsclflayout *flp;
 	uint64_t len;
-	int error, layouttype;
+	int error;
 
-	if ((lyp->nfsly_flags & NFSLY_FILES) != 0)
-		layouttype = NFSLAYOUT_NFSV4_1_FILES;
-	else
-		layouttype = NFSLAYOUT_FLEXFILE;
 	LIST_FOREACH(flp, &lyp->nfsly_flayrw, nfsfl_list) {
-		if (layouttype == NFSLAYOUT_FLEXFILE &&
-		    (flp->nfsfl_fflags & NFSFLEXFLAG_NO_LAYOUTCOMMIT) != 0) {
-			NFSCL_DEBUG(4, "Flex file: no layoutcommit\n");
-			/* If not supported, don't bother doing it. */
-			NFSLOCKMNT(nmp);
-			nmp->nm_state |= NFSSTA_NOLAYOUTCOMMIT;
-			NFSUNLOCKMNT(nmp);
-			break;
-		} else if (flp->nfsfl_off <= lyp->nfsly_lastbyte) {
+		if (flp->nfsfl_off <= lyp->nfsly_lastbyte) {
 			len = flp->nfsfl_end - flp->nfsfl_off;
 			error = nfsrpc_layoutcommit(nmp, lyp->nfsly_fh,
 			    lyp->nfsly_fhlen, 0, flp->nfsfl_off, len,
 			    lyp->nfsly_lastbyte, &lyp->nfsly_stateid,
-			    layouttype, cred, p, NULL);
+			    NFSLAYOUT_NFSV4_1_FILES, 0, NULL, cred, p, NULL);
 			NFSCL_DEBUG(4, "layoutcommit err=%d\n", error);
 			if (error == NFSERR_NOTSUPP) {
 				/* If not supported, don't bother doing it. */
