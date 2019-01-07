@@ -182,6 +182,10 @@ struct sfxge_evq {
 	unsigned int		buf_base_id;
 	unsigned int		entries;
 	char			lock_name[SFXGE_LOCK_NAME_MAX];
+#if EFSYS_OPT_QSTATS
+	clock_t			stats_update_time;
+	uint64_t		stats[EV_NQSTATS];
+#endif
 } __aligned(CACHE_LINE_SIZE);
 
 #define	SFXGE_NDESCS	1024
@@ -273,6 +277,9 @@ struct sfxge_softc {
 	struct ifnet			*ifnet;
 	unsigned int			if_flags;
 	struct sysctl_oid		*stats_node;
+#if EFSYS_OPT_QSTATS
+	struct sysctl_oid		*evqs_stats_node;
+#endif
 	struct sysctl_oid		*txqs_node;
 
 	struct task			task_reset;
@@ -282,6 +289,8 @@ struct sfxge_softc {
 	size_t				vpd_size;
 	efx_nic_t			*enp;
 	efsys_lock_t			enp_lock;
+
+	boolean_t			txq_dynamic_cksum_toggle_supported;
 
 	unsigned int			rxq_entries;
 	unsigned int			txq_entries;
@@ -302,7 +311,6 @@ struct sfxge_softc {
 #endif
 
 	unsigned int			max_rss_channels;
-	uma_zone_t			rxq_cache;
 	struct sfxge_rxq		*rxq[SFXGE_RX_SCALE_MAX];
 	unsigned int			rx_indir_table[EFX_RSS_TBL_SIZE];
 

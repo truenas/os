@@ -222,9 +222,15 @@ struct asmc_model asmc_models[] = {
 	},
 
 	{
+	  "MacBookPro8,1", "Apple SMC MacBook Pro (early 2011, 13-inch)",
+	  ASMC_SMS_FUNCS_DISABLED, ASMC_FAN_FUNCS2, ASMC_LIGHT_FUNCS,
+	  ASMC_MBP81_TEMPS, ASMC_MBP81_TEMPNAMES, ASMC_MBP81_TEMPDESCS
+	},
+
+	{
 	  "MacBookPro8,2", "Apple SMC MacBook Pro (early 2011)",
 	  ASMC_SMS_FUNCS, ASMC_FAN_FUNCS, ASMC_LIGHT_FUNCS,
-	  ASMC_MBP8_TEMPS, ASMC_MBP8_TEMPNAMES, ASMC_MBP8_TEMPDESCS
+	  ASMC_MBP82_TEMPS, ASMC_MBP82_TEMPNAMES, ASMC_MBP82_TEMPDESCS
 	},
 
 	{
@@ -257,13 +263,31 @@ struct asmc_model asmc_models[] = {
 	  ASMC_MM31_TEMPS, ASMC_MM31_TEMPNAMES, ASMC_MM31_TEMPDESCS
 	},
 
-	/* Idem for the MacPro */
+	/* The Mac Mini 5,2 has no SMS */
+	{ 
+	  "Macmini5,2", "Apple SMC Mac Mini 5,2",
+	  NULL, NULL, NULL,
+	  ASMC_FAN_FUNCS2,
+	  NULL, NULL, NULL,
+	  ASMC_MM52_TEMPS, ASMC_MM52_TEMPNAMES, ASMC_MM52_TEMPDESCS
+	},
+
+	/* Idem for the Mac Pro "Quad Core" (original) */
+	{
+	  "MacPro1,1", "Apple SMC Mac Pro (Quad Core)",
+	  NULL, NULL, NULL,
+	  ASMC_FAN_FUNCS,
+	  NULL, NULL, NULL,
+	  ASMC_MP1_TEMPS, ASMC_MP1_TEMPNAMES, ASMC_MP1_TEMPDESCS
+	},
+
+	/* Idem for the Mac Pro (8-core) */
 	{
 	  "MacPro2", "Apple SMC Mac Pro (8-core)",
 	  NULL, NULL, NULL,
 	  ASMC_FAN_FUNCS,
 	  NULL, NULL, NULL,
-	  ASMC_MP_TEMPS, ASMC_MP_TEMPNAMES, ASMC_MP_TEMPDESCS
+	  ASMC_MP2_TEMPS, ASMC_MP2_TEMPNAMES, ASMC_MP2_TEMPDESCS
 	},
 
 	/* Idem for the MacPro  2010*/
@@ -303,6 +327,21 @@ struct asmc_model asmc_models[] = {
 	  ASMC_MBA5_TEMPS, ASMC_MBA5_TEMPNAMES, ASMC_MBA5_TEMPDESCS
 	},
 
+	{
+	  "MacBookAir7,1", "Apple SMC MacBook Air 11-inch (Early 2015)",
+	  ASMC_SMS_FUNCS_DISABLED,
+	  ASMC_FAN_FUNCS2,
+	  ASMC_LIGHT_FUNCS,
+	  ASMC_MBA7_TEMPS, ASMC_MBA7_TEMPNAMES, ASMC_MBA7_TEMPDESCS
+	},
+
+	{
+	  "MacBookAir7,2", "Apple SMC MacBook Air 13-inch (Early 2015)",
+	  ASMC_SMS_FUNCS_DISABLED,
+	  ASMC_FAN_FUNCS2,
+	  ASMC_LIGHT_FUNCS,
+	  ASMC_MBA7_TEMPS, ASMC_MBA7_TEMPNAMES, ASMC_MBA7_TEMPDESCS
+	},
 
 	{ NULL, NULL }
 };
