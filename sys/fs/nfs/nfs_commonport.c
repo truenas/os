@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/smp.h>
 #include <sys/sysctl.h>
 #include <sys/taskqueue.h>
+#include <rpc/rpc_com.h>
 #include <vm/vm.h>
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
@@ -67,12 +68,8 @@ char nfsv4_callbackaddr[INET6_ADDRSTRLEN];
 struct callout newnfsd_callout;
 int nfsrv_lughashsize = 100;
 struct mtx nfsrv_dslock_mtx;
-struct mtx nfsrv_dsclock_mtx;
-struct mtx nfsrv_dsrmlock_mtx;
-struct mtx nfsrv_dwrpclock_mtx;
-struct mtx nfsrv_dsrpclock_mtx;
-struct mtx nfsrv_darpclock_mtx;
 struct nfsdevicehead nfsrv_devidhead;
+volatile int nfsrv_devidcnt = 0;
 void (*nfsd_call_servertimer)(void) = NULL;
 void (*ncl_call_invalcaches)(struct vnode *) = NULL;
 
@@ -94,7 +91,7 @@ SYSCTL_INT(_vfs_nfs, OID_AUTO, debuglevel, CTLFLAG_RW, &nfscl_debuglevel,
     0, "Debug level for NFS client");
 SYSCTL_INT(_vfs_nfs, OID_AUTO, userhashsize, CTLFLAG_RDTUN, &nfsrv_lughashsize,
     0, "Size of hash tables for uid/name mapping");
-int nfs_pnfsiothreads = 0;
+int nfs_pnfsiothreads = -1;
 SYSCTL_INT(_vfs_nfs, OID_AUTO, pnfsiothreads, CTLFLAG_RW, &nfs_pnfsiothreads,
     0, "Number of pNFS mirror I/O threads");
 
@@ -632,11 +629,30 @@ nfssvc_call(struct thread *p, struct nfssvc_args *uap, struct ucred *cred)
 		goto out;
 	} else if (uap->flag & NFSSVC_NFSUSERDPORT) {
 		u_short sockport;
+		struct sockaddr *sad;
+		struct sockaddr_un *sun;
 
-		error = copyin(uap->argp, (caddr_t)&sockport,
-		    sizeof (u_short));
-		if (!error)
-			error = nfsrv_nfsuserdport(sockport, p);
+		if ((uap->flag & NFSSVC_NEWSTRUCT) != 0) {
+			/* New nfsuserd using an AF_LOCAL socket. */
+			sun = malloc(sizeof(struct sockaddr_un), M_SONAME,
+			    M_WAITOK | M_ZERO);
+			error = copyinstr(uap->argp, sun->sun_path,
+			    sizeof(sun->sun_path), NULL);
+			if (error != 0) {
+				free(sun, M_SONAME);
+				return (error);
+			}
+		        sun->sun_family = AF_LOCAL;
+		        sun->sun_len = SUN_LEN(sun);
+			sockport = 0;
+			sad = (struct sockaddr *)sun;
+		} else {
+			error = copyin(uap->argp, (caddr_t)&sockport,
+			    sizeof (u_short));
+			sad = NULL;
+		}
+		if (error == 0)
+			error = nfsrv_nfsuserdport(sad, sockport, p);
 	} else if (uap->flag & NFSSVC_NFSUSERDDELPORT) {
 		nfsrv_nfsuserddelport();
 		error = 0;
@@ -708,7 +724,9 @@ nfs_pnfsio(task_fn_t *func, void *context)
 	pio = (struct pnfsio *)context;
 	if (pnfsioq == NULL) {
 		if (nfs_pnfsiothreads == 0)
-			nfs_pnfsiothreads = mp_ncpus * 8;
+			return (EPERM);
+		if (nfs_pnfsiothreads < 0)
+			nfs_pnfsiothreads = mp_ncpus * 4;
 		pnfsioq = taskqueue_create("pnfsioq", M_WAITOK,
 		    taskqueue_thread_enqueue, &pnfsioq);
 		if (pnfsioq == NULL)
@@ -752,11 +770,6 @@ nfscommon_modevent(module_t mod, int type, void *data)
 		mtx_init(&nfsrv_nfsuserdsock.nr_mtx, "nfsuserd", NULL,
 		    MTX_DEF);
 		mtx_init(&nfsrv_dslock_mtx, "nfs4ds", NULL, MTX_DEF);
-		mtx_init(&nfsrv_dsclock_mtx, "nfsdsc", NULL, MTX_DEF);
-		mtx_init(&nfsrv_dsrmlock_mtx, "nfsdsrm", NULL, MTX_DEF);
-		mtx_init(&nfsrv_dwrpclock_mtx, "nfsdwrpc", NULL, MTX_DEF);
-		mtx_init(&nfsrv_dsrpclock_mtx, "nfsdsrpc", NULL, MTX_DEF);
-		mtx_init(&nfsrv_darpclock_mtx, "nfsdarpc", NULL, MTX_DEF);
 		TAILQ_INIT(&nfsrv_devidhead);
 		callout_init(&newnfsd_callout, 1);
 		newnfs_init();
@@ -785,11 +798,6 @@ nfscommon_modevent(module_t mod, int type, void *data)
 		mtx_destroy(&nfs_req_mutex);
 		mtx_destroy(&nfsrv_nfsuserdsock.nr_mtx);
 		mtx_destroy(&nfsrv_dslock_mtx);
-		mtx_destroy(&nfsrv_dsclock_mtx);
-		mtx_destroy(&nfsrv_dsrmlock_mtx);
-		mtx_destroy(&nfsrv_dwrpclock_mtx);
-		mtx_destroy(&nfsrv_dsrpclock_mtx);
-		mtx_destroy(&nfsrv_darpclock_mtx);
 		loaded = 0;
 		break;
 	default:

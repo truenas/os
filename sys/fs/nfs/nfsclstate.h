@@ -92,6 +92,7 @@ struct nfsclds {
 #define	NFSCLDS_MDS		0x0002
 #define	NFSCLDS_DS		0x0004
 #define	NFSCLDS_CLOSED		0x0008
+#define	NFSCLDS_SAMECONN	0x0010
 
 struct nfsclclient {
 	LIST_ENTRY(nfsclclient) nfsc_list;
@@ -266,6 +267,7 @@ struct nfscllayout {
  */
 struct nfsffm {
 	nfsv4stateid_t		st;
+	struct nfscldevinfo	*devp;
 	char			dev[NFSX_V4DEVICEID];
 	uint32_t		eff;
 	uid_t			user;
@@ -287,7 +289,6 @@ struct nfsclflayout {
 	uint64_t			nfsfl_off;
 	uint64_t			nfsfl_end;
 	uint32_t			nfsfl_iomode;
-	struct nfscldevinfo		*nfsfl_devp;
 	uint16_t			nfsfl_flags;
 	union {
 		struct {
@@ -296,6 +297,7 @@ struct nfsclflayout {
 			uint32_t	stripe1;
 			uint8_t		dev[NFSX_V4DEVICEID];
 			uint16_t	fhcnt;
+			struct nfscldevinfo *devp;
 		} fl;
 		struct {
 			uint64_t	stripeunit;
@@ -314,6 +316,7 @@ struct nfsclflayout {
 #define	nfsfl_stripe1		nfsfl_un.fl.stripe1
 #define	nfsfl_dev		nfsfl_un.fl.dev
 #define	nfsfl_fhcnt		nfsfl_un.fl.fhcnt
+#define	nfsfl_devp		nfsfl_un.fl.devp
 #define	nfsfl_stripeunit	nfsfl_un.ff.stripeunit
 #define	nfsfl_fflags		nfsfl_un.ff.fflags
 #define	nfsfl_statshint		nfsfl_un.ff.statshint
@@ -338,6 +341,9 @@ struct nfsclrecalllayout {
 	int				nfsrecly_recalltype;
 	uint32_t			nfsrecly_iomode;
 	uint32_t			nfsrecly_stateseqid;
+	uint32_t			nfsrecly_stat;
+	uint32_t			nfsrecly_op;
+	char				nfsrecly_devid[NFSX_V4DEVICEID];
 };
 
 /*
