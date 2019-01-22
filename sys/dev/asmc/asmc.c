@@ -154,6 +154,8 @@ static struct asmc_model *asmc_match(device_t dev);
 			 asmc_mbp_sysctl_light_right, \
 			 asmc_mbp_sysctl_light_control
 
+#define ASMC_LIGHT_FUNCS_DISABLED NULL, NULL, NULL
+
 struct asmc_model asmc_models[] = {
 	{
 	  "MacBook1,1", "Apple SMC MacBook Core Duo",
@@ -234,6 +236,12 @@ struct asmc_model asmc_models[] = {
 	},
 
 	{
+	 "MacBookPro9,2", "Apple SMC MacBook Pro (mid 2012)",
+	  ASMC_SMS_FUNCS_DISABLED, ASMC_FAN_FUNCS, ASMC_LIGHT_FUNCS,
+	  ASMC_MBP9_TEMPS, ASMC_MBP9_TEMPNAMES, ASMC_MBP9_TEMPDESCS
+	},
+
+	{
 	  "MacBookPro11,2", "Apple SMC MacBook Pro Retina Core i7 (2013/2014)",
 	  ASMC_SMS_FUNCS_DISABLED, ASMC_FAN_FUNCS2, ASMC_LIGHT_FUNCS,
 	  ASMC_MBP112_TEMPS, ASMC_MBP112_TEMPNAMES, ASMC_MBP112_TEMPDESCS
@@ -261,6 +269,15 @@ struct asmc_model asmc_models[] = {
 	  ASMC_FAN_FUNCS,
 	  NULL, NULL, NULL,
 	  ASMC_MM31_TEMPS, ASMC_MM31_TEMPNAMES, ASMC_MM31_TEMPDESCS
+	},
+
+	/* The Mac Mini 4,1 (Mid-2010) has no SMS */
+	{ 
+	  "Macmini4,1", "Apple SMC Mac mini 4,1 (Mid-2010)",
+	  ASMC_SMS_FUNCS_DISABLED,
+	  ASMC_FAN_FUNCS,
+	  ASMC_LIGHT_FUNCS_DISABLED,
+	  ASMC_MM41_TEMPS, ASMC_MM41_TEMPNAMES, ASMC_MM41_TEMPDESCS
 	},
 
 	/* The Mac Mini 5,2 has no SMS */

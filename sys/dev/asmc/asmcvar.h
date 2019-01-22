@@ -255,6 +255,27 @@ struct asmc_softc {
 				  "TMBS", "TP0P", "TPCD", "TW0P", "Th1H", \
 				  "Th2H", "Tm0P", "Ts0P", "Ts0S" }
 
+#define ASMC_MBP9_TEMPS		{ "Ts0P", "Ts0S", "TA0P", "TB1T", "TB2T", \
+				  "TB0T", "TC1C", "TC2C", "TC0E", "TC0F", \
+				  "TC0J", "TC0P", "TCFC", "TCGC", "TCSA", \
+				  "TCTD", "TCXC", "TG1D", "TM0P", "TM0S", \
+				  "TPCD", NULL }
+
+#define ASMC_MBP9_TEMPNAMES	{ "Ts0P", "Ts0S", "TA0P", "TB1T", "TB2T", \
+				  "TB0T", "TC1C", "TC2C", "TC0E", "TC0F", \
+				  "TC0J", "TC0P", "TCFC", "TCGC", "TCSA", \
+				  "TCTD", "TCXC", "TG1D", "TM0P", "TM0S", \
+				  "TPCD" }
+
+#define ASMC_MBP9_TEMPDESCS	{ "Palm Rest", "Memory Proximity", "Airflow 1", \
+				  "Battery 1", "Battery 2", "Battery TS_MAX", \
+				  "CPU Core 1", "CPU Core 2", "CPU1", "CPU1", \
+				  "TC0J", "CPU 1 Proximity", "TCFC", \
+				  "PECI GPU", "PECI SA", "TCTD", "PECI CPU", \
+				  "GPU Die", "Memory Bank A1", "Memory Module A1", \
+				  "PCH Die" }
+
+
 #define ASMC_MBP112_TEMPS	{ "TB0T", "TB1T", "TB2T", "TBXT", "TC0E", \
 				  "TC0F", "TC0P", "TC1C", "TC2C", "TC3C", \
 				  "TC4C", "TCFC", "TCGC", "TCSA", "TCTD", \
@@ -336,6 +357,27 @@ struct asmc_softc {
 				  "Northbridge Die Core Temperature", \
 				  "Northbridge Proximity Temperature", \
 				  "Wireless Module Proximity Temperature", }
+
+#define ASMC_MM41_TEMPS		{ "TA0P", "TC0D", "TC0G", "TC0H", "TC0P", \
+				  "TC0p", "TCPG", "TH0G", "TH0P", "TH0p", \
+				  "TM0G", "TM0P", "TM0p", "TN0D", "TN0G", \
+				  "TN0P", "TN0p", "TN1D", "TN1E", "TN1F", \
+				  "TN1G", "TN1S", "TNPG", "TO0P", "TO0p", \
+				  "TW0P", "Tm0P", "Tp0C", NULL }
+
+#define ASMC_MM41_TEMPNAMES	{ "TA0P", "TC0D", "TC0G", "TC0H", "TC0P", \
+				  "TC0p", "TCPG", "TH0G", "TH0P", "TH0p", \
+				  "TM0G", "TM0P", "TM0p", "TN0D", "TN0G", \
+				  "TN0P", "TN0p", "TN1D", "TN1E", "TN1F", \
+				  "TN1G", "TN1S", "TNPG", "TO0P", "TO0p", \
+				  "TW0P", "Tm0P", "Tp0C", NULL }
+
+#define ASMC_MM41_TEMPDESCS	{ "TA0P", "TC0D", "TC0G", "TC0H", "TC0P", \
+				  "TC0p", "TCPG", "TH0G", "TH0P", "TH0p", \
+				  "TM0G", "TM0P", "TM0p", "TN0D", "TN0G", \
+				  "TN0P", "TN0p", "TN1D", "TN1E", "TN1F", \
+				  "TN1G", "TN1S", "TNPG", "TO0P", "TO0p", \
+				  "TW0P", "Tm0P", "Tp0C", NULL }
 
 #define ASMC_MM52_TEMPS		{ "TA0P", "TA1P", \
 				  "TC0D", "TC0P", \
