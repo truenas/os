@@ -65,13 +65,12 @@ gss_acquire_cred(OM_uint32 *minor_status,
 		return (GSS_S_FAILURE);
 
 	/*
-	 * I apologise for this hack, but the number of retries
-	 * defaults to INT_MAX, which means an infinite, uninteruptable
-	 * hang in some cases.
+	 * The number of retries defaults to INT_MAX, which means
+	 * an infinite, uninteruptible hang effectively.  We'll limit
+	 * it to five retries.
 	 */
-	i = 1;
+	i = 5;
 	CLNT_CONTROL(cl, CLSET_RETRIES, &i);
-	CLNT_CONTROL(cl, CLSET_INTERRUPTIBLE, &i);
 
 	args.uid = curthread->td_ucred->cr_uid;
 	if (desired_name)
