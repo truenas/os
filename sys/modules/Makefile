@@ -35,6 +35,7 @@ SUBDIR=	\
 	ale \
 	alq \
 	${_amd_ecc_inject} \
+	${_amdgpio} \
 	${_amdsbwd} \
 	${_amdsmn} \
 	${_amdtemp} \
@@ -716,6 +717,7 @@ _x86bios=	x86bios
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
+_amdgpio=	amdgpio
 _efirt=		efirt
 _ioat=		ioat
 _ixl=		ixl

@@ -3310,14 +3310,18 @@ DIOCCHANGEADDR_error:
 		struct pf_src_node	*n, *p, *pstore;
 		uint32_t		 i, nr = 0;
 
+		for (i = 0, sh = V_pf_srchash; i <= pf_srchashmask;
+				i++, sh++) {
+			PF_HASHROW_LOCK(sh);
+			LIST_FOREACH(n, &sh->nodes, entry)
+				nr++;
+			PF_HASHROW_UNLOCK(sh);
+		}
+
+		psn->psn_len = min(psn->psn_len,
+		    sizeof(struct pf_src_node) * nr);
+
 		if (psn->psn_len == 0) {
-			for (i = 0, sh = V_pf_srchash; i <= pf_srchashmask;
-			    i++, sh++) {
-				PF_HASHROW_LOCK(sh);
-				LIST_FOREACH(n, &sh->nodes, entry)
-					nr++;
-				PF_HASHROW_UNLOCK(sh);
-			}
 			psn->psn_len = sizeof(struct pf_src_node) * nr;
 			break;
 		}
@@ -3717,20 +3721,6 @@ shutdown_pf(void)
 
 		/* status does not use malloced mem so no need to cleanup */
 		/* fingerprints and interfaces have their own cleanup code */
-
-		/* Free counters last as we updated them during shutdown. */
-		counter_u64_free(V_pf_default_rule.states_cur);
-		counter_u64_free(V_pf_default_rule.states_tot);
-		counter_u64_free(V_pf_default_rule.src_nodes);
-
-		for (int i = 0; i < PFRES_MAX; i++)
-			counter_u64_free(V_pf_status.counters[i]);
-		for (int i = 0; i < LCNT_MAX; i++)
-			counter_u64_free(V_pf_status.lcounters[i]);
-		for (int i = 0; i < FCNT_MAX; i++)
-			counter_u64_free(V_pf_status.fcounters[i]);
-		for (int i = 0; i < SCNT_MAX; i++)
-			counter_u64_free(V_pf_status.scounters[i]);
 	} while(0);
 
 	return (error);
@@ -3968,6 +3958,20 @@ pf_unload_vnet(void)
 	pf_cleanup();
 	if (IS_DEFAULT_VNET(curvnet))
 		pf_mtag_cleanup();
+
+	/* Free counters last as we updated them during shutdown. */
+	counter_u64_free(V_pf_default_rule.states_cur);
+	counter_u64_free(V_pf_default_rule.states_tot);
+	counter_u64_free(V_pf_default_rule.src_nodes);
+
+	for (int i = 0; i < PFRES_MAX; i++)
+		counter_u64_free(V_pf_status.counters[i]);
+	for (int i = 0; i < LCNT_MAX; i++)
+		counter_u64_free(V_pf_status.lcounters[i]);
+	for (int i = 0; i < FCNT_MAX; i++)
+		counter_u64_free(V_pf_status.fcounters[i]);
+	for (int i = 0; i < SCNT_MAX; i++)
+		counter_u64_free(V_pf_status.scounters[i]);
 }
 
 static int

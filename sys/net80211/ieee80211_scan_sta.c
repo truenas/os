@@ -472,12 +472,15 @@ add_channels(struct ieee80211vap *vap,
 		if (c == NULL || isexcluded(vap, c))
 			continue;
 		if (mode == IEEE80211_MODE_AUTO) {
+			KASSERT(IEEE80211_IS_CHAN_B(c),
+			    ("%s: wrong channel for 'auto' mode %u / %u\n",
+			    __func__, c->ic_freq, c->ic_flags));
+
 			/*
 			 * XXX special-case 11b/g channels so we select
 			 *     the g channel if both are present.
 			 */
-			if (IEEE80211_IS_CHAN_B(c) &&
-			    (cg = find11gchannel(ic, i, c->ic_freq)) != NULL)
+			if ((cg = find11gchannel(ic, i, c->ic_freq)) != NULL)
 				c = cg;
 		}
 		ss->ss_chans[ss->ss_last++] = c;
@@ -595,32 +598,46 @@ makescanlist(struct ieee80211_scan_state *ss, struct ieee80211vap *vap,
 	 */
 	for (scan = table; scan->list != NULL; scan++) {
 		mode = scan->mode;
-		if (vap->iv_des_mode != IEEE80211_MODE_AUTO) {
+
+		switch (mode) {
+		case IEEE80211_MODE_11B:
+			if (vap->iv_des_mode == IEEE80211_MODE_11B)
+				break;
+
 			/*
-			 * If a desired mode was specified, scan only 
+			 * The scan table marks 2.4Ghz channels as b
+			 * so if the desired mode is 11g / 11ng,
+			 * then use the 11b channel list but upgrade the mode.
+			 *
+			 * NB: 11b -> AUTO lets add_channels upgrade an
+			 * 11b channel to 11g if available.
+			 */
+			if (vap->iv_des_mode == IEEE80211_MODE_AUTO ||
+			    vap->iv_des_mode == IEEE80211_MODE_11G ||
+			    vap->iv_des_mode == IEEE80211_MODE_11NG) {
+				mode = vap->iv_des_mode;
+				break;
+			}
+
+			continue;
+		case IEEE80211_MODE_11A:
+			/* Use 11a channel list for 11na mode */
+			if (vap->iv_des_mode == IEEE80211_MODE_11NA) {
+				mode = vap->iv_des_mode;
+				break;
+			}
+
+			/* FALLTHROUGH */
+		default:
+			/*
+			 * If a desired mode was specified, scan only
 			 * channels that satisfy that constraint.
 			 */
-			if (vap->iv_des_mode != mode) {
-				/*
-				 * The scan table marks 2.4Ghz channels as b
-				 * so if the desired mode is 11g, then use
-				 * the 11b channel list but upgrade the mode.
-				 */
-				if (vap->iv_des_mode == IEEE80211_MODE_11G) {
-					if (mode == IEEE80211_MODE_11G) /* Skip the G check */
-						continue;
-					else if (mode == IEEE80211_MODE_11B)
-						mode = IEEE80211_MODE_11G;	/* upgrade */
-				}
-			}
-		} else {
-			/*
-			 * This lets add_channels upgrade an 11b channel
-			 * to 11g if available.
-			 */
-			if (mode == IEEE80211_MODE_11B)
-				mode = IEEE80211_MODE_AUTO;
+			if (vap->iv_des_mode != IEEE80211_MODE_AUTO &&
+			    vap->iv_des_mode != mode)
+				continue;
 		}
+
 #ifdef IEEE80211_F_XR
 		/* XR does not operate on turbo channels */
 		if ((vap->iv_flags & IEEE80211_F_XR) &&
