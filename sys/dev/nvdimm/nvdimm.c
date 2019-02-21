@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016-2017 Alexander Motin <mav@FreeBSD.org>
+ * Copyright (c) 2016-2019 Alexander Motin <mav@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/rman.h>
 #include <sys/sbuf.h>
+#include <sys/smp.h>
 #include <sys/sysctl.h>
 #include <sys/uio.h>
 #include <sys/vmmeter.h>
@@ -65,8 +66,38 @@ __FBSDID("$FreeBSD$");
 #include <dev/acpica/acpivar.h>
 
 #include "../ntb/ntb.h"
+#include "../ioat/ioat.h"
 
 #define	ELF_KERN_STR	("elf"__XSTRING(__ELF_WORD_SIZE)" kernel")
+
+#define	PMEM_NUM_TR	256
+
+struct pmem_dma_ch;
+struct pmem_disk;
+
+struct pmem_dma_tr {
+	struct pmem_dma_ch	*ch;
+	struct pmem_disk	*sc;
+	bus_dmamap_t		 dmam;
+	LIST_ENTRY(pmem_dma_tr)	 list;
+	int			 inprog;
+	struct bio		*bp;
+};
+
+struct pmem_dma_ch {
+	struct mtx		 mtx;
+	bus_dmaengine_t		 dma;		/* Primary DMA engine (local) */
+	bus_dmaengine_t		 dma2;		/* Secondary DMA engine (NTB) */
+	size_t			 maxio;
+	bus_dma_tag_t		 dmat;
+	struct pmem_dma_tr	*trs;
+	LIST_HEAD(, pmem_dma_tr) free_tr;
+};
+
+struct pmem_dma {
+	int			 numch;
+	struct pmem_dma_ch	*ch;
+};
 
 enum {
 	STATE_INCORRECT = 0,
@@ -88,6 +119,7 @@ struct pmem_label {
 
 /* PMEM device */
 struct pmem_disk {
+	device_t		 dev;
 	struct disk		*disk;
 	int			 rid;
 	struct resource		*res;
@@ -95,8 +127,10 @@ struct pmem_disk {
 	vm_paddr_t		 size;		/* Local PMEM size */
 	uint8_t			*vaddr;		/* Local PMEM KVA address */
 	struct pmem_label	*label;		/* Local PMEM label */
+	vm_paddr_t		 rpaddr;	/* Remote PMEM phys address */
 	uint8_t			*rvaddr;	/* Remote PMEM KVA address */
 	struct pmem_label	*rlabel;	/* Remote PMEM label */
+	struct pmem_dma		 dma;
 };
 
 /* NTB PMEM device */
@@ -129,11 +163,95 @@ static u_int ntb_pmem_start_timeout = 120;
 SYSCTL_UINT(_hw_pmem, OID_AUTO, start_timeout, CTLFLAG_RWTUN,
     &ntb_pmem_start_timeout, 0, "Time to wait for NTB connection");
 
+static u_int ntb_pmem_min_dma_size = 24*1024;
+SYSCTL_UINT(_hw_pmem, OID_AUTO, min_dma_size, CTLFLAG_RWTUN,
+    &ntb_pmem_min_dma_size, 0, "Minimal I/O size to use DMA");
+
+static void
+pmem_dma_init(device_t dev)
+{
+	struct pmem_disk *sc = device_get_softc(dev);
+	struct pmem_dma_ch *ch;
+	struct pmem_dma_tr *tr;
+	int i, t, n, err;
+
+	n = ioat_get_nchannels();
+	if (n == 0)
+		return;
+	sc->dma.ch = mallocarray(n, sizeof(struct pmem_dma_ch), M_DEVBUF,
+	    M_ZERO | M_WAITOK);
+	for (i = 0; i < n; i++) {
+		ch = &sc->dma.ch[i];
+		mtx_init(&ch->mtx, "pmem_dma_ch", NULL, MTX_DEF);
+		LIST_INIT(&ch->free_tr);
+		ch->dma = ioat_get_dmaengine(i, M_WAITOK);
+		if (ch->dma == NULL) {
+			device_printf(dev, "getting DMA engine failed\n");
+			continue;
+		}
+		if (n > 8)
+			sc->dma.ch[(i + n / 2) % n].dma2 = ch->dma;
+		else
+			sc->dma.ch[(i + 1) % n].dma2 = ch->dma;
+		ch->maxio = ioat_get_max_io_size(ch->dma);
+		err = bus_dma_tag_create(NULL,
+		    0, 0, BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, NULL, NULL,
+		    MAXPHYS, (MAXPHYS / PAGE_SIZE) + 1, MIN(MAXPHYS, ch->maxio),
+		    0, busdma_lock_mutex, &ch->mtx, &ch->dmat);
+		if (err != 0) {
+			device_printf(dev, "tag create failed %d\n", err);
+			ioat_put_dmaengine(ch->dma);
+			continue;
+		}
+		ioat_set_interrupt_coalesce(ch->dma, 0);
+		ch->trs = mallocarray(PMEM_NUM_TR, sizeof(struct pmem_dma_tr),
+		    M_DEVBUF, M_ZERO | M_WAITOK);
+		for (t = 0; t < PMEM_NUM_TR; t++) {
+			tr = &ch->trs[t];
+			tr->ch = ch;
+			tr->sc = sc;
+			err = bus_dmamap_create(ch->dmat, 0, &tr->dmam);
+			if (err != 0) {
+				device_printf(dev, "map create failed %d\n", err);
+				break;
+			}
+			LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+		}
+	}
+	sc->dma.numch = n;
+}
+
+static void
+pmem_dma_shutdown(device_t dev)
+{
+	struct pmem_disk *sc = device_get_softc(dev);
+	struct pmem_dma_ch *ch;
+	struct pmem_dma_tr *tr;
+	int i;
+
+	for (i = 0; i < sc->dma.numch; i++) {
+		ch = &sc->dma.ch[i];
+		while ((tr = LIST_FIRST(&ch->free_tr)) != NULL) {
+			LIST_REMOVE(tr, list);
+			bus_dmamap_destroy(ch->dmat, tr->dmam);
+		}
+		free(ch->trs, M_DEVBUF);
+		ioat_put_dmaengine(ch->dma);
+		bus_dma_tag_destroy(ch->dmat);
+		mtx_destroy(&ch->mtx);
+	}
+	free(sc->dma.ch, M_DEVBUF);
+	sc->dma.ch = NULL;
+	sc->dma.numch = 0;
+}
+
 static int
 pmem_open(struct disk *dp)
 {
 	struct pmem_disk *sc = dp->d_drv1;
 
+	if (sc->dma.numch == 0)
+		pmem_dma_init(sc->dev);
 	sc->label->opened = 1;
 	return (0);
 }
@@ -151,19 +269,12 @@ void ntb_copy1(void *dst, void *src, size_t len);
 void ntb_copy2(void *dst1, void *dst2, void *src, size_t len);
 
 static void
-pmem_strategy(struct bio *bp)
+pmem_pio_strategy(struct bio *bp)
 {
 	struct pmem_disk *sc = bp->bio_disk->d_drv1;
 	uint8_t *addr, *nvaddr;
 	vm_offset_t page;
 	off_t done, off, moff, size;
-
-	if (bp->bio_cmd != BIO_READ && bp->bio_cmd != BIO_WRITE) {
-		bp->bio_flags |= BIO_ERROR;
-		bp->bio_error = EOPNOTSUPP;
-		biodone(bp);
-		return;
-	}
 
 	for (done = 0; done < bp->bio_length; done += size) {
 		if (bp->bio_flags & BIO_UNMAPPED) {
@@ -196,6 +307,162 @@ pmem_strategy(struct bio *bp)
 	}
 
 	biodone(bp);
+}
+
+static void
+pmem_dma_cb(void *arg, int error)
+{
+	struct pmem_dma_tr *tr = arg;
+	struct pmem_dma_ch *ch = tr->ch;
+	struct bio *bp = tr->bp;
+
+	mtx_lock(&ch->mtx);
+	if (--tr->inprog > 0) {
+		mtx_unlock(&ch->mtx);
+		return;
+	}
+	tr->bp = NULL;
+	bus_dmamap_unload(ch->dmat, tr->dmam);
+	LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+	mtx_unlock(&ch->mtx);
+
+	if (bp == NULL)
+		return;
+
+	if (error != 0) {
+		bp->bio_error = error;
+		bp->bio_flags |= BIO_ERROR;
+		bp->bio_resid = bp->bio_bcount;
+	}
+	biodone(bp);
+}
+
+static void
+pmem_dma_map(void *arg, bus_dma_segment_t *segs, int nseg, int error)
+{
+	struct pmem_dma_tr *tr = arg;
+	struct pmem_dma_ch *ch = tr->ch;
+	struct pmem_disk *sc = tr->sc;
+	struct bio *bp = tr->bp;
+	bus_dmaengine_callback_t cb;
+	vm_paddr_t rpaddr;
+	int err, i, flags;
+	off_t off;
+
+	if (error != 0) {
+fallback:
+		bus_dmamap_unload(ch->dmat, tr->dmam);
+		LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+fallback2:
+		tr->bp = NULL;
+		pmem_pio_strategy(bp);
+		return;
+	}
+
+	/* First read/write to local NVDIMM. */
+	off = bp->bio_offset;
+	cb = NULL;
+	flags = 0;
+	err = ioat_acquire_reserve(ch->dma, nseg, M_NOWAIT);
+	if (err != 0)
+		goto fallback;
+	for (i = 0; i < nseg; i++) {
+		if (i == nseg - 1) {
+			cb = pmem_dma_cb;
+			flags = DMA_INT_EN;
+		}
+		if (bp->bio_cmd == BIO_READ) {
+			if (ioat_copy(ch->dma, segs[i].ds_addr, sc->paddr + off,
+			    segs[i].ds_len, cb, tr, flags) == NULL) {
+				ioat_release(ch->dma);
+				goto fallback;
+			}
+		} else {
+			if (ioat_copy(ch->dma, sc->paddr + off, segs[i].ds_addr,
+			    segs[i].ds_len, cb, tr, flags) == NULL) {
+				ioat_release(ch->dma);
+				goto fallback;
+			}
+		}
+		off += segs[i].ds_len;
+	}
+	ioat_release(ch->dma);
+	tr->inprog = 1;
+
+	/* Optional second write to remote NVDIMM. */
+	rpaddr = (bp->bio_cmd == BIO_WRITE) ? sc->rpaddr : 0;
+	if (rpaddr == 0)
+		return;
+	off = bp->bio_offset;
+	cb = NULL;
+	flags = 0;
+	err = ioat_acquire_reserve(ch->dma2, nseg, M_NOWAIT);
+	if (err != 0)
+		goto fallback2;
+	for (i = 0; i < nseg; i++) {
+		if (i == nseg - 1) {
+			cb = pmem_dma_cb;
+			flags = DMA_INT_EN;
+		}
+		if (ioat_copy(ch->dma2, rpaddr + off, segs[i].ds_addr,
+		    segs[i].ds_len, cb, tr, flags) == NULL) {
+			ioat_release(ch->dma2);
+			goto fallback2;
+		}
+		off += segs[i].ds_len;
+	}
+	ioat_release(ch->dma2);
+	tr->inprog = 2;
+}
+
+static void
+pmem_dma_strategy(struct bio *bp)
+{
+	struct pmem_disk *sc = bp->bio_disk->d_drv1;
+	struct pmem_dma_ch *ch;
+	struct pmem_dma_tr *tr;
+	u_int c, err;
+
+	c = curcpu * sc->dma.numch / mp_ncpus;
+	ch = &sc->dma.ch[c];
+	mtx_lock(&ch->mtx);
+	tr = LIST_FIRST(&ch->free_tr);
+	if (tr == NULL) {
+fallback:
+		mtx_unlock(&ch->mtx);
+		pmem_pio_strategy(bp);
+		return;
+	}
+
+	LIST_REMOVE(tr, list);
+	tr->bp = bp;
+	err = bus_dmamap_load_bio(ch->dmat, tr->dmam, bp, pmem_dma_map, tr, 0);
+	if (err != 0 && err != EINPROGRESS) {
+		device_printf(sc->dev, "bus_dmamap_load_bio error 0x%x\n",err);
+		tr->bp = NULL;
+		LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+		goto fallback;
+	}
+	mtx_unlock(&ch->mtx);
+}
+
+static void
+pmem_strategy(struct bio *bp)
+{
+	struct pmem_disk *sc = bp->bio_disk->d_drv1;
+
+	if (bp->bio_cmd != BIO_READ && bp->bio_cmd != BIO_WRITE) {
+		bp->bio_flags |= BIO_ERROR;
+		bp->bio_error = EOPNOTSUPP;
+		biodone(bp);
+		return;
+	}
+
+	if (sc->dma.numch > 0 &&
+	    bp->bio_length >= ntb_pmem_min_dma_size)
+		pmem_dma_strategy(bp);
+	else
+		pmem_pio_strategy(bp);
 }
 
 static void
@@ -271,6 +538,7 @@ pmem_attach(device_t dev)
 	struct pmem_disk *sc = device_get_softc(dev);
 	struct disk *disk;
 
+	sc->dev = dev;
 	sc->rid = 0;
 	sc->res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->rid, 0);
 	if (sc->res == NULL)
@@ -278,6 +546,7 @@ pmem_attach(device_t dev)
 	sc->paddr = rman_get_start(sc->res);
 	sc->size = rman_get_size(sc->res);
 	sc->vaddr = pmap_mapdev_attr(sc->paddr, sc->size, VM_MEMATTR_DEFAULT);
+	sc->rpaddr = 0;
 	sc->rvaddr = NULL;
 
 	sc->label = (struct pmem_label *)(sc->vaddr + sc->size - PAGE_SIZE);
@@ -323,6 +592,8 @@ pmem_detach(device_t dev)
 
 	disk_destroy(sc->disk);
 	pmap_unmapdev((vm_offset_t)sc->vaddr, sc->size);
+	if (sc->dma.numch != 0)
+		pmem_dma_shutdown(dev);
 	bus_release_resource(dev, SYS_RES_MEMORY, sc->rid, sc->res);
 	return (0);
 }
@@ -347,6 +618,7 @@ static devclass_t nvdimm_root_devclass;
 
 DRIVER_MODULE(pmem, nexus, pmem_driver, pmem_devclass, 0, 0);
 DRIVER_MODULE(pmem, nvdimm_root, pmem_driver, pmem_devclass, 0, 0);
+MODULE_DEPEND(pmem, ioat, 1, 1, 1);
 MODULE_VERSION(nvdimm, 1);
 
 /* Hooks for the ACPI CA debugging infrastructure */
@@ -1167,26 +1439,6 @@ ntb_pmem_sync(void *data)
 		cpu_spinwait();
 
 	if (dir > 0) {
-#if 0
-		b = ticks;
-		memset(sc->vaddr, 0, 1024*1024*1024);
-		device_printf(dev, "memset() local %dMB/s\n", 1024*hz/(ticks - b));
-		b = ticks;
-		memset(sc->rvaddr, 0, 1024*1024*1024);
-		device_printf(dev, "memset() remote %dMB/s\n", 1024*hz/(ticks - b));
-		b = ticks;
-		memcpy(sc->rvaddr, sc->vaddr, 1024*1024*1024);
-		device_printf(dev, "local to remote %dMB/s\n", 1024*hz/(ticks - b));
-		b = ticks;
-		memcpy(sc->rvaddr, sc->vaddr, 1024*1024*1024);
-		device_printf(dev, "local to remote %dMB/s\n", 1024*hz/(ticks - b));
-		b = ticks;
-		memcpy(sc->vaddr, sc->rvaddr, 1024*1024*1024);
-		device_printf(dev, "remote to local %dMB/s\n", 1024*hz/(ticks - b));
-		b = ticks;
-		memcpy(sc->vaddr, sc->rvaddr, 1024*1024*1024);
-		device_printf(dev, "remote to local %dMB/s\n", 1024*hz/(ticks - b));
-#endif
 		device_printf(dev, "Copying local to remote.\n");
 		b = ticks;
 		memcpy(sc->rvaddr, sc->vaddr, sc->size - PAGE_SIZE);
@@ -1249,6 +1501,7 @@ ntb_pmem_link_work(void *data)
 
 	callout_stop(&sc->ntb_start);
 	device_printf(dev, "Connection established\n");
+	scd->rpaddr = sc->ntb_paddr + off;
 	scd->rvaddr = sc->ntb_caddr + off;
 	scd->rlabel = (struct pmem_label *)(scd->rvaddr + scd->size -
 	    PAGE_SIZE);
@@ -1280,6 +1533,7 @@ ntb_pmem_link_event(void *data)
 		 */
 		ntb_spad_clear(dev);
 
+		scd->rpaddr = 0;
 		scd->rvaddr = NULL;
 		scd->rlabel = NULL;
 		scd->label->state = MIN(scd->label->state, STATE_IDLE);
@@ -1394,6 +1648,7 @@ ntb_pmem_detach(device_t dev)
 	root_mount_rel(sc->ntb_rootmount);
 	sc->ntb_rootmount = NULL;
 
+	scd->rpaddr = 0;
 	scd->rvaddr = NULL;
 	scd->rlabel = NULL;
 	error = ntb_link_disable(dev);
