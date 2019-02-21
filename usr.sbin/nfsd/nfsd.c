@@ -190,8 +190,8 @@ main(int argc, char **argv)
 	    "  nfsd [-ardtue] [-h bindip]\n"
 	    "       [-n numservers] [--minthreads #] [--maxthreads #]\n"
 	    "       [-p/--pnfs dsserver0:/dsserver0-mounted-on-dir,...,"
-	    "dsserverN:/dsserverN-mounted-on-dir] [-m mirrorlevel]\n";
-	    "       [-V virtual_hostname]\n"
+	    "dsserverN:/dsserverN-mounted-on-dir] [-m mirrorlevel]\n"
+	    "       [-V virtual_hostname]\n";
 	while ((ch = getopt_long(argc, argv, getopt_shortopts, longopts,
 		    &longindex)) != -1)
 		switch (ch) {
