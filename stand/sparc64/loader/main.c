@@ -53,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #ifdef LOADER_ZFS_SUPPORT
 #include <sys/vtoc.h>
-#include "../zfs/libzfs.h"
+#include "libzfs.h"
 #endif
 
 #include <vm/vm.h>
@@ -74,8 +74,6 @@ __FBSDID("$FreeBSD$");
 #include "bootstrap.h"
 #include "libofw.h"
 #include "dev_net.h"
-
-extern char bootprog_info[];
 
 enum {
 	HEAPVA		= 0x800000,

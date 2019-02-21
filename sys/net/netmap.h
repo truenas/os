@@ -538,7 +538,8 @@ enum {
 
 enum {
 	/* On NETMAP_REQ_REGISTER, ask netmap to use memory allocated
-	 * from user-space allocated memory pools (e.g. hugepages). */
+	 * from user-space allocated memory pools (e.g. hugepages).
+	 */
 	NETMAP_REQ_OPT_EXTMEM = 1,
 
 	/* ON NETMAP_REQ_SYNC_KLOOP_START, ask netmap to use eventfd-based
@@ -549,8 +550,15 @@ enum {
 	/* On NETMAP_REQ_REGISTER, ask netmap to work in CSB mode, where
 	 * head, cur and tail pointers are not exchanged through the
 	 * struct netmap_ring header, but rather using an user-provided
-	 * memory area (see struct nm_csb_atok and struct nm_csb_ktoa). */
+	 * memory area (see struct nm_csb_atok and struct nm_csb_ktoa).
+	 */
 	NETMAP_REQ_OPT_CSB,
+
+	/* An extension to NETMAP_REQ_OPT_SYNC_KLOOP_EVENTFDS, which specifies
+	 * if the TX and/or RX rings are synced in the context of the VM exit.
+	 * This requires the 'ioeventfd' fields to be valid (cannot be < 0).
+	 */
+	NETMAP_REQ_OPT_SYNC_KLOOP_MODE,
 };
 
 /*
@@ -767,6 +775,8 @@ struct nm_csb_ktoa {
 
 #ifdef __KERNEL__
 #define nm_stst_barrier smp_wmb
+#define nm_ldld_barrier smp_rmb
+#define nm_stld_barrier smp_mb
 #else  /* !__KERNEL__ */
 static inline void nm_stst_barrier(void)
 {
@@ -775,17 +785,30 @@ static inline void nm_stst_barrier(void)
 	 * which is fine for us. */
 	__atomic_thread_fence(__ATOMIC_RELEASE);
 }
+static inline void nm_ldld_barrier(void)
+{
+	/* A memory barrier with acquire semantic has the combined
+	 * effect of a load-load barrier and a store-load barrier,
+	 * which is fine for us. */
+	__atomic_thread_fence(__ATOMIC_ACQUIRE);
+}
 #endif /* !__KERNEL__ */
 
 #elif defined(__FreeBSD__)
 
 #ifdef _KERNEL
 #define nm_stst_barrier	atomic_thread_fence_rel
+#define nm_ldld_barrier	atomic_thread_fence_acq
+#define nm_stld_barrier	atomic_thread_fence_seq_cst
 #else  /* !_KERNEL */
 #include <stdatomic.h>
 static inline void nm_stst_barrier(void)
 {
 	atomic_thread_fence(memory_order_release);
+}
+static inline void nm_ldld_barrier(void)
+{
+	atomic_thread_fence(memory_order_acquire);
 }
 #endif /* !_KERNEL */
 
@@ -799,6 +822,10 @@ static inline void
 nm_sync_kloop_appl_write(struct nm_csb_atok *atok, uint32_t cur,
 			 uint32_t head)
 {
+	/* Issue a first store-store barrier to make sure writes to the
+	 * netmap ring do not overcome updates on atok->cur and atok->head. */
+	nm_stst_barrier();
+
 	/*
 	 * We need to write cur and head to the CSB but we cannot do it atomically.
 	 * There is no way we can prevent the host from reading the updated value
@@ -813,11 +840,11 @@ nm_sync_kloop_appl_write(struct nm_csb_atok *atok, uint32_t cur,
 	 *
 	 * The following memory barrier scheme is used to make this happen:
 	 *
-	 *          Guest              Host
+	 *          Guest                Host
 	 *
-	 *          STORE(cur)         LOAD(head)
-	 *          mb() <-----------> mb()
-	 *          STORE(head)        LOAD(cur)
+	 *          STORE(cur)           LOAD(head)
+	 *          wmb() <----------->  rmb()
+	 *          STORE(head)          LOAD(cur)
 	 *
 	 */
 	atok->cur = cur;
@@ -837,8 +864,12 @@ nm_sync_kloop_appl_read(struct nm_csb_ktoa *ktoa, uint32_t *hwtail,
 	 * (see explanation in sync_kloop_kernel_write).
 	 */
 	*hwtail = ktoa->hwtail;
-	nm_stst_barrier();
+	nm_ldld_barrier();
 	*hwcur = ktoa->hwcur;
+
+	/* Make sure that loads from ktoa->hwtail and ktoa->hwcur are not delayed
+	 * after the loads from the netmap ring. */
+	nm_ldld_barrier();
 }
 
 /*
@@ -852,6 +883,12 @@ struct nmreq_opt_sync_kloop_eventfds {
 	 * their order must agree with the CSB arrays passed in the
 	 * NETMAP_REQ_OPT_CSB option. Each entry contains a file descriptor
 	 * backed by an eventfd.
+	 *
+	 * If any of the 'ioeventfd' entries is < 0, the event loop uses
+	 * the sleeping synchronization strategy (according to sleep_us),
+	 * and keeps kern_need_kick always disabled.
+	 * Each 'irqfd' can be < 0, and in that case the corresponding queue
+	 * is never notified.
 	 */
 	struct {
 		/* Notifier for the application --> kernel loop direction. */
@@ -859,6 +896,13 @@ struct nmreq_opt_sync_kloop_eventfds {
 		/* Notifier for the kernel loop --> application direction. */
 		int32_t irqfd;
 	} eventfds[0];
+};
+
+struct nmreq_opt_sync_kloop_mode {
+	struct nmreq_option	nro_opt;	/* common header */
+#define NM_OPT_SYNC_KLOOP_DIRECT_TX (1 << 0)
+#define NM_OPT_SYNC_KLOOP_DIRECT_RX (1 << 1)
+	uint32_t mode;
 };
 
 struct nmreq_opt_extmem {

@@ -304,11 +304,12 @@ cd9660_open(const char *path, struct open_file *f)
 	if (isonum_723(vd->logical_block_size) != ISO_DEFAULT_BLOCK_SIZE)
 		goto out;
 
-	rec = *(struct iso_directory_record *) vd->root_directory_record;
+	bcopy(vd->root_directory_record, &rec, sizeof(rec));
 	if (*path == '/') path++; /* eat leading '/' */
 
 	first = 1;
 	use_rrip = 0;
+	lenskip = 0;
 	while (*path) {
 		bno = isonum_733(rec.extent) + isonum_711(rec.ext_attr_length);
 		dsize = isonum_733(rec.size);
@@ -343,7 +344,7 @@ cd9660_open(const char *path, struct open_file *f)
 				use_rrip = rrip_check(f, dp, &lenskip);
 
 			if (dirmatch(f, path, dp, use_rrip,
-				first ? 0 : lenskip)) {
+			    first ? 0 : lenskip)) {
 				first = 0;
 				break;
 			} else

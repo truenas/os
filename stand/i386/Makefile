@@ -10,7 +10,9 @@ SUBDIR.yes+=	pmbr-datadisk
 
 SUBDIR.${MK_LOADER_FIREWIRE}+=	libfirewire
 
-SUBDIR.yes+=	loader
+SUBDIR.${MK_FORTH}+= loader_4th
+SUBDIR.${MK_LOADER_LUA}+= loader_lua
+SUBDIR.yes+=	loader_simp
 
 # special boot programs, 'self-extracting boot2+loader'
 SUBDIR.yes+=	pxeldr
@@ -19,6 +21,6 @@ SUBDIR.yes+=	pxeldr
 SUBDIR.yes+=	kgzldr
 .endif
 
-SUBDIR.${MK_ZFS}+=	zfsboot gptzfsboot zfsloader
+SUBDIR.${MK_LOADER_ZFS}+=	zfsboot gptzfsboot
 
 .include <bsd.subdir.mk>

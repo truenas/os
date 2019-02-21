@@ -266,7 +266,7 @@ typedef struct hrtimer{
 		__LINE__, __FUNCTION__, ##__VA_ARGS__);		\
 	} while (0)
 
-/* Disabled printf (used to be ND). */
+/* Disabled printf (used to be nm_prdis). */
 #define nm_prdis(format, ...)
 
 /* Rate limited, lps indicates how many per second. */
@@ -280,11 +280,6 @@ typedef struct hrtimer{
 		if (__cnt++ < lps)				\
 			nm_prinf(format, ##__VA_ARGS__);	\
 	} while (0)
-
-/* Old macros. */
-#define ND	nm_prdis
-#define D	nm_prerr
-#define RD	nm_prlim
 
 struct netmap_adapter;
 struct nm_bdg_fwd;
@@ -1144,7 +1139,7 @@ nm_kr_rxspace(struct netmap_kring *k)
 	int space = k->nr_hwtail - k->nr_hwcur;
 	if (space < 0)
 		space += k->nkr_num_slots;
-	ND("preserving %d rx slots %d -> %d", space, k->nr_hwcur, k->nr_hwtail);
+	nm_prdis("preserving %d rx slots %d -> %d", space, k->nr_hwcur, k->nr_hwtail);
 
 	return space;
 }
@@ -1157,12 +1152,21 @@ nm_kr_rxspace(struct netmap_kring *k)
 static inline int
 nm_kr_txempty(struct netmap_kring *kring)
 {
-	return kring->rcur == kring->nr_hwtail;
+	return kring->rhead == kring->nr_hwtail;
 }
 
 /* True if no more completed slots in the rx ring, only valid after
  * rxsync_prologue */
 #define nm_kr_rxempty(_k)	nm_kr_txempty(_k)
+
+/* True if the application needs to wait for more space on the ring
+ * (more received packets or more free tx slots).
+ * Only valid after *xsync_prologue. */
+static inline int
+nm_kr_wouldblock(struct netmap_kring *kring)
+{
+	return kring->rcur == kring->nr_hwtail;
+}
 
 /*
  * protect against multiple threads using the same ring.
@@ -1361,6 +1365,8 @@ nm_update_hostrings_mode(struct netmap_adapter *na)
 void nm_set_native_flags(struct netmap_adapter *);
 void nm_clear_native_flags(struct netmap_adapter *);
 
+void netmap_krings_mode_commit(struct netmap_adapter *na, int onoff);
+
 /*
  * nm_*sync_prologue() functions are used in ioctl/poll and ptnetmap
  * kthreads.
@@ -1388,7 +1394,7 @@ uint32_t nm_rxsync_prologue(struct netmap_kring *, struct netmap_ring *);
 #if 1 /* debug version */
 #define	NM_CHECK_ADDR_LEN(_na, _a, _l)	do {				\
 	if (_a == NETMAP_BUF_BASE(_na) || _l > NETMAP_BUF_SIZE(_na)) {	\
-		RD(5, "bad addr/len ring %d slot %d idx %d len %d",	\
+		nm_prlim(5, "bad addr/len ring %d slot %d idx %d len %d",	\
 			kring->ring_id, nm_i, slot->buf_idx, len);	\
 		if (_l > NETMAP_BUF_SIZE(_na))				\
 			_l = NETMAP_BUF_SIZE(_na);			\
@@ -1550,7 +1556,7 @@ void __netmap_adapter_get(struct netmap_adapter *na);
 #define netmap_adapter_get(na) 				\
 	do {						\
 		struct netmap_adapter *__na = na;	\
-		D("getting %p:%s (%d)", __na, (__na)->name, (__na)->na_refcount);	\
+		nm_prinf("getting %p:%s (%d)", __na, (__na)->name, (__na)->na_refcount);	\
 		__netmap_adapter_get(__na);		\
 	} while (0)
 
@@ -1559,7 +1565,7 @@ int __netmap_adapter_put(struct netmap_adapter *na);
 #define netmap_adapter_put(na)				\
 	({						\
 		struct netmap_adapter *__na = na;	\
-		D("putting %p:%s (%d)", __na, (__na)->name, (__na)->na_refcount);	\
+		nm_prinf("putting %p:%s (%d)", __na, (__na)->name, (__na)->na_refcount);	\
 		__netmap_adapter_put(__na);		\
 	})
 
@@ -1721,7 +1727,7 @@ int nm_iommu_group_id(bus_dma_tag_t dev);
 			addr, NETMAP_BUF_SIZE, DMA_TO_DEVICE);
 
 	if (dma_mapping_error(&adapter->pdev->dev, buffer_info->dma)) {
-		D("dma mapping error");
+		nm_prerr("dma mapping error");
 		/* goto dma_error; See e1000_put_txbuf() */
 		/* XXX reset */
 	}
@@ -1944,7 +1950,6 @@ struct netmap_priv_d {
 	 * (N entries). */
 	struct nm_csb_ktoa	*np_csb_ktoa_base;
 
-	struct thread	*np_td;		/* kqueue, just debugging */
 #ifdef linux
 	struct file	*np_filp;  /* used by sync kloop */
 #endif /* linux */
@@ -1981,6 +1986,12 @@ nm_si_user(struct netmap_priv_d *priv, enum txrx t)
 #ifdef WITH_PIPES
 int netmap_pipe_txsync(struct netmap_kring *txkring, int flags);
 int netmap_pipe_rxsync(struct netmap_kring *rxkring, int flags);
+int netmap_pipe_krings_create_both(struct netmap_adapter *na,
+				  struct netmap_adapter *ona);
+void netmap_pipe_krings_delete_both(struct netmap_adapter *na,
+				    struct netmap_adapter *ona);
+int netmap_pipe_reg_both(struct netmap_adapter *na,
+			 struct netmap_adapter *ona);
 #endif /* WITH_PIPES */
 
 #ifdef WITH_MONITOR
@@ -2244,61 +2255,14 @@ int ptnet_nm_krings_create(struct netmap_adapter *na);
 void ptnet_nm_krings_delete(struct netmap_adapter *na);
 void ptnet_nm_dtor(struct netmap_adapter *na);
 
-/* Guest driver: Write kring pointers (cur, head) to the CSB.
- * This routine is coupled with ptnetmap_host_read_kring_csb(). */
-static inline void
-ptnetmap_guest_write_kring_csb(struct nm_csb_atok *atok, uint32_t cur,
-			       uint32_t head)
-{
-    /*
-     * We need to write cur and head to the CSB but we cannot do it atomically.
-     * There is no way we can prevent the host from reading the updated value
-     * of one of the two and the old value of the other. However, if we make
-     * sure that the host never reads a value of head more recent than the
-     * value of cur we are safe. We can allow the host to read a value of cur
-     * more recent than the value of head, since in the netmap ring cur can be
-     * ahead of head and cur cannot wrap around head because it must be behind
-     * tail. Inverting the order of writes below could instead result into the
-     * host to think head went ahead of cur, which would cause the sync
-     * prologue to fail.
-     *
-     * The following memory barrier scheme is used to make this happen:
-     *
-     *          Guest              Host
-     *
-     *          STORE(cur)         LOAD(head)
-     *          mb() <-----------> mb()
-     *          STORE(head)        LOAD(cur)
-     */
-    atok->cur = cur;
-    nm_stst_barrier();
-    atok->head = head;
-}
-
-/* Guest driver: Read kring pointers (hwcur, hwtail) from the CSB.
- * This routine is coupled with ptnetmap_host_write_kring_csb(). */
-static inline void
-ptnetmap_guest_read_kring_csb(struct nm_csb_ktoa *ktoa,
-                              struct netmap_kring *kring)
-{
-    /*
-     * We place a memory barrier to make sure that the update of hwtail never
-     * overtakes the update of hwcur.
-     * (see explanation in ptnetmap_host_write_kring_csb).
-     */
-    kring->nr_hwtail = ktoa->hwtail;
-    nm_stst_barrier();
-    kring->nr_hwcur = ktoa->hwcur;
-}
-
-/* Helper function wrapping ptnetmap_guest_read_kring_csb(). */
+/* Helper function wrapping nm_sync_kloop_appl_read(). */
 static inline void
 ptnet_sync_tail(struct nm_csb_ktoa *ktoa, struct netmap_kring *kring)
 {
 	struct netmap_ring *ring = kring->ring;
 
 	/* Update hwcur and hwtail as known by the host. */
-        ptnetmap_guest_read_kring_csb(ktoa, kring);
+        nm_sync_kloop_appl_read(ktoa, &kring->nr_hwtail, &kring->nr_hwcur);
 
 	/* nm_sync_finalize */
 	ring->tail = kring->rtail = kring->nr_hwtail;
@@ -2362,7 +2326,7 @@ nm_os_get_mbuf(struct ifnet *ifp, int len)
 		m->m_ext.ext_arg1 = m->m_ext.ext_buf; // XXX save
 		m->m_ext.ext_free = (void *)void_mbuf_dtor;
 		m->m_ext.ext_type = EXT_EXTREF;
-		ND(5, "create m %p refcnt %d", m, MBUF_REFCNT(m));
+		nm_prdis(5, "create m %p refcnt %d", m, MBUF_REFCNT(m));
 	}
 	return m;
 }
