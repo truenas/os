@@ -21,7 +21,6 @@ sig_stop="USR1"
 
 nfsd_precmd()
 {
-	local	_vhost
 	rc_flags="${nfs_server_flags}"
 
 	# Load the modules now, so that the vfs.nfsd sysctl
