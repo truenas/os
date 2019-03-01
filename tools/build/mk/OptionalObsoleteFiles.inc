@@ -7036,7 +7036,6 @@ OLD_FILES+=usr/lib32/libpmc_p.a
 OLD_FILES+=usr/sbin/pmcannotate
 OLD_FILES+=usr/sbin/pmccontrol
 OLD_FILES+=usr/sbin/pmcstat
-OLD_FILES+=usr/share/man/man1/pmcstudy.1.gz
 OLD_FILES+=usr/share/man/man3/pmc.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.atom.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.atomsilvermont.3.gz
@@ -7046,6 +7045,7 @@ OLD_FILES+=usr/share/man/man3/pmc.corei7.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.corei7uc.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.haswell.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.haswelluc.3.gz
+OLD_FILES+=usr/share/man/man3/pmc.haswellxeon.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.iaf.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.ivybridge.3.gz
 OLD_FILES+=usr/share/man/man3/pmc.ivybridgexeon.3.gz
@@ -7105,6 +7105,7 @@ OLD_FILES+=usr/share/man/man3/pmclog_read.3.gz
 OLD_FILES+=usr/share/man/man8/pmcannotate.8.gz
 OLD_FILES+=usr/share/man/man8/pmccontrol.8.gz
 OLD_FILES+=usr/share/man/man8/pmcstat.8.gz
+OLD_FILES+=usr/share/man/man8/pmcstudy.8.gz
 .endif
 
 .if ${MK_PORTSNAP} == no
@@ -9337,6 +9338,32 @@ OLD_FILES+=usr/share/man/man1/who.1.gz
 OLD_FILES+=usr/share/man/man8/ac.8.gz
 OLD_FILES+=usr/share/man/man8/lastlogin.8.gz
 OLD_FILES+=usr/share/man/man8/utx.8.gz
+.endif
+
+.if ${MK_VI} == no
+OLD_FILES+=etc/rc.d/virecover
+OLD_FILES+=rescue/ex
+OLD_FILES+=rescue/vi
+OLD_FILES+=usr/bin/ex
+OLD_FILES+=usr/bin/nex
+OLD_FILES+=usr/bin/nvi
+OLD_FILES+=usr/bin/nview
+OLD_FILES+=usr/bin/vi
+OLD_FILES+=usr/bin/view
+OLD_FILES+=usr/share/man/man1/ex.1.gz
+OLD_FILES+=usr/share/man/man1/nex.1.gz
+OLD_FILES+=usr/share/man/man1/nvi.1.gz
+OLD_FILES+=usr/share/man/man1/nview.1.gz
+OLD_FILES+=usr/share/man/man1/vi.1.gz
+OLD_FILES+=usr/share/man/man1/view.1.gz
+.  if exists(${DESTDIR}/usr/share/vi)
+VI_DIRS!=find ${DESTDIR}/usr/share/vi -type d \
+    | sed -e 's,^${DESTDIR}/,,'; echo
+VI_FILES!=find ${DESTDIR}/usr/share/vi \! -type d \
+    | sed -e 's,^${DESTDIR}/,,'; echo
+OLD_DIRS+=${VI_DIRS}
+OLD_FILES+=${VI_FILES}
+.  endif
 .endif
 
 .if ${MK_WIRELESS} == no
