@@ -87,6 +87,15 @@ static const unsigned char flags[NOPT] = {
 };
 uint32_t opts;
 
+static const struct string {
+    const char *p;
+    size_t len;
+} loadpath[] = {
+    { PATH_LOADER_ZFS, sizeof(PATH_LOADER_ZFS) },
+    { PATH_LOADER, sizeof(PATH_LOADER) },
+    { PATH_KERNEL, sizeof(PATH_KERNEL) },
+};
+
 static const unsigned char dev_maj[NDEV] = {30, 4, 2};
 
 static char cmd[512];
@@ -839,15 +848,16 @@ main(void)
 	reboot();
 
     /*
-     * Try to exec /boot/loader. If interrupted by a keypress,
-     * or in case of failure, try to load a kernel directly instead.
+     * Try to exec a loader or the kernel directly.
+     * If interrupted by a keypress, or in case of failure,
+     * drop the user to a boot2 prompt.
      */
-
     if (autoboot && !*kname) {
-	memcpy(kname, PATH_LOADER, sizeof(PATH_LOADER));
-	if (!keyhit(3)) {
+	for (i = 0; i < nitems(loadpath); i++) {
+	    memcpy(kname, loadpath[i].p, loadpath[i].len);
+	    if (keyhit(3))
+		break;
 	    load();
-	    memcpy(kname, PATH_KERNEL, sizeof(PATH_KERNEL));
 	}
     }
 
