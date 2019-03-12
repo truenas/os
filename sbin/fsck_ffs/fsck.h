@@ -230,6 +230,7 @@ struct inodesc {
 	ufs_lbn_t id_lbn;	/* logical block number of current block */
 	ufs2_daddr_t id_blkno;	/* current block number being examined */
 	int id_numfrags;	/* number of frags contained in block */
+	ufs_lbn_t id_lballoc;	/* pass1: last LBN that is allocated */
 	off_t id_filesize;	/* for DATA nodes, the size of the directory */
 	ufs2_daddr_t id_entryno;/* for DATA nodes, current entry number */
 	int id_loc;		/* for DATA nodes, current location in dir */
@@ -289,6 +290,7 @@ extern long countdirs;		/* number of directories we actually found */
 #define MIBSIZE	3		/* size of fsck sysctl MIBs */
 extern int	adjrefcnt[MIBSIZE];	/* MIB command to adjust inode reference cnt */
 extern int	adjblkcnt[MIBSIZE];	/* MIB command to adjust inode block count */
+extern int	setsize[MIBSIZE];	/* MIB command to set inode size */
 extern int	adjndir[MIBSIZE];	/* MIB command to adjust number of directories */
 extern int	adjnbfree[MIBSIZE];	/* MIB command to adjust number of free blocks */
 extern int	adjnifree[MIBSIZE];	/* MIB command to adjust number of free inodes */
@@ -444,7 +446,7 @@ union dinode   *ginode(ino_t inumber);
 void		infohandler(int sig);
 void		alarmhandler(int sig);
 void		inocleanup(void);
-void		inodirty(void);
+void		inodirty(union dinode *);
 struct inostat *inoinfo(ino_t inum);
 void		IOstats(char *what);
 int		linkup(ino_t orphan, ino_t parentdir, char *name);
