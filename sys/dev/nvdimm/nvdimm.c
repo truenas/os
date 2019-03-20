@@ -868,7 +868,7 @@ nvdimm_sysctl(SYSCTL_HANDLER_ARGS)
 	ACPI_OBJECT *obj;
 	struct nvdimm_child *ivar;
 	struct sbuf sb;
-	int error;
+	int error, val;
 
 	error = priv_check(req->td, PRIV_SYSCTL_DEBUG);
 	if (error)
@@ -940,8 +940,13 @@ nvdimm_sysctl(SYSCTL_HANDLER_ARGS)
 	} else if (arg2 == 12) {
 		sbuf_printf(&sb, "ES Lifetime Percentage: %d%%\n",
 		    obj->Buffer.Pointer[4]);
-		sbuf_printf(&sb, "ES Current Temperature: %d C\n",
-		    ((uint16_t)obj->Buffer.Pointer[6] << 8) | obj->Buffer.Pointer[5]);
+		val = ((uint16_t)obj->Buffer.Pointer[6] << 8) | obj->Buffer.Pointer[5];
+		/* Workaround wrong units reported by Micron NVDIMMs. */
+		if ((val & 0x1000) != 0)
+			val = - (val & 0x0fff) / 16;
+		else if (val >= 128)
+			val = (val & 0x0fff) / 16;
+		sbuf_printf(&sb, "ES Current Temperature: %d C\n", val);
 		sbuf_printf(&sb, "Total Runtime: %d",
 		    ((uint32_t)obj->Buffer.Pointer[10] << 24) |
 		    ((uint32_t)obj->Buffer.Pointer[9] << 16) |
