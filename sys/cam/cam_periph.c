@@ -910,8 +910,7 @@ cam_periph_mapmem(union ccb *ccb, struct cam_periph_map_info *mapinfo,
 		 * small allocations malloc is backed by UMA, and so much
 		 * cheaper on SMP systems.
 		 */
-		if (lengths[i] <= periph_mapmem_thresh &&
-		    ccb->ccb_h.func_code != XPT_MMC_IO) {
+		if (lengths[i] <= periph_mapmem_thresh) {
 			*data_ptrs[i] = malloc(lengths[i], M_CAMPERIPH,
 			    M_WAITOK);
 			if (dirs[i] != CAM_DIR_IN) {
@@ -1030,15 +1029,6 @@ cam_periph_unmapmem(union ccb *ccb, struct cam_periph_map_info *mapinfo)
 		lengths[0] = ccb->ataio.dxfer_len;
 		dirs[0] = ccb->ccb_h.flags & CAM_DIR_MASK;
 		numbufs = 1;
-		break;
-	case XPT_MMC_IO:
-		data_ptrs[0] = (u_int8_t **)&ccb->mmcio.cmd.data;
-		lengths[0] = sizeof(struct mmc_data *);
-		dirs[0] = ccb->ccb_h.flags & CAM_DIR_MASK;
-		data_ptrs[1] = (u_int8_t **)&ccb->mmcio.cmd.data->data;
-		lengths[1] = ccb->mmcio.cmd.data->len;
-		dirs[1] = ccb->ccb_h.flags & CAM_DIR_MASK;
-		numbufs = 2;
 		break;
 	case XPT_SMP_IO:
 		data_ptrs[0] = &ccb->smpio.smp_request;
