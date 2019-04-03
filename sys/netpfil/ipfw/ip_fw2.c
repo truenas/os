@@ -1595,12 +1595,10 @@ do {								\
 				break;
 
 			case IPPROTO_CARP:
-				PULLUP_TO(hlen, ulp, struct carp_header);
-				if (((struct carp_header *)ulp)->carp_version !=
-				    CARP_VERSION) 
-					return (IP_FW_DENY);
-				if (((struct carp_header *)ulp)->carp_type !=
-				    CARP_ADVERTISEMENT) 
+				PULLUP_TO(hlen, ulp, offsetof(
+				    struct carp_header, carp_counter));
+				if (CARP_ADVERTISEMENT !=
+				    ((struct carp_header *)ulp)->carp_type)
 					return (IP_FW_DENY);
 				break;
 
@@ -2353,13 +2351,13 @@ do {								\
 
 			case O_VERSRCREACH:
 				/* Outgoing packets automatically pass/match */
-				match = (hlen > 0 && ((oif != NULL) ||
+				match = (hlen > 0 && ((oif != NULL) || (
 #ifdef INET6
 				    is_ipv6 ?
 				        verify_path6(&(args->f_id.src_ip6),
 				            NULL, args->f_id.fib) :
 #endif
-				    verify_path(src_ip, NULL, args->f_id.fib)));
+				    verify_path(src_ip, NULL, args->f_id.fib))));
 				break;
 
 			case O_ANTISPOOF:
