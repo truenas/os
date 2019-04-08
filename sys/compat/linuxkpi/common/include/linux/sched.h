@@ -143,6 +143,11 @@ linux_schedule_save_interrupt_value(struct task_struct *task, int value)
 	task->bsd_interrupt_value = value;
 }
 
+bool linux_task_exiting(struct task_struct *task);
+
+#define	current_exiting() \
+	linux_task_exiting(current)
+
 static inline int
 linux_schedule_get_interrupt_value(struct task_struct *task)
 {
@@ -176,6 +181,14 @@ local_clock(void)
 
 	nanotime(&ts);
 	return ((uint64_t)ts.tv_sec * NSEC_PER_SEC + ts.tv_nsec);
+}
+
+static inline const char *
+get_task_comm(char *buf, struct task_struct *task)
+{
+
+	buf[0] = 0; /* buffer is too small */
+	return (task->comm);
 }
 
 #endif	/* _LINUX_SCHED_H_ */

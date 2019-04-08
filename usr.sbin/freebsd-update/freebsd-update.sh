@@ -45,7 +45,8 @@ Options:
                   (default: /var/db/freebsd-update/)
   -f conffile  -- Read configuration options from conffile
                   (default: /etc/freebsd-update.conf)
-  -F           -- Force a fetch operation to proceed
+  -F           -- Force a fetch operation to proceed in the
+                  case of an unfinished upgrade
   -k KEY       -- Trust an RSA key with SHA256 hash of KEY
   -r release   -- Target for upgrade (e.g., 11.1-RELEASE)
   -s server    -- Server from which to fetch updates
@@ -818,6 +819,7 @@ install_check_params () {
 		echo "No updates are available to install."
 		if [ $ISFETCHED -eq 0 ]; then
 			echo "Run '$0 fetch' first."
+			exit 1
 		fi
 		exit 0
 	fi
