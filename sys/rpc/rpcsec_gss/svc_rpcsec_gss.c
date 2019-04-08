@@ -167,10 +167,28 @@ struct svc_rpc_gss_cookedcred {
 };
 
 #define CLIENT_HASH_SIZE	256
-#define CLIENT_MAX		128
-struct svc_rpc_gss_client_list svc_rpc_gss_client_hash[CLIENT_HASH_SIZE];
+#define CLIENT_MAX		1024
+u_int svc_rpc_gss_client_max = CLIENT_MAX;
+u_int svc_rpc_gss_client_hash_size = CLIENT_HASH_SIZE;
+
+SYSCTL_NODE(_kern, OID_AUTO, rpc, CTLFLAG_RW, 0, "RPC");
+SYSCTL_NODE(_kern_rpc, OID_AUTO, gss, CTLFLAG_RW, 0, "GSS");
+
+SYSCTL_UINT(_kern_rpc_gss, OID_AUTO, client_max, CTLFLAG_RW,
+    &svc_rpc_gss_client_max, 0,
+    "Max number of rpc-gss clients");
+
+SYSCTL_UINT(_kern_rpc_gss, OID_AUTO, client_hash, CTLFLAG_RDTUN,
+    &svc_rpc_gss_client_hash_size, 0,
+    "Size of rpc-gss client hash table");
+
+static u_int svc_rpc_gss_client_count;
+SYSCTL_UINT(_kern_rpc_gss, OID_AUTO, client_count, CTLFLAG_RD,
+    &svc_rpc_gss_client_count, 0,
+    "Number of rpc-gss clients");
+
+struct svc_rpc_gss_client_list *svc_rpc_gss_client_hash;
 struct svc_rpc_gss_client_list svc_rpc_gss_clients;
-static size_t svc_rpc_gss_client_count;
 static uint32_t svc_rpc_gss_next_clientid = 1;
 
 static void
@@ -178,7 +196,8 @@ svc_rpc_gss_init(void *arg)
 {
 	int i;
 
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+	svc_rpc_gss_client_hash = mem_alloc(sizeof(struct svc_rpc_gss_client_list) * svc_rpc_gss_client_hash_size);
+	for (i = 0; i < svc_rpc_gss_client_hash_size; i++)
 		TAILQ_INIT(&svc_rpc_gss_client_hash[i]);
 	TAILQ_INIT(&svc_rpc_gss_clients);
 	svc_auth_reg(RPCSEC_GSS, svc_rpc_gss, rpc_gss_svc_getcred);
@@ -514,7 +533,7 @@ svc_rpc_gss_find_client(struct svc_rpc_gss_clientid *id)
 	if (id->ci_hostid != hostid || id->ci_boottime != boottime.tv_sec)
 		return (NULL);
 
-	list = &svc_rpc_gss_client_hash[id->ci_id % CLIENT_HASH_SIZE];
+	list = &svc_rpc_gss_client_hash[id->ci_id % svc_rpc_gss_client_hash_size];
 	sx_xlock(&svc_rpc_gss_lock);
 	TAILQ_FOREACH(client, list, cl_link) {
 		if (client->cl_id.ci_id == id->ci_id) {
@@ -546,19 +565,18 @@ svc_rpc_gss_create_client(void)
 
 	client = mem_alloc(sizeof(struct svc_rpc_gss_client));
 	memset(client, 0, sizeof(struct svc_rpc_gss_client));
-	refcount_init(&client->cl_refs, 1);
+
+	/*
+	 * Set the initial value of cl_refs to two.  One for the caller
+	 * and the other to hold onto the client structure until it expires.
+	 */
+	refcount_init(&client->cl_refs, 2);
 	sx_init(&client->cl_lock, "GSS-client");
 	getcredhostid(curthread->td_ucred, &hostid);
 	client->cl_id.ci_hostid = hostid;
 	getboottime(&boottime);
 	client->cl_id.ci_boottime = boottime.tv_sec;
 	client->cl_id.ci_id = svc_rpc_gss_next_clientid++;
-	list = &svc_rpc_gss_client_hash[client->cl_id.ci_id % CLIENT_HASH_SIZE];
-	sx_xlock(&svc_rpc_gss_lock);
-	TAILQ_INSERT_HEAD(list, client, cl_link);
-	TAILQ_INSERT_HEAD(&svc_rpc_gss_clients, client, cl_alllink);
-	svc_rpc_gss_client_count++;
-	sx_xunlock(&svc_rpc_gss_lock);
 
 	/*
 	 * Start the client off with a short expiration time. We will
@@ -568,6 +586,12 @@ svc_rpc_gss_create_client(void)
 	client->cl_locked = FALSE;
 	client->cl_expiration = time_uptime + 5*60;
 
+	list = &svc_rpc_gss_client_hash[client->cl_id.ci_id % svc_rpc_gss_client_hash_size];
+	sx_xlock(&svc_rpc_gss_lock);
+	TAILQ_INSERT_HEAD(list, client, cl_link);
+	TAILQ_INSERT_HEAD(&svc_rpc_gss_clients, client, cl_alllink);
+	svc_rpc_gss_client_count++;
+	sx_xunlock(&svc_rpc_gss_lock);
 	return (client);
 }
 
@@ -619,7 +643,7 @@ svc_rpc_gss_forget_client_locked(struct svc_rpc_gss_client *client)
 	struct svc_rpc_gss_client_list *list;
 
 	sx_assert(&svc_rpc_gss_lock, SX_XLOCKED);
-	list = &svc_rpc_gss_client_hash[client->cl_id.ci_id % CLIENT_HASH_SIZE];
+	list = &svc_rpc_gss_client_hash[client->cl_id.ci_id % svc_rpc_gss_client_hash_size];
 	TAILQ_REMOVE(list, client, cl_link);
 	TAILQ_REMOVE(&svc_rpc_gss_clients, client, cl_alllink);
 	svc_rpc_gss_client_count--;
@@ -634,7 +658,7 @@ svc_rpc_gss_forget_client(struct svc_rpc_gss_client *client)
 	struct svc_rpc_gss_client_list *list;
 	struct svc_rpc_gss_client *tclient;
 
-	list = &svc_rpc_gss_client_hash[client->cl_id.ci_id % CLIENT_HASH_SIZE];
+	list = &svc_rpc_gss_client_hash[client->cl_id.ci_id % svc_rpc_gss_client_hash_size];
 	sx_xlock(&svc_rpc_gss_lock);
 	TAILQ_FOREACH(tclient, list, cl_link) {
 		/*
@@ -666,7 +690,7 @@ svc_rpc_gss_timeout_clients(void)
 	 */
 	sx_xlock(&svc_rpc_gss_lock);
 	client = TAILQ_LAST(&svc_rpc_gss_clients, svc_rpc_gss_client_list);
-	while (svc_rpc_gss_client_count > CLIENT_MAX && client != NULL) {
+	while (svc_rpc_gss_client_count > svc_rpc_gss_client_max && client != NULL) {
 		svc_rpc_gss_forget_client_locked(client);
 		sx_xunlock(&svc_rpc_gss_lock);
 		svc_rpc_gss_release_client(client);
@@ -1265,7 +1289,6 @@ svc_rpc_gss(struct svc_req *rqst, struct rpc_msg *msg)
 			goto out;
 		}
 		client = svc_rpc_gss_create_client();
-		refcount_acquire(&client->cl_refs);
 	} else {
 		struct svc_rpc_gss_clientid *p;
 		if (gc.gc_handle.length != sizeof(*p)) {
