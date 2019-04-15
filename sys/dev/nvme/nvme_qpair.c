@@ -255,7 +255,8 @@ nvme_completion_is_retry(const struct nvme_completion *cpl)
 	 * TODO: spec is not clear how commands that are aborted due
 	 *  to TLER will be marked.  So for now, it seems
 	 *  NAMESPACE_NOT_READY is the only case where we should
-	 *  look at the DNR bit.
+	 *  look at the DNR bit. Requests failed with ABORTED_BY_REQUEST
+	 *  set the DNR bit correctly since the driver controls that.
 	 */
 	switch (cpl->status.sct) {
 	case NVME_SCT_GENERIC:
@@ -321,9 +322,13 @@ nvme_qpair_complete_tracker(struct nvme_qpair *qpair, struct nvme_tracker *tr,
 		req->retries++;
 		nvme_qpair_submit_tracker(qpair, tr);
 	} else {
-		if (req->type != NVME_REQUEST_NULL)
+		if (req->type != NVME_REQUEST_NULL) {
+			bus_dmamap_sync(qpair->dma_tag_payload,
+			    tr->payload_dma_map,
+			    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 			bus_dmamap_unload(qpair->dma_tag_payload,
 			    tr->payload_dma_map);
+		}
 
 		nvme_free_request(req);
 		tr->req = NULL;
@@ -407,6 +412,8 @@ nvme_qpair_process_completions(struct nvme_qpair *qpair)
 		 */
 		return (false);
 
+	bus_dmamap_sync(qpair->dma_tag, qpair->queuemem_map,
+	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 	while (1) {
 		cpl = &qpair->cpl[qpair->cq_head];
 
@@ -735,13 +742,8 @@ nvme_qpair_submit_tracker(struct nvme_qpair *qpair, struct nvme_tracker *tr)
 	ctrlr = qpair->ctrlr;
 
 	if (req->timeout)
-#if __FreeBSD_version >= 800030
 		callout_reset_curcpu(&tr->timer, ctrlr->timeout_period * hz,
 		    nvme_timeout, tr);
-#else
-		callout_reset(&tr->timer, ctrlr->timeout_period * hz,
-		    nvme_timeout, tr);
-#endif
 
 	/* Copy the command from the tracker to the submission queue. */
 	memcpy(&qpair->cmd[qpair->sq_tail], &req->cmd, sizeof(req->cmd));
@@ -749,7 +751,16 @@ nvme_qpair_submit_tracker(struct nvme_qpair *qpair, struct nvme_tracker *tr)
 	if (++qpair->sq_tail == qpair->num_entries)
 		qpair->sq_tail = 0;
 
+	bus_dmamap_sync(qpair->dma_tag, qpair->queuemem_map,
+	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
+#ifndef __powerpc__
+	/*
+	 * powerpc's bus_dmamap_sync() already includes a heavyweight sync, but
+	 * no other archs do.
+	 */
 	wmb();
+#endif
+
 	nvme_mmio_write_4(qpair->ctrlr, doorbell[qpair->id].sq_tdbl,
 	    qpair->sq_tail);
 
@@ -800,6 +811,8 @@ nvme_payload_map(void *arg, bus_dma_segment_t *seg, int nseg, int error)
 		tr->req->cmd.prp2 = 0;
 	}
 
+	bus_dmamap_sync(tr->qpair->dma_tag_payload, tr->payload_dma_map,
+	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 	nvme_qpair_submit_tracker(tr->qpair, tr);
 }
 
@@ -860,7 +873,6 @@ _nvme_qpair_submit_request(struct nvme_qpair *qpair, struct nvme_request *req)
 	case NVME_REQUEST_NULL:
 		nvme_qpair_submit_tracker(tr->qpair, tr);
 		break;
-#ifdef NVME_UNMAPPED_BIO_SUPPORT
 	case NVME_REQUEST_BIO:
 		KASSERT(req->u.bio->bio_bcount <= qpair->ctrlr->max_xfer_size,
 		    ("bio->bio_bcount (%jd) exceeds max_xfer_size (%d)\n",
@@ -872,7 +884,6 @@ _nvme_qpair_submit_request(struct nvme_qpair *qpair, struct nvme_request *req)
 			nvme_printf(qpair->ctrlr,
 			    "bus_dmamap_load_bio returned 0x%x!\n", err);
 		break;
-#endif
 	case NVME_REQUEST_CCB:
 		err = bus_dmamap_load_ccb(tr->qpair->dma_tag_payload,
 		    tr->payload_dma_map, req->u.payload,

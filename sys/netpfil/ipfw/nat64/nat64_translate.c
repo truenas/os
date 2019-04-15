@@ -1,7 +1,8 @@
 /*-
- * Copyright (c) 2015-2018 Yandex LLC
- * Copyright (c) 2015-2018 Andrey V. Elsukov <ae@FreeBSD.org>
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
+ * Copyright (c) 2015-2019 Yandex LLC
+ * Copyright (c) 2015-2019 Andrey V. Elsukov <ae@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,8 +25,6 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#include "opt_ipfw.h"
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -63,6 +62,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet6/in6_var.h>
 #include <netinet6/in6_fib.h>
 #include <netinet6/ip6_var.h>
+#include <netinet6/ip_fw_nat64.h>
 
 #include <netpfil/pf/pf.h>
 #include <netpfil/ipfw/ip_fw_private.h>
@@ -70,6 +70,53 @@ __FBSDID("$FreeBSD$");
 
 #include "ip_fw_nat64.h"
 #include "nat64_translate.h"
+
+
+typedef int (*nat64_output_t)(struct ifnet *, struct mbuf *,
+    struct sockaddr *, struct nat64_counters *, void *);
+typedef int (*nat64_output_one_t)(struct mbuf *, struct nat64_counters *,
+    void *);
+
+static int nat64_find_route4(struct nhop4_basic *, struct sockaddr_in *,
+    struct mbuf *);
+static int nat64_find_route6(struct nhop6_basic *, struct sockaddr_in6 *,
+    struct mbuf *);
+static int nat64_output_one(struct mbuf *, struct nat64_counters *, void *);
+static int nat64_output(struct ifnet *, struct mbuf *, struct sockaddr *,
+    struct nat64_counters *, void *);
+static int nat64_direct_output_one(struct mbuf *, struct nat64_counters *,
+    void *);
+static int nat64_direct_output(struct ifnet *, struct mbuf *,
+    struct sockaddr *, struct nat64_counters *, void *);
+
+struct nat64_methods {
+	nat64_output_t		output;
+	nat64_output_one_t	output_one;
+};
+static const struct nat64_methods nat64_netisr = {
+	.output = nat64_output,
+	.output_one = nat64_output_one
+};
+static const struct nat64_methods nat64_direct = {
+	.output = nat64_direct_output,
+	.output_one = nat64_direct_output_one
+};
+static VNET_DEFINE(const struct nat64_methods *, nat64out) = &nat64_netisr;
+#define	V_nat64out	VNET(nat64out)
+
+void
+nat64_set_output_method(int direct)
+{
+
+	V_nat64out = direct != 0 ? &nat64_direct: &nat64_netisr;
+}
+
+int
+nat64_get_output_method(void)
+{
+
+	return (V_nat64out == &nat64_direct ? 1: 0);
+}
 
 static void
 nat64_log(struct pfloghdr *logdata, struct mbuf *m, sa_family_t family)
@@ -80,14 +127,8 @@ nat64_log(struct pfloghdr *logdata, struct mbuf *m, sa_family_t family)
 	ipfw_bpf_mtap2(logdata, PFLOG_HDRLEN, m);
 }
 
-#ifdef IPFIREWALL_NAT64_DIRECT_OUTPUT
-static NAT64NOINLINE int nat64_find_route4(struct nhop4_basic *,
-    struct sockaddr_in *, struct mbuf *);
-static NAT64NOINLINE int nat64_find_route6(struct nhop6_basic *,
-    struct sockaddr_in6 *, struct mbuf *);
-
-static NAT64NOINLINE int
-nat64_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
+static int
+nat64_direct_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
     struct nat64_counters *stats, void *logdata)
 {
 	int error;
@@ -100,8 +141,9 @@ nat64_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
 	return (error);
 }
 
-static NAT64NOINLINE int
-nat64_output_one(struct mbuf *m, struct nat64_counters *stats, void *logdata)
+static int
+nat64_direct_output_one(struct mbuf *m, struct nat64_counters *stats,
+    void *logdata)
 {
 	struct nhop6_basic nh6;
 	struct nhop4_basic nh4;
@@ -153,8 +195,8 @@ nat64_output_one(struct mbuf *m, struct nat64_counters *stats, void *logdata)
 		NAT64STAT_INC(stats, oerrors);
 	return (error);
 }
-#else /* !IPFIREWALL_NAT64_DIRECT_OUTPUT */
-static NAT64NOINLINE int
+
+static int
 nat64_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
     struct nat64_counters *stats, void *logdata)
 {
@@ -187,13 +229,12 @@ nat64_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
 	return (ret);
 }
 
-static NAT64NOINLINE int
+static int
 nat64_output_one(struct mbuf *m, struct nat64_counters *stats, void *logdata)
 {
 
 	return (nat64_output(NULL, m, NULL, stats, logdata));
 }
-#endif /* !IPFIREWALL_NAT64_DIRECT_OUTPUT */
 
 /*
  * Check the given IPv6 prefix and length according to RFC6052:
@@ -202,7 +243,7 @@ nat64_output_one(struct mbuf *m, struct nat64_counters *stats, void *logdata)
  * Returns zero on success, otherwise EINVAL.
  */
 int
-nat64_check_prefix6(const struct in6_addr *prefix, int length)
+nat64_check_prefixlen(int length)
 {
 
 	switch (length) {
@@ -211,29 +252,40 @@ nat64_check_prefix6(const struct in6_addr *prefix, int length)
 	case 48:
 	case 56:
 	case 64:
-		/* Well-known prefix has 96 prefix length */
-		if (IN6_IS_ADDR_WKPFX(prefix))
-			return (EINVAL);
-		/* FALLTHROUGH */
 	case 96:
-		/* Bits 64 to 71 must be set to zero */
-		if (prefix->__u6_addr.__u6_addr8[8] != 0)
-			return (EINVAL);
-		/* Some extra checks */
-		if (IN6_IS_ADDR_MULTICAST(prefix) ||
-		    IN6_IS_ADDR_UNSPECIFIED(prefix) ||
-		    IN6_IS_ADDR_LOOPBACK(prefix))
-			return (EINVAL);
 		return (0);
 	}
 	return (EINVAL);
 }
 
 int
+nat64_check_prefix6(const struct in6_addr *prefix, int length)
+{
+
+	if (nat64_check_prefixlen(length) != 0)
+		return (EINVAL);
+
+	/* Well-known prefix has 96 prefix length */
+	if (IN6_IS_ADDR_WKPFX(prefix) && length != 96)
+		return (EINVAL);
+
+	/* Bits 64 to 71 must be set to zero */
+	if (prefix->__u6_addr.__u6_addr8[8] != 0)
+		return (EINVAL);
+
+	/* Some extra checks */
+	if (IN6_IS_ADDR_MULTICAST(prefix) ||
+	    IN6_IS_ADDR_UNSPECIFIED(prefix) ||
+	    IN6_IS_ADDR_LOOPBACK(prefix))
+		return (EINVAL);
+	return (0);
+}
+
+int
 nat64_check_private_ip4(const struct nat64_config *cfg, in_addr_t ia)
 {
 
-	if (V_nat64_allow_private)
+	if (cfg->flags & NAT64_ALLOW_PRIVATE)
 		return (0);
 
 	/* WKPFX must not be used to represent non-global IPv4 addresses */
@@ -262,29 +314,34 @@ nat64_check_private_ip4(const struct nat64_config *cfg, in_addr_t ia)
 	return (0);
 }
 
+/*
+ * Embed @ia IPv4 address into @ip6 IPv6 address.
+ * Place to embedding determined from prefix length @plen.
+ */
 void
-nat64_embed_ip4(const struct nat64_config *cfg, in_addr_t ia,
-    struct in6_addr *ip6)
+nat64_embed_ip4(struct in6_addr *ip6, int plen, in_addr_t ia)
 {
 
-	/* assume the prefix6 is properly filled with zeros */
-	bcopy(&cfg->prefix6, ip6, sizeof(*ip6));
-	switch (cfg->plen6) {
+	switch (plen) {
 	case 32:
 	case 96:
-		ip6->s6_addr32[cfg->plen6 / 32] = ia;
+		ip6->s6_addr32[plen / 32] = ia;
 		break;
 	case 40:
 	case 48:
 	case 56:
+		/*
+		 * Preserve prefix bits.
+		 * Since suffix bits should be zero and reserved for future
+		 * use, we just overwrite the whole word, where they are.
+		 */
+		ip6->s6_addr32[1] &= 0xffffffff << (32 - plen % 32);
 #if BYTE_ORDER == BIG_ENDIAN
-		ip6->s6_addr32[1] = cfg->prefix6.s6_addr32[1] |
-		    (ia >> (cfg->plen6 % 32));
-		ip6->s6_addr32[2] = ia << (24 - cfg->plen6 % 32);
+		ip6->s6_addr32[1] |= ia >> (plen % 32);
+		ip6->s6_addr32[2] = ia << (24 - plen % 32);
 #elif BYTE_ORDER == LITTLE_ENDIAN
-		ip6->s6_addr32[1] = cfg->prefix6.s6_addr32[1] |
-		    (ia << (cfg->plen6 % 32));
-		ip6->s6_addr32[2] = ia >> (24 - cfg->plen6 % 32);
+		ip6->s6_addr32[1] |= ia << (plen % 32);
+		ip6->s6_addr32[2] = ia >> (24 - plen % 32);
 #endif
 		break;
 	case 64:
@@ -297,13 +354,18 @@ nat64_embed_ip4(const struct nat64_config *cfg, in_addr_t ia,
 #endif
 		break;
 	default:
-		panic("Wrong plen6");
+		panic("Wrong plen: %d", plen);
 	};
+	/*
+	 * Bits 64 to 71 of the address are reserved for compatibility
+	 * with the host identifier format defined in the IPv6 addressing
+	 * architecture [RFC4291]. These bits MUST be set to zero.
+	 */
 	ip6->s6_addr8[8] = 0;
 }
 
 in_addr_t
-nat64_extract_ip4(const struct nat64_config *cfg, const struct in6_addr *ip6)
+nat64_extract_ip4(const struct in6_addr *ip6, int plen)
 {
 	in_addr_t ia;
 
@@ -314,7 +376,7 @@ nat64_extract_ip4(const struct nat64_config *cfg, const struct in6_addr *ip6)
 	 * The suffix bits are reserved for future extensions and SHOULD
 	 * be set to zero.
 	 */
-	switch (cfg->plen6) {
+	switch (plen) {
 	case 32:
 		if (ip6->s6_addr32[3] != 0 || ip6->s6_addr32[2] != 0)
 			goto badip6;
@@ -338,20 +400,20 @@ nat64_extract_ip4(const struct nat64_config *cfg, const struct in6_addr *ip6)
 		    (ip6->s6_addr32[3] & htonl(0x00ffffff)) != 0)
 			goto badip6;
 	};
-	switch (cfg->plen6) {
+	switch (plen) {
 	case 32:
 	case 96:
-		ia = ip6->s6_addr32[cfg->plen6 / 32];
+		ia = ip6->s6_addr32[plen / 32];
 		break;
 	case 40:
 	case 48:
 	case 56:
 #if BYTE_ORDER == BIG_ENDIAN
-		ia = (ip6->s6_addr32[1] << (cfg->plen6 % 32)) |
-		    (ip6->s6_addr32[2] >> (24 - cfg->plen6 % 32));
+		ia = (ip6->s6_addr32[1] << (plen % 32)) |
+		    (ip6->s6_addr32[2] >> (24 - plen % 32));
 #elif BYTE_ORDER == LITTLE_ENDIAN
-		ia = (ip6->s6_addr32[1] >> (cfg->plen6 % 32)) |
-		    (ip6->s6_addr32[2] << (24 - cfg->plen6 % 32));
+		ia = (ip6->s6_addr32[1] >> (plen % 32)) |
+		    (ip6->s6_addr32[2] << (24 - plen % 32));
 #endif
 		break;
 	case 64:
@@ -364,12 +426,9 @@ nat64_extract_ip4(const struct nat64_config *cfg, const struct in6_addr *ip6)
 	default:
 		return (0);
 	};
-	if (nat64_check_ip4(ia) != 0 ||
-	    nat64_check_private_ip4(cfg, ia) != 0)
-		goto badip4;
+	if (nat64_check_ip4(ia) == 0)
+		return (ia);
 
-	return (ia);
-badip4:
 	DPRINTF(DP_GENERIC | DP_DROPS,
 	    "invalid destination address: %08x", ia);
 	return (0);
@@ -396,7 +455,7 @@ badip6:
  *	IPv6 to IPv4:	HC' = cksum_add(HC, result)
  *	IPv4 to IPv6:	HC' = cksum_add(HC, ~result)
  */
-static NAT64NOINLINE uint16_t
+static uint16_t
 nat64_cksum_convert(struct ip6_hdr *ip6, struct ip *ip)
 {
 	uint32_t sum;
@@ -416,7 +475,7 @@ nat64_cksum_convert(struct ip6_hdr *ip6, struct ip *ip)
 	return (sum);
 }
 
-static NAT64NOINLINE void
+static void
 nat64_init_ip4hdr(const struct ip6_hdr *ip6, const struct ip6_frag *frag,
     uint16_t plen, uint8_t proto, struct ip *ip)
 {
@@ -426,12 +485,10 @@ nat64_init_ip4hdr(const struct ip6_hdr *ip6, const struct ip6_frag *frag,
 	ip->ip_hl = sizeof(*ip) >> 2;
 	ip->ip_tos = (ntohl(ip6->ip6_flow) >> 20) & 0xff;
 	ip->ip_len = htons(sizeof(*ip) + plen);
-#ifdef IPFIREWALL_NAT64_DIRECT_OUTPUT
-	ip->ip_ttl = ip6->ip6_hlim - IPV6_HLIMDEC;
-#else
-	/* Forwarding code will decrement TTL. */
 	ip->ip_ttl = ip6->ip6_hlim;
-#endif
+	/* Forwarding code will decrement TTL for netisr based output. */
+	if (V_nat64out == &nat64_direct)
+		ip->ip_ttl -= IPV6_HLIMDEC;
 	ip->ip_sum = 0;
 	ip->ip_p = (proto == IPPROTO_ICMPV6) ? IPPROTO_ICMP: proto;
 	ip_fillid(ip);
@@ -649,7 +706,7 @@ nat64_icmp6_reflect(struct mbuf *m, uint8_t type, uint8_t code, uint32_t mtu,
 	icmp6->icmp6_cksum = in6_cksum(n, IPPROTO_ICMPV6,
 	    sizeof(struct ip6_hdr), plen);
 	m_freem(m);
-	nat64_output_one(n, stats, logdata);
+	V_nat64out->output_one(n, stats, logdata);
 	return;
 freeit:
 	NAT64STAT_INC(stats, dropped);
@@ -752,7 +809,7 @@ nat64_icmp_reflect(struct mbuf *m, uint8_t type,
 	icmp->icmp_cksum = in_cksum_skip(n, sizeof(struct ip) + plen,
 	    sizeof(struct ip));
 	m_freem(m);
-	nat64_output_one(n, stats, logdata);
+	V_nat64out->output_one(n, stats, logdata);
 	return;
 freeit:
 	NAT64STAT_INC(stats, dropped);
@@ -988,9 +1045,11 @@ nat64_icmp_translate(struct mbuf *m, struct ip6_hdr *ip6, uint16_t icmpid,
 	/* Construct new inner IPv6 header */
 	eip6 = mtodo(n, offset + sizeof(struct icmp6_hdr));
 	eip6->ip6_src = ip6->ip6_dst;
-	/* Use the fact that we have single /96 prefix for IPv4 map */
+
+	/* Use the same prefix that we have in outer header */
 	eip6->ip6_dst = ip6->ip6_src;
-	nat64_embed_ip4(cfg, ip.ip_dst.s_addr, &eip6->ip6_dst);
+	MPASS(cfg->flags & NAT64_PLATPFX);
+	nat64_embed_ip4(&eip6->ip6_dst, cfg->plat_plen, ip.ip_dst.s_addr);
 
 	eip6->ip6_flow = htonl(ip.ip_tos << 20);
 	eip6->ip6_vfc |= IPV6_VERSION;
@@ -1169,12 +1228,10 @@ nat64_do_handle_ip4(struct mbuf *m, struct in6_addr *saddr,
 
 	ip6.ip6_flow = htonl(ip->ip_tos << 20);
 	ip6.ip6_vfc |= IPV6_VERSION;
-#ifdef IPFIREWALL_NAT64_DIRECT_OUTPUT
-	ip6.ip6_hlim = ip->ip_ttl - IPTTLDEC;
-#else
-	/* Forwarding code will decrement HLIM. */
 	ip6.ip6_hlim = ip->ip_ttl;
-#endif
+	/* Forwarding code will decrement TTL for netisr based output. */
+	if (V_nat64out == &nat64_direct)
+		ip6.ip6_hlim -= IPTTLDEC;
 	ip6.ip6_plen = htons(plen);
 	ip6.ip6_nxt = (proto == IPPROTO_ICMP) ? IPPROTO_ICMPV6: proto;
 	/* Convert checksums. */
@@ -1207,7 +1264,7 @@ nat64_do_handle_ip4(struct mbuf *m, struct in6_addr *saddr,
 	mbufq_init(&mq, 255);
 	nat64_fragment6(&cfg->stats, &ip6, &mq, m, nh.nh_mtu, ip_id, ip_off);
 	while ((m = mbufq_dequeue(&mq)) != NULL) {
-		if (nat64_output(nh.nh_ifp, m, (struct sockaddr *)&dst,
+		if (V_nat64out->output(nh.nh_ifp, m, (struct sockaddr *)&dst,
 		    &cfg->stats, logdata) != 0)
 			break;
 		NAT64STAT_INC(&cfg->stats, opcnt46);
@@ -1415,11 +1472,12 @@ nat64_handle_icmp6(struct mbuf *m, int hlen, uint32_t aaddr, uint16_t aport,
 
 	/* Now we need to make a fake IPv4 packet to generate ICMP message */
 	ip.ip_dst.s_addr = aaddr;
-	ip.ip_src.s_addr = nat64_extract_ip4(cfg, &ip6i->ip6_src);
+	ip.ip_src.s_addr = nat64_extract_ip4(&ip6i->ip6_src, cfg->plat_plen);
+	if (ip.ip_src.s_addr == 0)
+		goto fail;
 	/* XXX: Make fake ulp header */
-#ifdef IPFIREWALL_NAT64_DIRECT_OUTPUT
-	ip6i->ip6_hlim += IPV6_HLIMDEC; /* init_ip4hdr will decrement it */
-#endif
+	if (V_nat64out == &nat64_direct) /* init_ip4hdr will decrement it */
+		ip6i->ip6_hlim += IPV6_HLIMDEC;
 	nat64_init_ip4hdr(ip6i, ip6f, plen, proto, &ip);
 	m_adj(m, hlen - sizeof(struct ip));
 	bcopy(&ip, mtod(m, void *), sizeof(ip));
@@ -1469,7 +1527,7 @@ nat64_do_handle_ip6(struct mbuf *m, uint32_t aaddr, uint16_t aport,
 		return (NAT64MFREE);
 	}
 
-	ip.ip_dst.s_addr = nat64_extract_ip4(cfg, &ip6->ip6_dst);
+	ip.ip_dst.s_addr = nat64_extract_ip4(&ip6->ip6_dst, cfg->plat_plen);
 	if (ip.ip_dst.s_addr == 0) {
 		NAT64STAT_INC(&cfg->stats, dropped);
 		return (NAT64MFREE);
@@ -1589,7 +1647,7 @@ nat64_do_handle_ip6(struct mbuf *m, uint32_t aaddr, uint16_t aport,
 
 	m_adj(m, hlen - sizeof(ip));
 	bcopy(&ip, mtod(m, void *), sizeof(ip));
-	if (nat64_output(nh.nh_ifp, m, (struct sockaddr *)&dst,
+	if (V_nat64out->output(nh.nh_ifp, m, (struct sockaddr *)&dst,
 	    &cfg->stats, logdata) == 0)
 		NAT64STAT_INC(&cfg->stats, opcnt64);
 	return (NAT64RETURN);

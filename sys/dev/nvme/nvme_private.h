@@ -110,16 +110,6 @@ MALLOC_DECLARE(M_NVME);
 #define CACHE_LINE_SIZE		(64)
 #endif
 
-/*
- * Use presence of the BIO_UNMAPPED flag to determine whether unmapped I/O
- *  support and the bus_dmamap_load_bio API are available on the target
- *  kernel.  This will ease porting back to earlier stable branches at a
- *  later point.
- */
-#ifdef BIO_UNMAPPED
-#define NVME_UNMAPPED_BIO_SUPPORT
-#endif
-
 extern uma_zone_t	nvme_request_zone;
 extern int32_t		nvme_retry_count;
 
@@ -132,9 +122,7 @@ struct nvme_completion_poll_status {
 #define NVME_REQUEST_VADDR	1
 #define NVME_REQUEST_NULL	2 /* For requests with no payload. */
 #define NVME_REQUEST_UIO	3
-#ifdef NVME_UNMAPPED_BIO_SUPPORT
 #define NVME_REQUEST_BIO	4
-#endif
 #define NVME_REQUEST_CCB        5
 
 struct nvme_request {
@@ -245,7 +233,8 @@ struct nvme_controller {
 
 	uint32_t		ready_timeout_in_ms;
 	uint32_t		quirks;
-#define QUIRK_DELAY_B4_CHK_RDY 1		/* Can't touch MMIO on disable */
+#define	QUIRK_DELAY_B4_CHK_RDY	1		/* Can't touch MMIO on disable */
+#define	QUIRK_DISABLE_TIMEOUT	2		/* Disable broken completion timeout feature */
 
 	bus_space_tag_t		bus_tag;
 	bus_space_handle_t	bus_handle;
@@ -345,11 +334,6 @@ struct nvme_controller {
 		    nvme_mmio_offsetof(reg)+4,				       \
 		    (val & 0xFFFFFFFF00000000UL) >> 32);		       \
 	} while (0);
-
-#if __FreeBSD_version < 800054
-#define wmb()	__asm volatile("sfence" ::: "memory")
-#define mb()	__asm volatile("mfence" ::: "memory")
-#endif
 
 #define nvme_printf(ctrlr, fmt, args...)	\
     device_printf(ctrlr->dev, fmt, ##args)
@@ -508,14 +492,8 @@ nvme_allocate_request_bio(struct bio *bio, nvme_cb_fn_t cb_fn, void *cb_arg)
 
 	req = _nvme_allocate_request(cb_fn, cb_arg);
 	if (req != NULL) {
-#ifdef NVME_UNMAPPED_BIO_SUPPORT
 		req->type = NVME_REQUEST_BIO;
 		req->u.bio = bio;
-#else
-		req->type = NVME_REQUEST_VADDR;
-		req->u.payload = bio->bio_data;
-		req->payload_size = bio->bio_bcount;
-#endif
 	}
 	return (req);
 }
