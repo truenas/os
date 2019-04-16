@@ -93,8 +93,8 @@ struct ip_moptions {
 	u_long	imo_multicast_vif;	/* vif num outgoing multicasts */
 	u_char	imo_multicast_ttl;	/* TTL for outgoing multicasts */
 	u_char	imo_multicast_loop;	/* 1 => hear sends if a member */
-	u_short	imo_num_memberships;	/* no. memberships this socket */
 	u_short	imo_max_memberships;	/* max memberships this socket */
+	int	imo_num_memberships;	/* no. memberships this socket */
 	struct	in_multi **imo_membership;	/* group memberships */
 	struct	in_mfilter *imo_mfilters;	/* source filters */
 	struct	epoch_context imo_epoch_ctx;

@@ -1414,16 +1414,13 @@ carp_multicast_setup(struct carp_if *cif, sa_family_t sa)
 		bzero(&in6, sizeof(in6));
 		in6.s6_addr16[0] = htons(0xff02);
 		in6.s6_addr8[15] = 0x12;
-		if ((error = in6_setscope(&in6, ifp, NULL)) != 0) {
-			free(im6o->im6o_membership, M_CARP);
-			break;
-		}
+		if ((error = in6_setscope(&in6, ifp, NULL)) != 0)
+			goto error_out;
 		in6m = NULL;
-		if ((error = in6_joingroup(ifp, &in6, NULL, &in6m, 0)) != 0) {
-			free(im6o->im6o_membership, M_CARP);
-			break;
-		}
-		in6m_acquire(in6m);
+		if ((error = in6_joingroup(ifp, &in6, NULL, &in6m, 0)) != 0)
+			goto error_out;
+
+		/* reference acquired by joingroup */
 		im6o->im6o_membership[0] = in6m;
 		im6o->im6o_num_memberships++;
 
@@ -1434,20 +1431,21 @@ carp_multicast_setup(struct carp_if *cif, sa_family_t sa)
 		in6.s6_addr32[2] = htonl(1);
 		in6.s6_addr32[3] = 0;
 		in6.s6_addr8[12] = 0xff;
-		if ((error = in6_setscope(&in6, ifp, NULL)) != 0) {
-			in6_leavegroup(im6o->im6o_membership[0], NULL);
-			free(im6o->im6o_membership, M_CARP);
-			break;
-		}
+		if ((error = in6_setscope(&in6, ifp, NULL)) != 0) 
+			goto error_out;
 		in6m = NULL;
-		if ((error = in6_joingroup(ifp, &in6, NULL, &in6m, 0)) != 0) {
-			in6_leavegroup(im6o->im6o_membership[0], NULL);
-			free(im6o->im6o_membership, M_CARP);
-			break;
-		}
-		in6m_acquire(in6m);
+		if ((error = in6_joingroup(ifp, &in6, NULL, &in6m, 0)) != 0)
+			goto error_out;
+		/* reference acquired by joingroup */
 		im6o->im6o_membership[1] = in6m;
 		im6o->im6o_num_memberships++;
+		break;
+
+		error_out:
+		if (im6o->im6o_membership[0])
+			in6_leavegroup(im6o->im6o_membership[0], NULL);
+		free(im6o->im6o_membership, M_CARP);
+		
 		break;
 	    }
 #endif

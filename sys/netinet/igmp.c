@@ -628,8 +628,10 @@ igmp_ifdetach(struct ifnet *ifp)
 			    ifma->ifma_protospec == NULL)
 				continue;
 			inm = (struct in_multi *)ifma->ifma_protospec;
-			if (inm->inm_state == IGMP_LEAVING_MEMBER)
+			if (inm->inm_state == IGMP_LEAVING_MEMBER) {
 				inm_rele_locked(&inm_free_tmp, inm);
+				ifma->ifma_protospec = NULL;
+			}
 			inm_clear_recorded(inm);
 			if (__predict_false(ifma_restart)) {
 				ifma_restart = false;
@@ -854,6 +856,7 @@ igmp_input_v2_query(struct ifnet *ifp, const struct ip *ip,
 			    "process v2 query 0x%08x on ifp %p(%s)",
 			    ntohl(igmp->igmp_group.s_addr), ifp, ifp->if_xname);
 			igmp_v2_update_group(inm, timer);
+			inm_release_deferred(inm);
 		}
 	}
 
@@ -930,7 +933,7 @@ igmp_input_v3_query(struct ifnet *ifp, const struct ip *ip,
     /*const*/ struct igmpv3 *igmpv3)
 {
 	struct igmp_ifsoftc	*igi;
-	struct in_multi		*inm;
+	struct in_multi		*inm = NULL;
 	int			 is_general_query;
 	uint32_t		 maxresp, nsrc, qqi;
 	uint16_t		 timer;
@@ -1079,6 +1082,8 @@ igmp_input_v3_query(struct ifnet *ifp, const struct ip *ip,
 
 out_locked:
 	IGMP_UNLOCK();
+	if (inm)
+		inm_release_deferred(inm);
 	IN_MULTI_LIST_UNLOCK();
 
 	return (0);
@@ -1292,6 +1297,9 @@ igmp_input_v1_report(struct ifnet *ifp, /*const*/ struct ip *ip,
 	}
 
 out_locked:
+	if (inm)
+		inm_release_deferred(inm);
+
 	IN_MULTI_LIST_UNLOCK();
 
 	return (0);
@@ -1401,8 +1409,9 @@ igmp_input_v2_report(struct ifnet *ifp, /*const*/ struct ip *ip,
 			break;
 		}
 	}
-
 out_locked:
+	if (inm)
+		inm_release_deferred(inm);
 	IN_MULTI_LIST_UNLOCK();
 
 	return (0);
@@ -2037,6 +2046,7 @@ igmp_v3_cancel_link_timers(struct igmp_ifsoftc *igi)
 			 * transition to NOT would lose the leave and race.
 			 */
 			inm_rele_locked(&inm_free_tmp, inm);
+			ifma->ifma_protospec = NULL;
 			/* FALLTHROUGH */
 		case IGMP_G_QUERY_PENDING_MEMBER:
 		case IGMP_SG_QUERY_PENDING_MEMBER:
@@ -2268,6 +2278,9 @@ igmp_change_state(struct in_multi *inm)
 	 */
 	KASSERT(inm->inm_ifma != NULL, ("%s: no ifma", __func__));
 	ifp = inm->inm_ifma->ifma_ifp;
+	/* The interface address has gone away */
+	if (ifp == NULL)
+		return (0);
 	/*
 	 * Sanity check that netinet's notion of ifp is the
 	 * same as net's.

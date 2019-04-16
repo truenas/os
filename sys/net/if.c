@@ -1019,6 +1019,8 @@ if_purgemaddrs(struct ifnet *ifp)
 	while (!CK_STAILQ_EMPTY(&ifp->if_multiaddrs)) {
 		ifma = CK_STAILQ_FIRST(&ifp->if_multiaddrs);
 		CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ifma, ifmultiaddr, ifma_link);
+		ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
+		MCDPRINTF("removed ifma: %p from %s\n", ifma, ifp->if_xname);
 		if_delmulti_locked(ifp, ifma, 1);
 	}
 	IF_ADDR_WUNLOCK(ifp);
@@ -3429,6 +3431,7 @@ if_allocmulti(struct ifnet *ifp, struct sockaddr *sa, struct sockaddr *llsa,
 	ifma->ifma_addr = dupsa;
 
 	ifma->ifma_ifp = ifp;
+	if_ref(ifp);
 	ifma->ifma_refcount = 1;
 	ifma->ifma_protospec = NULL;
 
@@ -3462,15 +3465,15 @@ static void
 if_freemulti_internal(struct ifmultiaddr *ifma)
 {
 
+#ifdef MCAST_VERBOSE
+	kdb_backtrace();
+	printf("%s freeing ifma: %p\n", __func__, ifma);
+#endif
 	KASSERT(ifma->ifma_refcount == 0, ("if_freemulti: refcount %d",
 	    ifma->ifma_refcount));
 
 	if (ifma->ifma_lladdr != NULL)
 		free(ifma->ifma_lladdr, M_IFMADDR);
-#ifdef MCAST_VERBOSE
-	kdb_backtrace();
-	printf("%s freeing ifma: %p\n", __func__, ifma);
-#endif
 	free(ifma->ifma_addr, M_IFMADDR);
 	free(ifma, M_IFMADDR);
 }
@@ -3583,7 +3586,8 @@ if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
 			ll_ifma = if_allocmulti(ifp, llsa, NULL, M_NOWAIT);
 			if (ll_ifma == NULL) {
 				--ifma->ifma_refcount;
-				if_freemulti(ifma);
+				if (ifma->ifma_refcount == 0)
+					if_freemulti(ifma);
 				error = ENOMEM;
 				goto free_llsa_out;
 			}
@@ -3601,6 +3605,7 @@ if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
 	 * ifnet address list.
 	 */
 	ifma->ifma_flags |= IFMA_F_ENQUEUED;
+	MCDPRINTF("insert ifma: %p in %s\n", ifma, ifp->if_xname);
 	CK_STAILQ_INSERT_HEAD(&ifp->if_multiaddrs, ifma, ifma_link);
 
 	if (retifma != NULL)
@@ -3767,6 +3772,7 @@ static int
 if_delmulti_locked(struct ifnet *ifp, struct ifmultiaddr *ifma, int detaching)
 {
 	struct ifmultiaddr *ll_ifma;
+	struct ifmultiaddr *ifmatmp;
 
 	if (ifp != NULL && ifma->ifma_ifp != NULL) {
 		KASSERT(ifma->ifma_ifp == ifp,
@@ -3774,61 +3780,55 @@ if_delmulti_locked(struct ifnet *ifp, struct ifmultiaddr *ifma, int detaching)
 		IF_ADDR_WLOCK_ASSERT(ifp);
 	}
 
-	ifp = ifma->ifma_ifp;
+	MPASS(ifma->ifma_ifp == NULL || ifma->ifma_ifp == ifp);
 	MCDPRINTF("%s freeing %p from %s \n", __func__, ifma, ifp ? ifp->if_xname : "");
 
-	/*
-	 * If the ifnet is detaching, null out references to ifnet,
-	 * so that upper protocol layers will notice, and not attempt
-	 * to obtain locks for an ifnet which no longer exists. The
-	 * routing socket announcement must happen before the ifnet
-	 * instance is detached from the system.
-	 */
-	if (detaching) {
-#ifdef DIAGNOSTIC
-		printf("%s: detaching ifnet instance %p\n", __func__, ifp);
-#endif
-		/*
-		 * ifp may already be nulled out if we are being reentered
-		 * to delete the ll_ifma.
-		 */
-		if (ifp != NULL) {
-			rt_newmaddrmsg(RTM_DELMADDR, ifma);
-			ifma->ifma_ifp = NULL;
+	if (ifp) {
+		if (ifma->ifma_flags & IFMA_F_ENQUEUED) {
+			MCDPRINTF("removed ifma: %p from %s\n", ifma, ifp->if_xname);
+			CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ifma, ifmultiaddr, ifma_link);
+			ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
 		}
+		/*
+		 * If this is a link level interface, we need to ensure that we've cleared any
+		 * dangling references
+		 */
+		CK_STAILQ_FOREACH(ifmatmp, &ifp->if_multiaddrs, ifma_link) {
+			if (ifmatmp->ifma_llifma == ifma)
+				ifmatmp->ifma_llifma = NULL;
+		}
+		rt_newmaddrmsg(RTM_DELMADDR, ifma);
+		if_rele(ifp);
+		ifma->ifma_ifp = NULL;
 	}
-
+	ifma->ifma_llifma = NULL;
 	if (--ifma->ifma_refcount > 0)
 		return 0;
 
-	if (ifp != NULL && detaching == 0 && (ifma->ifma_flags & IFMA_F_ENQUEUED)) {
-		CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ifma, ifmultiaddr, ifma_link);
-		ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
-	}
 	/*
 	 * If this ifma is a network-layer ifma, a link-layer ifma may
 	 * have been associated with it. Release it first if so.
 	 */
 	ll_ifma = ifma->ifma_llifma;
-	if (ll_ifma != NULL) {
+	if (ifp && ll_ifma != NULL) {
+		ifp = ll_ifma->ifma_ifp;
+		if (ll_ifma->ifma_flags & IFMA_F_ENQUEUED) {
+			CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ll_ifma, ifmultiaddr,
+						ifma_link);
+			ll_ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
+		}
 		KASSERT(ifma->ifma_lladdr != NULL,
 		    ("%s: llifma w/o lladdr", __func__));
-		if (detaching)
+		ifma->ifma_llifma = NULL;
+		if (ifp) {
+			if_rele(ifp);
 			ll_ifma->ifma_ifp = NULL;	/* XXX */
-		if (--ll_ifma->ifma_refcount == 0) {
-			if (ifp != NULL) {
-				if (ll_ifma->ifma_flags & IFMA_F_ENQUEUED) {
-					CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ll_ifma, ifmultiaddr,
-						ifma_link);
-					ll_ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
-				}
-			}
-			if_freemulti(ll_ifma);
 		}
+		if (ll_ifma->ifma_refcount == 0)
+			if_freemulti(ll_ifma);
 	}
 #ifdef INVARIANTS
 	if (ifp) {
-		struct ifmultiaddr *ifmatmp;
 
 		CK_STAILQ_FOREACH(ifmatmp, &ifp->if_multiaddrs, ifma_link)
 			MPASS(ifma != ifmatmp);

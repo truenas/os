@@ -431,7 +431,7 @@ in6_getmulti(struct ifnet *ifp, const struct in6_addr *group,
 		 */
 		KASSERT(inm->in6m_refcount >= 1,
 		    ("%s: bad refcount %d", __func__, inm->in6m_refcount));
-		in6m_acquire_locked(inm);
+		/* reference acquired by lookup */
 		*pinm = inm;
 		goto out_locked;
 	}
@@ -473,6 +473,7 @@ in6_getmulti(struct ifnet *ifp, const struct in6_addr *group,
 			panic("%s: ifma %p is inconsistent with %p (%p)",
 			    __func__, ifma, inm, group);
 #endif
+		/* add caller reference */
 		in6m_acquire_locked(inm);
 		*pinm = inm;
 		goto out_locked;
@@ -499,7 +500,9 @@ in6_getmulti(struct ifnet *ifp, const struct in6_addr *group,
 	inm->in6m_ifp = ifp;
 	inm->in6m_mli = MLD_IFINFO(ifp);
 	inm->in6m_ifma = ifma;
-	inm->in6m_refcount = 1;
+	ifma->ifma_refcount++;
+	/* one reference for the ifma and one for the caller */
+	inm->in6m_refcount = 2;
 	inm->in6m_state = MLD_NOT_MEMBER;
 	mbufq_init(&inm->in6m_scq, MLD_MAX_STATE_CHANGES);
 
@@ -588,6 +591,18 @@ in6m_release_list_deferred(struct in6_multi_head *inmh)
 }
 
 void
+in6m_release_deferred(struct in6_multi *inm)
+{
+	IN6_MULTI_LIST_LOCK_ASSERT();
+	if (--inm->in6m_refcount == 0) {
+		mtx_lock(&in6_multi_free_mtx);
+		SLIST_INSERT_HEAD(&in6m_free_list, inm, in6m_nrele);
+		mtx_unlock(&in6_multi_free_mtx);
+		GROUPTASK_ENQUEUE(&free_gtask);
+	}
+}
+
+void
 in6m_release_wait(void)
 {
 
@@ -599,9 +614,6 @@ void
 in6m_disconnect_locked(struct in6_multi_head *inmh, struct in6_multi *inm)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
-	struct in6_ifaddr *ifa6;
-	struct in6_multi_mship *imm, *imm_tmp;
 	struct ifmultiaddr *ifma, *ll_ifma;
 
 	IN6_MULTI_LIST_LOCK_ASSERT();
@@ -622,7 +634,7 @@ in6m_disconnect_locked(struct in6_multi_head *inmh, struct in6_multi *inm)
 		ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
 	}
 	MCDPRINTF("removed ifma: %p from %s\n", ifma, ifp->if_xname);
-	if ((ll_ifma = ifma->ifma_llifma) != NULL) {
+	if (ifma->ifma_ifp != NULL && (ll_ifma = ifma->ifma_llifma) != NULL) {
 		MPASS(ifma != ll_ifma);
 		ifma->ifma_llifma = NULL;
 		MPASS(ll_ifma->ifma_llifma == NULL);
@@ -631,11 +643,25 @@ in6m_disconnect_locked(struct in6_multi_head *inmh, struct in6_multi *inm)
 			if (ll_ifma->ifma_flags & IFMA_F_ENQUEUED) {
 				CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ll_ifma, ifmultiaddr, ifma_link);
 				ll_ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
+				MCDPRINTF("removed ll_ifma: %p from %s -- from in6m -- \n", ll_ifma, ifp->if_xname);
+			} else {
+				MCDPRINTF("did not remove ll_ifma: %p from %s - not queued\n", ll_ifma, ifp->if_xname);
 			}
-			MCDPRINTF("removed ll_ifma: %p from %s\n", ll_ifma, ifp->if_xname);
 			if_freemulti(ll_ifma);
 		}
 	}
+}
+
+int
+in6m_remove_members(struct in6_multi_head *inmh, struct in6_multi *inm)
+{
+	struct in6_ifaddr *ifa6;
+	struct ifaddr *ifa;
+	struct in6_multi_mship *imm, *imm_tmp;
+	struct ifnet *ifp;
+	int released = 0;
+
+	ifp = inm->in6m_ifp;
 	CK_STAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 		if (ifa->ifa_addr->sa_family != AF_INET6)
 			continue;
@@ -644,12 +670,15 @@ in6m_disconnect_locked(struct in6_multi_head *inmh, struct in6_multi *inm)
 		    i6mm_chain, imm_tmp) {
 			if (inm == imm->i6mm_maddr) {
 				LIST_REMOVE(imm, i6mm_chain);
-				free(imm, M_IP6MADDR);
 				in6m_rele_locked(inmh, inm);
+				released = (inm->in6m_refcount == 0);
+				free(imm, M_IP6MADDR);
 			}
 		}
 	}
+	return (released);
 }
+
 
 static void
 in6m_release_task(void *arg __unused)
@@ -1322,8 +1351,8 @@ out_in6m_release:
 				break;
 			}
 		}
-		in6m_disconnect_locked(&inmh, inm);
-		in6m_rele_locked(&inmh, inm);
+		if (in6m_remove_members(&inmh, inm) == 0)
+			in6m_rele_locked(&inmh, inm);
 		IF_ADDR_RUNLOCK(ifp);
 	} else {
 		*pinm = inm;
@@ -1415,9 +1444,8 @@ in6_leavegroup_locked(struct in6_multi *inm, /*const*/ struct in6_mfilter *imf)
 		IF_ADDR_WLOCK(ifp);
 
 	SLIST_INIT(&inmh);
-	if (inm->in6m_refcount == 1)
-		in6m_disconnect_locked(&inmh, inm);
-	in6m_rele_locked(&inmh, inm);
+	if (in6m_remove_members(&inmh, inm) == 0)
+		in6m_rele_locked(&inmh, inm);
 	if (ifp)
 		IF_ADDR_WUNLOCK(ifp);
 	IN6_MULTI_LIST_UNLOCK();
@@ -2126,7 +2154,6 @@ in6p_join_group(struct inpcb *inp, struct sockopt *sopt)
 		 */
 		idx = imo->im6o_num_memberships;
 		imo->im6o_membership[idx] = NULL;
-		imo->im6o_num_memberships++;
 		KASSERT(imo->im6o_mfilters != NULL,
 		    ("%s: im6f_mfilters vector was not allocated", __func__));
 		imf = &imo->im6o_mfilters[idx];
@@ -2180,13 +2207,16 @@ in6p_join_group(struct inpcb *inp, struct sockopt *sopt)
 		    &inm, 0);
 		if (error) {
 			IN6_MULTI_UNLOCK();
+			INP_WLOCK(inp);
 			goto out_im6o_free;
 		}
 		/*
 		 * NOTE: Refcount from in6_joingroup_locked()
 		 * is protecting membership.
 		 */
+		MPASS(idx == imo->im6o_num_memberships);
 		imo->im6o_membership[idx] = inm;
+		imo->im6o_num_memberships++;
 	} else {
 		CTR1(KTR_MLD, "%s: merge inm state", __func__);
 		IN6_MULTI_LIST_LOCK();

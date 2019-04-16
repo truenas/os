@@ -266,9 +266,9 @@ inm_disconnect(struct in_multi *inm)
 	if (ifma->ifma_flags & IFMA_F_ENQUEUED) {
 		CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ifma, ifmultiaddr, ifma_link);
 		ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
+		MCDPRINTF("removed ifma: %p from %s\n", ifma, ifp->if_xname);
 	}
-	MCDPRINTF("removed ifma: %p from %s\n", ifma, ifp->if_xname);
-	if ((ll_ifma = ifma->ifma_llifma) != NULL) {
+	if (ifma->ifma_ifp != NULL && (ll_ifma = ifma->ifma_llifma) != NULL) {
 		MPASS(ifma != ll_ifma);
 		ifma->ifma_llifma = NULL;
 		MPASS(ll_ifma->ifma_llifma == NULL);
@@ -277,8 +277,8 @@ inm_disconnect(struct in_multi *inm)
 			if (ll_ifma->ifma_flags & IFMA_F_ENQUEUED) {
 				CK_STAILQ_REMOVE(&ifp->if_multiaddrs, ll_ifma, ifmultiaddr, ifma_link);
 				ll_ifma->ifma_flags &= ~IFMA_F_ENQUEUED;
+				MCDPRINTF("removed ll_ifma: %p from %s\n", ll_ifma, ifp->if_xname);
 			}
-			MCDPRINTF("removed ll_ifma: %p from %s\n", ll_ifma, ifp->if_xname);
 			if_freemulti(ll_ifma);
 			ifma_restart = true;
 		}
@@ -292,7 +292,9 @@ inm_release_deferred(struct in_multi *inm)
 
 	IN_MULTI_LIST_LOCK_ASSERT();
 	MPASS(inm->inm_refcount > 0);
+	MCDPRINTF("inm: %p refcount: %d\n", inm, inm->inm_refcount);
 	if (--inm->inm_refcount == 0) {
+		MCDPRINTF("freeing %p \n", inm);
 		SLIST_INIT(&tmp);
 		inm_disconnect(inm);
 		inm->inm_ifma->ifma_protospec = NULL;
@@ -357,6 +359,8 @@ inm_lookup_locked(struct ifnet *ifp, const struct in_addr ina)
 			break;
 		inm = NULL;
 	}
+	if (inm)
+		inm_acquire_locked(inm);
 	return (inm);
 }
 
@@ -559,13 +563,8 @@ in_getmulti(struct ifnet *ifp, const struct in_addr *group,
 	IN_MULTI_LIST_LOCK();
 	inm = inm_lookup(ifp, *group);
 	if (inm != NULL) {
-		/*
-		 * If we already joined this group, just bump the
-		 * refcount and return it.
-		 */
-		KASSERT(inm->inm_refcount >= 1,
+		KASSERT(inm->inm_refcount > 1,
 		    ("%s: bad refcount %d", __func__, inm->inm_refcount));
-		inm_acquire_locked(inm);
 		*pinm = inm;
 	}
 	IN_MULTI_LIST_UNLOCK();
@@ -637,7 +636,9 @@ in_getmulti(struct ifnet *ifp, const struct in_addr *group,
 	inm->inm_ifp = ifp;
 	inm->inm_igi = ii->ii_igmp;
 	inm->inm_ifma = ifma;
-	inm->inm_refcount = 1;
+	ifma->ifma_refcount++;
+	/* One reference for the caller and one for the ifma */
+	inm->inm_refcount = 2;
 	inm->inm_state = IGMP_NOT_MEMBER;
 	mbufq_init(&inm->inm_scq, IGMP_MAX_STATE_CHANGES);
 	inm->inm_st[0].iss_fmode = MCAST_UNDEFINED;
@@ -1313,6 +1314,7 @@ in_joingroup_locked(struct ifnet *ifp, const struct in_addr *gina,
 	if (error) {
 
 		CTR2(KTR_IGMPV3, "%s: dropping ref on %p", __func__, inm);
+		/* drop the callers reference */
 		inm_release_deferred(inm);
 	} else {
 		*pinm = inm;
@@ -2208,14 +2210,8 @@ inp_join_group(struct inpcb *inp, struct sockopt *sopt)
 			if (error)
 				goto out_inp_locked;
 		}
-		/*
-		 * Allocate the new slot upfront so we can deal with
-		 * grafting the new source filter in same code path
-		 * as for join-source on existing membership.
-		 */
 		idx = imo->imo_num_memberships;
 		imo->imo_membership[idx] = NULL;
-		imo->imo_num_memberships++;
 		KASSERT(imo->imo_mfilters != NULL,
 		    ("%s: imf_mfilters vector was not allocated", __func__));
 		imf = &imo->imo_mfilters[idx];
@@ -2268,13 +2264,14 @@ inp_join_group(struct inpcb *inp, struct sockopt *sopt)
 		error = in_joingroup_locked(ifp, &gsa->sin.sin_addr, imf,
 		    &inm);
 		if (error) {
-                        CTR1(KTR_IGMPV3, "%s: in_joingroup_locked failed", 
-                            __func__);
-                        IN_MULTI_LIST_UNLOCK();
-			goto out_imo_free;
+			CTR1(KTR_IGMPV3, "%s: in_joingroup_locked failed", 
+				 __func__);
+			goto out_in_multi_locked;
 		}
-		inm_acquire(inm);
+		/* joingroup returns with a reference held */
 		imo->imo_membership[idx] = inm;
+		MPASS(idx == imo->imo_num_memberships);
+		imo->imo_num_memberships++;
 	} else {
 		CTR1(KTR_IGMPV3, "%s: merge inm state", __func__);
 		IN_MULTI_LIST_LOCK();
@@ -2296,10 +2293,12 @@ inp_join_group(struct inpcb *inp, struct sockopt *sopt)
 	}
 
 out_in_multi_locked:
+	if (imo->imo_num_memberships)
+		MPASS(imo->imo_membership[0]);
 
 	IN_MULTI_UNLOCK();
 	INP_WLOCK(inp);
-	if (in_pcbrele_wlocked(inp))
+	if (in_pcbrele_wlocked(inp)) 
 		return (ENXIO);
 	if (error) {
 		imf_rollback(imf);
@@ -2320,7 +2319,6 @@ out_imo_free:
 			IN_MULTI_LIST_UNLOCK();
 		}
 		imo->imo_membership[idx] = NULL;
-		--imo->imo_num_memberships;
 	}
 
 out_inp_locked:
