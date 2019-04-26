@@ -730,18 +730,7 @@ _ixlv=		ixlv
 _linux64=	linux64
 _linux_common=	linux_common
 _ntb=		ntb
-_nvd=		nvd
 _nvdimm=	nvdimm
-_nvme=		nvme
-_nvram=		nvram
-_nxge=		nxge
-.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
-_opensolaris=	opensolaris
-.endif
-.if ${MK_CRYPT} != "no" || defined(ALL_MODULES)
-_padlock=	padlock
-.endif
-_pccard=	pccard
 _pms=		pms
 _qlxge=		qlxge
 _qlxgb=		qlxgb
