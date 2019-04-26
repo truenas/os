@@ -339,7 +339,6 @@ dev/ntb/ntb_hw/ntb_hw_plx.c	optional	ntb_hw_plx | ntb_hw
 dev/nvd/nvd.c			optional	nvd nvme
 dev/nvdimm/nvdimm.c		optional	nvdimm
 dev/nvdimm/nvdimm_copy.S	optional	nvdimm
-dev/nve/if_nve.c		optional	nve pci
 dev/nvme/nvme.c			optional	nvme
 dev/nvme/nvme_ctrlr.c		optional	nvme
 dev/nvme/nvme_ctrlr_cmd.c	optional	nvme
