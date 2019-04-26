@@ -522,6 +522,7 @@ fdt_setup_fdtp()
 		if (fdt_load_dtb(bfp->f_addr) == 0) {
 			printf("Using DTB from loaded file '%s'.\n", 
 			    bfp->f_name);
+			fdt_platform_load_overlays();
 			return (0);
 		}
 	}
@@ -531,12 +532,15 @@ fdt_setup_fdtp()
 		if (fdt_load_dtb_addr(fdt_to_load) == 0) {
 			printf("Using DTB from memory address %p.\n",
 			    fdt_to_load);
+			fdt_platform_load_overlays();
 			return (0);
 		}
 	}
 
-	if (fdt_platform_load_dtb() == 0)
+	if (fdt_platform_load_dtb() == 0) {
+		fdt_platform_load_overlays();
 		return (0);
+	}
 
 	/* If there is a dtb compiled into the kernel, use it. */
 	if ((va = fdt_find_static_dtb()) != 0) {
@@ -844,7 +848,6 @@ void
 fdt_fixup_stdout(const char *str)
 {
 	char *ptr;
-	int serialno;
 	int len, no, sero;
 	const struct fdt_property *prop;
 	char *tmp[10];
@@ -856,7 +859,6 @@ fdt_fixup_stdout(const char *str)
 	if (ptr == str)
 		return;
 
-	serialno = (int)strtol(ptr, NULL, 0);
 	no = fdt_path_offset(fdtp, "/chosen");
 	if (no < 0)
 		return;
@@ -913,9 +915,7 @@ fdt_load_dtb_overlays(const char *extras)
 static int
 fdt_fixup(void)
 {
-	int chosen, len;
-
-	len = 0;
+	int chosen;
 
 	debugf("fdt_fixup()\n");
 
@@ -973,7 +973,6 @@ command_fdt_internal(int argc, char *argv[])
 {
 	cmdf_t *cmdh;
 	int flags;
-	char *cmd;
 	int i, err;
 
 	if (argc < 2) {
@@ -984,11 +983,10 @@ command_fdt_internal(int argc, char *argv[])
 	/*
 	 * Validate fdt <command>.
 	 */
-	cmd = strdup(argv[1]);
 	i = 0;
 	cmdh = NULL;
 	while (!(commands[i].name == NULL)) {
-		if (strcmp(cmd, commands[i].name) == 0) {
+		if (strcmp(argv[1], commands[i].name) == 0) {
 			/* found it */
 			cmdh = commands[i].handler;
 			flags = commands[i].flags;
@@ -1512,7 +1510,6 @@ fdt_modprop(int nodeoff, char *propname, void *value, char mode)
 		sprintf(command_errbuf, "property does not exist!");
 		return (CMD_ERROR);
 	}
-	len = strlen(value);
 	rv = 0;
 	buf = value;
 

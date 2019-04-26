@@ -233,7 +233,8 @@ static eventhandler_tag bridge_detach_cookie;
 
 int	bridge_rtable_prune_period = BRIDGE_RTABLE_PRUNE_PERIOD;
 
-uma_zone_t bridge_rtnode_zone;
+static VNET_DEFINE(uma_zone_t, bridge_rtnode_zone);
+#define	V_bridge_rtnode_zone	VNET(bridge_rtnode_zone)
 
 static int	bridge_clone_create(struct if_clone *, int, caddr_t);
 static void	bridge_clone_destroy(struct ifnet *);
@@ -526,6 +527,9 @@ static void
 vnet_bridge_init(const void *unused __unused)
 {
 
+	V_bridge_rtnode_zone = uma_zcreate("bridge_rtnode",
+	    sizeof(struct bridge_rtnode), NULL, NULL, NULL, NULL,
+	    UMA_ALIGN_PTR, 0);
 	BRIDGE_LIST_LOCK_INIT();
 	LIST_INIT(&V_bridge_list);
 	V_bridge_cloner = if_clone_simple(bridge_name,
@@ -541,6 +545,7 @@ vnet_bridge_uninit(const void *unused __unused)
 	if_clone_detach(V_bridge_cloner);
 	V_bridge_cloner = NULL;
 	BRIDGE_LIST_LOCK_DESTROY();
+	uma_zdestroy(V_bridge_rtnode_zone);
 }
 VNET_SYSUNINIT(vnet_bridge_uninit, SI_SUB_PSEUDO, SI_ORDER_ANY,
     vnet_bridge_uninit, NULL);
@@ -551,9 +556,6 @@ bridge_modevent(module_t mod, int type, void *data)
 
 	switch (type) {
 	case MOD_LOAD:
-		bridge_rtnode_zone = uma_zcreate("bridge_rtnode",
-		    sizeof(struct bridge_rtnode), NULL, NULL, NULL, NULL,
-		    UMA_ALIGN_PTR, 0);
 		bridge_input_p = bridge_input;
 		bridge_output_p = bridge_output;
 		bridge_dn_p = bridge_dummynet;
@@ -565,7 +567,6 @@ bridge_modevent(module_t mod, int type, void *data)
 	case MOD_UNLOAD:
 		EVENTHANDLER_DEREGISTER(ifnet_departure_event,
 		    bridge_detach_cookie);
-		uma_zdestroy(bridge_rtnode_zone);
 		bridge_input_p = NULL;
 		bridge_output_p = NULL;
 		bridge_dn_p = NULL;
@@ -737,6 +738,9 @@ bridge_clone_destroy(struct ifnet *ifp)
 		bridge_delete_span(sc, bif);
 	}
 
+	/* Tear down the routing table. */
+	bridge_rtable_fini(sc);
+
 	BRIDGE_UNLOCK(sc);
 
 	callout_drain(&sc->sc_brcallout);
@@ -748,9 +752,6 @@ bridge_clone_destroy(struct ifnet *ifp)
 	bstp_detach(&sc->sc_stp);
 	ether_ifdetach(ifp);
 	if_free(ifp);
-
-	/* Tear down the routing table. */
-	bridge_rtable_fini(sc);
 
 	BRIDGE_LOCK_DESTROY(sc);
 	free(sc, M_DEVBUF);
@@ -2670,7 +2671,7 @@ bridge_rtupdate(struct bridge_softc *sc, const uint8_t *dst, uint16_t vlan,
 		 * initialize the expiration time and Ethernet
 		 * address.
 		 */
-		brt = uma_zalloc(bridge_rtnode_zone, M_NOWAIT | M_ZERO);
+		brt = uma_zalloc(V_bridge_rtnode_zone, M_NOWAIT | M_ZERO);
 		if (brt == NULL)
 			return (ENOMEM);
 
@@ -2683,7 +2684,7 @@ bridge_rtupdate(struct bridge_softc *sc, const uint8_t *dst, uint16_t vlan,
 		brt->brt_vlan = vlan;
 
 		if ((error = bridge_rtnode_insert(sc, brt)) != 0) {
-			uma_zfree(bridge_rtnode_zone, brt);
+			uma_zfree(V_bridge_rtnode_zone, brt);
 			return (error);
 		}
 		brt->brt_dst = bif;
@@ -2767,11 +2768,14 @@ bridge_timer(void *arg)
 
 	BRIDGE_LOCK_ASSERT(sc);
 
+	/* Destruction of rtnodes requires a proper vnet context */
+	CURVNET_SET(sc->sc_ifp->if_vnet);
 	bridge_rtage(sc);
 
 	if (sc->sc_ifp->if_drv_flags & IFF_DRV_RUNNING)
 		callout_reset(&sc->sc_brcallout,
 		    bridge_rtable_prune_period * hz, bridge_timer, sc);
+	CURVNET_RESTORE();
 }
 
 /*
@@ -3029,7 +3033,7 @@ bridge_rtnode_destroy(struct bridge_softc *sc, struct bridge_rtnode *brt)
 	LIST_REMOVE(brt, brt_list);
 	sc->sc_brtcnt--;
 	brt->brt_dst->bif_addrcnt--;
-	uma_zfree(bridge_rtnode_zone, brt);
+	uma_zfree(V_bridge_rtnode_zone, brt);
 }
 
 /*
@@ -3043,6 +3047,7 @@ bridge_rtable_expire(struct ifnet *ifp, int age)
 	struct bridge_softc *sc = ifp->if_bridge;
 	struct bridge_rtnode *brt;
 
+	CURVNET_SET(ifp->if_vnet);
 	BRIDGE_LOCK(sc);
 
 	/*
@@ -3061,6 +3066,7 @@ bridge_rtable_expire(struct ifnet *ifp, int age)
 		}
 	}
 	BRIDGE_UNLOCK(sc);
+	CURVNET_RESTORE();
 }
 
 /*

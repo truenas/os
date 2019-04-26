@@ -6965,6 +6965,7 @@ arc_fini(void)
 		arc_ksp = NULL;
 	}
 
+
 	(void) zthr_cancel(arc_adjust_zthr);
 	zthr_destroy(arc_adjust_zthr);
 

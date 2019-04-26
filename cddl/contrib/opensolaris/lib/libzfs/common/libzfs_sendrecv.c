@@ -1113,7 +1113,7 @@ send_progress_thread(void *arg)
 	zfs_cmd_t zc = { 0 };
 	zfs_handle_t *zhp = pa->pa_zhp;
 	libzfs_handle_t *hdl = zhp->zfs_hdl;
-	unsigned long long bytes;
+	unsigned long long bytes, total;
 	char buf[16];
 	time_t t;
 	struct tm *tm;
@@ -1143,6 +1143,7 @@ send_progress_thread(void *arg)
 				pct = 100 * bytes / pa->pa_size;
 			else
 				pct = 100;
+
 			setproctitle("sending %s (%d%%: %llu/%llu)",
 			    zhp->zfs_name, pct, bytes, pa->pa_size);
 		} else if (pa->pa_parsable) {
@@ -1295,6 +1296,7 @@ dump_snapshot(zfs_handle_t *zhp, void *arg)
 		    fromorigin, flags, &size);
 		sdd->size += size;
 	}
+
 	if (sdd->verbose) {
 		send_print_verbose(fout, zhp->zfs_name,
 		    sdd->prevsnap[0] ? sdd->prevsnap : NULL,
@@ -1594,8 +1596,8 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 	int error = 0;
 	char name[ZFS_MAX_DATASET_NAME_LEN];
 	enum lzc_send_flags lzc_flags = 0;
-	FILE *fout = (flags->verbose && flags->dryrun) ? stdout : stderr;
 	uint64_t size = 0;
+	FILE *fout = (flags->verbose && flags->dryrun) ? stdout : stderr;
 
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
 	    "cannot resume send"));
@@ -1663,7 +1665,7 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 		fromname = name;
 	}
 
-	if (flags->verbose || flags->progress) {
+	if (flags->progress) {
 		error = lzc_send_space(zhp->zfs_name, fromname,
 		    lzc_flags, &size);
 		if (error == 0)

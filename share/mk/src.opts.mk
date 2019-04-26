@@ -125,6 +125,7 @@ __DEFAULT_YES_OPTIONS = \
     LIB32 \
     LIBPTHREAD \
     LIBTHR \
+    LLVM_COV \
     LOADER_GELI \
     LOADER_LUA \
     LOADER_OFW \
@@ -197,6 +198,7 @@ __DEFAULT_NO_OPTIONS = \
     LINT \
     LOADER_FIREWIRE \
     LOADER_FORCE_LE \
+    LOADER_VERBOSE \
     NAND \
     OFED_EXTRA \
     OPENLDAP \
@@ -229,6 +231,8 @@ __TT=${TARGET}
 __TT=${MACHINE}
 .endif
 
+__DEFAULT_NO_OPTIONS+=LLVM_TARGET_BPF
+
 .include <bsd.compiler.mk>
 # If the compiler is not C++11 capable, disable Clang and use GCC instead.
 # This means that architectures that have GCC 4.2 as default can not
@@ -256,9 +260,13 @@ __DEFAULT_NO_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_FULL CLANG_IS_CC LLD
 __DEFAULT_NO_OPTIONS+=LLVM_TARGET_AARCH64 LLVM_TARGET_ARM LLVM_TARGET_MIPS
 __DEFAULT_NO_OPTIONS+=LLVM_TARGET_POWERPC LLVM_TARGET_SPARC LLVM_TARGET_X86
 .endif
+__DEFAULT_NO_OPTIONS+=LLVM_TARGET_BPF
 # In-tree binutils/gcc are older versions without modern architecture support.
 .if ${__T} == "aarch64" || ${__T} == "riscv64"
 BROKEN_OPTIONS+=BINUTILS BINUTILS_BOOTSTRAP GCC GCC_BOOTSTRAP GDB
+.endif
+.if ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "i386" || \
+    ${__T:Mriscv*} != "" || ${__TT} == "mips"
 __DEFAULT_YES_OPTIONS+=LLVM_LIBUNWIND
 .else
 __DEFAULT_NO_OPTIONS+=LLVM_LIBUNWIND
@@ -330,6 +338,12 @@ __DEFAULT_YES_OPTIONS+=OFED
 __DEFAULT_NO_OPTIONS+=OFED
 .endif
 
+.if ${COMPILER_FEATURES:Mc++11} && (${__T} == "amd64" || ${__T} == "i386")
+__DEFAULT_YES_OPTIONS+=OPENMP
+.else
+__DEFAULT_NO_OPTIONS+=OPENMP
+.endif
+
 .include <bsd.mkopt.mk>
 
 #
@@ -358,6 +372,10 @@ MK_${var}:=	no
 # Force some options off if their dependencies are off.
 # Order is somewhat important.
 #
+.if !${COMPILER_FEATURES:Mc++11}
+MK_LLVM_LIBUNWIND:=	no
+.endif
+
 .if ${MK_CAPSICUM} == "no"
 MK_CASPER:=	no
 .endif
@@ -464,6 +482,7 @@ MK_LLDB:=	no
 .if ${MK_CLANG} == "no"
 MK_CLANG_EXTRAS:= no
 MK_CLANG_FULL:= no
+MK_LLVM_COV:= no
 .endif
 
 #

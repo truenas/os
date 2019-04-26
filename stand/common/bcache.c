@@ -44,9 +44,9 @@ __FBSDID("$FreeBSD$");
 /* #define BCACHE_DEBUG */
 
 #ifdef BCACHE_DEBUG
-# define DEBUG(fmt, args...)	printf("%s: " fmt "\n" , __func__ , ## args)
+# define DPRINTF(fmt, args...)	printf("%s: " fmt "\n" , __func__ , ## args)
 #else
-# define DEBUG(fmt, args...)
+# define DPRINTF(fmt, args...)
 #endif
 
 struct bcachectl
@@ -86,7 +86,6 @@ static u_int bcache_rablks;
 	((bc)->bcache_ctl[BHASH((bc), (blkno))].bc_blkno != (blkno))
 #define	BCACHE_READAHEAD	256
 #define	BCACHE_MINREADAHEAD	32
-#define	BCACHE_MARKER		0xdeadbeef
 
 static void	bcache_invalidate(struct bcache *bc, daddr_t blkno);
 static void	bcache_insert(struct bcache *bc, daddr_t blkno);
@@ -123,7 +122,6 @@ bcache_allocate(void)
     u_int i;
     struct bcache *bc = malloc(sizeof (struct bcache));
     int disks = bcache_numdev;
-    uint32_t *marker;
 
     if (disks == 0)
 	disks = 1;	/* safe guard */
@@ -142,8 +140,7 @@ bcache_allocate(void)
 
     bc->bcache_nblks = bcache_total_nblks >> i;
     bcache_unit_nblks = bc->bcache_nblks;
-    bc->bcache_data = malloc(bc->bcache_nblks * bcache_blksize +
-	sizeof(uint32_t));
+    bc->bcache_data = malloc(bc->bcache_nblks * bcache_blksize);
     if (bc->bcache_data == NULL) {
 	/* dont error out yet. fall back to 32 blocks and try again */
 	bc->bcache_nblks = 32;
@@ -158,9 +155,6 @@ bcache_allocate(void)
 	errno = ENOMEM;
 	return (NULL);
     }
-    /* Insert cache end marker. */
-    marker = (uint32_t *)(bc->bcache_data + bc->bcache_nblks * bcache_blksize);
-    *marker = BCACHE_MARKER;
 
     /* Flush the cache */
     for (i = 0; i < bc->bcache_nblks; i++) {
@@ -222,14 +216,11 @@ read_strategy(void *devdata, int rw, daddr_t blk, size_t size,
     int				result;
     daddr_t			p_blk;
     caddr_t			p_buf;
-    uint32_t			*marker;
 
     if (bc == NULL) {
 	errno = ENODEV;
 	return (-1);
     }
-
-    marker = (uint32_t *)(bc->bcache_data + bc->bcache_nblks * bcache_blksize);
 
     if (rsize != NULL)
 	*rsize = 0;
@@ -350,12 +341,6 @@ read_strategy(void *devdata, int rw, daddr_t blk, size_t size,
 	result = 0;
     }
 
-    if (*marker != BCACHE_MARKER) {
-	printf("BUG: bcache corruption detected: nblks: %zu p_blk: %lu, "
-	    "p_size: %zu, ra: %zu\n", bc->bcache_nblks,
-	    (long unsigned)BHASH(bc, p_blk), p_size, ra);
-    }
-
  done:
     if ((result == 0) && (rsize != NULL))
 	*rsize = size;
@@ -384,7 +369,7 @@ bcache_strategy(void *devdata, int rw, daddr_t blk, size_t size,
     /* bypass large requests, or when the cache is inactive */
     if (bc == NULL ||
 	((size * 2 / bcache_blksize) > bcache_nblks)) {
-	DEBUG("bypass %zu from %qu", size / bcache_blksize, blk);
+	DPRINTF("bypass %zu from %qu", size / bcache_blksize, blk);
 	bcache_bypasses++;
 	rw &= F_MASK;
 	return (dd->dv_strategy(dd->dv_devdata, rw, blk, size, buf, rsize));
@@ -459,7 +444,7 @@ bcache_insert(struct bcache *bc, daddr_t blkno)
     
     cand = BHASH(bc, blkno);
 
-    DEBUG("insert blk %llu -> %u # %d", blkno, cand, bcache_bcount);
+    DPRINTF("insert blk %llu -> %u # %d", blkno, cand, bcache_bcount);
     bc->bcache_ctl[cand].bc_blkno = blkno;
     bc->bcache_ctl[cand].bc_count = bcache_bcount++;
 }
@@ -476,7 +461,7 @@ bcache_invalidate(struct bcache *bc, daddr_t blkno)
     if (bc->bcache_ctl[i].bc_blkno == blkno) {
 	bc->bcache_ctl[i].bc_count = -1;
 	bc->bcache_ctl[i].bc_blkno = -1;
-	DEBUG("invalidate blk %llu", blkno);
+	DPRINTF("invalidate blk %llu", blkno);
     }
 }
 
@@ -491,12 +476,12 @@ command_bcache(int argc, char *argv[])
 	return(CMD_ERROR);
     }
 
-    printf("\ncache blocks: %d\n", bcache_total_nblks);
-    printf("cache blocksz: %d\n", bcache_blksize);
-    printf("cache readahead: %d\n", bcache_rablks);
-    printf("unit cache blocks: %d\n", bcache_unit_nblks);
-    printf("cached units: %d\n", bcache_units);
-    printf("%d ops  %d bypasses  %d hits  %d misses\n", bcache_ops,
+    printf("\ncache blocks: %u\n", bcache_total_nblks);
+    printf("cache blocksz: %u\n", bcache_blksize);
+    printf("cache readahead: %u\n", bcache_rablks);
+    printf("unit cache blocks: %u\n", bcache_unit_nblks);
+    printf("cached units: %u\n", bcache_units);
+    printf("%u ops %d bypasses %u hits %u misses\n", bcache_ops,
 	bcache_bypasses, bcache_hits, bcache_misses);
     return(CMD_OK);
 }

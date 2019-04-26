@@ -120,6 +120,7 @@ struct devreq {
 #define	DEV_CLEAR_DRIVER _IOW('D', 8, struct devreq)
 #define	DEV_RESCAN	_IOW('D', 9, struct devreq)
 #define	DEV_DELETE	_IOW('D', 10, struct devreq)
+#define	DEV_RESET	_IOW('D', 13, struct devreq)
 
 /* Flags for DEV_DETACH and DEV_DISABLE. */
 #define	DEVF_FORCE_DETACH	0x0000001
@@ -132,6 +133,10 @@ struct devreq {
 
 /* Flags for DEV_DELETE. */
 #define	DEVF_FORCE_DELETE	0x0000001
+
+/* Flags for DEV_RESET */
+#define	DEVF_RESET_DETACH	0x0000001	/* Detach drivers vs suspend
+						   device */
 
 #ifdef _KERNEL
 
@@ -479,6 +484,8 @@ int	bus_generic_unmap_resource(device_t dev, device_t child, int type,
 				   struct resource_map *map);
 int	bus_generic_write_ivar(device_t dev, device_t child, int which,
 			       uintptr_t value);
+int	bus_helper_reset_post(device_t dev, int flags);
+int	bus_helper_reset_prepare(device_t dev, int flags);
 int	bus_null_rescan(device_t dev);
 
 /*

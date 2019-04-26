@@ -253,6 +253,10 @@ ZFS_VDEV_QUEUE_KNOB_MIN(scrub);
 ZFS_VDEV_QUEUE_KNOB_MAX(scrub);
 ZFS_VDEV_QUEUE_KNOB_MIN(trim);
 ZFS_VDEV_QUEUE_KNOB_MAX(trim);
+ZFS_VDEV_QUEUE_KNOB_MIN(removal);
+ZFS_VDEV_QUEUE_KNOB_MAX(removal);
+ZFS_VDEV_QUEUE_KNOB_MIN(initializing);
+ZFS_VDEV_QUEUE_KNOB_MAX(initializing);
 
 #undef ZFS_VDEV_QUEUE_KNOB
 
@@ -981,6 +985,15 @@ vdev_queue_change_io_priority(zio_t *zio, zio_priority_t priority)
 {
 	vdev_queue_t *vq = &zio->io_vd->vdev_queue;
 	avl_tree_t *tree;
+
+	/*
+	 * ZIO_PRIORITY_NOW is used by the vdev cache code and the aggregate zio
+	 * code to issue IOs without adding them to the vdev queue. In this
+	 * case, the zio is already going to be issued as quickly as possible
+	 * and so it doesn't need any reprioitization to help.
+	 */
+	if (zio->io_priority == ZIO_PRIORITY_NOW)
+		return;
 
 	ASSERT3U(zio->io_priority, <, ZIO_PRIORITY_NUM_QUEUEABLE);
 	ASSERT3U(priority, <, ZIO_PRIORITY_NUM_QUEUEABLE);
