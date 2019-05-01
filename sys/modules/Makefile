@@ -199,6 +199,7 @@ SUBDIR=	\
 	${_ix} \
 	${_ixv} \
 	${_ixl} \
+	${_ixnvdimm} \
 	jme \
 	kbdmux \
 	kgssapi \
@@ -734,6 +735,7 @@ _ccp=		ccp
 _iavf=		iavf
 _ioat=		ioat
 _ixl=		ixl
+_ixnvdimm=	ixnvdimm
 _nvdimm=	nvdimm
 _pms=		pms
 _qlxge=		qlxge
