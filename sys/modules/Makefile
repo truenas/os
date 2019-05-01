@@ -208,6 +208,7 @@ SUBDIR=	\
 	${_ix} \
 	${_ixv} \
 	${_ixl} \
+	${_ixnvdimm} \
 	jme \
 	joy \
 	kbdmux \
@@ -730,6 +731,7 @@ _efirt=		efirt
 _iavf=		iavf
 _ioat=		ioat
 _ixl=		ixl
+_ixnvdimm=	ixnvdimm
 _linux64=	linux64
 _linux_common=	linux_common
 _ntb=		ntb
