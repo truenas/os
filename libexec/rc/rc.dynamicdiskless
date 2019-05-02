@@ -1,0 +1,126 @@
+#!/bin/sh
+#
+# Copyright (c) 2018  Kris Moore
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+# $FreeBSD$
+
+# This script is similar in concept to rc.initdiskless (Read that file!)
+#
+# It specifically probes the directories /conf/base/SUBDIR looking
+# for directories the user wishes to copy into tmpfs backed file-systems
+# and re-mounted on top of the base.
+#
+# Some key differences:
+#
+# /conf/base/SUBDIR directories do not have # to be pre-populated. Just
+# having a blank directory there indicates the # desire to convert that
+# directory to a tmpfs backed FS. Contents from the original location
+# will be copied over on boot, and then moved back into the tmpfs location
+# of the existing directory.
+#
+# /conf/base/DIR__DIR__SUBDIR is allowed. An example would be wanting to
+# use /conf/base/usr__local__etc which would make /usr/local/etc
+# a tmpfs backed FS.
+
+DEFAULT_TMPFS_SIZE=$(($(/sbin/sysctl -n hw.physmem) / 1536))
+
+copy_subdir()
+{
+	CDIR=$(basename $1)
+	TDIR=$(basename $1 | sed 's|__|/|g')
+	if [ ! -d "/$TDIR" ] ; then
+		echo "ERROR: /conf/base/$CDIR was specified but /$TDIR does not exist"
+		return 1
+	fi
+
+	# Check if we have a md_size specificed for this FS
+	unset MDSIZE
+	if [ -e "/conf/base/$CDIR/md_size" ] ; then
+		MDSIZE=$(cat /conf/base/$CDIR/md_size)
+	fi
+
+	create_md /conf/base/$CDIR $CDIR $MDSIZE
+	if [ $? -ne 0 ] ; then
+		echo "ERROR: Failed mounting tmpfs on /conf/base/$CDIR"
+		return 1
+	fi
+
+	cp -a /${TDIR}/ /conf/base/${CDIR}/
+	if [ $? -ne 0 ] ; then
+		echo "ERROR: Failed copying $TDIR -> /conf/base/$CDIR"
+		return 1
+	fi
+
+	create_md /$TDIR ${CDIR}_real $MDSIZE
+	if [ $? -ne 0 ] ; then
+		echo "ERROR: Failed mounting tmpfs on /$TDIR"
+		return 1
+	fi
+
+	cp -a /conf/base/${CDIR}/ /${TDIR}/
+	if [ $? -ne 0 ] ; then
+		echo "ERROR: Failed copying /conf/base/$CDIR -> /$TDIR"
+		return 1
+	fi
+}
+
+# Create a generic memory disk.
+# The 'auto' parameter will attempt to use tmpfs(5), falls back to md(4).
+# $1 is size in 512-byte sectors, $2 is the mount point.
+mount_md() {
+    /sbin/mdmfs -s $1 auto $2
+}
+
+# Create the memory filesystem if it has not already been created
+#
+create_md() {
+	[ "x`eval echo \\$md_created_$2`" = "x" ] || return # only once
+	if [ -z "$3" ]; then
+	    md_size=${DEFAULT_TMPFS_SIZE}
+	else
+	    md_size="$3"
+	fi
+	md_size=$((${md_size} * 512))
+	mount_md $md_size /$1
+	/bin/chmod 755 /$1
+	eval md_created_$2=created
+}
+
+# Do we have anything to do?
+if [ ! -d "/conf/base/" ] ; then
+	return 0
+fi
+
+# Make sure tmpfs is loaded
+kldload tmpfs 2>/dev/null
+
+# Lets grab a list of dirs to work on
+for SUBDIR in $(find /conf/base -type d -depth 1 | tr -s '\n' ' ')
+do
+	copy_subdir ${SUBDIR}
+done
+
+# DONE
+exit 0

@@ -3,7 +3,7 @@
 
 CONFGROUPS=	CONFETC CONFETCEXEC CONFETCDEFAULTS
 CONFETCDIR=	/etc
-CONFETC=	network.subr rc rc.initdiskless rc.subr rc.shutdown rc.bsdextended
+CONFETC=	network.subr rc rc.dynamicdiskless rc.initdiskless rc.subr rc.shutdown rc.bsdextended
 CONFETCPACKAGE=	rc
 
 .if ${MK_IPFW} != "no"
