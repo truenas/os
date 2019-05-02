@@ -66,12 +66,8 @@ enum {
 	TPF_ABORT_SHUTDOWN = (1 << 6),	/* connection abort is in progress */
 	TPF_CPL_PENDING    = (1 << 7),	/* haven't received the last CPL */
 	TPF_SYNQE	   = (1 << 8),	/* synq_entry, not really a toepcb */
-	TPF_SYNQE_NEEDFREE = (1 << 9),	/* synq_entry was malloc'd separately */
-	TPF_SYNQE_TCPDDP   = (1 << 10),	/* ulp_mode TCPDDP in toepcb */
-	TPF_SYNQE_EXPANDED = (1 << 11),	/* toepcb ready, tid context updated */
-	TPF_SYNQE_HAS_L2TE = (1 << 12),	/* we've replied to PASS_ACCEPT_REQ */
-	TPF_SYNQE_TLS      = (1 << 13), /* ulp_mode TLS in toepcb */
-	TPF_FORCE_CREDITS  = (1 << 14), /* always send credits */
+	TPF_SYNQE_EXPANDED = (1 << 9),	/* toepcb ready, tid context updated */
+	TPF_FORCE_CREDITS  = (1 << 10), /* always send credits */
 };
 
 enum {
@@ -85,6 +81,7 @@ enum {
 };
 
 struct sockopt;
+struct offload_settings;
 
 struct ofld_tx_sdesc {
 	uint32_t plen;		/* payload length */
@@ -173,6 +170,7 @@ struct toepcb {
 	struct l2t_entry *l2te;	/* L2 table entry used by this connection */
 	struct clip_entry *ce;	/* CLIP table entry used by this tid */
 	int tid;		/* Connection identifier */
+	int tc_idx;		/* traffic class that this tid is bound to */
 
 	/* tx credit handling */
 	u_int tx_total;		/* total tx WR credits (in 16B units) */
@@ -216,26 +214,26 @@ struct flowc_tx_params {
 	unsigned int mss;
 };
 
-#define	DDP_RETRY_WAIT	5	/* seconds to wait before re-enabling DDP */
-#define	DDP_LOW_SCORE	1
-#define	DDP_HIGH_SCORE	3
-
 /*
- * Compressed state for embryonic connections for a listener.  Barely fits in
- * 64B, try not to grow it further.
+ * Compressed state for embryonic connections for a listener.
  */
 struct synq_entry {
-	TAILQ_ENTRY(synq_entry) link;	/* listen_ctx's synq link */
-	int flags;			/* same as toepcb's tp_flags */
-	int tid;
 	struct listen_ctx *lctx;	/* backpointer to listen ctx */
 	struct mbuf *syn;
-	uint32_t iss;
-	uint32_t ts;
-	volatile uintptr_t wr;
+	int flags;			/* same as toepcb's tp_flags */
+	volatile int ok_to_respond;
 	volatile u_int refcnt;
+	int tid;
+	uint32_t iss;
+	uint32_t irs;
+	uint32_t ts;
+	uint16_t txqid;
+	uint16_t rxqid;
 	uint16_t l2e_idx;
+	uint16_t ulp_mode;
 	uint16_t rcv_bufsize;
+	__be16 tcp_opt; /* from cpl_pass_establish */
+	struct toepcb *toep;
 };
 
 /* listen_ctx flags */
@@ -252,16 +250,8 @@ struct listen_ctx {
 	struct sge_wrq *ctrlq;
 	struct sge_ofld_rxq *ofld_rxq;
 	struct clip_entry *ce;
-	TAILQ_HEAD(, synq_entry) synq;
 };
 
-struct clip_entry {
-	TAILQ_ENTRY(clip_entry) link;
-	struct in6_addr lip;	/* local IPv6 address */
-	u_int refcount;
-};
-
-TAILQ_HEAD(clip_head, clip_entry);
 struct tom_data {
 	struct toedev tod;
 
@@ -275,10 +265,6 @@ struct tom_data {
 	int lctx_count;		/* # of lctx in the hash table */
 
 	struct ppod_region pr;
-
-	struct mtx clip_table_lock;
-	struct clip_head clip_table;
-	int clip_gen;
 
 	/* WRs that will not be sent to the chip because L2 resolution failed */
 	struct mtx unsent_wr_lock;
@@ -327,19 +313,17 @@ void insert_tid(struct adapter *, int, void *, int);
 void *lookup_tid(struct adapter *, int);
 void update_tid(struct adapter *, int, void *);
 void remove_tid(struct adapter *, int, int);
-void release_tid(struct adapter *, int, struct sge_wrq *);
-int find_best_mtu_idx(struct adapter *, struct in_conninfo *, int);
+int find_best_mtu_idx(struct adapter *, struct in_conninfo *,
+    struct offload_settings *);
 u_long select_rcv_wnd(struct socket *);
 int select_rcv_wscale(void);
 uint64_t calc_opt0(struct socket *, struct vi_info *, struct l2t_entry *,
-    int, int, int, int);
+    int, int, int, int, struct offload_settings *);
 uint64_t select_ntuple(struct vi_info *, struct l2t_entry *);
-int select_ulp_mode(struct socket *, struct adapter *);
+int select_ulp_mode(struct socket *, struct adapter *,
+    struct offload_settings *);
 void set_ulp_mode(struct toepcb *, int);
 int negative_advice(int);
-struct clip_entry *hold_lip(struct tom_data *, struct in6_addr *,
-    struct clip_entry *);
-void release_lip(struct tom_data *, struct clip_entry *);
 
 /* t4_connect.c */
 void t4_init_connect_cpl_handlers(void);
@@ -361,6 +345,7 @@ int do_abort_req_synqe(struct sge_iq *, const struct rss_header *,
 int do_abort_rpl_synqe(struct sge_iq *, const struct rss_header *,
     struct mbuf *);
 void t4_offload_socket(struct toedev *, void *, struct socket *);
+void synack_failure_cleanup(struct adapter *, int);
 
 /* t4_cpl_io.c */
 void aiotx_init_toep(struct toepcb *);
@@ -383,7 +368,6 @@ void t4_set_tcb_field(struct adapter *, struct sge_wrq *, struct toepcb *,
     uint16_t, uint64_t, uint64_t, int, int);
 void t4_push_frames(struct adapter *sc, struct toepcb *toep, int drop);
 void t4_push_pdus(struct adapter *sc, struct toepcb *toep, int drop);
-int do_set_tcb_rpl(struct sge_iq *, const struct rss_header *, struct mbuf *);
 
 /* t4_ddp.c */
 int t4_init_ppod_region(struct ppod_region *, struct t4_range *, u_int,
@@ -409,8 +393,9 @@ void ddp_queue_toep(struct toepcb *);
 void release_ddp_resources(struct toepcb *toep);
 void handle_ddp_close(struct toepcb *, struct tcpcb *, uint32_t);
 void handle_ddp_indicate(struct toepcb *);
-void handle_ddp_tcb_rpl(struct toepcb *, const struct cpl_set_tcb_rpl *);
 void insert_ddp_data(struct toepcb *, uint32_t);
+const struct offload_settings *lookup_offload_policy(struct adapter *, int,
+    struct mbuf *, uint16_t, struct inpcb *);
 
 /* t4_tls.c */
 bool can_tls_offload(struct adapter *);

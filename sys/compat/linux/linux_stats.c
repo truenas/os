@@ -81,6 +81,7 @@ linux_kern_statat(struct thread *td, int flag, int fd, char *path,
 	    translate_vnhook_major_minor));
 }
 
+#ifdef LINUX_LEGACY_SYSCALLS
 static int
 linux_kern_stat(struct thread *td, char *path, enum uio_seg pathseg,
     struct stat *sbp)
@@ -97,6 +98,7 @@ linux_kern_lstat(struct thread *td, char *path, enum uio_seg pathseg,
 	return (linux_kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, path,
 	    pathseg, sbp));
 }
+#endif
 
 static void
 translate_fd_major_minor(struct thread *td, int fd, struct stat *buf)
@@ -155,6 +157,7 @@ newstat_copyout(struct stat *buf, void *ubuf)
 	return (copyout(&tbuf, ubuf, sizeof(tbuf)));
 }
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_newstat(struct thread *td, struct linux_newstat_args *args)
 {
@@ -196,6 +199,7 @@ linux_newlstat(struct thread *td, struct linux_newlstat_args *args)
 		return (error);
 	return (newstat_copyout(&sb, args->buf));
 }
+#endif
 
 int
 linux_newfstat(struct thread *td, struct linux_newfstat_args *args)
@@ -319,7 +323,7 @@ struct l_statfs {
 #define	LINUX_PROC_SUPER_MAGIC	0x9fa0L
 #define	LINUX_UFS_SUPER_MAGIC	0x00011954L	/* XXX - UFS_MAGIC in Linux */
 #define	LINUX_ZFS_SUPER_MAGIC	0x2FC12FC1
-#define LINUX_DEVFS_SUPER_MAGIC	0x1373L
+#define	LINUX_DEVFS_SUPER_MAGIC	0x1373L
 #define	LINUX_SHMFS_MAGIC	0x01021994
 
 static long
@@ -436,7 +440,7 @@ linux_statfs64(struct thread *td, struct linux_statfs64_args *args)
 	int error;
 
 	if (args->bufsize != sizeof(struct l_statfs64))
-		return EINVAL;
+		return (EINVAL);
 
 	LCONVPATHEXIST(td, args->path, &path);
 
@@ -509,6 +513,7 @@ struct l_ustat
 	char		f_fpack[6];
 };
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_ustat(struct thread *td, struct linux_ustat_args *args)
 {
@@ -519,6 +524,7 @@ linux_ustat(struct thread *td, struct linux_ustat_args *args)
 
 	return (EOPNOTSUPP);
 }
+#endif
 
 #if defined(__i386__) || (defined(__amd64__) && defined(COMPAT_LINUX32))
 

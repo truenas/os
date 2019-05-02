@@ -35,6 +35,8 @@
 #include <compat/linux/linux.h>
 #include <amd64/linux/linux_syscall.h>
 
+#define	LINUX_LEGACY_SYSCALLS
+
 /*
  * debugging support
  */
@@ -459,7 +461,7 @@ struct l_pollfd {
 struct linux_robust_list {
 	l_uintptr_t			next;
 };
- 
+
 struct linux_robust_list_head {
 	struct linux_robust_list	list;
 	l_long				futex_offset;

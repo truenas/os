@@ -29,6 +29,7 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_inet.h"
+#include "opt_inet6.h"
 
 #ifdef TCP_OFFLOAD
 #include <sys/param.h>
@@ -116,7 +117,7 @@ send_flowc_wr(struct toepcb *toep, struct flowc_tx_params *ftxp)
 	struct vi_info *vi = toep->vi;
 	struct port_info *pi = vi->pi;
 	struct adapter *sc = pi->adapter;
-	unsigned int pfvf = G_FW_VIID_PFN(vi->viid) << S_FW_VIID_PFN;
+	unsigned int pfvf = sc->pf << S_FW_VIID_PFN;
 	struct ofld_tx_sdesc *txsd = &toep->txsd[toep->txsd_pidx];
 
 	KASSERT(!(toep->flags & TPF_FLOWC_WR_SENT),
@@ -130,6 +131,11 @@ send_flowc_wr(struct toepcb *toep, struct flowc_tx_params *ftxp)
 		nparams++;
 	if (toep->tls.fcplenmax != 0)
 		nparams++;
+	if (toep->tc_idx != -1) {
+		MPASS(toep->tc_idx >= 0 &&
+		    toep->tc_idx < sc->chip_params->nsched_cls);
+		nparams++;
+	}
 
 	flowclen = sizeof(*flowc) + nparams * sizeof(struct fw_flowc_mnemval);
 
@@ -181,6 +187,8 @@ send_flowc_wr(struct toepcb *toep, struct flowc_tx_params *ftxp)
 		FLOWC_PARAM(ULP_MODE, toep->ulp_mode);
 	if (toep->tls.fcplenmax != 0)
 		FLOWC_PARAM(TXDATAPLEN_MAX, toep->tls.fcplenmax);
+	if (toep->tc_idx != -1)
+		FLOWC_PARAM(SCHEDCLASS, toep->tc_idx);
 #undef FLOWC_PARAM
 
 	KASSERT(paramidx == nparams, ("nparams mismatch"));
@@ -197,6 +205,76 @@ send_flowc_wr(struct toepcb *toep, struct flowc_tx_params *ftxp)
 	toep->flags |= TPF_FLOWC_WR_SENT;
         t4_wrq_tx(sc, wr);
 }
+
+#ifdef RATELIMIT
+/*
+ * Input is Bytes/second (so_max_pacing-rate), chip counts in Kilobits/second.
+ */
+static int
+update_tx_rate_limit(struct adapter *sc, struct toepcb *toep, u_int Bps)
+{
+	int tc_idx, rc;
+	const u_int kbps = (u_int) (uint64_t)Bps * 8ULL / 1000;
+	const int port_id = toep->vi->pi->port_id;
+
+	CTR3(KTR_CXGBE, "%s: tid %u, rate %uKbps", __func__, toep->tid, kbps);
+
+	if (kbps == 0) {
+		/* unbind */
+		tc_idx = -1;
+	} else {
+		rc = t4_reserve_cl_rl_kbps(sc, port_id, kbps, &tc_idx);
+		if (rc != 0)
+			return (rc);
+		MPASS(tc_idx >= 0 && tc_idx < sc->chip_params->nsched_cls);
+	}
+
+	if (toep->tc_idx != tc_idx) {
+		struct wrqe *wr;
+		struct fw_flowc_wr *flowc;
+		int nparams = 1, flowclen, flowclen16;
+		struct ofld_tx_sdesc *txsd = &toep->txsd[toep->txsd_pidx];
+
+		flowclen = sizeof(*flowc) + nparams * sizeof(struct
+		    fw_flowc_mnemval);
+		flowclen16 = howmany(flowclen, 16);
+		if (toep->tx_credits < flowclen16 || toep->txsd_avail == 0 ||
+		    (wr = alloc_wrqe(roundup2(flowclen, 16), toep->ofld_txq)) == NULL) {
+			if (tc_idx >= 0)
+				t4_release_cl_rl(sc, port_id, tc_idx);
+			return (ENOMEM);
+		}
+
+		flowc = wrtod(wr);
+		memset(flowc, 0, wr->wr_len);
+
+		flowc->op_to_nparams = htobe32(V_FW_WR_OP(FW_FLOWC_WR) |
+		    V_FW_FLOWC_WR_NPARAMS(nparams));
+		flowc->flowid_len16 = htonl(V_FW_WR_LEN16(flowclen16) |
+		    V_FW_WR_FLOWID(toep->tid));
+
+		flowc->mnemval[0].mnemonic = FW_FLOWC_MNEM_SCHEDCLASS;
+		if (tc_idx == -1)
+			flowc->mnemval[0].val = htobe32(0xff);
+		else
+			flowc->mnemval[0].val = htobe32(tc_idx);
+
+		txsd->tx_credits = flowclen16;
+		txsd->plen = 0;
+		toep->tx_credits -= txsd->tx_credits;
+		if (__predict_false(++toep->txsd_pidx == toep->txsd_total))
+			toep->txsd_pidx = 0;
+		toep->txsd_avail--;
+		t4_wrq_tx(sc, wr);
+	}
+
+	if (toep->tc_idx >= 0)
+		t4_release_cl_rl(sc, port_id, toep->tc_idx);
+	toep->tc_idx = tc_idx;
+
+	return (0);
+}
+#endif
 
 void
 send_reset(struct adapter *sc, struct toepcb *toep, uint32_t snd_nxt)
@@ -272,18 +350,18 @@ assign_rxopt(struct tcpcb *tp, unsigned int opt)
 		n = sizeof(struct ip6_hdr) + sizeof(struct tcphdr);
 	else
 		n = sizeof(struct ip) + sizeof(struct tcphdr);
-	if (V_tcp_do_rfc1323)
-		n += TCPOLEN_TSTAMP_APPA;
 	tp->t_maxseg = sc->params.mtus[G_TCPOPT_MSS(opt)] - n;
-
-	CTR4(KTR_CXGBE, "%s: tid %d, mtu_idx %u (%u)", __func__, toep->tid,
-	    G_TCPOPT_MSS(opt), sc->params.mtus[G_TCPOPT_MSS(opt)]);
 
 	if (G_TCPOPT_TSTAMP(opt)) {
 		tp->t_flags |= TF_RCVD_TSTMP;	/* timestamps ok */
 		tp->ts_recent = 0;		/* hmmm */
 		tp->ts_recent_age = tcp_ts_getticks();
+		tp->t_maxseg -= TCPOLEN_TSTAMP_APPA;
 	}
+
+	CTR5(KTR_CXGBE, "%s: tid %d, mtu_idx %u (%u), mss %u", __func__,
+	    toep->tid, G_TCPOPT_MSS(opt), sc->params.mtus[G_TCPOPT_MSS(opt)],
+	    tp->t_maxseg);
 
 	if (G_TCPOPT_SACK(opt))
 		tp->t_flags |= TF_SACK_PERMIT;	/* should already be set */
@@ -305,18 +383,15 @@ assign_rxopt(struct tcpcb *tp, unsigned int opt)
  * Completes some final bits of initialization for just established connections
  * and changes their state to TCPS_ESTABLISHED.
  *
- * The ISNs are from after the exchange of SYNs.  i.e., the true ISN + 1.
+ * The ISNs are from the exchange of SYNs.
  */
 void
-make_established(struct toepcb *toep, uint32_t snd_isn, uint32_t rcv_isn,
-    uint16_t opt)
+make_established(struct toepcb *toep, uint32_t iss, uint32_t irs, uint16_t opt)
 {
 	struct inpcb *inp = toep->inp;
 	struct socket *so = inp->inp_socket;
 	struct tcpcb *tp = intotcpcb(inp);
 	long bufsize;
-	uint32_t iss = be32toh(snd_isn) - 1;	/* true ISS */
-	uint32_t irs = be32toh(rcv_isn) - 1;	/* true IRS */
 	uint16_t tcpopt = be16toh(opt);
 	struct flowc_tx_params ftxp;
 
@@ -661,7 +736,7 @@ t4_push_frames(struct adapter *sc, struct toepcb *toep, int drop)
 	struct socket *so = inp->inp_socket;
 	struct sockbuf *sb = &so->so_snd;
 	int tx_credits, shove, compl, sowwakeup;
-	struct ofld_tx_sdesc *txsd = &toep->txsd[toep->txsd_pidx];
+	struct ofld_tx_sdesc *txsd;
 	bool aiotx_mbuf_seen;
 
 	INP_WLOCK_ASSERT(inp);
@@ -681,6 +756,13 @@ t4_push_frames(struct adapter *sc, struct toepcb *toep, int drop)
 	if (__predict_false(toep->flags & TPF_ABORT_SHUTDOWN))
 		return;
 
+#ifdef RATELIMIT
+	if (__predict_false(inp->inp_flags2 & INP_RATE_LIMIT_CHANGED) &&
+	    (update_tx_rate_limit(sc, toep, so->so_max_pacing_rate) == 0)) {
+		inp->inp_flags2 &= ~INP_RATE_LIMIT_CHANGED;
+	}
+#endif
+
 	/*
 	 * This function doesn't resume by itself.  Someone else must clear the
 	 * flag and call this function.
@@ -691,6 +773,7 @@ t4_push_frames(struct adapter *sc, struct toepcb *toep, int drop)
 		return;
 	}
 
+	txsd = &toep->txsd[toep->txsd_pidx];
 	do {
 		tx_credits = min(toep->tx_credits, MAX_OFLD_TX_CREDITS);
 		max_imm = max_imm_payload(tx_credits);
@@ -1168,22 +1251,12 @@ do_peer_close(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	KASSERT(m == NULL, ("%s: wasn't expecting payload", __func__));
 
 	if (__predict_false(toep->flags & TPF_SYNQE)) {
-#ifdef INVARIANTS
-		struct synq_entry *synqe = (void *)toep;
-
-		INP_WLOCK(synqe->lctx->inp);
-		if (synqe->flags & TPF_SYNQE_HAS_L2TE) {
-			KASSERT(synqe->flags & TPF_ABORT_SHUTDOWN,
-			    ("%s: listen socket closed but tid %u not aborted.",
-			    __func__, tid));
-		} else {
-			/*
-			 * do_pass_accept_req is still running and will
-			 * eventually take care of this tid.
-			 */
-		}
-		INP_WUNLOCK(synqe->lctx->inp);
-#endif
+		/*
+		 * do_pass_establish must have run before do_peer_close and if
+		 * this is still a synqe instead of a toepcb then the connection
+		 * must be getting aborted.
+		 */
+		MPASS(toep->flags & TPF_ABORT_SHUTDOWN);
 		CTR4(KTR_CXGBE, "%s: tid %u, synqe %p (0x%x)", __func__, tid,
 		    toep, toep->flags);
 		return (0);
@@ -1488,22 +1561,12 @@ do_rx_data(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	uint32_t ddp_placed = 0;
 
 	if (__predict_false(toep->flags & TPF_SYNQE)) {
-#ifdef INVARIANTS
-		struct synq_entry *synqe = (void *)toep;
-
-		INP_WLOCK(synqe->lctx->inp);
-		if (synqe->flags & TPF_SYNQE_HAS_L2TE) {
-			KASSERT(synqe->flags & TPF_ABORT_SHUTDOWN,
-			    ("%s: listen socket closed but tid %u not aborted.",
-			    __func__, tid));
-		} else {
-			/*
-			 * do_pass_accept_req is still running and will
-			 * eventually take care of this tid.
-			 */
-		}
-		INP_WUNLOCK(synqe->lctx->inp);
-#endif
+		/*
+		 * do_pass_establish must have run before do_rx_data and if this
+		 * is still a synqe instead of a toepcb then the connection must
+		 * be getting aborted.
+		 */
+		MPASS(toep->flags & TPF_ABORT_SHUTDOWN);
 		CTR4(KTR_CXGBE, "%s: tid %u, synqe %p (0x%x)", __func__, tid,
 		    toep, toep->flags);
 		m_freem(m);
@@ -1648,30 +1711,6 @@ do_rx_data(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	CURVNET_RESTORE();
 	return (0);
 }
-
-#define S_CPL_FW4_ACK_OPCODE    24
-#define M_CPL_FW4_ACK_OPCODE    0xff
-#define V_CPL_FW4_ACK_OPCODE(x) ((x) << S_CPL_FW4_ACK_OPCODE)
-#define G_CPL_FW4_ACK_OPCODE(x) \
-    (((x) >> S_CPL_FW4_ACK_OPCODE) & M_CPL_FW4_ACK_OPCODE)
-
-#define S_CPL_FW4_ACK_FLOWID    0
-#define M_CPL_FW4_ACK_FLOWID    0xffffff
-#define V_CPL_FW4_ACK_FLOWID(x) ((x) << S_CPL_FW4_ACK_FLOWID)
-#define G_CPL_FW4_ACK_FLOWID(x) \
-    (((x) >> S_CPL_FW4_ACK_FLOWID) & M_CPL_FW4_ACK_FLOWID)
-
-#define S_CPL_FW4_ACK_CR        24
-#define M_CPL_FW4_ACK_CR        0xff
-#define V_CPL_FW4_ACK_CR(x)     ((x) << S_CPL_FW4_ACK_CR)
-#define G_CPL_FW4_ACK_CR(x)     (((x) >> S_CPL_FW4_ACK_CR) & M_CPL_FW4_ACK_CR)
-
-#define S_CPL_FW4_ACK_SEQVAL    0
-#define M_CPL_FW4_ACK_SEQVAL    0x1
-#define V_CPL_FW4_ACK_SEQVAL(x) ((x) << S_CPL_FW4_ACK_SEQVAL)
-#define G_CPL_FW4_ACK_SEQVAL(x) \
-    (((x) >> S_CPL_FW4_ACK_SEQVAL) & M_CPL_FW4_ACK_SEQVAL)
-#define F_CPL_FW4_ACK_SEQVAL    V_CPL_FW4_ACK_SEQVAL(1U)
 
 static int
 do_fw4_ack(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
@@ -1826,44 +1865,6 @@ do_fw4_ack(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	return (0);
 }
 
-int
-do_set_tcb_rpl(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
-{
-	struct adapter *sc = iq->adapter;
-	const struct cpl_set_tcb_rpl *cpl = (const void *)(rss + 1);
-	unsigned int tid = GET_TID(cpl);
-	struct toepcb *toep;
-#ifdef INVARIANTS
-	unsigned int opcode = G_CPL_OPCODE(be32toh(OPCODE_TID(cpl)));
-#endif
-
-	KASSERT(opcode == CPL_SET_TCB_RPL,
-	    ("%s: unexpected opcode 0x%x", __func__, opcode));
-	KASSERT(m == NULL, ("%s: wasn't expecting payload", __func__));
-	MPASS(iq != &sc->sge.fwq);
-
-	toep = lookup_tid(sc, tid);
-	if (toep->ulp_mode == ULP_MODE_TCPDDP) {
-		handle_ddp_tcb_rpl(toep, cpl);
-		return (0);
-	}
-
-	/*
-	 * TOM and/or other ULPs don't request replies for CPL_SET_TCB or
-	 * CPL_SET_TCB_FIELD requests.  This can easily change and when it does
-	 * the dispatch code will go here.
-	 */
-#ifdef INVARIANTS
-	panic("%s: Unexpected CPL_SET_TCB_RPL for tid %u on iq %p", __func__,
-	    tid, iq);
-#else
-	log(LOG_ERR, "%s: Unexpected CPL_SET_TCB_RPL for tid %u on iq %p\n",
-	    __func__, tid, iq);
-#endif
-
-	return (0);
-}
-
 void
 t4_set_tcb_field(struct adapter *sc, struct sge_wrq *wrq, struct toepcb *toep,
     uint16_t word, uint64_t mask, uint64_t val, int reply, int cookie)
@@ -1873,6 +1874,9 @@ t4_set_tcb_field(struct adapter *sc, struct sge_wrq *wrq, struct toepcb *toep,
 	struct ofld_tx_sdesc *txsd;
 
 	MPASS((cookie & ~M_COOKIE) == 0);
+	if (reply) {
+		MPASS(cookie != CPL_COOKIE_RESERVED);
+	}
 
 	wr = alloc_wrqe(sizeof(*req), wrq);
 	if (wr == NULL) {
@@ -1912,9 +1916,10 @@ t4_init_cpl_io_handlers(void)
 	t4_register_cpl_handler(CPL_PEER_CLOSE, do_peer_close);
 	t4_register_cpl_handler(CPL_CLOSE_CON_RPL, do_close_con_rpl);
 	t4_register_cpl_handler(CPL_ABORT_REQ_RSS, do_abort_req);
-	t4_register_cpl_handler(CPL_ABORT_RPL_RSS, do_abort_rpl);
+	t4_register_shared_cpl_handler(CPL_ABORT_RPL_RSS, do_abort_rpl,
+	    CPL_COOKIE_TOM);
 	t4_register_cpl_handler(CPL_RX_DATA, do_rx_data);
-	t4_register_cpl_handler(CPL_FW4_ACK, do_fw4_ack);
+	t4_register_shared_cpl_handler(CPL_FW4_ACK, do_fw4_ack, CPL_COOKIE_TOM);
 }
 
 void
@@ -1924,9 +1929,9 @@ t4_uninit_cpl_io_handlers(void)
 	t4_register_cpl_handler(CPL_PEER_CLOSE, NULL);
 	t4_register_cpl_handler(CPL_CLOSE_CON_RPL, NULL);
 	t4_register_cpl_handler(CPL_ABORT_REQ_RSS, NULL);
-	t4_register_cpl_handler(CPL_ABORT_RPL_RSS, NULL);
+	t4_register_shared_cpl_handler(CPL_ABORT_RPL_RSS, NULL, CPL_COOKIE_TOM);
 	t4_register_cpl_handler(CPL_RX_DATA, NULL);
-	t4_register_cpl_handler(CPL_FW4_ACK, NULL);
+	t4_register_shared_cpl_handler(CPL_FW4_ACK, NULL, CPL_COOKIE_TOM);
 }
 
 /*

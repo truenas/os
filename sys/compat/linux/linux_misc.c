@@ -114,7 +114,7 @@ int stclohz;				/* Statistics clock frequency */
 static unsigned int linux_to_bsd_resource[LINUX_RLIM_NLIMITS] = {
 	RLIMIT_CPU, RLIMIT_FSIZE, RLIMIT_DATA, RLIMIT_STACK,
 	RLIMIT_CORE, RLIMIT_RSS, RLIMIT_NPROC, RLIMIT_NOFILE,
-	RLIMIT_MEMLOCK, RLIMIT_AS 
+	RLIMIT_MEMLOCK, RLIMIT_AS
 };
 
 struct l_sysinfo {
@@ -189,6 +189,7 @@ linux_sysinfo(struct thread *td, struct linux_sysinfo_args *args)
 	return (copyout(&sysinfo, args->info, sizeof(sysinfo)));
 }
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_alarm(struct thread *td, struct linux_alarm_args *args)
 {
@@ -223,6 +224,7 @@ linux_alarm(struct thread *td, struct linux_alarm_args *args)
 	td->td_retval[0] = old_it.it_value.tv_sec;
 	return (0);
 }
+#endif
 
 int
 linux_brk(struct thread *td, struct linux_brk_args *args)
@@ -492,6 +494,7 @@ cleanup:
 
 #endif	/* __i386__ */
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_select(struct thread *td, struct linux_select_args *args)
 {
@@ -583,6 +586,7 @@ select_out:
 #endif
 	return (error);
 }
+#endif
 
 int
 linux_mremap(struct thread *td, struct linux_mremap_args *args)
@@ -644,6 +648,7 @@ linux_msync(struct thread *td, struct linux_msync_args *args)
 	    args->fl & ~LINUX_MS_SYNC));
 }
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_time(struct thread *td, struct linux_time_args *args)
 {
@@ -663,6 +668,7 @@ linux_time(struct thread *td, struct linux_time_args *args)
 	td->td_retval[0] = tm;
 	return (0);
 }
+#endif
 
 struct l_times_argv {
 	l_clock_t	tms_utime;
@@ -759,6 +765,7 @@ struct l_utimbuf {
 	l_time_t l_modtime;
 };
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_utime(struct thread *td, struct linux_utime_args *args)
 {
@@ -792,7 +799,9 @@ linux_utime(struct thread *td, struct linux_utime_args *args)
 	LFREEPATH(fname);
 	return (error);
 }
+#endif
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_utimes(struct thread *td, struct linux_utimes_args *args)
 {
@@ -825,6 +834,7 @@ linux_utimes(struct thread *td, struct linux_utimes_args *args)
 	LFREEPATH(fname);
 	return (error);
 }
+#endif
 
 static int
 linux_utimensat_nsec_valid(l_long nsec)
@@ -837,7 +847,7 @@ linux_utimensat_nsec_valid(l_long nsec)
 	return (1);
 }
 
-int 
+int
 linux_utimensat(struct thread *td, struct linux_utimensat_args *args)
 {
 	struct l_timespec l_times[2];
@@ -912,13 +922,14 @@ linux_utimensat(struct thread *td, struct linux_utimensat_args *args)
 		error = kern_futimens(td, dfd, timesp, UIO_SYSSPACE);
 	else {
 		error = kern_utimensat(td, dfd, path, UIO_SYSSPACE, timesp,
-	    		UIO_SYSSPACE, flags);
+			UIO_SYSSPACE, flags);
 		LFREEPATH(path);
 	}
 
 	return (error);
 }
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_futimesat(struct thread *td, struct linux_futimesat_args *args)
 {
@@ -951,6 +962,7 @@ linux_futimesat(struct thread *td, struct linux_futimesat_args *args)
 	LFREEPATH(fname);
 	return (error);
 }
+#endif
 
 int
 linux_common_wait(struct thread *td, int pid, int *status,
@@ -1091,6 +1103,7 @@ linux_waitid(struct thread *td, struct linux_waitid_args *args)
 	return (error);
 }
 
+#ifdef LINUX_LEGACY_SYSCALLS
 int
 linux_mknod(struct thread *td, struct linux_mknod_args *args)
 {
@@ -1139,6 +1152,7 @@ linux_mknod(struct thread *td, struct linux_mknod_args *args)
 	LFREEPATH(path);
 	return (error);
 }
+#endif
 
 int
 linux_mknodat(struct thread *td, struct linux_mknodat_args *args)
@@ -1219,7 +1233,7 @@ struct l_itimerval {
 	l_timeval it_value;
 };
 
-#define	B2L_ITIMERVAL(bip, lip) 					\
+#define	B2L_ITIMERVAL(bip, lip)						\
 	(bip)->it_interval.tv_sec = (lip)->it_interval.tv_sec;		\
 	(bip)->it_interval.tv_usec = (lip)->it_interval.tv_usec;	\
 	(bip)->it_value.tv_sec = (lip)->it_value.tv_sec;		\
@@ -1850,7 +1864,9 @@ linux_exit_group(struct thread *td, struct linux_exit_group_args *args)
 		/* NOTREACHED */
 }
 
-#define _LINUX_CAPABILITY_VERSION  0x19980330
+#define _LINUX_CAPABILITY_VERSION_1  0x19980330
+#define _LINUX_CAPABILITY_VERSION_2  0x20071026
+#define _LINUX_CAPABILITY_VERSION_3  0x20080522
 
 struct l_user_cap_header {
 	l_int	version;
@@ -1864,22 +1880,35 @@ struct l_user_cap_data {
 };
 
 int
-linux_capget(struct thread *td, struct linux_capget_args *args)
+linux_capget(struct thread *td, struct linux_capget_args *uap)
 {
 	struct l_user_cap_header luch;
-	struct l_user_cap_data lucd;
-	int error;
+	struct l_user_cap_data lucd[2];
+	int error, u32s;
 
-	if (args->hdrp == NULL)
+	if (uap->hdrp == NULL)
 		return (EFAULT);
 
-	error = copyin(args->hdrp, &luch, sizeof(luch));
+	error = copyin(uap->hdrp, &luch, sizeof(luch));
 	if (error != 0)
 		return (error);
 
-	if (luch.version != _LINUX_CAPABILITY_VERSION) {
-		luch.version = _LINUX_CAPABILITY_VERSION;
-		error = copyout(&luch, args->hdrp, sizeof(luch));
+	switch (luch.version) {
+	case _LINUX_CAPABILITY_VERSION_1:
+		u32s = 1;
+		break;
+	case _LINUX_CAPABILITY_VERSION_2:
+	case _LINUX_CAPABILITY_VERSION_3:
+		u32s = 2;
+		break;
+	default:
+#ifdef DEBUG
+		if (ldebug(capget))
+			printf(LMSG("invalid capget capability version 0x%x"),
+			    luch.version);
+#endif
+		luch.version = _LINUX_CAPABILITY_VERSION_1;
+		error = copyout(&luch, uap->hdrp, sizeof(luch));
 		if (error)
 			return (error);
 		return (EINVAL);
@@ -1888,37 +1917,50 @@ linux_capget(struct thread *td, struct linux_capget_args *args)
 	if (luch.pid)
 		return (EPERM);
 
-	if (args->datap) {
+	if (uap->datap) {
 		/*
 		 * The current implementation doesn't support setting
 		 * a capability (it's essentially a stub) so indicate
 		 * that no capabilities are currently set or available
 		 * to request.
 		 */
-		bzero (&lucd, sizeof(lucd));
-		error = copyout(&lucd, args->datap, sizeof(lucd));
+		memset(&lucd, 0, u32s * sizeof(lucd[0]));
+		error = copyout(&lucd, uap->datap, u32s * sizeof(lucd[0]));
 	}
 
 	return (error);
 }
 
 int
-linux_capset(struct thread *td, struct linux_capset_args *args)
+linux_capset(struct thread *td, struct linux_capset_args *uap)
 {
 	struct l_user_cap_header luch;
-	struct l_user_cap_data lucd;
-	int error;
+	struct l_user_cap_data lucd[2];
+	int error, i, u32s;
 
-	if (args->hdrp == NULL || args->datap == NULL)
+	if (uap->hdrp == NULL || uap->datap == NULL)
 		return (EFAULT);
 
-	error = copyin(args->hdrp, &luch, sizeof(luch));
+	error = copyin(uap->hdrp, &luch, sizeof(luch));
 	if (error != 0)
 		return (error);
 
-	if (luch.version != _LINUX_CAPABILITY_VERSION) {
-		luch.version = _LINUX_CAPABILITY_VERSION;
-		error = copyout(&luch, args->hdrp, sizeof(luch));
+	switch (luch.version) {
+	case _LINUX_CAPABILITY_VERSION_1:
+		u32s = 1;
+		break;
+	case _LINUX_CAPABILITY_VERSION_2:
+	case _LINUX_CAPABILITY_VERSION_3:
+		u32s = 2;
+		break;
+	default:
+#ifdef DEBUG
+		if (ldebug(capset))
+			printf(LMSG("invalid capset capability version 0x%x"),
+			    luch.version);
+#endif
+		luch.version = _LINUX_CAPABILITY_VERSION_1;
+		error = copyout(&luch, uap->hdrp, sizeof(luch));
 		if (error)
 			return (error);
 		return (EINVAL);
@@ -1927,18 +1969,21 @@ linux_capset(struct thread *td, struct linux_capset_args *args)
 	if (luch.pid)
 		return (EPERM);
 
-	error = copyin(args->datap, &lucd, sizeof(lucd));
+	error = copyin(uap->datap, &lucd, u32s * sizeof(lucd[0]));
 	if (error != 0)
 		return (error);
 
 	/* We currently don't support setting any capabilities. */
-	if (lucd.effective || lucd.permitted || lucd.inheritable) {
-		linux_msg(td,
-			  "capset effective=0x%x, permitted=0x%x, "
-			  "inheritable=0x%x is not implemented",
-			  (int)lucd.effective, (int)lucd.permitted,
-			  (int)lucd.inheritable);
-		return (EPERM);
+	for (i = 0; i < u32s; i++) {
+		if (lucd[i].effective || lucd[i].permitted ||
+		    lucd[i].inheritable) {
+			linux_msg(td,
+			    "capset[%d] effective=0x%x, permitted=0x%x, "
+			    "inheritable=0x%x is not implemented", i,
+			    (int)lucd[i].effective, (int)lucd[i].permitted,
+			    (int)lucd[i].inheritable);
+			return (EPERM);
+		}
 	}
 
 	return (0);
@@ -1994,7 +2039,7 @@ linux_prctl(struct thread *td, struct linux_prctl_args *args)
 	case LINUX_PR_SET_NAME:
 		/*
 		 * To be on the safe side we need to make sure to not
-		 * overflow the size a linux program expects. We already
+		 * overflow the size a Linux program expects. We already
 		 * do this here in the copyin, so that we don't need to
 		 * check on copyout.
 		 */

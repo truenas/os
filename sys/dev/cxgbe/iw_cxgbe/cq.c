@@ -61,7 +61,7 @@ static int destroy_cq(struct c4iw_rdev *rdev, struct t4_cq *cq,
 	struct wrqe *wr;
 
 	wr_len = sizeof *res_wr + sizeof *res;
-	wr = alloc_wrqe(wr_len, &sc->sge.mgmtq);
+	wr = alloc_wrqe(wr_len, &sc->sge.ctrlq[0]);
                 if (wr == NULL)
                         return (0);
         res_wr = wrtod(wr);
@@ -131,7 +131,7 @@ create_cq(struct c4iw_rdev *rdev, struct t4_cq *cq,
 	/* build fw_ri_res_wr */
 	wr_len = sizeof *res_wr + sizeof *res;
 
-	wr = alloc_wrqe(wr_len, &sc->sge.mgmtq);
+	wr = alloc_wrqe(wr_len, &sc->sge.ctrlq[0]);
 	if (wr == NULL)
         	return (0);
         res_wr = wrtod(wr);
@@ -669,7 +669,7 @@ proc_cqe:
 		BUG_ON(wq->sq.in_use <= 0 && wq->sq.in_use >= wq->sq.size);
 
 		wq->sq.cidx = (uint16_t)idx;
-		CTR2(KTR_IW_CXGBE, "%s completing sq idx %u\n",
+		CTR2(KTR_IW_CXGBE, "%s completing sq idx %u",
 				__func__, wq->sq.cidx);
 		*cookie = wq->sq.sw_sq[wq->sq.cidx].wr_id;
 		t4_sq_consume(wq);
