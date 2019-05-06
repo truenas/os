@@ -2027,7 +2027,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			else
 				tp->t_flags |= TF_ACKNOW;
 
-			if ((thflags & TH_ECE) && V_tcp_do_ecn) {
+			if (((thflags & (TH_CWR | TH_ECE)) == TH_ECE) &&
+			    V_tcp_do_ecn) {
 				tp->t_flags |= TF_ECN_PERMIT;
 				TCPSTAT_INC(tcps_ecn_shs);
 			}
@@ -2401,8 +2402,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		if ((tp->t_flags & (TF_RCVD_SCALE|TF_REQ_SCALE)) ==
 			(TF_RCVD_SCALE|TF_REQ_SCALE)) {
 			tp->rcv_scale = tp->request_r_scale;
-			tp->snd_wnd = tiwin;
 		}
+		tp->snd_wnd = tiwin;
 		/*
 		 * Make transitions:
 		 *      SYN-RECEIVED  -> ESTABLISHED

@@ -454,6 +454,8 @@ rip_output(struct mbuf *m, struct socket *so, ...)
 	u_long dst;
 	int flags = ((so->so_options & SO_DONTROUTE) ? IP_ROUTETOIF : 0) |
 	    IP_ALLOWBROADCAST;
+	int cnt, hlen;
+	u_char opttype, optlen, *cp;
 
 	va_start(ap, so);
 	dst = va_arg(ap, u_long);
@@ -508,25 +510,60 @@ rip_output(struct mbuf *m, struct socket *so, ...)
 			m_freem(m);
 			return(EMSGSIZE);
 		}
-		INP_RLOCK(inp);
 		ip = mtod(m, struct ip *);
+		hlen = ip->ip_hl << 2;
+		if (m->m_len < hlen) {
+			m = m_pullup(m, hlen);
+			if (m == NULL)
+				return (EINVAL);
+			ip = mtod(m, struct ip *);
+		}
+
+		INP_RLOCK(inp);
+		/*
+		 * Don't allow both user specified and setsockopt options,
+		 * and don't allow packet length sizes that will crash.
+		 */
+		if ((hlen < sizeof (*ip))
+		    || ((hlen > sizeof (*ip)) && inp->inp_options)
+		    || (ntohs(ip->ip_len) != m->m_pkthdr.len)) {
+			INP_RUNLOCK(inp);
+			m_freem(m);
+			return (EINVAL);
+		}
 		error = prison_check_ip4(inp->inp_cred, &ip->ip_src);
 		if (error != 0) {
 			INP_RUNLOCK(inp);
 			m_freem(m);
 			return (error);
 		}
-
 		/*
-		 * Don't allow both user specified and setsockopt options,
-		 * and don't allow packet length sizes that will crash.
+		 * Don't allow IP options which do not have the required
+		 * structure as specified in section 3.1 of RFC 791 on
+		 * pages 15-23.
 		 */
-		if (((ip->ip_hl != (sizeof (*ip) >> 2)) && inp->inp_options)
-		    || (ntohs(ip->ip_len) != m->m_pkthdr.len)
-		    || (ntohs(ip->ip_len) < (ip->ip_hl << 2))) {
-			INP_RUNLOCK(inp);
-			m_freem(m);
-			return (EINVAL);
+		cp = (u_char *)(ip + 1);
+		cnt = hlen - sizeof (struct ip);
+		for (; cnt > 0; cnt -= optlen, cp += optlen) {
+			opttype = cp[IPOPT_OPTVAL];
+			if (opttype == IPOPT_EOL)
+				break;
+			if (opttype == IPOPT_NOP) {
+				optlen = 1;
+				continue;
+			}
+			if (cnt < IPOPT_OLEN + sizeof(u_char)) {
+				INP_RUNLOCK(inp);
+				m_freem(m);
+				return (EINVAL);
+			}
+			optlen = cp[IPOPT_OLEN];
+			if (optlen < IPOPT_OLEN + sizeof(u_char) ||
+			    optlen > cnt) {
+				INP_RUNLOCK(inp);
+				m_freem(m);
+				return (EINVAL);
+			}
 		}
 		/*
 		 * This doesn't allow application to specify ID of zero,
