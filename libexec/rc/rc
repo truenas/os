@@ -49,6 +49,11 @@ HOME=/
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 export HOME PATH
 
+# Do we want to do a dynamic diskless setup?
+if [ -f /etc/dynamicdiskless ]; then
+	sh /etc/rc.dynamicdiskless
+fi
+
 if [ "$1" = autoboot ]; then
 	autoboot=yes
 	_boot="faststart"
