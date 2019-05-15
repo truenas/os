@@ -351,6 +351,17 @@ ppt_is_mmio(struct vm *vm, vm_paddr_t gpa)
 	return (FALSE);
 }
 
+static void
+ppt_pci_reset(device_t dev)
+{
+
+	if (pcie_flr(dev,
+	     max(pcie_get_max_completion_timeout(dev) / 1000, 10), true))
+		return;
+
+	pci_power_reset(dev);
+}
+
 int
 ppt_assign_device(struct vm *vm, int bus, int slot, int func)
 {
@@ -366,9 +377,7 @@ ppt_assign_device(struct vm *vm, int bus, int slot, int func)
 			return (EBUSY);
 
 		pci_save_state(ppt->dev);
-		pcie_flr(ppt->dev,
-		    max(pcie_get_max_completion_timeout(ppt->dev) / 1000, 10),
-		    true);
+		ppt_pci_reset(ppt->dev);
 		pci_restore_state(ppt->dev);
 		ppt->vm = vm;
 		iommu_add_device(vm_iommu_domain(vm), pci_get_rid(ppt->dev));
@@ -391,9 +400,7 @@ ppt_unassign_device(struct vm *vm, int bus, int slot, int func)
 			return (EBUSY);
 
 		pci_save_state(ppt->dev);
-		pcie_flr(ppt->dev,
-		    max(pcie_get_max_completion_timeout(ppt->dev) / 1000, 10),
-		    true);
+		ppt_pci_reset(ppt->dev);
 		pci_restore_state(ppt->dev);
 		ppt_unmap_mmio(vm, ppt);
 		ppt_teardown_msi(ppt);
