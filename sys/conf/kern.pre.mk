@@ -118,7 +118,7 @@ DEFINED_PROF=	${PROF}
 CFLAGS+=	${CONF_CFLAGS}
 
 .if defined(LINKER_FEATURES) && ${LINKER_FEATURES:Mbuild-id}
-LDFLAGS+=	-Wl,--build-id=sha1
+LDFLAGS+=	--build-id=sha1
 .endif
 
 .if (${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
@@ -127,11 +127,11 @@ LDFLAGS+=	-Wl,--build-id=sha1
 .error amd64/arm64/i386 kernel requires linker ifunc support
 .endif
 .if ${MACHINE_CPUARCH} == "amd64"
-LDFLAGS+=	-Wl,-z max-page-size=2097152
+LDFLAGS+=	-z max-page-size=2097152
 .if ${LINKER_TYPE} != "lld"
-LDFLAGS+=	-Wl,-z common-page-size=4096
+LDFLAGS+=	-z common-page-size=4096
 .else
-LDFLAGS+=	-Wl,-z -Wl,ifunc-noplt
+LDFLAGS+=	-z notext -z ifunc-noplt
 .endif
 .endif
 
@@ -202,6 +202,12 @@ OFEDCFLAGS=	${CFLAGS:N-I*} -DCONFIG_INFINIBAND_USER_MEM \
 		${OFEDINCLUDES} ${CFLAGS:M-I*} ${OFEDNOERR}
 OFED_C_NOIMP=	${CC} -c -o ${.TARGET} ${OFEDCFLAGS} ${WERROR} ${PROF}
 OFED_C=		${OFED_C_NOIMP} ${.IMPSRC}
+
+# mlxfw C flags.
+MLXFW_C=	${OFED_C_NOIMP} \
+		-I${SRCTOP}/sys/contrib/xz-embedded/freebsd \
+		-I${SRCTOP}/sys/contrib/xz-embedded/linux/lib/xz \
+		${.IMPSRC}
 
 GEN_CFILES= $S/$M/$M/genassym.c ${MFILES:T:S/.m$/.c/}
 SYSTEM_CFILES= config.c env.c hints.c vnode_if.c

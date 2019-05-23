@@ -92,6 +92,10 @@ __FBSDID("$FreeBSD$");
 
 SYSCTL_NODE(_compat, OID_AUTO, linuxkpi, CTLFLAG_RW, 0, "LinuxKPI parameters");
 
+int linuxkpi_debug;
+SYSCTL_INT(_compat_linuxkpi, OID_AUTO, debug, CTLFLAG_RWTUN,
+    &linuxkpi_debug, 0, "Set to enable pr_debug() prints. Clear to disable.");
+
 MALLOC_DEFINE(M_KMALLOC, "linux", "Linux kmalloc compat");
 
 #include <linux/rbtree.h>
@@ -1900,6 +1904,15 @@ add_timer_on(struct timer_list *timer, int cpu)
 	callout_reset_on(&timer->callout,
 	    linux_timer_jiffies_until(timer->expires),
 	    &linux_timer_callback_wrapper, timer, cpu);
+}
+
+int
+del_timer(struct timer_list *timer)
+{
+
+	if (callout_stop(&(timer)->callout) == -1)
+		return (0);
+	return (1);
 }
 
 static void

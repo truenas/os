@@ -168,6 +168,7 @@ load_key_buf(unsigned char *buf, size_t nbytes)
 	initialize();
 
 	if (!(buf[0] & OPENPGP_TAG_ISTAG)) {
+		/* Note: we do *not* free data */
 		data = dearmor((char *)buf, nbytes, &nbytes);
 		ptr = data;
 	} else
@@ -190,7 +191,6 @@ load_key_buf(unsigned char *buf, size_t nbytes)
 			}
 		}
 	}
-	free(data);
 	return (key);
 }
 
@@ -209,8 +209,10 @@ openpgp_trust_add(OpenPGP_key *key)
 
 		LIST_INIT(&trust_list);
 	}
-	if (key)
+	if (key) {
+		DEBUG_PRINTF(2, ("openpgp_trust_add(%s)\n", key->id));
 		LIST_INSERT_HEAD(&trust_list, key, entries);
+	}
 }
 
 /**
@@ -289,32 +291,48 @@ load_trusted_key_id(const char *keyID)
 OpenPGP_key *
 load_key_id(const char *keyID)
 {
-	static int once = 0;
 	OpenPGP_key *key;
 
-	if (!once) {
-#ifdef HAVE_TA_ASC
-		const char **tp;
-		char *cp;
-		size_t n;
-
-		for (tp = ta_ASC; *tp; tp++) {
-			if ((cp = strdup(*tp))) {
-				n = strlen(cp);
-				key = load_key_buf((unsigned char *)cp, n);
-				free(cp);
-				openpgp_trust_add(key);
-			}
-		}
-#endif
-		once = 1;
-	}
 	key = openpgp_trust_get(keyID);
 #ifndef _STANDALONE
 	if (!key)
 		key = load_trusted_key_id(keyID);
 #endif
+	DEBUG_PRINTF(2, ("load_key_id(%s): %s\n", keyID, key ? "found" : "nope"));
 	return (key);
+}
+
+/**
+ * @brief initialize our internal trust store if any
+ */
+int
+openpgp_trust_init(void)
+{
+	static int once = -1;
+#ifdef HAVE_TA_ASC
+	OpenPGP_key *key;
+	const char **tp;
+	char *cp;
+	size_t n;
+#endif
+
+	if (once < 0) {
+		once = 0;
+#ifdef HAVE_TA_ASC
+		for (tp = ta_ASC; *tp; tp++) {
+			if ((cp = strdup(*tp))) {
+				n = strlen(cp);
+				key = load_key_buf((unsigned char *)cp, n);
+				free(cp);
+				if (key) {
+					openpgp_trust_add(key);
+					once++;
+				}
+			}
+		}
+	}
+#endif
+	return (once);
 }
 
 /**
@@ -333,19 +351,21 @@ openpgp_self_tests(void)
 	char *fdata, *sdata = NULL;
 	size_t fbytes, sbytes;
 
-	for (tp = ta_ASC, vp = vc_ASC; *tp && *vp && rc; tp++, vp++) {
-		if ((fdata = strdup(*tp)) &&
-		    (sdata = strdup(*vp))) {
-			fbytes = strlen(fdata);
-			sbytes = strlen(sdata);
-			rc = openpgp_verify("ta_ASC",
-			    (unsigned char *)fdata, fbytes,
-			    (unsigned char *)sdata, sbytes, 0);
-			printf("Testing verify OpenPGP signature:\t\t%s\n",
-			    rc ? "Failed" : "Passed");
+	if (openpgp_trust_init() > 0) {
+		for (tp = ta_ASC, vp = vc_ASC; *tp && *vp && rc; tp++, vp++) {
+			if ((fdata = strdup(*tp)) &&
+			    (sdata = strdup(*vp))) {
+				fbytes = strlen(fdata);
+				sbytes = strlen(sdata);
+				rc = openpgp_verify("ta_ASC",
+				    (unsigned char *)fdata, fbytes,
+				    (unsigned char *)sdata, sbytes, 0);
+				printf("Testing verify OpenPGP signature:\t\t%s\n",
+				    rc ? "Failed" : "Passed");
+			}
+			free(fdata);
+			free(sdata);
 		}
-		free(fdata);
-		free(sdata);
 	}
 #endif
 	return (rc);

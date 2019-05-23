@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/bin/python2
 #
 # Copyright (c) 2014 The FreeBSD Foundation
 # All rights reserved.
@@ -42,7 +42,9 @@ from glob import iglob
 katdir = '/usr/local/share/nist-kat'
 
 def katg(base, glob):
-	assert os.path.exists(os.path.join(katdir, base)), "Please 'pkg install nist-kat'"
+	assert os.path.exists(katdir), "Please 'pkg install nist-kat'"
+	if not os.path.exists(os.path.join(katdir, base)):
+		raise unittest.SkipTest("Missing %s test vectors" % (base))
 	return iglob(os.path.join(katdir, base, glob))
 
 aesmodules = [ 'cryptosoft0', 'aesni0', 'ccr0', 'ccp0' ]
@@ -59,17 +61,17 @@ def GenTestCase(cname):
 		###############
 		##### AES #####
 		###############
-		@unittest.skipIf(cname not in aesmodules, 'skipping AES on %s' % (cname))
+		@unittest.skipIf(cname not in aesmodules, 'skipping AES-XTS on %s' % (cname))
 		def test_xts(self):
 			for i in katg('XTSTestVectors/format tweak value input - data unit seq no', '*.rsp'):
 				self.runXTS(i, cryptodev.CRYPTO_AES_XTS)
 
-		@unittest.skipIf(cname not in aesmodules, 'skipping AES on %s' % (cname))
+		@unittest.skipIf(cname not in aesmodules, 'skipping AES-CBC on %s' % (cname))
 		def test_cbc(self):
 			for i in katg('KAT_AES', 'CBC[GKV]*.rsp'):
 				self.runCBC(i)
 
-		@unittest.skipIf(cname not in aesmodules, 'skipping AES on %s' % (cname))
+		@unittest.skipIf(cname not in aesmodules, 'skipping AES-GCM on %s' % (cname))
 		def test_gcm(self):
 			for i in katg('gcmtestvectors', 'gcmEncrypt*'):
 				self.runGCM(i, 'ENCRYPT')
@@ -112,7 +114,8 @@ def GenTestCase(cname):
 						c = Crypto(cryptodev.CRYPTO_AES_NIST_GCM_16,
 						    cipherkey,
 						    mac=self._gmacsizes[len(cipherkey)],
-						    mackey=cipherkey, crid=crid)
+						    mackey=cipherkey, crid=crid,
+						    maclen=16)
 					except EnvironmentError, e:
 						# Can't test algorithms the driver does not support.
 						if e.errno != errno.EOPNOTSUPP:
@@ -258,12 +261,56 @@ def GenTestCase(cname):
 		###############
 		@unittest.skipIf(cname not in shamodules, 'skipping SHA on %s' % str(cname))
 		def test_sha(self):
-			# SHA not available in software
-			pass
-			#for i in iglob('SHA1*'):
-			#	self.runSHA(i)
+			for i in katg('shabytetestvectors', 'SHA*Msg.rsp'):
+				self.runSHA(i)
 
-		@unittest.skipIf(cname not in shamodules, 'skipping SHA on %s' % str(cname))
+		def runSHA(self, fname):
+			# Skip SHA512_(224|256) tests
+			if fname.find('SHA512_') != -1:
+				return
+
+			for hashlength, lines in cryptodev.KATParser(fname,
+			    [ 'Len', 'Msg', 'MD' ]):
+				# E.g., hashlength will be "L=20" (bytes)
+				hashlen = int(hashlength.split("=")[1])
+
+				if hashlen == 20:
+					alg = cryptodev.CRYPTO_SHA1
+				elif hashlen == 28:
+					alg = cryptodev.CRYPTO_SHA2_224
+				elif hashlen == 32:
+					alg = cryptodev.CRYPTO_SHA2_256
+				elif hashlen == 48:
+					alg = cryptodev.CRYPTO_SHA2_384
+				elif hashlen == 64:
+					alg = cryptodev.CRYPTO_SHA2_512
+				else:
+					# Skip unsupported hashes
+					# Slurp remaining input in section
+					for data in lines:
+						continue
+					continue
+
+				for data in lines:
+					msg = data['Msg'].decode('hex')
+                                        msg = msg[:int(data['Len'])]
+					md = data['MD'].decode('hex')
+
+					try:
+						c = Crypto(mac=alg, crid=crid,
+						    maclen=hashlen)
+					except EnvironmentError, e:
+						# Can't test hashes the driver does not support.
+						if e.errno != errno.EOPNOTSUPP:
+							raise
+						continue
+
+					_, r = c.encrypt(msg, iv="")
+
+					self.assertEqual(r, md, "Actual: " + \
+					    repr(r.encode("hex")) + " Expected: " + repr(data) + " on " + cname)
+
+		@unittest.skipIf(cname not in shamodules, 'skipping SHA-HMAC on %s' % str(cname))
 		def test_sha1hmac(self):
 			for i in katg('hmactestvectors', 'HMAC.rsp'):
 				self.runSHA1HMAC(i)
@@ -279,11 +326,8 @@ def GenTestCase(cname):
 					alg = cryptodev.CRYPTO_SHA1_HMAC
 					blocksize = 64
 				elif hashlen == 28:
-					# Cryptodev doesn't support SHA-224
-					# Slurp remaining input in section
-					for data in lines:
-						continue
-					continue
+					alg = cryptodev.CRYPTO_SHA2_224_HMAC
+					blocksize = 64
 				elif hashlen == 32:
 					alg = cryptodev.CRYPTO_SHA2_256_HMAC
 					blocksize = 64
@@ -311,7 +355,7 @@ def GenTestCase(cname):
 
 					try:
 						c = Crypto(mac=alg, mackey=key,
-						    crid=crid)
+						    crid=crid, maclen=hashlen)
 					except EnvironmentError, e:
 						# Can't test hashes the driver does not support.
 						if e.errno != errno.EOPNOTSUPP:
@@ -320,13 +364,8 @@ def GenTestCase(cname):
 
 					_, r = c.encrypt(msg, iv="")
 
-					# A limitation in cryptodev.py means we
-					# can only store MACs up to 16 bytes.
-					# That's good enough to validate the
-					# correct behavior, more or less.
-					maclen = min(tlen, 16)
-					self.assertEqual(r[:maclen], mac[:maclen], "Actual: " + \
-					    repr(r[:maclen].encode("hex")) + " Expected: " + repr(data))
+					self.assertEqual(r[:tlen], mac, "Actual: " + \
+					    repr(r.encode("hex")) + " Expected: " + repr(data))
 
 	return GendCryptoTestCase
 

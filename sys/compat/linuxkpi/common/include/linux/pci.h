@@ -342,8 +342,6 @@ static inline void
 pci_disable_device(struct pci_dev *pdev)
 {
 
-	pci_disable_io(pdev->dev.bsddev, SYS_RES_IOPORT);
-	pci_disable_io(pdev->dev.bsddev, SYS_RES_MEMORY);
 	pci_disable_busmaster(pdev->dev.bsddev);
 }
 
@@ -523,6 +521,7 @@ pci_write_config_dword(struct pci_dev *pdev, int where, u32 val)
 int	linux_pci_register_driver(struct pci_driver *pdrv);
 int	linux_pci_register_drm_driver(struct pci_driver *pdrv);
 void	linux_pci_unregister_driver(struct pci_driver *pdrv);
+void	linux_pci_unregister_drm_driver(struct pci_driver *pdrv);
 
 #define	pci_register_driver(pdrv)	linux_pci_register_driver(pdrv)
 #define	pci_unregister_driver(pdrv)	linux_pci_unregister_driver(pdrv)
@@ -605,7 +604,7 @@ static inline int
 pci_channel_offline(struct pci_dev *pdev)
 {
 
-	return (pci_get_vendor(pdev->dev.bsddev) == 0xffff);
+	return (pci_get_vendor(pdev->dev.bsddev) == PCIV_INVALID);
 }
 
 static inline int pci_enable_sriov(struct pci_dev *dev, int nr_virtfn)

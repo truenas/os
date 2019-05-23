@@ -32,24 +32,16 @@ static inline int
 mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
     struct mlx5e_rx_wqe *wqe, u16 ix)
 {
-	bus_dma_segment_t segs[rq->nsegs];
+	bus_dma_segment_t segs[MLX5E_MAX_BUSDMA_RX_SEGS];
 	struct mbuf *mb;
 	int nsegs;
 	int err;
-#if (MLX5E_MAX_RX_SEGS != 1)
 	struct mbuf *mb_head;
 	int i;
-#endif
+
 	if (rq->mbuf[ix].mbuf != NULL)
 		return (0);
 
-#if (MLX5E_MAX_RX_SEGS == 1)
-	mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, rq->wqe_sz);
-	if (unlikely(!mb))
-		return (-ENOMEM);
-
-	mb->m_pkthdr.len = mb->m_len = rq->wqe_sz;
-#else
 	mb_head = mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR,
 	    MLX5E_MAX_RX_BYTES);
 	if (unlikely(mb == NULL))
@@ -72,7 +64,7 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 	}
 	/* rewind to first mbuf in chain */
 	mb = mb_head;
-#endif
+
 	/* get IP header aligned */
 	m_adj(mb, MLX5E_NET_IP_ALIGN);
 
@@ -85,9 +77,6 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 		err = -ENOMEM;
 		goto err_free_mbuf;
 	}
-#if (MLX5E_MAX_RX_SEGS == 1)
-	wqe->data[0].addr = cpu_to_be64(segs[0].ds_addr);
-#else
 	wqe->data[0].addr = cpu_to_be64(segs[0].ds_addr);
 	wqe->data[0].byte_count = cpu_to_be32(segs[0].ds_len |
 	    MLX5_HW_START_PADDING);
@@ -99,7 +88,6 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 		wqe->data[i].addr = 0;
 		wqe->data[i].byte_count = 0;
 	}
-#endif
 
 	rq->mbuf[ix].mbuf = mb;
 	rq->mbuf[ix].data = mb->m_data;
@@ -222,28 +210,31 @@ mlx5e_lro_update_hdr(struct mbuf *mb, struct mlx5_cqe64 *cqe)
 static uint64_t
 mlx5e_mbuf_tstmp(struct mlx5e_priv *priv, uint64_t hw_tstmp)
 {
-	struct mlx5e_clbr_point *cp;
+	struct mlx5e_clbr_point *cp, dcp;
 	uint64_t a1, a2, res;
 	u_int gen;
 
 	do {
 		cp = &priv->clbr_points[priv->clbr_curr];
 		gen = atomic_load_acq_int(&cp->clbr_gen);
-		a1 = (hw_tstmp - cp->clbr_hw_prev) >> MLX5E_TSTMP_PREC;
-		a2 = (cp->base_curr - cp->base_prev) >> MLX5E_TSTMP_PREC;
-		res = (a1 * a2) << MLX5E_TSTMP_PREC;
-
-		/*
-		 * Divisor cannot be zero because calibration callback
-		 * checks for the condition and disables timestamping
-		 * if clock halted.
-		 */
-		res /= (cp->clbr_hw_curr - cp->clbr_hw_prev) >>
-		    MLX5E_TSTMP_PREC;
-
-		res += cp->base_prev;
+		if (gen == 0)
+			return (0);
+		dcp = *cp;
 		atomic_thread_fence_acq();
-	} while (gen == 0 || gen != cp->clbr_gen);
+	} while (gen != cp->clbr_gen);
+
+	a1 = (hw_tstmp - dcp.clbr_hw_prev) >> MLX5E_TSTMP_PREC;
+	a2 = (dcp.base_curr - dcp.base_prev) >> MLX5E_TSTMP_PREC;
+	res = (a1 * a2) << MLX5E_TSTMP_PREC;
+
+	/*
+	 * Divisor cannot be zero because calibration callback
+	 * checks for the condition and disables timestamping
+	 * if clock halted.
+	 */
+	res /= (dcp.clbr_hw_curr - dcp.clbr_hw_prev) >> MLX5E_TSTMP_PREC;
+
+	res += dcp.base_prev;
 	return (res);
 }
 
@@ -254,9 +245,7 @@ mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
 {
 	struct ifnet *ifp = rq->ifp;
 	struct mlx5e_channel *c;
-#if (MLX5E_MAX_RX_SEGS != 1)
 	struct mbuf *mb_head;
-#endif
 	int lro_num_seg;	/* HW LRO session aggregated packets counter */
 	uint64_t tstmp;
 
@@ -267,9 +256,6 @@ mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
 		rq->stats.lro_bytes += cqe_bcnt;
 	}
 
-#if (MLX5E_MAX_RX_SEGS == 1)
-	mb->m_pkthdr.len = mb->m_len = cqe_bcnt;
-#else
 	mb->m_pkthdr.len = cqe_bcnt;
 	for (mb_head = mb; mb != NULL; mb = mb->m_next) {
 		if (mb->m_len > cqe_bcnt)
@@ -286,7 +272,7 @@ mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
 	}
 	/* rewind to first mbuf in chain */
 	mb = mb_head;
-#endif
+
 	/* check if a Toeplitz hash was computed */
 	if (cqe->rss_hash_type != 0) {
 		mb->m_pkthdr.flowid = be32_to_cpu(cqe->rss_hash_result);
@@ -385,7 +371,12 @@ mlx5e_decompress_cqe(struct mlx5e_cq *cq, struct mlx5_cqe64 *title,
 	 */
 	title->byte_cnt = mini->byte_cnt;
 	title->wqe_counter = cpu_to_be16((wqe_counter + i) & cq->wq.sz_m1);
-	title->check_sum = mini->checksum;
+	title->rss_hash_result = mini->rx_hash_result;
+	/*
+	 * Since we use MLX5_CQE_FORMAT_HASH when creating the RX CQ,
+	 * the value of the checksum should be ignored.
+	 */
+	title->check_sum = 0;
 	title->op_own = (title->op_own & 0xf0) |
 	    (((cq->wq.cc + i) >> cq->wq.log_sz) & 1);
 }
@@ -464,10 +455,8 @@ mlx5e_poll_rx_cq(struct mlx5e_rq *rq, int budget)
 		}
 		if ((MHLEN - MLX5E_NET_IP_ALIGN) >= byte_cnt &&
 		    (mb = m_gethdr(M_NOWAIT, MT_DATA)) != NULL) {
-#if (MLX5E_MAX_RX_SEGS != 1)
 			/* set maximum mbuf length */
 			mb->m_len = MHLEN - MLX5E_NET_IP_ALIGN;
-#endif
 			/* get IP header aligned */
 			mb->m_data += MLX5E_NET_IP_ALIGN;
 
@@ -545,6 +534,9 @@ mlx5e_rx_cq_comp(struct mlx5_core_cq *mcq)
 		mlx5e_post_rx_wqes(rq);
 	}
 	mlx5e_post_rx_wqes(rq);
+	/* check for dynamic interrupt moderation callback */
+	if (rq->dim.mode != NET_DIM_CQ_PERIOD_MODE_DISABLED)
+		net_dim(&rq->dim, rq->stats.packets, rq->stats.bytes);
 	mlx5e_cq_arm(&rq->cq, MLX5_GET_DOORBELL_LOCK(&rq->channel->priv->doorbell_lock));
 	tcp_lro_flush_all(&rq->lro);
 	mtx_unlock(&rq->mtx);
