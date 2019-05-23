@@ -4156,11 +4156,9 @@ sctp_aloc_a_assoc_id(struct sctp_inpcb *inp, struct sctp_tcb *stcb)
 	struct sctpasochead *head;
 	struct sctp_tcb *lstcb;
 
-	SCTP_INP_WLOCK(inp);
 try_again:
 	if (inp->sctp_flags & SCTP_PCB_FLAGS_SOCKET_ALLGONE) {
 		/* TSNH */
-		SCTP_INP_WUNLOCK(inp);
 		return (0);
 	}
 	/*
@@ -4179,8 +4177,7 @@ try_again:
 	head = &inp->sctp_asocidhash[SCTP_PCBHASH_ASOC(id, inp->hashasocidmark)];
 	LIST_INSERT_HEAD(head, stcb, sctp_tcbasocidhash);
 	stcb->asoc.in_asocid_hash = 1;
-	SCTP_INP_WUNLOCK(inp);
-	return id;
+	return (id);
 }
 
 /*
@@ -4343,7 +4340,6 @@ sctp_aloc_assoc(struct sctp_inpcb *inp, struct sockaddr *firstaddr,
 	memset(stcb, 0, sizeof(*stcb));
 	asoc = &stcb->asoc;
 
-	asoc->assoc_id = sctp_aloc_a_assoc_id(inp, stcb);
 	SCTP_TCB_LOCK_INIT(stcb);
 	SCTP_TCB_SEND_LOCK_INIT(stcb);
 	stcb->rport = rport;
@@ -4354,7 +4350,6 @@ sctp_aloc_assoc(struct sctp_inpcb *inp, struct sockaddr *firstaddr,
 		/* failed */
 		SCTP_TCB_LOCK_DESTROY(stcb);
 		SCTP_TCB_SEND_LOCK_DESTROY(stcb);
-		LIST_REMOVE(stcb, sctp_tcbasocidhash);
 		SCTP_ZONE_FREE(SCTP_BASE_INFO(ipi_zone_asoc), stcb);
 		SCTP_DECR_ASOC_COUNT();
 		*error = err;
@@ -4367,7 +4362,6 @@ sctp_aloc_assoc(struct sctp_inpcb *inp, struct sockaddr *firstaddr,
 		/* inpcb freed while alloc going on */
 		SCTP_TCB_LOCK_DESTROY(stcb);
 		SCTP_TCB_SEND_LOCK_DESTROY(stcb);
-		LIST_REMOVE(stcb, sctp_tcbasocidhash);
 		SCTP_ZONE_FREE(SCTP_BASE_INFO(ipi_zone_asoc), stcb);
 		SCTP_INP_WUNLOCK(inp);
 		SCTP_INP_INFO_WUNLOCK();
@@ -4378,6 +4372,7 @@ sctp_aloc_assoc(struct sctp_inpcb *inp, struct sockaddr *firstaddr,
 	}
 	SCTP_TCB_LOCK(stcb);
 
+	asoc->assoc_id = sctp_aloc_a_assoc_id(inp, stcb);
 	/* now that my_vtag is set, add it to the hash */
 	head = &SCTP_BASE_INFO(sctp_asochash)[SCTP_PCBHASH_ASOC(stcb->asoc.my_vtag, SCTP_BASE_INFO(hashasocmark))];
 	/* put it in the bucket in the vtag hash of assoc's for the system */
@@ -4986,6 +4981,7 @@ sctp_free_assoc(struct sctp_inpcb *inp, struct sctp_tcb *stcb, int from_inpcbfre
 	 * in case.
 	 */
 	/* anything on the wheel needs to be removed */
+	SCTP_TCB_SEND_LOCK(stcb);
 	for (i = 0; i < asoc->streamoutcnt; i++) {
 		struct sctp_stream_out *outs;
 
@@ -4994,7 +4990,7 @@ sctp_free_assoc(struct sctp_inpcb *inp, struct sctp_tcb *stcb, int from_inpcbfre
 		TAILQ_FOREACH_SAFE(sp, &outs->outqueue, next, nsp) {
 			atomic_subtract_int(&asoc->stream_queue_cnt, 1);
 			TAILQ_REMOVE(&outs->outqueue, sp, next);
-			stcb->asoc.ss_functions.sctp_ss_remove_from_stream(stcb, asoc, outs, sp, 0);
+			stcb->asoc.ss_functions.sctp_ss_remove_from_stream(stcb, asoc, outs, sp, 1);
 			sctp_free_spbufspace(stcb, asoc, sp);
 			if (sp->data) {
 				if (so) {
@@ -5016,6 +5012,7 @@ sctp_free_assoc(struct sctp_inpcb *inp, struct sctp_tcb *stcb, int from_inpcbfre
 			sctp_free_a_strmoq(stcb, sp, SCTP_SO_LOCKED);
 		}
 	}
+	SCTP_TCB_SEND_UNLOCK(stcb);
 	/* sa_ignore FREED_MEMORY */
 	TAILQ_FOREACH_SAFE(strrst, &asoc->resetHead, next_resp, nstrrst) {
 		TAILQ_REMOVE(&asoc->resetHead, strrst, next_resp);
