@@ -626,6 +626,7 @@ AcpiExResolveOperands (
             case ACPI_TYPE_INTEGER:
             case ACPI_TYPE_STRING:
             case ACPI_TYPE_BUFFER:
+            case ACPI_TYPE_PACKAGE:
 
                 /* Valid operand */
                break;

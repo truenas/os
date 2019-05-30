@@ -217,6 +217,9 @@ AcpiExConvertToInteger (
         Count   = ObjDesc->Buffer.Length;
         break;
 
+    case ACPI_TYPE_PACKAGE:
+        break;
+
     default:
 
         return_ACPI_STATUS (AE_TYPE);
