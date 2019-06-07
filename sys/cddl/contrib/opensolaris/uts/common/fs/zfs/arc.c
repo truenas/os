@@ -1149,6 +1149,12 @@ sysctl_vfs_zfs_arc_meta_limit(SYSCTL_HANDLER_ARGS)
 		return (EINVAL);
 
 	arc_meta_limit = val;
+
+	mutex_enter(&arc_adjust_lock);
+	arc_adjust_needed = B_TRUE;
+	mutex_exit(&arc_adjust_lock);
+	zthr_wakeup(arc_adjust_zthr);
+
 	return (0);
 }
 
@@ -1209,6 +1215,11 @@ sysctl_vfs_zfs_arc_max(SYSCTL_HANDLER_ARGS)
 		arc_c = arc_c / 2;
 
 	zfs_arc_max = arc_c;
+
+	mutex_enter(&arc_adjust_lock);
+	arc_adjust_needed = B_TRUE;
+	mutex_exit(&arc_adjust_lock);
+	zthr_wakeup(arc_adjust_zthr);
 
 	return (0);
 }
