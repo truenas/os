@@ -45,8 +45,10 @@
 #define	ALT_STACK_SIZE	128
 
 #define	PCPU_MD_FIELDS							\
+	struct pmap *pc_curpmap;	/* Currently active pmap */	\
 	uint32_t pc_pending_ipis;	/* IPIs pending to this CPU */	\
-	char __pad[61]
+	uint32_t pc_hart;		/* Hart ID */			\
+	char __pad[57]
 
 #ifdef _KERNEL
 

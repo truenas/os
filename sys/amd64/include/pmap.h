@@ -119,6 +119,7 @@
 #define	PG_PROMOTED	X86_PG_AVAIL(54)	/* PDE only */
 #define	PG_FRAME	(0x000ffffffffff000ul)
 #define	PG_PS_FRAME	(0x000fffffffe00000ul)
+#define	PG_PS_PDP_FRAME	(0x000fffffc0000000ul)
 
 /*
  * Promotion to a 2MB (PDE) page mapping requires that the corresponding 4KB
@@ -137,7 +138,7 @@
 #define PGEX_RSV	0x08	/* reserved PTE field is non-zero */
 #define PGEX_I		0x10	/* during an instruction fetch */
 #define	PGEX_PK		0x20	/* protection key violation */
-#define	PGEX_SGX	0x40	/* SGX-related */
+#define	PGEX_SGX	0x8000	/* SGX-related */
 
 /* 
  * undef the PG_xx macros that define bits in the regular x86 PTEs that

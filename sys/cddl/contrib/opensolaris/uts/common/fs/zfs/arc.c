@@ -1233,6 +1233,12 @@ sysctl_vfs_zfs_arc_meta_limit(SYSCTL_HANDLER_ARGS)
 		return (EINVAL);
 
 	arc_meta_limit = val;
+
+	mutex_enter(&arc_adjust_lock);
+	arc_adjust_needed = B_TRUE;
+	mutex_exit(&arc_adjust_lock);
+	zthr_wakeup(arc_adjust_zthr);
+
 	return (0);
 }
 
@@ -1293,6 +1299,11 @@ sysctl_vfs_zfs_arc_max(SYSCTL_HANDLER_ARGS)
 		arc_c = arc_c / 2;
 
 	zfs_arc_max = arc_c;
+
+	mutex_enter(&arc_adjust_lock);
+	arc_adjust_needed = B_TRUE;
+	mutex_exit(&arc_adjust_lock);
+	zthr_wakeup(arc_adjust_zthr);
 
 	return (0);
 }
@@ -5129,7 +5140,7 @@ static boolean_t
 arc_is_overflowing(void)
 {
 	/* Always allow at least one block of overflow */
-	uint64_t overflow = MAX(SPA_MAXBLOCKSIZE,
+	int64_t overflow = MAX(SPA_MAXBLOCKSIZE,
 	    arc_c >> zfs_arc_overflow_shift);
 
 	/*
@@ -5141,7 +5152,7 @@ arc_is_overflowing(void)
 	 * in the ARC. In practice, that's in the tens of MB, which is low
 	 * enough to be safe.
 	 */
-	return (aggsum_lower_bound(&arc_size) >= arc_c + overflow);
+	return (aggsum_lower_bound(&arc_size) >= (int64_t)arc_c + overflow);
 }
 
 static abd_t *
@@ -7074,6 +7085,16 @@ arc_state_fini(void)
 	multilist_destroy(arc_mru_ghost->arcs_list[ARC_BUFC_DATA]);
 	multilist_destroy(arc_mfu->arcs_list[ARC_BUFC_DATA]);
 	multilist_destroy(arc_mfu_ghost->arcs_list[ARC_BUFC_DATA]);
+
+	aggsum_fini(&arc_meta_used);
+	aggsum_fini(&arc_size);
+	aggsum_fini(&astat_data_size);
+	aggsum_fini(&astat_metadata_size);
+	aggsum_fini(&astat_hdr_size);
+	aggsum_fini(&astat_bonus_size);
+	aggsum_fini(&astat_dnode_size);
+	aggsum_fini(&astat_dbuf_size);
+	aggsum_fini(&astat_l2_hdr_size);
 }
 
 uint64_t
@@ -7357,8 +7378,13 @@ arc_fini(void)
 	mutex_destroy(&arc_adjust_lock);
 	cv_destroy(&arc_adjust_waiters_cv);
 
-	arc_state_fini();
+	/*
+	 * buf_fini() must proceed arc_state_fini() because buf_fin() may
+	 * trigger the release of kmem magazines, which can callback to
+	 * arc_space_return() which accesses aggsums freed in act_state_fini().
+	 */
 	buf_fini();
+	arc_state_fini();
 
 	ASSERT0(arc_loaned_bytes);
 }

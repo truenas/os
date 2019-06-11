@@ -117,6 +117,9 @@ int64_t dcache_line_size;	/* The minimum D cache line size */
 int64_t icache_line_size;	/* The minimum I cache line size */
 int64_t idcache_line_size;	/* The minimum cache line size */
 
+uint32_t boot_hart;	/* The hart we booted on. */
+cpuset_t all_harts;
+
 extern int *end;
 extern int *initstack_end;
 
@@ -178,7 +181,6 @@ set_regs(struct thread *td, struct reg *regs)
 
 	frame = td->td_frame;
 	frame->tf_sepc = regs->sepc;
-	frame->tf_sstatus = regs->sstatus;
 	frame->tf_ra = regs->ra;
 	frame->tf_sp = regs->sp;
 	frame->tf_gp = regs->gp;
@@ -460,11 +462,13 @@ void
 spinlock_enter(void)
 {
 	struct thread *td;
+	register_t reg;
 
 	td = curthread;
 	if (td->td_md.md_spinlock_count == 0) {
+		reg = intr_disable();
 		td->td_md.md_spinlock_count = 1;
-		td->td_md.md_saved_sstatus_ie = intr_disable();
+		td->td_md.md_saved_sstatus_ie = reg;
 	} else
 		td->td_md.md_spinlock_count++;
 	critical_enter();
@@ -734,6 +738,10 @@ cache_setup(void)
 {
 
 	/* TODO */
+
+	dcache_line_size = 0;
+	icache_line_size = 0;
+	idcache_line_size = 0;
 }
 
 /*
@@ -853,6 +861,7 @@ initriscv(struct riscv_bootparams *rvbp)
 	/* Set the pcpu data, this is needed by pmap_bootstrap */
 	pcpup = &__pcpu[0];
 	pcpu_init(pcpup, 0, sizeof(struct pcpu));
+	pcpup->pc_hart = boot_hart;
 
 	/* Set the pcpu pointer */
 	__asm __volatile("mv gp, %0" :: "r"(pcpup));
@@ -871,10 +880,6 @@ initriscv(struct riscv_bootparams *rvbp)
 	cninit();
 
 	init_proc0(rvbp->kern_stack);
-
-	/* set page table base register for thread0 */
-	thread0.td_pcb->pcb_l1addr = \
-	    (rvbp->kern_l1pt - KERNBASE + rvbp->kern_phys);
 
 	msgbufinit(msgbufp, msgbufsize);
 	mutex_init();

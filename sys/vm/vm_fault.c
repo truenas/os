@@ -271,7 +271,8 @@ vm_fault_soft_fast(struct faultstate *fs, vm_offset_t vaddr, vm_prot_t prot,
 {
 	vm_page_t m, m_map;
 #if (defined(__aarch64__) || defined(__amd64__) || (defined(__arm__) && \
-    __ARM_ARCH >= 6) || defined(__i386__)) && VM_NRESERVLEVEL > 0
+    __ARM_ARCH >= 6) || defined(__i386__) || defined(__riscv)) && \
+    VM_NRESERVLEVEL > 0
 	vm_page_t m_super;
 	int flags;
 #endif
@@ -286,7 +287,8 @@ vm_fault_soft_fast(struct faultstate *fs, vm_offset_t vaddr, vm_prot_t prot,
 	m_map = m;
 	psind = 0;
 #if (defined(__aarch64__) || defined(__amd64__) || (defined(__arm__) && \
-    __ARM_ARCH >= 6) || defined(__i386__)) && VM_NRESERVLEVEL > 0
+    __ARM_ARCH >= 6) || defined(__i386__) || defined(__riscv)) && \
+    VM_NRESERVLEVEL > 0
 	if ((m->flags & PG_FICTITIOUS) == 0 &&
 	    (m_super = vm_reserv_to_superpage(m)) != NULL &&
 	    rounddown2(vaddr, pagesizes[m_super->psind]) >= fs->entry->start &&
@@ -463,7 +465,7 @@ vm_fault_populate(struct faultstate *fs, vm_prot_t prot, int fault_type,
 	    pidx += npages, m = vm_page_next(&m[npages - 1])) {
 		vaddr = fs->entry->start + IDX_TO_OFF(pidx) - fs->entry->offset;
 #if defined(__aarch64__) || defined(__amd64__) || (defined(__arm__) && \
-    __ARM_ARCH >= 6) || defined(__i386__)
+    __ARM_ARCH >= 6) || defined(__i386__) || defined(__riscv)
 		psind = m->psind;
 		if (psind > 0 && ((vaddr & (pagesizes[psind] - 1)) != 0 ||
 		    pidx + OFF_TO_IDX(pagesizes[psind]) - 1 > pager_last ||
@@ -1002,7 +1004,7 @@ readrest:
 			 */
 			if (rv == VM_PAGER_ERROR || rv == VM_PAGER_BAD) {
 				vm_page_lock(fs.m);
-				if (fs.m->wire_count == 0)
+				if (!vm_page_wired(fs.m))
 					vm_page_free(fs.m);
 				else
 					vm_page_xunbusy_maybelocked(fs.m);
@@ -1025,7 +1027,7 @@ readrest:
 			 */
 			if (fs.object != fs.first_object) {
 				vm_page_lock(fs.m);
-				if (fs.m->wire_count == 0)
+				if (!vm_page_wired(fs.m))
 					vm_page_free(fs.m);
 				else
 					vm_page_xunbusy_maybelocked(fs.m);
@@ -1792,7 +1794,7 @@ again:
 				vm_page_wire(dst_m);
 				vm_page_unlock(dst_m);
 			} else {
-				KASSERT(dst_m->wire_count > 0,
+				KASSERT(vm_page_wired(dst_m),
 				    ("dst_m %p is not wired", dst_m));
 			}
 		} else {
