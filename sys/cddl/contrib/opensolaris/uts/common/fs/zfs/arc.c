@@ -6748,9 +6748,7 @@ arc_state_fini(void)
 	aggsum_fini(&astat_data_size);
 	aggsum_fini(&astat_metadata_size);
 	aggsum_fini(&astat_hdr_size);
-	aggsum_fini(&astat_bonus_size);
-	aggsum_fini(&astat_dnode_size);
-	aggsum_fini(&astat_dbuf_size);
+	aggsum_fini(&astat_other_size);
 	aggsum_fini(&astat_l2_hdr_size);
 }
 
