@@ -1639,7 +1639,7 @@ ncl_doio(struct vnode *vp, struct buf *bp, struct ucred *cr, struct thread *td,
 		    }
 		}
 		/* ASSERT_VOP_LOCKED(vp, "ncl_doio"); */
-		if (p && (vp->v_vflag & VV_TEXT)) {
+		if (p && vp->v_writecount <= -1) {
 			mtx_lock(&np->n_mtx);
 			if (NFS_TIMESPEC_COMPARE(&np->n_mtime, &np->n_vattr.na_mtime)) {
 				mtx_unlock(&np->n_mtx);
@@ -1832,7 +1832,7 @@ ncl_doio(struct vnode *vp, struct buf *bp, struct ucred *cr, struct thread *td,
  */
 
 int
-ncl_meta_setsize(struct vnode *vp, struct ucred *cred, struct thread *td, u_quad_t nsize)
+ncl_meta_setsize(struct vnode *vp, struct thread *td, u_quad_t nsize)
 {
 	struct nfsnode *np = VTONFS(vp);
 	u_quad_t tsize;
@@ -1854,7 +1854,7 @@ ncl_meta_setsize(struct vnode *vp, struct ucred *cred, struct thread *td, u_quad
 		 * truncation point.  We may have a B_DELWRI and/or B_CACHE
 		 * buffer that now needs to be truncated.
 		 */
-		error = vtruncbuf(vp, cred, nsize, biosize);
+		error = vtruncbuf(vp, nsize, biosize);
 		lbn = nsize / biosize;
 		bufsize = nsize - (lbn * biosize);
 		bp = nfs_getcacheblk(vp, lbn, bufsize, td);

@@ -114,6 +114,7 @@ struct dirlist {
 struct exportlist {
 	struct dirlist	*ex_dirl;
 	struct dirlist	*ex_defdir;
+	struct grouplist *ex_grphead;
 	int		ex_flag;
 	fsid_t		ex_fs;
 	char		*ex_fsdir;
@@ -127,6 +128,8 @@ struct exportlist {
 };
 /* ex_flag bits */
 #define	EX_LINKED	0x1
+
+SLIST_HEAD(exportlisthead, exportlist);
 
 struct netmsk {
 	struct sockaddr_storage nt_net;
@@ -189,13 +192,17 @@ static int	do_mount(struct exportlist *, struct grouplist *, int,
 		    struct xucred *, char *, int, struct statfs *);
 static int	do_opt(char **, char **, struct exportlist *,
 		    struct grouplist *, int *, int *, struct xucred *);
-static struct exportlist	*ex_search(fsid_t *);
+static struct exportlist	*ex_search(fsid_t *, struct exportlisthead *);
 static struct exportlist	*get_exp(void);
 static void	free_dir(struct dirlist *);
 static void	free_exp(struct exportlist *);
 static void	free_grp(struct grouplist *);
 static void	free_host(struct hostlist *);
 static void	get_exportlist(void);
+static void	insert_exports(struct exportlist *, struct exportlisthead *);
+static void	free_exports(struct exportlisthead *);
+static void	read_exportfile(void);
+static void	delete_export(struct iovec *, int, struct statfs *, char *);
 static int	get_host(char *, struct grouplist *, struct grouplist *);
 static struct hostlist *get_ht(void);
 static int	get_line(void);
@@ -227,9 +234,8 @@ static int	xdr_fhs(XDR *, caddr_t);
 static int	xdr_mlist(XDR *, caddr_t);
 static void	terminate(int);
 
-static SLIST_HEAD(, exportlist) exphead = SLIST_HEAD_INITIALIZER(exphead);
-static SLIST_HEAD(, mountlist) mlhead = SLIST_HEAD_INITIALIZER(mlhead);
-static struct grouplist *grphead;
+static struct exportlisthead exphead = SLIST_HEAD_INITIALIZER(&exphead);
+static SLIST_HEAD(, mountlist) mlhead = SLIST_HEAD_INITIALIZER(&mlhead);
 static char *exnames_default[2] = { _PATH_EXPORTS, NULL };
 static char **exnames;
 static char **hosts = NULL;
@@ -449,7 +455,6 @@ main(int argc, char **argv)
 
 	argc -= optind;
 	argv += optind;
-	grphead = (struct grouplist *)NULL;
 	if (argc > 0)
 		exnames = argv;
 	else
@@ -1087,7 +1092,7 @@ mntsrv(struct svc_req *rqstp, SVCXPRT *transp)
 		if (bad)
 			ep = NULL;
 		else
-			ep = ex_search(&fsb.f_fsid);
+			ep = ex_search(&fsb.f_fsid, &exphead);
 		hostset = defset = 0;
 		if (ep && (chk_host(ep->ex_defdir, saddr, &defset, &hostset,
 		    &numsecflavors, &secflavorsp) ||
@@ -1540,7 +1545,7 @@ get_exportlist_one(void)
 					 * See if this directory is already
 					 * in the list.
 					 */
-					ep = ex_search(&fsb.f_fsid);
+					ep = ex_search(&fsb.f_fsid, &exphead);
 					if (ep == (struct exportlist *)NULL) {
 					    ep = get_exp();
 					    ep->ex_fs = fsb.f_fsid;
@@ -1686,8 +1691,8 @@ get_exportlist_one(void)
 		 */
 		if (has_host) {
 			hang_dirp(dirhead, tgrp, ep, opt_flags);
-			grp->gr_next = grphead;
-			grphead = tgrp;
+			grp->gr_next = ep->ex_grphead;
+			ep->ex_grphead = tgrp;
 		} else {
 			hang_dirp(dirhead, (struct grouplist *)NULL, ep,
 				opt_flags);
@@ -1695,7 +1700,7 @@ get_exportlist_one(void)
 		}
 		dirhead = (struct dirlist *)NULL;
 		if ((ep->ex_flag & EX_LINKED) == 0) {
-			SLIST_INSERT_HEAD(&exphead, ep, entries);
+			insert_exports(ep, &exphead);
 
 			ep->ex_flag |= EX_LINKED;
 		}
@@ -1714,16 +1719,12 @@ nextline:
 static void
 get_exportlist(void)
 {
-	struct exportlist *ep, *ep2;
-	struct grouplist *grp, *tgrp;
 	struct export_args export;
 	struct iovec *iov;
-	struct statfs *fsp, *mntbufp;
-	struct xvfsconf vfc;
+	struct statfs *mntbufp;
 	char errmsg[255];
 	int num, i;
 	int iovlen;
-	int done;
 	struct nfsex_args eargs;
 
 	if (suspend_nfsd != 0)
@@ -1738,18 +1739,7 @@ get_exportlist(void)
 	/*
 	 * First, get rid of the old list
 	 */
-	SLIST_FOREACH_SAFE(ep, &exphead, entries, ep2) {
-		SLIST_REMOVE(&exphead, ep, exportlist, entries);
-		free_exp(ep);
-	}
-
-	grp = grphead;
-	while (grp) {
-		tgrp = grp;
-		grp = grp->gr_next;
-		free_grp(tgrp);
-	}
-	grphead = (struct grouplist *)NULL;
+	free_exports(&exphead);
 
 	/*
 	 * and the old V4 root dir.
@@ -1781,47 +1771,8 @@ get_exportlist(void)
 		build_iovec(&iov, &iovlen, "errmsg", errmsg, sizeof(errmsg));
 	}
 
-	for (i = 0; i < num; i++) {
-		fsp = &mntbufp[i];
-		if (getvfsbyname(fsp->f_fstypename, &vfc) != 0) {
-			syslog(LOG_ERR, "getvfsbyname() failed for %s",
-			    fsp->f_fstypename);
-			continue;
-		}
-
-		/*
-		 * We do not need to delete "export" flag from
-		 * filesystems that do not have it set.
-		 */
-		if (!(fsp->f_flags & MNT_EXPORTED))
-		    continue;
-		/*
-		 * Do not delete export for network filesystem by
-		 * passing "export" arg to nmount().
-		 * It only makes sense to do this for local filesystems.
-		 */
-		if (vfc.vfc_flags & VFCF_NETWORK)
-			continue;
-
-		iov[1].iov_base = fsp->f_fstypename;
-		iov[1].iov_len = strlen(fsp->f_fstypename) + 1;
-		iov[3].iov_base = fsp->f_mntonname;
-		iov[3].iov_len = strlen(fsp->f_mntonname) + 1;
-		iov[5].iov_base = fsp->f_mntfromname;
-		iov[5].iov_len = strlen(fsp->f_mntfromname) + 1;
-		errmsg[0] = '\0';
-
-		/*
-		 * EXDEV is returned when path exists but is not a
-		 * mount point.  May happens if raced with unmount.
-		 */
-		if (nmount(iov, iovlen, fsp->f_flags) < 0 &&
-		    errno != ENOENT && errno != ENOTSUP && errno != EXDEV) {
-			syslog(LOG_ERR,
-			    "can't delete exports for %s: %m %s",
-			    fsp->f_mntonname, errmsg);
-		}
-	}
+	for (i = 0; i < num; i++)
+		delete_export(iov, iovlen, &mntbufp[i], errmsg);
 
 	if (iov != NULL) {
 		/* Free strings allocated by strdup() in getmntopts.c */
@@ -1836,6 +1787,51 @@ get_exportlist(void)
 		free(iov);
 		iovlen = 0;
 	}
+
+	read_exportfile();
+
+	/*
+	 * If there was no public fh, clear any previous one set.
+	 */
+	if (has_publicfh == 0)
+		(void) nfssvc(NFSSVC_NOPUBLICFH, NULL);
+
+	/* Resume the nfsd. If they weren't suspended, this is harmless. */
+	(void)nfssvc(NFSSVC_RESUMENFSD, NULL);
+}
+
+/*
+ * Insert an export entry in the appropriate list.
+ */
+static void
+insert_exports(struct exportlist *ep, struct exportlisthead *exhp)
+{
+
+	SLIST_INSERT_HEAD(exhp, ep, entries);
+}
+
+/*
+ * Free up the exports lists passed in as arguments.
+ */
+static void
+free_exports(struct exportlisthead *exhp)
+{
+	struct exportlist *ep, *ep2;
+
+	SLIST_FOREACH_SAFE(ep, exhp, entries, ep2) {
+		SLIST_REMOVE(exhp, ep, exportlist, entries);
+		free_exp(ep);
+	}
+	SLIST_INIT(exhp);
+}
+
+/*
+ * Read the exports file(s) and call get_exportlist_one() for each line.
+ */
+static void
+read_exportfile(void)
+{
+	int done, i;
 
 	/*
 	 * Read in the exports file and build the list, calling
@@ -1857,15 +1853,54 @@ get_exportlist(void)
 		syslog(LOG_ERR, "can't open any exports file");
 		exit(2);
 	}
+}
 
+/*
+ * Delete an exports entry.
+ */
+static void
+delete_export(struct iovec *iov, int iovlen, struct statfs *fsp, char *errmsg)
+{
+	struct xvfsconf vfc;
+
+	if (getvfsbyname(fsp->f_fstypename, &vfc) != 0) {
+		syslog(LOG_ERR, "getvfsbyname() failed for %s",
+		    fsp->f_fstypename);
+		return;
+	}
+	
 	/*
-	 * If there was no public fh, clear any previous one set.
+	 * We do not need to delete "export" flag from
+	 * filesystems that do not have it set.
 	 */
-	if (has_publicfh == 0)
-		(void) nfssvc(NFSSVC_NOPUBLICFH, NULL);
-
-	/* Resume the nfsd. If they weren't suspended, this is harmless. */
-	(void)nfssvc(NFSSVC_RESUMENFSD, NULL);
+	if (!(fsp->f_flags & MNT_EXPORTED))
+		return;
+	/*
+	 * Do not delete export for network filesystem by
+	 * passing "export" arg to nmount().
+	 * It only makes sense to do this for local filesystems.
+	 */
+	if (vfc.vfc_flags & VFCF_NETWORK)
+		return;
+	
+	iov[1].iov_base = fsp->f_fstypename;
+	iov[1].iov_len = strlen(fsp->f_fstypename) + 1;
+	iov[3].iov_base = fsp->f_mntonname;
+	iov[3].iov_len = strlen(fsp->f_mntonname) + 1;
+	iov[5].iov_base = fsp->f_mntfromname;
+	iov[5].iov_len = strlen(fsp->f_mntfromname) + 1;
+	errmsg[0] = '\0';
+	
+	/*
+	 * EXDEV is returned when path exists but is not a
+	 * mount point.  May happens if raced with unmount.
+	 */
+	if (nmount(iov, iovlen, fsp->f_flags) < 0 && errno != ENOENT &&
+	    errno != ENOTSUP && errno != EXDEV) {
+		syslog(LOG_ERR,
+		    "can't delete exports for %s: %m %s",
+		    fsp->f_mntonname, errmsg);
+	}
 }
 
 /*
@@ -1924,11 +1959,11 @@ getexp_err(struct exportlist *ep, struct grouplist *grp, const char *reason)
  * Search the export list for a matching fs.
  */
 static struct exportlist *
-ex_search(fsid_t *fsid)
+ex_search(fsid_t *fsid, struct exportlisthead *exhp)
 {
 	struct exportlist *ep;
 
-	SLIST_FOREACH(ep, &exphead, entries) {
+	SLIST_FOREACH(ep, exhp, entries) {
 		if (ep->ex_fs.val[0] == fsid->val[0] &&
 		    ep->ex_fs.val[1] == fsid->val[1])
 			return (ep);
@@ -2403,6 +2438,7 @@ get_host(char *cp, struct grouplist *grp, struct grouplist *tgrp)
 static void
 free_exp(struct exportlist *ep)
 {
+	struct grouplist *grp, *tgrp;
 
 	if (ep->ex_defdir) {
 		free_host(ep->ex_defdir->dp_hosts);
@@ -2413,6 +2449,12 @@ free_exp(struct exportlist *ep)
 	if (ep->ex_indexfile)
 		free(ep->ex_indexfile);
 	free_dir(ep->ex_dirl);
+	grp = ep->ex_grphead;
+	while (grp) {
+		tgrp = grp;
+		grp = grp->gr_next;
+		free_grp(tgrp);
+	}
 	free((caddr_t)ep);
 }
 

@@ -203,6 +203,7 @@ device		bcm2835_bsc	# Broadcom BCM283x I2C bus
 device		iicbus
 device		iic
 device		twsi		# Allwinner I2C controller
+device		syr827		# Silergy SYR827 PMIC
 
 # Clock and reset controllers
 device		aw_ccu		# Allwinner clock controller
@@ -229,6 +230,10 @@ device		aw_thermal	# Allwinner Thermal Sensor Controller
 # SPI
 device		spibus
 device		bcm2835_spi	# Broadcom BCM283x SPI bus
+
+# PWM
+device		pwm
+device		aw_pwm
 
 # Console
 device		vt
