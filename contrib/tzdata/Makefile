@@ -12,7 +12,10 @@ VERSION=	unknown
 # Email address for bug reports.
 BUGEMAIL=	tz@iana.org
 
-# Choose source data features.  To get new features right away, use:
+# DATAFORM selects the data format.
+# Available formats represent essentially the same data, albeit
+# possibly with minor discrepancies that users are not likely to notice.
+# To get new features and the best data right away, use:
 #	DATAFORM=	vanguard
 # To wait a while before using new features, to give downstream users
 # time to upgrade zic (the default), use:
@@ -32,12 +35,14 @@ DATAFORM=		main
 
 LOCALTIME=	GMT
 
-# If you want something other than Eastern United States time as a template
-# for handling POSIX-style timezone environment variables,
+# The POSIXRULES macro controls interpretation of nonstandard and obsolete
+# POSIX-like TZ settings like TZ='EET-2EEST' that lack DST transition rules.
+# In the reference implementation, if you want something other than Eastern
+# United States time as a template for handling these settings, you can
 # change the line below (after finding the timezone you want in the
 # one of the $(TDATA) source files, or adding it to a source file).
-# When a POSIX-style environment variable is handled, the rules in the
-# template file are used to determine "spring forward" and "fall back" days and
+# A setting like TZ='EET-2EEST' is supposed to use the rules in the
+# template file to determine "spring forward" and "fall back" days and
 # times; the environment variable itself specifies UT offsets of standard and
 # daylight saving time.
 # Alternatively, if you discover you've got the wrong timezone, you can just
@@ -46,7 +51,17 @@ LOCALTIME=	GMT
 # Use the command
 #	make zonenames
 # to get a list of the values you can use for POSIXRULES.
-# If you want POSIX compatibility, use "America/New_York".
+#
+# If POSIXRULES is empty, no template is installed; this is the intended
+# future default for POSIXRULES.
+#
+# Nonempty POSIXRULES is obsolete and should not be relied on, because:
+# * It does not work correctly in popular implementations such as GNU/Linux.
+# * It does not work in the tzdb implementation for timestamps after 2037.
+# * It is incompatible with 'zic -b slim' if POSIXRULES specifies transitions
+#   at standard time or UT rather than at local time.
+# In short, software should avoid ruleless settings like TZ='EET-2EEST'
+# and so should not depend on the value of POSIXRULES.
 
 POSIXRULES=	America/New_York
 
@@ -113,8 +128,8 @@ TIME_T_ALTERNATIVES = $(TIME_T_ALTERNATIVES_HEAD) $(TIME_T_ALTERNATIVES_TAIL)
 TIME_T_ALTERNATIVES_HEAD = int64_t
 TIME_T_ALTERNATIVES_TAIL = int32_t uint32_t uint64_t
 
-# What kind of TZif data files to generate.
-# (TZif is the binary time zone data format that zic generates.)
+# What kind of TZif data files to generate.  (TZif is the binary time
+# zone data format that zic generates; see Internet RFC 8536.)
 # If you want only POSIX time, with time values interpreted as
 # seconds since the epoch (not counting leap seconds), use
 #	REDO=		posix_only
@@ -229,6 +244,13 @@ LDLIBS=
 #	other than simply getting garbage data
 #  -DUSE_LTZ=0 to build zdump with the system time zone library
 #	Also set TZDOBJS=zdump.o and CHECK_TIME_T_ALTERNATIVES= below.
+#  -DZIC_BLOAT_DEFAULT=\"slim\" to default zic's -b option to "slim", and
+#	similarly for "fat".  Fat TZif files work around incompatibilities
+#	and bugs in some TZif readers, notably readers that mishandle 64-bit
+#	data in TZif files.  Slim TZif files are more efficient and do not
+#	work around these incompatibilities and bugs.  If not given, the
+#	current default is "fat" but this is intended to change as readers
+#	requiring fat files often mishandle timestamps after 2037 anyway.
 #  -DZIC_MAX_ABBR_LEN_WO_WARN=3
 #	(or some other number) to set the maximum time zone abbreviation length
 #	that zic will accept without a warning (the default is 6)
@@ -360,6 +382,11 @@ LEAPSECONDS=
 zic=		./zic
 ZIC=		$(zic) $(ZFLAGS)
 
+# To shrink the size of installed TZif files,
+# append "-r @N" to omit data before N-seconds-after-the-Epoch.
+# You can also append "-b slim" if that is not already the default;
+# see ZIC_BLOAT_DEFAULT above.
+# See the zic man page for more about -b and -r.
 ZFLAGS=
 
 # How to use zic to install TZif files.
@@ -382,6 +409,9 @@ KSHELL=		/bin/bash
 
 # Name of curl <https://curl.haxx.se/>, used for HTML validation.
 CURL=		curl
+
+# Name of GNU Privacy Guard <https://gnupg.org/>, used to sign distributions.
+GPG=		gpg
 
 # The path where SGML DTDs are kept and the catalog file(s) to use when
 # validating HTML 4.01.  The default should work on both Debian and Red Hat.
@@ -491,7 +521,8 @@ MANTXTS=	newctime.3.txt newstrftime.3.txt newtzset.3.txt \
 COMMON=		calendars CONTRIBUTING LICENSE Makefile \
 			NEWS README theory.html version
 WEB_PAGES=	tz-art.html tz-how-to.html tz-link.html
-CHECK_WEB_PAGES=check_tz-art.html check_tz-how-to.html check_tz-link.html
+CHECK_WEB_PAGES=check_theory.html check_tz-art.html \
+			check_tz-how-to.html check_tz-link.html
 DOCS=		$(MANS) date.1 $(MANTXTS) $(WEB_PAGES)
 PRIMARY_YDATA=	africa antarctica asia australasia \
 		europe northamerica southamerica
@@ -556,7 +587,9 @@ install:	all $(DATA) $(REDO) $(MANS)
 			'$(DESTDIR)$(LIBDIR)' \
 			'$(DESTDIR)$(MANDIR)/man3' '$(DESTDIR)$(MANDIR)/man5' \
 			'$(DESTDIR)$(MANDIR)/man8'
-		$(ZIC_INSTALL) -l $(LOCALTIME) -p $(POSIXRULES) \
+		$(ZIC_INSTALL) -l $(LOCALTIME) \
+			`case '$(POSIXRULES)' in ?*) echo '-p';; esac \
+			` $(POSIXRULES) \
 			-t '$(DESTDIR)$(TZDEFAULT)'
 		cp -f $(TABDATA) '$(DESTDIR)$(TZDIR)/.'
 		cp tzselect '$(DESTDIR)$(BINDIR)/.'
@@ -775,12 +808,6 @@ CHECK_CC_LIST = { n = split($$1,a,/,/); for (i=2; i<=n; i++) print a[1], a[i]; }
 check_sorted: backward backzone iso3166.tab zone.tab zone1970.tab
 		$(AWK) '/^Link/ {print $$3}' backward | LC_ALL=C sort -cu
 		$(AWK) '/^Zone/ {print $$2}' backzone | LC_ALL=C sort -cu
-		$(AWK) '/^[^#]/ {print $$1}' iso3166.tab | LC_ALL=C sort -cu
-		$(AWK) '/^[^#]/ {print $$1}' zone.tab | LC_ALL=C sort -c
-		$(AWK) '/^[^#]/ {print substr($$0, 1, 2)}' zone1970.tab | \
-		  LC_ALL=C sort -c
-		$(AWK) '/^[^#]/ $(CHECK_CC_LIST)' zone1970.tab | \
-		  LC_ALL=C sort -cu
 		touch $@
 
 check_links:	checklinks.awk $(TDATA_TO_CHECK) tzdata.zi
@@ -804,9 +831,10 @@ check_tzs:	$(TZS) $(TZS_NEW)
 		touch $@
 
 check_web:	$(CHECK_WEB_PAGES)
+check_theory.html: theory.html
 check_tz-art.html: tz-art.html
 check_tz-link.html: tz-link.html
-check_tz-art.html check_tz-link.html:
+check_theory.html check_tz-art.html check_tz-link.html:
 		$(CURL) -sS --url https://validator.w3.org/nu/ -F out=gnu \
 		    -F file=@$$(expr $@ : 'check_\(.*\)') -o $@.out && \
 		  test ! -s $@.out || { cat $@.out; exit 1; }
@@ -840,11 +868,13 @@ check_zishrink_posix check_zishrink_right: \
 		touch $@
 
 clean_misc:
+		rm -fr check_*.dir
 		rm -f *.o *.out $(TIME_T_ALTERNATIVES) \
 		  check_* core typecheck_* \
 		  date tzselect version.h zdump zic yearistype libtz.a
 clean:		clean_misc
-		rm -fr *.dir *.zi tzdb-*/ $(TZS_NEW)
+		rm -fr *.dir tzdb-*/
+		rm -f *.zi $(TZS_NEW)
 
 maintainer-clean: clean
 		@echo 'This command is intended for maintainers to use; it'
@@ -1042,7 +1072,7 @@ tzdata$(VERSION).tar.gz.asc: tzdata$(VERSION).tar.gz
 tzdata$(VERSION)-rearguard.tar.gz.asc: tzdata$(VERSION)-rearguard.tar.gz
 tzdb-$(VERSION).tar.lz.asc: tzdb-$(VERSION).tar.lz
 $(ALL_ASC):
-		gpg2 --armor --detach-sign $?
+		$(GPG) --armor --detach-sign $?
 
 TYPECHECK_CFLAGS = $(CFLAGS) -DTYPECHECK -D__time_t_defined -D_TIME_T
 typecheck: typecheck_long_long typecheck_unsigned
