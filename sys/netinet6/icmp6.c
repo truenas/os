@@ -443,8 +443,6 @@ icmp6_input(struct mbuf **mp, int *offp, int proto)
 			in6_ifstat_inc(m->m_pkthdr.rcvif, ifs6_in_discard);
 			goto freeit;
 		}
-		in6m_release_deferred(inm);
-
 	}
 
 	/*
