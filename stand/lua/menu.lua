@@ -3,6 +3,7 @@
 --
 -- Copyright (c) 2015 Pedro Souza <pedrosouza@freebsd.org>
 -- Copyright (C) 2018 Kyle Evans <kevans@FreeBSD.org>
+-- Copyright (c) 2019 iXsystems, Inc.
 -- All rights reserved.
 --
 -- Redistribution and use in source and binary forms, with or without
@@ -58,6 +59,14 @@ local function bootenvSet(env)
 	loader.setenv("vfs.root.mountfrom", env)
 	loader.setenv("currdev", env .. ":")
 	config.reload()
+end
+
+local function serialboot()
+	loader.setenv("comconsole_speed", "115200")
+	loader.setenv("console", "comconsole,vidconsole")
+	loader.setenv("boot_multicons", "YES")
+	loader.setenv("boot_serial", "YES")
+	core.boot()
 end
 
 -- Module exports
@@ -211,37 +220,32 @@ menu.boot_options = {
 
 menu.welcome = {
 	entries = function()
-		local menu_entries = menu.welcome.all_entries
-		-- Swap the first two menu items on single user boot
-		if core.isSingleUserBoot() then
-			-- We'll cache the swapped menu, for performance
-			if menu.welcome.swapped_menu ~= nil then
-				return menu.welcome.swapped_menu
-			end
-			-- Shallow copy the table
-			menu_entries = core.deepCopyTable(menu_entries)
-
-			-- Swap the first two menu entries
-			menu_entries[1], menu_entries[2] =
-			    menu_entries[2], menu_entries[1]
-
-			-- Then set their names to their alternate names
-			menu_entries[1].name, menu_entries[2].name =
-			    menu_entries[1].alternate_name,
-			    menu_entries[2].alternate_name
-			menu.welcome.swapped_menu = menu_entries
-		end
-		return menu_entries
+		local me = menu.welcome.all_entries
+		local single = core.isSingleUserBoot()
+		return {
+			single and me.single_user or me.multi_user,
+			single and me.single_serial or me.multi_serial,
+			me.prompt,
+			me.reboot,
+			{
+				entry_type = core.MENU_SEPARATOR,
+			},
+			{
+				entry_type = core.MENU_SEPARATOR,
+				name = "Options:",
+			},
+			me.kernel_options,
+			me.boot_options,
+			me.boot_envs,
+		}
 	end,
 	all_entries = {
 		-- boot multi user
-		{
+		multi_user = {
 			entry_type = core.MENU_ENTRY,
-			name = color.highlight("B") .. "oot Multi user " ..
+			name = color.highlight("B") .. "oot " ..
+			    loader.getenv("product") .. " " ..
 			    color.highlight("[Enter]"),
-			-- Not a standard menu entry function!
-			alternate_name = color.highlight("B") ..
-			    "oot Multi user",
 			func = function()
 				core.setSingleUser(false)
 				core.boot()
@@ -249,20 +253,42 @@ menu.welcome = {
 			alias = {"b", "B"},
 		},
 		-- boot single user
-		{
+		single_user = {
 			entry_type = core.MENU_ENTRY,
-			name = "Boot " .. color.highlight("S") .. "ingle user",
-			-- Not a standard menu entry function!
-			alternate_name = "Boot " .. color.highlight("S") ..
-			    "ingle user " .. color.highlight("[Enter]"),
+			name = color.highlight("B") .. "oot " ..
+			    loader.getenv("product") .. " (Single User) " ..
+			    color.highlight("[Enter]"),
 			func = function()
 				core.setSingleUser(true)
 				core.boot()
 			end,
+			alias = {"b", "B"},
+		},
+		-- boot multi user with serial console
+		multi_serial = {
+			entry_type = core.MENU_ENTRY,
+			name = "Boot " .. loader.getenv("product") ..
+			    " (" .. color.highlight("S") .. "erial Console)",
+			func = function()
+				core.setSingleUser(false)
+				serialboot()
+			end,
+			alias = {"s", "S"},
+		},
+		-- boot single user with serial console
+		single_serial = {
+			entry_type = core.MENU_ENTRY,
+			name = "Boot " .. loader.getenv("product") ..
+			    " (" .. color.highlight("S") .. "erial Console," ..
+			    " Single User)",
+			func = function()
+				core.setSingleUser(true)
+				serialboot()
+			end,
 			alias = {"s", "S"},
 		},
 		-- escape to interpreter
-		{
+		prompt = {
 			entry_type = core.MENU_RETURN,
 			name = color.highlight("Esc") .. "ape to loader prompt",
 			func = function()
@@ -271,7 +297,7 @@ menu.welcome = {
 			alias = {core.KEYSTR_ESCAPE},
 		},
 		-- reboot
-		{
+		reboot = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("R") .. "eboot",
 			func = function()
@@ -279,15 +305,8 @@ menu.welcome = {
 			end,
 			alias = {"r", "R"},
 		},
-		{
-			entry_type = core.MENU_SEPARATOR,
-		},
-		{
-			entry_type = core.MENU_SEPARATOR,
-			name = "Options:",
-		},
 		-- kernel options
-		{
+		kernel_options = {
 			entry_type = core.MENU_CAROUSEL_ENTRY,
 			carousel_id = "kernel",
 			items = core.kernelList,
@@ -320,14 +339,14 @@ menu.welcome = {
 			alias = {"k", "K"},
 		},
 		-- boot options
-		{
+		boot_options = {
 			entry_type = core.MENU_SUBMENU,
 			name = "Boot " .. color.highlight("O") .. "ptions",
 			submenu = menu.boot_options,
 			alias = {"o", "O"},
 		},
 		-- boot environments
-		{
+		boot_envs = {
 			entry_type = core.MENU_SUBMENU,
 			visible = function()
 				return core.isZFSBoot() and
@@ -338,7 +357,7 @@ menu.welcome = {
 			alias = {"e", "E"},
 		},
 		-- chainload
-		{
+		chainload = {
 			entry_type = core.MENU_ENTRY,
 			name = function()
 				return 'Chain' .. color.highlight("L") ..
