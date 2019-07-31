@@ -3,6 +3,7 @@
 --
 -- Copyright (c) 2015 Pedro Souza <pedrosouza@freebsd.org>
 -- Copyright (c) 2018 Kyle Evans <kevans@FreeBSD.org>
+-- Copyright (c) 2019 iXsystems, Inc.
 -- All rights reserved.
 --
 -- Redistribution and use in source and binary forms, with or without
@@ -61,8 +62,12 @@ local function bootenvSet(env)
 	end
 end
 
-local function multiUserPrompt()
-	return loader.getenv("loader_menu_multi_user_prompt") or "Multi user"
+local function serialboot()
+	loader.setenv("comconsole_speed", "115200")
+	loader.setenv("console", "comconsole,vidconsole")
+	loader.setenv("boot_multicons", "YES")
+	loader.setenv("boot_serial", "YES")
+	core.boot()
 end
 
 -- Module exports
@@ -219,37 +224,13 @@ menu.boot_options = {
 
 menu.welcome = {
 	entries = function()
-		local menu_entries = menu.welcome.all_entries
-		local multi_user = menu_entries.multi_user
-		local single_user = menu_entries.single_user
-		local boot_entry_1, boot_entry_2
-		if core.isSingleUserBoot() then
-			-- Swap the first two menu items on single user boot.
-			-- We'll cache the alternate entries for performance.
-			local alts = menu_entries.alts
-			if alts == nil then
-				single_user = core.deepCopyTable(single_user)
-				multi_user = core.deepCopyTable(multi_user)
-				single_user.name = single_user.alternate_name
-				multi_user.name = multi_user.alternate_name
-				menu_entries.alts = {
-					single_user = single_user,
-					multi_user = multi_user,
-				}
-			else
-				single_user = alts.single_user
-				multi_user = alts.multi_user
-			end
-			boot_entry_1, boot_entry_2 = single_user, multi_user
-		else
-			boot_entry_1, boot_entry_2 = multi_user, single_user
-		end
+		local me = menu.welcome.all_entries
+		local single = core.isSingleUserBoot()
 		return {
-			boot_entry_1,
-			boot_entry_2,
-			menu_entries.prompt,
-			menu_entries.reboot,
-			menu_entries.console,
+			single and me.single_user or me.multi_user,
+			single and me.single_serial or me.multi_serial,
+			me.prompt,
+			me.reboot,
 			{
 				entry_type = core.MENU_SEPARATOR,
 			},
@@ -257,55 +238,60 @@ menu.welcome = {
 				entry_type = core.MENU_SEPARATOR,
 				name = "Options:",
 			},
-			menu_entries.kernel_options,
-			menu_entries.boot_options,
-			menu_entries.zpool_checkpoints,
-			menu_entries.boot_envs,
-			menu_entries.chainload,
-			menu_entries.vendor,
+			me.kernel_options,
+			me.boot_options,
+			me.boot_envs,
 		}
 	end,
 	all_entries = {
+		-- boot multi user
 		multi_user = {
 			entry_type = core.MENU_ENTRY,
-			name = function()
-				return color.highlight("B") .. "oot " ..
-				    multiUserPrompt() .. " " ..
-				    color.highlight("[Enter]")
-			end,
-			-- Not a standard menu entry function!
-			alternate_name = function()
-				return color.highlight("B") .. "oot " ..
-				    multiUserPrompt()
-			end,
+			name = color.highlight("B") .. "oot " ..
+			    loader.getenv("product") .. " " ..
+			    color.highlight("[Enter]"),
 			func = function()
 				core.setSingleUser(false)
 				core.boot()
 			end,
 			alias = {"b", "B"},
 		},
+		-- boot single user
 		single_user = {
 			entry_type = core.MENU_ENTRY,
-			name = "Boot " .. color.highlight("S") .. "ingle user",
-			-- Not a standard menu entry function!
-			alternate_name = "Boot " .. color.highlight("S") ..
-			    "ingle user " .. color.highlight("[Enter]"),
+			name = color.highlight("B") .. "oot " ..
+			    loader.getenv("product") .. " (Single User) " ..
+			    color.highlight("[Enter]"),
 			func = function()
 				core.setSingleUser(true)
 				core.boot()
 			end,
+			alias = {"b", "B"},
+		},
+		-- boot multi user with serial console
+		multi_serial = {
+			entry_type = core.MENU_ENTRY,
+			name = "Boot " .. loader.getenv("product") ..
+			    " (" .. color.highlight("S") .. "erial Console)",
+			func = function()
+				core.setSingleUser(false)
+				serialboot()
+			end,
 			alias = {"s", "S"},
 		},
-		console = {
+		-- boot single user with serial console
+		single_serial = {
 			entry_type = core.MENU_ENTRY,
-			name = function()
-				return color.highlight("C") .. "ons: " .. core.getConsoleName()
-			end,
+			name = "Boot " .. loader.getenv("product") ..
+			    " (" .. color.highlight("S") .. "erial Console," ..
+			    " Single User)",
 			func = function()
-				core.nextConsoleChoice()
+				core.setSingleUser(true)
+				serialboot()
 			end,
-			alias = {"c", "C"},
+			alias = {"s", "S"},
 		},
+		-- escape to interpreter
 		prompt = {
 			entry_type = core.MENU_RETURN,
 			name = color.highlight("Esc") .. "ape to loader prompt",
@@ -314,6 +300,7 @@ menu.welcome = {
 			end,
 			alias = {core.KEYSTR_ESCAPE},
 		},
+		-- reboot
 		reboot = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("R") .. "eboot",
@@ -322,6 +309,7 @@ menu.welcome = {
 			end,
 			alias = {"r", "R"},
 		},
+		-- kernel options
 		kernel_options = {
 			entry_type = core.MENU_CAROUSEL_ENTRY,
 			carousel_id = "kernel",
@@ -354,38 +342,14 @@ menu.welcome = {
 			end,
 			alias = {"k", "K"},
 		},
+		-- boot options
 		boot_options = {
 			entry_type = core.MENU_SUBMENU,
 			name = "Boot " .. color.highlight("O") .. "ptions",
 			submenu = menu.boot_options,
 			alias = {"o", "O"},
 		},
-		zpool_checkpoints = {
-			entry_type = core.MENU_ENTRY,
-			name = function()
-				local rewind = "No"
-				if core.isRewinded() then
-					rewind = "Yes"
-				end
-				return "Rewind ZFS " .. color.highlight("C") ..
-					"heckpoint: " .. rewind
-			end,
-			func = function()
-				core.changeRewindCheckpoint()
-				if core.isRewinded() then
-					bootenvSet(
-					    core.bootenvDefaultRewinded())
-				else
-					bootenvSet(core.bootenvDefault())
-				end
-				config.setCarouselIndex("be_active", 1)
-			end,
-			visible = function()
-				return core.isZFSBoot() and
-				    core.isCheckpointed()
-			end,
-			alias = {"c", "C"},
-		},
+		-- boot environments
 		boot_envs = {
 			entry_type = core.MENU_SUBMENU,
 			visible = function()
@@ -396,6 +360,7 @@ menu.welcome = {
 			submenu = menu.boot_environments,
 			alias = {"e", "E"},
 		},
+		-- chainload
 		chainload = {
 			entry_type = core.MENU_ENTRY,
 			name = function()
