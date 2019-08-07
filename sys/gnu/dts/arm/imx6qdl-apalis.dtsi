@@ -49,6 +49,7 @@
 
 	/* Will be filled by the bootloader */
 	memory@10000000 {
+		device_type = "memory";
 		reg = <0x10000000 0>;
 	};
 
@@ -482,10 +483,6 @@
 };
 
 &iomuxc {
-	/* pins used on module */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_reset_moci>;
-
 	pinctrl_apalis_gpio1: gpio2io04grp {
 		fsl,pins = <
 			MX6QDL_PAD_NANDF_D4__GPIO2_IO04 0x130b0

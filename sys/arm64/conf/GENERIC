@@ -93,6 +93,7 @@ options 	SOC_ALLWINNER_H5
 options 	SOC_CAVM_THUNDERX
 options 	SOC_HISI_HI6220
 options 	SOC_BRCM_BCM2837
+options 	SOC_MARVELL_8K
 options 	SOC_ROCKCHIP_RK3328
 options 	SOC_XILINX_ZYNQ
 
@@ -181,7 +182,6 @@ device		ohci			# OHCI USB interface
 device		ehci			# EHCI USB interface (USB 2.0)
 device		ehci_mv			# Marvell EHCI USB interface
 device		xhci			# XHCI PCI->USB interface (USB 3.0)
-device		xhci_mv			# Marvell XHCI USB interface
 device		usb			# USB Bus (required)
 device		ukbd			# Keyboard
 device		umass			# Disks/Mass storage - Requires scbus and da
@@ -191,11 +191,21 @@ device		muge
 device		smcphy
 device		smsc
 
-# GPIO
+# Sound support
+device sound
+device a10_codec
+
+# DMA controller
+device		a31_dmac
+
+# GPIO / PINCTRL
 device		aw_gpio		# Allwinner GPIO controller
 device		gpio
 device		gpioled
 device		fdt_pinctrl
+device		gpioregulator
+device		mv_gpio		# Marvell GPIO controller
+device		mvebu_pinctrl	# Marvell Pinmux Controller
 
 # I2C
 device		aw_rsb		# Allwinner Reduced Serial Bus
@@ -210,6 +220,8 @@ device		aw_ccu		# Allwinner clock controller
 
 # Interrupt controllers
 device		aw_nmi		# Allwinner NMI support
+device		mv_cp110_icu	# Marvell CP110 ICU
+device		mv_ap806_gicp	# Marvell AP806 GICP
 
 # Real-time clock support
 device		aw_rtc		# Allwinner Real-time Clock
@@ -226,6 +238,7 @@ device		aw_sid		# Allwinner Secure ID EFUSE
 
 # Thermal sensors
 device		aw_thermal	# Allwinner Thermal Sensor Controller
+device		mv_thermal	# Marvell Thermal Sensor Controller
 
 # SPI
 device		spibus
@@ -240,6 +253,11 @@ device		vt
 device		kbdmux
 
 device		vt_efifb
+
+# EVDEV support
+device		evdev			# input event device support
+options		EVDEV_SUPPORT		# evdev support in legacy drivers
+device		uinput			# install /dev/uinput cdev
 
 # Pseudo devices.
 device		crypto		# core crypto support

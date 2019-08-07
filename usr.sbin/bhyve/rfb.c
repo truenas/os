@@ -45,6 +45,9 @@ __FBSDID("$FreeBSD$");
 #include <netdb.h>
 
 #include <assert.h>
+#ifndef WITHOUT_CAPSICUM
+#include <capsicum_helpers.h>
+#endif
 #include <err.h>
 #include <errno.h>
 #include <pthread.h>
@@ -290,8 +293,10 @@ rfb_recv_set_encodings_msg(struct rfb_softc *rc, int cfd)
 			rc->enc_raw_ok = true;
 			break;
 		case RFB_ENCODING_ZLIB:
-			rc->enc_zlib_ok = true;
-			deflateInit(&rc->zstream, Z_BEST_SPEED);
+			if (!rc->enc_zlib_ok) {
+				deflateInit(&rc->zstream, Z_BEST_SPEED);
+				rc->enc_zlib_ok = true;
+			}
 			break;
 		case RFB_ENCODING_RESIZE:
 			rc->enc_resize_ok = true;
@@ -1044,7 +1049,7 @@ rfb_init(char *hostname, int port, int wait, char *password)
 
 #ifndef WITHOUT_CAPSICUM
 	cap_rights_init(&rights, CAP_ACCEPT, CAP_EVENT, CAP_READ, CAP_WRITE);
-	if (cap_rights_limit(rc->sfd, &rights) == -1 && errno != ENOSYS)
+	if (caph_rights_limit(rc->sfd, &rights) == -1)
 		errx(EX_OSERR, "Unable to apply rights for sandbox");
 #endif
 

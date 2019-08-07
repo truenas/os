@@ -309,7 +309,8 @@ pci_vtscsi_reset(void *vsc)
 	/* initialize config structure */
 	sc->vss_config = (struct pci_vtscsi_config){
 		.num_queues = VTSCSI_REQUESTQ,
-		.seg_max = VTSCSI_MAXSEG,
+		/* Leave room for the request and the response. */
+		.seg_max = VTSCSI_MAXSEG - 2,
 		.max_sectors = 2,
 		.cmd_per_lun = 1,
 		.event_info_size = sizeof(struct pci_vtscsi_event),
@@ -581,7 +582,7 @@ static void
 pci_vtscsi_eventq_notify(void *vsc, struct vqueue_info *vq)
 {
 
-	vq->vq_used->vu_flags |= VRING_USED_F_NO_NOTIFY;
+	vq_kick_disable(vq);
 }
 
 static void

@@ -376,7 +376,12 @@ extern struct mtx_padalign pa_lock[];
 /*
  * Page flags.  If changed at any other time than page allocation or
  * freeing, the modification must be protected by the vm_page lock.
+ *
+ * The PG_PCPU_CACHE flag is set at allocation time if the page was
+ * allocated from a per-CPU cache.  It is cleared the next time that the
+ * page is allocated from the physical memory allocator.
  */
+#define	PG_PCPU_CACHE	0x0001		/* was allocated from per-CPU caches */
 #define	PG_FICTITIOUS	0x0004		/* physical page doesn't exist */
 #define	PG_ZERO		0x0008		/* page is zeroed */
 #define	PG_MARKER	0x0010		/* special queue marker page */
@@ -559,7 +564,7 @@ bool vm_page_reclaim_contig(int req, u_long npages, vm_paddr_t low,
 bool vm_page_reclaim_contig_domain(int domain, int req, u_long npages,
     vm_paddr_t low, vm_paddr_t high, u_long alignment, vm_paddr_t boundary);
 void vm_page_reference(vm_page_t m);
-void vm_page_remove (vm_page_t);
+bool vm_page_remove(vm_page_t);
 int vm_page_rename (vm_page_t, vm_object_t, vm_pindex_t);
 vm_page_t vm_page_replace(vm_page_t mnew, vm_object_t object,
     vm_pindex_t pindex);

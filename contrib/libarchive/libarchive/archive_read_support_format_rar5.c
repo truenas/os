@@ -623,9 +623,9 @@ static int run_arm_filter(struct rar5* rar, struct filter_info* flt) {
 	for(i = 0; i < flt->block_length - 3; i += 4) {
 		uint8_t* b = &rar->cstate.window_buf[
 		    (rar->cstate.solid_offset +
-		    flt->block_start + i) & rar->cstate.window_mask];
+		    flt->block_start + i + 3) & rar->cstate.window_mask];
 
-		if(b[3] == 0xEB) {
+		if(*b == 0xEB) {
 			/* 0xEB = ARM's BL (branch + link) instruction. */
 			offset = read_filter_data(rar,
 			    (rar->cstate.solid_offset + flt->block_start + i) &
@@ -1123,6 +1123,13 @@ static int rar5_options(struct archive_read *a, const char *key,
 static void init_header(struct archive_read* a) {
 	a->archive.archive_format = ARCHIVE_FORMAT_RAR_V5;
 	a->archive.archive_format_name = "RAR5";
+}
+
+static void init_window_mask(struct rar5* rar) {
+	if (rar->cstate.window_size)
+		rar->cstate.window_mask = rar->cstate.window_size - 1;
+	else
+		rar->cstate.window_mask = 0;
 }
 
 enum HEADER_FLAGS {
@@ -1672,6 +1679,7 @@ static int process_head_file(struct archive_read* a, struct rar5* rar,
 	/* Values up to 64M should fit into ssize_t on every
 	 * architecture. */
 	rar->cstate.window_size = (ssize_t) window_size;
+	init_window_mask(rar);
 
 	rar->file.solid = (compression_info & SOLID) > 0;
 	rar->file.service = 0;
@@ -2235,10 +2243,7 @@ static int rar5_read_header(struct archive_read *a,
 
 static void init_unpack(struct rar5* rar) {
 	rar->file.calculated_crc32 = 0;
-	if (rar->cstate.window_size)
-		rar->cstate.window_mask = rar->cstate.window_size - 1;
-	else
-		rar->cstate.window_mask = 0;
+	init_window_mask(rar);
 
 	free(rar->cstate.window_buf);
 	free(rar->cstate.filtered_buf);
@@ -2851,7 +2856,7 @@ static int do_uncompress_block(struct archive_read* a, const uint8_t* p) {
 		 * - Values lower than 256 are just bytes. Those codes
 		 *   can be stored in the output buffer directly.
 		 *
-		 * - Code 256 defines a new filter, which is later used to 
+		 * - Code 256 defines a new filter, which is later used to
 		 *   ransform the data block accordingly to the filter type.
 		 *   The data block needs to be fully uncompressed first.
 		 *
@@ -3906,7 +3911,7 @@ static int rar5_read_data_skip(struct archive_read *a) {
 			/* Turn off "skip mode". */
 			rar->skip_mode--;
 
-			if(ret < 0) {
+			if(ret < 0 || ret == ARCHIVE_EOF) {
 				/* Propagate any potential error conditions
 				 * to the caller. */
 				return ret;

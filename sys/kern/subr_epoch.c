@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/sched.h>
+#include <sys/sx.h>
 #include <sys/smp.h>
 #include <sys/sysctl.h>
 #include <sys/turnstile.h>
@@ -54,6 +55,34 @@ __FBSDID("$FreeBSD$");
 #include <ck_epoch.h>
 
 static MALLOC_DEFINE(M_EPOCH, "epoch", "epoch based reclamation");
+
+#ifdef __amd64__
+#define EPOCH_ALIGN CACHE_LINE_SIZE*2
+#else
+#define EPOCH_ALIGN CACHE_LINE_SIZE
+#endif
+
+TAILQ_HEAD (epoch_tdlist, epoch_tracker);
+typedef struct epoch_record {
+	ck_epoch_record_t er_record;
+	volatile struct epoch_tdlist er_tdlist;
+	volatile uint32_t er_gen;
+	uint32_t er_cpuid;
+	/* fields above are part of KBI and cannot be modified */
+	struct epoch_context er_drain_ctx;
+	struct epoch *er_parent;
+} __aligned(EPOCH_ALIGN)     *epoch_record_t;
+
+struct epoch {
+	struct ck_epoch e_epoch __aligned(EPOCH_ALIGN);
+	epoch_record_t e_pcpu_record;
+	int	e_idx;
+	int	e_flags;
+	/* fields above are part of KBI and cannot be modified */
+	struct sx e_drain_sx;
+	struct mtx e_drain_mtx;
+	volatile int e_drain_count;
+};
 
 /* arbitrary --- needs benchmarking */
 #define MAX_ADAPTIVE_SPIN 100
@@ -119,11 +148,15 @@ epoch_init(void *arg __unused)
 	epoch_call_count = counter_u64_alloc(M_WAITOK);
 	epoch_call_task_count = counter_u64_alloc(M_WAITOK);
 
-	pcpu_zone_record = uma_zcreate("epoch_record pcpu", sizeof(struct epoch_record),
-	    NULL, NULL, NULL, NULL, UMA_ALIGN_PTR, UMA_ZONE_PCPU);
+	pcpu_zone_record = uma_zcreate("epoch_record pcpu",
+	    sizeof(struct epoch_record), NULL, NULL, NULL, NULL,
+	    UMA_ALIGN_PTR, UMA_ZONE_PCPU);
 	CPU_FOREACH(cpu) {
-		GROUPTASK_INIT(DPCPU_ID_PTR(cpu, epoch_cb_task), 0, epoch_call_task, NULL);
-		taskqgroup_attach_cpu(qgroup_softirq, DPCPU_ID_PTR(cpu, epoch_cb_task), NULL, cpu, -1, "epoch call task");
+		GROUPTASK_INIT(DPCPU_ID_PTR(cpu, epoch_cb_task), 0,
+		    epoch_call_task, NULL);
+		taskqgroup_attach_cpu(qgroup_softirq,
+		    DPCPU_ID_PTR(cpu, epoch_cb_task), NULL, cpu, -1,
+		    "epoch call task");
 	}
 	inited = 1;
 	global_epoch = epoch_alloc(0);
@@ -153,7 +186,17 @@ epoch_ctor(epoch_t epoch)
 		ck_epoch_register(&epoch->e_epoch, &er->er_record, NULL);
 		TAILQ_INIT((struct threadlist *)(uintptr_t)&er->er_tdlist);
 		er->er_cpuid = cpu;
+		er->er_parent = epoch;
 	}
+}
+
+static void
+epoch_adjust_prio(struct thread *td, u_char prio)
+{
+
+	thread_lock(td);
+	sched_prio(td, prio);
+	thread_unlock(td);
 }
 
 epoch_t
@@ -169,6 +212,8 @@ epoch_alloc(int flags)
 	MPASS(epoch_count < MAX_EPOCHS - 2);
 	epoch->e_flags = flags;
 	epoch->e_idx = epoch_count;
+	sx_init(&epoch->e_drain_sx, "epoch-drain-sx");
+	mtx_init(&epoch->e_drain_mtx, "epoch-drain-mtx", NULL, MTX_DEF);
 	allepochs[epoch_count++] = epoch;
 	return (epoch);
 }
@@ -176,60 +221,130 @@ epoch_alloc(int flags)
 void
 epoch_free(epoch_t epoch)
 {
-#ifdef INVARIANTS
-	struct epoch_record *er;
-	int cpu;
 
-	CPU_FOREACH(cpu) {
-		er = zpcpu_get_cpu(epoch->e_pcpu_record, cpu);
-		MPASS(TAILQ_EMPTY(&er->er_tdlist));
-	}
-#endif
+	epoch_drain_callbacks(epoch);
 	allepochs[epoch->e_idx] = NULL;
 	epoch_wait(global_epoch);
 	uma_zfree_pcpu(pcpu_zone_record, epoch->e_pcpu_record);
+	mtx_destroy(&epoch->e_drain_mtx);
+	sx_destroy(&epoch->e_drain_sx);
 	free(epoch, M_EPOCH);
 }
 
-void
-epoch_enter_preempt_KBI(epoch_t epoch, epoch_tracker_t et)
+static epoch_record_t
+epoch_currecord(epoch_t epoch)
 {
 
-	epoch_enter_preempt(epoch, et);
+	return (zpcpu_get_cpu(epoch->e_pcpu_record, curcpu));
+}
+
+#define INIT_CHECK(epoch)					\
+	do {							\
+		if (__predict_false((epoch) == NULL))		\
+			return;					\
+	} while (0)
+
+void
+epoch_enter_preempt(epoch_t epoch, epoch_tracker_t et)
+{
+	struct epoch_record *er;
+	struct thread *td;
+
+	MPASS(cold || epoch != NULL);
+	INIT_CHECK(epoch);
+	MPASS(epoch->e_flags & EPOCH_PREEMPT);
+#ifdef EPOCH_TRACKER_DEBUG
+	et->et_magic_pre = EPOCH_MAGIC0;
+	et->et_magic_post = EPOCH_MAGIC1;
+#endif
+	td = curthread;
+	et->et_td = td;
+	td->td_epochnest++;
+	critical_enter();
+	sched_pin();
+
+	td->td_pre_epoch_prio = td->td_priority;
+	er = epoch_currecord(epoch);
+	TAILQ_INSERT_TAIL(&er->er_tdlist, et, et_link);
+	ck_epoch_begin(&er->er_record, &et->et_section);
+	critical_exit();
 }
 
 void
-epoch_exit_preempt_KBI(epoch_t epoch, epoch_tracker_t et)
+epoch_enter(epoch_t epoch)
 {
+	struct thread *td;
+	epoch_record_t er;
 
-	epoch_exit_preempt(epoch, et);
+	MPASS(cold || epoch != NULL);
+	INIT_CHECK(epoch);
+	td = curthread;
+
+	td->td_epochnest++;
+	critical_enter();
+	er = epoch_currecord(epoch);
+	ck_epoch_begin(&er->er_record, NULL);
 }
 
 void
-epoch_enter_KBI(epoch_t epoch)
+epoch_exit_preempt(epoch_t epoch, epoch_tracker_t et)
 {
+	struct epoch_record *er;
+	struct thread *td;
 
-	epoch_enter(epoch);
+	INIT_CHECK(epoch);
+	td = curthread;
+	critical_enter();
+	sched_unpin();
+	MPASS(td->td_epochnest);
+	td->td_epochnest--;
+	er = epoch_currecord(epoch);
+	MPASS(epoch->e_flags & EPOCH_PREEMPT);
+	MPASS(et != NULL);
+	MPASS(et->et_td == td);
+#ifdef EPOCH_TRACKER_DEBUG
+	MPASS(et->et_magic_pre == EPOCH_MAGIC0);
+	MPASS(et->et_magic_post == EPOCH_MAGIC1);
+	et->et_magic_pre = 0;
+	et->et_magic_post = 0;
+#endif
+#ifdef INVARIANTS
+	et->et_td = (void*)0xDEADBEEF;
+#endif
+	ck_epoch_end(&er->er_record, &et->et_section);
+	TAILQ_REMOVE(&er->er_tdlist, et, et_link);
+	er->er_gen++;
+	if (__predict_false(td->td_pre_epoch_prio != td->td_priority))
+		epoch_adjust_prio(td, td->td_pre_epoch_prio);
+	critical_exit();
 }
 
 void
-epoch_exit_KBI(epoch_t epoch)
+epoch_exit(epoch_t epoch)
 {
+	struct thread *td;
+	epoch_record_t er;
 
-	epoch_exit(epoch);
+	INIT_CHECK(epoch);
+	td = curthread;
+	MPASS(td->td_epochnest);
+	td->td_epochnest--;
+	er = epoch_currecord(epoch);
+	ck_epoch_end(&er->er_record, NULL);
+	critical_exit();
 }
 
 /*
- * epoch_block_handler_preempt is a callback from the ck code when another thread is
- * currently in an epoch section.
+ * epoch_block_handler_preempt() is a callback from the CK code when another
+ * thread is currently in an epoch section.
  */
 static void
-epoch_block_handler_preempt(struct ck_epoch *global __unused, ck_epoch_record_t *cr,
-    void *arg __unused)
+epoch_block_handler_preempt(struct ck_epoch *global __unused,
+    ck_epoch_record_t *cr, void *arg __unused)
 {
 	epoch_record_t record;
 	struct thread *td, *owner, *curwaittd;
-	struct epoch_thread *tdwait;
+	struct epoch_tracker *tdwait;
 	struct turnstile *ts;
 	struct lock_object *lock;
 	int spincount, gen;
@@ -317,32 +432,28 @@ epoch_block_handler_preempt(struct ck_epoch *global __unused, ck_epoch_record_t 
 		if (TD_IS_INHIBITED(curwaittd) && TD_ON_LOCK(curwaittd) &&
 		    ((ts = curwaittd->td_blocked) != NULL)) {
 			/*
-			 * We unlock td to allow turnstile_wait to reacquire the
-			 * the thread lock. Before unlocking it we enter a critical
-			 * section to prevent preemption after we reenable interrupts
-			 * by dropping the thread lock in order to prevent curwaittd
-			 * from getting to run.
+			 * We unlock td to allow turnstile_wait to reacquire
+			 * the thread lock. Before unlocking it we enter a
+			 * critical section to prevent preemption after we
+			 * reenable interrupts by dropping the thread lock in
+			 * order to prevent curwaittd from getting to run.
 			 */
 			critical_enter();
 			thread_unlock(td);
-			owner = turnstile_lock(ts, &lock);
-			/*
-			 * The owner pointer indicates that the lock succeeded. Only
-			 * in case we hold the lock and the turnstile we locked is still
-			 * the one that curwaittd is blocked on can we continue. Otherwise
-			 * The turnstile pointer has been changed out from underneath
-			 * us, as in the case where the lock holder has signalled curwaittd,
-			 * and we need to continue.
-			 */
-			if (owner != NULL && ts == curwaittd->td_blocked) {
-				MPASS(TD_IS_INHIBITED(curwaittd) && TD_ON_LOCK(curwaittd));
-				critical_exit();
-				turnstile_wait(ts, owner, curwaittd->td_tsqueue);
-				counter_u64_add(turnstile_count, 1);
-				thread_lock(td);
-				return;
-			} else if (owner != NULL)
+
+			if (turnstile_lock(ts, &lock, &owner)) {
+				if (ts == curwaittd->td_blocked) {
+					MPASS(TD_IS_INHIBITED(curwaittd) &&
+					    TD_ON_LOCK(curwaittd));
+					critical_exit();
+					turnstile_wait(ts, owner,
+					    curwaittd->td_tsqueue);
+					counter_u64_add(turnstile_count, 1);
+					thread_lock(td);
+					return;
+				}
 				turnstile_unlock(ts, lock);
+			}
 			thread_lock(td);
 			critical_exit();
 			KASSERT(td->td_locks == locksheld,
@@ -385,9 +496,8 @@ epoch_wait_preempt(epoch_t epoch)
 	if ((epoch->e_flags & EPOCH_LOCKED) == 0)
 		WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, NULL,
 		    "epoch_wait() can be long running");
-	KASSERT(!in_epoch(epoch),
-			("epoch_wait_preempt() called in the middle "
-			 "of an epoch section of the same epoch"));
+	KASSERT(!in_epoch(epoch), ("epoch_wait_preempt() called in the middle "
+	    "of an epoch section of the same epoch"));
 #endif
 	thread_lock(td);
 	DROP_GIANT();
@@ -400,7 +510,8 @@ epoch_wait_preempt(epoch_t epoch)
 	td->td_pinned = 0;
 	sched_bind(td, old_cpu);
 
-	ck_epoch_synchronize_wait(&epoch->e_epoch, epoch_block_handler_preempt, NULL);
+	ck_epoch_synchronize_wait(&epoch->e_epoch, epoch_block_handler_preempt,
+	    NULL);
 
 	/* restore CPU binding, if any */
 	if (was_bound != 0) {
@@ -501,7 +612,7 @@ epoch_call_task(void *arg __unused)
 	head = ck_stack_batch_pop_npsc(&cb_stack);
 	for (cursor = head; cursor != NULL; cursor = next) {
 		struct ck_epoch_entry *entry =
-		ck_epoch_entry_container(cursor);
+		    ck_epoch_entry_container(cursor);
 
 		next = CK_STACK_NEXT(cursor);
 		entry->function(entry);
@@ -511,7 +622,7 @@ epoch_call_task(void *arg __unused)
 int
 in_epoch_verbose(epoch_t epoch, int dump_onfail)
 {
-	struct epoch_thread *tdwait;
+	struct epoch_tracker *tdwait;
 	struct thread *td;
 	epoch_record_t er;
 
@@ -546,10 +657,116 @@ in_epoch(epoch_t epoch)
 	return (in_epoch_verbose(epoch, 0));
 }
 
-void
-epoch_adjust_prio(struct thread *td, u_char prio)
+static void
+epoch_drain_cb(struct epoch_context *ctx)
 {
+	struct epoch *epoch =
+	    __containerof(ctx, struct epoch_record, er_drain_ctx)->er_parent;
+
+	if (atomic_fetchadd_int(&epoch->e_drain_count, -1) == 1) {
+		mtx_lock(&epoch->e_drain_mtx);
+		wakeup(epoch);
+		mtx_unlock(&epoch->e_drain_mtx);
+	}
+}
+
+void
+epoch_drain_callbacks(epoch_t epoch)
+{
+	epoch_record_t er;
+	struct thread *td;
+	int was_bound;
+	int old_pinned;
+	int old_cpu;
+	int cpu;
+
+	WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, NULL,
+	    "epoch_drain_callbacks() may sleep!");
+
+	/* too early in boot to have epoch set up */
+	if (__predict_false(epoch == NULL))
+		return;
+#if !defined(EARLY_AP_STARTUP)
+	if (__predict_false(inited < 2))
+		return;
+#endif
+	DROP_GIANT();
+
+	sx_xlock(&epoch->e_drain_sx);
+	mtx_lock(&epoch->e_drain_mtx);
+
+	td = curthread;
 	thread_lock(td);
-	sched_prio(td, prio);
+	old_cpu = PCPU_GET(cpuid);
+	old_pinned = td->td_pinned;
+	was_bound = sched_is_bound(td);
+	sched_unbind(td);
+	td->td_pinned = 0;
+
+	CPU_FOREACH(cpu)
+		epoch->e_drain_count++;
+	CPU_FOREACH(cpu) {
+		er = zpcpu_get_cpu(epoch->e_pcpu_record, cpu);
+		sched_bind(td, cpu);
+		epoch_call(epoch, &er->er_drain_ctx, &epoch_drain_cb);
+	}
+
+	/* restore CPU binding, if any */
+	if (was_bound != 0) {
+		sched_bind(td, old_cpu);
+	} else {
+		/* get thread back to initial CPU, if any */
+		if (old_pinned != 0)
+			sched_bind(td, old_cpu);
+		sched_unbind(td);
+	}
+	/* restore pinned after bind */
+	td->td_pinned = old_pinned;
+
 	thread_unlock(td);
+
+	while (epoch->e_drain_count != 0)
+		msleep(epoch, &epoch->e_drain_mtx, PZERO, "EDRAIN", 0);
+
+	mtx_unlock(&epoch->e_drain_mtx);
+	sx_xunlock(&epoch->e_drain_sx);
+
+	PICKUP_GIANT();
+}
+
+/* for binary compatibility */
+
+struct epoch_tracker_KBI {
+	void *datap[3];
+#ifdef EPOCH_TRACKER_DEBUG
+	int datai[5];
+#else
+	int datai[1];
+#endif
+} __aligned(sizeof(void *));
+
+CTASSERT(sizeof(struct epoch_tracker_KBI) >= sizeof(struct epoch_tracker));
+
+void
+epoch_enter_preempt_KBI(epoch_t epoch, epoch_tracker_t et)
+{
+	epoch_enter_preempt(epoch, et);
+}
+
+void
+epoch_exit_preempt_KBI(epoch_t epoch, epoch_tracker_t et)
+{
+	epoch_exit_preempt(epoch, et);
+}
+
+void
+epoch_enter_KBI(epoch_t epoch)
+{
+	epoch_enter(epoch);
+}
+
+void
+epoch_exit_KBI(epoch_t epoch)
+{
+	epoch_exit(epoch);
 }

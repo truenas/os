@@ -1756,6 +1756,8 @@ dev/extres/clk/clk_mux.c	optional ext_resources clk fdt
 dev/extres/phy/phy.c		optional ext_resources phy fdt
 dev/extres/phy/phydev_if.m	optional ext_resources phy fdt
 dev/extres/phy/phynode_if.m	optional ext_resources phy fdt
+dev/extres/phy/phy_usb.c	optional ext_resources phy fdt
+dev/extres/phy/phynode_usb_if.m	optional ext_resources phy fdt
 dev/extres/hwreset/hwreset.c	optional ext_resources hwreset fdt
 dev/extres/hwreset/hwreset_if.m	optional ext_resources hwreset fdt
 dev/extres/nvmem/nvmem.c	optional ext_resources nvmem fdt
@@ -1780,6 +1782,7 @@ dev/fdt/fdt_slicer.c		optional fdt cfi | fdt nand | fdt mx25l | fdt n25q | fdt a
 dev/fdt/fdt_static_dtb.S	optional fdt fdt_dtb_static \
 	dependency	"${FDT_DTS_FILE:T:R}.dtb"
 dev/fdt/simplebus.c		optional fdt
+dev/fdt/simple_mfd.c		optional fdt
 dev/fe/if_fe.c			optional fe
 dev/fe/if_fe_pccard.c		optional fe pccard
 dev/filemon/filemon.c		optional filemon
@@ -2775,11 +2778,11 @@ dev/puc/puc.c			optional puc
 dev/puc/puc_cfg.c		optional puc
 dev/puc/puc_pccard.c		optional puc pccard
 dev/puc/puc_pci.c		optional puc pci
-dev/pwm/pwmc.c			optional pwm
-dev/pwm/pwmbus.c		optional pwm
-dev/pwm/pwm_if.m		optional pwm
-dev/pwm/pwmbus_if.m		optional pwm
-dev/pwm/ofw_pwm.c		optional pwm fdt
+dev/pwm/pwmc.c			optional pwm | pwmc
+dev/pwm/pwmbus.c		optional pwm | pwmbus
+dev/pwm/pwmbus_if.m		optional pwm | pwmbus
+dev/pwm/ofw_pwm.c		optional pwm fdt | pwmbus fdt
+dev/pwm/ofw_pwmbus.c		optional pwm fdt | pwmbus fdt
 dev/quicc/quicc_core.c		optional quicc
 dev/ral/rt2560.c		optional ral
 dev/ral/rt2661.c		optional ral

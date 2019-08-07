@@ -55,6 +55,7 @@
 
 	/* Will be filled by the bootloader */
 	memory@10000000 {
+		device_type = "memory";
 		reg = <0x10000000 0>;
 	};
 
@@ -146,7 +147,7 @@
 &ecspi4 {
 	status = "okay";
 
-	mcp251x0: mcp251x@1 {
+	mcp251x0: mcp251x@0 {
 		compatible = "microchip,mcp2515";
 		reg = <0>;
 		clocks = <&clk16m>;

@@ -515,6 +515,7 @@ printtrap(u_int vector, struct trapframe *frame, int isfatal, int user)
 	case EXC_DSE:
 	case EXC_DSI:
 	case EXC_DTMISS:
+	case EXC_ALI:
 		printf("   virtual address = 0x%" PRIxPTR "\n", frame->dar);
 		break;
 	case EXC_ISE:
@@ -532,6 +533,7 @@ printtrap(u_int vector, struct trapframe *frame, int isfatal, int user)
 	printf("   current msr     = 0x%" PRIxPTR "\n", mfmsr());
 	printf("   lr              = 0x%" PRIxPTR " (0x%" PRIxPTR ")\n",
 	    frame->lr, frame->lr - (register_t)(__startkernel - KERNBASE));
+	printf("   frame           = %p\n", frame);
 	printf("   curthread       = %p\n", curthread);
 	if (curthread != NULL)
 		printf("          pid = %d, comm = %s\n",
@@ -830,7 +832,7 @@ static int
 fix_unaligned(struct thread *td, struct trapframe *frame)
 {
 	struct thread	*fputhread;
-#ifdef	__SPE__
+#ifdef BOOKE
 	uint32_t	inst;
 #endif
 	int		indicator, reg;
@@ -841,7 +843,7 @@ fix_unaligned(struct thread *td, struct trapframe *frame)
 	if (indicator & ESR_SPE) {
 		if (copyin((void *)frame->srr0, &inst, sizeof(inst)) != 0)
 			return (-1);
-		reg = EXC_ALI_SPE_REG(inst);
+		reg = EXC_ALI_INST_RST(inst);
 		fpr = (double *)td->td_pcb->pcb_vec.vr[reg];
 		fputhread = PCPU_GET(vecthread);
 
@@ -871,12 +873,22 @@ fix_unaligned(struct thread *td, struct trapframe *frame)
 		return (0);
 	}
 #else
+#ifdef BOOKE
+	indicator = (frame->cpu.booke.esr & ESR_ST) ? EXC_ALI_STFD : EXC_ALI_LFD;
+#else
 	indicator = EXC_ALI_OPCODE_INDICATOR(frame->cpu.aim.dsisr);
+#endif
 
 	switch (indicator) {
 	case EXC_ALI_LFD:
 	case EXC_ALI_STFD:
+#ifdef BOOKE
+		if (copyin((void *)frame->srr0, &inst, sizeof(inst)) != 0)
+			return (-1);
+		reg = EXC_ALI_INST_RST(inst);
+#else
 		reg = EXC_ALI_RST(frame->cpu.aim.dsisr);
+#endif
 		fpr = &td->td_pcb->pcb_fpu.fpr[reg].fpr;
 		fputhread = PCPU_GET(fputhread);
 

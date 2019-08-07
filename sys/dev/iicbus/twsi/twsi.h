@@ -34,6 +34,8 @@
 #ifndef _TWSI_H_
 #define	_TWSI_H_
 
+#include <dev/extres/clk/clk.h>
+
 struct twsi_baud_rate {
 	uint32_t	raw;
 	int		param;
@@ -43,9 +45,21 @@ struct twsi_baud_rate {
 
 struct twsi_softc {
 	device_t	dev;
-	struct resource	*res[1];	/* SYS_RES_MEMORY */
+	struct resource	*res[2];
 	struct mtx	mutex;
 	device_t	iicbus;
+	void *			intrhand;
+	bool			have_intr;
+	clk_t		clk_core;
+	clk_t		clk_reg;
+
+	struct iic_msg		*msg;
+	uint16_t		sent_bytes;
+	uint16_t		recv_bytes;
+	int			transfer;
+	int			error;
+	uint32_t		control_val;
+	bool			need_ack;
 
 	bus_size_t	reg_data;
 	bus_size_t	reg_slave_addr;

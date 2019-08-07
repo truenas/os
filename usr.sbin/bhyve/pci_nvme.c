@@ -4,6 +4,9 @@
  * Copyright (c) 2017 Shunsuke Mie
  * Copyright (c) 2018 Leon Dang
  *
+ * Function crc16 Copyright (c) 2017, Fedor Uporov 
+ *     Obtained from function ext2_crc16() in sys/fs/ext2fs/ext2_csum.c
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -30,7 +33,7 @@
  * bhyve PCIe-NVMe device emulation.
  *
  * options:
- *  -s <n>,nvme,devpath,maxq=#,qsz=#,ioslots=#,sectsz=#,ser=A-Z
+ *  -s <n>,nvme,devpath,maxq=#,qsz=#,ioslots=#,sectsz=#,ser=A-Z,eui64=#
  *
  *  accepted devpath:
  *    /dev/blockdev
@@ -42,6 +45,7 @@
  *  ioslots = max number of concurrent io requests
  *  sectsz  = sector size (defaults to blockif sector size)
  *  ser     = serial number (20-chars max)
+ *  eui64   = IEEE Extended Unique Identifier (8 byte value)
  *
  */
 
@@ -54,6 +58,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
+#include <net/ieee_oui.h>
 
 #include <assert.h>
 #include <pthread.h>
@@ -84,6 +89,9 @@ static int nvme_debug = 0;
 #define	NVME_MSIX_BAR		4
 
 #define	NVME_IOSLOTS		8
+
+/* The NVMe spec defines bits 13:4 in BAR0 as reserved */
+#define NVME_MMIO_SPACE_MIN	(1 << 14)
 
 #define	NVME_QUEUES		16
 #define	NVME_MAX_QENTRIES	2048
@@ -161,6 +169,7 @@ struct pci_nvme_blockstore {
 	uint64_t	size;
 	uint32_t	sectsz;
 	uint32_t	sectsz_bits;
+	uint64_t	eui64;
 };
 
 struct pci_nvme_ioreq {
@@ -199,6 +208,9 @@ struct pci_nvme_softc {
 
 	struct nvme_namespace_data  nsdata;
 	struct nvme_controller_data ctrldata;
+	struct nvme_error_information_entry err_log;
+	struct nvme_health_information_page health_log;
+	struct nvme_firmware_page fw_log;
 
 	struct pci_nvme_blockstore nvstore;
 
@@ -346,12 +358,61 @@ pci_nvme_init_ctrldata(struct pci_nvme_softc *sc)
 	cd->power_state[0].mp = 10;
 }
 
-static void
-pci_nvme_init_nsdata(struct pci_nvme_softc *sc)
+/*
+ * Calculate the CRC-16 of the given buffer
+ * See copyright attribution at top of file
+ */
+static uint16_t
+crc16(uint16_t crc, const void *buffer, unsigned int len)
 {
-	struct nvme_namespace_data *nd;
+	const unsigned char *cp = buffer;
+	/* CRC table for the CRC-16. The poly is 0x8005 (x16 + x15 + x2 + 1). */
+	static uint16_t const crc16_table[256] = {
+		0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
+		0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,
+		0xCC01, 0x0CC0, 0x0D80, 0xCD41, 0x0F00, 0xCFC1, 0xCE81, 0x0E40,
+		0x0A00, 0xCAC1, 0xCB81, 0x0B40, 0xC901, 0x09C0, 0x0880, 0xC841,
+		0xD801, 0x18C0, 0x1980, 0xD941, 0x1B00, 0xDBC1, 0xDA81, 0x1A40,
+		0x1E00, 0xDEC1, 0xDF81, 0x1F40, 0xDD01, 0x1DC0, 0x1C80, 0xDC41,
+		0x1400, 0xD4C1, 0xD581, 0x1540, 0xD701, 0x17C0, 0x1680, 0xD641,
+		0xD201, 0x12C0, 0x1380, 0xD341, 0x1100, 0xD1C1, 0xD081, 0x1040,
+		0xF001, 0x30C0, 0x3180, 0xF141, 0x3300, 0xF3C1, 0xF281, 0x3240,
+		0x3600, 0xF6C1, 0xF781, 0x3740, 0xF501, 0x35C0, 0x3480, 0xF441,
+		0x3C00, 0xFCC1, 0xFD81, 0x3D40, 0xFF01, 0x3FC0, 0x3E80, 0xFE41,
+		0xFA01, 0x3AC0, 0x3B80, 0xFB41, 0x3900, 0xF9C1, 0xF881, 0x3840,
+		0x2800, 0xE8C1, 0xE981, 0x2940, 0xEB01, 0x2BC0, 0x2A80, 0xEA41,
+		0xEE01, 0x2EC0, 0x2F80, 0xEF41, 0x2D00, 0xEDC1, 0xEC81, 0x2C40,
+		0xE401, 0x24C0, 0x2580, 0xE541, 0x2700, 0xE7C1, 0xE681, 0x2640,
+		0x2200, 0xE2C1, 0xE381, 0x2340, 0xE101, 0x21C0, 0x2080, 0xE041,
+		0xA001, 0x60C0, 0x6180, 0xA141, 0x6300, 0xA3C1, 0xA281, 0x6240,
+		0x6600, 0xA6C1, 0xA781, 0x6740, 0xA501, 0x65C0, 0x6480, 0xA441,
+		0x6C00, 0xACC1, 0xAD81, 0x6D40, 0xAF01, 0x6FC0, 0x6E80, 0xAE41,
+		0xAA01, 0x6AC0, 0x6B80, 0xAB41, 0x6900, 0xA9C1, 0xA881, 0x6840,
+		0x7800, 0xB8C1, 0xB981, 0x7940, 0xBB01, 0x7BC0, 0x7A80, 0xBA41,
+		0xBE01, 0x7EC0, 0x7F80, 0xBF41, 0x7D00, 0xBDC1, 0xBC81, 0x7C40,
+		0xB401, 0x74C0, 0x7580, 0xB541, 0x7700, 0xB7C1, 0xB681, 0x7640,
+		0x7200, 0xB2C1, 0xB381, 0x7340, 0xB101, 0x71C0, 0x7080, 0xB041,
+		0x5000, 0x90C1, 0x9181, 0x5140, 0x9301, 0x53C0, 0x5280, 0x9241,
+		0x9601, 0x56C0, 0x5780, 0x9741, 0x5500, 0x95C1, 0x9481, 0x5440,
+		0x9C01, 0x5CC0, 0x5D80, 0x9D41, 0x5F00, 0x9FC1, 0x9E81, 0x5E40,
+		0x5A00, 0x9AC1, 0x9B81, 0x5B40, 0x9901, 0x59C0, 0x5880, 0x9841,
+		0x8801, 0x48C0, 0x4980, 0x8941, 0x4B00, 0x8BC1, 0x8A81, 0x4A40,
+		0x4E00, 0x8EC1, 0x8F81, 0x4F40, 0x8D01, 0x4DC0, 0x4C80, 0x8C41,
+		0x4400, 0x84C1, 0x8581, 0x4540, 0x8701, 0x47C0, 0x4680, 0x8641,
+		0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040
+	};
 
-	nd = &sc->nsdata;
+	while (len--)
+		crc = (((crc >> 8) & 0xffU) ^
+		    crc16_table[(crc ^ *cp++) & 0xffU]) & 0x0000ffffU;
+	return crc;
+}
+
+static void
+pci_nvme_init_nsdata(struct pci_nvme_softc *sc,
+    struct nvme_namespace_data *nd, uint32_t nsid,
+    uint64_t eui64)
+{
 
 	nd->nsze = sc->nvstore.size / sc->nvstore.sectsz;
 	nd->ncap = nd->nsze;
@@ -359,10 +420,34 @@ pci_nvme_init_nsdata(struct pci_nvme_softc *sc)
 
 	/* Get LBA and backstore information from backing store */
 	nd->nlbaf = 0; /* NLBAF is a 0's based value (i.e. 1 LBA Format) */
+	nd->flbas = 0;
+
+	/* Create an EUI-64 if user did not provide one */
+	if (eui64 == 0) {
+		char *data = NULL;
+
+		asprintf(&data, "%s%u%u%u", vmname, sc->nsc_pi->pi_bus,
+		    sc->nsc_pi->pi_slot, sc->nsc_pi->pi_func);
+
+		if (data != NULL) {
+			eui64 = OUI_FREEBSD_NVME_LOW | crc16(0, data, strlen(data));
+			free(data);
+		}
+		eui64 = (eui64 << 16) | (nsid & 0xffff);
+	}
+	be64enc(nd->eui64, eui64);
+
 	/* LBA data-sz = 2^lbads */
 	nd->lbaf[0] = sc->nvstore.sectsz_bits << NVME_NS_DATA_LBAF_LBADS_SHIFT;
+}
 
-	nd->flbas = 0;
+static void
+pci_nvme_init_logpages(struct pci_nvme_softc *sc)
+{
+
+	memset(&sc->err_log, 0, sizeof(sc->err_log));
+	memset(&sc->health_log, 0, sizeof(sc->health_log));
+	memset(&sc->fw_log, 0, sizeof(sc->fw_log));
 }
 
 static void
@@ -452,6 +537,47 @@ pci_nvme_init_controller(struct vmctx *ctx, struct pci_nvme_softc *sc)
 	         sizeof(struct nvme_completion) * acqs);
 	DPRINTF(("%s mapping Admin-CQ guest 0x%lx, host: %p\r\n",
 	        __func__, sc->regs.acq, sc->compl_queues[0].qbase));
+}
+
+static int
+nvme_prp_memcpy(struct vmctx *ctx, uint64_t prp1, uint64_t prp2, uint8_t *src,
+	size_t len)
+{
+	uint8_t *dst;
+	size_t bytes;
+
+	if (len > (8 * 1024)) {
+		return (-1);
+	}
+
+	/* Copy from the start of prp1 to the end of the physical page */
+	bytes = PAGE_SIZE - (prp1 & PAGE_MASK);
+	bytes = MIN(bytes, len);
+
+	dst = vm_map_gpa(ctx, prp1, bytes);
+	if (dst == NULL) {
+		return (-1);
+	}
+
+	memcpy(dst, src, bytes);
+
+	src += bytes;
+
+	len -= bytes;
+	if (len == 0) {
+		return (0);
+	}
+
+	len = MIN(len, PAGE_SIZE);
+
+	dst = vm_map_gpa(ctx, prp2, len);
+	if (dst == NULL) {
+		return (-1);
+	}
+
+	memcpy(dst, src, len);
+
+	return (0);
 }
 
 static int
@@ -587,26 +713,24 @@ nvme_opc_get_log_page(struct pci_nvme_softc* sc, struct nvme_command* command,
 {
 	uint32_t logsize = (1 + ((command->cdw10 >> 16) & 0xFFF)) * 2;
 	uint8_t logpage = command->cdw10 & 0xFF;
-	void *data;
 
 	DPRINTF(("%s log page %u len %u\r\n", __func__, logpage, logsize));
-
-	if (logpage >= 1 && logpage <= 3)
-		data = vm_map_gpa(sc->nsc_pi->pi_vmctx, command->prp1,
-		                  PAGE_SIZE);
 
 	pci_nvme_status_genc(&compl->status, NVME_SC_SUCCESS);
 
 	switch (logpage) {
-	case 0x01: /* Error information */
-		memset(data, 0, logsize > PAGE_SIZE ? PAGE_SIZE : logsize);
+	case NVME_LOG_ERROR:
+		nvme_prp_memcpy(sc->nsc_pi->pi_vmctx, command->prp1,
+		    command->prp2, (uint8_t *)&sc->err_log, logsize);
 		break;
-	case 0x02: /* SMART/Health information */
+	case NVME_LOG_HEALTH_INFORMATION:
 		/* TODO: present some smart info */
-		memset(data, 0, logsize > PAGE_SIZE ? PAGE_SIZE : logsize);
+		nvme_prp_memcpy(sc->nsc_pi->pi_vmctx, command->prp1,
+		    command->prp2, (uint8_t *)&sc->health_log, logsize);
 		break;
-	case 0x03: /* Firmware slot information */
-		memset(data, 0, logsize > PAGE_SIZE ? PAGE_SIZE : logsize);
+	case NVME_LOG_FIRMWARE_SLOT:
+		nvme_prp_memcpy(sc->nsc_pi->pi_vmctx, command->prp1,
+		    command->prp2, (uint8_t *)&sc->fw_log, logsize);
 		break;
 	default:
 		WPRINTF(("%s get log page %x command not supported\r\n",
@@ -630,14 +754,13 @@ nvme_opc_identify(struct pci_nvme_softc* sc, struct nvme_command* command,
 
 	switch (command->cdw10 & 0xFF) {
 	case 0x00: /* return Identify Namespace data structure */
-		dest = vm_map_gpa(sc->nsc_pi->pi_vmctx, command->prp1,
-		                  sizeof(sc->nsdata));
-		memcpy(dest, &sc->nsdata, sizeof(sc->nsdata));
+		nvme_prp_memcpy(sc->nsc_pi->pi_vmctx, command->prp1,
+		    command->prp2, (uint8_t *)&sc->nsdata, sizeof(sc->nsdata));
 		break;
 	case 0x01: /* return Identify Controller data structure */
-		dest = vm_map_gpa(sc->nsc_pi->pi_vmctx, command->prp1,
-		                  sizeof(sc->ctrldata));
-		memcpy(dest, &sc->ctrldata, sizeof(sc->ctrldata));
+		nvme_prp_memcpy(sc->nsc_pi->pi_vmctx, command->prp1,
+		    command->prp2, (uint8_t *)&sc->ctrldata,
+		    sizeof(sc->ctrldata));
 		break;
 	case 0x02: /* list of 1024 active NSIDs > CDW1.NSID */
 		dest = vm_map_gpa(sc->nsc_pi->pi_vmctx, command->prp1,
@@ -1763,6 +1886,8 @@ pci_nvme_parse_opts(struct pci_nvme_softc *sc, char *opts)
 				free(uopt);
 				return (-1);
 			}
+		} else if (!strcmp("eui64", xopts)) {
+			sc->nvstore.eui64 = htobe64(strtoull(config, NULL, 0));
 		} else if (optidx == 0) {
 			snprintf(bident, sizeof(bident), "%d:%d",
 			         sc->nsc_pi->pi_slot, sc->nsc_pi->pi_func);
@@ -1847,9 +1972,16 @@ pci_nvme_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	pci_set_cfgdata8(pi, PCIR_PROGIF,
 	                 PCIP_STORAGE_NVM_ENTERPRISE_NVMHCI_1_0);
 
-	/* allocate size of nvme registers + doorbell space for all queues */
+	/*
+	 * Allocate size of NVMe registers + doorbell space for all queues.
+	 *
+	 * The specification requires a minimum memory I/O window size of 16K.
+	 * The Windows driver will refuse to start a device with a smaller
+	 * window.
+	 */
 	pci_membar_sz = sizeof(struct nvme_registers) +
-	                2*sizeof(uint32_t)*(sc->max_queues + 1);
+	    2 * sizeof(uint32_t) * (sc->max_queues + 1);
+	pci_membar_sz = MAX(pci_membar_sz, NVME_MMIO_SPACE_MIN);
 
 	DPRINTF(("nvme membar size: %u\r\n", pci_membar_sz));
 
@@ -1865,12 +1997,19 @@ pci_nvme_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 		goto done;
 	}
 
+	error = pci_emul_add_pciecap(pi, PCIEM_TYPE_ROOT_INT_EP);
+	if (error) {
+		WPRINTF(("%s pci add Express capability failed\r\n", __func__));
+		goto done;
+	}
+
 	pthread_mutex_init(&sc->mtx, NULL);
 	sem_init(&sc->iosemlock, 0, sc->ioslots);
 
 	pci_nvme_reset(sc);
 	pci_nvme_init_ctrldata(sc);
-	pci_nvme_init_nsdata(sc);
+	pci_nvme_init_nsdata(sc, &sc->nsdata, 1, sc->nvstore.eui64);
+	pci_nvme_init_logpages(sc);
 
 	pci_lintr_request(pi);
 
