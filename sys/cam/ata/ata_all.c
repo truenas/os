@@ -184,7 +184,13 @@ ata_op_string(struct ata_cmd *cmd)
 		return ("SEP_ATTN");
 	case 0x70: return ("SEEK");
 	case 0x77: return ("SET_DATE_TIME_EXT");
-	case 0x78: return ("ACCESSIBLE_MAX_ADDRESS_CONFIGURATION");
+	case 0x78:
+		switch (cmd->features) {
+		case 0x00: return ("GET_NATIVE_MAX_ADDRESS_EXT");
+		case 0x01: return ("SET_ACCESSIBLE_MAX_ADDRESS_EXT");
+		case 0x02: return ("FREEZE_ACCESSIBLE_MAX_ADDRESS_EXT");
+		}
+		return ("ACCESSIBLE_MAX_ADDRESS_CONFIGURATION");
 	case 0x7C: return ("REMOVE_ELEMENT_AND_TRUNCATE");
 	case 0x87: return ("CFA_TRANSLATE_SECTOR");
 	case 0x90: return ("EXECUTE_DEVICE_DIAGNOSTIC");
@@ -209,7 +215,16 @@ ata_op_string(struct ata_cmd *cmd)
 		return ("SMART");
 	case 0xb1: return ("DEVICE CONFIGURATION");
 	case 0xb2: return ("SET_SECTOR_CONFIGURATION_EXT");
-	case 0xb4: return ("SANITIZE_DEVICE");
+	case 0xb4:
+		switch(cmd->features) {
+		case 0x00: return ("SANITIZE_STATUS_EXT");
+		case 0x11: return ("CRYPTO_SCRAMBLE_EXT");
+		case 0x12: return ("BLOCK_ERASE_EXT");
+		case 0x14: return ("OVERWRITE_EXT");
+		case 0x20: return ("SANITIZE_FREEZE_LOCK_EXT");
+		case 0x40: return ("SANITIZE_ANTIFREEZE_LOCK_EXT");
+		}
+		return ("SANITIZE_DEVICE");
 	case 0xc0: return ("CFA_ERASE");
 	case 0xc4: return ("READ_MUL");
 	case 0xc5: return ("WRITE_MUL");
@@ -1237,4 +1252,29 @@ ata_zac_mgmt_in(struct ccb_ataio *ataio, uint32_t retries,
 		ataio->ata_flags |= ATA_FLAG_AUX;
 		ataio->aux = auxiliary;
 	}
+}
+
+void
+ata_param_fixup(struct ata_params *ident_buf)
+{
+	int16_t *ptr;
+
+	for (ptr = (int16_t *)ident_buf;
+	     ptr < (int16_t *)ident_buf + sizeof(struct ata_params)/2; ptr++) {
+		*ptr = le16toh(*ptr);
+	}
+	if (strncmp(ident_buf->model, "FX", 2) &&
+	    strncmp(ident_buf->model, "NEC", 3) &&
+	    strncmp(ident_buf->model, "Pioneer", 7) &&
+	    strncmp(ident_buf->model, "SHARP", 5)) {
+		ata_bswap(ident_buf->model, sizeof(ident_buf->model));
+		ata_bswap(ident_buf->revision, sizeof(ident_buf->revision));
+		ata_bswap(ident_buf->serial, sizeof(ident_buf->serial));
+	}
+	ata_btrim(ident_buf->model, sizeof(ident_buf->model));
+	ata_bpack(ident_buf->model, ident_buf->model, sizeof(ident_buf->model));
+	ata_btrim(ident_buf->revision, sizeof(ident_buf->revision));
+	ata_bpack(ident_buf->revision, ident_buf->revision, sizeof(ident_buf->revision));
+	ata_btrim(ident_buf->serial, sizeof(ident_buf->serial));
+	ata_bpack(ident_buf->serial, ident_buf->serial, sizeof(ident_buf->serial));
 }

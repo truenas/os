@@ -68,7 +68,7 @@ static phynode_method_t phynode_methods[] = {
 DEFINE_CLASS_0(phynode, phynode_class, phynode_methods, 0);
 
 static phynode_list_t phynode_list = TAILQ_HEAD_INITIALIZER(phynode_list);
-
+struct sx phynode_topo_lock;
 SX_SYSINIT(phy_topology, &phynode_topo_lock, "Phy topology lock");
 
 /* ----------------------------------------------------------------------------
@@ -517,7 +517,7 @@ phy_get_by_ofw_property(device_t consumer_dev, phandle_t cnode, char *name,
 	ncells = OF_getencprop_alloc_multi(cnode, name, sizeof(pcell_t),
 	    (void **)&cells);
 	if (ncells < 1)
-		return (ENXIO);
+		return (ENOENT);
 
 	/* Tranlate provider to device. */
 	phydev = OF_device_from_xref(cells[0]);
