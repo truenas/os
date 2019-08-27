@@ -194,7 +194,7 @@ static	int		ppsratecheck(struct timeval *, int *, int);
  * hand side to allow for binary searching of the array and include a trailer
  * with a 0 for the bitmask for linear searches to easily find the end with.
  */
-static const	struct	optlist	ipopts[20] = {
+static const	struct	optlist	ipopts[] = {
 	{ IPOPT_NOP,	0x000001 },
 	{ IPOPT_RR,	0x000002 },
 	{ IPOPT_ZSU,	0x000004 },
@@ -235,7 +235,7 @@ static const struct optlist ip6exthdr[] = {
 /*
  * bit values for identifying presence of individual IP security options
  */
-static const	struct	optlist	secopt[8] = {
+static const	struct	optlist	secopt[] = {
 	{ IPSO_CLASS_RES4,	0x01 },
 	{ IPSO_CLASS_TOPS,	0x02 },
 	{ IPSO_CLASS_SECR,	0x04 },
@@ -4023,7 +4023,7 @@ ipf_synclist(softc, fr, ifp)
 		/*
 		 * Lookup all the interface names that are part of the rule.
 		 */
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < FR_NUM(fr->fr_ifas); i++) {
 			if ((ifp != NULL) && (fr->fr_ifas[i] != ifp))
 				continue;
 			if (fr->fr_ifnames[i] == -1)
@@ -4418,6 +4418,28 @@ ipf_matchicmpqueryreply(v, ic, icmp, rev)
 }
 
 
+/*
+ * IFNAMES are located in the variable length field starting at
+ * frentry.fr_names. As pointers within the struct cannot be passed
+ * to the kernel from ipf(8), an offset is used. An offset of -1 means it
+ * is unused (invalid). If it is used (valid) it is an offset to the
+ * character string of an interface name or a comment. The following
+ * macros will assist those who follow to understand the code.
+ */
+#define IPF_IFNAME_VALID(_a)	(_a != -1)
+#define IPF_IFNAME_INVALID(_a)	(_a == -1)
+#define IPF_IFNAMES_DIFFERENT(_a)	\
+	!((IPF_IFNAME_INVALID(fr1->_a) &&	\
+	IPF_IFNAME_INVALID(fr2->_a)) ||	\
+	(IPF_IFNAME_VALID(fr1->_a) &&	\
+	IPF_IFNAME_VALID(fr2->_a) &&	\
+	!strcmp(FR_NAME(fr1, _a), FR_NAME(fr2, _a))))
+#define IPF_FRDEST_DIFFERENT(_a)	\
+	(memcmp(&fr1->_a.fd_addr, &fr2->_a.fd_addr,	\
+	offsetof(frdest_t, fd_name) - offsetof(frdest_t, fd_addr)) ||	\
+	IPF_IFNAMES_DIFFERENT(_a.fd_name))
+
+
 /* ------------------------------------------------------------------------ */
 /* Function:    ipf_rule_compare                                            */
 /* Parameters:  fr1(I) - first rule structure to compare                    */
@@ -4430,22 +4452,50 @@ ipf_matchicmpqueryreply(v, ic, icmp, rev)
 static int
 ipf_rule_compare(frentry_t *fr1, frentry_t *fr2)
 {
+	int i;
+
 	if (fr1->fr_cksum != fr2->fr_cksum)
 		return (1);
 	if (fr1->fr_size != fr2->fr_size)
 		return (2);
 	if (fr1->fr_dsize != fr2->fr_dsize)
 		return (3);
-	if (bcmp((char *)&fr1->fr_func, (char *)&fr2->fr_func, FR_CMPSIZ(fr1))
+	if (bcmp((char *)&fr1->fr_func, (char *)&fr2->fr_func, FR_CMPSIZ)
 	    != 0)
 		return (4);
+	/*
+	 * XXX:	There is still a bug here as different rules with the
+	 *	the same interfaces but in a different order will compare
+	 *	differently. But since multiple interfaces in a rule doesn't
+	 *	work anyway a simple straightforward compare is performed
+	 *	here. Ultimately frentry_t creation will need to be
+	 *	revisited in ipf_y.y. While the other issue, recognition
+	 *	of only the first interface in a list of interfaces will
+	 *	need to be separately addressed along with why only four.
+	 */
+	for (i = 0; i < FR_NUM(fr1->fr_ifnames); i++) {
+		/*
+		 * XXX:	It's either the same index or uninitialized.
+		 * 	We assume this because multiple interfaces
+		 *	referenced by the same rule doesn't work anyway.
+		 */
+		if (IPF_IFNAMES_DIFFERENT(fr_ifnames[i]))
+			return(5);
+	}
+
+	if (IPF_FRDEST_DIFFERENT(fr_tif))
+		return (6);
+	if (IPF_FRDEST_DIFFERENT(fr_rif))
+		return (7);
+	if (IPF_FRDEST_DIFFERENT(fr_dif))
+		return (8);
 	if (!fr1->fr_data && !fr2->fr_data)
 		return (0);	/* move along, nothing to see here */
 	if (fr1->fr_data && fr2->fr_data) {
 		if (bcmp(fr1->fr_caddr, fr2->fr_caddr, fr1->fr_dsize) == 0)
 			return (0);	/* same */
 	}
-	return (5);
+	return (9);
 }
 
 

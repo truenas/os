@@ -233,6 +233,7 @@ struct xvnode {
  *	VI_DOOMED is doubly protected by the interlock and vnode lock.  Both
  *	are required for writing but the status may be checked with either.
  */
+#define	VI_TEXT_REF	0x0001	/* Text ref grabbed use ref */
 #define	VI_MOUNT	0x0020	/* Mount in progress */
 #define	VI_DOOMED	0x0080	/* This vnode is being recycled */
 #define	VI_FREE		0x0100	/* This vnode is on the freelist */
@@ -826,27 +827,30 @@ void	vop_rename_fail(struct vop_rename_args *ap);
 
 #define VOP_LOCK(vp, flags) VOP_LOCK1(vp, flags, __FILE__, __LINE__)
 
-#ifdef	INVARIANTS
+#ifdef INVARIANTS
 #define	VOP_ADD_WRITECOUNT_CHECKED(vp, cnt)				\
 do {									\
 	int error_;							\
 									\
 	error_ = VOP_ADD_WRITECOUNT((vp), (cnt));			\
-	MPASS(error_ == 0);						\
+	VNASSERT(error_ == 0, (vp), ("VOP_ADD_WRITECOUNT returned %d",	\
+	    error_));							\
 } while (0)
 #define	VOP_SET_TEXT_CHECKED(vp)					\
 do {									\
 	int error_;							\
 									\
 	error_ = VOP_SET_TEXT((vp));					\
-	MPASS(error_ == 0);						\
+	VNASSERT(error_ == 0, (vp), ("VOP_SET_TEXT returned %d",	\
+	    error_));							\
 } while (0)
 #define	VOP_UNSET_TEXT_CHECKED(vp)					\
 do {									\
 	int error_;							\
 									\
 	error_ = VOP_UNSET_TEXT((vp));					\
-	MPASS(error_ == 0);						\
+	VNASSERT(error_ == 0, (vp), ("VOP_UNSET_TEXT returned %d",	\
+	    error_));							\
 } while (0)
 #else
 #define	VOP_ADD_WRITECOUNT_CHECKED(vp, cnt)	VOP_ADD_WRITECOUNT((vp), (cnt))
