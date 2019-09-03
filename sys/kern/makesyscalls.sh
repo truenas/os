@@ -45,13 +45,7 @@ sysarg="sysarg.switch.$$"
 sysprotoend="sysprotoend.$$"
 systracetmp="systrace.$$"
 systraceret="systraceret.$$"
-
-if [ -r capabilities.conf ]; then
-	capenabled=`egrep -v '^#|^$' capabilities.conf`
-	capenabled=`echo $capenabled | sed 's/ /,/g'`
-else
-	capenabled=""
-fi
+capabilities_conf="capabilities.conf"
 
 trap "rm $sysaue $sysdcl $syscompat $syscompatdcl $syscompat4 $syscompat4dcl $syscompat6 $syscompat6dcl $syscompat7 $syscompat7dcl $syscompat10 $syscompat10dcl $syscompat11 $syscompat11dcl $sysent $sysinc $sysarg $sysprotoend $systracetmp $systraceret" 0
 
@@ -64,17 +58,44 @@ case $# in
 esac
 
 if [ -n "$2" ]; then
-	. $2
+	. "$2"
+fi
+
+if [ -r $capabilities_conf ]; then
+	capenabled=`egrep -v '^#|^$' $capabilities_conf`
+	capenabled=`echo $capenabled | sed 's/ /,/g'`
+else
+	capenabled=""
 fi
 
 sed -e '
-:join
+	# FreeBSD ID, includes, comments, and blank lines
+	/.*\$FreeBSD/b done_joining
+	/^[#;]/b done_joining
+	/^$/b done_joining
+
+	# Join lines ending in backslash
+:joining
 	/\\$/{a\
 
 	N
 	s/\\\n//
-	b join
+	b joining
 	}
+
+	# OBSOL, etc lines without function signatures
+	/^[0-9][^{]*$/b done_joining
+
+	# Join incomplete signatures.  The { must appear on the first line
+	# and the } must appear on the last line (modulo lines joined by
+	# backslashes).
+	/^[^}]*$/{a\
+
+	N
+	s/\n//
+	b joining
+	}
+:done_joining
 2,${
 	/^#/!s/\([{}()*,]\)/ \1 /g
 }
@@ -117,6 +138,7 @@ sed -e '
 		switchname = \"$switchname\"
 		namesname = \"$namesname\"
 		infile = \"$1\"
+		abi_func_prefix = \"$abi_func_prefix\"
 		capenabled_string = \"$capenabled\"
 		"'
 
@@ -355,7 +377,8 @@ sed -e '
 		# from it.
 		#
 		for (cap in capenabled) {
-			if (funcname == capenabled[cap]) {
+			if (funcname == capenabled[cap] ||
+			    funcname == abi_func_prefix capenabled[cap]) {
 				flags = "SYF_CAPENABLED";
 				break;
 			}
@@ -480,20 +503,20 @@ sed -e '
 		}
 		printf("\t\t*n_args = %d;\n\t\tbreak;\n\t}\n", argc) > systrace
 		printf("\t\tbreak;\n") > systracetmp
-		if (argc != 0 && !flag("NOARGS") && !flag("NOPROTO") && \
-		    !flag("NODEF")) {
-			printf("struct %s {\n", argalias) > sysarg
-			for (i = 1; i <= argc; i++)
-				printf("\tchar %s_l_[PADL_(%s)]; " \
-				    "%s %s; char %s_r_[PADR_(%s)];\n",
-				    argname[i], argtype[i],
-				    argtype[i], argname[i],
-				    argname[i], argtype[i]) > sysarg
-			printf("};\n") > sysarg
+		if (!flag("NOARGS") && !flag("NOPROTO") && !flag("NODEF")) {
+			if (argc != 0) {
+				printf("struct %s {\n", argalias) > sysarg
+				for (i = 1; i <= argc; i++)
+					printf("\tchar %s_l_[PADL_(%s)]; " \
+					    "%s %s; char %s_r_[PADR_(%s)];\n",
+					    argname[i], argtype[i],
+					    argtype[i], argname[i],
+					    argname[i], argtype[i]) > sysarg
+				printf("};\n") > sysarg
+			} else
+				printf("struct %s {\n\tregister_t dummy;\n};\n",
+				    argalias) > sysarg
 		}
-		else if (!flag("NOARGS") && !flag("NOPROTO") && !flag("NODEF"))
-			printf("struct %s {\n\tregister_t dummy;\n};\n",
-			    argalias) > sysarg
 		if (!flag("NOPROTO") && !flag("NODEF")) {
 			if (funcname == "nosys" || funcname == "lkmnosys" ||
 			    funcname == "sysarch" || funcname ~ /^freebsd/ || 
