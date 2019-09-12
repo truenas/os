@@ -25,6 +25,7 @@ MAN=	aac.4 \
 	adm6996fc.4 \
 	adv.4 \
 	adw.4 \
+	ads111x.4 \
 	ae.4 \
 	${_aesni.4} \
 	age.4 \
@@ -108,6 +109,7 @@ MAN=	aac.4 \
 	ccr.4 \
 	cd.4 \
 	cdce.4 \
+	cdceem.4 \
 	cfi.4 \
 	cfumass.4 \
 	ch.4 \
@@ -590,7 +592,13 @@ MAN=	aac.4 \
 	xpt.4 \
 	zero.4
 
-MLINKS=	ae.4 if_ae.4
+MLINKS=	ads111x.4 ads1013.4 \
+	ads111x.4 ads1014.4 \
+	ads111x.4 ads1015.4 \
+	ads111x.4 ads1113.4 \
+	ads111x.4 ads1114.4 \
+	ads111x.4 ads1115.4
+MLINKS+=ae.4 if_ae.4
 MLINKS+=age.4 if_age.4
 MLINKS+=agp.4 agpgart.4
 MLINKS+=alc.4 if_alc.4

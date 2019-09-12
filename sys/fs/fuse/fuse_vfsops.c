@@ -58,11 +58,11 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/buf.h>
 #include <sys/module.h>
 #include <sys/systm.h>
 #include <sys/errno.h>
-#include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/capsicum.h>
 #include <sys/conf.h>
@@ -89,8 +89,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <security/mac/mac_framework.h>
 
-#define FUSE_DEBUG_MODULE VFSOPS
-#include "fuse_debug.h"
+SDT_PROVIDER_DECLARE(fuse);
+/* 
+ * Fuse trace probe:
+ * arg0: verbosity.  Higher numbers give more verbose messages
+ * arg1: Textual message
+ */
+SDT_PROBE_DEFINE2(fuse, , vfsops, trace, "int", "char*");
 
 /* This will do for privilege types for now */
 #ifndef PRIV_VFS_FUSE_ALLOWOTHER
@@ -115,16 +120,16 @@ struct vfsops fuse_vfsops = {
 	.vfs_statfs = fuse_vfsop_statfs,
 };
 
-SYSCTL_INT(_vfs_fuse, OID_AUTO, init_backgrounded, CTLFLAG_RD,
+SYSCTL_INT(_vfs_fusefs, OID_AUTO, init_backgrounded, CTLFLAG_RD,
     SYSCTL_NULL_INT_PTR, 1, "indicate async handshake");
 static int fuse_enforce_dev_perms = 0;
 
-SYSCTL_INT(_vfs_fuse, OID_AUTO, enforce_dev_perms, CTLFLAG_RW,
+SYSCTL_INT(_vfs_fusefs, OID_AUTO, enforce_dev_perms, CTLFLAG_RW,
     &fuse_enforce_dev_perms, 0,
     "enforce fuse device permissions for secondary mounts");
 static unsigned sync_unmount = 1;
 
-SYSCTL_UINT(_vfs_fuse, OID_AUTO, sync_unmount, CTLFLAG_RW,
+SYSCTL_UINT(_vfs_fusefs, OID_AUTO, sync_unmount, CTLFLAG_RW,
     &sync_unmount, 0, "specify when to use synchronous unmount");
 
 MALLOC_DEFINE(M_FUSEVFS, "fuse_filesystem", "buffer for fuse vfs layer");
@@ -138,9 +143,9 @@ fuse_getdevice(const char *fspec, struct thread *td, struct cdev **fdevp)
 	int err;
 
 	/*
-         * Not an update, or updating the name: look up the name
-         * and verify that it refers to a sensible disk device.
-         */
+	 * Not an update, or updating the name: look up the name
+	 * and verify that it refers to a sensible disk device.
+	 */
 
 	NDINIT(ndp, LOOKUP, FOLLOW, UIO_SYSSPACE, fspec, td);
 	if ((err = namei(ndp)) != 0)
@@ -183,9 +188,9 @@ fuse_getdevice(const char *fspec, struct thread *td, struct cdev **fdevp)
 		}
 	}
 	/*
-         * according to coda code, no extra lock is needed --
-         * although in sys/vnode.h this field is marked "v"
-         */
+	 * according to coda code, no extra lock is needed --
+	 * although in sys/vnode.h this field is marked "v"
+	 */
 	vrele(devvp);
 
 	if (!fdev->si_devsw ||
@@ -199,9 +204,13 @@ fuse_getdevice(const char *fspec, struct thread *td, struct cdev **fdevp)
 }
 
 #define FUSE_FLAGOPT(fnam, fval) do {				\
-    vfs_flagopt(opts, #fnam, &mntopts, fval);		\
-    vfs_flagopt(opts, "__" #fnam, &__mntopts, fval);	\
+	vfs_flagopt(opts, #fnam, &mntopts, fval);		\
+	vfs_flagopt(opts, "__" #fnam, &__mntopts, fval);	\
 } while (0)
+
+SDT_PROBE_DEFINE1(fuse, , vfsops, mntopts, "uint64_t");
+SDT_PROBE_DEFINE4(fuse, , vfsops, mount_err, "char*", "struct fuse_data*",
+	"struct mount*", "int");
 
 static int
 fuse_vfsop_mount(struct mount *mp)
@@ -216,7 +225,7 @@ fuse_vfsop_mount(struct mount *mp)
 	size_t len;
 
 	struct cdev *fdev;
-	struct fuse_data *data;
+	struct fuse_data *data = NULL;
 	struct thread *td;
 	struct file *fp, *fptmp;
 	char *fspec, *subtype;
@@ -228,8 +237,6 @@ fuse_vfsop_mount(struct mount *mp)
 	mntopts = 0;
 	__mntopts = 0;
 	td = curthread;
-
-	fuse_trace_printf_vfsop();
 
 	if (mp->mnt_flag & MNT_UPDATE)
 		return EOPNOTSUPP;
@@ -262,9 +269,9 @@ fuse_vfsop_mount(struct mount *mp)
 		return err;
 
 	/*
-         * With the help of underscored options the mount program
-         * can inform us from the flags it sets by default
-         */
+	 * With the help of underscored options the mount program
+	 * can inform us from the flags it sets by default
+	 */
 	FUSE_FLAGOPT(allow_other, FSESS_DAEMON_CAN_SPY);
 	FUSE_FLAGOPT(push_symlinks_in, FSESS_PUSH_SYMLINKS_IN);
 	FUSE_FLAGOPT(default_permissions, FSESS_DEFAULT_PERMISSIONS);
@@ -286,29 +293,31 @@ fuse_vfsop_mount(struct mount *mp)
 	}
 	subtype = vfs_getopts(opts, "subtype=", &err);
 
-	FS_DEBUG2G("mntopts 0x%jx\n", (uintmax_t)mntopts);
+	SDT_PROBE1(fuse, , vfsops, mntopts, mntopts);
 
 	err = fget(td, fd, &cap_read_rights, &fp);
 	if (err != 0) {
-		FS_DEBUG("invalid or not opened device: data=%p\n", data);
+		SDT_PROBE2(fuse, , vfsops, trace, 1,
+			"invalid or not opened device");
 		goto out;
 	}
 	fptmp = td->td_fpop;
 	td->td_fpop = fp;
-        err = devfs_get_cdevpriv((void **)&data);
+	err = devfs_get_cdevpriv((void **)&data);
 	td->td_fpop = fptmp;
 	fdrop(fp, td);
 	FUSE_LOCK();
 	if (err != 0 || data == NULL || data->mp != NULL) {
-		FS_DEBUG("invalid or not opened device: data=%p data.mp=%p\n",
-		    data, data != NULL ? data->mp : NULL);
 		err = ENXIO;
+		SDT_PROBE4(fuse, , vfsops, mount_err,
+			"invalid or not opened device", data, mp, err);
 		FUSE_UNLOCK();
 		goto out;
 	}
 	if (fdata_get_dead(data)) {
-		FS_DEBUG("device is dead during mount: data=%p\n", data);
 		err = ENOTCONN;
+		SDT_PROBE4(fuse, , vfsops, mount_err,
+			"device is dead during mount", data, mp, err);
 		FUSE_UNLOCK();
 		goto out;
 	}
@@ -338,14 +347,13 @@ fuse_vfsop_mount(struct mount *mp)
 	mp->mnt_kern_flag |= MNTK_USES_BCACHE;
 	MNT_IUNLOCK(mp);
 	/* We need this here as this slot is used by getnewvnode() */
-	mp->mnt_stat.f_iosize = DFLTPHYS;
+	mp->mnt_stat.f_iosize = maxbcachebuf;
 	if (subtype) {
 		strlcat(mp->mnt_stat.f_fstypename, ".", MFSNAMELEN);
 		strlcat(mp->mnt_stat.f_fstypename, subtype, MFSNAMELEN);
 	}
 	copystr(fspec, mp->mnt_stat.f_mntfromname, MNAMELEN - 1, &len);
 	bzero(mp->mnt_stat.f_mntfromname + len, MNAMELEN - len);
-	FS_DEBUG2G("mp %p: %s\n", mp, mp->mnt_stat.f_mntfromname);
 
 	/* Now handshaking with daemon */
 	fuse_internal_send_init(data, td);
@@ -353,14 +361,13 @@ fuse_vfsop_mount(struct mount *mp)
 out:
 	if (err) {
 		FUSE_LOCK();
-		if (data->mp == mp) {
+		if (data != NULL && data->mp == mp) {
 			/*
 			 * Destroy device only if we acquired reference to
 			 * it
 			 */
-			FS_DEBUG("mount failed, destroy device: data=%p mp=%p"
-			      " err=%d\n",
-			    data, mp, err);
+			SDT_PROBE4(fuse, , vfsops, mount_err,
+				"mount failed, destroy device", data, mp, err);
 			data->mp = NULL;
 			fdata_trydestroy(data);
 		}
@@ -381,8 +388,6 @@ fuse_vfsop_unmount(struct mount *mp, int mntflags)
 	struct fuse_dispatcher fdi;
 	struct thread *td = curthread;
 
-	fuse_trace_printf_vfsop();
-
 	if (mntflags & MNT_FORCE) {
 		flags |= FORCECLOSE;
 	}
@@ -402,7 +407,6 @@ fuse_vfsop_unmount(struct mount *mp, int mntflags)
 		FUSE_UNLOCK();
 	err = vflush(mp, 0, flags, td);
 	if (err) {
-		debug_printf("vflush failed");
 		return err;
 	}
 	if (fdata_get_dead(data)) {
@@ -444,17 +448,20 @@ fuse_vfsop_root(struct mount *mp, int lkflags, struct vnode **vpp)
 		if (err == 0)
 			*vpp = data->vroot;
 	} else {
-		err = fuse_vnode_get(mp, FUSE_ROOT_ID, NULL, vpp, NULL, VDIR);
+		err = fuse_vnode_get(mp, NULL, FUSE_ROOT_ID, NULL, vpp, NULL,
+		    VDIR);
 		if (err == 0) {
 			FUSE_LOCK();
 			MPASS(data->vroot == NULL || data->vroot == *vpp);
 			if (data->vroot == NULL) {
-				FS_DEBUG("new root vnode\n");
+				SDT_PROBE2(fuse, , vfsops, trace, 1,
+					"new root vnode");
 				data->vroot = *vpp;
 				FUSE_UNLOCK();
 				vref(*vpp);
 			} else if (data->vroot != *vpp) {
-				FS_DEBUG("root vnode race\n");
+				SDT_PROBE2(fuse, , vfsops, trace, 1,
+					"root vnode race");
 				FUSE_UNLOCK();
 				VOP_UNLOCK(*vpp, 0);
 				vrele(*vpp);
@@ -476,7 +483,6 @@ fuse_vfsop_statfs(struct mount *mp, struct statfs *sbp)
 	struct fuse_statfs_out *fsfo;
 	struct fuse_data *data;
 
-	FS_DEBUG2G("mp %p: %s\n", mp, mp->mnt_stat.f_mntfromname);
 	data = fuse_get_mpdata(mp);
 
 	if (!(data->dataflags & FSESS_INITED))
@@ -506,15 +512,6 @@ fuse_vfsop_statfs(struct mount *mp, struct statfs *sbp)
 	sbp->f_ffree = fsfo->st.ffree;	/* cast from uint64_t to int64_t */
 	sbp->f_namemax = fsfo->st.namelen;
 	sbp->f_bsize = fsfo->st.frsize;	/* cast from uint32_t to uint64_t */
-
-	FS_DEBUG("fuse_statfs_out -- blocks: %llu, bfree: %llu, bavail: %llu, "
-	      "fil	es: %llu, ffree: %llu, bsize: %i, namelen: %i\n",
-	      (unsigned long long)fsfo->st.blocks, 
-	      (unsigned long long)fsfo->st.bfree,
-	      (unsigned long long)fsfo->st.bavail, 
-	      (unsigned long long)fsfo->st.files,
-	      (unsigned long long)fsfo->st.ffree, fsfo->st.bsize, 
-	      fsfo->st.namelen);
 
 	fdisp_destroy(&fdi);
 	return 0;

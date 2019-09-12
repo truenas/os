@@ -1843,6 +1843,7 @@ dev/ida/ida.c			optional ida
 dev/ida/ida_disk.c		optional ida
 dev/ida/ida_pci.c		optional ida pci
 dev/iicbus/ad7418.c		optional ad7418
+dev/iicbus/ads111x.c		optional ads111x
 dev/iicbus/ds1307.c		optional ds1307
 dev/iicbus/ds13rtc.c		optional ds13rtc | ds133x | ds1374
 dev/iicbus/ds1672.c		optional ds1672
@@ -2573,10 +2574,12 @@ dev/nsp/nsp_pccard.c		optional nsp pccard
 dev/null/null.c			standard
 dev/nvd/nvd.c			optional nvd nvme
 dev/nvme/nvme.c			optional nvme
+dev/nvme/nvme_ahci.c		optional nvme ahci
 dev/nvme/nvme_ctrlr.c		optional nvme
 dev/nvme/nvme_ctrlr_cmd.c	optional nvme
 dev/nvme/nvme_ns.c		optional nvme
 dev/nvme/nvme_ns_cmd.c		optional nvme
+dev/nvme/nvme_pci.c		optional nvme pci
 dev/nvme/nvme_qpair.c		optional nvme
 dev/nvme/nvme_sim.c		optional nvme scbus
 dev/nvme/nvme_sysctl.c		optional nvme
@@ -3335,6 +3338,7 @@ dev/usb/net/if_aue.c		optional aue
 dev/usb/net/if_axe.c		optional axe
 dev/usb/net/if_axge.c		optional axge
 dev/usb/net/if_cdce.c		optional cdce
+dev/usb/net/if_cdceem.c		optional cdceem
 dev/usb/net/if_cue.c		optional cue
 dev/usb/net/if_ipheth.c		optional ipheth
 dev/usb/net/if_kue.c		optional kue
@@ -3348,8 +3352,8 @@ dev/usb/net/if_usie.c		optional usie
 dev/usb/net/if_urndis.c		optional urndis
 dev/usb/net/ruephy.c		optional rue
 dev/usb/net/usb_ethernet.c	optional uether | aue | axe | axge | cdce | \
-					 cue | ipheth | kue | mos | rue | \
-					 smsc | udav | ure | urndis
+					 cdceem | cue | ipheth | kue | mos | \
+					 rue | smsc | udav | ure | urndis
 dev/usb/net/uhso.c		optional uhso
 #
 # USB WLAN drivers
@@ -3454,6 +3458,7 @@ dev/usb/template/usb_template_phone.c	optional usb_template
 dev/usb/template/usb_template_serialnet.c	optional usb_template
 dev/usb/template/usb_template_midi.c	optional usb_template
 dev/usb/template/usb_template_multi.c	optional usb_template
+dev/usb/template/usb_template_cdceem.c	optional usb_template
 #
 # USB video drivers
 #
@@ -3565,15 +3570,15 @@ fs/fdescfs/fdesc_vfsops.c	optional fdescfs
 fs/fdescfs/fdesc_vnops.c	optional fdescfs
 fs/fifofs/fifo_vnops.c		standard
 fs/cuse/cuse.c			optional cuse
-fs/fuse/fuse_device.c		optional fuse
-fs/fuse/fuse_file.c		optional fuse
-fs/fuse/fuse_internal.c		optional fuse
-fs/fuse/fuse_io.c		optional fuse
-fs/fuse/fuse_ipc.c		optional fuse
-fs/fuse/fuse_main.c		optional fuse
-fs/fuse/fuse_node.c		optional fuse
-fs/fuse/fuse_vfsops.c		optional fuse
-fs/fuse/fuse_vnops.c		optional fuse
+fs/fuse/fuse_device.c		optional fusefs
+fs/fuse/fuse_file.c		optional fusefs
+fs/fuse/fuse_internal.c		optional fusefs
+fs/fuse/fuse_io.c		optional fusefs
+fs/fuse/fuse_ipc.c		optional fusefs
+fs/fuse/fuse_main.c		optional fusefs
+fs/fuse/fuse_node.c		optional fusefs
+fs/fuse/fuse_vfsops.c		optional fusefs
+fs/fuse/fuse_vnops.c		optional fusefs
 fs/msdosfs/msdosfs_conv.c	optional msdosfs
 fs/msdosfs/msdosfs_denode.c	optional msdosfs
 fs/msdosfs/msdosfs_fat.c	optional msdosfs
@@ -4230,6 +4235,7 @@ netgraph/bluetooth/common/ng_bluetooth.c optional netgraph_bluetooth
 netgraph/bluetooth/drivers/bt3c/ng_bt3c_pccard.c optional netgraph_bluetooth_bt3c
 netgraph/bluetooth/drivers/h4/ng_h4.c optional netgraph_bluetooth_h4
 netgraph/bluetooth/drivers/ubt/ng_ubt.c optional netgraph_bluetooth_ubt usb
+netgraph/bluetooth/drivers/ubt/ng_ubt_intel.c optional netgraph_bluetooth_ubt usb
 netgraph/bluetooth/drivers/ubtbcmfw/ubtbcmfw.c optional netgraph_bluetooth_ubtbcmfw usb
 netgraph/bluetooth/hci/ng_hci_cmds.c optional netgraph_bluetooth_hci
 netgraph/bluetooth/hci/ng_hci_evnt.c optional netgraph_bluetooth_hci

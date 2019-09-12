@@ -1073,7 +1073,7 @@ options 	NFSCL			#Network File System client
 options 	AUTOFS			#Automounter filesystem
 options 	CD9660			#ISO 9660 filesystem
 options 	FDESCFS			#File descriptor filesystem
-options 	FUSE			#FUSE support module
+options 	FUSEFS			#FUSEFS support module
 options 	MSDOSFS			#MS DOS File System (FAT, FAT32)
 options 	NFSLOCKD		#Network Lock Manager
 options 	NFSD			#Network Filesystem Server
@@ -2525,6 +2525,7 @@ device		iicoc		# OpenCores I2C controller support
 # I2C peripheral devices
 #
 device		ad7418		# Analog Devices temp and voltage sensor
+device		ads111x		# Texas Instruments ADS101x and ADS111x ADCs
 device		ds1307		# Dallas DS1307 RTC and compatible
 device		ds13rtc		# All Dallas/Maxim ds13xx chips
 device		ds1672		# Dallas DS1672 RTC
