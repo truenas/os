@@ -250,7 +250,7 @@ pmem_open(struct disk *dp)
 {
 	struct pmem_disk *sc = dp->d_drv1;
 
-	if (sc->dma.numch == 0)
+	if (!cold && sc->dma.numch == 0)
 		pmem_dma_init(sc->dev);
 	sc->label->opened = 1;
 	return (0);
