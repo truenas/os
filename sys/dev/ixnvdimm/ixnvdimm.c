@@ -362,14 +362,14 @@ fallback2:
 	/* First read/write to local NVDIMM. */
 	off = bp->bio_offset;
 	cb = NULL;
-	flags = 0;
+	flags = DMA_NO_WAIT;
 	err = ioat_acquire_reserve(ch->dma, nseg, M_NOWAIT);
 	if (err != 0)
 		goto fallback;
 	for (i = 0; i < nseg; i++) {
 		if (i == nseg - 1) {
 			cb = pmem_dma_cb;
-			flags = DMA_INT_EN;
+			flags |= DMA_INT_EN;
 		}
 		if (bp->bio_cmd == BIO_READ) {
 			if (ioat_copy(ch->dma, segs[i].ds_addr, sc->paddr + off,
@@ -395,14 +395,14 @@ fallback2:
 		return;
 	off = bp->bio_offset;
 	cb = NULL;
-	flags = 0;
+	flags = DMA_NO_WAIT;
 	err = ioat_acquire_reserve(ch->dma2, nseg, M_NOWAIT);
 	if (err != 0)
 		goto fallback2;
 	for (i = 0; i < nseg; i++) {
 		if (i == nseg - 1) {
 			cb = pmem_dma_cb;
-			flags = DMA_INT_EN;
+			flags |= DMA_INT_EN;
 		}
 		if (ioat_copy(ch->dma2, rpaddr + off, segs[i].ds_addr,
 		    segs[i].ds_len, cb, tr, flags) == NULL) {
