@@ -79,19 +79,18 @@ struct pmem_dma_tr {
 	struct pmem_dma_ch	*ch;
 	struct pmem_disk	*sc;
 	bus_dmamap_t		 dmam;
-	LIST_ENTRY(pmem_dma_tr)	 list;
+	SLIST_ENTRY(pmem_dma_tr) list;
 	int			 inprog;
 	struct bio		*bp;
 };
 
 struct pmem_dma_ch {
-	struct mtx		 mtx;
 	bus_dmaengine_t		 dma;		/* Primary DMA engine (local) */
 	bus_dmaengine_t		 dma2;		/* Secondary DMA engine (NTB) */
-	size_t			 maxio;
 	bus_dma_tag_t		 dmat;
 	struct pmem_dma_tr	*trs;
-	LIST_HEAD(, pmem_dma_tr) free_tr;
+	struct mtx		 mtx	__aligned(CACHE_LINE_SIZE);
+	SLIST_HEAD(, pmem_dma_tr) free_tr;
 };
 
 struct pmem_dma {
@@ -173,6 +172,7 @@ pmem_dma_init(device_t dev)
 	struct pmem_disk *sc = device_get_softc(dev);
 	struct pmem_dma_ch *ch;
 	struct pmem_dma_tr *tr;
+	size_t maxio;
 	int i, t, n, err;
 
 	n = ioat_get_nchannels();
@@ -183,7 +183,7 @@ pmem_dma_init(device_t dev)
 	for (i = 0; i < n; i++) {
 		ch = &sc->dma.ch[i];
 		mtx_init(&ch->mtx, "pmem_dma_ch", NULL, MTX_DEF);
-		LIST_INIT(&ch->free_tr);
+		SLIST_INIT(&ch->free_tr);
 		ch->dma = ioat_get_dmaengine(i, M_WAITOK);
 		if (ch->dma == NULL) {
 			device_printf(dev, "getting DMA engine failed\n");
@@ -193,10 +193,10 @@ pmem_dma_init(device_t dev)
 			sc->dma.ch[(i + n / 2) % n].dma2 = ch->dma;
 		else
 			sc->dma.ch[(i + 1) % n].dma2 = ch->dma;
-		ch->maxio = ioat_get_max_io_size(ch->dma);
+		maxio = ioat_get_max_io_size(ch->dma);
 		err = bus_dma_tag_create(NULL,
 		    0, 0, BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, NULL, NULL,
-		    MAXPHYS, (MAXPHYS / PAGE_SIZE) + 1, MIN(MAXPHYS, ch->maxio),
+		    MAXPHYS, (MAXPHYS / PAGE_SIZE) + 1, MIN(MAXPHYS, maxio),
 		    0, busdma_lock_mutex, &ch->mtx, &ch->dmat);
 		if (err != 0) {
 			device_printf(dev, "tag create failed %d\n", err);
@@ -215,7 +215,7 @@ pmem_dma_init(device_t dev)
 				device_printf(dev, "map create failed %d\n", err);
 				break;
 			}
-			LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+			SLIST_INSERT_HEAD(&ch->free_tr, tr, list);
 		}
 	}
 	sc->dma.numch = n;
@@ -231,8 +231,8 @@ pmem_dma_shutdown(device_t dev)
 
 	for (i = 0; i < sc->dma.numch; i++) {
 		ch = &sc->dma.ch[i];
-		while ((tr = LIST_FIRST(&ch->free_tr)) != NULL) {
-			LIST_REMOVE(tr, list);
+		while ((tr = SLIST_FIRST(&ch->free_tr)) != NULL) {
+			SLIST_REMOVE_HEAD(&ch->free_tr, list);
 			bus_dmamap_destroy(ch->dmat, tr->dmam);
 		}
 		free(ch->trs, M_DEVBUF);
@@ -323,7 +323,7 @@ pmem_dma_cb(void *arg, int error)
 	}
 	tr->bp = NULL;
 	bus_dmamap_unload(ch->dmat, tr->dmam);
-	LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+	SLIST_INSERT_HEAD(&ch->free_tr, tr, list);
 	mtx_unlock(&ch->mtx);
 
 	if (bp == NULL)
@@ -352,7 +352,7 @@ pmem_dma_map(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 	if (error != 0) {
 fallback:
 		bus_dmamap_unload(ch->dmat, tr->dmam);
-		LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+		SLIST_INSERT_HEAD(&ch->free_tr, tr, list);
 fallback2:
 		tr->bp = NULL;
 		pmem_pio_strategy(bp);
@@ -426,7 +426,7 @@ pmem_dma_strategy(struct bio *bp)
 	c = curcpu * sc->dma.numch / mp_ncpus;
 	ch = &sc->dma.ch[c];
 	mtx_lock(&ch->mtx);
-	tr = LIST_FIRST(&ch->free_tr);
+	tr = SLIST_FIRST(&ch->free_tr);
 	if (tr == NULL) {
 fallback:
 		mtx_unlock(&ch->mtx);
@@ -434,13 +434,13 @@ fallback:
 		return;
 	}
 
-	LIST_REMOVE(tr, list);
+	SLIST_REMOVE_HEAD(&ch->free_tr, list);
 	tr->bp = bp;
 	err = bus_dmamap_load_bio(ch->dmat, tr->dmam, bp, pmem_dma_map, tr, 0);
 	if (err != 0 && err != EINPROGRESS) {
 		device_printf(sc->dev, "bus_dmamap_load_bio error 0x%x\n",err);
 		tr->bp = NULL;
-		LIST_INSERT_HEAD(&ch->free_tr, tr, list);
+		SLIST_INSERT_HEAD(&ch->free_tr, tr, list);
 		goto fallback;
 	}
 	mtx_unlock(&ch->mtx);
