@@ -350,22 +350,31 @@ _outb(u_char data, u_int port)
 }
 #endif
 
-#if defined(__i386__) || defined(__amd64__) || defined(__powerpc__)
+#if defined(__i386__) || defined(__amd64__) || defined(__powerpc__) || defined(__aarch64__)
 void *_ioremap_attr(vm_paddr_t phys_addr, unsigned long size, int attr);
 #else
 #define	_ioremap_attr(...) NULL
 #endif
 
+#ifdef VM_MEMATTR_DEVICE
+#define	ioremap_nocache(addr, size)					\
+    _ioremap_attr((addr), (size), VM_MEMATTR_DEVICE)
+#define	ioremap_wt(addr, size)						\
+    _ioremap_attr((addr), (size), VM_MEMATTR_DEVICE)
+#define	ioremap(addr, size)						\
+    _ioremap_attr((addr), (size), VM_MEMATTR_DEVICE)
+#else
 #define	ioremap_nocache(addr, size)					\
     _ioremap_attr((addr), (size), VM_MEMATTR_UNCACHEABLE)
-#define	ioremap_wc(addr, size)						\
-    _ioremap_attr((addr), (size), VM_MEMATTR_WRITE_COMBINING)
-#define	ioremap_wb(addr, size)						\
-    _ioremap_attr((addr), (size), VM_MEMATTR_WRITE_BACK)
 #define	ioremap_wt(addr, size)						\
     _ioremap_attr((addr), (size), VM_MEMATTR_WRITE_THROUGH)
 #define	ioremap(addr, size)						\
     _ioremap_attr((addr), (size), VM_MEMATTR_UNCACHEABLE)
+#endif
+#define	ioremap_wc(addr, size)						\
+    _ioremap_attr((addr), (size), VM_MEMATTR_WRITE_COMBINING)
+#define	ioremap_wb(addr, size)						\
+    _ioremap_attr((addr), (size), VM_MEMATTR_WRITE_BACK)
 void iounmap(void *addr);
 
 #define	memset_io(a, b, c)	memset((a), (b), (c))

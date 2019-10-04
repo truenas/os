@@ -2750,6 +2750,8 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 			if (strlen(new_name) == IFNAMSIZ-1)
 				return (EINVAL);
 		}
+		if (strcmp(new_name, ifp->if_xname) == 0)
+			break;
 		if (ifunit(new_name) != NULL)
 			return (EEXIST);
 
@@ -2922,6 +2924,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 	case SIOCGIFGENERIC:
 	case SIOCGIFRSSKEY:
 	case SIOCGIFRSSHASH:
+	case SIOCGIFDOWNREASON:
 		if (ifp->if_ioctl == NULL)
 			return (EOPNOTSUPP);
 		error = (*ifp->if_ioctl)(ifp, cmd, data);

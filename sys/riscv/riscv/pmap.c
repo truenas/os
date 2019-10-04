@@ -1105,12 +1105,15 @@ pmap_add_delayed_free_list(vm_page_t m, struct spglist *free,
  * of idle page table pages.  Each of a pmap's page table pages is responsible
  * for mapping a distinct range of virtual addresses.  The pmap's collection is
  * ordered by this virtual address range.
+ *
+ * If "promoted" is false, then the page table page "ml3" must be zero filled.
  */
 static __inline int
-pmap_insert_pt_page(pmap_t pmap, vm_page_t ml3)
+pmap_insert_pt_page(pmap_t pmap, vm_page_t ml3, bool promoted)
 {
 
 	PMAP_LOCK_ASSERT(pmap, MA_OWNED);
+	ml3->valid = promoted ? VM_PAGE_BITS_ALL : 0;
 	return (vm_radix_insert(&pmap->pm_root, ml3));
 }
 
@@ -2003,9 +2006,11 @@ pmap_remove_kernel_l2(pmap_t pmap, pt_entry_t *l2, vm_offset_t va)
 	newl2 = ml3pa | PTE_V;
 
 	/*
-	 * Initialize the page table page.
+	 * If this page table page was unmapped by a promotion, then it
+	 * contains valid mappings.  Zero it to invalidate those mappings.
 	 */
-	pagezero((void *)PHYS_TO_DMAP(ml3pa));
+	if (ml3->valid != 0)
+		pagezero((void *)PHYS_TO_DMAP(ml3pa));
 
 	/*
 	 * Demote the mapping.
@@ -2065,6 +2070,8 @@ pmap_remove_l2(pmap_t pmap, pt_entry_t *l2, vm_offset_t sva,
 	} else {
 		ml3 = pmap_remove_pt_page(pmap, sva);
 		if (ml3 != NULL) {
+			KASSERT(ml3->valid == VM_PAGE_BITS_ALL,
+			    ("pmap_remove_l2: l3 page not promoted"));
 			pmap_resident_count_dec(pmap, 1);
 			KASSERT(ml3->wire_count == Ln_ENTRIES,
 			    ("pmap_remove_l2: l3 page wire count error"));
@@ -2483,8 +2490,10 @@ pmap_demote_l2_locked(pmap_t pmap, pd_entry_t *l2, vm_offset_t va,
 			    "failure for va %#lx in pmap %p", va, pmap);
 			return (false);
 		}
-		if (va < VM_MAXUSER_ADDRESS)
+		if (va < VM_MAXUSER_ADDRESS) {
+			mpte->wire_count = Ln_ENTRIES;
 			pmap_resident_count_inc(pmap, 1);
+		}
 	}
 	mptepa = VM_PAGE_TO_PHYS(mpte);
 	firstl3 = (pt_entry_t *)PHYS_TO_DMAP(mptepa);
@@ -2496,10 +2505,10 @@ pmap_demote_l2_locked(pmap_t pmap, pd_entry_t *l2, vm_offset_t va,
 	newl3 = oldl2;
 
 	/*
-	 * If the page table page is new, initialize it.
+	 * If the page table page is not leftover from an earlier promotion,
+	 * initialize it.
 	 */
-	if (mpte->wire_count == 1) {
-		mpte->wire_count = Ln_ENTRIES;
+	if (mpte->valid == 0) {
 		for (i = 0; i < Ln_ENTRIES; i++)
 			pmap_store(firstl3 + i, newl3 + (i << PTE_PPN0_S));
 	}
@@ -2590,7 +2599,7 @@ pmap_promote_l2(pmap_t pmap, pd_entry_t *l2, vm_offset_t va,
 	ml3 = PHYS_TO_VM_PAGE(PTE_TO_PHYS(pmap_load(l2)));
 	KASSERT(ml3->pindex == pmap_l2_pindex(va),
 	    ("pmap_promote_l2: page table page's pindex is wrong"));
-	if (pmap_insert_pt_page(pmap, ml3)) {
+	if (pmap_insert_pt_page(pmap, ml3, true)) {
 		CTR2(KTR_PMAP, "pmap_promote_l2: failure for va %#lx pmap %p",
 		    va, pmap);
 		atomic_add_long(&pmap_l2_p_failures, 1);
@@ -2973,15 +2982,13 @@ pmap_enter_l2(pmap_t pmap, vm_offset_t va, pd_entry_t new_l2, u_int flags,
 			}
 		vm_page_free_pages_toq(&free, true);
 		if (va >= VM_MAXUSER_ADDRESS) {
+			/*
+			 * Both pmap_remove_l2() and pmap_remove_l3() will
+			 * leave the kernel page table page zero filled.
+			 */
 			mt = PHYS_TO_VM_PAGE(PTE_TO_PHYS(pmap_load(l2)));
-			if (pmap_insert_pt_page(pmap, mt)) {
-				/*
-				 * XXX Currently, this can't happen bacuse
-				 * we do not perform pmap_enter(psind == 1)
-				 * on the kernel pmap.
-				 */
+			if (pmap_insert_pt_page(pmap, mt, false))
 				panic("pmap_enter_l2: trie insert failed");
-			}
 		} else
 			KASSERT(pmap_load(l2) == 0,
 			    ("pmap_enter_l2: non-zero L2 entry %p", l2));
@@ -3538,6 +3545,27 @@ restart:
 	return (count);
 }
 
+/*
+ * Returns true if the given page is mapped individually or as part of
+ * a 2mpage.  Otherwise, returns false.
+ */
+bool
+pmap_page_is_mapped(vm_page_t m)
+{
+	struct rwlock *lock;
+	bool rv;
+
+	if ((m->oflags & VPO_UNMANAGED) != 0)
+		return (false);
+	lock = VM_PAGE_TO_PV_LIST_LOCK(m);
+	rw_rlock(lock);
+	rv = !TAILQ_EMPTY(&m->md.pv_list) ||
+	    ((m->flags & PG_FICTITIOUS) == 0 &&
+	    !TAILQ_EMPTY(&pa_to_pvh(VM_PAGE_TO_PHYS(m))->pv_list));
+	rw_runlock(lock);
+	return (rv);
+}
+
 static void
 pmap_remove_pages_pv(pmap_t pmap, vm_page_t m, pv_entry_t pv,
     struct spglist *free, bool superpage)
@@ -3558,6 +3586,8 @@ pmap_remove_pages_pv(pmap_t pmap, vm_page_t m, pv_entry_t pv,
 		}
 		mpte = pmap_remove_pt_page(pmap, pv->pv_va);
 		if (mpte != NULL) {
+			KASSERT(ml3->valid == VM_PAGE_BITS_ALL,
+			    ("pmap_remove_pages: l3 page not promoted"));
 			pmap_resident_count_dec(pmap, 1);
 			KASSERT(mpte->wire_count == Ln_ENTRIES,
 			    ("pmap_remove_pages: pte page wire count error"));
@@ -4095,7 +4125,7 @@ pmap_clear_modify(vm_page_t m)
 	pmap_t pmap;
 	pv_entry_t next_pv, pv;
 	pd_entry_t *l2, oldl2;
-	pt_entry_t *l3, oldl3;
+	pt_entry_t *l3;
 	vm_offset_t va;
 	int md_gen, pvh_gen;
 
@@ -4133,28 +4163,19 @@ restart:
 		va = pv->pv_va;
 		l2 = pmap_l2(pmap, va);
 		oldl2 = pmap_load(l2);
-		if ((oldl2 & PTE_W) != 0) {
-			if (pmap_demote_l2_locked(pmap, l2, va, &lock)) {
-				if ((oldl2 & PTE_SW_WIRED) == 0) {
-					/*
-					 * Write protect the mapping to a
-					 * single page so that a subsequent
-					 * write access may repromote.
-					 */
-					va += VM_PAGE_TO_PHYS(m) -
-					    PTE_TO_PHYS(oldl2);
-					l3 = pmap_l2_to_l3(l2, va);
-					oldl3 = pmap_load(l3);
-					if ((oldl3 & PTE_V) != 0) {
-						while (!atomic_fcmpset_long(l3,
-						    &oldl3, oldl3 & ~(PTE_D |
-						    PTE_W)))
-							cpu_spinwait();
-						vm_page_dirty(m);
-						pmap_invalidate_page(pmap, va);
-					}
-				}
-			}
+		/* If oldl2 has PTE_W set, then it also has PTE_D set. */
+		if ((oldl2 & PTE_W) != 0 &&
+		    pmap_demote_l2_locked(pmap, l2, va, &lock) &&
+		    (oldl2 & PTE_SW_WIRED) == 0) {
+			/*
+			 * Write protect the mapping to a single page so that
+			 * a subsequent write access may repromote.
+			 */
+			va += VM_PAGE_TO_PHYS(m) - PTE_TO_PHYS(oldl2);
+			l3 = pmap_l2_to_l3(l2, va);
+			pmap_clear_bits(l3, PTE_D | PTE_W);
+			vm_page_dirty(m);
+			pmap_invalidate_page(pmap, va);
 		}
 		PMAP_UNLOCK(pmap);
 	}

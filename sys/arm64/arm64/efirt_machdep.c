@@ -245,6 +245,7 @@ efi_arch_enter(void)
 
 	__asm __volatile(
 	    "msr ttbr0_el1, %0	\n"
+	    "isb		\n"
 	    "dsb  ishst		\n"
 	    "tlbi vmalle1is	\n"
 	    "dsb  ish		\n"
@@ -259,9 +260,20 @@ efi_arch_leave(void)
 {
 	struct thread *td;
 
+	/*
+	 * Restore the pcpu pointer. Some UEFI implementations trash it and
+	 * we don't store it before calling into them. To fix this we need
+	 * to restore it after returning to the kernel context. As reading
+	 * curthread will access x18 we need to restore it before loading
+	 * the thread pointer.
+	 */
+	__asm __volatile(
+	    "mrs x18, tpidr_el1	\n"
+	);
 	td = curthread;
 	__asm __volatile(
 	    "msr ttbr0_el1, %0	\n"
+	    "isb		\n"
 	    "dsb  ishst		\n"
 	    "tlbi vmalle1is	\n"
 	    "dsb  ish		\n"

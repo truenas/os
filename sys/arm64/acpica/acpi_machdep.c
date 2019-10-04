@@ -68,7 +68,7 @@ map_table(vm_paddr_t pa, int offset, const char *sig)
 	void *table;
 
 	header = pmap_mapbios(pa, sizeof(ACPI_TABLE_HEADER));
-	if (strncmp(header->Signature, sig, ACPI_NAME_SIZE) != 0) {
+	if (strncmp(header->Signature, sig, ACPI_NAMESEG_SIZE) != 0) {
 		pmap_unmapbios((vm_offset_t)header, sizeof(ACPI_TABLE_HEADER));
 		return (NULL);
 	}
@@ -107,7 +107,7 @@ probe_table(vm_paddr_t address, const char *sig)
 		printf("Table '%.4s' at 0x%jx\n", table->Signature,
 		    (uintmax_t)address);
 
-	if (strncmp(table->Signature, sig, ACPI_NAME_SIZE) != 0) {
+	if (strncmp(table->Signature, sig, ACPI_NAMESEG_SIZE) != 0) {
 		pmap_unmapbios((vm_offset_t)table, sizeof(ACPI_TABLE_HEADER));
 		return (0);
 	}
@@ -233,3 +233,16 @@ acpi_map_addr(struct acpi_generic_address *addr, bus_space_tag_t *tag,
 
 	return (bus_space_map(*tag, phys, size, 0, handle));
 }
+
+#if MAXMEMDOM > 1
+static void
+parse_pxm_tables(void *dummy)
+{
+
+	acpi_pxm_init(MAXCPU, (vm_paddr_t)1 << 40);
+	acpi_pxm_parse_tables();
+	acpi_pxm_set_mem_locality();
+}
+SYSINIT(parse_pxm_tables, SI_SUB_VM - 1, SI_ORDER_FIRST, parse_pxm_tables,
+    NULL);
+#endif

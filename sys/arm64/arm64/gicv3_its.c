@@ -272,7 +272,7 @@ static const struct {
 } its_quirks[] = {
 	{
 		/* Cavium ThunderX Pass 1.x */
-		.desc = "Cavoum ThunderX errata: 22375, 24313",
+		.desc = "Cavium ThunderX errata: 22375, 24313",
 		.iidr = GITS_IIDR_RAW(GITS_IIDR_IMPL_CAVIUM,
 		    GITS_IIDR_PROD_THUNDER, GITS_IIDR_VAR_THUNDER_1, 0),
 		.iidr_mask = ~GITS_IIDR_REVISION_MASK,
@@ -572,31 +572,16 @@ gicv3_its_pendtables_init(struct gicv3_its_softc *sc)
 	}
 }
 
-static int
-its_init_cpu(device_t dev, struct gicv3_its_softc *sc)
+static void
+its_init_cpu_lpi(device_t dev, struct gicv3_its_softc *sc)
 {
 	device_t gicv3;
-	vm_paddr_t target;
 	uint64_t xbaser, tmp;
 	uint32_t ctlr;
 	u_int cpuid;
-	int domain;
-
-	if (!CPU_ISSET(PCPU_GET(cpuid), &sc->sc_cpus))
-		return (0);
-
-	if (bus_get_domain(dev, &domain) == 0) {
-		if (PCPU_GET(domain) != domain)
-			return (0);
-	}
 
 	gicv3 = device_get_parent(dev);
 	cpuid = PCPU_GET(cpuid);
-
-	/* Check if the ITS is enabled on this CPU */
-	if ((gic_r_read_4(gicv3, GICR_TYPER) & GICR_TYPER_PLPIS) == 0) {
-		return (ENXIO);
-	}
 
 	/* Disable LPIs */
 	ctlr = gic_r_read_4(gicv3, GICR_CTLR);
@@ -666,10 +651,36 @@ its_init_cpu(device_t dev, struct gicv3_its_softc *sc)
 
 	/* Make sure the GIC has seen everything */
 	dsb(sy);
+}
+
+static int
+its_init_cpu(device_t dev, struct gicv3_its_softc *sc)
+{
+	device_t gicv3;
+	vm_paddr_t target;
+	u_int cpuid;
+	struct redist_pcpu *rpcpu;
+
+	gicv3 = device_get_parent(dev);
+	cpuid = PCPU_GET(cpuid);
+	if (!CPU_ISSET(cpuid, &sc->sc_cpus))
+		return (0);
+
+	/* Check if the ITS is enabled on this CPU */
+	if ((gic_r_read_4(gicv3, GICR_TYPER) & GICR_TYPER_PLPIS) == 0)
+		return (ENXIO);
+
+	rpcpu = gicv3_get_redist(dev);
+
+	/* Do per-cpu LPI init once */
+	if (!rpcpu->lpi_enabled) {
+		its_init_cpu_lpi(dev, sc);
+		rpcpu->lpi_enabled = true;
+	}
 
 	if ((gic_its_read_8(sc, GITS_TYPER) & GITS_TYPER_PTA) != 0) {
 		/* This ITS wants the redistributor physical address */
-		target = vtophys(gicv3_get_redist_vaddr(dev));
+		target = vtophys(rman_get_virtual(&rpcpu->res));
 	} else {
 		/* This ITS wants the unique processor number */
 		target = GICR_TYPER_CPUNUM(gic_r_read_8(gicv3, GICR_TYPER));
@@ -729,8 +740,8 @@ gicv3_its_attach(device_t dev)
 	/* Protects access to the ITS command circular buffer. */
 	mtx_init(&sc->sc_its_cmd_lock, "ITS cmd lock", NULL, MTX_SPIN);
 
+	CPU_ZERO(&sc->sc_cpus);
 	if (bus_get_domain(dev, &domain) == 0) {
-		CPU_ZERO(&sc->sc_cpus);
 		if (domain < MAXMEMDOM)
 			CPU_COPY(&cpuset_domain[domain], &sc->sc_cpus);
 	} else {
@@ -1727,6 +1738,7 @@ static int
 gicv3_its_acpi_attach(device_t dev)
 {
 	struct gicv3_its_softc *sc;
+	struct gic_v3_devinfo *di;
 	int err;
 
 	sc = device_get_softc(dev);
@@ -1734,13 +1746,13 @@ gicv3_its_acpi_attach(device_t dev)
 	if (err != 0)
 		return (err);
 
-	sc->sc_pic = intr_pic_register(dev,
-	    device_get_unit(dev) + ACPI_MSI_XREF);
+	di = device_get_ivars(dev);
+	sc->sc_pic = intr_pic_register(dev, di->msi_xref);
 	intr_pic_add_handler(device_get_parent(dev), sc->sc_pic,
-	    gicv3_its_intr, sc, GIC_FIRST_LPI, LPI_NIRQS);
+	    gicv3_its_intr, sc, sc->sc_irq_base, sc->sc_irq_length);
 
 	/* Register this device to handle MSI interrupts */
-	intr_msi_register(dev, device_get_unit(dev) + ACPI_MSI_XREF);
+	intr_msi_register(dev, di->msi_xref);
 
 	return (0);
 }

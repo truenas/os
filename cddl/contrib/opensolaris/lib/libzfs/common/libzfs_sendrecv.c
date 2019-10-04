@@ -1190,16 +1190,14 @@ send_print_verbose(FILE *fout, const char *tosnap, const char *fromsnap,
 		}
 	}
 
-	if (size != 0) {
-		if (parsable) {
-			(void) fprintf(fout, "\t%llu",
-			    (longlong_t)size);
-		} else {
-			char buf[16];
-			zfs_nicenum(size, buf, sizeof (buf));
-			(void) fprintf(fout, dgettext(TEXT_DOMAIN,
-			    " estimated size is %s"), buf);
-		}
+	if (parsable) {
+		(void) fprintf(fout, "\t%llu",
+		    (longlong_t)size);
+	} else if (size != 0) {
+		char buf[16];
+		zfs_nicenum(size, buf, sizeof (buf));
+		(void) fprintf(fout, dgettext(TEXT_DOMAIN,
+		    " estimated size is %s"), buf);
 	}
 	(void) fprintf(fout, "\n");
 }
@@ -1291,13 +1289,11 @@ dump_snapshot(zfs_handle_t *zhp, void *arg)
 	fromorigin = sdd->prevsnap[0] == '\0' &&
 	    (sdd->fromorigin || sdd->replicate);
 
-	if (sdd->progress && sdd->dryrun) {
+	if (sdd->verbose || sdd->progress) {
 		(void) estimate_ioctl(zhp, sdd->prevsnap_obj,
 		    fromorigin, flags, &size);
 		sdd->size += size;
-	}
 
-	if (sdd->verbose) {
 		send_print_verbose(fout, zhp->zfs_name,
 		    sdd->prevsnap[0] ? sdd->prevsnap : NULL,
 		    size, sdd->parsable);
@@ -1665,7 +1661,7 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 		fromname = name;
 	}
 
-	if (flags->progress) {
+	if (flags->progress || flags->verbose) {
 		error = lzc_send_space(zhp->zfs_name, fromname,
 		    lzc_flags, &size);
 		if (error == 0)
@@ -1935,7 +1931,7 @@ zfs_send(zfs_handle_t *zhp, const char *fromsnap, const char *tosnap,
 		sdd.cleanup_fd = -1;
 		sdd.snapholds = NULL;
 	}
-	if (flags->progress || sdd.snapholds != NULL) {
+	if (flags->progress || flags->verbose || sdd.snapholds != NULL) {
 		/*
 		 * Do a verbose no-op dry run to get all the verbose output
 		 * or to gather snapshot hold's before generating any data,
@@ -2037,17 +2033,49 @@ err_out:
 }
 
 int
-zfs_send_one(zfs_handle_t *zhp, const char *from, int fd,
-    enum lzc_send_flags flags)
+zfs_send_one(zfs_handle_t *zhp, const char *from, int fd, sendflags_t flags)
 {
-	int err;
+	int err = 0;
 	libzfs_handle_t *hdl = zhp->zfs_hdl;
-
+	enum lzc_send_flags lzc_flags = 0;
+	FILE *fout = (flags.verbose && flags.dryrun) ? stdout : stderr;
 	char errbuf[1024];
+
+	if (flags.largeblock)
+		lzc_flags |= LZC_SEND_FLAG_LARGE_BLOCK;
+	if (flags.embed_data)
+		lzc_flags |= LZC_SEND_FLAG_EMBED_DATA;
+	if (flags.compress)
+		lzc_flags |= LZC_SEND_FLAG_COMPRESS;
+
+	if (flags.verbose) {
+		uint64_t size = 0;
+		err = lzc_send_space(zhp->zfs_name, from, lzc_flags, &size);
+		if (err == 0) {
+			send_print_verbose(fout, zhp->zfs_name, from, size,
+			    flags.parsable);
+			if (flags.parsable) {
+				(void) fprintf(fout, "size\t%llu\n",
+				    (longlong_t)size);
+			} else {
+				char buf[16];
+				zfs_nicenum(size, buf, sizeof (buf));
+				(void) fprintf(fout, dgettext(TEXT_DOMAIN,
+				    "total estimated size is %s\n"), buf);
+			}
+		} else {
+			(void) fprintf(stderr, "Cannot estimate send size: "
+			    "%s\n", strerror(errno));
+		}
+	}
+
+	if (flags.dryrun)
+		return (err);
+
 	(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
 	    "warning: cannot send '%s'"), zhp->zfs_name);
 
-	err = lzc_send(zhp->zfs_name, from, fd, flags);
+	err = lzc_send(zhp->zfs_name, from, fd, lzc_flags);
 	if (err != 0) {
 		switch (errno) {
 		case EXDEV:
@@ -3278,11 +3306,18 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 		}
 	} else {
 		/*
-		 * if the fs does not exist, look for it based on the
-		 * fromsnap GUID
+		 * If the fs does not exist, look for it based on the
+		 * fromsnap GUID.
 		 */
-		(void) snprintf(errbuf, sizeof (errbuf), dgettext(TEXT_DOMAIN,
-		    "cannot receive incremental stream"));
+		if (resuming) {
+			(void) snprintf(errbuf, sizeof (errbuf),
+			    dgettext(TEXT_DOMAIN,
+			    "cannot receive resume stream"));
+		} else {
+			(void) snprintf(errbuf, sizeof (errbuf),
+			    dgettext(TEXT_DOMAIN,
+			    "cannot receive incremental stream"));
+		}
 
 		(void) strcpy(zc.zc_name, zc.zc_value);
 		*strchr(zc.zc_name, '@') = '\0';

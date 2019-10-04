@@ -528,7 +528,7 @@ interpret:
 			euip = uifind(attr.va_uid);
 			change_euid(imgp->newcred, euip);
 		}
-		vn_lock(imgp->vp, LK_EXCLUSIVE | LK_RETRY);
+		vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
 		if (attr.va_mode & S_ISGID)
 			change_egid(imgp->newcred, attr.va_gid);
 		/*
@@ -557,7 +557,7 @@ interpret:
 		    oldcred->cr_svgid != oldcred->cr_gid) {
 			VOP_UNLOCK(imgp->vp, 0);
 			imgp->newcred = crdup(oldcred);
-			vn_lock(imgp->vp, LK_EXCLUSIVE | LK_RETRY);
+			vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
 			change_svuid(imgp->newcred, imgp->newcred->cr_uid);
 			change_svgid(imgp->newcred, imgp->newcred->cr_gid);
 		}
@@ -574,7 +574,7 @@ interpret:
 		if (vn_fullpath(td, imgp->vp, &imgp->execpath,
 		    &imgp->freepath) != 0)
 			imgp->execpath = args->fname;
-		vn_lock(imgp->vp, LK_EXCLUSIVE | LK_RETRY);
+		vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
 	}
 
 	/*
@@ -618,7 +618,9 @@ interpret:
 		 * The vnode lock is held over this entire period
 		 * so nothing should illegitimately be blocked.
 		 */
-		VOP_UNSET_TEXT_CHECKED(imgp->vp);
+		MPASS(imgp->textset);
+		VOP_UNSET_TEXT_CHECKED(newtextvp);
+		imgp->textset = false;
 		/* free name buffer and old vnode */
 		if (args->fname != NULL)
 			NDFREE(&nd, NDF_ONLY_PNBUF);
@@ -994,7 +996,10 @@ exec_map_first_page(struct image_params *imgp)
 		vm_page_xbusy(ma[0]);
 		if (!vm_pager_has_page(object, 0, NULL, &after)) {
 			vm_page_lock(ma[0]);
-			vm_page_free(ma[0]);
+			if (!vm_page_wired(ma[0]))
+				vm_page_free(ma[0]);
+			else
+				vm_page_xunbusy_maybelocked(ma[0]);
 			vm_page_unlock(ma[0]);
 			VM_OBJECT_WUNLOCK(object);
 			return (EIO);
@@ -1021,7 +1026,10 @@ exec_map_first_page(struct image_params *imgp)
 		if (rv != VM_PAGER_OK) {
 			for (i = 0; i < initial_pagein; i++) {
 				vm_page_lock(ma[i]);
-				vm_page_free(ma[i]);
+				if (!vm_page_wired(ma[i]))
+					vm_page_free(ma[i]);
+				else
+					vm_page_xunbusy_maybelocked(ma[i]);
 				vm_page_unlock(ma[i]);
 			}
 			VM_OBJECT_WUNLOCK(object);
