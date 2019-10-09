@@ -100,6 +100,7 @@ static int nfs_commit_miss;
 extern int nfsrv_issuedelegs;
 extern int nfsrv_dolocallocks;
 extern int nfsd_enable_stringtouid;
+extern int nfsd_ignore_sync_writes;
 extern struct nfsdevicehead nfsrv_devidhead;
 
 static void nfsrv_pnfscreate(struct vnode *, struct vattr *, struct ucred *,
@@ -153,6 +154,8 @@ SYSCTL_INT(_vfs_nfsd, OID_AUTO, enable_stringtouid, CTLFLAG_RW,
 static int nfsrv_pnfsgetdsattr = 1;
 SYSCTL_INT(_vfs_nfsd, OID_AUTO, pnfsgetdsattr, CTLFLAG_RW,
     &nfsrv_pnfsgetdsattr, 0, "When set getattr gets DS attributes via RPC");
+SYSCTL_INT(_vfs_nfsd, OID_AUTO, ignore_sync_writes, CTLFLAG_RW,
+    &nfsd_ignore_sync_writes, 0, "Enable that nfds always makes writes async - only enable with UPS");
 
 /*
  * nfsrv_dsdirsize can only be increased and only when the nfsd threads are
@@ -883,7 +886,7 @@ nfsvno_write(struct vnode *vp, off_t off, int retlen, int cnt, int *stable,
 	struct iovec *ivp;
 	int i, len;
 	struct iovec *iv;
-	int ioflags, error;
+	int ioflags, error, syncflags;
 	struct uio io, *uiop = &io;
 	struct nfsheur *nh;
 
@@ -920,11 +923,16 @@ nfsvno_write(struct vnode *vp, off_t off, int retlen, int cnt, int *stable,
 			cp = mtod(mp, caddr_t);
 		}
 	}
-
+	
+	if (nfsd_ignore_sync_writes == 0)
+		syncflags = (IO_SYNC | IO_NODELOCKED);
+	else
+		syncflags = IO_NODELOCKED;
+	
 	if (*stable == NFSWRITE_UNSTABLE)
 		ioflags = IO_NODELOCKED;
 	else
-		ioflags = (IO_SYNC | IO_NODELOCKED);
+		ioflags = syncflags;
 	uiop->uio_resid = retlen;
 	uiop->uio_rw = UIO_WRITE;
 	uiop->uio_segflg = UIO_SYSSPACE;
