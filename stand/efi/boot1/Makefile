@@ -2,9 +2,10 @@
 
 .include <bsd.init.mk>
 
-PROG=		boot1.sym
+BOOT1?=		boot1
+PROG=		${BOOT1}.sym
 INTERNALPROG=
-WARNS?=		6
+WARNS=		6
 
 CFLAGS+=	-DEFI_BOOT1
 # We implement a slightly non-standard %S in that it always takes a
@@ -12,7 +13,12 @@ CFLAGS+=	-DEFI_BOOT1
 # seems to matter on arm64 where wchar_t defaults to an int instead
 # of a short. There's no good cast to use here so just ignore the
 # warnings for now.
+CWARNFLAGS.proto.c+=	-Wno-format
 CWARNFLAGS.boot1.c+=	-Wno-format
+
+# Disable bogus alignment issues
+CWARNFLAGS.ufs_module.c += -Wno-format
+CWARNFLAGS.ufs_module.c += -Wno-cast-align
 
 # Disable warnings that are currently incompatible with the zfs boot code
 CWARNFLAGS.zfs_module.c += -Wno-array-bounds
@@ -24,7 +30,7 @@ CWARNFLAGS.zfs_module.c += -Wno-unused-parameter
 CWARNFLAGS.zfs_module.c += -Wno-unused-function
 
 # architecture-specific loader code
-SRCS=	boot1.c self_reloc.c start.S ufs_module.c
+SRCS+=	boot1.c proto.c self_reloc.c start.S ufs_module.c devpath.c
 .if ${MK_LOADER_ZFS} != "no"
 SRCS+=		zfs_module.c
 CFLAGS.zfs_module.c+=	-I${ZFSSRC}
@@ -51,10 +57,11 @@ CFLAGS+=	-DEFI_DEBUG
 .PATH:		${EFISRC}/loader/arch/${MACHINE}
 .PATH:		${EFISRC}/loader
 .PATH:		${LDRSRC}
+.PATH:		${EFISRC}/libefi
 CFLAGS+=	-I${LDRSRC}
 
-FILES=	boot1.efi boot1.efifat
-FILESMODE_boot1.efi=	${BINMODE}
+FILES=	${BOOT1}.efi ${BOOT1}.efifat
+FILESMODE_${BOOT1}.efi=	${BINMODE}
 
 LDSCRIPT=	${EFISRC}/loader/arch/${MACHINE}/ldscript.${MACHINE}
 LDFLAGS+=	-Wl,-T${LDSCRIPT},-Bsymbolic,-znotext -shared
@@ -79,7 +86,7 @@ LDADD+=		${LIBEFI} ${LIBSA}
 
 DPADD+=		${LDSCRIPT}
 
-boot1.efi: ${PROG}
+${BOOT1}.efi: ${PROG}
 	if ${NM} ${.ALLSRC} | grep ' U '; then \
 		echo "Undefined symbols in ${.ALLSRC}"; \
 		exit 1; \
@@ -95,7 +102,7 @@ boot1.efi: ${PROG}
 
 .include "Makefile.fat"
 
-boot1.efifat: boot1.efi
+${BOOT1}.efifat: ${BOOT1}.efi
 	@set -- `ls -l ${.ALLSRC}`; \
 	x=$$(($$5-${BOOT1_MAXSIZE})); \
 	if [ $$x -ge 0 ]; then \
@@ -106,6 +113,6 @@ boot1.efifat: boot1.efi
 	xz -d -c ${BOOTSRC}/efi/boot1/fat-${MACHINE}.tmpl.xz > ${.TARGET}
 	${DD} if=${.ALLSRC} of=${.TARGET} seek=${BOOT1_OFFSET} conv=notrunc
 
-CLEANFILES+= boot1.efi boot1.efifat
+CLEANFILES+= ${BOOT1}.efi ${BOOT1}.efifat
 
 .include <bsd.prog.mk>

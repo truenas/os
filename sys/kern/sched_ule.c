@@ -247,6 +247,7 @@ struct tdq {
 	u_char		tdq_ipipending;		/* IPI pending. */
 	u_char		tdq_idx;		/* Current insert index. */
 	u_char		tdq_ridx;		/* Current removal index. */
+	int		tdq_id;			/* cpuid. */
 	struct runq	tdq_realtime;		/* real-time run queue. */
 	struct runq	tdq_timeshare;		/* timeshare run queue. */
 	struct runq	tdq_idle;		/* Queue of IDLE threads. */
@@ -280,14 +281,14 @@ static int trysteal_limit = 2;
 /*
  * One thread queue per processor.
  */
-static struct tdq	tdq_cpu[MAXCPU];
 static struct tdq	*balance_tdq;
 static int balance_ticks;
+DPCPU_DEFINE_STATIC(struct tdq, tdq);
 DPCPU_DEFINE_STATIC(uint32_t, randomval);
 
-#define	TDQ_SELF()	(&tdq_cpu[PCPU_GET(cpuid)])
-#define	TDQ_CPU(x)	(&tdq_cpu[(x)])
-#define	TDQ_ID(x)	((int)((x) - tdq_cpu))
+#define	TDQ_SELF()	(DPCPU_PTR(tdq))
+#define	TDQ_CPU(x)	(DPCPU_ID_PTR((x), tdq))
+#define	TDQ_ID(x)	((x)->tdq_id)
 #else	/* !SMP */
 static struct tdq	tdq_cpu;
 
@@ -311,7 +312,7 @@ static void sched_pctcpu_update(struct td_sched *, int);
 
 /* Operations on per processor queues */
 static struct thread *tdq_choose(struct tdq *);
-static void tdq_setup(struct tdq *);
+static void tdq_setup(struct tdq *, int i);
 static void tdq_load_add(struct tdq *, struct thread *);
 static void tdq_load_rem(struct tdq *, struct thread *);
 static __inline void tdq_runq_add(struct tdq *, struct thread *, int);
@@ -642,10 +643,6 @@ struct cpu_search {
 #define	CPU_SEARCH_HIGHEST	0x2
 #define	CPU_SEARCH_BOTH		(CPU_SEARCH_LOWEST|CPU_SEARCH_HIGHEST)
 
-#define	CPUSET_FOREACH(cpu, mask)				\
-	for ((cpu) = 0; (cpu) <= mp_maxid; (cpu)++)		\
-		if (CPU_ISSET(cpu, &mask))
-
 static __always_inline int cpu_search(const struct cpu_group *cg,
     struct cpu_search *low, struct cpu_search *high, const int match);
 int __noinline cpu_search_lowest(const struct cpu_group *cg,
@@ -838,6 +835,7 @@ sched_highest(const struct cpu_group *cg, cpuset_t mask, int minload)
 static void
 sched_balance_group(struct cpu_group *cg)
 {
+	struct tdq *tdq;
 	cpuset_t hmask, lmask;
 	int high, low, anylow;
 
@@ -853,9 +851,9 @@ sched_balance_group(struct cpu_group *cg)
 		if (CPU_EMPTY(&lmask))
 			break;
 		anylow = 1;
+		tdq = TDQ_CPU(high);
 nextlow:
-		low = sched_lowest(cg, lmask, -1,
-		    TDQ_CPU(high)->tdq_load - 1, high);
+		low = sched_lowest(cg, lmask, -1, tdq->tdq_load - 1, high);
 		/* Stop if we looked well and found no less loaded CPU. */
 		if (anylow && low == -1)
 			break;
@@ -863,7 +861,7 @@ nextlow:
 		if (low == -1)
 			continue;
 		/* Transfer thread from high to low. */
-		if (sched_balance_pair(TDQ_CPU(high), TDQ_CPU(low))) {
+		if (sched_balance_pair(tdq, TDQ_CPU(low))) {
 			/* CPU that got thread can no longer be a donor. */
 			CPU_CLR(low, &hmask);
 		} else {
@@ -1249,7 +1247,7 @@ sched_pickcpu(struct thread *td, int flags)
 	struct td_sched *ts;
 	struct tdq *tdq;
 	cpuset_t mask;
-	int cpu, pri, self;
+	int cpu, pri, self, intr;
 
 	self = PCPU_GET(cpuid);
 	ts = td_get_sched(td);
@@ -1266,76 +1264,108 @@ sched_pickcpu(struct thread *td, int flags)
 	 * Prefer to run interrupt threads on the processors that generate
 	 * the interrupt.
 	 */
-	pri = td->td_priority;
 	if (td->td_priority <= PRI_MAX_ITHD && THREAD_CAN_SCHED(td, self) &&
-	    curthread->td_intr_nesting_level && ts->ts_cpu != self) {
-		SCHED_STAT_INC(pickcpu_intrbind);
-		ts->ts_cpu = self;
-		if (TDQ_CPU(self)->tdq_lowpri > pri) {
-			SCHED_STAT_INC(pickcpu_affinity);
-			return (ts->ts_cpu);
+	    curthread->td_intr_nesting_level) {
+		tdq = TDQ_SELF();
+		if (tdq->tdq_lowpri >= PRI_MIN_IDLE) {
+			SCHED_STAT_INC(pickcpu_idle_affinity);
+			return (self);
 		}
+		ts->ts_cpu = self;
+		intr = 1;
+		cg = tdq->tdq_cg;
+		goto llc;
+	} else {
+		intr = 0;
+		tdq = TDQ_CPU(ts->ts_cpu);
+		cg = tdq->tdq_cg;
 	}
 	/*
 	 * If the thread can run on the last cpu and the affinity has not
 	 * expired and it is idle, run it there.
 	 */
-	tdq = TDQ_CPU(ts->ts_cpu);
-	cg = tdq->tdq_cg;
 	if (THREAD_CAN_SCHED(td, ts->ts_cpu) &&
 	    tdq->tdq_lowpri >= PRI_MIN_IDLE &&
 	    SCHED_AFFINITY(ts, CG_SHARE_L2)) {
 		if (cg->cg_flags & CG_FLAG_THREAD) {
-			CPUSET_FOREACH(cpu, cg->cg_mask) {
-				if (TDQ_CPU(cpu)->tdq_lowpri < PRI_MIN_IDLE)
+			/* Check all SMT threads for being idle. */
+			for (cpu = CPU_FFS(&cg->cg_mask) - 1; ; cpu++) {
+				if (CPU_ISSET(cpu, &cg->cg_mask) &&
+				    TDQ_CPU(cpu)->tdq_lowpri < PRI_MIN_IDLE)
 					break;
+				if (cpu >= mp_maxid) {
+					SCHED_STAT_INC(pickcpu_idle_affinity);
+					return (ts->ts_cpu);
+				}
 			}
-		} else
-			cpu = INT_MAX;
-		if (cpu > mp_maxid) {
+		} else {
 			SCHED_STAT_INC(pickcpu_idle_affinity);
 			return (ts->ts_cpu);
 		}
 	}
+llc:
 	/*
 	 * Search for the last level cache CPU group in the tree.
-	 * Skip caches with expired affinity time and SMT groups.
-	 * Affinity to higher level caches will be handled less aggressively.
+	 * Skip SMT, identical groups and caches with expired affinity.
+	 * Interrupt threads affinity is explicit and never expires.
 	 */
 	for (ccg = NULL; cg != NULL; cg = cg->cg_parent) {
 		if (cg->cg_flags & CG_FLAG_THREAD)
 			continue;
-		if (!SCHED_AFFINITY(ts, cg->cg_level))
+		if (cg->cg_children == 1 || cg->cg_count == 1)
+			continue;
+		if (cg->cg_level == CG_SHARE_NONE ||
+		    (!intr && !SCHED_AFFINITY(ts, cg->cg_level)))
 			continue;
 		ccg = cg;
 	}
-	if (ccg != NULL)
-		cg = ccg;
+	/* Found LLC shared by all CPUs, so do a global search. */
+	if (ccg == cpu_top)
+		ccg = NULL;
 	cpu = -1;
-	/* Search the group for the less loaded idle CPU we can run now. */
 	mask = td->td_cpuset->cs_mask;
-	if (cg != NULL && cg != cpu_top &&
-	    CPU_CMP(&cg->cg_mask, &cpu_top->cg_mask) != 0)
-		cpu = sched_lowest(cg, mask, max(pri, PRI_MAX_TIMESHARE),
+	pri = td->td_priority;
+	/*
+	 * Try hard to keep interrupts within found LLC.  Search the LLC for
+	 * the least loaded CPU we can run now.  For NUMA systems it should
+	 * be within target domain, and it also reduces scheduling overhead.
+	 */
+	if (ccg != NULL && intr) {
+		cpu = sched_lowest(ccg, mask, pri, INT_MAX, ts->ts_cpu);
+		if (cpu >= 0)
+			SCHED_STAT_INC(pickcpu_intrbind);
+	} else
+	/* Search the LLC for the least loaded idle CPU we can run now. */
+	if (ccg != NULL) {
+		cpu = sched_lowest(ccg, mask, max(pri, PRI_MAX_TIMESHARE),
 		    INT_MAX, ts->ts_cpu);
-	/* Search globally for the less loaded CPU we can run now. */
-	if (cpu == -1)
+		if (cpu >= 0)
+			SCHED_STAT_INC(pickcpu_affinity);
+	}
+	/* Search globally for the least loaded CPU we can run now. */
+	if (cpu < 0) {
 		cpu = sched_lowest(cpu_top, mask, pri, INT_MAX, ts->ts_cpu);
-	/* Search globally for the less loaded CPU. */
-	if (cpu == -1)
+		if (cpu >= 0)
+			SCHED_STAT_INC(pickcpu_lowest);
+	}
+	/* Search globally for the least loaded CPU. */
+	if (cpu < 0) {
 		cpu = sched_lowest(cpu_top, mask, -1, INT_MAX, ts->ts_cpu);
-	KASSERT(cpu != -1, ("sched_pickcpu: Failed to find a cpu."));
+		if (cpu >= 0)
+			SCHED_STAT_INC(pickcpu_lowest);
+	}
+	KASSERT(cpu >= 0, ("sched_pickcpu: Failed to find a cpu."));
 	KASSERT(!CPU_ABSENT(cpu), ("sched_pickcpu: Picked absent CPU %d.", cpu));
 	/*
 	 * Compare the lowest loaded cpu to current cpu.
 	 */
-	if (THREAD_CAN_SCHED(td, self) && TDQ_CPU(self)->tdq_lowpri > pri &&
-	    TDQ_CPU(cpu)->tdq_lowpri < PRI_MIN_IDLE &&
-	    TDQ_CPU(self)->tdq_load <= TDQ_CPU(cpu)->tdq_load + 1) {
+	tdq = TDQ_CPU(cpu);
+	if (THREAD_CAN_SCHED(td, self) && TDQ_SELF()->tdq_lowpri > pri &&
+	    tdq->tdq_lowpri < PRI_MIN_IDLE &&
+	    TDQ_SELF()->tdq_load <= tdq->tdq_load + 1) {
 		SCHED_STAT_INC(pickcpu_local);
 		cpu = self;
-	} else
-		SCHED_STAT_INC(pickcpu_lowest);
+	}
 	if (cpu != ts->ts_cpu)
 		SCHED_STAT_INC(pickcpu_migration);
 	return (cpu);
@@ -1376,14 +1406,15 @@ tdq_choose(struct tdq *tdq)
  * Initialize a thread queue.
  */
 static void
-tdq_setup(struct tdq *tdq)
+tdq_setup(struct tdq *tdq, int id)
 {
 
 	if (bootverbose)
-		printf("ULE: setup cpu %d\n", TDQ_ID(tdq));
+		printf("ULE: setup cpu %d\n", id);
 	runq_init(&tdq->tdq_realtime);
 	runq_init(&tdq->tdq_timeshare);
 	runq_init(&tdq->tdq_idle);
+	tdq->tdq_id = id;
 	snprintf(tdq->tdq_name, sizeof(tdq->tdq_name),
 	    "sched lock %d", (int)TDQ_ID(tdq));
 	mtx_init(&tdq->tdq_lock, tdq->tdq_name, "sched lock",
@@ -1403,8 +1434,8 @@ sched_setup_smp(void)
 
 	cpu_top = smp_topo();
 	CPU_FOREACH(i) {
-		tdq = TDQ_CPU(i);
-		tdq_setup(tdq);
+		tdq = DPCPU_ID_PTR(i, tdq);
+		tdq_setup(tdq, i);
 		tdq->tdq_cg = smp_topo_find(cpu_top, i);
 		if (tdq->tdq_cg == NULL)
 			panic("Can't find cpu group for %d\n", i);
@@ -1422,12 +1453,12 @@ sched_setup(void *dummy)
 {
 	struct tdq *tdq;
 
-	tdq = TDQ_SELF();
 #ifdef SMP
 	sched_setup_smp();
 #else
-	tdq_setup(tdq);
+	tdq_setup(TDQ_SELF(), 0);
 #endif
+	tdq = TDQ_SELF();
 
 	/* Add thread0's load since it's running. */
 	TDQ_LOCK(tdq);
@@ -2015,7 +2046,7 @@ sched_switch(struct thread *td, struct thread *newtd, int flags)
 	KASSERT(newtd == NULL, ("sched_switch: Unsupported newtd argument"));
 
 	cpuid = PCPU_GET(cpuid);
-	tdq = TDQ_CPU(cpuid);
+	tdq = TDQ_SELF();
 	ts = td_get_sched(td);
 	mtx = td->td_lock;
 	sched_pctcpu_update(ts, 1);
@@ -2110,7 +2141,7 @@ sched_switch(struct thread *td, struct thread *newtd, int flags)
 		 * run queue lock.
 		 */
 		cpuid = PCPU_GET(cpuid);
-		tdq = TDQ_CPU(cpuid);
+		tdq = TDQ_SELF();
 		lock_profile_obtain_lock_success(
 		    &TDQ_LOCKPTR(tdq)->lock_object, 0, 0, __FILE__, __LINE__);
 
@@ -2850,14 +2881,15 @@ sched_throw(struct thread *td)
 	struct thread *newtd;
 	struct tdq *tdq;
 
-	tdq = TDQ_SELF();
 	if (td == NULL) {
 		/* Correct spinlock nesting and acquire the correct lock. */
+		tdq = TDQ_SELF();
 		TDQ_LOCK(tdq);
 		spinlock_exit();
 		PCPU_SET(switchtime, cpu_ticks());
 		PCPU_SET(switchticks, ticks);
 	} else {
+		tdq = TDQ_SELF();
 		MPASS(td->td_lock == TDQ_LOCKPTR(tdq));
 		tdq_load_rem(tdq, td);
 		lock_profile_release_lock(&TDQ_LOCKPTR(tdq)->lock_object);
@@ -2885,7 +2917,7 @@ sched_fork_exit(struct thread *td)
 	 * non-nested critical section with the scheduler lock held.
 	 */
 	cpuid = PCPU_GET(cpuid);
-	tdq = TDQ_CPU(cpuid);
+	tdq = TDQ_SELF();
 	if (TD_IS_IDLETHREAD(td))
 		td->td_lock = TDQ_LOCKPTR(tdq);
 	MPASS(td->td_lock == TDQ_LOCKPTR(tdq));

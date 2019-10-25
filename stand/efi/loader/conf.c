@@ -31,15 +31,19 @@ __FBSDID("$FreeBSD$");
 #include <bootstrap.h>
 #include <efi.h>
 #include <efilib.h>
-#ifdef EFI_ZFS_BOOT
-#include <libzfs.h>
-#endif
+#include <efizfs.h>
+
+extern struct devsw vdisk_dev;
 
 struct devsw *devsw[] = {
 	&efipart_fddev,
 	&efipart_cddev,
 	&efipart_hddev,
+	&efihttp_dev, /* ordering with efinet_dev matters */
+#if defined(LOADER_NET_SUPPORT)
 	&efinet_dev,
+#endif
+	&vdisk_dev,
 #ifdef EFI_ZFS_BOOT
 	&zfs_dev,
 #endif
@@ -53,6 +57,7 @@ struct fs_ops *file_system[] = {
 	&dosfs_fsops,
 	&ufs_fsops,
 	&cd9660_fsops,
+	&efihttp_fsops,
 	&tftp_fsops,
 	&nfs_fsops,
 	&gzipfs_fsops,
@@ -61,7 +66,9 @@ struct fs_ops *file_system[] = {
 };
 
 struct netif_driver *netif_drivers[] = {
+#if defined(LOADER_NET_SUPPORT)
 	&efinetif,
+#endif
 	NULL
 };
 

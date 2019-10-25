@@ -343,6 +343,10 @@ ATOMIC_STORE_LOAD(32)
 ATOMIC_STORE_LOAD(64)
 #undef ATOMIC_STORE_LOAD
 
+#ifdef __mips_n32
+#define	atomic_load_64	atomic_load_acq_64
+#endif
+
 /*
  * Atomically compare the value stored at *p with cmpval and if the
  * two values are equal, update the value of *p with newval. Returns
@@ -754,5 +758,69 @@ atomic_thread_fence_seq_cst(void)
 #define	atomic_load_acq_ptr	atomic_load_acq_long
 #define	atomic_store_rel_ptr	atomic_store_rel_long
 #define	atomic_readandclear_ptr	atomic_readandclear_long
+
+static __inline unsigned int
+atomic_swap_int(volatile unsigned int *ptr, const unsigned int value)
+{
+	unsigned int retval;
+
+	retval = *ptr;
+
+	while (!atomic_fcmpset_int(ptr, &retval, value))
+		;
+	return (retval);
+}
+
+static __inline uint32_t
+atomic_swap_32(volatile uint32_t *ptr, const uint32_t value)
+{
+	uint32_t retval;
+
+	retval = *ptr;
+
+	while (!atomic_fcmpset_32(ptr, &retval, value))
+		;
+	return (retval);
+}
+
+#if defined(__mips_n64) || defined(__mips_n32)
+static __inline uint64_t
+atomic_swap_64(volatile uint64_t *ptr, const uint64_t value)
+{
+	uint64_t retval;
+
+	retval = *ptr;
+
+	while (!atomic_fcmpset_64(ptr, &retval, value))
+		;
+	return (retval);
+}
+#endif
+
+static __inline unsigned long
+atomic_swap_long(volatile unsigned long *ptr, const unsigned long value)
+{
+	unsigned long retval;
+
+	retval = *ptr;
+
+	while (!atomic_fcmpset_32((volatile uint32_t *)ptr,
+	    (uint32_t *)&retval, value))
+		;
+	return (retval);
+}
+
+static __inline uintptr_t
+atomic_swap_ptr(volatile uintptr_t *ptr, const uintptr_t value)
+{
+	uintptr_t retval;
+
+	retval = *ptr;
+
+	while (!atomic_fcmpset_32((volatile uint32_t *)ptr,
+	    (uint32_t *)&retval, value))
+		;
+	return (retval);
+}
 
 #endif /* ! _MACHINE_ATOMIC_H_ */

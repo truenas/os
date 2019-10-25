@@ -163,7 +163,7 @@ static kobj_method_t link_elf_methods[] = {
 	KOBJMETHOD(linker_ctf_get,		link_elf_ctf_get),
 	KOBJMETHOD(linker_symtab_get, 		link_elf_symtab_get),
 	KOBJMETHOD(linker_strtab_get, 		link_elf_strtab_get),
-	{ 0, 0 }
+	KOBJMETHOD_END
 };
 
 static struct linker_class link_elf_class = {
@@ -774,8 +774,7 @@ link_elf_load_file(linker_class_t cls, const char *filename,
 	 * This stuff needs to be in a single chunk so that profiling etc
 	 * can get the bounds and gdb can associate offsets with modules
 	 */
-	ef->object = vm_object_allocate(OBJT_DEFAULT,
-	    round_page(mapsize) >> PAGE_SHIFT);
+	ef->object = vm_object_allocate(OBJT_PHYS, atop(round_page(mapsize)));
 	if (ef->object == NULL) {
 		error = ENOMEM;
 		goto out;

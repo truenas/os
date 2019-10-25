@@ -1595,8 +1595,8 @@ void
 pmap_bootstrap(vm_paddr_t *firstaddr)
 {
 	vm_offset_t va;
-	pt_entry_t *pte;
-	uint64_t cr4;
+	pt_entry_t *pte, *pcpu_pte;
+	uint64_t cr4, pcpu_phys;
 	u_long res;
 	int i;
 
@@ -1610,6 +1610,8 @@ pmap_bootstrap(vm_paddr_t *firstaddr)
 	 * Create an initial set of page tables to run the kernel in.
 	 */
 	create_pagetables(firstaddr);
+
+	pcpu_phys = allocpages(firstaddr, MAXCPU);
 
 	/*
 	 * Add a physical memory segment (vm_phys_seg) corresponding to the
@@ -1678,7 +1680,20 @@ pmap_bootstrap(vm_paddr_t *firstaddr)
 	SYSMAP(caddr_t, CMAP1, crashdumpmap, MAXDUMPPGS)
 	CADDR1 = crashdumpmap;
 
+	SYSMAP(struct pcpu *, pcpu_pte, __pcpu, MAXCPU);
 	virtual_avail = va;
+
+	for (i = 0; i < MAXCPU; i++) {
+		pcpu_pte[i] = (pcpu_phys + ptoa(i)) | X86_PG_V | X86_PG_RW |
+		    pg_g | pg_nx | X86_PG_M | X86_PG_A;
+	}
+	STAILQ_INIT(&cpuhead);
+	wrmsr(MSR_GSBASE, (uint64_t)&__pcpu[0]);
+	pcpu_init(&__pcpu[0], 0, sizeof(struct pcpu));
+	amd64_bsp_pcpu_init1(&__pcpu[0]);
+	amd64_bsp_ist_init(&__pcpu[0]);
+	__pcpu[0].pc_dynamic = temp_bsp_pcpu.pc_dynamic;
+	__pcpu[0].pc_acpi_id = temp_bsp_pcpu.pc_acpi_id;
 
 	/*
 	 * Initialize the PAT MSR.
@@ -3135,7 +3150,7 @@ pmap_kenter(vm_offset_t va, vm_paddr_t pa)
 	pt_entry_t *pte;
 
 	pte = vtopte(va);
-	pte_store(pte, pa | X86_PG_RW | X86_PG_V | pg_g);
+	pte_store(pte, pa | X86_PG_RW | X86_PG_V | pg_g | pg_nx);
 }
 
 static __inline void
@@ -3146,7 +3161,7 @@ pmap_kenter_attr(vm_offset_t va, vm_paddr_t pa, int mode)
 
 	pte = vtopte(va);
 	cache_bits = pmap_cache_bits(kernel_pmap, mode, 0);
-	pte_store(pte, pa | X86_PG_RW | X86_PG_V | pg_g | cache_bits);
+	pte_store(pte, pa | X86_PG_RW | X86_PG_V | pg_g | pg_nx | cache_bits);
 }
 
 /*

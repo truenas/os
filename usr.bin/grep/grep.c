@@ -218,20 +218,9 @@ static void
 add_pattern(char *pat, size_t len)
 {
 
-	/* Do not add further pattern is we already match everything */
-	if (matchall)
-	  return;
-
 	/* Check if we can do a shortcut */
 	if (len == 0) {
 		matchall = true;
-		for (unsigned int i = 0; i < patterns; i++) {
-			free(pattern[i].pat);
-		}
-		pattern = grep_realloc(pattern, sizeof(struct pat));
-		pattern[0].pat = NULL;
-		pattern[0].len = 0;
-		patterns = 1;
 		return;
 	}
 	/* Increase size if necessary */
@@ -343,20 +332,22 @@ main(int argc, char *argv[])
 
 	setlocale(LC_ALL, "");
 
-	/* Check what is the program name of the binary.  In this
-	   way we can have all the funcionalities in one binary
-	   without the need of scripting and using ugly hacks. */
+	/*
+	 * Check how we've bene invoked to determine the behavior we should
+	 * exhibit. In this way we can have all the functionalities in one
+	 * binary without the need of scripting and using ugly hacks.
+	 */
 	pn = getprogname();
-	if (pn[0] == 'r') {
-		dirbehave = DIR_RECURSE;
-		Hflag = true;
-	}
 	switch (pn[0]) {
 	case 'e':
 		grepbehave = GREP_EXTENDED;
 		break;
 	case 'f':
 		grepbehave = GREP_FIXED;
+		break;
+	case 'r':
+		dirbehave = DIR_RECURSE;
+		Hflag = true;
 		break;
 	}
 
@@ -652,7 +643,7 @@ main(int argc, char *argv[])
 	aargv += optind;
 
 	/* Empty pattern file matches nothing */
-	if (!needpattern && (patterns == 0))
+	if (!needpattern && (patterns == 0) && !matchall)
 		exit(1);
 
 	/* Fail if we don't have any pattern */
@@ -699,11 +690,10 @@ main(int argc, char *argv[])
 
 	r_pattern = grep_calloc(patterns, sizeof(*r_pattern));
 
-	/* Don't process any patterns if we have a blank one */
 #ifdef WITH_INTERNAL_NOSPEC
-	if (!matchall && grepbehave != GREP_FIXED) {
+	if (grepbehave != GREP_FIXED) {
 #else
-	if (!matchall) {
+	{
 #endif
 		/* Check if cheating is allowed (always is for fgrep). */
 		for (i = 0; i < patterns; ++i) {
@@ -735,7 +725,12 @@ main(int argc, char *argv[])
 				matched = true;
 		}
 
-	/* Find out the correct return value according to the
-	   results and the command line option. */
+	if (Lflag)
+		matched = !matched;
+
+	/*
+	 * Calculate the correct return value according to the
+	 * results and the command line option.
+	 */
 	exit(matched ? (file_err ? (qflag ? 0 : 2) : 0) : (file_err ? 2 : 1));
 }

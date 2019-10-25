@@ -61,8 +61,6 @@ __FBSDID("$FreeBSD$");
 
 #include "pic_if.h"
 
-extern struct pcpu __pcpu[MAXCPU];
-
 volatile static int ap_awake;
 volatile static u_int ap_letgo;
 volatile static u_quad_t ap_timebase;
@@ -182,6 +180,11 @@ cpu_mp_start(void)
 next:
 		error = platform_smp_next_cpu(&cpu);
 	}
+
+#ifdef SMP
+	/* Probe mp_ncores and smp_threads_per_core as a side effect. */
+	(void)cpu_topo();
+#endif
 }
 
 void

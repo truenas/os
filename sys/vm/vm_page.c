@@ -199,10 +199,12 @@ vm_page_init_cache_zones(void *dummy __unused)
 		vmd = VM_DOMAIN(domain);
 
 		/*
-		 * Don't allow the page caches to take up more than .25% of
-		 * memory.
+		 * Don't allow the page caches to take up more than .1875% of
+		 * memory.  A UMA bucket contains at most 256 free pages, and we
+		 * have two buckets per CPU per free pool.
 		 */
-		if (vmd->vmd_page_count / 400 < 256 * mp_ncpus * VM_NFREEPOOL)
+		if (vmd->vmd_page_count / 600 < 2 * 256 * mp_ncpus *
+		    VM_NFREEPOOL)
 			continue;
 		for (pool = 0; pool < VM_NFREEPOOL; pool++) {
 			pgcache = &vmd->vmd_pgcache[pool];
@@ -3401,9 +3403,12 @@ vm_page_free_prep(vm_page_t m)
 		vm_page_lock_assert(m, MA_OWNED);
 		KASSERT(!pmap_page_is_mapped(m),
 		    ("vm_page_free_prep: freeing mapped page %p", m));
-	} else
+		KASSERT((m->aflags & (PGA_EXECUTABLE | PGA_WRITEABLE)) == 0,
+		    ("vm_page_free_prep: mapping flags set in page %p", m));
+	} else {
 		KASSERT(m->queue == PQ_NONE,
 		    ("vm_page_free_prep: unmanaged page %p is queued", m));
+	}
 	VM_CNT_INC(v_tfree);
 
 	if (vm_page_sbusied(m))

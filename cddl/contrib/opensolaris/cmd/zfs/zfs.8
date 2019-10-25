@@ -23,17 +23,16 @@
 .\" Copyright (c) 2012, Glen Barber <gjb@FreeBSD.org>
 .\" Copyright (c) 2012, Bryan Drewery <bdrewery@FreeBSD.org>
 .\" Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
-.\" Copyright (c) 2014, Joyent, Inc. All rights reserved.
 .\" Copyright (c) 2013, Steven Hartland <smh@FreeBSD.org>
 .\" Copyright (c) 2016 Nexenta Systems, Inc. All Rights Reserved.
 .\" Copyright (c) 2014, Xin LI <delphij@FreeBSD.org>
 .\" Copyright (c) 2014-2015, The FreeBSD Foundation, All Rights Reserved.
-.\" Copyright 2018 Joyent, Inc.
+.\" Copyright 2019 Joyent, Inc.
 .\" Copyright (c) 2018 Datto Inc.
 .\"
 .\" $FreeBSD$
 .\"
-.Dd February 15, 2018
+.Dd Octover 16, 2019
 .Dt ZFS 8
 .Os
 .Sh NAME
@@ -103,6 +102,9 @@
 .Cm rename
 .Fl r
 .Ar snapshot snapshot
+.Nm
+.Cm rename
+.Ar bookmark bookmark
 .Nm
 .Cm rename
 .Fl u
@@ -2092,6 +2094,16 @@ Recursively rename the snapshots of all descendent datasets. Snapshots are the
 only dataset that can be renamed recursively.
 .It Xo
 .Nm
+.Cm rename
+.Ar bookmark bookmark
+.Xc
+.Pp
+Renames the given bookmark.
+Bookmarks can only be renamed within the parent file system or volume.
+When renaming a bookmark, the parent file system or volume of the bookmark
+does not need to be specified as part of the second argument.
+.It Xo
+.Nm
 .Cm list
 .Op Fl r Ns | Ns Fl d Ar depth
 .Op Fl Hp
@@ -2323,7 +2335,7 @@ option was not specified.
 .Ar filesystem Ns | Ns Ar volume
 .Xc
 .Pp
-Remap the indirect blocks in the given fileystem or volume so that they no
+Remap the indirect blocks in the given filesystem or volume so that they no
 longer reference blocks on previously removed vdevs and we can eventually
 shrink the size of the indirect mapping objects for the previously removed
 vdevs. Note that remapping all blocks might not be possible and that
@@ -3915,6 +3927,7 @@ M       F       /tank/test/modified
 .Xr jail 8 ,
 .Xr mount 8 ,
 .Xr umount 8 ,
+.Xr zfs-program 8 ,
 .Xr zpool 8
 .Sh AUTHORS
 This manual page is a

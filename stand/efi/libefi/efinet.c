@@ -40,6 +40,8 @@ __FBSDID("$FreeBSD$");
 #include <efi.h>
 #include <efilib.h>
 
+#include "dev_net.h"
+
 static EFI_GUID sn_guid = EFI_SIMPLE_NETWORK_PROTOCOL;
 
 static void efinet_end(struct netif *);
@@ -108,6 +110,24 @@ efinet_match(struct netif *nif, void *machdep_hint)
 static int
 efinet_probe(struct netif *nif, void *machdep_hint)
 {
+	EFI_SIMPLE_NETWORK *net;
+	EFI_HANDLE h;
+	EFI_STATUS status;
+
+	h = nif->nif_driver->netif_ifs[nif->nif_unit].dif_private;
+	/*
+	 * Open the network device in exclusive mode. Without this
+	 * we will be racing with the UEFI network stack. It will
+	 * pull packets off the network leading to lost packets.
+	 */
+	status = BS->OpenProtocol(h, &sn_guid, (void **)&net,
+	    IH, NULL, EFI_OPEN_PROTOCOL_EXCLUSIVE);
+	if (status != EFI_SUCCESS) {
+		printf("Unable to open network interface %d for "
+		    "exclusive access: %lu\n", nif->nif_unit,
+		    EFI_ERROR_CODE(status));
+		return (efi_status_to_errno(status));
+	}
 
 	return (0);
 }
@@ -180,6 +200,74 @@ efinet_get(struct iodesc *desc, void **pkt, time_t timeout)
 	return (ret);
 }
 
+/*
+ * Loader uses BOOTP/DHCP and also uses RARP as a fallback to populate
+ * network parameters and problems with DHCP servers can cause the loader
+ * to fail to populate them. Allow the device to ask about the basic
+ * network parameters and if present use them.
+ */
+static void
+efi_env_net_params(struct iodesc *desc)
+{
+	char *envstr;
+	in_addr_t ipaddr, mask, gwaddr, serveraddr;
+	n_long rootaddr;
+
+	if ((envstr = getenv("rootpath")) != NULL)
+		strlcpy(rootpath, envstr, sizeof(rootpath));
+
+	/*
+	 * Get network parameters.
+	 */
+	envstr = getenv("ipaddr");
+	ipaddr = (envstr != NULL) ? inet_addr(envstr) : 0;
+
+	envstr = getenv("netmask");
+	mask = (envstr != NULL) ? inet_addr(envstr) : 0;
+
+	envstr = getenv("gatewayip");
+	gwaddr = (envstr != NULL) ? inet_addr(envstr) : 0;
+
+	envstr = getenv("serverip");
+	serveraddr = (envstr != NULL) ? inet_addr(envstr) : 0;
+
+	/* No network params. */
+	if (ipaddr == 0 && mask == 0 && gwaddr == 0 && serveraddr == 0)
+		return;
+
+	/* Partial network params. */
+	if (ipaddr == 0 || mask == 0 || gwaddr == 0 || serveraddr == 0) {
+		printf("Incomplete network settings from U-Boot\n");
+		return;
+	}
+
+	/*
+	 * Set network parameters.
+	 */
+	myip.s_addr = ipaddr;
+	netmask = mask;
+	gateip.s_addr = gwaddr;
+	servip.s_addr = serveraddr;
+
+	/*
+	 * There must be a rootpath. It may be ip:/path or it may be just the
+	 * path in which case the ip needs to be serverip.
+	 */
+	rootaddr = net_parse_rootpath();
+	if (rootaddr == INADDR_NONE)
+		rootaddr = serveraddr;
+	rootip.s_addr = rootaddr;
+
+#ifdef EFINET_DEBUG
+	printf("%s: ip=%s\n", __func__, inet_ntoa(myip));
+	printf("%s: mask=%s\n", __func__, intoa(netmask));
+	printf("%s: gateway=%s\n", __func__, inet_ntoa(gateip));
+	printf("%s: server=%s\n", __func__, inet_ntoa(servip));
+#endif
+
+	desc->myip = myip;
+}
+
 static void
 efinet_init(struct iodesc *desc, void *machdep_hint)
 {
@@ -189,13 +277,16 @@ efinet_init(struct iodesc *desc, void *machdep_hint)
 	EFI_STATUS status;
 	UINT32 mask;
 
+	/* Attempt to get netboot params from env */
+	efi_env_net_params(desc);
+
 	if (nif->nif_driver->netif_ifs[nif->nif_unit].dif_unit < 0) {
 		printf("Invalid network interface %d\n", nif->nif_unit);
 		return;
 	}
 
 	h = nif->nif_driver->netif_ifs[nif->nif_unit].dif_private;
-	status = BS->HandleProtocol(h, &sn_guid, (VOID **)&nif->nif_devdata);
+	status = OpenProtocolByHandle(h, &sn_guid, (void **)&nif->nif_devdata);
 	if (status != EFI_SUCCESS) {
 		printf("net%d: cannot fetch interface data (status=%lu)\n",
 		    nif->nif_unit, EFI_ERROR_CODE(status));
@@ -269,7 +360,6 @@ efinet_dev_init()
 	struct netif_dif *dif;
 	struct netif_stats *stats;
 	EFI_DEVICE_PATH *devpath, *node;
-	EFI_SIMPLE_NETWORK *net;
 	EFI_HANDLE *handles, *handles2;
 	EFI_STATUS status;
 	UINTN sz;
@@ -304,19 +394,6 @@ efinet_dev_init()
 		if (DevicePathType(node) != MESSAGING_DEVICE_PATH ||
 		    DevicePathSubType(node) != MSG_MAC_ADDR_DP)
 			continue;
-
-		/*
-		 * Open the network device in exclusive mode. Without this
-		 * we will be racing with the UEFI network stack. It will
-		 * pull packets off the network leading to lost packets.
-		 */
-		status = BS->OpenProtocol(handles[i], &sn_guid, (void **)&net,
-		    IH, NULL, EFI_OPEN_PROTOCOL_EXCLUSIVE);
-		if (status != EFI_SUCCESS) {
-			printf("Unable to open network interface %d for "
-			    "exclusive access: %lu\n", i,
-			    EFI_ERROR_CODE(status));
-		}
 
 		handles2[nifs] = handles[i];
 		nifs++;
