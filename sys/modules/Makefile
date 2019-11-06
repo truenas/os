@@ -369,6 +369,7 @@ SUBDIR=	\
 	ste \
 	${_stg} \
 	stge \
+	${_superio} \
 	${_sym} \
 	${_syscons} \
 	sysvipc \
@@ -717,6 +718,7 @@ _rdrand_rng=	rdrand_rng
 .endif
 _s3=		s3
 _sdhci_acpi=	sdhci_acpi
+_superio=	superio
 _tpm=		tpm
 _twa=		twa
 _vesa=		vesa

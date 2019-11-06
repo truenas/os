@@ -1438,13 +1438,11 @@ spa_unload(spa_t *spa)
 	}
 
 	if (spa->spa_condense_zthr != NULL) {
-		ASSERT(!zthr_isrunning(spa->spa_condense_zthr));
 		zthr_destroy(spa->spa_condense_zthr);
 		spa->spa_condense_zthr = NULL;
 	}
 
 	if (spa->spa_checkpoint_discard_zthr != NULL) {
-		ASSERT(!zthr_isrunning(spa->spa_checkpoint_discard_zthr));
 		zthr_destroy(spa->spa_checkpoint_discard_zthr);
 		spa->spa_checkpoint_discard_zthr = NULL;
 	}
@@ -2345,7 +2343,7 @@ spa_load(spa_t *spa, spa_load_state_t state, spa_import_type_t type)
 	 * and are making their way through the eviction process.
 	 */
 	spa_evicting_os_wait(spa);
-	spa->spa_minref = refcount_count(&spa->spa_refcount);
+	spa->spa_minref = zfs_refcount_count(&spa->spa_refcount);
 	if (error) {
 		if (error != EEXIST) {
 			spa->spa_loaded_ts.tv_sec = 0;
@@ -4978,7 +4976,7 @@ spa_create(const char *pool, nvlist_t *nvroot, nvlist_t *props,
 	 * and are making their way through the eviction process.
 	 */
 	spa_evicting_os_wait(spa);
-	spa->spa_minref = refcount_count(&spa->spa_refcount);
+	spa->spa_minref = zfs_refcount_count(&spa->spa_refcount);
 	spa->spa_load_state = SPA_LOAD_NONE;
 
 	mutex_exit(&spa_namespace_lock);
@@ -7310,12 +7308,12 @@ spa_async_suspend(spa_t *spa)
 	spa_vdev_remove_suspend(spa);
 
 	zthr_t *condense_thread = spa->spa_condense_zthr;
-	if (condense_thread != NULL && zthr_isrunning(condense_thread))
-		VERIFY0(zthr_cancel(condense_thread));
+	if (condense_thread != NULL)
+		zthr_cancel(condense_thread);
 
 	zthr_t *discard_thread = spa->spa_checkpoint_discard_zthr;
-	if (discard_thread != NULL && zthr_isrunning(discard_thread))
-		VERIFY0(zthr_cancel(discard_thread));
+	if (discard_thread != NULL)
+		zthr_cancel(discard_thread);
 }
 
 void
@@ -7328,11 +7326,11 @@ spa_async_resume(spa_t *spa)
 	spa_restart_removal(spa);
 
 	zthr_t *condense_thread = spa->spa_condense_zthr;
-	if (condense_thread != NULL && !zthr_isrunning(condense_thread))
+	if (condense_thread != NULL)
 		zthr_resume(condense_thread);
 
 	zthr_t *discard_thread = spa->spa_checkpoint_discard_zthr;
-	if (discard_thread != NULL && !zthr_isrunning(discard_thread))
+	if (discard_thread != NULL)
 		zthr_resume(discard_thread);
 }
 
@@ -8045,7 +8043,8 @@ spa_sync(spa_t *spa, uint64_t txg)
 		 * allocations all happen from spa_sync().
 		 */
 		for (int i = 0; i < spa->spa_alloc_count; i++)
-			ASSERT0(refcount_count(&(mg->mg_alloc_queue_depth[i])));
+			ASSERT0(zfs_refcount_count(
+			    &(mg->mg_alloc_queue_depth[i])));
 		mg->mg_max_alloc_queue_depth = max_queue_depth;
 
 		for (int i = 0; i < spa->spa_alloc_count; i++) {
@@ -8056,7 +8055,7 @@ spa_sync(spa_t *spa, uint64_t txg)
 	}
 	metaslab_class_t *mc = spa_normal_class(spa);
 	for (int i = 0; i < spa->spa_alloc_count; i++) {
-		ASSERT0(refcount_count(&mc->mc_alloc_slots[i]));
+		ASSERT0(zfs_refcount_count(&mc->mc_alloc_slots[i]));
 		mc->mc_alloc_max_slots[i] = slots_per_allocator;
 	}
 	mc->mc_alloc_throttle_enabled = zio_dva_throttle_enabled;

@@ -1244,7 +1244,7 @@ vnlru_proc(void)
 {
 	struct mount *mp, *nmp;
 	unsigned long onumvnodes;
-	int done, force, trigger, usevnodes;
+	int done, force, trigger, usevnodes, vsp;
 	bool reclaim_nc_src;
 
 	EVENTHANDLER_REGISTER(shutdown_pre_sync, kproc_shutdown, vnlruproc,
@@ -1272,7 +1272,8 @@ vnlru_proc(void)
 			force = 1;
 			vstir = 0;
 		}
-		if (vspace() >= vlowat && force == 0) {
+		vsp = vspace();
+		if (vsp >= vlowat && force == 0) {
 			vnlruproc_sig = 0;
 			wakeup(&vnlruproc_sig);
 			msleep(vnlruproc, &vnode_free_list_mtx,
@@ -1339,7 +1340,8 @@ vnlru_proc(void)
 		 * After becoming active to expand above low water, keep
 		 * active until above high water.
 		 */
-		force = vspace() < vhiwat;
+		vsp = vspace();
+		force = vsp < vhiwat;
 	}
 }
 
@@ -1416,8 +1418,10 @@ vtryrecycle(struct vnode *vp)
 static void
 vcheckspace(void)
 {
+	int vsp;
 
-	if (vspace() < vlowat && vnlruproc_sig == 0) {
+	vsp = vspace();
+	if (vsp < vlowat && vnlruproc_sig == 0) {
 		vnlruproc_sig = 1;
 		wakeup(vnlruproc);
 	}
@@ -3656,8 +3660,10 @@ vn_printf(struct vnode *vp, const char *fmt, ...)
 		strlcat(buf, "|VI_DOINGINACT", sizeof(buf));
 	if (vp->v_iflag & VI_OWEINACT)
 		strlcat(buf, "|VI_OWEINACT", sizeof(buf));
+	if (vp->v_iflag & VI_TEXT_REF)
+		strlcat(buf, "|VI_TEXT_REF", sizeof(buf));
 	flags = vp->v_iflag & ~(VI_MOUNT | VI_DOOMED | VI_FREE |
-	    VI_ACTIVE | VI_DOINGINACT | VI_OWEINACT);
+	    VI_ACTIVE | VI_DOINGINACT | VI_OWEINACT | VI_TEXT_REF);
 	if (flags != 0) {
 		snprintf(buf2, sizeof(buf2), "|VI(0x%lx)", flags);
 		strlcat(buf, buf2, sizeof(buf));

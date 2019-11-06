@@ -21,7 +21,7 @@
 
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2016 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2018 by Delphix. All rights reserved.
  * Copyright 2017 Nexenta Systems, Inc.
  */
 
@@ -139,6 +139,8 @@ uint64_t zap_create_link(objset_t *os, dmu_object_type_t ot,
      uint64_t parent_obj, const char *name, dmu_tx_t *tx);
 uint64_t zap_create_link_dnsize(objset_t *os, dmu_object_type_t ot,
     uint64_t parent_obj, const char *name, int dnodesize, dmu_tx_t *tx);
+uint64_t zap_create_link_dnsize(objset_t *os, dmu_object_type_t ot,
+    uint64_t parent_obj, const char *name, int dnodesize, dmu_tx_t *tx);
 
 /*
  * Initialize an already-allocated object.
@@ -228,7 +230,7 @@ int zap_lookup_norm_by_dnode(dnode_t *dn, const char *name,
     boolean_t *ncp);
 
 int zap_count_write_by_dnode(dnode_t *dn, const char *name,
-    int add, refcount_t *towrite, refcount_t *tooverwrite);
+    int add, zfs_refcount_t *towrite, zfs_refcount_t *tooverwrite);
 
 /*
  * Create an attribute with the given name and value.
@@ -347,6 +349,7 @@ typedef struct zap_cursor {
 	uint64_t zc_serialized;
 	uint64_t zc_hash;
 	uint32_t zc_cd;
+	boolean_t zc_prefetch;
 } zap_cursor_t;
 
 typedef struct {
@@ -373,6 +376,8 @@ typedef struct {
  * zapobj.  You must _fini the cursor when you are done with it.
  */
 void zap_cursor_init(zap_cursor_t *zc, objset_t *ds, uint64_t zapobj);
+void zap_cursor_init_noprefetch(zap_cursor_t *zc, objset_t *os,
+    uint64_t zapobj);
 void zap_cursor_fini(zap_cursor_t *zc);
 
 /*

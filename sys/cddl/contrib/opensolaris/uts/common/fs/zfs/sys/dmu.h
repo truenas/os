@@ -75,6 +75,7 @@ struct arc_buf;
 struct zio_prop;
 struct sa_handle;
 struct file;
+struct locked_range;
 
 typedef struct objset objset_t;
 typedef struct dmu_tx dmu_tx_t;
@@ -823,7 +824,7 @@ typedef struct dmu_object_info {
 	uint8_t doi_checksum;
 	uint8_t doi_compress;
 	uint8_t doi_nblkptr;
-	uint8_t doi_pad[4];
+	int8_t doi_pad[4];
 	uint64_t doi_dnodesize;
 	uint64_t doi_physical_blocks_512;	/* data + metadata, 512b blks */
 	uint64_t doi_max_offset;
@@ -966,7 +967,7 @@ typedef struct zgd {
 	struct lwb	*zgd_lwb;
 	struct blkptr	*zgd_bp;
 	dmu_buf_t	*zgd_db;
-	struct rl	*zgd_rl;
+	struct locked_range *zgd_lr;
 	void		*zgd_private;
 } zgd_t;
 

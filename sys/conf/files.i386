@@ -282,6 +282,7 @@ dev/ipmi/ipmi_smbios.c		optional ipmi
 dev/ipmi/ipmi_ssif.c		optional ipmi smbus
 dev/ipmi/ipmi_pci.c		optional ipmi pci
 dev/ipmi/ipmi_linux.c		optional ipmi compat_linux
+dev/itwd/itwd.c			optional itwd
 dev/le/if_le_isa.c		optional le isa
 dev/mse/mse.c			optional mse
 dev/mse/mse_isa.c		optional mse isa
@@ -318,6 +319,7 @@ dev/sio/sio_pccard.c		optional sio pccard
 dev/sio/sio_pci.c		optional sio pci
 dev/sio/sio_puc.c		optional sio puc
 dev/speaker/spkr.c		optional speaker
+dev/superio/superio.c		optional superio isa
 dev/syscons/apm/apm_saver.c	optional apm_saver apm
 dev/syscons/scterm-teken.c	optional sc
 dev/syscons/scvesactl.c		optional sc vga vesa
