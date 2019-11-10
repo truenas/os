@@ -291,14 +291,12 @@ pmem_pio_strategy(struct bio *bp)
 
 		if (bp->bio_cmd == BIO_READ) {
 			memcpy(addr, sc->vaddr + off, size);
-		} else if (bp->bio_cmd == BIO_WRITE) {
-			sc->label->empty = 0;
+		} else {
 			if ((nvaddr = sc->rvaddr) != NULL) {
 				ntb_copy2(sc->vaddr + off, nvaddr + off,
 				    addr, size);
 			} else {
 				ntb_copy1(sc->vaddr + off, addr, size);
-				sc->label->dirty = 1;
 			}
 		}
 
@@ -457,7 +455,11 @@ pmem_strategy(struct bio *bp)
 		biodone(bp);
 		return;
 	}
-
+	if (bp->bio_cmd == BIO_WRITE) {
+		sc->label->empty = 0;
+		if (sc->rvaddr == NULL)
+			sc->label->dirty = 1;
+	}
 	if (sc->dma.numch > 0 &&
 	    bp->bio_length >= ntb_pmem_min_dma_size)
 		pmem_dma_strategy(bp);
