@@ -195,7 +195,7 @@ pmem_dma_init(device_t dev)
 			sc->dma.ch[(i + 1) % n].dma2 = ch->dma;
 		maxio = ioat_get_max_io_size(ch->dma);
 		err = bus_dma_tag_create(NULL,
-		    0, 0, BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, NULL, NULL,
+		    1, 0, BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, NULL, NULL,
 		    MAXPHYS, (MAXPHYS / PAGE_SIZE) + 1, MIN(MAXPHYS, maxio),
 		    0, busdma_lock_mutex, &ch->mtx, &ch->dmat);
 		if (err != 0) {
