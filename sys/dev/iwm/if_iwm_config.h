@@ -78,6 +78,7 @@ enum iwm_device_family {
 	IWM_DEVICE_FAMILY_UNDEFINED,
 	IWM_DEVICE_FAMILY_7000,
 	IWM_DEVICE_FAMILY_8000,
+	IWM_DEVICE_FAMILY_9000,
 };
 
 #define IWM_DEFAULT_MAX_TX_POWER	22
@@ -130,13 +131,15 @@ enum iwm_nvm_type {
  */
 struct iwm_cfg {
 	const char *name;
-        const char *fw_name;
-        uint16_t eeprom_size;
-        enum iwm_device_family device_family;
-        int host_interrupt_operation_mode;
-        uint8_t nvm_hw_section_num;
-        int apmg_wake_up_wa;
-        enum iwm_nvm_type nvm_type;
+	const char *fw_name;
+	uint16_t eeprom_size;
+	enum iwm_device_family device_family;
+	int host_interrupt_operation_mode;
+	int mqrx_supported;
+	int integrated;
+	uint8_t nvm_hw_section_num;
+	int apmg_wake_up_wa;
+	enum iwm_nvm_type nvm_type;
 };
 
 /*
@@ -150,5 +153,7 @@ extern const struct iwm_cfg iwm7265_cfg;
 extern const struct iwm_cfg iwm7265d_cfg;
 extern const struct iwm_cfg iwm8260_cfg;
 extern const struct iwm_cfg iwm8265_cfg;
+extern const struct iwm_cfg iwm9560_cfg;
+extern const struct iwm_cfg iwm9260_cfg;
 
 #endif /* __IWM_CONFIG_H__ */
