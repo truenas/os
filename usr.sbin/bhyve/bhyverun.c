@@ -993,9 +993,16 @@ do_open(const char *vmname)
 			exit(4);
 		}
 	}
-	error = vm_set_topology(ctx, sockets, cores, threads, maxcpus);
-	if (error)
-		errx(EX_OSERR, "vm_set_topology");
+	if (sockets != guest_ncpus) {
+		error = vm_set_topology(ctx, sockets, cores, threads, maxcpus);
+		if (error)
+			errx(EX_OSERR, "vm_set_topology");
+	} else {
+		error = vm_get_topology(ctx, &sockets, &cores, &threads, &maxcpus);
+		if (error)
+			errx(EX_OSERR, "vm_get_topology");
+		sockets = (guest_ncpus + cores * threads - 1) / (cores * threads);
+	}
 	return (ctx);
 }
 
