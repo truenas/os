@@ -130,10 +130,12 @@ aw_ccung_reset_assert(device_t dev, intptr_t id, bool reset)
 
 	mtx_lock(&sc->mtx);
 	val = CCU_READ4(sc, sc->resets[id].offset);
+	dprintf("offset=%x Read %x\n", sc->resets[id].offset, val);
 	if (reset)
 		val &= ~(1 << sc->resets[id].shift);
 	else
 		val |= 1 << sc->resets[id].shift;
+	dprintf("offset=%x Write %x\n", sc->resets[id].offset, val);
 	CCU_WRITE4(sc, sc->resets[id].offset, val);
 	mtx_unlock(&sc->mtx);
 
@@ -153,6 +155,7 @@ aw_ccung_reset_is_asserted(device_t dev, intptr_t id, bool *reset)
 
 	mtx_lock(&sc->mtx);
 	val = CCU_READ4(sc, sc->resets[id].offset);
+	dprintf("offset=%x Read %x\n", sc->resets[id].offset, val);
 	*reset = (val & (1 << sc->resets[id].shift)) != 0 ? false : true;
 	mtx_unlock(&sc->mtx);
 
@@ -299,12 +302,24 @@ aw_ccung_attach(device_t dev)
 		case AW_CLK_NM:
 			aw_clk_nm_register(sc->clkdom, sc->clks[i].clk.nm);
 			break;
+		case AW_CLK_M:
+			aw_clk_m_register(sc->clkdom, sc->clks[i].clk.m);
+			break;
 		case AW_CLK_PREDIV_MUX:
 			aw_clk_prediv_mux_register(sc->clkdom,
 			    sc->clks[i].clk.prediv_mux);
 			break;
 		case AW_CLK_FRAC:
 			aw_clk_frac_register(sc->clkdom, sc->clks[i].clk.frac);
+			break;
+		case AW_CLK_MIPI:
+			aw_clk_mipi_register(sc->clkdom, sc->clks[i].clk.mipi);
+			break;
+		case AW_CLK_NP:
+			aw_clk_np_register(sc->clkdom, sc->clks[i].clk.np);
+			break;
+		case AW_CLK_NMM:
+			aw_clk_nmm_register(sc->clkdom, sc->clks[i].clk.nmm);
 			break;
 		}
 	}
