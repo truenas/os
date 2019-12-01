@@ -85,7 +85,7 @@ struct pmem_dma_tr {
 };
 
 struct pmem_dma_ch {
-	bus_dmaengine_t		 dma;		/* Primary DMA engine (local) */
+	bus_dmaengine_t		 dma1;		/* Primary DMA engine (local) */
 	bus_dmaengine_t		 dma2;		/* Secondary DMA engine (NTB) */
 	bus_dma_tag_t		 dmat;
 	struct pmem_dma_tr	*trs;
@@ -95,6 +95,9 @@ struct pmem_dma_ch {
 
 struct pmem_dma {
 	int			 numch;
+	int			 num1;
+	int			 num2;
+	int			 w2swap;
 	struct pmem_dma_ch	*ch;
 };
 
@@ -129,6 +132,8 @@ struct pmem_disk {
 	vm_paddr_t		 rpaddr;	/* Remote PMEM phys address */
 	uint8_t			*rvaddr;	/* Remote PMEM KVA address */
 	struct pmem_label	*rlabel;	/* Remote PMEM label */
+	int			 domain;	/* Local PMEM domain */
+	int			 rdomain;	/* Remove PMEM (NTB) domain */
 	struct pmem_dma		 dma;
 };
 
@@ -172,38 +177,94 @@ pmem_dma_init(device_t dev)
 	struct pmem_disk *sc = device_get_softc(dev);
 	struct pmem_dma_ch *ch;
 	struct pmem_dma_tr *tr;
+	uint8_t dmapd[MAXMEMDOM];
+	bus_dmaengine_t dma;
 	size_t maxio;
-	int i, t, n, err;
+	int d, d1, d2, err, i, n, numch, num1, num2, t;
 
 	n = ioat_get_nchannels();
 	if (n == 0)
 		return;
-	sc->dma.ch = mallocarray(n, sizeof(struct pmem_dma_ch), M_DEVBUF,
-	    M_ZERO | M_WAITOK);
+
+	/* Find NUMA domains with IOAT engines. */
+	bzero(dmapd, sizeof(dmapd));
 	for (i = 0; i < n; i++) {
+		dma = ioat_get_dmaengine(i, M_WAITOK);
+		if (dma == NULL)
+			continue;
+		t = 0;
+		ioat_get_domain(dma, &t);
+		dmapd[t]++;
+		ioat_put_dmaengine(dma);
+	}
+
+	/* Find NUMA domain with IOAT closest to NVDIMM. */
+	d1 = -1;
+	for (i = 0; i < vm_ndomains; i++) {
+		if (dmapd[i] == 0)
+			continue;
+		t = vm_phys_mem_affinity(i, sc->domain);
+		if (d1 < 0 || d > t) {
+			d1 = i;
+			d = t;
+		}
+	}
+
+	/* Find NUMA domain with IOAT closest to NTB. */
+	/* Try not to use the same domain for both uses. */
+	d2 = -1;
+	for (i = 0; i < vm_ndomains; i++) {
+		if (dmapd[i] == 0 || i == d1)
+			continue;
+		t = vm_phys_mem_affinity(i, sc->rdomain);
+		if (d2 < 0 || d > t) {
+			d2 = i;
+			d = t;
+		}
+	}
+
+	numch = dmapd[d1];
+	if (d2 >= 0 && numch < dmapd[d2])
+		numch = dmapd[d2];
+	sc->dma.ch = mallocarray(numch, sizeof(struct pmem_dma_ch), M_DEVBUF,
+	    M_ZERO | M_WAITOK);
+	num1 = num2 = 0;
+	for (i = 0; i < n; i++) {
+		dma = ioat_get_dmaengine(i, M_WAITOK);
+		if (dma == NULL)
+			continue;
+		t = 0;
+		ioat_get_domain(dma, &t);
+		if (t == d1) {
+			ioat_set_interrupt_coalesce(dma, 0);
+			sc->dma.ch[num1++].dma1 = dma;
+		} else if (t == d2) {
+			ioat_set_interrupt_coalesce(dma, 0);
+			sc->dma.ch[num2++].dma2 = dma;
+		} else
+			ioat_put_dmaengine(dma);
+	}
+	for (i = 0; i < numch; i++) {
 		ch = &sc->dma.ch[i];
 		mtx_init(&ch->mtx, "pmem_dma_ch", NULL, MTX_DEF);
 		SLIST_INIT(&ch->free_tr);
-		ch->dma = ioat_get_dmaengine(i, M_WAITOK);
-		if (ch->dma == NULL) {
-			device_printf(dev, "getting DMA engine failed\n");
-			continue;
-		}
-		if (n > 8)
-			sc->dma.ch[(i + n / 2) % n].dma2 = ch->dma;
-		else
-			sc->dma.ch[(i + 1) % n].dma2 = ch->dma;
-		maxio = ioat_get_max_io_size(ch->dma);
+		if (i >= num1)
+			ch->dma1 = sc->dma.ch[i % num1].dma1;
+		if (num2 > 0 && i >= num2)
+			ch->dma2 = sc->dma.ch[i % num2].dma2;
+		else if (num2 == 0)
+			ch->dma2 = sc->dma.ch[(i + 1) % num1].dma1;
+		maxio = MIN(ioat_get_max_io_size(ch->dma1),
+		    ioat_get_max_io_size(ch->dma2));
 		err = bus_dma_tag_create(NULL,
 		    1, 0, BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, NULL, NULL,
 		    MAXPHYS, (MAXPHYS / PAGE_SIZE) + 1, MIN(MAXPHYS, maxio),
 		    0, busdma_lock_mutex, &ch->mtx, &ch->dmat);
 		if (err != 0) {
 			device_printf(dev, "tag create failed %d\n", err);
-			ioat_put_dmaengine(ch->dma);
+			ioat_put_dmaengine(ch->dma1);
 			continue;
 		}
-		ioat_set_interrupt_coalesce(ch->dma, 0);
 		ch->trs = mallocarray(PMEM_NUM_TR, sizeof(struct pmem_dma_tr),
 		    M_DEVBUF, M_ZERO | M_WAITOK);
 		for (t = 0; t < PMEM_NUM_TR; t++) {
@@ -218,7 +279,18 @@ pmem_dma_init(device_t dev)
 			SLIST_INSERT_HEAD(&ch->free_tr, tr, list);
 		}
 	}
-	sc->dma.numch = n;
+
+	/*
+	 * If we are writing to both NVDIMM and NTB, and they are in the
+	 * same domain, but we have DMAs from two domains for them, give
+	 * the NTB the closest DMA, since it is slower then NVDIMM, and
+	 * benefit there would benefit the whole transfer time.
+	 */
+	sc->dma.w2swap = (sc->domain == sc->rdomain && d2 >= 0 && d1 != d2);
+
+	sc->dma.numch = numch;
+	sc->dma.num1 = num1;
+	sc->dma.num2 = num2;
 }
 
 static void
@@ -236,10 +308,13 @@ pmem_dma_shutdown(device_t dev)
 			bus_dmamap_destroy(ch->dmat, tr->dmam);
 		}
 		free(ch->trs, M_DEVBUF);
-		ioat_put_dmaengine(ch->dma);
 		bus_dma_tag_destroy(ch->dmat);
 		mtx_destroy(&ch->mtx);
 	}
+	for (i = 0; i < sc->dma.num1; i++)
+		ioat_put_dmaengine(sc->dma.ch[i].dma1);
+	for (i = 0; i < sc->dma.num2; i++)
+		ioat_put_dmaengine(sc->dma.ch[i].dma2);
 	free(sc->dma.ch, M_DEVBUF);
 	sc->dma.ch = NULL;
 	sc->dma.numch = 0;
@@ -344,6 +419,7 @@ pmem_dma_map(void *arg, bus_dma_segment_t *segs, int nseg, int error)
 	struct bio *bp = tr->bp;
 	bus_dmaengine_callback_t cb;
 	vm_paddr_t rpaddr;
+	bus_dmaengine_t dma1, dma2;
 	int err, i, flags;
 	off_t off;
 
@@ -357,11 +433,20 @@ fallback2:
 		return;
 	}
 
+	rpaddr = (bp->bio_cmd == BIO_WRITE) ? sc->rpaddr : 0;
+	if (rpaddr != 0 && sc->dma.w2swap) {
+		dma1 = ch->dma2;
+		dma2 = ch->dma1;
+	} else {
+		dma1 = ch->dma1;
+		dma2 = ch->dma2;
+	}
+
 	/* First read/write to local NVDIMM. */
 	off = bp->bio_offset;
 	cb = NULL;
 	flags = DMA_NO_WAIT;
-	err = ioat_acquire_reserve(ch->dma, nseg, M_NOWAIT);
+	err = ioat_acquire_reserve(dma1, nseg, M_NOWAIT);
 	if (err != 0)
 		goto fallback;
 	for (i = 0; i < nseg; i++) {
@@ -370,31 +455,30 @@ fallback2:
 			flags |= DMA_INT_EN;
 		}
 		if (bp->bio_cmd == BIO_READ) {
-			if (ioat_copy(ch->dma, segs[i].ds_addr, sc->paddr + off,
+			if (ioat_copy(dma1, segs[i].ds_addr, sc->paddr + off,
 			    segs[i].ds_len, cb, tr, flags) == NULL) {
-				ioat_release(ch->dma);
+				ioat_release(dma1);
 				goto fallback;
 			}
 		} else {
-			if (ioat_copy(ch->dma, sc->paddr + off, segs[i].ds_addr,
+			if (ioat_copy(dma1, sc->paddr + off, segs[i].ds_addr,
 			    segs[i].ds_len, cb, tr, flags) == NULL) {
-				ioat_release(ch->dma);
+				ioat_release(dma1);
 				goto fallback;
 			}
 		}
 		off += segs[i].ds_len;
 	}
-	ioat_release(ch->dma);
+	ioat_release(dma1);
 	tr->inprog = 1;
 
 	/* Optional second write to remote NVDIMM. */
-	rpaddr = (bp->bio_cmd == BIO_WRITE) ? sc->rpaddr : 0;
 	if (rpaddr == 0)
 		return;
 	off = bp->bio_offset;
 	cb = NULL;
 	flags = DMA_NO_WAIT;
-	err = ioat_acquire_reserve(ch->dma2, nseg, M_NOWAIT);
+	err = ioat_acquire_reserve(dma2, nseg, M_NOWAIT);
 	if (err != 0)
 		goto fallback2;
 	for (i = 0; i < nseg; i++) {
@@ -402,14 +486,14 @@ fallback2:
 			cb = pmem_dma_cb;
 			flags |= DMA_INT_EN;
 		}
-		if (ioat_copy(ch->dma2, rpaddr + off, segs[i].ds_addr,
+		if (ioat_copy(dma2, rpaddr + off, segs[i].ds_addr,
 		    segs[i].ds_len, cb, tr, flags) == NULL) {
-			ioat_release(ch->dma2);
+			ioat_release(dma2);
 			goto fallback2;
 		}
 		off += segs[i].ds_len;
 	}
-	ioat_release(ch->dma2);
+	ioat_release(dma2);
 	tr->inprog = 2;
 }
 
@@ -547,9 +631,18 @@ pmem_attach(device_t dev)
 		return (ENXIO);
 	sc->paddr = rman_get_start(sc->res);
 	sc->size = rman_get_size(sc->res);
-	sc->vaddr = pmap_mapdev_attr(sc->paddr, sc->size, VM_MEMATTR_DEFAULT);
+	sc->vaddr = pmap_mapdev_attr(sc->paddr, sc->size, VM_MEMATTR_WRITE_THROUGH);
 	sc->rpaddr = 0;
 	sc->rvaddr = NULL;
+
+	/* Get NUMA domain of the NVDIMM. */
+	if (bus_get_domain(dev, &sc->domain) != 0)
+#if (__FreeBSD_version >= 1200000)
+		sc->domain = _vm_phys_domain(sc->paddr);
+#else
+		sc->domain = 0;
+#endif
+	sc->rdomain = sc->domain;	/* Will be overwritten by ntb_pmem. */
 
 	sc->label = (struct pmem_label *)(sc->vaddr + sc->size - PAGE_SIZE);
 	sc->rlabel = NULL;
@@ -1632,6 +1725,9 @@ ntb_pmem_attach(device_t dev)
 		device_printf(dev, "ntb_mw_set_trans() error %d\n", error);
 		return (ENXIO);
 	}
+
+	/* Get NUMA domain of the NTB for pmem driver. */
+	bus_get_domain(dev, &scd->rdomain);
 
 	/* Bring up the link. */
 	error = ntb_set_ctx(dev, dev, &ntb_pmem_ops);
