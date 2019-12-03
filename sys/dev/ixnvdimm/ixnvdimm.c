@@ -146,12 +146,8 @@ struct ntb_pmem {
 	vm_paddr_t		 ntb_size;	/* MW size */
 	caddr_t			 ntb_caddr;	/* MW KVA address */
 	vm_paddr_t		 ntb_xalign;	/* XLAT address allignment */
-	bus_addr_t		 ntb_xaddr_limit; /* XLAT address limit */
 	vm_paddr_t		 ntb_xpaddr;	/* XLAT physical address */
 	vm_paddr_t		 ntb_xsize;	/* XLAT size */
-	bus_dma_tag_t		 ntb_xdma_tag;	/* XLAT DMA tag */
-	bus_dmamap_t		 ntb_xdma_map;	/* XLAT DMA map */
-	bus_addr_t		 ntb_xdma_addr;	/* XLAT DMA addr */
 	struct root_hold_token	*ntb_rootmount; /* Root mount delay token. */
 };
 
@@ -1669,8 +1665,7 @@ ntb_pmem_attach(device_t dev)
 {
 	struct ntb_pmem *sc = device_get_softc(dev);
 	struct pmem_disk *scd;
-	bus_dma_segment_t seg;
-	int error, nseg;
+	int error;
 
 	/* Find pmemX device with equal unit number. */
 	sc->nvd_dev = devclass_get_device(pmem_devclass, device_get_unit(dev));
@@ -1691,7 +1686,7 @@ ntb_pmem_attach(device_t dev)
 		return (ENXIO);
 	}
 	error = ntb_mw_get_range(dev, 0, &sc->ntb_paddr, &sc->ntb_caddr,
-	    &sc->ntb_size, &sc->ntb_xalign, NULL, &sc->ntb_xaddr_limit);
+	    &sc->ntb_size, &sc->ntb_xalign, NULL, NULL);
 	if (error != 0) {
 		device_printf(dev, "ntb_mw_get_range() error %d\n", error);
 		return (ENXIO);
@@ -1725,34 +1720,8 @@ ntb_pmem_attach(device_t dev)
 		device_printf(dev, "ntb_mw_set_wc() error %d\n", error);
 
 	/* Setup address translation. */
-	if (bus_dma_tag_create(bus_get_dma_tag(dev), sc->ntb_xalign, 0,
-	    sc->ntb_xaddr_limit, BUS_SPACE_MAXADDR,
-	    NULL, NULL, sc->ntb_xsize, 1, sc->ntb_xsize,
-	    0, NULL, NULL, &sc->ntb_xdma_tag)) {
-		device_printf(dev, "Unable to create MW tag of size %zu\n",
-		    sc->ntb_xsize);
-		return (ENOMEM);
-	}
-	if (bus_dmamap_create(sc->ntb_xdma_tag, 0, &sc->ntb_xdma_map)) {
-		bus_dma_tag_destroy(sc->ntb_xdma_tag);
-		device_printf(dev, "Unable to create map of size %zu\n",
-		    sc->ntb_xsize);
-		return (ENOMEM);
-	}
-	nseg = -1;
-	if (_bus_dmamap_load_phys(sc->ntb_xdma_tag, sc->ntb_xdma_map,
-	    sc->ntb_xpaddr, sc->ntb_xsize, 0, &seg, &nseg)) {
-		bus_dmamap_destroy(sc->ntb_xdma_tag, sc->ntb_xdma_map);
-		bus_dma_tag_destroy(sc->ntb_xdma_tag);
-		device_printf(dev, "Unable to load map of size %zu\n",
-		    sc->ntb_xsize);
-		return (ENOMEM);
-	}
-	sc->ntb_xdma_addr = seg.ds_addr;
-	error = ntb_mw_set_trans(dev, 0, sc->ntb_xdma_addr, sc->ntb_xsize);
+	error = ntb_mw_set_trans(dev, 0, sc->ntb_xpaddr, sc->ntb_xsize);
 	if (error != 0) {
-		bus_dmamap_destroy(sc->ntb_xdma_tag, sc->ntb_xdma_map);
-		bus_dma_tag_destroy(sc->ntb_xdma_tag);
 		device_printf(dev, "ntb_mw_set_trans() error %d\n", error);
 		return (ENXIO);
 	}
@@ -1792,13 +1761,6 @@ ntb_pmem_detach(device_t dev)
 	error = ntb_mw_clear_trans(dev, 0);
 	if (error != 0)
 		device_printf(dev, "ntb_mw_clear_trans() error %d\n", error);
-	if (sc->ntb_xdma_map != NULL) {
-		bus_dmamap_unload(sc->ntb_xdma_tag, sc->ntb_xdma_map);
-		bus_dmamap_destroy(sc->ntb_xdma_tag, sc->ntb_xdma_map);
-	}
-	if (sc->ntb_xdma_tag != NULL) {
-		bus_dma_tag_destroy(sc->ntb_xdma_tag);
-	}
 	callout_drain(&sc->ntb_link_work);
 	return (0);
 }
