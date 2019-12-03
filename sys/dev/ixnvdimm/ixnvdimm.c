@@ -1705,15 +1705,6 @@ ntb_pmem_attach(device_t dev)
 	callout_init(&sc->ntb_link_work, 1);
 	callout_init(&sc->ntb_start, 1);
 
-	/* Delay boot if this PMEM ever saw NTB. */
-	if (scd->label->state >= STATE_IDLE) {
-		device_printf(dev, "PMEM saw NTB, delaying root mount.\n");
-		sc->ntb_rootmount = root_mount_hold("ntb_pmem");
-		callout_reset(&sc->ntb_start, ntb_pmem_start_timeout * hz,
-		    ntb_pmem_start, dev);
-	} else
-		sc->ntb_rootmount = NULL;
-
 	/* Allow write combining for the memory window. */
 	error = ntb_mw_set_wc(dev, 0, VM_MEMATTR_WRITE_COMBINING);
 	if (error != 0)
@@ -1728,6 +1719,15 @@ ntb_pmem_attach(device_t dev)
 
 	/* Get NUMA domain of the NTB for pmem driver. */
 	bus_get_domain(dev, &scd->rdomain);
+
+	/* Delay boot if this PMEM ever saw NTB. */
+	if (scd->label->state >= STATE_IDLE) {
+		device_printf(dev, "PMEM saw NTB, delaying root mount.\n");
+		sc->ntb_rootmount = root_mount_hold("ntb_pmem");
+		callout_reset(&sc->ntb_start, ntb_pmem_start_timeout * hz,
+		    ntb_pmem_start, dev);
+	} else
+		sc->ntb_rootmount = NULL;
 
 	/* Bring up the link. */
 	error = ntb_set_ctx(dev, dev, &ntb_pmem_ops);
