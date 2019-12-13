@@ -4380,6 +4380,10 @@ vdev_deadman(vdev_t *vd)
 				    "%lluns, delta %lluns, last io %lluns",
 				    fio->io_timestamp, (u_longlong_t)delta,
 				    vq->vq_io_complete_ts);
+				zfs_ereport_post(FM_EREPORT_ZFS_DEADMAN,
+				    spa, vd, fio, 0, 0);
+			}
+			if (delta > 5 * spa_deadman_synctime(spa)) {
 				fm_panic("I/O to pool '%s' appears to be "
 				    "hung on vdev guid %llu at '%s'.",
 				    spa_name(spa),

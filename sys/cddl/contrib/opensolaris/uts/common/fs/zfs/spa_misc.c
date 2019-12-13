@@ -298,18 +298,18 @@ boolean_t zfs_free_leak_on_eio = B_FALSE;
 /*
  * Expiration time in milliseconds. This value has two meanings. First it is
  * used to determine when the spa_deadman() logic should fire. By default the
- * spa_deadman() will fire if spa_sync() has not completed in 1000 seconds.
+ * spa_deadman() will fire if spa_sync() has not completed in 600 seconds.
  * Secondly, the value determines if an I/O is considered "hung". Any I/O that
  * has not completed in zfs_deadman_synctime_ms is considered "hung" resulting
  * in a system panic.
  */
-uint64_t zfs_deadman_synctime_ms = 1000000ULL;
+uint64_t zfs_deadman_synctime_ms = 600000ULL;
 
 /*
  * Check time in milliseconds. This defines the frequency at which we check
  * for hung I/O.
  */
-uint64_t zfs_deadman_checktime_ms = 5000ULL;
+uint64_t zfs_deadman_checktime_ms = 60000ULL;
 
 /*
  * Default value of -1 for zfs_deadman_enabled is resolved in
