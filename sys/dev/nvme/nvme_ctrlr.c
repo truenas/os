@@ -1085,7 +1085,7 @@ nvme_ctrlr_setup_interrupts(struct nvme_controller *ctrlr)
 	int		num_vectors_available;
 
 	dev = ctrlr->dev;
-	min_cpus_per_ioq = 1;
+	min_cpus_per_ioq = (mp_ncpus >= 32) ? 2 : 1;
 	TUNABLE_INT_FETCH("hw.nvme.min_cpus_per_ioq", &min_cpus_per_ioq);
 
 	if (min_cpus_per_ioq < 1) {
