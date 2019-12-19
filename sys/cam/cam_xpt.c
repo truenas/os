@@ -99,13 +99,6 @@ MALLOC_DEFINE(M_CAMDEV, "CAM DEV", "CAM devices");
 MALLOC_DEFINE(M_CAMCCB, "CAM CCB", "CAM CCBs");
 MALLOC_DEFINE(M_CAMPATH, "CAM path", "CAM paths");
 
-/* Object for defering XPT actions to a taskqueue */
-struct xpt_task {
-	struct task	task;
-	void		*data1;
-	uintptr_t	data2;
-};
-
 struct xpt_softc {
 	uint32_t		xpt_generation;
 
@@ -129,13 +122,12 @@ struct xpt_softc {
 	TAILQ_HEAD(,cam_eb)	xpt_busses;
 	u_int			bus_generation;
 
-	struct intr_config_hook	*xpt_config_hook;
-
 	int			boot_delay;
 	struct callout 		boot_callout;
+	struct task		boot_task;
+	struct root_hold_token	xpt_rootmount;
 
 	struct mtx		xpt_topo_lock;
-	struct mtx		xpt_lock;
 	struct taskqueue	*xpt_taskq;
 };
 
@@ -222,7 +214,7 @@ static struct cdevsw xpt_cdevsw = {
 
 /* Storage for debugging datastructures */
 struct cam_path *cam_dpath;
-u_int32_t cam_dflags = CAM_DEBUG_FLAGS;
+u_int32_t __read_mostly cam_dflags = CAM_DEBUG_FLAGS;
 SYSCTL_UINT(_kern_cam, OID_AUTO, dflags, CTLFLAG_RWTUN,
 	&cam_dflags, 0, "Enabled debug flags");
 u_int32_t cam_debug_delay = CAM_DEBUG_DELAY;
@@ -273,6 +265,7 @@ static struct cam_et*
 static struct cam_ed*
 		 xpt_find_device(struct cam_et *target, lun_id_t lun_id);
 static void	 xpt_config(void *arg);
+static void	 xpt_hold_boot_locked(void);
 static int	 xpt_schedule_dev(struct camq *queue, cam_pinfo *dev_pinfo,
 				 u_int32_t new_priority);
 static xpt_devicefunc_t xptpassannouncefunc;
@@ -881,7 +874,7 @@ xpt_rescan(union ccb *ccb)
 		}
 	}
 	TAILQ_INSERT_TAIL(&xsoftc.ccb_scanq, &ccb->ccb_h, sim_links.tqe);
-	xsoftc.buses_to_config++;
+	xpt_hold_boot_locked();
 	wakeup(&xsoftc.ccb_scanq);
 	xpt_unlock_buses();
 }
@@ -901,7 +894,6 @@ xpt_init(void *dummy)
 	STAILQ_INIT(&xsoftc.highpowerq);
 	xsoftc.num_highpower = CAM_MAX_HIGHPOWER;
 
-	mtx_init(&xsoftc.xpt_lock, "XPT lock", NULL, MTX_DEF);
 	mtx_init(&xsoftc.xpt_highpower_lock, "XPT highpower lock", NULL, MTX_DEF);
 	xsoftc.xpt_taskq = taskqueue_create("CAM XPT task", M_WAITOK,
 	    taskqueue_thread_enqueue, /*context*/&xsoftc.xpt_taskq);
@@ -913,6 +905,7 @@ xpt_init(void *dummy)
 	 */
 	xsoftc.boot_delay = CAM_BOOT_DELAY;
 #endif
+
 	/*
 	 * The xpt layer is, itself, the equivalent of a SIM.
 	 * Allow 16 ccbs in the ccb pool for it.  This should
@@ -925,21 +918,18 @@ xpt_init(void *dummy)
 				"xpt",
 				/*softc*/NULL,
 				/*unit*/0,
-				/*mtx*/&xsoftc.xpt_lock,
+				/*mtx*/NULL,
 				/*max_dev_transactions*/0,
 				/*max_tagged_dev_transactions*/0,
 				devq);
 	if (xpt_sim == NULL)
 		return (ENOMEM);
 
-	mtx_lock(&xsoftc.xpt_lock);
 	if ((status = xpt_bus_register(xpt_sim, NULL, 0)) != CAM_SUCCESS) {
-		mtx_unlock(&xsoftc.xpt_lock);
 		printf("xpt_init: xpt_bus_register failed with status %#x,"
 		       " failing attach\n", status);
 		return (EINVAL);
 	}
-	mtx_unlock(&xsoftc.xpt_lock);
 
 	/*
 	 * Looking at the XPT from the SIM layer, the XPT is
@@ -979,23 +969,11 @@ xpt_init(void *dummy)
 		       "- failing attach\n");
 		return (ENOMEM);
 	}
+
 	/*
 	 * Register a callback for when interrupts are enabled.
 	 */
-	xsoftc.xpt_config_hook =
-	    (struct intr_config_hook *)malloc(sizeof(struct intr_config_hook),
-					      M_CAMXPT, M_NOWAIT | M_ZERO);
-	if (xsoftc.xpt_config_hook == NULL) {
-		printf("xpt_init: Cannot malloc config hook "
-		       "- failing attach\n");
-		return (ENOMEM);
-	}
-	xsoftc.xpt_config_hook->ich_func = xpt_config;
-	if (config_intrhook_establish(xsoftc.xpt_config_hook) != 0) {
-		free (xsoftc.xpt_config_hook, M_CAMXPT);
-		printf("xpt_init: config_intrhook_establish failed "
-		       "- failing attach\n");
-	}
+	config_intrhook_oneshot(xpt_config, NULL);
 
 	return (0);
 }
@@ -5157,6 +5135,10 @@ xpt_stop_tags(struct cam_path *path)
 	xpt_action((union ccb *)&crs);
 }
 
+/*
+ * Assume all possible buses are detected by this time, so allow boot
+ * as soon as they all are scanned.
+ */
 static void
 xpt_boot_delay(void *arg)
 {
@@ -5164,12 +5146,26 @@ xpt_boot_delay(void *arg)
 	xpt_release_boot();
 }
 
+/*
+ * Now that all config hooks have completed, start boot_delay timer,
+ * waiting for possibly still undetected buses (USB) to appear.
+ */
+static void
+xpt_ch_done(void *arg)
+{
+
+	callout_init(&xsoftc.boot_callout, 1);
+	callout_reset_sbt(&xsoftc.boot_callout, SBT_1MS * xsoftc.boot_delay, 0,
+	    xpt_boot_delay, NULL, 0);
+}
+SYSINIT(xpt_hw_delay, SI_SUB_INT_CONFIG_HOOKS, SI_ORDER_ANY, xpt_ch_done, NULL);
+
+/*
+ * Now that interrupts are enabled, go find our devices
+ */
 static void
 xpt_config(void *arg)
 {
-	/*
-	 * Now that interrupts are enabled, go find our devices
-	 */
 	if (taskqueue_start_threads(&xsoftc.xpt_taskq, 1, PRIBIO, "CAM taskq"))
 		printf("xpt_config: failed to create taskqueue thread.\n");
 
@@ -5188,9 +5184,7 @@ xpt_config(void *arg)
 
 	periphdriver_init(1);
 	xpt_hold_boot();
-	callout_init(&xsoftc.boot_callout, 1);
-	callout_reset_sbt(&xsoftc.boot_callout, SBT_1MS * xsoftc.boot_delay, 0,
-	    xpt_boot_delay, NULL, 0);
+
 	/* Fire up rescan thread. */
 	if (kproc_kthread_add(xpt_scanner_thread, NULL, &cam_proc, NULL, 0, 0,
 	    "cam", "scanner")) {
@@ -5199,31 +5193,38 @@ xpt_config(void *arg)
 }
 
 void
+xpt_hold_boot_locked(void)
+{
+
+	if (xsoftc.buses_to_config++ == 0)
+		root_mount_hold_token("CAM", &xsoftc.xpt_rootmount);
+}
+
+void
 xpt_hold_boot(void)
 {
+
 	xpt_lock_buses();
-	xsoftc.buses_to_config++;
+	xpt_hold_boot_locked();
 	xpt_unlock_buses();
 }
 
 void
 xpt_release_boot(void)
 {
-	xpt_lock_buses();
-	xsoftc.buses_to_config--;
-	if (xsoftc.buses_to_config == 0 && xsoftc.buses_config_done == 0) {
-		struct	xpt_task *task;
 
-		xsoftc.buses_config_done = 1;
-		xpt_unlock_buses();
-		/* Call manually because we don't have any buses */
-		task = malloc(sizeof(struct xpt_task), M_CAMXPT, M_NOWAIT);
-		if (task != NULL) {
-			TASK_INIT(&task->task, 0, xpt_finishconfig_task, task);
-			taskqueue_enqueue(taskqueue_thread, &task->task);
-		}
-	} else
-		xpt_unlock_buses();
+	xpt_lock_buses();
+	if (--xsoftc.buses_to_config == 0) {
+		if (xsoftc.buses_config_done == 0) {
+			xsoftc.buses_config_done = 1;
+			xsoftc.buses_to_config++;
+			TASK_INIT(&xsoftc.boot_task, 0, xpt_finishconfig_task,
+			    NULL);
+			taskqueue_enqueue(taskqueue_thread, &xsoftc.boot_task);
+		} else
+			root_mount_rel(&xsoftc.xpt_rootmount);
+	}
+	xpt_unlock_buses();
 }
 
 /*
@@ -5261,12 +5262,7 @@ xpt_finishconfig_task(void *context, int pending)
 	if (!bootverbose)
 		xpt_for_all_devices(xptpassannouncefunc, NULL);
 
-	/* Release our hook so that the boot can continue. */
-	config_intrhook_disestablish(xsoftc.xpt_config_hook);
-	free(xsoftc.xpt_config_hook, M_CAMXPT);
-	xsoftc.xpt_config_hook = NULL;
-
-	free(context, M_CAMXPT);
+	xpt_release_boot();
 }
 
 cam_status

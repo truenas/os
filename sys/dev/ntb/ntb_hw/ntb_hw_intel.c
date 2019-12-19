@@ -218,6 +218,9 @@ struct ntb_softc {
 	struct ntb_pci_bar_info	*peer_lapic_bar;
 	struct callout		peer_msix_work;
 
+	bus_dma_tag_t		bar0_dma_tag;
+	bus_dmamap_t		bar0_dma_map;
+
 	struct callout		heartbeat_timer;
 	struct callout		lr_timer;
 
@@ -781,37 +784,65 @@ bar_get_xlat_params(struct ntb_softc *ntb, enum ntb_bar bar, uint32_t *base,
 static int
 intel_ntb_map_pci_bars(struct ntb_softc *ntb)
 {
+	struct ntb_pci_bar_info *bar;
 	int rc;
 
-	ntb->bar_info[NTB_CONFIG_BAR].pci_resource_id = PCIR_BAR(0);
-	rc = map_mmr_bar(ntb, &ntb->bar_info[NTB_CONFIG_BAR]);
+	bar = &ntb->bar_info[NTB_CONFIG_BAR];
+	bar->pci_resource_id = PCIR_BAR(0);
+	rc = map_mmr_bar(ntb, bar);
 	if (rc != 0)
 		goto out;
 
-	ntb->bar_info[NTB_B2B_BAR_1].pci_resource_id = PCIR_BAR(2);
-	rc = map_memory_window_bar(ntb, &ntb->bar_info[NTB_B2B_BAR_1]);
-	if (rc != 0)
-		goto out;
-	ntb->bar_info[NTB_B2B_BAR_1].psz_off = XEON_PBAR23SZ_OFFSET;
-	ntb->bar_info[NTB_B2B_BAR_1].ssz_off = XEON_SBAR23SZ_OFFSET;
-	ntb->bar_info[NTB_B2B_BAR_1].pbarxlat_off = XEON_PBAR2XLAT_OFFSET;
+	/*
+	 * At least on Xeon v4 NTB device leaks to host some remote side
+	 * BAR0 writes supposed to update scratchpad registers.  I am not
+	 * sure why it happens, but it may be related to the fact that
+	 * on a link side BAR0 is 32KB, while on a host side it is 64KB.
+	 * Without this hack DMAR blocks those accesses as not allowed.
+	 */
+	if (bus_dma_tag_create(bus_get_dma_tag(ntb->device), 1, 0,
+	    BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, NULL, NULL,
+	    bar->size, 1, bar->size, 0, NULL, NULL, &ntb->bar0_dma_tag)) {
+		device_printf(ntb->device, "Unable to create BAR0 tag\n");
+		return (ENOMEM);
+	}
+	if (bus_dmamap_create(ntb->bar0_dma_tag, 0, &ntb->bar0_dma_map)) {
+		device_printf(ntb->device, "Unable to create BAR0 map\n");
+		return (ENOMEM);
+	}
+	if (bus_dma_dmar_load_ident(ntb->bar0_dma_tag, ntb->bar0_dma_map,
+	    bar->pbase, bar->size, 0)) {
+		device_printf(ntb->device, "Unable to load BAR0 map\n");
+		return (ENOMEM);
+	}
 
-	ntb->bar_info[NTB_B2B_BAR_2].pci_resource_id = PCIR_BAR(4);
-	rc = map_memory_window_bar(ntb, &ntb->bar_info[NTB_B2B_BAR_2]);
+	bar = &ntb->bar_info[NTB_B2B_BAR_1];
+	bar->pci_resource_id = PCIR_BAR(2);
+	rc = map_memory_window_bar(ntb, bar);
 	if (rc != 0)
 		goto out;
-	ntb->bar_info[NTB_B2B_BAR_2].psz_off = XEON_PBAR4SZ_OFFSET;
-	ntb->bar_info[NTB_B2B_BAR_2].ssz_off = XEON_SBAR4SZ_OFFSET;
-	ntb->bar_info[NTB_B2B_BAR_2].pbarxlat_off = XEON_PBAR4XLAT_OFFSET;
+	bar->psz_off = XEON_PBAR23SZ_OFFSET;
+	bar->ssz_off = XEON_SBAR23SZ_OFFSET;
+	bar->pbarxlat_off = XEON_PBAR2XLAT_OFFSET;
+
+	bar = &ntb->bar_info[NTB_B2B_BAR_2];
+	bar->pci_resource_id = PCIR_BAR(4);
+	rc = map_memory_window_bar(ntb, bar);
+	if (rc != 0)
+		goto out;
+	bar->psz_off = XEON_PBAR4SZ_OFFSET;
+	bar->ssz_off = XEON_SBAR4SZ_OFFSET;
+	bar->pbarxlat_off = XEON_PBAR4XLAT_OFFSET;
 
 	if (!HAS_FEATURE(ntb, NTB_SPLIT_BAR))
 		goto out;
 
-	ntb->bar_info[NTB_B2B_BAR_3].pci_resource_id = PCIR_BAR(5);
-	rc = map_memory_window_bar(ntb, &ntb->bar_info[NTB_B2B_BAR_3]);
-	ntb->bar_info[NTB_B2B_BAR_3].psz_off = XEON_PBAR5SZ_OFFSET;
-	ntb->bar_info[NTB_B2B_BAR_3].ssz_off = XEON_SBAR5SZ_OFFSET;
-	ntb->bar_info[NTB_B2B_BAR_3].pbarxlat_off = XEON_PBAR5XLAT_OFFSET;
+	bar = &ntb->bar_info[NTB_B2B_BAR_3];
+	bar->pci_resource_id = PCIR_BAR(5);
+	rc = map_memory_window_bar(ntb, bar);
+	bar->psz_off = XEON_PBAR5SZ_OFFSET;
+	bar->ssz_off = XEON_SBAR5SZ_OFFSET;
+	bar->pbarxlat_off = XEON_PBAR5XLAT_OFFSET;
 
 out:
 	if (rc != 0)
@@ -934,15 +965,20 @@ map_memory_window_bar(struct ntb_softc *ntb, struct ntb_pci_bar_info *bar)
 static void
 intel_ntb_unmap_pci_bar(struct ntb_softc *ntb)
 {
-	struct ntb_pci_bar_info *current_bar;
+	struct ntb_pci_bar_info *bar;
 	int i;
 
+	if (ntb->bar0_dma_map != NULL) {
+		bus_dmamap_unload(ntb->bar0_dma_tag, ntb->bar0_dma_map);
+		bus_dmamap_destroy(ntb->bar0_dma_tag, ntb->bar0_dma_map);
+	}
+	if (ntb->bar0_dma_tag != NULL)
+		bus_dma_tag_destroy(ntb->bar0_dma_tag);
 	for (i = 0; i < NTB_MAX_BARS; i++) {
-		current_bar = &ntb->bar_info[i];
-		if (current_bar->pci_resource != NULL)
+		bar = &ntb->bar_info[i];
+		if (bar->pci_resource != NULL)
 			bus_release_resource(ntb->device, SYS_RES_MEMORY,
-			    current_bar->pci_resource_id,
-			    current_bar->pci_resource);
+			    bar->pci_resource_id, bar->pci_resource);
 	}
 }
 
@@ -2408,6 +2444,14 @@ intel_ntb_sysctl_init(struct ntb_softc *ntb)
 	if (ntb->conn_type != NTB_CONN_B2B)
 		return;
 
+	SYSCTL_ADD_PROC(ctx, regpar, OID_AUTO, "outgoing_xlat01l",
+	    CTLFLAG_RD | CTLTYPE_OPAQUE, ntb,
+	    NTB_REG_32 | XEON_B2B_XLAT_OFFSETL,
+	    sysctl_handle_register, "IU", "Outgoing XLAT0L register");
+	SYSCTL_ADD_PROC(ctx, regpar, OID_AUTO, "outgoing_xlat01u",
+	    CTLFLAG_RD | CTLTYPE_OPAQUE, ntb,
+	    NTB_REG_32 | XEON_B2B_XLAT_OFFSETU,
+	    sysctl_handle_register, "IU", "Outgoing XLAT0U register");
 	SYSCTL_ADD_PROC(ctx, regpar, OID_AUTO, "outgoing_xlat23",
 	    CTLFLAG_RD | CTLTYPE_OPAQUE, ntb,
 	    NTB_REG_64 | ntb->bar_info[NTB_B2B_BAR_1].pbarxlat_off,

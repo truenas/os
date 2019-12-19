@@ -2385,7 +2385,7 @@ vm_map_pmap_enter(vm_map_t map, vm_offset_t addr, vm_prot_t prot,
 
 	psize = atop(size);
 	if (psize + pindex > object->size) {
-		if (object->size < pindex) {
+		if (pindex >= object->size) {
 			VM_OBJECT_RUNLOCK(object);
 			return;
 		}
@@ -4525,7 +4525,7 @@ vm_map_lookup(vm_map_t *var_map,		/* IN/OUT */
 	vm_map_entry_t entry;
 	vm_map_t map = *var_map;
 	vm_prot_t prot;
-	vm_prot_t fault_type = fault_typea;
+	vm_prot_t fault_type;
 	vm_object_t eobject;
 	vm_size_t size;
 	struct ucred *cred;
@@ -4569,7 +4569,7 @@ RetryLookupLocked:
 		    vm_map_growstack(map, vaddr, entry) == KERN_SUCCESS)
 			goto RetryLookupLocked;
 	}
-	fault_type &= VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+	fault_type = fault_typea & VM_PROT_ALL;
 	if ((fault_type & prot) != fault_type || prot == VM_PROT_NONE) {
 		vm_map_unlock_read(map);
 		return (KERN_PROTECTION_FAILURE);
