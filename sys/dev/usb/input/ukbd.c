@@ -80,7 +80,6 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/ioccom.h>
 #include <sys/filio.h>
-#include <sys/tty.h>
 #include <sys/kbio.h>
 
 #include <dev/kbd/kbdreg.h>
@@ -1370,7 +1369,7 @@ ukbd_attach(device_t dev)
 	sc->sc_flags |= UKBD_FLAG_ATTACHED;
 
 	if (bootverbose) {
-		genkbd_diag(kbd, bootverbose);
+		kbdd_diag(kbd, bootverbose);
 	}
 
 #ifdef USB_DEBUG
@@ -2283,9 +2282,7 @@ static keyboard_switch_t ukbdsw = {
 	.clear_state = &ukbd_clear_state,
 	.get_state = &ukbd_get_state,
 	.set_state = &ukbd_set_state,
-	.get_fkeystr = &genkbd_get_fkeystr,
 	.poll = &ukbd_poll,
-	.diag = &genkbd_diag,
 };
 
 KEYBOARD_DRIVER(ukbd, ukbdsw, ukbd_configure);
