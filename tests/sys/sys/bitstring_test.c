@@ -246,6 +246,17 @@ BITSTRING_TC_DEFINE(bit_ffs_at)
 			    nbits, memloc, i, found_set_bit);
 		}
 	}
+
+	/* Pass a start value beyond the size of the bit string */
+	bit_ffs_at(bitstr, nbits, nbits, &found_set_bit);
+	ATF_REQUIRE_MSG(found_set_bit == -1,
+			"bit_ffs_at_%d_%s: Failed with high start value of %d, Result %d",
+			nbits, memloc, nbits, found_set_bit);
+
+	bit_ffs_at(bitstr, nbits + 3, nbits, &found_set_bit);
+	ATF_REQUIRE_MSG(found_set_bit == -1,
+			"bit_ffs_at_%d_%s: Failed with high start value of %d, Result %d",
+			nbits, memloc, nbits + 3, found_set_bit);
 }
 
 BITSTRING_TC_DEFINE(bit_ffc_at)
@@ -297,6 +308,180 @@ BITSTRING_TC_DEFINE(bit_ffc_at)
 			    nbits, memloc, i, found_clear_bit);
 		}
 	}
+
+	/* Pass a start value beyond the size of the bit string */
+	bit_ffc_at(bitstr, nbits, nbits, &found_clear_bit);
+	ATF_REQUIRE_MSG(found_clear_bit == -1,
+			"bit_ffc_at_%d_%s: Failed with high start value, Result %d",
+			nbits, memloc, found_clear_bit);
+
+	bit_ffc_at(bitstr, nbits + 3, nbits, &found_clear_bit);
+	ATF_REQUIRE_MSG(found_clear_bit == -1,
+			"bit_ffc_at_%d_%s: Failed with high start value of %d, Result %d",
+			nbits, memloc, nbits + 3, found_clear_bit);
+}
+
+BITSTRING_TC_DEFINE(bit_ffc_area_no_match)
+/* bitstr_t *bitstr, int nbits, const char *memloc */
+{
+	int found_clear_bits;
+
+	memset(bitstr, 0xFF, bitstr_size(nbits));
+	bit_ffc_area(bitstr, nbits, 2, &found_clear_bits);
+	ATF_REQUIRE_EQ_MSG(-1, found_clear_bits,
+		"bit_ffc_area_%d_%s: Failed all set bits.", nbits, memloc);
+}
+
+BITSTRING_TC_DEFINE(bit_ffs_area_no_match)
+/* bitstr_t *bitstr, int nbits, const char *memloc */
+{
+	int found_clear_bits;
+
+	memset(bitstr, 0, bitstr_size(nbits));
+	bit_ffs_area(bitstr, nbits, 2, &found_clear_bits);
+	ATF_REQUIRE_EQ_MSG(-1, found_clear_bits,
+		"bit_ffs_area_%d_%s: Failed all clear bits.", nbits, memloc);
+}
+
+ATF_TC_WITHOUT_HEAD(bit_ffs_area);
+ATF_TC_BODY(bit_ffs_area, tc)
+{
+	const int nbits = 72;
+	bitstr_t bit_decl(bitstr, nbits) = {};
+	int location;
+
+	bit_set(bitstr, 5);
+	bit_set(bitstr, 6);
+
+	location = 0;
+	bit_ffs_area(bitstr, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffs_area: found location of size 3 when only 2 bits are set");
+
+	bit_set(bitstr, 7);
+
+	location = 0;
+	bit_ffs_area(bitstr, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(5, location,
+			"bit_ffs_area: failed to find location of size 3");
+
+	bit_set(bitstr, 8);
+
+	location = 0;
+	bit_ffs_area(bitstr, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(5, location,
+			"bit_ffs_area: failed to find location of size 3");
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 2, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(5, location,
+			"bit_ffs_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 6, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(6, location,
+			"bit_ffs_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 8, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffs_area_at: found invalid location");
+
+	bit_set(bitstr, 69);
+	bit_set(bitstr, 70);
+	bit_set(bitstr, 71);
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 8, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(69, location,
+			"bit_ffs_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 69, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(69, location,
+			"bit_ffs_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 70, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffs_area_at: found invalid location");
+
+	location = 0;
+	bit_ffs_area_at(bitstr, 72, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffs_area_at: found invalid location");
+}
+
+ATF_TC_WITHOUT_HEAD(bit_ffc_area);
+ATF_TC_BODY(bit_ffc_area, tc)
+{
+	const int nbits = 80;
+	bitstr_t bit_decl(bitstr, nbits) = {};
+	int location;
+
+	/* set all bits */
+	memset(bitstr, 0xFF, bitstr_size(nbits));
+
+	bit_clear(bitstr, 7);
+	bit_clear(bitstr, 8);
+
+	location = 0;
+	bit_ffc_area(bitstr, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffc_area: found location of size 3 when only 2 bits are set");
+
+	bit_clear(bitstr, 9);
+
+	location = 0;
+	bit_ffc_area(bitstr, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(7, location,
+			"bit_ffc_area: failed to find location of size 3");
+
+	bit_clear(bitstr, 10);
+
+	location = 0;
+	bit_ffc_area(bitstr, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(7, location,
+			"bit_ffc_area: failed to find location of size 3");
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 2, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(7, location,
+			"bit_ffc_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 8, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(8, location,
+			"bit_ffc_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 9, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffc_area_at: found invalid bit location");
+
+	bit_clear(bitstr, 77);
+	bit_clear(bitstr, 78);
+	bit_clear(bitstr, 79);
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 12, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(77, location,
+			"bit_ffc_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 77, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(77, location,
+			"bit_ffc_area_at: failed to find location of size 3");
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 78, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffc_area_at: found invalid location");
+
+	location = 0;
+	bit_ffc_area_at(bitstr, 85, nbits, 3, &location);
+	ATF_REQUIRE_EQ_MSG(-1, location,
+			"bit_ffc_area_at: found invalid location");
 }
 
 BITSTRING_TC_DEFINE(bit_nclear)
@@ -419,6 +604,8 @@ ATF_TP_ADD_TCS(tp)
 
 	ATF_TP_ADD_TC(tp, bitstr_in_struct);
 	ATF_TP_ADD_TC(tp, bitstr_size);
+	ATF_TP_ADD_TC(tp, bit_ffc_area);
+	ATF_TP_ADD_TC(tp, bit_ffs_area);
 	BITSTRING_TC_ADD(tp, bit_set);
 	BITSTRING_TC_ADD(tp, bit_clear);
 	BITSTRING_TC_ADD(tp, bit_ffs);
@@ -428,6 +615,8 @@ ATF_TP_ADD_TCS(tp)
 	BITSTRING_TC_ADD(tp, bit_nclear);
 	BITSTRING_TC_ADD(tp, bit_nset);
 	BITSTRING_TC_ADD(tp, bit_count);
+	BITSTRING_TC_ADD(tp, bit_ffs_area_no_match);
+	BITSTRING_TC_ADD(tp, bit_ffc_area_no_match);
 
 	return (atf_no_error());
 }

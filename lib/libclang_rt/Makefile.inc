@@ -8,13 +8,13 @@
     (!defined(CPUTYPE) || ${CPUTYPE:M*soft*} == "")
 CRTARCH?=	armhf
 .else
-CRTARCH?=	${MACHINE_CPUARCH:C/amd64/x86_64/}
+CRTARCH?=	${MACHINE_ARCH:C/amd64/x86_64/}
 .endif
-CRTSRC=		${SRCTOP}/contrib/compiler-rt
+CRTSRC=		${SRCTOP}/contrib/llvm-project/compiler-rt
 
 .PATH:		${CRTSRC}/lib
 
-CLANGDIR=	/usr/lib/clang/8.0.1
+CLANGDIR=	/usr/lib/clang/9.0.1
 LIBDIR=		${CLANGDIR}/lib/freebsd
 SHLIBDIR=	${LIBDIR}
 
@@ -40,5 +40,6 @@ CFLAGS+=	-fno-stack-protector
 CFLAGS+=	-funwind-tables
 CXXFLAGS+=	-fvisibility-inlines-hidden
 CXXFLAGS+=	-fvisibility=hidden
+CFLAGS+=	-I${CRTSRC}/include
 CFLAGS+=	-I${CRTSRC}/lib
 CXXSTD=		c++11

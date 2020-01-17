@@ -708,6 +708,7 @@ static int iflib_altq_if_transmit(if_t ifp, struct mbuf *m);
 #endif
 static int iflib_register(if_ctx_t);
 static void iflib_deregister(if_ctx_t);
+static void iflib_unregister_vlan_handlers(if_ctx_t ctx);
 static void iflib_init_locked(if_ctx_t ctx);
 static void iflib_add_device_sysctl_pre(if_ctx_t ctx);
 static void iflib_add_device_sysctl_post(if_ctx_t ctx);
@@ -1734,20 +1735,16 @@ iflib_txsd_destroy(if_ctx_t ctx, iflib_txq_t txq, int i)
 {
 	bus_dmamap_t map;
 
-	map = NULL;
-	if (txq->ift_sds.ifsd_map != NULL)
+	if (txq->ift_sds.ifsd_map != NULL) {
 		map = txq->ift_sds.ifsd_map[i];
-	if (map != NULL) {
 		bus_dmamap_sync(txq->ift_buf_tag, map, BUS_DMASYNC_POSTWRITE);
 		bus_dmamap_unload(txq->ift_buf_tag, map);
 		bus_dmamap_destroy(txq->ift_buf_tag, map);
 		txq->ift_sds.ifsd_map[i] = NULL;
 	}
 
-	map = NULL;
-	if (txq->ift_sds.ifsd_tso_map != NULL)
+	if (txq->ift_sds.ifsd_tso_map != NULL) {
 		map = txq->ift_sds.ifsd_tso_map[i];
-	if (map != NULL) {
 		bus_dmamap_sync(txq->ift_tso_buf_tag, map,
 		    BUS_DMASYNC_POSTWRITE);
 		bus_dmamap_unload(txq->ift_tso_buf_tag, map);
@@ -1763,6 +1760,14 @@ iflib_txq_destroy(iflib_txq_t txq)
 
 	for (int i = 0; i < txq->ift_size; i++)
 		iflib_txsd_destroy(ctx, txq, i);
+
+	if (txq->ift_br != NULL) {
+		ifmp_ring_free(txq->ift_br);
+		txq->ift_br = NULL;
+	}
+
+	mtx_destroy(&txq->ift_mtx);
+
 	if (txq->ift_sds.ifsd_map != NULL) {
 		free(txq->ift_sds.ifsd_map, M_IFLIB);
 		txq->ift_sds.ifsd_map = NULL;
@@ -1782,6 +1787,9 @@ iflib_txq_destroy(iflib_txq_t txq)
 	if (txq->ift_tso_buf_tag != NULL) {
 		bus_dma_tag_destroy(txq->ift_tso_buf_tag);
 		txq->ift_tso_buf_tag = NULL;
+	}
+	if (txq->ift_ifdi != NULL) {
+		free(txq->ift_ifdi, M_IFLIB);
 	}
 }
 
@@ -2146,9 +2154,6 @@ iflib_fl_bufs_free(iflib_fl_t fl)
 			bus_dmamap_unload(fl->ifl_buf_tag, sd_map);
 			if (*sd_cl != NULL)
 				uma_zfree(fl->ifl_zone, *sd_cl);
-			// XXX: Should this get moved out?
-			if (iflib_in_detach(fl->ifl_rxq->ifr_ctx))
-				bus_dmamap_destroy(fl->ifl_buf_tag, sd_map);
 			if (*sd_m != NULL) {
 				m_init(*sd_m, M_NOWAIT, MT_DATA, 0);
 				uma_zfree(zone_mbuf, *sd_m);
@@ -2236,14 +2241,14 @@ iflib_rx_sds_free(iflib_rxq_t rxq)
 			if (fl->ifl_buf_tag != NULL) {
 				if (fl->ifl_sds.ifsd_map != NULL) {
 					for (j = 0; j < fl->ifl_size; j++) {
-						if (fl->ifl_sds.ifsd_map[j] ==
-						    NULL)
-							continue;
 						bus_dmamap_sync(
 						    fl->ifl_buf_tag,
 						    fl->ifl_sds.ifsd_map[j],
 						    BUS_DMASYNC_POSTREAD);
 						bus_dmamap_unload(
+						    fl->ifl_buf_tag,
+						    fl->ifl_sds.ifsd_map[j]);
+						bus_dmamap_destroy(
 						    fl->ifl_buf_tag,
 						    fl->ifl_sds.ifsd_map[j]);
 					}
@@ -2262,6 +2267,8 @@ iflib_rx_sds_free(iflib_rxq_t rxq)
 		}
 		free(rxq->ifr_fl, M_IFLIB);
 		rxq->ifr_fl = NULL;
+		free(rxq->ifr_ifdi, M_IFLIB);
+		rxq->ifr_ifdi = NULL;
 		rxq->ifr_cq_cidx = 0;
 	}
 }
@@ -2294,8 +2301,11 @@ iflib_timer(void *arg)
 		     (sctx->isc_pause_frames == 0)))
 			goto hung;
 
-		if (ifmp_ring_is_stalled(txq->ift_br))
+		if (txq->ift_qstatus != IFLIB_QUEUE_IDLE &&
+		    ifmp_ring_is_stalled(txq->ift_br)) {
+			KASSERT(ctx->ifc_link_state == LINK_STATE_UP, ("queue can't be marked as hung if interface is down"));
 			txq->ift_qstatus = IFLIB_QUEUE_HUNG;
+		}
 		txq->ift_cleaned_prev = txq->ift_cleaned;
 	}
 #ifdef DEV_NETMAP
@@ -4951,6 +4961,9 @@ iflib_pseudo_deregister(if_ctx_t ctx)
 	struct taskqgroup *tqg;
 	iflib_fl_t fl;
 
+	/* Unregister VLAN event handlers early */
+	iflib_unregister_vlan_handlers(ctx);
+
 	ether_ifdetach(ifp);
 	/* XXX drain any dependent tasks */
 	tqg = qgroup_if_io_tqg;
@@ -5024,12 +5037,16 @@ iflib_device_deregister(if_ctx_t ctx)
 	ctx->ifc_flags |= IFC_IN_DETACH;
 	STATE_UNLOCK(ctx);
 
+	/* Unregister VLAN handlers before calling iflib_stop() */
+	iflib_unregister_vlan_handlers(ctx);
+
+	iflib_netmap_detach(ifp);
+	ether_ifdetach(ifp);
+
 	CTX_LOCK(ctx);
 	iflib_stop(ctx);
 	CTX_UNLOCK(ctx);
 
-	iflib_netmap_detach(ifp);
-	ether_ifdetach(ifp);
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
@@ -5316,13 +5333,8 @@ iflib_register(if_ctx_t ctx)
 }
 
 static void
-iflib_deregister(if_ctx_t ctx)
+iflib_unregister_vlan_handlers(if_ctx_t ctx)
 {
-	if_t ifp = ctx->ifc_ifp;
-
-	/* Remove all media */
-	ifmedia_removeall(&ctx->ifc_media);
-
 	/* Unregister VLAN events */
 	if (ctx->ifc_vlan_attach_event != NULL) {
 		EVENTHANDLER_DEREGISTER(vlan_config, ctx->ifc_vlan_attach_event);
@@ -5332,6 +5344,19 @@ iflib_deregister(if_ctx_t ctx)
 		EVENTHANDLER_DEREGISTER(vlan_unconfig, ctx->ifc_vlan_detach_event);
 		ctx->ifc_vlan_detach_event = NULL;
 	}
+
+}
+
+static void
+iflib_deregister(if_ctx_t ctx)
+{
+	if_t ifp = ctx->ifc_ifp;
+
+	/* Remove all media */
+	ifmedia_removeall(&ctx->ifc_media);
+
+	/* Ensure that VLAN event handlers are unregistered */
+	iflib_unregister_vlan_handlers(ctx);
 
 	/* Release kobject reference */
 	kobj_delete((kobj_t) ctx, NULL);
@@ -5583,9 +5608,9 @@ iflib_tx_structures_free(if_ctx_t ctx)
 	int i, j;
 
 	for (i = 0; i < NTXQSETS(ctx); i++, txq++) {
-		iflib_txq_destroy(txq);
 		for (j = 0; j < sctx->isc_ntxqs; j++)
 			iflib_dma_free(&txq->ift_ifdi[j]);
+		iflib_txq_destroy(txq);
 	}
 	free(ctx->ifc_txqs, M_IFLIB);
 	ctx->ifc_txqs = NULL;
@@ -5647,9 +5672,12 @@ static void
 iflib_rx_structures_free(if_ctx_t ctx)
 {
 	iflib_rxq_t rxq = ctx->ifc_rxqs;
-	int i;
+	if_shared_ctx_t sctx = ctx->ifc_sctx;
+	int i, j;
 
 	for (i = 0; i < ctx->ifc_softc_ctx.isc_nrxqsets; i++, rxq++) {
+		for (j = 0; j < sctx->isc_nrxqs; j++)
+			iflib_dma_free(&rxq->ifr_ifdi[j]);
 		iflib_rx_sds_free(rxq);
 #if defined(INET6) || defined(INET)
 		if (if_getcapabilities(ctx->ifc_ifp) & IFCAP_LRO)

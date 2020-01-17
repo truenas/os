@@ -2,7 +2,7 @@
 
 CRTARCH=	${MACHINE_CPUARCH:C/amd64/x86_64/}
 
-CRTSRC=		${SRCTOP}/contrib/compiler-rt/lib/builtins
+CRTSRC=		${SRCTOP}/contrib/llvm-project/compiler-rt/lib/builtins
 
 .PATH:		${CRTSRC}/${CRTARCH}
 .PATH:		${CRTSRC}
@@ -58,7 +58,6 @@ SRCF+=		fixunsxfti
 SRCF+=		fixxfdi
 SRCF+=		fixxfti
 SRCF+=		floatditf
-SRCF+=		floatsitf
 SRCF+=		floattidf
 SRCF+=		floattisf
 SRCF+=		floattixf
@@ -68,7 +67,7 @@ SRCF+=		floatunsisf
 SRCF+=		floatuntidf
 SRCF+=		floatuntisf
 SRCF+=		floatuntixf
-SRCF+=		gcc_personality_v0
+SRCF+=		gcc_personality_v0	# not in upstream
 SRCF+=		int_util
 SRCF+=		lshrdi3
 SRCF+=		lshrti3
@@ -160,7 +159,10 @@ SRCF+=		fixtfti
 SRCF+=		fixunstfdi
 SRCF+=		fixunstfsi
 SRCF+=		fixunstfti
+SRCF+=		floatsitf
+SRCF+=		floattitf
 SRCF+=		floatunsitf
+SRCF+=		floatuntitf
 SRCF+=		multf3
 SRCF+=		subtf3
 SRCF+=		trunctfdf2
@@ -202,6 +204,14 @@ CFLAGS+=	-DEMIT_SYNC_ATOMICS
 
 SRCF+=		stdatomic
 .endif
+
+
+.if "${COMPILER_TYPE}" == "clang" && \
+    (${MACHINE_ARCH} == "powerpc" || ${MACHINE_ARCH} == "powerpcspe")
+SRCS+=          atomic.c
+CFLAGS.atomic.c+=      -Wno-atomic-alignment
+.endif
+
 
 .for file in ${SRCF}
 .if ${MACHINE_ARCH:Marmv[67]*} && (!defined(CPUTYPE) || ${CPUTYPE:M*soft*} == "") \
