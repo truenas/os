@@ -508,7 +508,8 @@ topo_probe(void)
 
 	if (mp_ncpus <= 1)
 		; /* nothing */
-	else if (cpu_vendor_id == CPU_VENDOR_AMD)
+	else if (cpu_vendor_id == CPU_VENDOR_AMD ||
+	    cpu_vendor_id == CPU_VENDOR_HYGON)
 		topo_probe_amd();
 	else if (cpu_vendor_id == CPU_VENDOR_INTEL)
 		topo_probe_intel();
@@ -1074,6 +1075,11 @@ init_secondary_tail(void)
 	cpu_initclocks_ap();
 #endif
 
+	/*
+	 * Assert that smp_after_idle_runnable condition is reasonable.
+	 */
+	MPASS(PCPU_GET(curpcb) == NULL);
+
 	sched_throw(NULL);
 
 	panic("scheduler returned us to %s", __func__);
@@ -1083,13 +1089,12 @@ init_secondary_tail(void)
 static void
 smp_after_idle_runnable(void *arg __unused)
 {
-	struct thread *idle_td;
+	struct pcpu *pc;
 	int cpu;
 
 	for (cpu = 1; cpu < mp_ncpus; cpu++) {
-		idle_td = pcpu_find(cpu)->pc_idlethread;
-		while (idle_td->td_lastcpu == NOCPU &&
-		    idle_td->td_oncpu == NOCPU)
+		pc = pcpu_find(cpu);
+		while (atomic_load_ptr(&pc->pc_curpcb) == (uintptr_t)NULL)
 			cpu_spinwait();
 		kmem_free((vm_offset_t)bootstacks[cpu], kstack_pages *
 		    PAGE_SIZE);

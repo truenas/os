@@ -33,7 +33,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd January 7, 2016
+.Dd January 6, 2020
 .Dt NVME 4
 .Os
 .Sh NAME
@@ -70,6 +70,8 @@ Per-CPU IO queue pairs
 .It
 API for registering NVMe namespace consumers such as
 .Xr nvd 4
+or
+.Xr nda 4
 .It
 API for submitting NVM commands to namespaces
 .It
@@ -118,11 +120,36 @@ hw.nvme.force_intx=1
 .Pp
 Note that use of INTx implies disabling of per-CPU I/O queue pairs.
 .Pp
-When there is an error,
-.Nm
-prints only the most relevant information about the command by default.
-To enable dumping of all information about the command, set the following tunable
-value in
+To control maximum amount of system RAM in bytes to use as Host Memory
+Buffer for capable devices, set the following tunable:
+.Bd -literal -offset indent
+hw.nvme.hmb_max
+.Ed
+.Pp
+The default value is 5% of physical memory size per device.
+.Pp
+The
+.Xr nvd 4
+driver is used to provide a disk driver to the system by default.
+The
+.Xr nda 4
+driver can also be used instead.
+The
+.Xr nvd 4
+driver performs better with smaller transactions and few TRIM
+commands.
+It sends all commands directly to the drive immediately.
+The
+.Xr nda 4
+driver performs better with larger transactions and also collapses
+TRIM commands giving better performance.
+It can queue commands to the drive; combine
+.Dv BIO_DELETE
+commands into a single trip; and
+use the CAM I/O scheduler to bias one type of operation over another.
+To select the
+.Xr nda 4
+driver, set the following tunable value in
 .Xr loader.conf 5 :
 .Bd -literal -offset indent
 hw.nvme.verbose_cmd_dump=1
@@ -173,7 +200,25 @@ with a completion entry that was posted by the controller.
 (W) Writing 1 to this sysctl will dump the full contents of the submission
 and completion queues to the console.
 .El
+.Pp
+In addition to the typical pci attachment, the
+.Nm
+driver supports attaching to a
+.Xr ahci 4
+device.
+Intel's Rapid Storage Technology (RST) hides the nvme device
+behind the AHCI device due to limitations in Windows.
+However, this effectively hides it from the
+.Fx
+kernel.
+To work around this limitation,
+.Fx
+detects that the AHCI device supports RST and when it is enabled.
+See
+.Xr ahci 4
+for more details.
 .Sh SEE ALSO
+.Xr nda 4 ,
 .Xr nvd 4 ,
 .Xr pci 4 ,
 .Xr nvmecontrol 8 ,
