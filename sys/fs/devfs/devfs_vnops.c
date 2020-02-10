@@ -802,9 +802,16 @@ out:
 		error = ENOTTY;
 
 	if (error == 0 && com == TIOCSCTTY) {
-		/* Do nothing if reassigning same control tty */
+		/*
+		 * Do nothing if reassigning same control tty, or if the
+		 * control tty has already disappeared.  If it disappeared,
+		 * it's because we were racing with TIOCNOTTY.  TIOCNOTTY
+		 * already took care of releasing the old vnode and we have
+		 * nothing left to do.
+		 */
 		sx_slock(&proctree_lock);
-		if (td->td_proc->p_session->s_ttyvp == vp) {
+		if (td->td_proc->p_session->s_ttyvp == vp ||
+		    td->td_proc->p_session->s_ttyp == NULL) {
 			sx_sunlock(&proctree_lock);
 			return (0);
 		}
@@ -912,8 +919,8 @@ devfs_lookupx(struct vop_lookup_args *ap, int *dm_unlock)
 	if ((flags & ISDOTDOT) && (dvp->v_vflag & VV_ROOT))
 		return (EIO);
 
-	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred, td);
-	if (error)
+	error = vn_dir_check_exec(dvp, cnp);
+	if (error != 0)
 		return (error);
 
 	if (cnp->cn_namelen == 1 && *pname == '.') {

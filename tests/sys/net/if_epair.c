@@ -1,7 +1,5 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
- *
- * Copyright (c) 2019 Rob Wing
+ * Copyright (c) 2020   Kristof Provost <kp@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -12,10 +10,10 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -23,30 +21,55 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
+ *
+ * $FreeBSD$
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+#include <sys/param.h>
+#include <sys/ioctl.h>
+#include <sys/linker.h>
+#include <sys/module.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
-#include <be.h>
+#include <net/if.h>
 
-/*
- * argv[1] = root boot environment (e.g. zroot/ROOT),
- * argv[2] = name of boot environment to create
- * argv[3] = snapshot to create boot environment from
- * argv[4] = depth
- */
-int main(int argc, char *argv[]) {
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <strings.h>
 
-        libbe_handle_t *lbh;
+#include <atf-c.h>
 
-	if (argc != 5)
-		return -1;
+ATF_TC(params);
+ATF_TC_HEAD(params, tc)
+{
+        atf_tc_set_md_var(tc, "require.user", "root");
+}
 
-        if ((lbh = libbe_init(argv[1])) == NULL)
-                return -1;
+ATF_TC_BODY(params, tc)
+{
+	struct ifreq ifr;
+	int s;
 
-	libbe_print_on_error(lbh, true);
+	s = kldload("if_epair");
+	if (s == -1 && errno != EEXIST)
+		atf_tc_fail("Failed to load if_epair");
 
-	return (be_create_depth(lbh, argv[2], argv[3], atoi(argv[4])));
+	s = socket(AF_INET, SOCK_DGRAM, 0);
+	if (s < 0)
+		atf_tc_fail("Failed to create socket");
+
+        bzero(&ifr, sizeof(ifr));
+	ifr.ifr_data = (caddr_t)-1;
+        (void) strlcpy(ifr.ifr_name, "epair", sizeof(ifr.ifr_name));
+
+	ioctl(s, SIOCIFCREATE2, &ifr);
+}
+
+ATF_TP_ADD_TCS(tp)
+{
+        ATF_TP_ADD_TC(tp, params);
+
+	return (atf_no_error());
 }
