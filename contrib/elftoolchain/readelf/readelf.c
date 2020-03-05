@@ -670,6 +670,9 @@ phdr_type(unsigned int mach, unsigned int ptype)
 	case PT_GNU_EH_FRAME: return "GNU_EH_FRAME";
 	case PT_GNU_STACK: return "GNU_STACK";
 	case PT_GNU_RELRO: return "GNU_RELRO";
+	case PT_OPENBSD_RANDOMIZE: return "OPENBSD_RANDOMIZE";
+	case PT_OPENBSD_WXNEEDED: return "OPENBSD_WXNEEDED";
+	case PT_OPENBSD_BOOTDATA: return "OPENBSD_BOOTDATA";
 	default:
 		if (ptype >= PT_LOOS && ptype <= PT_HIOS)
 			snprintf(s_ptype, sizeof(s_ptype), "LOOS+%#x",
@@ -5871,6 +5874,7 @@ dump_dwarf_frame_regtable(struct readelf *re, Dwarf_Fde fde, Dwarf_Addr pc,
 	for (; cur_pc < end_pc; cur_pc++) {
 		if (dwarf_get_fde_info_for_all_regs(fde, cur_pc, &rt, &row_pc,
 		    &de) != DW_DLV_OK) {
+			free(vec);
 			warnx("dwarf_get_fde_info_for_all_regs failed: %s\n",
 			    dwarf_errmsg(de));
 			return (-1);

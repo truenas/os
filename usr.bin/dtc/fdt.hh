@@ -34,6 +34,7 @@
 
 #ifndef _FDT_HH_
 #define _FDT_HH_
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
@@ -57,6 +58,14 @@ namespace fdt
 class property;
 class node;
 class device_tree;
+/**
+ * Type for device tree write functions.
+ */
+typedef void (device_tree::* tree_write_fn_ptr)(int);
+/**
+ * Type for device tree read functions.
+ */
+typedef void (device_tree::* tree_read_fn_ptr)(const std::string &, FILE *);
 /**
  * Type for (owned) pointers to properties.
  */

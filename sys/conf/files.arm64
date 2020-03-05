@@ -278,13 +278,21 @@ cddl/dev/dtrace/aarch64/dtrace_subr.c			optional dtrace compile-with "${DTRACE_C
 cddl/dev/fbt/aarch64/fbt_isa.c				optional dtrace_fbt | dtraceall compile-with "${FBT_C}"
 
 # RockChip Drivers
+arm64/rockchip/rk3399_emmcphy.c		optional fdt rk_emmcphy soc_rockchip_rk3399
+arm64/rockchip/rk_dwc3.c		optional fdt rk_dwc3 soc_rockchip_rk3399
 arm64/rockchip/rk_i2c.c			optional fdt rk_i2c soc_rockchip_rk3328 | fdt rk_i2c soc_rockchip_rk3399
 arm64/rockchip/rk805.c			optional fdt rk805 soc_rockchip_rk3328 | fdt rk805 soc_rockchip_rk3399
 arm64/rockchip/rk_grf.c			optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
 arm64/rockchip/rk_pinctrl.c		optional fdt rk_pinctrl soc_rockchip_rk3328 | fdt rk_pinctrl soc_rockchip_rk3399
 arm64/rockchip/rk_gpio.c		optional fdt rk_gpio soc_rockchip_rk3328 | fdt rk_gpio soc_rockchip_rk3399
+arm64/rockchip/rk_iodomain.c		optional fdt rk_iodomain
+arm64/rockchip/rk_spi.c			optional fdt rk_spi
 arm64/rockchip/rk_usb2phy.c		optional fdt rk_usb2phy soc_rockchip_rk3328 | soc_rockchip_rk3399
+arm64/rockchip/rk_typec_phy.c		optional fdt rk_typec_phy soc_rockchip_rk3399
 arm64/rockchip/if_dwc_rk.c		optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399
+arm64/rockchip/rk_tsadc_if.m		optional fdt soc_rockchip_rk3399
+arm64/rockchip/rk_tsadc.c		optional fdt soc_rockchip_rk3399
+arm64/rockchip/rk_pwm.c			optional fdt rk_pwm
 dev/dwc/if_dwc.c			optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399
 dev/dwc/if_dwc_if.m			optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399
 
@@ -292,6 +300,7 @@ dev/dwc/if_dwc_if.m			optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_r
 arm64/rockchip/clk/rk_cru.c		optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
 arm64/rockchip/clk/rk_clk_armclk.c	optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
 arm64/rockchip/clk/rk_clk_composite.c	optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
+arm64/rockchip/clk/rk_clk_fract.c	optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
 arm64/rockchip/clk/rk_clk_gate.c	optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
 arm64/rockchip/clk/rk_clk_mux.c		optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399
 arm64/rockchip/clk/rk_clk_pll.c		optional fdt soc_rockchip_rk3328 | fdt soc_rockchip_rk3399

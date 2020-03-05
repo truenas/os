@@ -154,10 +154,10 @@ static int copypktopts(struct ip6_pktopts *, struct ip6_pktopts *, int);
 
 
 /*
- * Make an extension header from option data.  hp is the source, and
- * mp is the destination.
+ * Make an extension header from option data.  hp is the source,
+ * mp is the destination, and _ol is the optlen.
  */
-#define MAKE_EXTHDR(hp, mp)						\
+#define	MAKE_EXTHDR(hp, mp, _ol)					\
     do {								\
 	if (hp) {							\
 		struct ip6_ext *eh = (struct ip6_ext *)(hp);		\
@@ -165,6 +165,7 @@ static int copypktopts(struct ip6_pktopts *, struct ip6_pktopts *, int);
 		    ((eh)->ip6e_len + 1) << 3);				\
 		if (error)						\
 			goto freehdrs;					\
+		(_ol) += (*(mp))->m_len;				\
 	}								\
     } while (/*CONSTCOND*/ 0)
 
@@ -179,7 +180,9 @@ static int copypktopts(struct ip6_pktopts *, struct ip6_pktopts *, int);
     do {\
 	if (m) {\
 		if (!hdrsplit) \
-			panic("assumption failed: hdr not split"); \
+			panic("%s:%d: assumption failed: "\
+			    "hdr not split: hdrsplit %d exthdrs %p",\
+			    __func__, __LINE__, hdrsplit, &exthdrs);\
 		*mtod((m), u_char *) = *(p);\
 		*(p) = (i);\
 		p = mtod((m), u_char *);\
@@ -203,6 +206,36 @@ in6_delayed_cksum(struct mbuf *m, uint32_t plen, u_short offset)
 		m_copyback(m, offset, sizeof(csum), (caddr_t)&csum);
 	else
 		*(u_short *)mtodo(m, offset) = csum;
+}
+
+static int
+ip6_output_delayed_csum(struct mbuf *m, struct ifnet *ifp, int csum_flags,
+    int plen, int optlen, bool frag __unused)
+{
+
+	KASSERT((plen >= optlen), ("%s:%d: plen %d < optlen %d, m %p, ifp %p "
+	    "csum_flags %#x frag %d\n",
+	    __func__, __LINE__, plen, optlen, m, ifp, csum_flags, frag));
+
+	if ((csum_flags & CSUM_DELAY_DATA_IPV6) ||
+#ifdef SCTP
+	    (csum_flags & CSUM_SCTP_IPV6) ||
+#endif
+	    false) {
+		if (csum_flags & CSUM_DELAY_DATA_IPV6) {
+			in6_delayed_cksum(m, plen - optlen,
+			    sizeof(struct ip6_hdr) + optlen);
+			m->m_pkthdr.csum_flags &= ~CSUM_DELAY_DATA_IPV6;
+		}
+#ifdef SCTP
+		if (csum_flags & CSUM_SCTP_IPV6) {
+			sctp_delayed_cksum(m, sizeof(struct ip6_hdr) + optlen);
+			m->m_pkthdr.csum_flags &= ~CSUM_SCTP_IPV6;
+		}
+#endif
+	}
+
+	return (0);
 }
 
 int
@@ -277,8 +310,9 @@ ip6_fragment(struct ifnet *ifp, struct mbuf *m0, int hlen, u_char nextproto,
 }
 
 /*
- * IP6 output. The packet in mbuf chain m contains a skeletal IP6
- * header (with pri, len, nxt, hlim, src, dst).
+ * IP6 output.
+ * The packet in mbuf chain m contains a skeletal IP6 header (with pri, len,
+ * nxt, hlim, src, dst).
  * This function may modify ver and hlim only.
  * The mbuf chain containing the packet will be freed.
  * The mbuf opt, if present, will not be freed.
@@ -286,9 +320,8 @@ ip6_fragment(struct ifnet *ifp, struct mbuf *m0, int hlen, u_char nextproto,
  * skipped and ro->ro_rt would be used. If ro is present but ro->ro_rt is NULL,
  * then result of route lookup is stored in ro->ro_rt.
  *
- * type of "mtu": rt_mtu is u_long, ifnet.ifr_mtu is int, and
- * nd_ifinfo.linkmtu is u_int32_t.  so we use u_long to hold largest one,
- * which is rt_mtu.
+ * Type of "mtu": rt_mtu is u_long, ifnet.ifr_mtu is int, and nd_ifinfo.linkmtu
+ * is uint32_t.  So we use u_long to hold largest one, which is rt_mtu.
  *
  * ifpp - XXX: just for statistics
  */
@@ -303,22 +336,23 @@ ip6_output(struct mbuf *m0, struct ip6_pktopts *opt,
 	struct ip6_hdr *ip6;
 	struct ifnet *ifp, *origifp;
 	struct mbuf *m = m0;
-	struct mbuf *mprev = NULL;
-	int hlen, tlen, len;
+	struct mbuf *mprev;
+	int tlen, len;
 	struct route_in6 ip6route;
 	struct rtentry *rt = NULL;
 	struct sockaddr_in6 *dst, src_sa, dst_sa;
 	struct in6_addr odst;
+	u_char *nexthdrp;
 	int error = 0;
 	struct in6_ifaddr *ia = NULL;
 	u_long mtu;
 	int alwaysfrag, dontfrag;
-	u_int32_t optlen = 0, plen = 0, unfragpartlen = 0;
+	u_int32_t optlen, plen = 0, unfragpartlen;
 	struct ip6_exthdrs exthdrs;
 	struct in6_addr src0, dst0;
 	u_int32_t zone;
 	struct route_in6 *ro_pmtu = NULL;
-	int hdrsplit = 0;
+	bool hdrsplit;
 	int sw_csum, tso;
 	int needfiblookup;
 	uint32_t fibnum;
@@ -329,7 +363,7 @@ ip6_output(struct mbuf *m0, struct ip6_pktopts *opt,
 		INP_LOCK_ASSERT(inp);
 		M_SETFIB(m, inp->inp_inc.inc_fibnum);
 		if ((flags & IP_NODEFAULTFLOWID) == 0) {
-			/* unconditionally set flowid */
+			/* Unconditionally set flowid. */
 			m->m_pkthdr.flowid = inp->inp_flowid;
 			M_HASHTYPE_SET(m, inp->inp_flowtype);
 		}
@@ -350,134 +384,8 @@ ip6_output(struct mbuf *m0, struct ip6_pktopts *opt,
 	}
 #endif /* IPSEC */
 
-	bzero(&exthdrs, sizeof(exthdrs));
-	if (opt) {
-		/* Hop-by-Hop options header */
-		MAKE_EXTHDR(opt->ip6po_hbh, &exthdrs.ip6e_hbh);
-		/* Destination options header(1st part) */
-		if (opt->ip6po_rthdr) {
-			/*
-			 * Destination options header(1st part)
-			 * This only makes sense with a routing header.
-			 * See Section 9.2 of RFC 3542.
-			 * Disabling this part just for MIP6 convenience is
-			 * a bad idea.  We need to think carefully about a
-			 * way to make the advanced API coexist with MIP6
-			 * options, which might automatically be inserted in
-			 * the kernel.
-			 */
-			MAKE_EXTHDR(opt->ip6po_dest1, &exthdrs.ip6e_dest1);
-		}
-		/* Routing header */
-		MAKE_EXTHDR(opt->ip6po_rthdr, &exthdrs.ip6e_rthdr);
-		/* Destination options header(2nd part) */
-		MAKE_EXTHDR(opt->ip6po_dest2, &exthdrs.ip6e_dest2);
-	}
-
-	/*
-	 * Calculate the total length of the extension header chain.
-	 * Keep the length of the unfragmentable part for fragmentation.
-	 */
-	optlen = 0;
-	if (exthdrs.ip6e_hbh)
-		optlen += exthdrs.ip6e_hbh->m_len;
-	if (exthdrs.ip6e_dest1)
-		optlen += exthdrs.ip6e_dest1->m_len;
-	if (exthdrs.ip6e_rthdr)
-		optlen += exthdrs.ip6e_rthdr->m_len;
-	unfragpartlen = optlen + sizeof(struct ip6_hdr);
-
-	/* NOTE: we don't add AH/ESP length here (done in ip6_ipsec_output) */
-	if (exthdrs.ip6e_dest2)
-		optlen += exthdrs.ip6e_dest2->m_len;
-
-	/*
-	 * If there is at least one extension header,
-	 * separate IP6 header from the payload.
-	 */
-	if (optlen && !hdrsplit) {
-		if ((error = ip6_splithdr(m, &exthdrs)) != 0) {
-			m = NULL;
-			goto freehdrs;
-		}
-		m = exthdrs.ip6e_ip6;
-		hdrsplit++;
-	}
-
+	/* Source address validation. */
 	ip6 = mtod(m, struct ip6_hdr *);
-
-	/* adjust mbuf packet header length */
-	m->m_pkthdr.len += optlen;
-	plen = m->m_pkthdr.len - sizeof(*ip6);
-
-	/* If this is a jumbo payload, insert a jumbo payload option. */
-	if (plen > IPV6_MAXPACKET) {
-		if (!hdrsplit) {
-			if ((error = ip6_splithdr(m, &exthdrs)) != 0) {
-				m = NULL;
-				goto freehdrs;
-			}
-			m = exthdrs.ip6e_ip6;
-			hdrsplit++;
-		}
-		/* adjust pointer */
-		ip6 = mtod(m, struct ip6_hdr *);
-		if ((error = ip6_insert_jumboopt(&exthdrs, plen)) != 0)
-			goto freehdrs;
-		ip6->ip6_plen = 0;
-	} else
-		ip6->ip6_plen = htons(plen);
-
-	/*
-	 * Concatenate headers and fill in next header fields.
-	 * Here we have, on "m"
-	 *	IPv6 payload
-	 * and we insert headers accordingly.  Finally, we should be getting:
-	 *	IPv6 hbh dest1 rthdr ah* [esp* dest2 payload]
-	 *
-	 * during the header composing process, "m" points to IPv6 header.
-	 * "mprev" points to an extension header prior to esp.
-	 */
-	u_char *nexthdrp = &ip6->ip6_nxt;
-	mprev = m;
-
-	/*
-	 * we treat dest2 specially.  this makes IPsec processing
-	 * much easier.  the goal here is to make mprev point the
-	 * mbuf prior to dest2.
-	 *
-	 * result: IPv6 dest2 payload
-	 * m and mprev will point to IPv6 header.
-	 */
-	if (exthdrs.ip6e_dest2) {
-		if (!hdrsplit)
-			panic("assumption failed: hdr not split");
-		exthdrs.ip6e_dest2->m_next = m->m_next;
-		m->m_next = exthdrs.ip6e_dest2;
-		*mtod(exthdrs.ip6e_dest2, u_char *) = ip6->ip6_nxt;
-		ip6->ip6_nxt = IPPROTO_DSTOPTS;
-	}
-
-	/*
-	 * result: IPv6 hbh dest1 rthdr dest2 payload
-	 * m will point to IPv6 header.  mprev will point to the
-	 * extension header prior to dest2 (rthdr in the above case).
-	 */
-	MAKE_CHAIN(exthdrs.ip6e_hbh, mprev, nexthdrp, IPPROTO_HOPOPTS);
-	MAKE_CHAIN(exthdrs.ip6e_dest1, mprev, nexthdrp,
-		   IPPROTO_DSTOPTS);
-	MAKE_CHAIN(exthdrs.ip6e_rthdr, mprev, nexthdrp,
-		   IPPROTO_ROUTING);
-
-	/*
-	 * If there is a routing header, discard the packet.
-	 */
-	if (exthdrs.ip6e_rthdr) {
-		 error = EINVAL;
-		 goto bad;
-	}
-
-	/* Source address validation */
 	if (IN6_IS_ADDR_UNSPECIFIED(&ip6->ip6_src) &&
 	    (flags & IPV6_UNSPECSRC) == 0) {
 		error = EOPNOTSUPP;
@@ -490,11 +398,147 @@ ip6_output(struct mbuf *m0, struct ip6_pktopts *opt,
 		goto bad;
 	}
 
-	IP6STAT_INC(ip6s_localout);
+	/*
+	 * If we are given packet options to add extension headers prepare them.
+	 * Calculate the total length of the extension header chain.
+	 * Keep the length of the unfragmentable part for fragmentation.
+	 */
+	bzero(&exthdrs, sizeof(exthdrs));
+	optlen = 0;
+	unfragpartlen = sizeof(struct ip6_hdr);
+	if (opt) {
+		/* Hop-by-Hop options header. */
+		MAKE_EXTHDR(opt->ip6po_hbh, &exthdrs.ip6e_hbh, optlen);
+
+		/* Destination options header (1st part). */
+		if (opt->ip6po_rthdr) {
+#ifndef RTHDR_SUPPORT_IMPLEMENTED
+			/*
+			 * If there is a routing header, discard the packet
+			 * right away here. RH0/1 are obsolete and we do not
+			 * currently support RH2/3/4.
+			 * People trying to use RH253/254 may want to disable
+			 * this check.
+			 * The moment we do support any routing header (again)
+			 * this block should check the routing type more
+			 * selectively.
+			 */
+			error = EINVAL;
+			goto bad;
+#endif
+
+			/*
+			 * Destination options header (1st part).
+			 * This only makes sense with a routing header.
+			 * See Section 9.2 of RFC 3542.
+			 * Disabling this part just for MIP6 convenience is
+			 * a bad idea.  We need to think carefully about a
+			 * way to make the advanced API coexist with MIP6
+			 * options, which might automatically be inserted in
+			 * the kernel.
+			 */
+			MAKE_EXTHDR(opt->ip6po_dest1, &exthdrs.ip6e_dest1,
+			    optlen);
+		}
+		/* Routing header. */
+		MAKE_EXTHDR(opt->ip6po_rthdr, &exthdrs.ip6e_rthdr, optlen);
+
+		unfragpartlen += optlen;
+
+		/*
+		 * NOTE: we don't add AH/ESP length here (done in
+		 * ip6_ipsec_output()).
+		 */
+
+		/* Destination options header (2nd part). */
+		MAKE_EXTHDR(opt->ip6po_dest2, &exthdrs.ip6e_dest2, optlen);
+	}
 
 	/*
-	 * Route packet.
+	 * If there is at least one extension header,
+	 * separate IP6 header from the payload.
 	 */
+	hdrsplit = false;
+	if (optlen) {
+		if ((error = ip6_splithdr(m, &exthdrs)) != 0) {
+			m = NULL;
+			goto freehdrs;
+		}
+		m = exthdrs.ip6e_ip6;
+		ip6 = mtod(m, struct ip6_hdr *);
+		hdrsplit = true;
+	}
+
+	/* Adjust mbuf packet header length. */
+	m->m_pkthdr.len += optlen;
+	plen = m->m_pkthdr.len - sizeof(*ip6);
+
+	/* If this is a jumbo payload, insert a jumbo payload option. */
+	if (plen > IPV6_MAXPACKET) {
+		if (!hdrsplit) {
+			if ((error = ip6_splithdr(m, &exthdrs)) != 0) {
+				m = NULL;
+				goto freehdrs;
+			}
+			m = exthdrs.ip6e_ip6;
+			ip6 = mtod(m, struct ip6_hdr *);
+			hdrsplit = true;
+		}
+		if ((error = ip6_insert_jumboopt(&exthdrs, plen)) != 0)
+			goto freehdrs;
+		ip6->ip6_plen = 0;
+	} else
+		ip6->ip6_plen = htons(plen);
+	nexthdrp = &ip6->ip6_nxt;
+
+	if (optlen) {
+		/*
+		 * Concatenate headers and fill in next header fields.
+		 * Here we have, on "m"
+		 *	IPv6 payload
+		 * and we insert headers accordingly.
+		 * Finally, we should be getting:
+		 *	IPv6 hbh dest1 rthdr ah* [esp* dest2 payload].
+		 *
+		 * During the header composing process "m" points to IPv6
+		 * header.  "mprev" points to an extension header prior to esp.
+		 */
+		mprev = m;
+
+		/*
+		 * We treat dest2 specially.  This makes IPsec processing
+		 * much easier.  The goal here is to make mprev point the
+		 * mbuf prior to dest2.
+		 *
+		 * Result: IPv6 dest2 payload.
+		 * m and mprev will point to IPv6 header.
+		 */
+		if (exthdrs.ip6e_dest2) {
+			if (!hdrsplit)
+				panic("%s:%d: assumption failed: "
+				    "hdr not split: hdrsplit %d exthdrs %p",
+				    __func__, __LINE__, hdrsplit, &exthdrs);
+			exthdrs.ip6e_dest2->m_next = m->m_next;
+			m->m_next = exthdrs.ip6e_dest2;
+			*mtod(exthdrs.ip6e_dest2, u_char *) = ip6->ip6_nxt;
+			ip6->ip6_nxt = IPPROTO_DSTOPTS;
+		}
+
+		/*
+		 * Result: IPv6 hbh dest1 rthdr dest2 payload.
+		 * m will point to IPv6 header.  mprev will point to the
+		 * extension header prior to dest2 (rthdr in the above case).
+		 */
+		MAKE_CHAIN(exthdrs.ip6e_hbh, mprev, nexthdrp, IPPROTO_HOPOPTS);
+		MAKE_CHAIN(exthdrs.ip6e_dest1, mprev, nexthdrp,
+			   IPPROTO_DSTOPTS);
+		MAKE_CHAIN(exthdrs.ip6e_rthdr, mprev, nexthdrp,
+			   IPPROTO_ROUTING);
+	}
+
+	IP6STAT_INC(ip6s_localout);
+
+	/* Route packet. */
 	if (ro == NULL) {
 		ro = &ip6route;
 		bzero((caddr_t)ro, sizeof(*ro));
@@ -506,9 +550,9 @@ ip6_output(struct mbuf *m0, struct ip6_pktopts *opt,
 	fibnum = (inp != NULL) ? inp->inp_inc.inc_fibnum : M_GETFIB(m);
 again:
 	/*
-	 * if specified, try to fill in the traffic class field.
-	 * do not override if a non-zero value is already set.
-	 * we check the diffserv field and the ecn field separately.
+	 * If specified, try to fill in the traffic class field.
+	 * Do not override if a non-zero value is already set.
+	 * We check the diffserv field and the ECN field separately.
 	 */
 	if (opt && opt->ip6po_tclass >= 0) {
 		int mask = 0;
@@ -521,7 +565,7 @@ again:
 			ip6->ip6_flow |= htonl((opt->ip6po_tclass & mask) << 20);
 	}
 
-	/* fill in or override the hop limit field, if necessary. */
+	/* Fill in or override the hop limit field, if necessary. */
 	if (opt && opt->ip6po_hlim != -1)
 		ip6->ip6_hlim = opt->ip6po_hlim & 0xff;
 	else if (IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst)) {
@@ -533,7 +577,7 @@ again:
 	/*
 	 * Validate route against routing table additions;
 	 * a better/more specific route might have been added.
-	 * Make sure address family is set in route.
+	 * Make sure that the address family is set in route.
 	 */
 	if (inp) {
 		ro->ro_dst.sin6_family = AF_INET6;
@@ -564,15 +608,13 @@ again:
 	}
 	if (rt == NULL) {
 		/*
-		 * If in6_selectroute() does not return a route entry,
+		 * If in6_selectroute() does not return a route entry
 		 * dst may not have been updated.
 		 */
 		*dst = dst_sa;	/* XXX */
 	}
 
-	/*
-	 * then rt (for unicast) and ifp must be non-NULL valid values.
-	 */
+	/* Then rt (for unicast) and ifp must be non-NULL valid values. */
 	if ((flags & IPV6_FORWARDING) == 0) {
 		/* XXX: the FORWARDING flag can be set for mrouting. */
 		in6_ifstat_inc(ifp, ifs6_out_request);
@@ -590,7 +632,7 @@ again:
 	src_sa.sin6_addr = ip6->ip6_src;
 
 	dst0 = ip6->ip6_dst;
-	/* re-initialize to be sure */
+	/* Re-initialize to be sure. */
 	bzero(&dst_sa, sizeof(dst_sa));
 	dst_sa.sin6_family = AF_INET6;
 	dst_sa.sin6_len = sizeof(dst_sa);
@@ -607,7 +649,7 @@ again:
 		 *
 		 * Because the loopback interface cannot receive
 		 * packets with a different scope ID than its own,
-		 * there is a trick is to pretend the outgoing packet
+		 * there is a trick to pretend the outgoing packet
 		 * was received by the real network interface, by
 		 * setting "origifp" different from "ifp". This is
 		 * only allowed when "ifp" is a loopback network
@@ -645,7 +687,6 @@ again:
 			error = EHOSTUNREACH; /* XXX */
 		goto bad;
 	}
-
 	/* All scope ID checks are successful. */
 
 	if (rt && !IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst)) {
@@ -662,13 +703,12 @@ again:
 	}
 
 	if (!IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst)) {
-		m->m_flags &= ~(M_BCAST | M_MCAST); /* just in case */
+		m->m_flags &= ~(M_BCAST | M_MCAST); /* Just in case. */
 	} else {
 		m->m_flags = (m->m_flags & ~M_BCAST) | M_MCAST;
 		in6_ifstat_inc(ifp, ifs6_out_mcast);
-		/*
-		 * Confirm that the outgoing interface supports multicast.
-		 */
+
+		/* Confirm that the outgoing interface supports multicast. */
 		if (!(ifp->if_flags & IFF_MULTICAST)) {
 			IP6STAT_INC(ip6s_noroute);
 			in6_ifstat_inc(ifp, ifs6_out_discard);
@@ -763,8 +803,8 @@ again:
 	}
 
 	/*
-	 * clear embedded scope identifiers if necessary.
-	 * in6_clearscope will touch the addresses only when necessary.
+	 * Clear embedded scope identifiers if necessary.
+	 * in6_clearscope() will touch the addresses only when necessary.
 	 */
 	in6_clearscope(&ip6->ip6_src);
 	in6_clearscope(&ip6->ip6_dst);
@@ -794,7 +834,7 @@ again:
 		if (ip6_process_hopopts(m, (u_int8_t *)(hbh + 1),
 		    ((hbh->ip6h_len + 1) << 3) - sizeof(struct ip6_hbh),
 		    &dummy, &plen) < 0) {
-			/* m was already freed at this point */
+			/* m was already freed at this point. */
 			error = EINVAL;/* better error? */
 			goto done;
 		}
@@ -881,7 +921,7 @@ passout:
 	 * Send the packet to the outgoing interface.
 	 * If necessary, do IPv6 fragmentation before sending.
 	 *
-	 * the logic here is rather complex:
+	 * The logic here is rather complex:
 	 * 1: normal case (dontfrag == 0, alwaysfrag == 0)
 	 * 1-a:	send as is if tlen <= path mtu
 	 * 1-b:	fragment if tlen > path mtu
@@ -894,7 +934,7 @@ passout:
 	 *	always fragment
 	 *
 	 * 4: if dontfrag == 1 && alwaysfrag == 1
-	 *	error, as we cannot handle this conflicting request
+	 *	error, as we cannot handle this conflicting request.
 	 */
 	sw_csum = m->m_pkthdr.csum_flags;
 	if (!hdrsplit) {
@@ -908,29 +948,22 @@ passout:
 	 * XXX-BZ  Need a framework to know when the NIC can handle it, even
 	 * with ext. hdrs.
 	 */
-	if (sw_csum & CSUM_DELAY_DATA_IPV6) {
-		sw_csum &= ~CSUM_DELAY_DATA_IPV6;
-		in6_delayed_cksum(m, plen, sizeof(struct ip6_hdr));
-	}
-#ifdef SCTP
-	if (sw_csum & CSUM_SCTP_IPV6) {
-		sw_csum &= ~CSUM_SCTP_IPV6;
-		sctp_delayed_cksum(m, sizeof(struct ip6_hdr));
-	}
-#endif
-	m->m_pkthdr.csum_flags &= ifp->if_hwassist;
+	error = ip6_output_delayed_csum(m, ifp, sw_csum, plen, optlen, false);
+	if (error != 0)
+		goto bad;
+	/* XXX-BZ m->m_pkthdr.csum_flags &= ~ifp->if_hwassist; */
 	tlen = m->m_pkthdr.len;
 
 	if ((opt && (opt->ip6po_flags & IP6PO_DONTFRAG)) || tso)
 		dontfrag = 1;
 	else
 		dontfrag = 0;
-	if (dontfrag && alwaysfrag) {	/* case 4 */
-		/* conflicting request - can't transmit */
+	if (dontfrag && alwaysfrag) {	/* Case 4. */
+		/* Conflicting request - can't transmit. */
 		error = EMSGSIZE;
 		goto bad;
 	}
-	if (dontfrag && tlen > IN6_LINKMTU(ifp) && !tso) {	/* case 2-b */
+	if (dontfrag && tlen > IN6_LINKMTU(ifp) && !tso) {	/* Case 2-b. */
 		/*
 		 * Even if the DONTFRAG option is specified, we cannot send the
 		 * packet when the data length is larger than the MTU of the
@@ -945,10 +978,8 @@ passout:
 		goto bad;
 	}
 
-	/*
-	 * transmit packet without fragmentation
-	 */
-	if (dontfrag || (!alwaysfrag && tlen <= mtu)) {	/* case 1-a and 2-a */
+	/* Transmit packet without fragmentation. */
+	if (dontfrag || (!alwaysfrag && tlen <= mtu)) {	/* Cases 1-a and 2-a. */
 		struct in6_ifaddr *ia6;
 
 		ip6 = mtod(m, struct ip6_hdr *);
@@ -981,16 +1012,14 @@ passout:
 		goto done;
 	}
 
-	/*
-	 * try to fragment the packet.  case 1-b and 3
-	 */
+	/* Try to fragment the packet.  Cases 1-b and 3. */
 	if (mtu < IPV6_MMTU) {
-		/* path MTU cannot be less than IPV6_MMTU */
+		/* Path MTU cannot be less than IPV6_MMTU. */
 		error = EMSGSIZE;
 		in6_ifstat_inc(ifp, ifs6_out_fragfail);
 		goto bad;
 	} else if (ip6->ip6_plen == 0) {
-		/* jumbo payload cannot be fragmented */
+		/* Jumbo payload cannot be fragmented. */
 		error = EMSGSIZE;
 		in6_ifstat_inc(ifp, ifs6_out_fragfail);
 		goto bad;
@@ -1002,11 +1031,10 @@ passout:
 		 * fragment if possible.
 		 * Must be able to put at least 8 bytes per fragment.
 		 */
-		hlen = unfragpartlen;
 		if (mtu > IPV6_MAXPACKET)
 			mtu = IPV6_MAXPACKET;
 
-		len = (mtu - hlen - sizeof(struct ip6_frag)) & ~7;
+		len = (mtu - unfragpartlen - sizeof(struct ip6_frag)) & ~7;
 		if (len < 8) {
 			error = EMSGSIZE;
 			in6_ifstat_inc(ifp, ifs6_out_fragfail);
@@ -1018,16 +1046,11 @@ passout:
 		 * fragmented packets, then do it here.
 		 * XXX-BZ handle the hw offloading case.  Need flags.
 		 */
-		if (m->m_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6) {
-			in6_delayed_cksum(m, plen, hlen);
-			m->m_pkthdr.csum_flags &= ~CSUM_DELAY_DATA_IPV6;
-		}
-#ifdef SCTP
-		if (m->m_pkthdr.csum_flags & CSUM_SCTP_IPV6) {
-			sctp_delayed_cksum(m, hlen);
-			m->m_pkthdr.csum_flags &= ~CSUM_SCTP_IPV6;
-		}
-#endif
+		error = ip6_output_delayed_csum(m, ifp, m->m_pkthdr.csum_flags,
+		    plen, optlen, true);
+		if (error != 0)
+			goto bad;
+
 		/*
 		 * Change the next header field of the last header in the
 		 * unfragmentable part.
@@ -1042,6 +1065,7 @@ passout:
 			nextproto = *mtod(exthdrs.ip6e_hbh, u_char *);
 			*mtod(exthdrs.ip6e_hbh, u_char *) = IPPROTO_FRAGMENT;
 		} else {
+			ip6 = mtod(m, struct ip6_hdr *);
 			nextproto = ip6->ip6_nxt;
 			ip6->ip6_nxt = IPPROTO_FRAGMENT;
 		}
@@ -1053,15 +1077,14 @@ passout:
 		 */
 		m0 = m;
 		id = htonl(ip6_randomid());
-		if ((error = ip6_fragment(ifp, m, hlen, nextproto, len, id)))
+		error = ip6_fragment(ifp, m, unfragpartlen, nextproto,len, id);
+		if (error != 0)
 			goto sendorfree;
 
 		in6_ifstat_inc(ifp, ifs6_out_fragok);
 	}
 
-	/*
-	 * Remove leading garbages.
-	 */
+	/* Remove leading garbage. */
 sendorfree:
 	m = m0->m_nextpkt;
 	m0->m_nextpkt = 0;
@@ -1107,7 +1130,7 @@ done:
 	return (error);
 
 freehdrs:
-	m_freem(exthdrs.ip6e_hbh);	/* m_freem will check if mbuf is 0 */
+	m_freem(exthdrs.ip6e_hbh);	/* m_freem() checks if mbuf is NULL. */
 	m_freem(exthdrs.ip6e_dest1);
 	m_freem(exthdrs.ip6e_rthdr);
 	m_freem(exthdrs.ip6e_dest2);

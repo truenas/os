@@ -368,6 +368,7 @@ struct thread {
 #ifdef __amd64__
 	struct mdthread td_md;		/* (k) Any machine-dependent fields. */
 #endif
+	int		td_pflags2;	/* (k) Private thread (TDP2_*) flags. */
 };
 
 struct thread0_storage {
@@ -495,6 +496,8 @@ do {									\
 #define	TDP_UIOHELD	0x10000000 /* Current uio has pages held in td_ma */
 #define	TDP_FORKING	0x20000000 /* Thread is being created through fork() */
 #define	TDP_EXECVMSPC	0x40000000 /* Execve destroyed old vmspace */
+
+#define	TDP2_SBPAGES	0x00000001 /* Owns sbusy on some pages */
 
 /*
  * Reasons that the current thread can not be run yet.
@@ -1162,6 +1165,25 @@ curthread_pflags_restore(int save)
 {
 
 	curthread->td_pflags &= save;
+}
+
+static __inline int
+curthread_pflags2_set(int flags)
+{
+	struct thread *td;
+	int save;
+
+	td = curthread;
+	save = ~flags | (td->td_pflags2 & flags);
+	td->td_pflags2 |= flags;
+	return (save);
+}
+
+static __inline void
+curthread_pflags2_restore(int save)
+{
+
+	curthread->td_pflags2 &= save;
 }
 
 static __inline __pure2 struct td_sched *

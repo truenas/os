@@ -166,6 +166,7 @@ device		aw_mmc			# Allwinner SD/MMC controller
 device		mmc			# mmc/sd bus
 device		mmcsd			# mmc/sd flash cards
 device		dwmmc
+device		rk_emmcphy
 
 # Serial (COM) ports
 device		uart		# Generic UART driver
@@ -179,11 +180,13 @@ device		pl011
 # USB support
 device		aw_usbphy		# Allwinner USB PHY
 device		rk_usb2phy		# Rockchip USB2PHY
+device		rk_typec_phy		# Rockchip TypeC PHY
 device		dwcotg			# DWC OTG controller
 device		ohci			# OHCI USB interface
 device		ehci			# EHCI USB interface (USB 2.0)
 device		ehci_mv			# Marvell EHCI USB interface
 device		xhci			# XHCI PCI->USB interface (USB 3.0)
+device		rk_dwc3			# Rockchip DWC3 controller
 device		usb			# USB Bus (required)
 device		ukbd			# Keyboard
 device		umass			# Disks/Mass storage - Requires scbus and da
@@ -250,10 +253,12 @@ device		mv_thermal	# Marvell Thermal Sensor Controller
 # SPI
 device		spibus
 device		bcm2835_spi	# Broadcom BCM283x SPI bus
+device		rk_spi		# RockChip SPI controller
 
 # PWM
 device		pwm
 device		aw_pwm
+device		rk_pwm
 
 # Console
 device		vt
@@ -287,6 +292,9 @@ device		nvmem
 device		regulator
 device		syscon
 device		aw_syscon
+
+# IO Domains
+device		rk_iodomain
 
 # The `bpf' device enables the Berkeley Packet Filter.
 # Be aware of the administrative consequences of enabling this!

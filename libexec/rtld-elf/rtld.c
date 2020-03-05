@@ -2987,10 +2987,13 @@ resolve_object_ifunc(Obj_Entry *obj, bool bind_now, int flags,
 	if (obj->ifuncs_resolved)
 		return (0);
 	obj->ifuncs_resolved = true;
-	if (!obj->irelative && !((obj->bind_now || bind_now) && obj->gnu_ifunc))
+	if (!obj->irelative && !obj->irelative_nonplt &&
+	    !((obj->bind_now || bind_now) && obj->gnu_ifunc))
 		return (0);
 	if (obj_disable_relro(obj) == -1 ||
 	    (obj->irelative && reloc_iresolve(obj, lockstate) == -1) ||
+	    (obj->irelative_nonplt && reloc_iresolve_nonplt(obj,
+	    lockstate) == -1) ||
 	    ((obj->bind_now || bind_now) && obj->gnu_ifunc &&
 	    reloc_gnu_ifunc(obj, flags, lockstate) == -1) ||
 	    obj_enforce_relro(obj) == -1)
@@ -5580,26 +5583,30 @@ parse_args(char* argv[], int argc, bool *use_pathp, int *fdp)
 				print_usage(argv[0]);
 				_exit(0);
 			} else if (opt == 'f') {
-			/*
-			 * -f XX can be used to specify a descriptor for the
-			 * binary named at the command line (i.e., the later
-			 * argument will specify the process name but the
-			 * descriptor is what will actually be executed)
-			 */
-			if (j != arglen - 1) {
-				/* -f must be the last option in, e.g., -abcf */
-				_rtld_error("Invalid options: %s", arg);
-				rtld_die();
-			}
-			i++;
-			fd = parse_integer(argv[i]);
-			if (fd == -1) {
-				_rtld_error("Invalid file descriptor: '%s'",
-				    argv[i]);
-				rtld_die();
-			}
-			*fdp = fd;
-			break;
+				/*
+				 * -f XX can be used to specify a
+				 * descriptor for the binary named at
+				 * the command line (i.e., the later
+				 * argument will specify the process
+				 * name but the descriptor is what
+				 * will actually be executed).
+				 *
+				 * -f must be the last option in, e.g., -abcf.
+				 */
+				if (j != arglen - 1) {
+					_rtld_error("Invalid options: %s", arg);
+					rtld_die();
+				}
+				i++;
+				fd = parse_integer(argv[i]);
+				if (fd == -1) {
+					_rtld_error(
+					    "Invalid file descriptor: '%s'",
+					    argv[i]);
+					rtld_die();
+				}
+				*fdp = fd;
+				break;
 			} else if (opt == 'p') {
 				*use_pathp = true;
 			} else {

@@ -42,18 +42,13 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/ofw_bus_subr.h>
 
 #include <dev/extres/syscon/syscon.h>
-#include <dev/extres/syscon/syscon_generic.h>
-
-#include "opt_soc.h"
+#include <dev/fdt/simple_mfd.h>
 
 static struct ofw_compat_data compat_data[] = {
-#ifdef SOC_ROCKCHIP_RK3328
+	{"rockchip,rk3288-grf", 1},
 	{"rockchip,rk3328-grf", 1},
-#endif
-#ifdef SOC_ROCKCHIP_RK3399
 	{"rockchip,rk3399-grf", 1},
 	{"rockchip,rk3399-pmugrf", 1},
-#endif
 	{NULL,             0}
 };
 
@@ -77,7 +72,7 @@ static device_method_t rk_grf_methods[] = {
 };
 
 DEFINE_CLASS_1(rk_grf, rk_grf_driver, rk_grf_methods,
-    sizeof(struct syscon_generic_softc), syscon_generic_driver);
+    sizeof(struct simple_mfd_softc), simple_mfd_driver);
 
 static devclass_t rk_grf_devclass;
 EARLY_DRIVER_MODULE(rk_grf, simplebus, rk_grf_driver, rk_grf_devclass,
