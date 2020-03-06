@@ -373,6 +373,8 @@ int	fchmodat(int, const char *, mode_t, int);
 int	futimens(int fd, const struct timespec times[2]);
 int	utimensat(int fd, const char *path, const struct timespec times[2],
 		int flag);
+int	utimensat2(int fd, const char *path, const struct timespec *times,
+		int cnt, int flag);
 #endif
 int	fstat(int, struct stat *);
 #if __BSD_VISIBLE

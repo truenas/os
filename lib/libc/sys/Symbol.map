@@ -373,6 +373,7 @@ FBSD_1.4 {
 	futimens;
 	ppoll;
 	utimensat;
+	utimensat2;
 	numa_setaffinity;
 	numa_getaffinity;
 	sendmmsg;

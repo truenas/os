@@ -101,6 +101,8 @@ static int setfflags(struct thread *td, struct vnode *, u_long);
 static int getutimes(const struct timeval *, enum uio_seg, struct timespec *);
 static int getutimens(const struct timespec *, enum uio_seg,
     struct timespec *, int *);
+static int getutimens2(const struct timespec *, int cnt, enum uio_seg,
+    struct timespec *, int *);
 static int setutimes(struct thread *td, struct vnode *,
     const struct timespec *, int, int);
 static int vn_access(struct vnode *vp, int user_flags, struct ucred *cred,
@@ -3031,6 +3033,58 @@ getutimens(const struct timespec *usrtsp, enum uio_seg tspseg,
 	return (0);
 }
 
+static int
+getutimens2(const struct timespec *usrtsp, int cnt, enum uio_seg tspseg,
+    struct timespec *tsp, int *retflags)
+{
+	struct timespec tsnow;
+	int error;
+	int only_omit, only_now, i;
+	only_omit = only_now = 1;
+	vfs_timestamp(&tsnow);
+	*retflags = 0;
+	if (usrtsp == NULL) {
+		for (i=0; i <= cnt; i++) {
+			tsp[i] = tsnow;
+		}
+		*retflags |= UTIMENS_NULL;
+		return (0);
+	}
+	if (tspseg == UIO_SYSSPACE) {
+		for (i=0; i <= cnt; i++) {
+			tsp[i] = usrtsp[i];
+		}
+	} else if ((error = copyin(usrtsp, tsp, sizeof(*tsp) * cnt)) != 0)
+		return (error);
+
+	for (i=0; i<=cnt; i++) {
+		if ((tsp[i].tv_nsec != UTIME_OMIT) &&
+		    (tsp[i].tv_nsec < 0 || tsp[i].tv_nsec >= 1000000000L)) {
+			return (EINVAL);
+		}
+		if (tsp[i].tv_nsec == UTIME_OMIT) {
+			tsp[i].tv_sec = VNOVAL;
+			only_now = 0;
+		}
+		else if (tsp[i].tv_nsec == UTIME_NOW) {
+			tsp[i] = tsnow;
+			only_omit = 0;
+		}
+		else if ((tsp[i].tv_nsec != UTIME_OMIT) &&
+			 (tsp[i].tv_nsec != UTIME_NOW)) {
+			only_omit = 0;
+			only_now = 0;
+		}
+	}
+	if (only_omit) {
+		*retflags |= UTIMENS_EXIT;
+	}
+	if (only_now) {
+		*retflags |= UTIMENS_NULL;
+	}
+	return (0);
+}
+
 /*
  * Common implementation code for utimes(), lutimes(), futimes(), futimens(),
  * and utimensat().
@@ -3243,6 +3297,14 @@ sys_utimensat(struct thread *td, struct utimensat_args *uap)
 }
 
 int
+sys_utimensat2(struct thread *td, struct utimensat2_args *uap)
+{
+
+	return (kern_utimensat2(td, uap->fd, uap->path, UIO_USERSPACE,
+	    uap->times, uap->cnt, UIO_USERSPACE, uap->flag));
+}
+
+int
 kern_utimensat(struct thread *td, int fd, char *path, enum uio_seg pathseg,
     struct timespec *tptr, enum uio_seg tptrseg, int flag)
 {
@@ -3269,6 +3331,44 @@ kern_utimensat(struct thread *td, int fd, char *path, enum uio_seg pathseg,
 	NDFREE(&nd, NDF_ONLY_PNBUF);
 	if ((flags & UTIMENS_EXIT) == 0)
 		error = setutimes(td, nd.ni_vp, ts, 2, flags & UTIMENS_NULL);
+	vrele(nd.ni_vp);
+	return (error);
+}
+
+int
+kern_utimensat2(struct thread *td, int fd, char *path, enum uio_seg pathseg,
+    struct timespec *tptr, int cnt, enum uio_seg tptrseg, int flag)
+{
+	struct nameidata nd;
+	struct timespec ts[3];
+	int error, flags;
+
+	/*
+	 * For now leave open possibility of adding new times. 
+	 * Such as a last_archived time or an immutable create time.
+	 */
+	if (cnt > 3)
+		return (EINVAL);
+
+	if (flag & ~AT_SYMLINK_NOFOLLOW)
+		return (EINVAL);
+
+	if ((error = getutimens2(tptr, cnt, tptrseg, ts, &flags)) != 0)
+		return (error);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, ((flag & AT_SYMLINK_NOFOLLOW) ? NOFOLLOW :
+	    FOLLOW) | AUDITVNODE1, pathseg, path, fd,
+	    &cap_futimes_rights, td);
+	if ((error = namei(&nd)) != 0)
+		return (error);
+	/*
+	 * We are allowed to call namei() regardless of 2xUTIME_OMIT.
+	 * POSIX states:
+	 * "If both tv_nsec fields are UTIME_OMIT... EACCESS may be detected."
+	 * "Search permission is denied by a component of the path prefix."
+	 */
+	NDFREE(&nd, NDF_ONLY_PNBUF);
+	if ((flags & UTIMENS_EXIT) == 0)
+		error = setutimes(td, nd.ni_vp, ts, cnt, flags & UTIMENS_NULL);
 	vrele(nd.ni_vp);
 	return (error);
 }

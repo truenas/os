@@ -574,4 +574,5 @@ const char *syscallnames[] = {
 	"fhlink",			/* 565 = fhlink */
 	"fhlinkat",			/* 566 = fhlinkat */
 	"fhreadlink",			/* 567 = fhreadlink */
+	"utimensat2",			/* 568 = utimensat2 */
 };
