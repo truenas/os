@@ -1368,7 +1368,7 @@
 		    size_t bufsize \
 		); \
 	}
-568	AUE_FUTIMESAT2	STD	{ int utimensat2(int fd, \
+568	AUE_FUTIMENSAT2	STD	{ int utimensat2(int fd, \
 				    _In_z_ char *path, \
 				    _In_reads_(2) \
 				    struct timespec *times, \

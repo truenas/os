@@ -3083,7 +3083,7 @@ int	freebsd11_mknodat(struct thread *, struct freebsd11_mknodat_args *);
 #define	SYS_AUE_fhlink	AUE_NULL
 #define	SYS_AUE_fhlinkat	AUE_NULL
 #define	SYS_AUE_fhreadlink	AUE_NULL
-#define	SYS_AUE_utimensat2	AUE_FUTIMESAT2
+#define	SYS_AUE_utimensat2	AUE_FUTIMENSAT2
 
 #undef PAD_
 #undef PADL_

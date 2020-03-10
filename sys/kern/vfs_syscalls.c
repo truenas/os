@@ -3044,7 +3044,7 @@ getutimens2(const struct timespec *usrtsp, int cnt, enum uio_seg tspseg,
 	vfs_timestamp(&tsnow);
 	*retflags = 0;
 	if (usrtsp == NULL) {
-		for (i=0; i <= cnt; i++) {
+		for (i = 0; i <= cnt; i++) {
 			tsp[i] = tsnow;
 		}
 		*retflags |= UTIMENS_NULL;
@@ -3057,7 +3057,7 @@ getutimens2(const struct timespec *usrtsp, int cnt, enum uio_seg tspseg,
 	} else if ((error = copyin(usrtsp, tsp, sizeof(*tsp) * cnt)) != 0)
 		return (error);
 
-	for (i=0; i<=cnt; i++) {
+	for (i = 0; i <= cnt; i++) {
 		if ((tsp[i].tv_nsec != UTIME_OMIT) &&
 		    (tsp[i].tv_nsec < 0 || tsp[i].tv_nsec >= 1000000000L)) {
 			return (EINVAL);
@@ -3343,11 +3343,7 @@ kern_utimensat2(struct thread *td, int fd, char *path, enum uio_seg pathseg,
 	struct timespec ts[3];
 	int error, flags;
 
-	/*
-	 * For now leave open possibility of adding new times. 
-	 * Such as a last_archived time or an immutable create time.
-	 */
-	if (cnt > 3)
+	if (cnt != 3)
 		return (EINVAL);
 
 	if (flag & ~AT_SYMLINK_NOFOLLOW)

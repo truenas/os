@@ -617,5 +617,5 @@ struct sysent sysent[] = {
 	{ AS(fhlink_args), (sy_call_t *)sys_fhlink, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 565 = fhlink */
 	{ AS(fhlinkat_args), (sy_call_t *)sys_fhlinkat, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 566 = fhlinkat */
 	{ AS(fhreadlink_args), (sy_call_t *)sys_fhreadlink, AUE_NULL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 567 = fhreadlink */
-	{ AS(utimensat2_args), (sy_call_t *)sys_utimensat2, AUE_FUTIMESAT2, NULL, 0, 0, 0, SY_THR_STATIC },	/* 568 = utimensat2 */
+	{ AS(utimensat2_args), (sy_call_t *)sys_utimensat2, AUE_FUTIMENSAT2, NULL, 0, 0, 0, SY_THR_STATIC },	/* 568 = utimensat2 */
 };

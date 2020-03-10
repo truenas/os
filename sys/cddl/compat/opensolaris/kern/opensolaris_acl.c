@@ -163,8 +163,7 @@ acl_from_aces(struct acl *aclp, const ace_t *aces, int nentries)
 			entry->ae_entry_type = ACL_ENTRY_TYPE_ALARM;
 			break;
 		default:
-			printf("acl_from_aces: a_type is 0x%x. Returning EINVAL.\n", ace->a_type);
-			return (EINVAL);
+			panic("acl_from_aces: a_type is 0x%x", ace->a_type);
 		}
 	}
 
