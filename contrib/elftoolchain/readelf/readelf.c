@@ -47,7 +47,7 @@
 
 #include "_elftc.h"
 
-ELFTC_VCSID("$Id: readelf.c 3649 2018-11-24 03:26:23Z emaste $");
+ELFTC_VCSID("$Id: readelf.c 3769 2019-06-29 15:15:02Z emaste $");
 
 /* Backwards compatability for older FreeBSD releases. */
 #ifndef	STB_GNU_UNIQUE
@@ -215,12 +215,12 @@ struct eflags_desc {
 	const char *desc;
 };
 
-struct mips_option {
+struct flag_desc {
 	uint64_t flag;
 	const char *desc;
 };
 
-struct flag_desc {
+struct mips_option {
 	uint64_t flag;
 	const char *desc;
 };
@@ -1162,6 +1162,8 @@ note_type_freebsd_core(unsigned int nt)
 	case 15: return "NT_PROCSTAT_PSSTRINGS";
 	case 16: return "NT_PROCSTAT_AUXV";
 	case 17: return "NT_PTLWPINFO";
+	case 0x100: return "NT_PPC_VMX (ppc Altivec registers)";
+	case 0x102: return "NT_PPC_VSX (ppc VSX registers)";
 	case 0x202: return "NT_X86_XSTATE (x86 XSAVE extended state)";
 	case 0x400: return "NT_ARM_VFP (arm VFP registers)";
 	default: return (note_type_unknown(nt));
@@ -2354,8 +2356,15 @@ dump_eflags(struct readelf *re, uint64_t e_flags)
 		}
 		edesc = mips_eflags_desc;
 		break;
-	case EM_PPC:
 	case EM_PPC64:
+		switch (e_flags) {
+		case 0: printf(", Unspecified or Power ELF V1 ABI"); break;
+		case 1: printf(", Power ELF V1 ABI"); break;
+		case 2: printf(", OpenPOWER ELF V2 ABI"); break;
+		default: break;
+		}
+		/* FALLTHROUGH */
+	case EM_PPC:
 		edesc = powerpc_eflags_desc;
 		break;
 	case EM_RISCV:
@@ -7114,15 +7123,8 @@ process_members:
 }
 
 static void
-dump_object(struct readelf *re)
+dump_object(struct readelf *re, int fd)
 {
-	int fd;
-
-	if ((fd = open(re->filename, O_RDONLY)) == -1) {
-		warn("open %s failed", re->filename);
-		return;
-	}
-
 	if ((re->flags & DISPLAY_FILENAME) != 0)
 		printf("\nFile: %s\n", re->filename);
 
@@ -7143,13 +7145,10 @@ dump_object(struct readelf *re)
 		break;
 	default:
 		warnx("Internal: libelf returned unknown elf kind.");
-		goto done;
 	}
 
-	elf_end(re->elf);
-
 done:
-	close(fd);
+	elf_end(re->elf);
 }
 
 static void
@@ -7494,7 +7493,7 @@ main(int argc, char **argv)
 {
 	struct readelf	*re, re_storage;
 	unsigned long	 si;
-	int		 opt, i;
+	int		 fd, opt, i;
 	char		*ep;
 
 	re = &re_storage;
@@ -7619,7 +7618,13 @@ main(int argc, char **argv)
 
 	for (i = 0; i < argc; i++) {
 		re->filename = argv[i];
-		dump_object(re);
+		fd = open(re->filename, O_RDONLY);
+		if (fd < 0) {
+			warn("open %s failed", re->filename);
+		} else {
+			dump_object(re, fd);
+			close(fd);
+		}
 	}
 
 	exit(EXIT_SUCCESS);
