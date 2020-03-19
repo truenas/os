@@ -727,7 +727,6 @@ ipoib_unicast_send(struct mbuf *mb, struct ipoib_dev_priv *priv, struct ipoib_he
 			}
 
 			if (!path->query && path_rec_start(priv, path)) {
-				spin_unlock_irqrestore(&priv->lock, flags);
 				if (new_path)
 					ipoib_path_free(priv, path);
 				return;
@@ -1744,12 +1743,12 @@ module_exit(ipoib_cleanup_module);
 static int
 ipoib_evhand(module_t mod, int event, void *arg)
 {
-	                return (0);
+	return (0);
 }
 
 static moduledata_t ipoib_mod = {
-	                .name = "ipoib",
-			                .evhand = ipoib_evhand,
+	.name = "ipoib",
+	.evhand = ipoib_evhand,
 };
 
 DECLARE_MODULE(ipoib, ipoib_mod, SI_SUB_LAST, SI_ORDER_ANY);

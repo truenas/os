@@ -91,7 +91,8 @@ enum sysinit_sub_id {
 	SI_SUB_DONE		= 0x0000001,	/* processed*/
 	SI_SUB_TUNABLES		= 0x0700000,	/* establish tunable values */
 	SI_SUB_COPYRIGHT	= 0x0800001,	/* first use of console*/
-	SI_SUB_VM		= 0x1000000,	/* virtual memory system init*/
+	SI_SUB_VM		= 0x1000000,	/* virtual memory system init */
+	SI_SUB_COUNTER		= 0x1100000,	/* counter(9) is initialized */
 	SI_SUB_KMEM		= 0x1800000,	/* kernel memory*/
 	SI_SUB_HYPERVISOR	= 0x1A40000,	/*
 						 * Hypervisor detection and
@@ -182,6 +183,10 @@ enum sysinit_elem_order {
 	SI_ORDER_SECOND		= 0x0000001,	/* second*/
 	SI_ORDER_THIRD		= 0x0000002,	/* third*/
 	SI_ORDER_FOURTH		= 0x0000003,	/* fourth*/
+	SI_ORDER_FIFTH		= 0x0000004,	/* fifth*/
+	SI_ORDER_SIXTH		= 0x0000005,	/* sixth*/
+	SI_ORDER_SEVENTH	= 0x0000006,	/* seventh*/
+	SI_ORDER_EIGHTH		= 0x0000007,	/* eighth*/
 	SI_ORDER_MIDDLE		= 0x1000000,	/* somewhere in the middle */
 	SI_ORDER_ANY		= 0xfffffff	/* last*/
 };
