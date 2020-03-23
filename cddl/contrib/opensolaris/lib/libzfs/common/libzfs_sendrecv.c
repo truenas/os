@@ -3525,6 +3525,7 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 		 *  - we are resuming a failed receive.
 		 */
 		if (stream_wantsnewfs) {
+			boolean_t is_volume = drrb->drr_type == DMU_OST_ZVOL;
 			if (!flags->force) {
 				zcmd_free_nvlists(&zc);
 				zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
@@ -3539,6 +3540,14 @@ zfs_receive_one(libzfs_handle_t *hdl, int infd, const char *tosnap,
 				zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
 				    "destination has snapshots (eg. %s)\n"
 				    "must destroy them to overwrite it"),
+				    zc.zc_name);
+				return (zfs_error(hdl, EZFS_EXISTS, errbuf));
+			}
+			if (is_volume && strrchr(zc.zc_name, '/') == NULL) {
+				zcmd_free_nvlists(&zc);
+				zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
+				    "destination '%s' is the root dataset\n"
+				    "cannot overwrite with a ZVOL"),
 				    zc.zc_name);
 				return (zfs_error(hdl, EZFS_EXISTS, errbuf));
 			}
