@@ -404,7 +404,10 @@ in6_mc_get(struct ifnet *ifp, const struct in6_addr *group,
 	 */
 	IN6_MULTI_LOCK_ASSERT();
 	IF_ADDR_WLOCK(ifp);
-
+	if (ifp->if_afdata[AF_INET6] == NULL) {
+		IF_ADDR_WUNLOCK(ifp);
+		return (EINVAL);
+	}
 	inm = in6m_lookup_locked(ifp, group);
 	if (inm != NULL) {
 		/*
@@ -415,6 +418,7 @@ in6_mc_get(struct ifnet *ifp, const struct in6_addr *group,
 		    ("%s: bad refcount %d", __func__, inm->in6m_refcount));
 		++inm->in6m_refcount;
 		*pinm = inm;
+		ifma = NULL;
 		goto out_locked;
 	}
 
@@ -488,8 +492,9 @@ in6_mc_get(struct ifnet *ifp, const struct in6_addr *group,
 
 	ifma->ifma_protospec = inm;
 	*pinm = inm;
-
 out_locked:
+	if (ifma)
+		if_freemulti(ifma);
 	IF_ADDR_WUNLOCK(ifp);
 	return (error);
 }

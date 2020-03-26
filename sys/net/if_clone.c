@@ -261,6 +261,8 @@ if_clone_destroy(const char *name)
 	if (ifp == NULL)
 		return (ENXIO);
 
+	if_down(ifp);
+	pause("clone down", hz/3);
 	/* Find the cloner for this interface */
 	IF_CLONERS_LOCK();
 	LIST_FOREACH(ifc, &V_if_cloners, ifc_list) {

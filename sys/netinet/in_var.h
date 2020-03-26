@@ -354,7 +354,6 @@ struct	rtentry;
 struct	route;
 struct	ip_moptions;
 
-struct in_multi *inm_lookup_locked(struct ifnet *, const struct in_addr);
 struct in_multi *inm_lookup(struct ifnet *, const struct in_addr);
 int	imo_multi_filter(const struct ip_moptions *, const struct ifnet *,
 	    const struct sockaddr *, const struct sockaddr *);

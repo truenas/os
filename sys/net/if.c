@@ -245,7 +245,6 @@ struct mbuf *(*tbr_dequeue_ptr)(struct ifaltq *, int) = NULL;
 static void	if_attachdomain(void *);
 static void	if_attachdomain1(struct ifnet *);
 static int	ifconf(u_long, caddr_t);
-static void	if_freemulti(struct ifmultiaddr *);
 static void	if_grow(void);
 static void	if_input_default(struct ifnet *, struct mbuf *);
 static int	if_requestencap_default(struct ifnet *, struct if_encap_req *);
@@ -915,17 +914,20 @@ if_attachdomain1(struct ifnet *ifp)
 		log(LOG_WARNING, "%s called more than once on %s\n",
 		    __func__, ifp->if_xname);
 		return;
-	}
-	ifp->if_afdata_initialized = domain_init_status;
+	} else
+		/* address family dependent data region */
+		bzero(ifp->if_afdata, sizeof(ifp->if_afdata));
 	IF_AFDATA_UNLOCK(ifp);
 
-	/* address family dependent data region */
-	bzero(ifp->if_afdata, sizeof(ifp->if_afdata));
 	for (dp = domains; dp; dp = dp->dom_next) {
 		if (dp->dom_ifattach)
 			ifp->if_afdata[dp->dom_family] =
 			    (*dp->dom_ifattach)(ifp);
 	}
+	IF_AFDATA_LOCK(ifp);
+	ifp->if_afdata_initialized = domain_init_status;
+	IF_AFDATA_UNLOCK(ifp);
+
 }
 
 /*
@@ -2794,7 +2796,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 			return (EINVAL);
 
 		if (cmd == SIOCADDMULTI) {
-			struct ifmultiaddr *ifma;
+			bool exists;
 
 			/*
 			 * Userland is only permitted to join groups once
@@ -2804,12 +2806,12 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 			 * already exists.
 			 */
 			IF_ADDR_RLOCK(ifp);
-			ifma = if_findmulti(ifp, &ifr->ifr_addr);
+			exists = if_existsmulti(ifp, &ifr->ifr_addr);
 			IF_ADDR_RUNLOCK(ifp);
-			if (ifma != NULL)
+			if (exists)
 				error = EADDRINUSE;
 			else
-				error = if_addmulti(ifp, &ifr->ifr_addr, &ifma);
+				error = if_addmulti(ifp, &ifr->ifr_addr, NULL);
 		} else {
 			error = if_delmulti(ifp, &ifr->ifr_addr);
 		}
@@ -3324,8 +3326,8 @@ if_allmulti(struct ifnet *ifp, int onswitch)
 	return (if_setflag(ifp, IFF_ALLMULTI, 0, &ifp->if_amcount, onswitch));
 }
 
-struct ifmultiaddr *
-if_findmulti(struct ifnet *ifp, const struct sockaddr *sa)
+static struct ifmultiaddr *
+if_findmulti_noref(struct ifnet *ifp, const struct sockaddr *sa)
 {
 	struct ifmultiaddr *ifma;
 
@@ -3340,8 +3342,39 @@ if_findmulti(struct ifnet *ifp, const struct sockaddr *sa)
 				break;
 		}
 	}
+	return ifma;
+}
+
+
+struct ifmultiaddr *
+if_findmulti(struct ifnet *ifp, const struct sockaddr *sa)
+{
+	struct ifmultiaddr *ifma;
+
+	ifma = if_findmulti_noref(ifp, sa);
+	if (ifma != NULL)
+		refcount_acquire(&ifma->ifma_refcount);
 
 	return ifma;
+}
+
+bool
+if_existsmulti(struct ifnet *ifp, const struct sockaddr *sa)
+{
+	struct ifmultiaddr *ifma;
+
+	IF_ADDR_LOCK_ASSERT(ifp);
+
+	TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
+		if (sa->sa_family == AF_LINK) {
+			if (sa_dl_equal(ifma->ifma_addr, sa))
+				break;
+		} else {
+			if (sa_equal(ifma->ifma_addr, sa))
+				break;
+		}
+	}
+	return (ifma != NULL);
 }
 
 /*
@@ -3398,10 +3431,13 @@ if_allocmulti(struct ifnet *ifp, struct sockaddr *sa, struct sockaddr *llsa,
  * counting, notifying the driver, handling routing messages, and releasing
  * any dependent link layer state.
  */
-static void
+int
 if_freemulti(struct ifmultiaddr *ifma)
 {
 
+	if (refcount_release(&ifma->ifma_refcount) == 0)
+		return (0);
+	MPASS(ifma->ifma_enqueued == false);
 	KASSERT(ifma->ifma_refcount == 0, ("if_freemulti: refcount %d",
 	    ifma->ifma_refcount));
 
@@ -3409,6 +3445,7 @@ if_freemulti(struct ifmultiaddr *ifma)
 		free(ifma->ifma_lladdr, M_IFMADDR);
 	free(ifma->ifma_addr, M_IFMADDR);
 	free(ifma, M_IFMADDR);
+	return (1);
 }
 
 /*
@@ -3437,17 +3474,24 @@ if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
 	struct sockaddr *llsa;
 	struct sockaddr_dl sdl;
 	int error;
+	bool found;
 
 	/*
 	 * If the address is already present, return a new reference to it;
 	 * otherwise, allocate storage and set up a new address.
 	 */
+	found = false;
 	IF_ADDR_WLOCK(ifp);
-	ifma = if_findmulti(ifp, sa);
-	if (ifma != NULL) {
-		ifma->ifma_refcount++;
-		if (retifma != NULL)
-			*retifma = ifma;
+	if (retifma == NULL) {
+		if (if_existsmulti(ifp, sa))
+			found = true;
+
+	} else {
+		*retifma = if_findmulti(ifp, sa);
+		if (*retifma != NULL)
+			found = true;
+	}
+	if (found) {
 		IF_ADDR_WUNLOCK(ifp);
 		return (0);
 	}
@@ -3493,15 +3537,15 @@ if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
 		if (ll_ifma == NULL) {
 			ll_ifma = if_allocmulti(ifp, llsa, NULL, M_NOWAIT);
 			if (ll_ifma == NULL) {
-				--ifma->ifma_refcount;
 				if_freemulti(ifma);
 				error = ENOMEM;
 				goto free_llsa_out;
 			}
+			/* transferring refcount from stack local to list */
 			TAILQ_INSERT_HEAD(&ifp->if_multiaddrs, ll_ifma,
 			    ifma_link);
-		} else
-			ll_ifma->ifma_refcount++;
+			ll_ifma->ifma_enqueued = true;
+		}
 		ifma->ifma_llifma = ll_ifma;
 	}
 
@@ -3511,15 +3555,20 @@ if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
 	 * ifnet address list.
 	 */
 	TAILQ_INSERT_HEAD(&ifp->if_multiaddrs, ifma, ifma_link);
-
+	ifma->ifma_enqueued = true;
+	/*
+	 * Add reference for return
+	 */
 	if (retifma != NULL)
-		*retifma = ifma;
+		refcount_acquire(&ifma->ifma_refcount);
 
 	/*
 	 * Must generate the message while holding the lock so that 'ifma'
 	 * pointer is still valid.
 	 */
 	rt_newmaddrmsg(RTM_NEWMADDR, ifma);
+	if (retifma != NULL)
+		*retifma = ifma;
 	IF_ADDR_WUNLOCK(ifp);
 
 	/*
@@ -3576,7 +3625,7 @@ if_delmulti(struct ifnet *ifp, struct sockaddr *sa)
 
 	IF_ADDR_WLOCK(ifp);
 	lastref = 0;
-	ifma = if_findmulti(ifp, sa);
+	ifma = if_findmulti_noref(ifp, sa);
 	if (ifma != NULL)
 		lastref = if_delmulti_locked(ifp, ifma, 0);
 	IF_ADDR_WUNLOCK(ifp);
@@ -3669,6 +3718,7 @@ static int
 if_delmulti_locked(struct ifnet *ifp, struct ifmultiaddr *ifma, int detaching)
 {
 	struct ifmultiaddr *ll_ifma;
+	int freed = 0;
 
 	if (ifp != NULL && ifma->ifma_ifp != NULL) {
 		KASSERT(ifma->ifma_ifp == ifp,
@@ -3698,10 +3748,12 @@ if_delmulti_locked(struct ifnet *ifp, struct ifmultiaddr *ifma, int detaching)
 			ifma->ifma_ifp = NULL;
 		}
 	}
-
-	if (--ifma->ifma_refcount > 0)
+#if 0
+	if (ifma->ifma_refcount > 1) {
+		refcount_release(&ifma->ifma_refcount);
 		return 0;
-
+	}
+#endif
 	/*
 	 * If this ifma is a network-layer ifma, a link-layer ifma may
 	 * have been associated with it. Release it first if so.
@@ -3712,19 +3764,21 @@ if_delmulti_locked(struct ifnet *ifp, struct ifmultiaddr *ifma, int detaching)
 		    ("%s: llifma w/o lladdr", __func__));
 		if (detaching)
 			ll_ifma->ifma_ifp = NULL;	/* XXX */
-		if (--ll_ifma->ifma_refcount == 0) {
-			if (ifp != NULL) {
-				TAILQ_REMOVE(&ifp->if_multiaddrs, ll_ifma,
-				    ifma_link);
-			}
-			if_freemulti(ll_ifma);
+		if (ifp != NULL && ll_ifma->ifma_enqueued) {
+			TAILQ_REMOVE(&ifp->if_multiaddrs, ll_ifma,
+			    ifma_link);
+			ll_ifma->ifma_enqueued = false;
 		}
+		if_freemulti(ll_ifma);
 	}
 
-	if (ifp != NULL)
+	if (ifp != NULL) {
 		TAILQ_REMOVE(&ifp->if_multiaddrs, ifma, ifma_link);
-
-	if_freemulti(ifma);
+		ifma->ifma_enqueued = false;
+		freed = if_freemulti(ifma);
+	}
+	if (!freed)
+		if_freemulti(ifma);
 
 	/*
 	 * The last reference to this instance of struct ifmultiaddr

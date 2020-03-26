@@ -2621,7 +2621,7 @@ nd6_rem_ifa_lle(struct in6_ifaddr *ia, int all)
 
 	if (all != 0)
 		lltable_prefix_free(AF_INET6, saddr, smask, LLE_STATIC);
-	else
+	else if (ifp->if_afdata_initialized)
 		lltable_delete_addr(LLTABLE6(ifp), LLE_IFADDR, saddr);
 }
 
