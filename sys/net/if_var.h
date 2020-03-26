@@ -480,7 +480,8 @@ struct ifmultiaddr {
 	struct	sockaddr *ifma_addr; 	/* address this membership is for */
 	struct	sockaddr *ifma_lladdr;	/* link-layer translation, if any */
 	struct	ifnet *ifma_ifp;	/* back-pointer to interface */
-	u_int	ifma_refcount;		/* reference count */
+	volatile u_int	ifma_refcount;		/* reference count */
+	bool	ifma_enqueued;
 	void	*ifma_protospec;	/* protocol-specific state, if any */
 	struct	ifmultiaddr *ifma_llifma; /* pointer to ifma for ifma_lladdr */
 };
@@ -555,6 +556,8 @@ void	if_delallmulti(struct ifnet *);
 void	if_down(struct ifnet *);
 struct ifmultiaddr *
 	if_findmulti(struct ifnet *, const struct sockaddr *);
+bool if_existsmulti(struct ifnet *, const struct sockaddr *);
+int	if_freemulti(struct ifmultiaddr *);
 void	if_free(struct ifnet *);
 void	if_initname(struct ifnet *, const char *, int);
 void	if_link_state_change(struct ifnet *, int);

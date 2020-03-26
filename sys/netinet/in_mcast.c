@@ -232,7 +232,7 @@ imf_init(struct in_mfilter *imf, const int st0, const int st1)
  * on a given interface. ifp must be valid. If no record found, return NULL.
  * The IN_MULTI_LOCK and IF_ADDR_LOCK on ifp must be held.
  */
-struct in_multi *
+static struct in_multi *
 inm_lookup_locked(struct ifnet *ifp, const struct in_addr ina)
 {
 	struct ifmultiaddr *ifma;
@@ -250,6 +250,8 @@ inm_lookup_locked(struct ifnet *ifp, const struct in_addr ina)
 			inm = NULL;
 		}
 	}
+	if (inm)
+		++inm->inm_refcount;
 	return (inm);
 }
 
@@ -458,7 +460,6 @@ in_getmulti(struct ifnet *ifp, const struct in_addr *group,
 		 */
 		KASSERT(inm->inm_refcount >= 1,
 		    ("%s: bad refcount %d", __func__, inm->inm_refcount));
-		++inm->inm_refcount;
 		*pinm = inm;
 		return (0);
 	}
@@ -504,8 +505,7 @@ in_getmulti(struct ifnet *ifp, const struct in_addr *group,
 #endif
 		++inm->inm_refcount;
 		*pinm = inm;
-		IF_ADDR_WUNLOCK(ifp);
-		return (0);
+		goto unlock_out;
 	}
 
 	IF_ADDR_WLOCK_ASSERT(ifp);
@@ -537,7 +537,8 @@ in_getmulti(struct ifnet *ifp, const struct in_addr *group,
 	ifma->ifma_protospec = inm;
 
 	*pinm = inm;
-
+unlock_out:
+	if_freemulti(ifma);
 	IF_ADDR_WUNLOCK(ifp);
 	return (0);
 }
@@ -1200,7 +1201,7 @@ in_joingroup_locked(struct ifnet *ifp, const struct in_addr *gina,
 	}
 
 out_inm_release:
-	if (error) {
+	if (error || pinm == NULL) {
 		CTR2(KTR_IGMPV3, "%s: dropping ref on %p", __func__, inm);
 		inm_release_locked(inm);
 	} else {

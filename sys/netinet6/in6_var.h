@@ -718,8 +718,10 @@ in6m_lookup_locked(struct ifnet *ifp, const struct in6_addr *mcaddr)
 	TAILQ_FOREACH(ifma, &((ifp)->if_multiaddrs), ifma_link) {
 		if (ifma->ifma_addr->sa_family == AF_INET6) {
 			inm = (struct in6_multi *)ifma->ifma_protospec;
-			if (IN6_ARE_ADDR_EQUAL(&inm->in6m_addr, mcaddr))
+			if (IN6_ARE_ADDR_EQUAL(&inm->in6m_addr, mcaddr)) {
+				inm->in6m_refcount++;
 				break;
+			}
 			inm = NULL;
 		}
 	}

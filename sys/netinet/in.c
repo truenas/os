@@ -514,8 +514,7 @@ in_aifaddr_ioctl(u_long cmd, caddr_t data, struct ifnet *ifp, struct thread *td)
 		ii = ((struct in_ifinfo *)ifp->if_afdata[AF_INET]);
 		allhosts_addr.s_addr = htonl(INADDR_ALLHOSTS_GROUP);
 
-		error = in_joingroup(ifp, &allhosts_addr, NULL,
-			&ii->ii_allhosts);
+		error = in_joingroup(ifp, &allhosts_addr, NULL, NULL);
 	}
 
 	EVENTHANDLER_INVOKE(ifaddr_event, ifp);

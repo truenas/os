@@ -578,7 +578,7 @@ ng_ether_rcvmsg(node_p node, item_p item, hook_p lasthook)
 		case NGM_ETHER_ADD_MULTI:
 		    {
 			struct sockaddr_dl sa_dl;
-			struct ifmultiaddr *ifma;
+			bool exists;
 
 			if (msg->header.arglen != ETHER_ADDR_LEN) {
 				error = EINVAL;
@@ -598,14 +598,14 @@ ng_ether_rcvmsg(node_p node, item_p item, hook_p lasthook)
 			 * already exists.
 			 */
 			if_maddr_rlock(priv->ifp);
-			ifma = if_findmulti(priv->ifp,
+			exists = if_existsmulti(priv->ifp,
 			    (struct sockaddr *)&sa_dl);
 			if_maddr_runlock(priv->ifp);
-			if (ifma != NULL) {
+			if (exists) {
 				error = EADDRINUSE;
 			} else {
 				error = if_addmulti(priv->ifp,
-				    (struct sockaddr *)&sa_dl, &ifma);
+				    (struct sockaddr *)&sa_dl, NULL);
 			}
 			break;
 		    }

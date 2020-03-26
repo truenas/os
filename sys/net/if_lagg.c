@@ -1557,7 +1557,7 @@ lagg_setmulti(struct lagg_port *lp)
 	IF_ADDR_WUNLOCK(scifp);
 	SLIST_FOREACH (mc, &lp->lp_mc_head, mc_entries) {
 		error = if_addmulti(ifp,
-		    (struct sockaddr *)&mc->mc_addr, &mc->mc_ifma);
+		    (struct sockaddr *)&mc->mc_addr, NULL);
 		if (error)
 			return (error);
 	}

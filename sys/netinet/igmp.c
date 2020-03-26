@@ -632,6 +632,7 @@ igmp_ifdetach(struct ifnet *ifp)
 			if (inm->inm_state == IGMP_LEAVING_MEMBER) {
 				SLIST_INSERT_HEAD(&igi->igi_relinmhead,
 				    inm, inm_nrele);
+				inm->inm_refcount++;
 			}
 			inm_clear_recorded(inm);
 		}
@@ -865,6 +866,7 @@ igmp_input_v2_query(struct ifnet *ifp, const struct ip *ip,
 			    "process v2 query 0x%08x on ifp %p(%s)",
 			    ntohl(igmp->igmp_group.s_addr), ifp, ifp->if_xname);
 			igmp_v2_update_group(inm, timer);
+			inm_release_locked(inm);
 		}
 	}
 
@@ -948,6 +950,7 @@ igmp_input_v3_query(struct ifnet *ifp, const struct ip *ip,
 	uint8_t			 qrv;
 
 	is_general_query = 0;
+	inm = NULL;
 
 	CTR2(KTR_IGMPV3, "process v3 query on ifp %p(%s)", ifp, ifp->if_xname);
 
@@ -1089,6 +1092,8 @@ igmp_input_v3_query(struct ifnet *ifp, const struct ip *ip,
 	}
 
 out_locked:
+	if (inm != NULL)
+		inm_release_locked(inm);
 	IGMP_UNLOCK();
 	IN_MULTI_UNLOCK();
 
@@ -1303,6 +1308,8 @@ igmp_input_v1_report(struct ifnet *ifp, /*const*/ struct ip *ip,
 	}
 
 out_locked:
+	if (inm != NULL)
+		inm_release_locked(inm);
 	IN_MULTI_UNLOCK();
 
 	return (0);
@@ -1416,6 +1423,8 @@ igmp_input_v2_report(struct ifnet *ifp, /*const*/ struct ip *ip,
 	}
 
 out_locked:
+	if (inm != NULL)
+		inm_release_locked(inm);
 	IN_MULTI_UNLOCK();
 
 	return (0);
@@ -1907,6 +1916,7 @@ igmp_v3_process_group_timers(struct igmp_ifsoftc *igi,
 				inm->inm_state = IGMP_NOT_MEMBER;
 				SLIST_INSERT_HEAD(&igi->igi_relinmhead,
 				    inm, inm_nrele);
+				inm->inm_refcount++;
 			}
 		}
 		break;
@@ -2049,6 +2059,8 @@ igmp_v3_cancel_link_timers(struct igmp_ifsoftc *igi)
 			 * transition to NOT would lose the leave and race.
 			 */
 			SLIST_INSERT_HEAD(&igi->igi_relinmhead, inm, inm_nrele);
+			inm->inm_refcount++;
+
 			/* FALLTHROUGH */
 		case IGMP_G_QUERY_PENDING_MEMBER:
 		case IGMP_SG_QUERY_PENDING_MEMBER:
@@ -2377,9 +2389,10 @@ igmp_initial_join(struct in_multi *inm, struct igmp_ifsoftc *igi)
 		 * group around for the final INCLUDE {} enqueue.
 		 */
 		if (igi->igi_version == IGMP_VERSION_3 &&
-		    inm->inm_state == IGMP_LEAVING_MEMBER)
+		    inm->inm_state == IGMP_LEAVING_MEMBER) {
+			MPASS(inm->inm_refcount > 1);
 			inm_release_locked(inm);
-
+		}
 		inm->inm_state = IGMP_REPORTING_MEMBER;
 
 		switch (igi->igi_version) {
