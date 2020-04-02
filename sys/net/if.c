@@ -978,10 +978,9 @@ static void
 if_purgemaddrs(struct ifnet *ifp)
 {
 	struct ifmultiaddr *ifma;
-	struct ifmultiaddr *next;
 
 	IF_ADDR_WLOCK(ifp);
-	TAILQ_FOREACH_SAFE(ifma, &ifp->if_multiaddrs, ifma_link, next)
+	while ((ifma = TAILQ_FIRST(&ifp->if_multiaddrs)) != NULL)
 		if_delmulti_locked(ifp, ifma, 1);
 	IF_ADDR_WUNLOCK(ifp);
 }
