@@ -2301,6 +2301,8 @@ igmp_change_state(struct in_multi *inm)
 	 * same as net's.
 	 */
 	KASSERT(inm->inm_ifp == ifp, ("%s: bad ifp", __func__));
+	if (ifp->if_flags & IFF_DYING)
+		return (ESHUTDOWN);
 
 	IGMP_LOCK();
 
