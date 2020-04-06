@@ -10,6 +10,7 @@ mlx5_cmd.c \
 mlx5_cq.c \
 mlx5_diagnostics.c \
 mlx5_eq.c \
+mlx5_eswitch.c \
 mlx5_fs_cmd.c \
 mlx5_fs_tree.c \
 mlx5_fw.c \
@@ -31,9 +32,9 @@ mlx5_uar.c \
 mlx5_vport.c \
 mlx5_vsc.c \
 mlx5_wq.c \
-mlx5_gid.c \
-device_if.h bus_if.h vnode_if.h pci_if.h \
-opt_inet.h opt_inet6.h opt_rss.h opt_ratelimit.h
+mlx5_gid.c
+SRCS+=	${LINUXKPI_GENSRCS}
+SRCS+=	opt_inet.h opt_inet6.h opt_rss.h opt_ratelimit.h
 
 CFLAGS+= -I${SRCTOP}/sys/ofed/include
 CFLAGS+= -I${SRCTOP}/sys/compat/linuxkpi/common/include

@@ -523,8 +523,6 @@ uipc_attach(struct socket *so, int proto, struct thread *td)
 	unp->unp_socket = so;
 	so->so_pcb = unp;
 	unp->unp_refcount = 1;
-	if (so->so_listen != NULL)
-		unp->unp_flags |= UNP_NASCENT;
 
 	if ((locked = UNP_LINK_WOWNED()) == false)
 		UNP_LINK_WLOCK();
@@ -765,7 +763,6 @@ uipc_detach(struct socket *so)
 {
 	struct unpcb *unp, *unp2;
 	struct mtx *vplock;
-	struct sockaddr_un *saved_unp_addr;
 	struct vnode *vp;
 	int freeunp, local_unp_rights;
 
@@ -789,15 +786,11 @@ uipc_detach(struct socket *so)
 		mtx_lock(vplock);
 	}
 	UNP_PCB_LOCK(unp);
-	if (unp->unp_vnode != vp &&
-		unp->unp_vnode != NULL) {
+	if (unp->unp_vnode != vp && unp->unp_vnode != NULL) {
 		if (vplock)
 			mtx_unlock(vplock);
 		UNP_PCB_UNLOCK(unp);
 		goto restart;
-	}
-	if ((unp->unp_flags & UNP_NASCENT) != 0) {
-		goto teardown;
 	}
 	if ((vp = unp->unp_vnode) != NULL) {
 		VOP_UNP_DETACH(vp);
@@ -806,21 +799,20 @@ uipc_detach(struct socket *so)
 	if (__predict_false(unp == unp->unp_conn)) {
 		unp_disconnect(unp, unp);
 		unp2 = NULL;
-		goto connect_self;
+	} else {
+		if ((unp2 = unp->unp_conn) != NULL) {
+			unp_pcb_owned_lock2(unp, unp2, freeunp);
+			if (freeunp)
+				unp2 = NULL;
+		}
+		unp_pcb_hold(unp);
+		if (unp2 != NULL) {
+			unp_pcb_hold(unp2);
+			unp_disconnect(unp, unp2);
+			if (unp_pcb_rele(unp2) == 0)
+				UNP_PCB_UNLOCK(unp2);
+		}
 	}
-	if ((unp2 = unp->unp_conn) != NULL) {
-		unp_pcb_owned_lock2(unp, unp2, freeunp);
-		if (freeunp)
-			unp2 = NULL;
-	}
-	unp_pcb_hold(unp);
-	if (unp2 != NULL) {
-		unp_pcb_hold(unp2);
-		unp_disconnect(unp, unp2);
-		if (unp_pcb_rele(unp2) == 0)
-			UNP_PCB_UNLOCK(unp2);
-	}
- connect_self:
 	UNP_PCB_UNLOCK(unp);
 	UNP_REF_LIST_LOCK();
 	while (!LIST_EMPTY(&unp->unp_refs)) {
@@ -840,15 +832,11 @@ uipc_detach(struct socket *so)
 	freeunp = unp_pcb_rele(unp);
 	MPASS(freeunp == 0);
 	local_unp_rights = unp_rights;
-teardown:
 	unp->unp_socket->so_pcb = NULL;
-	saved_unp_addr = unp->unp_addr;
-	unp->unp_addr = NULL;
 	unp->unp_socket = NULL;
-	freeunp = unp_pcb_rele(unp);
-	if (saved_unp_addr != NULL)
-		free(saved_unp_addr, M_SONAME);
-	if (!freeunp)
+	free(unp->unp_addr, M_SONAME);
+	unp->unp_addr = NULL;
+	if (!unp_pcb_rele(unp))
 		UNP_PCB_UNLOCK(unp);
 	if (vp) {
 		mtx_unlock(vplock);
@@ -1682,7 +1670,6 @@ unp_connect2(struct socket *so, struct socket *so2, int req)
 
 	if (so2->so_type != so->so_type)
 		return (EPROTOTYPE);
-	unp2->unp_flags &= ~UNP_NASCENT;
 	unp->unp_conn = unp2;
 	unp_pcb_hold(unp2);
 	unp_pcb_hold(unp);

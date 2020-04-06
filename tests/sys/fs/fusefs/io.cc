@@ -46,34 +46,9 @@ extern "C" {
 /* 
  * For testing I/O like fsx does, but deterministically and without a real
  * underlying file system
- *
- * TODO: after fusefs gains the options to select cache mode for each mount
- * point, run each of these tests for all cache modes.
  */
 
 using namespace testing;
-
-enum cache_mode {
-	Uncached,
-	Writethrough,
-	Writeback,
-	WritebackAsync
-};
-
-const char *cache_mode_to_s(enum cache_mode cm) {
-	switch (cm) {
-	case Uncached:
-		return "Uncached";
-	case Writethrough:
-		return "Writethrough";
-	case Writeback:
-		return "Writeback";
-	case WritebackAsync:
-		return "WritebackAsync";
-	default:
-		return "Unknown";
-	}
-}
 
 const char FULLPATH[] = "mountpoint/some_file.txt";
 const char RELPATH[] = "some_file.txt";
