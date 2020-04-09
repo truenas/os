@@ -2197,7 +2197,9 @@ receive_object(struct receive_writer_arg *rwa, struct drr_object *drro,
 		    drro->drr_bonustype, drro->drr_bonuslen, tx);
 	} else if (drro->drr_type != doi.doi_type ||
 	    (drro->drr_blksz != doi.doi_data_block_size &&
-	     doi.doi_max_offset > doi.doi_data_block_size)) {
+	     doi.doi_max_offset > doi.doi_data_block_size) ||
+	    (drro->drr_bonuslen != doi.doi_bonus_size &&
+	     drro->drr_bonuslen > DN_MAX_BONUSLEN - sizeof (blkptr_t))) {
 		/* currently allocated, but with different properties */
 		err = dmu_object_reclaim(rwa->os, drro->drr_object,
 		    drro->drr_type, drro->drr_blksz,
