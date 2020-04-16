@@ -845,7 +845,6 @@ mlx5e_update_stats_locked(struct mlx5e_priv *priv)
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_vport_stats *s = &priv->stats.vport;
 	struct mlx5e_sq_stats *sq_stats;
-	struct buf_ring *sq_br;
 #if (__FreeBSD_version < 1100000)
 	struct ifnet *ifp = priv->ifp;
 #endif
@@ -895,13 +894,11 @@ mlx5e_update_stats_locked(struct mlx5e_priv *priv)
 
 		for (j = 0; j < priv->num_tc; j++) {
 			sq_stats = &pch->sq[j].stats;
-			sq_br = pch->sq[j].br;
 
 			tso_packets += sq_stats->tso_packets;
 			tso_bytes += sq_stats->tso_bytes;
 			tx_queue_dropped += sq_stats->dropped;
-			if (sq_br != NULL)
-				tx_queue_dropped += sq_br->br_drops;
+			tx_queue_dropped += sq_stats->enobuf;
 			tx_defragged += sq_stats->defragged;
 			tx_offload_none += sq_stats->csum_offload_none;
 		}
@@ -3479,15 +3476,19 @@ mlx5e_check_required_hca_cap(struct mlx5_core_dev *mdev)
 static u16
 mlx5e_get_max_inline_cap(struct mlx5_core_dev *mdev)
 {
-	uint32_t bf_buf_size = (1U << MLX5_CAP_GEN(mdev, log_bf_reg_size)) / 2U;
+	const int min_size = ETHER_VLAN_ENCAP_LEN + ETHER_HDR_LEN;
+	const int max_size = MLX5E_MAX_TX_INLINE;
+	const int bf_buf_size =
+	    ((1U << MLX5_CAP_GEN(mdev, log_bf_reg_size)) / 2U) -
+	    (sizeof(struct mlx5e_tx_wqe) - 2);
 
-	bf_buf_size -= sizeof(struct mlx5e_tx_wqe) - 2;
-
-	/* verify against driver hardware limit */
-	if (bf_buf_size > MLX5E_MAX_TX_INLINE)
-		bf_buf_size = MLX5E_MAX_TX_INLINE;
-
-	return (bf_buf_size);
+	/* verify against driver limits */
+	if (bf_buf_size > max_size)
+		return (max_size);
+	else if (bf_buf_size < min_size)
+		return (min_size);
+	else
+		return (bf_buf_size);
 }
 
 static int

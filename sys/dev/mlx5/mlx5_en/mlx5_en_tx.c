@@ -306,8 +306,10 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf **mbp)
 	u8 opcode;
 
 	/* Return ENOBUFS if the queue is full */
-	if (unlikely(!mlx5e_sq_has_room_for(sq, 2 * MLX5_SEND_WQE_MAX_WQEBBS)))
+	if (unlikely(!mlx5e_sq_has_room_for(sq, 2 * MLX5_SEND_WQE_MAX_WQEBBS))) {
+		sq->stats.enobuf++;
 		return (ENOBUFS);
+	}
 
 	/* Align SQ edge with NOPs to avoid WQE wrap around */
 	pi = ((~sq->pc) & sq->wq.sz_m1);
@@ -315,8 +317,10 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf **mbp)
 		/* Send one multi NOP message instead of many */
 		mlx5e_send_nop(sq, (pi + 1) * MLX5_SEND_WQEBB_NUM_DS);
 		pi = ((~sq->pc) & sq->wq.sz_m1);
-		if (pi < (MLX5_SEND_WQE_MAX_WQEBBS - 1))
+		if (pi < (MLX5_SEND_WQE_MAX_WQEBBS - 1)) {
+			sq->stats.enobuf++;
 			return (ENOMEM);
+		}
 	}
 
 	/* Setup local variables */
@@ -398,18 +402,18 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf **mbp)
 
 	if (likely(ihs == 0)) {
 		/* nothing to inline */
-	} else if (unlikely(ihs > sq->max_inline)) {
-		/* inline header size is too big */
-		err = EINVAL;
-		goto tx_drop;
 	} else if ((mb->m_flags & M_VLANTAG) != 0) {
 		struct ether_vlan_header *eh = (struct ether_vlan_header *)
 		    wqe->eth.inline_hdr_start;
 
 		/* Range checks */
-		if (unlikely(ihs > (MLX5E_MAX_TX_INLINE - ETHER_VLAN_ENCAP_LEN)))
-			ihs = (MLX5E_MAX_TX_INLINE - ETHER_VLAN_ENCAP_LEN);
-		else if (unlikely(ihs < ETHER_HDR_LEN)) {
+		if (unlikely(ihs > (sq->max_inline - ETHER_VLAN_ENCAP_LEN))) {
+			if (mb->m_pkthdr.csum_flags & CSUM_TSO) {
+				err = EINVAL;
+				goto tx_drop;
+			}
+			ihs = (sq->max_inline - ETHER_VLAN_ENCAP_LEN);
+		} else if (unlikely(ihs < ETHER_HDR_LEN)) {
 			err = EINVAL;
 			goto tx_drop;
 		}
@@ -426,6 +430,14 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf **mbp)
 		ihs += ETHER_VLAN_ENCAP_LEN;
 		wqe->eth.inline_hdr_sz = cpu_to_be16(ihs);
 	} else {
+		/* check if inline header size is too big */
+		if (unlikely(ihs > sq->max_inline)) {
+			if (unlikely(mb->m_pkthdr.csum_flags & CSUM_TSO)) {
+				err = EINVAL;
+				goto tx_drop;
+			}
+			ihs = sq->max_inline;
+		}
 		m_copydata(mb, 0, ihs, wqe->eth.inline_hdr_start);
 		m_adj(mb, ihs);
 		wqe->eth.inline_hdr_sz = cpu_to_be16(ihs);
