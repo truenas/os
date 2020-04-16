@@ -62,8 +62,12 @@ local function bootenvSet(env)
 end
 
 local function serialboot()
+	if core.isUEFIBoot() then
+		loader.setenv("console", "comconsole,efi")
+	else
+		loader.setenv("console", "comconsole,vidconsole")
+	end
 	loader.setenv("comconsole_speed", "115200")
-	loader.setenv("console", "comconsole,vidconsole")
 	loader.setenv("boot_multicons", "YES")
 	loader.setenv("boot_serial", "YES")
 	core.boot()
