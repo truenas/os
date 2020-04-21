@@ -82,25 +82,6 @@ also menu-namespace also menu-command-helpers
 	0 boot ( state -- )
 ;
 
-\
-\ Serial Boot
-\
-
-: init_serialboot ( N -- N )
-	s" boot_single" getenv -1 <> if
-		drop ( n c-addr -- n ) \ unused
-		toggle_menuitem ( n -- n )
-	then
-;
-
-: serialboot ( N -- NOTREACHED )
-	s" set comconsole_speed=115200" evaluate
-	s" set console=comconsole,vidconsole" evaluate
-	s" set boot_multicons=YES" evaluate
-	s" set boot_serial=YES" evaluate
-	0 boot ( state -- )
-;
-
 \ 
 \ ACPI
 \ 
