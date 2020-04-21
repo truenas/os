@@ -73,6 +73,10 @@ local function serialboot()
 	core.boot()
 end
 
+local function productname()
+	return loader.getenv("product") or "FreeBSD"
+end
+
 -- Module exports
 menu.handlers = {
 	-- Menu handlers take the current menu and selected entry as parameters,
@@ -251,7 +255,7 @@ menu.welcome = {
 		multi_user = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("B") .. "oot " ..
-			    loader.getenv("product") .. " " ..
+			    productname() .. " " ..
 			    color.highlight("[Enter]"),
 			func = function()
 				core.setSingleUser(false)
@@ -263,7 +267,7 @@ menu.welcome = {
 		single_user = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("B") .. "oot " ..
-			    loader.getenv("product") .. " (Single User) " ..
+			    productname() .. " (Single User) " ..
 			    color.highlight("[Enter]"),
 			func = function()
 				core.setSingleUser(true)
@@ -274,7 +278,7 @@ menu.welcome = {
 		-- boot multi user with serial console
 		multi_serial = {
 			entry_type = core.MENU_ENTRY,
-			name = "Boot " .. loader.getenv("product") ..
+			name = "Boot " .. productname() ..
 			    " (" .. color.highlight("S") .. "erial Console)",
 			func = function()
 				core.setSingleUser(false)
@@ -285,7 +289,7 @@ menu.welcome = {
 		-- boot single user with serial console
 		single_serial = {
 			entry_type = core.MENU_ENTRY,
-			name = "Boot " .. loader.getenv("product") ..
+			name = "Boot " .. productname() ..
 			    " (" .. color.highlight("S") .. "erial Console," ..
 			    " Single User)",
 			func = function()
