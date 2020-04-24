@@ -473,9 +473,12 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 	memset((void *)sc->fb_base, 0, FB_SIZE);
 
 	if (sc->vncserver_enabled)
-		error = vncserver_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait, sc->rfb_password, sc->vncserver_web);
+		error = vncserver_init(sc->rfb_host, sc->rfb_port,
+		    sc->rfb_wait, sc->rfb_password, sc->vncserver_web,
+		    vm_get_device_fd(ctx));
 	else
-		error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait, sc->rfb_password);
+		error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait,
+		    sc->rfb_password);
 done:
 	if (error)
 		free(sc);

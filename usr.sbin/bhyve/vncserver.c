@@ -35,6 +35,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/time.h>
 #include <sys/event.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <netinet/in.h>
 
@@ -383,11 +384,14 @@ sse42_supported()
 }
 
 int
-vncserver_init(char *hostname, int port, int wait, char *password, int webserver)
+vncserver_init(char *hostname, int port, int wait, char *password,
+    int webserver, int statfd)
 {
 	struct vncserver_softc *sc;
+	struct timeval now;
+	struct timespec until;
 
-	if(load_shared_lib() == 1)
+	if (load_shared_lib() == 1)
 	    errx(EX_SOFTWARE, "cannot load shared library libhyve-remote");
 	
 	sc = calloc(1, sizeof(struct vncserver_softc));
@@ -446,7 +450,17 @@ vncserver_init(char *hostname, int port, int wait, char *password, int webserver
 	if (wait) {
 		DPRINTF(("Waiting for vnc client...\n"));
 		pthread_mutex_lock(&sc->vs_mtx);
-		pthread_cond_wait(&sc->vs_cond, &sc->vs_mtx);
+		do {
+			gettimeofday(&now, NULL);
+			until.tv_sec = now.tv_sec + 3;
+			until.tv_nsec = 0;
+			/* Periodically check if the VM is still there. */
+			if (fstat(statfd, NULL) == -1 && errno != EFAULT) {
+				pthread_mutex_unlock(&sc->vs_mtx);
+				return (-1);
+			}
+		} while (pthread_cond_timedwait(&sc->vs_cond, &sc->vs_mtx,
+		    &until));
 		pthread_mutex_unlock(&sc->vs_mtx);
 	}
 
