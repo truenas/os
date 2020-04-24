@@ -392,7 +392,7 @@ pci_fbuf_render(struct bhyvegc *gc, void *arg)
 static int
 pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 {
-	int error, prot;
+	int error, prot, waitfd;
 	struct pci_fbuf_softc *sc;
 	
 	if (fbuf_sc != NULL) {
@@ -472,12 +472,13 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 	memset((void *)sc->fb_base, 0, FB_SIZE);
 
+	waitfd = sc->rfb_wait ? vm_get_device_fd(ctx) : -1;
+
 	if (sc->vncserver_enabled)
 		error = vncserver_init(sc->rfb_host, sc->rfb_port,
-		    sc->rfb_wait, sc->rfb_password, sc->vncserver_web,
-		    vm_get_device_fd(ctx));
+		    waitfd, sc->rfb_password, sc->vncserver_web);
 	else
-		error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait,
+		error = rfb_init(sc->rfb_host, sc->rfb_port, waitfd,
 		    sc->rfb_password);
 done:
 	if (error)
