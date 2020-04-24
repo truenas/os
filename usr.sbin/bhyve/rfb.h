@@ -32,7 +32,7 @@
 #define	_RFB_H_
 
 #define	RFB_PORT	5900
-#define	RFB_WAIT_INTERVAL	3	/* seconds */
+#define	RFB_WAIT_INTERVAL	1	/* seconds */
 
 int	rfb_init(const char *hostname, int port, int waitfd,
 	    const char *password);
