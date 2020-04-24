@@ -58,6 +58,7 @@ __FBSDID("$FreeBSD$");
 
 #include "bhyvegc.h"
 #include "console.h"
+#include "rfb.h"
 
 static int vncserver_debug = 1;
 #define	DPRINTF(params) if (vncserver_debug) printf params
@@ -384,12 +385,13 @@ sse42_supported()
 }
 
 int
-vncserver_init(char *hostname, int port, int wait, char *password,
-    int webserver, int statfd)
+vncserver_init(char *hostname, int port, int waitfd, char *password,
+    int webserver)
 {
 	struct vncserver_softc *sc;
 	struct timeval now;
 	struct timespec until;
+	int wait;
 
 	if (load_shared_lib() == 1)
 	    errx(EX_SOFTWARE, "cannot load shared library libhyve-remote");
@@ -405,7 +407,7 @@ vncserver_init(char *hostname, int port, int wait, char *password,
 
 	sc->vs_hw_crc = sse42_supported();
 
-	sc->vs_conn_wait = wait;
+	sc->vs_conn_wait = wait = waitfd != -1;
 
 	if (wait) {
 		pthread_mutex_init(&sc->vs_mtx, NULL);
@@ -448,17 +450,15 @@ vncserver_init(char *hostname, int port, int wait, char *password,
 	vnc_event_loop(-1, true);
 
 	if (wait) {
+		until.tv_nsec = 0;
 		DPRINTF(("Waiting for vnc client...\n"));
 		pthread_mutex_lock(&sc->vs_mtx);
 		do {
-			gettimeofday(&now, NULL);
-			until.tv_sec = now.tv_sec + 3;
-			until.tv_nsec = 0;
 			/* Periodically check if the VM is still there. */
-			if (fstat(statfd, NULL) == -1 && errno != EFAULT) {
-				pthread_mutex_unlock(&sc->vs_mtx);
-				return (-1);
-			}
+			gettimeofday(&now, NULL);
+			until.tv_sec = now.tv_sec + RFB_WAIT_INTERVAL;
+			if (fstat(waitfd, NULL) == -1 && errno != EFAULT)
+				errx(EX_UNAVAILABLE, "the VM was destroyed");
 		} while (pthread_cond_timedwait(&sc->vs_cond, &sc->vs_mtx,
 		    &until));
 		pthread_mutex_unlock(&sc->vs_mtx);

@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/endian.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
 #include <stdatomic.h>
@@ -1080,13 +1081,16 @@ sse42_supported(void)
 }
 
 int
-rfb_init(char *hostname, int port, int wait, char *password)
+rfb_init(char *hostname, int port, int waitfd, char *password)
 {
 	int e;
 	char servname[6];
 	struct rfb_softc *rc;
 	struct addrinfo *ai = NULL;
 	struct addrinfo hints;
+	struct timeval now;
+	struct timespec until;
+	int wait;
 	int on = 1;
 	int cnt;
 #ifndef WITHOUT_CAPSICUM
@@ -1150,7 +1154,7 @@ rfb_init(char *hostname, int port, int wait, char *password)
 
 	rc->hw_crc = sse42_supported();
 
-	rc->conn_wait = wait;
+	rc->conn_wait = wait = waitfd != -1;
 	if (wait) {
 		pthread_mutex_init(&rc->mtx, NULL);
 		pthread_cond_init(&rc->cond, NULL);
@@ -1160,8 +1164,17 @@ rfb_init(char *hostname, int port, int wait, char *password)
 	pthread_set_name_np(rc->tid, "rfb");
 
 	if (wait) {
+		until.tv_nsec = 0;
 		DPRINTF(("Waiting for rfb client..."));
 		pthread_mutex_lock(&rc->mtx);
+		do {
+			/* Periodically check if the VM is still there. */
+			gettimeofday(&now, NULL);
+			until.tv_sec = now.tv_sec + RFB_WAIT_INTERVAL;
+			if (fstat(waitfd, NULL) == -1 && errno != EFAULT)
+				errx(EX_UNAVAILABLE, "the VM was destroyed");
+		} while (pthread_cond_timedwait(&rc->cond, &rc->mtx, &until));
+
 		pthread_cond_wait(&rc->cond, &rc->mtx);
 		pthread_mutex_unlock(&rc->mtx);
 		DPRINTF(("rfb client connected"));

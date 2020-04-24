@@ -32,9 +32,10 @@
 #define	_RFB_H_
 
 #define	RFB_PORT	5900
+#define	RFB_WAIT_INTERVAL	3	/* seconds */
 
-int	rfb_init(char *hostname, int port, int wait, char *password);
-int	vncserver_init(char *hostname, int port, int wait, char *password,
-    int webserver, int statfd);
+int	rfb_init(char *hostname, int port, int waitfd, char *password);
+int	vncserver_init(char *hostname, int port, int waitfd, char *password,
+    int webserver);
 
 #endif /* _RFB_H_ */
