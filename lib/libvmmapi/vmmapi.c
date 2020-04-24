@@ -1762,7 +1762,7 @@ vm_limit_rights(struct vmctx *ctx)
 	cap_rights_t rights;
 	size_t ncmds;
 
-	cap_rights_init(&rights, CAP_IOCTL, CAP_MMAP_RW);
+	cap_rights_init(&rights, CAP_IOCTL, CAP_MMAP_RW, CAP_FSTATAT);
 	if (caph_rights_limit(ctx->fd, &rights) != 0)
 		return (-1);
 	ncmds = nitems(vm_ioctl_cmds);
