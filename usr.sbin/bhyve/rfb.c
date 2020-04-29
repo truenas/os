@@ -162,17 +162,6 @@ struct rfb_pixfmt_msg {
 /* percentage changes to screen before sending the entire screen */
 #define	RFB_SEND_ALL_THRESH		25
 
-/* path of libhyve-remote */
-#define LIB_HYVE_REMOTE "/usr/local/lib/libhyverem.so"
-
-/* prototype functions from shared library libhyve-remote */
-int (*vnc_init_server)(struct rfb_softc *sc);
-int (*vnc_event_loop)(int time, bool b);
-int (*vnc_enable_http)(char *webdir, bool enable);
-int (*vnc_enable_password)(char *vnc_password);
-void (*vnc_mark_rect_modified)(struct rfb_softc *sc, int x1, int y1,
-        int x2, int y2);
-
 struct rfb_enc_msg {
 	uint8_t		type;
 	uint8_t		pad;
