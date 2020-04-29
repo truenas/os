@@ -100,20 +100,21 @@ struct pci_fbuf_softc {
 	} __packed memregs;
 
 	/* rfb server */
-	char		*rfb_host;
-	char		*rfb_password;
-	int		rfb_port;
-	int		rfb_wait;
-	int		vga_enabled;
-	int		vga_full;
-	int		vncserver_enabled;
-        int             vncserver_web;
+	char      *rfb_host;
+	char      *rfb_password;
+	int       rfb_port;
+	int       rfb_wait;
+	int       vga_enabled;
+	int	  vga_full;
 
-	uint32_t	fbaddr;
-	char		*fb_base;
-	uint16_t	gc_width;
-	uint16_t	gc_height;
-	void		*vgasc;
+	int       vncserver_enabled;
+	int       vncserver_web;
+
+	uint32_t  fbaddr;
+	char      *fb_base;
+	uint16_t  gc_width;
+	uint16_t  gc_height;
+	void      *vgasc;
 	struct bhyvegc_image *gc_image;
 };
 
@@ -272,10 +273,10 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 			continue;
 		}
 
-                if(strcmp(xopts, "vncweb") == 0) {
-                    sc->vncserver_web = 1;
-                    continue;
-                }
+		if (strcmp(xopts, "vncweb") == 0) {
+			sc->vncserver_web = 1;
+			continue;
+		}
 
 		if (strcmp(xopts, "vncserver") == 0) {
 			if (loader == NULL) {
@@ -289,13 +290,13 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 				fprintf(stderr, "Using RFB bhyve implementation.\n");
 			} else {
 				sc->vncserver_enabled = 1;
-                                if (strcmp(xopts, "vncweb") == 0) 
-                                {
-                                    DPRINTF(DEBUG_VERBOSE, ("ENABLED VNCWEB"));
-                                    printf("ENABLED VNCWEB\n");
-                                    sc->vncserver_web = 1;
-                                }
-                        }
+				if (strcmp(xopts, "vncweb") == 0)
+				{
+					DPRINTF(DEBUG_VERBOSE, ("ENABLED VNCWEB"));
+					printf("ENABLED VNCWEB\n");
+					sc->vncserver_web = 1;
+				}
+			}
 			dlclose(shlib);
 			free(loader);
 			continue;
@@ -342,7 +343,7 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 					sc->rfb_host = strdup(tmpstr);
 				}
 			}
-		} else if (!strcmp(xopts, "vga")) {
+	        } else if (!strcmp(xopts, "vga")) {
 			if (!strcmp(config, "off")) {
 				sc->vga_enabled = 0;
 			} else if (!strcmp(config, "io")) {
@@ -356,8 +357,8 @@ pci_fbuf_parse_opts(struct pci_fbuf_softc *sc, char *opts)
 				ret = -1;
 				goto done;
 			}
-		} else if (!strcmp(xopts, "w")) {
-			sc->memregs.width = atoi(config);
+	        } else if (!strcmp(xopts, "w")) {
+		        sc->memregs.width = atoi(config);
 			if (sc->memregs.width > COLS_MAX) {
 				pci_fbuf_usage(xopts);
 				ret = -1;
