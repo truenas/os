@@ -63,7 +63,13 @@ end
 
 local function serialboot()
 	if core.isUEFIBoot() then
-		loader.setenv("console", "comconsole,efi")
+		if loader.getenv("efi_8250_uid") then
+			-- Use only comconsole if an efi serial port is present
+			-- so we don't duplicate our output in loader.
+			loader.setenv("console", "comconsole")
+		else
+			loader.setenv("console", "comconsole,efi")
+		end
 	else
 		loader.setenv("console", "comconsole,vidconsole")
 	end
