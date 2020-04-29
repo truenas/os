@@ -232,13 +232,20 @@ menu.boot_options = {
 
 menu.welcome = {
 	entries = function()
-		local me = menu.welcome.all_entries
-		local single = core.isSingleUserBoot()
+		local menu_entries = menu.welcome.all_entries
+		local boot_entry_1, boot_entry_2
+		if core.isSingleUserBoot() then
+			boot_entry_1 = menu_entries.single_user
+			boot_entry_2 = menu_entries.single_serial
+		else
+			boot_entry_1 = menu_entries.multi_user
+			boot_entry_2 = menu_entries.multi_serial
+		end
 		return {
-			single and me.single_user or me.multi_user,
-			single and me.single_serial or me.multi_serial,
-			me.prompt,
-			me.reboot,
+			boot_entry_1,
+			boot_entry_2,
+			menu_entries.prompt,
+			menu_entries.reboot,
 			{
 				entry_type = core.MENU_SEPARATOR,
 			},
@@ -246,13 +253,12 @@ menu.welcome = {
 				entry_type = core.MENU_SEPARATOR,
 				name = "Options:",
 			},
-			me.kernel_options,
-			me.boot_options,
-			me.boot_envs,
+			menu_entries.kernel_options,
+			menu_entries.boot_options,
+			menu_entries.boot_envs,
 		}
 	end,
 	all_entries = {
-		-- boot multi user
 		multi_user = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("B") .. "oot " ..
@@ -264,7 +270,6 @@ menu.welcome = {
 			end,
 			alias = {"b", "B"},
 		},
-		-- boot single user
 		single_user = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("B") .. "oot " ..
@@ -276,7 +281,6 @@ menu.welcome = {
 			end,
 			alias = {"b", "B"},
 		},
-		-- boot multi user with serial console
 		multi_serial = {
 			entry_type = core.MENU_ENTRY,
 			name = "Boot " .. productname() ..
@@ -287,7 +291,6 @@ menu.welcome = {
 			end,
 			alias = {"s", "S"},
 		},
-		-- boot single user with serial console
 		single_serial = {
 			entry_type = core.MENU_ENTRY,
 			name = "Boot " .. productname() ..
@@ -299,7 +302,6 @@ menu.welcome = {
 			end,
 			alias = {"s", "S"},
 		},
-		-- escape to interpreter
 		prompt = {
 			entry_type = core.MENU_RETURN,
 			name = color.highlight("Esc") .. "ape to loader prompt",
@@ -308,7 +310,6 @@ menu.welcome = {
 			end,
 			alias = {core.KEYSTR_ESCAPE},
 		},
-		-- reboot
 		reboot = {
 			entry_type = core.MENU_ENTRY,
 			name = color.highlight("R") .. "eboot",
@@ -317,7 +318,6 @@ menu.welcome = {
 			end,
 			alias = {"r", "R"},
 		},
-		-- kernel options
 		kernel_options = {
 			entry_type = core.MENU_CAROUSEL_ENTRY,
 			carousel_id = "kernel",
@@ -350,14 +350,12 @@ menu.welcome = {
 			end,
 			alias = {"k", "K"},
 		},
-		-- boot options
 		boot_options = {
 			entry_type = core.MENU_SUBMENU,
 			name = "Boot " .. color.highlight("O") .. "ptions",
 			submenu = menu.boot_options,
 			alias = {"o", "O"},
 		},
-		-- boot environments
 		boot_envs = {
 			entry_type = core.MENU_SUBMENU,
 			visible = function()
@@ -368,7 +366,6 @@ menu.welcome = {
 			submenu = menu.boot_environments,
 			alias = {"e", "E"},
 		},
-		-- chainload
 		chainload = {
 			entry_type = core.MENU_ENTRY,
 			name = function()
