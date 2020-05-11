@@ -47,14 +47,20 @@
 typedef vm_offset_t	db_addr_t;
 typedef long		db_expr_t;
 
-#define	PC_REGS()	((db_addr_t)kdb_thrctx->pcb_sepc)
+#define	PC_REGS()	((db_addr_t)kdb_frame->tf_sepc)
 
 #define	BKPT_INST	(0x00100073)
 #define	BKPT_SIZE	(INSN_SIZE)
 #define	BKPT_SET(inst)	(BKPT_INST)
 
-#define	BKPT_SKIP do {				\
-	kdb_frame->tf_sepc += BKPT_SIZE;	\
+#define	BKPT_SKIP do {							\
+	uint32_t _instr;						\
+									\
+	_instr = db_get_value(PC_REGS(), sizeof(uint32_t), FALSE);	\
+	if ((_instr & 0x3) == 0x3)					\
+		kdb_frame->tf_sepc += 4;	/* ebreak */		\
+	else								\
+		kdb_frame->tf_sepc += 2;	/* c.ebreak */		\
 } while (0)
 
 #define	db_clear_single_step	kdb_cpu_clear_singlestep

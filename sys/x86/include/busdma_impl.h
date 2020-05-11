@@ -84,6 +84,7 @@ struct bus_dma_impl {
 	void (*map_unload)(bus_dma_tag_t dmat, bus_dmamap_t map);
 	void (*map_sync)(bus_dma_tag_t dmat, bus_dmamap_t map,
 	    bus_dmasync_op_t op);
+	bool (*id_mapped)(bus_dma_tag_t, vm_paddr_t, bus_size_t);
 };
 
 void bus_dma_dflt_lock(void *arg, bus_dma_lock_op_t op);

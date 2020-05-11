@@ -95,6 +95,9 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/openfirm.h>
 #endif
 
+static void get_fpcontext(struct thread *td, mcontext_t *mcp);
+static void set_fpcontext(struct thread *td, mcontext_t *mcp);
+
 struct pcpu __pcpu[MAXCPU];
 
 static struct trapframe proc0_tf;
@@ -128,6 +131,7 @@ static void
 cpu_startup(void *dummy)
 {
 
+	sbi_print_version();
 	identify_cpu();
 
 	printf("real memory  = %ju (%ju MB)\n", ptoa((uintmax_t)realmem),
@@ -349,6 +353,7 @@ get_mcontext(struct thread *td, mcontext_t *mcp, int clear_ret)
 	mcp->mc_gpregs.gp_tp = tf->tf_tp;
 	mcp->mc_gpregs.gp_sepc = tf->tf_sepc;
 	mcp->mc_gpregs.gp_sstatus = tf->tf_sstatus;
+	get_fpcontext(td, mcp);
 
 	return (0);
 }
@@ -369,6 +374,7 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 	tf->tf_gp = mcp->mc_gpregs.gp_gp;
 	tf->tf_sepc = mcp->mc_gpregs.gp_sepc;
 	tf->tf_sstatus = mcp->mc_gpregs.gp_sstatus;
+	set_fpcontext(td, mcp);
 
 	return (0);
 }
@@ -518,8 +524,6 @@ sys_sigreturn(struct thread *td, struct sigreturn_args *uap)
 	ucontext_t uc;
 	int error;
 
-	if (uap == NULL)
-		return (EFAULT);
 	if (copyin(uap->sigcntxp, &uc, sizeof(uc)))
 		return (EFAULT);
 
@@ -535,8 +539,6 @@ sys_sigreturn(struct thread *td, struct sigreturn_args *uap)
 	error = set_mcontext(td, &uc.uc_mcontext);
 	if (error != 0)
 		return (error);
-
-	set_fpcontext(td, &uc.uc_mcontext);
 
 	/* Restore signal mask. */
 	kern_sigprocmask(td, SIG_SETMASK, &uc.uc_sigmask, NULL, 0);
@@ -555,15 +557,12 @@ void
 makectx(struct trapframe *tf, struct pcb *pcb)
 {
 
-	memcpy(pcb->pcb_t, tf->tf_t, sizeof(tf->tf_t));
 	memcpy(pcb->pcb_s, tf->tf_s, sizeof(tf->tf_s));
-	memcpy(pcb->pcb_a, tf->tf_a, sizeof(tf->tf_a));
 
 	pcb->pcb_ra = tf->tf_ra;
 	pcb->pcb_sp = tf->tf_sp;
 	pcb->pcb_gp = tf->tf_gp;
 	pcb->pcb_tp = tf->tf_tp;
-	pcb->pcb_sepc = tf->tf_sepc;
 }
 
 void
@@ -608,7 +607,6 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	/* Fill in the frame to copy out */
 	bzero(&frame, sizeof(frame));
 	get_mcontext(td, &frame.sf_uc.uc_mcontext, 0);
-	get_fpcontext(td, &frame.sf_uc.uc_mcontext);
 	frame.sf_si = ksi->ksi_info;
 	frame.sf_uc.uc_sigmask = *mask;
 	frame.sf_uc.uc_stack.ss_flags = (td->td_pflags & TDP_ALTSTACK) ?
@@ -847,6 +845,9 @@ initriscv(struct riscv_bootparams *rvbp)
 	__asm __volatile("mv tp, %0" :: "r"(pcpup));
 
 	PCPU_SET(curthread, &thread0);
+
+	/* Initialize SBI interface. */
+	sbi_init();
 
 	/* Set the module data location */
 	lastaddr = fake_preload_metadata(rvbp);

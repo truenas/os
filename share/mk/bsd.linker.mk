@@ -64,7 +64,7 @@ _v=	${_ld_version:M[1-9]*.[0-9]*:[1]}
 ${X_}LINKER_TYPE=	lld
 _v=	${_ld_version:[2]}
 .if ${_ld_version:[3]} == "(FreeBSD"
-${X_}LINKER_FREEBSD_VERSION:=	${_ld_version:[4]:C/.*-(.*)\)/\1/}
+${X_}LINKER_FREEBSD_VERSION:=	${_ld_version:[4]:C/.*-([^-]*)\)/\1/}
 .else
 ${X_}LINKER_FREEBSD_VERSION=	0
 .endif
@@ -81,6 +81,9 @@ ${X_}LINKER_FEATURES=
 .if ${${X_}LINKER_TYPE} != "bfd" || ${${X_}LINKER_VERSION} > 21750
 ${X_}LINKER_FEATURES+=	build-id
 ${X_}LINKER_FEATURES+=	ifunc
+.endif
+.if ${${X_}LINKER_TYPE} == "bfd" && ${${X_}LINKER_VERSION} > 21750
+${X_}LINKER_FEATURES+=	riscv-relaxations
 .endif
 .if ${${X_}LINKER_TYPE} != "lld" || ${${X_}LINKER_VERSION} >= 50000
 ${X_}LINKER_FEATURES+=	filter
