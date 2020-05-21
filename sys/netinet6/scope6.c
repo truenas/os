@@ -419,8 +419,10 @@ in6_setscope(struct in6_addr *in6, struct ifnet *ifp, u_int32_t *ret_id)
 			in6->s6_addr16[1] = htons(zoneid & 0xffff); /* XXX */
 		} else if (scope != IPV6_ADDR_SCOPE_GLOBAL) {
 			IF_AFDATA_RLOCK(ifp);
-			sid = SID(ifp);
-			zoneid = sid->s6id_list[scope];
+			if (ifp->if_afdata[AF_INET6] != NULL) {
+				sid = SID(ifp);
+				zoneid = sid->s6id_list[scope];
+			}
 			IF_AFDATA_RUNLOCK(ifp);
 		}
 	}
