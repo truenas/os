@@ -1226,9 +1226,13 @@ finish_vnet_shutdown:
 		if (dp->dom_ifdetach && ifp->if_afdata[dp->dom_family]) {
 			(*dp->dom_ifdetach)(ifp,
 			    ifp->if_afdata[dp->dom_family]);
-			ifp->if_afdata[dp->dom_family] = NULL;
 		}
 	}
+	IF_AFDATA_LOCK(ifp);
+	for (dp = domains; i > 0 && dp; dp = dp->dom_next) {
+		ifp->if_afdata[dp->dom_family] = NULL;
+	}
+	IF_AFDATA_UNLOCK(ifp);
 
 	return (0);
 }
