@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011, 2017 by Delphix. All rights reserved.
+ * Copyright (c) 2017, Intel Corporation.
  */
 
 #ifndef _SYS_VDEV_H
@@ -110,6 +111,8 @@ extern boolean_t vdev_children_are_offline(vdev_t *vd);
 extern void vdev_space_update(vdev_t *vd,
     int64_t alloc_delta, int64_t defer_delta, int64_t space_delta);
 
+extern int64_t vdev_deflated_space(vdev_t *vd, int64_t space);
+
 extern uint64_t vdev_psize_to_asize(vdev_t *vd, uint64_t psize);
 
 extern int vdev_fault(spa_t *spa, uint64_t guid, vdev_aux_t aux);
@@ -168,6 +171,8 @@ extern uint64_t vdev_label_offset(uint64_t psize, int l, uint64_t offset);
 extern int vdev_label_number(uint64_t psise, uint64_t offset);
 extern nvlist_t *vdev_label_read_config(vdev_t *vd, uint64_t txg);
 extern void vdev_uberblock_load(vdev_t *, struct uberblock *, nvlist_t **);
+extern void vdev_label_write(zio_t *zio, vdev_t *vd, int l, abd_t *buf, uint64_t
+    offset, uint64_t size, zio_done_func_t *done, void *priv, int flags);
 
 typedef enum {
 	VDEV_LABEL_CREATE,	/* create/add a new device */

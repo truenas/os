@@ -66,7 +66,7 @@ static const struct {
 	const char *key;
 	uint32_t value;
 } hdac_quirks_tab[] = {
-	{ "64bit", HDAC_QUIRK_DMAPOS },
+	{ "64bit", HDAC_QUIRK_64BIT },
 	{ "dmapos", HDAC_QUIRK_DMAPOS },
 	{ "msi", HDAC_QUIRK_MSI },
 };
@@ -193,6 +193,7 @@ static const struct {
 } hdac_pcie_snoop[] = {
 	{  INTEL_VENDORID, 0x00, 0x00, 0x00 },
 	{    ATI_VENDORID, 0x42, 0xf8, 0x02 },
+	{    AMD_VENDORID, 0x42, 0xf8, 0x02 },
 	{ NVIDIA_VENDORID, 0x4e, 0xf0, 0x0f },
 };
 
@@ -277,10 +278,10 @@ hdac_config_fetch(struct hdac_softc *sc, uint32_t *on, uint32_t *off)
 			);
 			if (inv == 0) {
 				*on |= hdac_quirks_tab[k].value;
-				*on &= ~hdac_quirks_tab[k].value;
+				*off &= ~hdac_quirks_tab[k].value;
 			} else if (inv != 0) {
 				*off |= hdac_quirks_tab[k].value;
-				*off &= ~hdac_quirks_tab[k].value;
+				*on &= ~hdac_quirks_tab[k].value;
 			}
 			break;
 		}

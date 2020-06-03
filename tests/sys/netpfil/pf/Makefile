@@ -16,7 +16,8 @@ ATF_TESTS_SH+=	anchor \
 		route_to \
 		synproxy \
 		set_skip \
-		pfsync
+		pfsync \
+		table
 
 ${PACKAGE}FILES+=	utils.subr \
 			echo_inetd.conf \

@@ -5580,12 +5580,6 @@ rack_do_syn_recv(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	if (IS_FASTOPEN(tp->t_flags) && tp->t_tfo_pending) {
 		tcp_fastopen_decrement_counter(tp->t_tfo_pending);
 		tp->t_tfo_pending = NULL;
-
-		/*
-		 * Account for the ACK of our SYN prior to
-		 * regular ACK processing below.
-		 */ 
-		tp->snd_una++;
 	}
 	if (tp->t_flags & TF_NEEDFIN) {
 		tcp_state_change(tp, TCPS_FIN_WAIT_1);
@@ -5603,6 +5597,13 @@ rack_do_syn_recv(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		if (!IS_FASTOPEN(tp->t_flags))
 			cc_conn_init(tp);
 	}
+	/*
+	 * Account for the ACK of our SYN prior to
+	 * regular ACK processing below, except for
+	 * simultaneous SYN, which is handled later.
+	 */
+	if (SEQ_GT(th->th_ack, tp->snd_una) && !(tp->t_flags & TF_NEEDSYN))
+		tp->snd_una++;
 	/*
 	 * If segment contains data or ACK, will call tcp_reass() later; if
 	 * not, do so now to pass queued data to user.
@@ -8355,8 +8356,11 @@ send:
 	if (flags & TH_SYN)
 		th->th_win = htons((u_short)
 		    (min(sbspace(&so->so_rcv), TCP_MAXWIN)));
-	else
+	else {
+		/* Avoid shrinking window with window scaling. */
+		recwin = roundup2(recwin, 1 << tp->rcv_scale);
 		th->th_win = htons((u_short)(recwin >> tp->rcv_scale));
+	}
 	/*
 	 * Adjust the RXWIN0SENT flag - indicate that we have advertised a 0
 	 * window.  This may cause the remote transmitter to stall.  This
