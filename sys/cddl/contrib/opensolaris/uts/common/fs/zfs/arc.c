@@ -1207,21 +1207,17 @@ sysctl_vfs_zfs_arc_max(SYSCTL_HANDLER_ARGS)
 	if (zfs_arc_meta_limit > 0 && val < zfs_arc_meta_limit)
 		return (EINVAL);
 
-	arc_c_max = val;
+	zfs_arc_max = arc_c_max = val;
 
-	arc_c = arc_c_max;
-        arc_p = (arc_c >> 1);
+	if (arc_c > arc_c_max) {
+		arc_c = arc_c_max;
+		arc_p = (arc_c >> 1);
+	}
 
 	if (zfs_arc_meta_limit == 0) {
 		/* limit meta-data to 1/4 of the arc capacity */
 		arc_meta_limit = arc_c_max / 4;
 	}
-
-	/* if kmem_flags are set, lets try to use less memory */
-	if (kmem_debugging())
-		arc_c = arc_c / 2;
-
-	zfs_arc_max = arc_c;
 
 	mutex_enter(&arc_adjust_lock);
 	arc_adjust_needed = B_TRUE;
@@ -1251,15 +1247,13 @@ sysctl_vfs_zfs_arc_min(SYSCTL_HANDLER_ARGS)
 	if (val < arc_abs_min || val > arc_c_max)
 		return (EINVAL);
 
-	arc_c_min = val;
+	zfs_arc_min = arc_c_min = val;
 
 	if (zfs_arc_meta_min == 0)
                 arc_meta_min = arc_c_min / 2;
 
 	if (arc_c < arc_c_min)
                 arc_c = arc_c_min;
-
-	zfs_arc_min = arc_c_min;
 
 	return (0);
 }
@@ -4823,8 +4817,8 @@ arc_adapt(int bytes, arc_state_t *state)
 	 * If we're within (2 * maxblocksize) bytes of the target
 	 * cache size, increment the target cache size
 	 */
-	if (aggsum_compare(&arc_size, arc_c - (2ULL << SPA_MAXBLOCKSHIFT)) >
-	    0) {
+	if (aggsum_upper_bound(&arc_size) >=
+	    arc_c - (2ULL << SPA_MAXBLOCKSHIFT)) {
 		DTRACE_PROBE1(arc__inc_adapt, int, bytes);
 		atomic_add_64(&arc_c, (int64_t)bytes);
 		if (arc_c > arc_c_max)
@@ -6813,7 +6807,7 @@ arc_init(void)
 		arc_c_min = zfs_arc_min;
 #endif
 
-	arc_c = arc_c_max;
+	arc_c = arc_c_min;
 	arc_p = (arc_c >> 1);
 
 	/* limit meta-data to 1/4 of the arc capacity */
