@@ -325,6 +325,7 @@ acpi_pcib_osc(struct acpi_hpcib_softc *sc, uint32_t osc_ctl)
 
 	/* Support Field: Extended PCI Config Space, PCI Segment Groups, MSI */
 	cap_set[PCI_OSC_SUPPORT] = PCIM_OSC_SUPPORT_EXT_PCI_CONF |
+	    PCIM_OSC_SUPPORT_ASPM | PCIM_OSC_SUPPORT_CPMC |
 	    PCIM_OSC_SUPPORT_SEG_GROUP | PCIM_OSC_SUPPORT_MSI;
 
 	/* Control Field */
