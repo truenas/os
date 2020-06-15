@@ -416,6 +416,11 @@ SYSCTL_INT(_hw_pci, OID_AUTO, clear_aer_on_attach, CTLFLAG_RWTUN,
     &pci_clear_aer_on_attach, 0,
     "Clear port and device AER state on driver attach");
 
+static int pci_plx_mask_re = 1;
+SYSCTL_INT(_hw_pci, OID_AUTO, plx_mask_re, CTLFLAG_RWTUN,
+    &pci_plx_mask_re, 0,
+    "Mask Receiver Error on PLX PCIe bridges.");
+
 static int
 pci_has_quirk(uint32_t devid, int quirk)
 {
@@ -4304,6 +4309,31 @@ pci_add_child_clear_aer(device_t dev, struct pci_devinfo *dinfo)
 	}
 }
 
+static void
+pci_add_child_mask_re(device_t dev, struct pci_devinfo *dinfo)
+{
+	int aer;
+	uint32_t r;
+
+	/*
+	 * Mask Receiver Errors on PLX PCIe bridges.  While the errors are
+	 * correctible and only reported to debug reduced performance, for
+	 * some reason at least on Supermicro X11DPI-NT board they end up
+	 * causing NMI.  Masking them makes problem go away.  Alternatively
+	 * masking both correctible and fatal errors for the device helps
+	 * too, but for some reason masking only correctible error is not
+	 * enough.  Alternatively enabling Unsupported Request Reporting
+	 * helps too, but I can't really explain it.  So among all the
+	 * options I decided to use least invasive and most specific one.
+	 */
+	if (dinfo->cfg.vendor == 0x10b5 &&
+	    pci_find_extcap(dev, PCIZ_AER, &aer) == 0) {
+		r = pci_read_config(dev, aer + PCIR_AER_COR_MASK, 4);
+		r |= PCIM_AER_COR_RECEIVER_ERROR;
+		pci_write_config(dev, aer + PCIR_AER_COR_MASK, r, 4);
+	}
+}
+
 void
 pci_add_child(device_t bus, struct pci_devinfo *dinfo)
 {
@@ -4320,6 +4350,8 @@ pci_add_child(device_t bus, struct pci_devinfo *dinfo)
 
 	if (pci_clear_aer_on_attach)
 		pci_add_child_clear_aer(dev, dinfo);
+	else if (pci_plx_mask_re)
+		pci_add_child_mask_re(dev, dinfo);
 
 	EVENTHANDLER_INVOKE(pci_add_device, dinfo->cfg.dev);
 }
