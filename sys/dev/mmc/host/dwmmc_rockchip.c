@@ -32,10 +32,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 #include <sys/bus.h>
 #include <sys/module.h>
+#include <sys/queue.h>
+#include <sys/taskqueue.h>
 
 #include <machine/bus.h>
 
 #include <dev/mmc/bridge.h>
+#include <dev/mmc/mmc_fdt_helpers.h>
 
 #include <dev/ofw/ofw_bus_subr.h>
 
@@ -134,6 +137,7 @@ static device_method_t rockchip_dwmmc_methods[] = {
 	/* bus interface */
 	DEVMETHOD(device_probe, rockchip_dwmmc_probe),
 	DEVMETHOD(device_attach, rockchip_dwmmc_attach),
+	DEVMETHOD(device_detach, dwmmc_detach),
 
 	DEVMETHOD_END
 };

@@ -53,9 +53,9 @@ __FBSDID("$FreeBSD$");
 #include "cpufreq_if.h"
 
 #if 0
-#define DEBUG(dev, msg...) device_printf(dev, "cpufreq_dt: " msg);
+#define DPRINTF(dev, msg...) device_printf(dev, "cpufreq_dt: " msg);
 #else
-#define DEBUG(dev, msg...)
+#define DPRINTF(dev, msg...)
 #endif
 
 enum opp_version {
@@ -82,6 +82,7 @@ struct cpufreq_dt_softc {
 	struct cpufreq_dt_opp *opp;
 	ssize_t nopp;
 
+	int cpu;
 	cpuset_t cpus;
 };
 
@@ -110,12 +111,12 @@ cpufreq_dt_find_opp(device_t dev, uint64_t freq)
 
 	sc = device_get_softc(dev);
 
-	DEBUG(dev, "Looking for freq %ju\n", freq);
+	DPRINTF(dev, "Looking for freq %ju\n", freq);
 	for (n = 0; n < sc->nopp; n++)
 		if (CPUFREQ_CMP(sc->opp[n].freq, freq))
 			return (&sc->opp[n]);
 
-	DEBUG(dev, "Couldn't find one\n");
+	DPRINTF(dev, "Couldn't find one\n");
 	return (NULL);
 }
 
@@ -144,7 +145,7 @@ cpufreq_dt_get(device_t dev, struct cf_setting *set)
 
 	sc = device_get_softc(dev);
 
-	DEBUG(dev, "cpufreq_dt_get\n");
+	DPRINTF(dev, "cpufreq_dt_get\n");
 	if (clk_get_freq(sc->clk, &freq) != 0)
 		return (ENXIO);
 
@@ -156,7 +157,7 @@ cpufreq_dt_get(device_t dev, struct cf_setting *set)
 
 	cpufreq_dt_opp_to_setting(dev, opp, set);
 
-	DEBUG(dev, "Current freq %dMhz\n", set->freq);
+	DPRINTF(dev, "Current freq %dMhz\n", set->freq);
 	return (0);
 }
 
@@ -169,6 +170,13 @@ cpufreq_dt_set(device_t dev, const struct cf_setting *set)
 	int uvolt, error;
 
 	sc = device_get_softc(dev);
+
+	DPRINTF(dev, "Working on cpu %d\n", sc->cpu);
+	DPRINTF(dev, "We have %d cpu on this dev\n", CPU_COUNT(&sc->cpus));
+	if (!CPU_ISSET(sc->cpu, &sc->cpus)) {
+		DPRINTF(dev, "Not for this CPU\n");
+		return (0);
+	}
 
 	if (clk_get_freq(sc->clk, &freq) != 0) {
 		device_printf(dev, "Can't get current clk freq\n");
@@ -191,7 +199,6 @@ cpufreq_dt_set(device_t dev, const struct cf_setting *set)
 			return (ENOENT);
 		}
 		uvolt = copp->uvolt_target;
-
 	}
 
 	opp = cpufreq_dt_find_opp(sc->dev, set->freq * 1000000);
@@ -199,26 +206,26 @@ cpufreq_dt_set(device_t dev, const struct cf_setting *set)
 		device_printf(dev, "Couldn't find an opp for this freq\n");
 		return (EINVAL);
 	}
-	DEBUG(sc->dev, "Current freq %ju, uvolt: %d\n", freq, uvolt);
-	DEBUG(sc->dev, "Target freq %ju, , uvolt: %d\n",
+	DPRINTF(sc->dev, "Current freq %ju, uvolt: %d\n", freq, uvolt);
+	DPRINTF(sc->dev, "Target freq %ju, , uvolt: %d\n",
 	    opp->freq, opp->uvolt_target);
 
 	if (uvolt < opp->uvolt_target) {
-		DEBUG(dev, "Changing regulator from %u to %u\n",
+		DPRINTF(dev, "Changing regulator from %u to %u\n",
 		    uvolt, opp->uvolt_target);
 		error = regulator_set_voltage(sc->reg,
 		    opp->uvolt_min,
 		    opp->uvolt_max);
 		if (error != 0) {
-			DEBUG(dev, "Failed, backout\n");
+			DPRINTF(dev, "Failed, backout\n");
 			return (ENXIO);
 		}
 	}
 
-	DEBUG(dev, "Setting clk to %ju\n", opp->freq);
+	DPRINTF(dev, "Setting clk to %ju\n", opp->freq);
 	error = clk_set_freq(sc->clk, opp->freq, CLK_SET_ROUND_DOWN);
 	if (error != 0) {
-		DEBUG(dev, "Failed, backout\n");
+		DPRINTF(dev, "Failed, backout\n");
 		/* Restore previous voltage (best effort) */
 		error = regulator_set_voltage(sc->reg,
 		    copp->uvolt_min,
@@ -227,13 +234,13 @@ cpufreq_dt_set(device_t dev, const struct cf_setting *set)
 	}
 
 	if (uvolt > opp->uvolt_target) {
-		DEBUG(dev, "Changing regulator from %u to %u\n",
+		DPRINTF(dev, "Changing regulator from %u to %u\n",
 		    uvolt, opp->uvolt_target);
 		error = regulator_set_voltage(sc->reg,
 		    opp->uvolt_min,
 		    opp->uvolt_max);
 		if (error != 0) {
-			DEBUG(dev, "Failed to switch regulator to %d\n",
+			DPRINTF(dev, "Failed to switch regulator to %d\n",
 			    opp->uvolt_target);
 			/* Restore previous CPU frequency (best effort) */
 			(void)clk_set_freq(sc->clk, copp->freq, 0);
@@ -264,7 +271,7 @@ cpufreq_dt_settings(device_t dev, struct cf_setting *sets, int *count)
 	struct cpufreq_dt_softc *sc;
 	ssize_t n;
 
-	DEBUG(dev, "cpufreq_dt_settings\n");
+	DPRINTF(dev, "cpufreq_dt_settings\n");
 	if (sets == NULL || count == NULL)
 		return (EINVAL);
 
@@ -450,14 +457,16 @@ cpufreq_dt_attach(device_t dev)
 	int cpu;
 	uint64_t freq;
 	int rv = 0;
+	char device_type[16];
 	enum opp_version version;
 
 	sc = device_get_softc(dev);
 	sc->dev = dev;
 	node = ofw_bus_get_node(device_get_parent(dev));
-	cpu = device_get_unit(device_get_parent(dev));
+	sc->cpu = device_get_unit(device_get_parent(dev));
 
-	if (cpu >= mp_ncpus) {
+	DPRINTF(dev, "cpu=%d\n", sc->cpu);
+	if (sc->cpu >= mp_ncpus) {
 		device_printf(dev, "Not attaching as cpu is not present\n");
 		return (ENXIO);
 	}
@@ -503,7 +512,19 @@ cpufreq_dt_attach(device_t dev)
 	 * Find all CPUs that share the same opp table
 	 */
 	CPU_ZERO(&sc->cpus);
-	for (cnode = node; cnode > 0; cnode = OF_peer(cnode), cpu++) {
+	cnode = OF_parent(node);
+	for (cpu = 0, cnode = OF_child(cnode); cnode > 0; cnode = OF_peer(cnode)) {
+		if (OF_getprop(cnode, "device_type", device_type, sizeof(device_type)) <= 0)
+			continue;
+		if (strcmp(device_type, "cpu") != 0)
+			continue;
+		if (cpu == sc->cpu) {
+			DPRINTF(dev, "Skipping our cpu\n");
+			CPU_SET(cpu, &sc->cpus);
+			cpu++;
+			continue;
+		}
+		DPRINTF(dev, "Testing CPU %d\n", cpu);
 		copp = -1;
 		if (version == OPP_V1)
 			OF_getencprop(cnode, "operating-points", &copp,
@@ -511,8 +532,12 @@ cpufreq_dt_attach(device_t dev)
 		else if (version == OPP_V2)
 			OF_getencprop(cnode, "operating-points-v2",
 			    &copp, sizeof(copp));
-		if (opp == copp)
+		if (opp == copp) {
+			DPRINTF(dev, "CPU %d is using the same opp as this one (%d)\n",
+			    cpu, sc->cpu);
 			CPU_SET(cpu, &sc->cpus);
+		}
+		cpu++;
 	}
 
 	if (clk_get_freq(sc->clk, &freq) == 0)

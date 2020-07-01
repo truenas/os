@@ -58,6 +58,8 @@ arm/allwinner/clkng/aw_clk_np.c		optional	aw_ccu fdt
 arm/allwinner/clkng/aw_clk_prediv_mux.c	optional	aw_ccu fdt
 arm/allwinner/clkng/ccu_a64.c		optional	soc_allwinner_a64 aw_ccu fdt
 arm/allwinner/clkng/ccu_h3.c		optional	soc_allwinner_h5 aw_ccu fdt
+arm/allwinner/clkng/ccu_h6.c		optional	soc_allwinner_h6 aw_ccu fdt
+arm/allwinner/clkng/ccu_h6_r.c		optional	soc_allwinner_h6 aw_ccu fdt
 arm/allwinner/clkng/ccu_sun8i_r.c	optional	aw_ccu fdt
 arm/allwinner/clkng/ccu_de2.c		optional	aw_ccu fdt
 
@@ -66,6 +68,8 @@ arm/allwinner/a64/a64_padconf.c	optional	soc_allwinner_a64 fdt
 arm/allwinner/a64/a64_r_padconf.c optional	soc_allwinner_a64 fdt
 arm/allwinner/h3/h3_padconf.c	optional	soc_allwinner_h5 fdt
 arm/allwinner/h3/h3_r_padconf.c optional	soc_allwinner_h5 fdt
+arm/allwinner/h6/h6_padconf.c optional		soc_allwinner_h6 fdt
+arm/allwinner/h6/h6_r_padconf.c optional	soc_allwinner_h6 fdt
 
 arm/annapurna/alpine/alpine_ccu.c		optional	al_ccu fdt
 arm/annapurna/alpine/alpine_nb_service.c	optional	al_nb_service fdt
@@ -223,6 +227,7 @@ dev/hwpmc/hwpmc_arm64.c		optional	hwpmc
 dev/hwpmc/hwpmc_arm64_md.c	optional	hwpmc
 dev/mbox/mbox_if.m		optional	soc_brcm_bcm2837
 dev/mmc/host/dwmmc.c		optional	dwmmc fdt
+dev/mmc/host/dwmmc_altera.c	optional	dwmmc fdt dwmmc_altera
 dev/mmc/host/dwmmc_hisi.c	optional	dwmmc fdt soc_hisi_hi6220
 dev/mmc/host/dwmmc_rockchip.c	optional	dwmmc fdt soc_rockchip_rk3328
 dev/neta/if_mvneta_fdt.c	optional	neta fdt

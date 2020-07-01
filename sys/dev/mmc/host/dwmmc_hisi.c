@@ -32,10 +32,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 #include <sys/bus.h>
 #include <sys/module.h>
+#include <sys/queue.h>
+#include <sys/taskqueue.h>
 
 #include <machine/bus.h>
 
 #include <dev/mmc/bridge.h>
+#include <dev/mmc/mmc_fdt_helpers.h>
 
 #include <dev/ofw/ofw_bus_subr.h>
 
@@ -77,7 +80,6 @@ hisi_dwmmc_attach(device_t dev)
 	 * DMA when the controller is not cache-coherent on arm64.
 	 */
 	sc->use_pio = 1;
-	sc->desc_count = 1;
 
 	return (dwmmc_attach(dev));
 }

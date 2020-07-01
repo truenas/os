@@ -80,6 +80,7 @@ struct vtnet_rxq {
 	struct taskqueue	*vtnrx_tq;
 	struct task		 vtnrx_intrtask;
 #ifdef DEV_NETMAP
+	uint32_t		 vtnrx_nm_refill;
 	struct virtio_net_hdr_mrg_rxbuf vtnrx_shrhdr;
 #endif  /* DEV_NETMAP */
 	char			 vtnrx_name[16];
@@ -363,5 +364,11 @@ CTASSERT(((VTNET_MAX_TX_SEGS - 1) * MCLBYTES) >= VTNET_MAX_MTU);
     mtx_init(VTNET_CORE_MTX((_sc)), (_sc)->vtnet_mtx_name,		\
         "VTNET Core Lock", MTX_DEF);					\
 } while (0)
+
+/*
+ * Values for the init_mode argument of vtnet_init_locked().
+ */
+#define VTNET_INIT_NETMAP_ENTER		1
+#define VTNET_INIT_NETMAP_EXIT		2
 
 #endif /* _IF_VTNETVAR_H */

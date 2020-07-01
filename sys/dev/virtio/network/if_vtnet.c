@@ -180,7 +180,7 @@ static int	vtnet_init_tx_queues(struct vtnet_softc *);
 static int	vtnet_init_rxtx_queues(struct vtnet_softc *);
 static void	vtnet_set_active_vq_pairs(struct vtnet_softc *);
 static int	vtnet_reinit(struct vtnet_softc *);
-static void	vtnet_init_locked(struct vtnet_softc *);
+static void	vtnet_init_locked(struct vtnet_softc *, int);
 static void	vtnet_init(void *);
 
 static void	vtnet_free_ctrl_vq(struct vtnet_softc *);
@@ -512,7 +512,7 @@ vtnet_resume(device_t dev)
 
 	VTNET_CORE_LOCK(sc);
 	if (ifp->if_flags & IFF_UP)
-		vtnet_init_locked(sc);
+		vtnet_init_locked(sc, 0);
 	sc->vtnet_flags &= ~VTNET_FLAG_SUSPENDED;
 	VTNET_CORE_UNLOCK(sc);
 
@@ -1065,7 +1065,7 @@ vtnet_change_mtu(struct vtnet_softc *sc, int new_mtu)
 
 	if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
 		ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-		vtnet_init_locked(sc);
+		vtnet_init_locked(sc, 0);
 	}
 
 	return (0);
@@ -1109,7 +1109,7 @@ vtnet_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 				}
 			}
 		} else
-			vtnet_init_locked(sc);
+			vtnet_init_locked(sc, 0);
 
 		if (error == 0)
 			sc->vtnet_if_flags = ifp->if_flags;
@@ -1167,7 +1167,7 @@ vtnet_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 
 		if (reinit && (ifp->if_drv_flags & IFF_DRV_RUNNING)) {
 			ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-			vtnet_init_locked(sc);
+			vtnet_init_locked(sc, 0);
 		}
 
 		VTNET_CORE_UNLOCK(sc);
@@ -1227,17 +1227,17 @@ vtnet_rxq_free_mbufs(struct vtnet_rxq *rxq)
 	struct mbuf *m;
 	int last;
 #ifdef DEV_NETMAP
-	int netmap_bufs = vtnet_netmap_queue_on(rxq->vtnrx_sc, NR_RX,
-						rxq->vtnrx_id);
+	struct netmap_kring *kring = netmap_kring_on(NA(rxq->vtnrx_sc->vtnet_ifp),
+							rxq->vtnrx_id, NR_RX);
 #else  /* !DEV_NETMAP */
-	int netmap_bufs = 0;
+	void *kring = NULL;
 #endif /* !DEV_NETMAP */
 
 	vq = rxq->vtnrx_vq;
 	last = 0;
 
 	while ((m = virtqueue_drain(vq, &last)) != NULL) {
-		if (!netmap_bufs)
+		if (kring == NULL)
 			m_freem(m);
 	}
 
@@ -1853,6 +1853,9 @@ vtnet_rx_vq_intr(void *xrxq)
 	struct vtnet_rxq *rxq;
 	struct ifnet *ifp;
 	int tries, more;
+#ifdef DEV_NETMAP
+	int nmirq;
+#endif /* DEV_NETMAP */
 
 	rxq = xrxq;
 	sc = rxq->vtnrx_sc;
@@ -1870,12 +1873,26 @@ vtnet_rx_vq_intr(void *xrxq)
 		return;
 	}
 
-#ifdef DEV_NETMAP
-	if (netmap_rx_irq(ifp, rxq->vtnrx_id, &more) != NM_IRQ_PASS)
-		return;
-#endif /* DEV_NETMAP */
-
 	VTNET_RXQ_LOCK(rxq);
+
+#ifdef DEV_NETMAP
+	/*
+	 * We call netmap_rx_irq() under lock to prevent concurrent calls.
+	 * This is not necessary to serialize the access to the RX vq, but
+	 * rather to avoid races that may happen if this interface is
+	 * attached to a VALE switch, which would cause received packets
+	 * to stall in the RX queue (nm_kr_tryget() could find the kring
+	 * busy when called from netmap_bwrap_intr_notify()).
+	 */
+	nmirq = netmap_rx_irq(ifp, rxq->vtnrx_id, &more);
+	if (nmirq != NM_IRQ_PASS) {
+		VTNET_RXQ_UNLOCK(rxq);
+		if (nmirq == NM_IRQ_RESCHED) {
+			taskqueue_enqueue(rxq->vtnrx_tq, &rxq->vtnrx_intrtask);
+		}
+		return;
+	}
+#endif /* DEV_NETMAP */
 
 again:
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0) {
@@ -1908,12 +1925,26 @@ vtnet_rxq_tq_intr(void *xrxq, int pending)
 	struct vtnet_rxq *rxq;
 	struct ifnet *ifp;
 	int more;
+#ifdef DEV_NETMAP
+	int nmirq;
+#endif /* DEV_NETMAP */
 
 	rxq = xrxq;
 	sc = rxq->vtnrx_sc;
 	ifp = sc->vtnet_ifp;
 
 	VTNET_RXQ_LOCK(rxq);
+
+#ifdef DEV_NETMAP
+	nmirq = netmap_rx_irq(ifp, rxq->vtnrx_id, &more);
+	if (nmirq != NM_IRQ_PASS) {
+		VTNET_RXQ_UNLOCK(rxq);
+		if (nmirq == NM_IRQ_RESCHED) {
+			taskqueue_enqueue(rxq->vtnrx_tq, &rxq->vtnrx_intrtask);
+		}
+		return;
+	}
+#endif /* DEV_NETMAP */
 
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0) {
 		VTNET_RXQ_UNLOCK(rxq);
@@ -1976,17 +2007,17 @@ vtnet_txq_free_mbufs(struct vtnet_txq *txq)
 	struct vtnet_tx_header *txhdr;
 	int last;
 #ifdef DEV_NETMAP
-	int netmap_bufs = vtnet_netmap_queue_on(txq->vtntx_sc, NR_TX,
-						txq->vtntx_id);
+	struct netmap_kring *kring = netmap_kring_on(NA(txq->vtntx_sc->vtnet_ifp),
+							txq->vtntx_id, NR_TX);
 #else  /* !DEV_NETMAP */
-	int netmap_bufs = 0;
+	void *kring = NULL;
 #endif /* !DEV_NETMAP */
 
 	vq = txq->vtntx_vq;
 	last = 0;
 
 	while ((txhdr = virtqueue_drain(vq, &last)) != NULL) {
-		if (!netmap_bufs) {
+		if (kring == NULL) {
 			m_freem(txhdr->vth_mbuf);
 			uma_zfree(vtnet_tx_header_zone, txhdr);
 		}
@@ -2685,7 +2716,7 @@ vtnet_tick(void *xsc)
 
 	if (timedout != 0) {
 		ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-		vtnet_init_locked(sc);
+		vtnet_init_locked(sc, 0);
 	} else
 		callout_schedule(&sc->vtnet_tick_ch, hz);
 }
@@ -2970,6 +3001,9 @@ vtnet_init_tx_queues(struct vtnet_softc *sc)
 	for (i = 0; i < sc->vtnet_act_vq_pairs; i++) {
 		txq = &sc->vtnet_txqs[i];
 		txq->vtntx_watchdog = 0;
+#ifdef DEV_NETMAP
+		netmap_reset(NA(sc->vtnet_ifp), NR_TX, i, 0);
+#endif /* DEV_NETMAP */
 	}
 
 	return (0);
@@ -3053,7 +3087,7 @@ vtnet_reinit(struct vtnet_softc *sc)
 }
 
 static void
-vtnet_init_locked(struct vtnet_softc *sc)
+vtnet_init_locked(struct vtnet_softc *sc, int init_mode)
 {
 	device_t dev;
 	struct ifnet *ifp;
@@ -3067,6 +3101,18 @@ vtnet_init_locked(struct vtnet_softc *sc)
 		return;
 
 	vtnet_stop(sc);
+
+#ifdef DEV_NETMAP
+	/* Once stopped we can update the netmap flags, if necessary. */
+	switch (init_mode) {
+	case VTNET_INIT_NETMAP_ENTER:
+		nm_set_native_flags(NA(ifp));
+		break;
+	case VTNET_INIT_NETMAP_EXIT:
+		nm_clear_native_flags(NA(ifp));
+		break;
+	}
+#endif /* DEV_NETMAP */
 
 	/* Reinitialize with the host. */
 	if (vtnet_virtio_reinit(sc) != 0)
@@ -3094,7 +3140,7 @@ vtnet_init(void *xsc)
 	sc = xsc;
 
 	VTNET_CORE_LOCK(sc);
-	vtnet_init_locked(sc);
+	vtnet_init_locked(sc, 0);
 	VTNET_CORE_UNLOCK(sc);
 }
 

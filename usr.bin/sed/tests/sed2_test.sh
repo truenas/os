@@ -88,10 +88,58 @@ escape_subst_body()
 	atf_check -o 'inline:abcx\n' sed 's/[ \r\t]//g' c
 }
 
+atf_test_case hex_subst
+hex_subst_head()
+{
+	atf_set "descr" "Verify proper conversion of hex escapes"
+}
+hex_subst_body()
+{
+	printf "test='foo'" > a
+	printf "test='27foo'" > b
+	printf "\rn" > c
+	printf "xx" > d
+
+	atf_check -o 'inline:test="foo"' sed 's/\x27/"/g' a
+	atf_check -o "inline:'test'='foo'" sed 's/test/\x27test\x27/g' a
+
+	# Make sure we take trailing digits literally.
+	atf_check -o "inline:test=\"foo'" sed 's/\x2727/"/g' b
+
+	# Single digit \x should work as well.
+	atf_check -o "inline:xn" sed 's/\xd/x/' c
+
+	# Invalid digit should cause us to ignore the sequence.  This test
+	# invokes UB, escapes of an ordinary character.  A future change will
+	# make regex(3) on longer tolerate this and we'll need to adjust what
+	# we're doing, but for now this will suffice.
+	atf_check -o "inline:" sed 's/\xx//' d
+}
+
+atf_test_case commands_on_stdin
+commands_on_stdin_head()
+{
+	atf_set "descr" "Verify -f -"
+}
+commands_on_stdin_body()
+{
+	printf "a\n" > a
+	printf "s/a/b/\n" > a_to_b
+	printf "s/b/c/\n" > b_to_c
+	printf "s/c/d/\n" > ./-
+	atf_check -o 'inline:d\n' sed -f a_to_b -f - -f ./- a < b_to_c
+
+	# Verify that nothing is printed if there are no input files provided.
+	printf 'i\\\nx' > insert_x
+	atf_check -o 'empty' sed -f - < insert_x
+}
+
 atf_init_test_cases()
 {
 	atf_add_test_case inplace_command_q
 	atf_add_test_case inplace_hardlink_src
 	atf_add_test_case inplace_symlink_src
 	atf_add_test_case escape_subst
+	atf_add_test_case hex_subst
+	atf_add_test_case commands_on_stdin
 }

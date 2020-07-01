@@ -29,7 +29,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd April 25, 2020
+.Dd June 13, 2020
 .Dt PROCCTL 2
 .Os
 .Sh NAME
@@ -40,7 +40,7 @@
 .Sh SYNOPSIS
 .In sys/procctl.h
 .Ft int
-.Fn procctl "idtype_t idtype" "id_t id" "int cmd" "void *arg"
+.Fn procctl "idtype_t idtype" "id_t id" "int cmd" "void *data"
 .Sh DESCRIPTION
 The
 .Fn procctl
@@ -80,7 +80,7 @@ by
 in the specified process or its descendants that did not changed
 the control nor modified it by other means.
 The
-.Va arg
+.Fa data
 parameter must point to the integer variable holding one of the following
 values:
 .Bl -tag -width PROC_ASLR_FORCE_DISABLE
@@ -99,7 +99,7 @@ Use system-wide configured policy for ASLR.
 .It Dv PROC_ASLR_STATUS
 Returns the current status of ASLR enablement for the target process.
 The
-.Va arg
+.Fa data
 parameter must point to the integer variable, where one of the
 following values is written:
 .Bl -tag -width PROC_ASLR_FORCE_DISABLE
@@ -117,7 +117,7 @@ Set process protection state.
 This is used to mark a process as protected from being killed if the system
 exhausts the available memory and swap.
 The
-.Fa arg
+.Fa data
 parameter must point to an integer containing an operation and zero or more
 optional flags.
 The following operations are supported:
@@ -524,6 +524,47 @@ Stack gaps are disabled in the process after
 .Xr execve 2 .
 .El
 .El
+.Sh x86 MACHINE-SPECIFIC REQUESTS
+.Bl -tag -width PROC_KPTI_STATUS
+.It Dv PROC_KPTI_CTL
+AMD64 only.
+Controls the Kernel Page Table Isolation (KPTI) option for the children
+of the specified process.
+For the command to work, the
+.Va vm.pmap.kpti
+tunable must be enabled on boot.
+It is not possible to change the KPTI setting for a running process,
+except at the
+.Xr execve 2 ,
+where the address space is reinitialized.
+.Pp
+The
+.Fa data
+parameter must point to an integer variable containing one of the
+following commands:
+.Bl -tag -width PROC_KPTI_CTL_DISABLE_ON_EXEC
+.It Dv PROC_KPTI_CTL_ENABLE_ON_EXEC
+Enable KPTI after
+.Xr execve 2 .
+.It Dv PROC_KPTI_CTL_DISABLE_ON_EXEC
+Disable KPTI after
+.Xr execve 2 .
+Only root or a process having the
+.Va PRIV_IO
+privilege might use this option.
+.El
+.It Dv PROC_KPTI_STATUS
+Returns the current KPTI status for the specified process.
+.Fa data must point to the integer variable, which returns the
+following statuses:
+.Bl -tag -width PROC_KPTI_CTL_DISABLE_ON_EXEC
+.It Dv PROC_KPTI_CTL_ENABLE_ON_EXEC
+.It Dv PROC_KPTI_CTL_DISABLE_ON_EXEC
+.El
+.Pp
+The status is or-ed with the
+.Va PROC_KPTI_STATUS_ACTIVE
+in case KPTI is active for the current address space of the process.
 .Sh NOTES
 Disabling tracing on a process should not be considered a security
 feature, as it is bypassable both by the kernel and privileged processes,

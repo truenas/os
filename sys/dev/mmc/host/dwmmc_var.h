@@ -35,6 +35,8 @@
 
 #ifdef EXT_RESOURCES
 #include <dev/extres/clk/clk.h>
+#include <dev/extres/hwreset/hwreset.h>
+#include <dev/extres/regulator/regulator.h>
 #endif
 
 enum {
@@ -50,6 +52,7 @@ struct dwmmc_softc {
 	device_t		dev;
 	void			*intr_cookie;
 	struct mmc_host		host;
+	struct mmc_fdt_helper	mmc_helper;
 	struct mtx		sc_mtx;
 	struct mmc_request	*req;
 	struct mmc_command	*curcmd;
@@ -58,7 +61,9 @@ struct dwmmc_softc {
 	uint32_t		use_auto_stop;
 	uint32_t		use_pio;
 	uint32_t		pwren_inverted;
-	u_int			desc_count;
+	device_t		child;
+	struct task		card_task;	/* Card presence check task */
+	struct timeout_task	card_delayed_task;/* Card insert delayed task */
 
 	int			(*update_ios)(struct dwmmc_softc *sc, struct mmc_ios *ios);
 
@@ -74,7 +79,6 @@ struct dwmmc_softc {
 	uint32_t		acd_rcvd;
 	uint32_t		cmd_done;
 	uint64_t		bus_hz;
-	uint32_t		max_hz;
 	uint32_t		fifo_depth;
 	uint32_t		num_slots;
 	uint32_t		sdr_timing;
@@ -83,11 +87,15 @@ struct dwmmc_softc {
 #ifdef EXT_RESOURCES
 	clk_t			biu;
 	clk_t			ciu;
+	hwreset_t		hwreset;
+	regulator_t		vmmc;
+	regulator_t		vqmmc;
 #endif
 };
 
 DECLARE_CLASS(dwmmc_driver);
 
 int dwmmc_attach(device_t);
+int dwmmc_detach(device_t);
 
 #endif
