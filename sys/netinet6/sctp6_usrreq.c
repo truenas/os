@@ -242,6 +242,11 @@ sctp6_notify(struct sctp_inpcb *inp,
 		}
 		if (net->mtu > next_mtu) {
 			net->mtu = next_mtu;
+			if (net->port) {
+				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu + sizeof(struct udphdr));
+			} else {
+				sctp_hc_set_mtu(&net->ro._l_addr, inp->fibnum, next_mtu);
+			}
 		}
 		/* Update the association MTU */
 		if (stcb->asoc.smallest_mtu > next_mtu) {
@@ -596,7 +601,7 @@ sctp6_bind(struct socket *so, struct sockaddr *addr, struct thread *p)
 	vflagsav = inp->ip_inp.inp.inp_vflag;
 	inp->ip_inp.inp.inp_vflag &= ~INP_IPV4;
 	inp->ip_inp.inp.inp_vflag |= INP_IPV6;
-	if ((addr != NULL) && (SCTP_IPV6_V6ONLY(&inp->ip_inp.inp) == 0)) {
+	if ((addr != NULL) && (SCTP_IPV6_V6ONLY(inp) == 0)) {
 		switch (addr->sa_family) {
 #ifdef INET
 		case AF_INET:

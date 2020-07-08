@@ -759,7 +759,9 @@ int	inp_so_options(const struct inpcb *inp);
 #define	INP_ORIGDSTADDR		0x00000800 /* receive IP dst address/port */
 #define INP_CANNOT_DO_ECN	0x00001000 /* The stack does not do ECN */
 #define	INP_REUSEPORT_LB	0x00002000 /* SO_REUSEPORT_LB option is set */
-
+#define INP_SUPPORTS_MBUFQ	0x00004000 /* Supports the mbuf queue method of LRO */
+#define INP_MBUF_QUEUE_READY	0x00008000 /* The transport is pacing, inputs can be queued */
+#define INP_DONT_SACK_QUEUE	0x00010000 /* If a sack arrives do not wake me */
 /*
  * Flags passed to in_pcblookup*() functions.
  */
@@ -846,7 +848,7 @@ int	in_pcbbind_setup(struct inpcb *, struct sockaddr *, in_addr_t *,
 	    u_short *, struct ucred *);
 int	in_pcbconnect(struct inpcb *, struct sockaddr *, struct ucred *);
 int	in_pcbconnect_mbuf(struct inpcb *, struct sockaddr *, struct ucred *,
-	    struct mbuf *);
+	    struct mbuf *, bool);
 int	in_pcbconnect_setup(struct inpcb *, struct sockaddr *, in_addr_t *,
 	    u_short *, in_addr_t *, u_short *, struct inpcb **,
 	    struct ucred *);
@@ -855,7 +857,7 @@ void	in_pcbdisconnect(struct inpcb *);
 void	in_pcbdrop(struct inpcb *);
 void	in_pcbfree(struct inpcb *);
 int	in_pcbinshash(struct inpcb *);
-int	in_pcbinshash_nopcbgroup(struct inpcb *);
+int	in_pcbinshash_mbuf(struct inpcb *, struct mbuf *);
 int	in_pcbladdr(struct inpcb *, struct in_addr *, struct in_addr *,
 	    struct ucred *);
 struct inpcb *

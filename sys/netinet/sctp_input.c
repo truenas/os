@@ -49,10 +49,10 @@ __FBSDID("$FreeBSD$");
 #include <netinet/sctp_bsd_addr.h>
 #include <netinet/sctp_timer.h>
 #include <netinet/sctp_crc32.h>
+#include <netinet/sctp_kdtrace.h>
 #if defined(INET) || defined(INET6)
 #include <netinet/udp.h>
 #endif
-#include <netinet/in_kdtrace.h>
 #include <sys/smp.h>
 
 
@@ -495,6 +495,9 @@ sctp_process_init_ack(struct mbuf *m, int iphlen, int offset,
 	/* process the peer's parameters in the INIT-ACK */
 	retval = sctp_process_init((struct sctp_init_chunk *)cp, stcb);
 	if (retval < 0) {
+		if (op_err != NULL) {
+			sctp_m_freem(op_err);
+		}
 		return (retval);
 	}
 	initack_limit = offset + ntohs(cp->ch.chunk_length);
@@ -502,6 +505,9 @@ sctp_process_init_ack(struct mbuf *m, int iphlen, int offset,
 	if ((retval = sctp_load_addresses_from_init(stcb, m,
 	    (offset + sizeof(struct sctp_init_chunk)), initack_limit,
 	    src, dst, NULL, stcb->asoc.port))) {
+		if (op_err != NULL) {
+			sctp_m_freem(op_err);
+		}
 		op_err = sctp_generate_cause(SCTP_BASE_SYSCTL(sctp_diag_info_code),
 		    "Problem with address parameters");
 		SCTPDBG(SCTP_DEBUG_INPUT1,
