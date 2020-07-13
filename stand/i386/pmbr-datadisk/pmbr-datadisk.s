@@ -95,7 +95,7 @@ putstr: 	lodsb				# Get character
 		jnz putstr.0			# No
 putstr.1:	jmp putstr.1			# Await reset
 
-msg_datadisk:	.asciz "This is a FreeNAS data disk and can not boot system.  System halted."
+msg_datadisk:	.asciz "This is a TrueNAS data disk and can not boot system.  System halted."
 
 boot_uuid:	.long 0x83bd6b9d
 		.word 0x7f41
