@@ -155,75 +155,72 @@ linuxkpi_thread_dtor(void *arg __unused, struct thread *td)
 	put_task_struct(ts);
 }
 
-struct task_struct *
-linux_pid_task(pid_t pid)
+static struct task_struct *
+linux_get_pid_task_int(pid_t pid, const bool do_get)
 {
 	struct thread *td;
 	struct proc *p;
+	struct task_struct *ts;
 
-	/* try to find corresponding thread */
-	td = tdfind(pid, -1);
-	if (td != NULL) {
-		struct task_struct *ts = td->td_lkpi_task;
-		PROC_UNLOCK(td->td_proc);
-		return (ts);
-	}
-
-	/* try to find corresponding procedure */
-	p = pfind(pid);
-	if (p != NULL) {
-		FOREACH_THREAD_IN_PROC(p, td) {
-			struct task_struct *ts = td->td_lkpi_task;
-			if (ts != NULL) {
-				PROC_UNLOCK(p);
-				return (ts);
-			}
+	if (pid > PID_MAX) {
+		/* try to find corresponding thread */
+		td = tdfind(pid, -1);
+		if (td != NULL) {
+			ts = td->td_lkpi_task;
+			if (do_get && ts != NULL)
+				get_task_struct(ts);
+			PROC_UNLOCK(td->td_proc);
+			return (ts);
 		}
-		PROC_UNLOCK(p);
+	} else {
+		/* try to find corresponding procedure */
+		p = pfind(pid);
+		if (p != NULL) {
+			FOREACH_THREAD_IN_PROC(p, td) {
+				ts = td->td_lkpi_task;
+				if (ts != NULL) {
+					if (do_get)
+						get_task_struct(ts);
+					PROC_UNLOCK(p);
+					return (ts);
+				}
+			}
+			PROC_UNLOCK(p);
+		}
 	}
 	return (NULL);
+}
+
+struct task_struct *
+linux_pid_task(pid_t pid)
+{
+	return (linux_get_pid_task_int(pid, false));
 }
 
 struct task_struct *
 linux_get_pid_task(pid_t pid)
 {
-	struct thread *td;
-	struct proc *p;
-
-	/* try to find corresponding thread */
-	td = tdfind(pid, -1);
-	if (td != NULL) {
-		struct task_struct *ts = td->td_lkpi_task;
-		if (ts != NULL)
-			get_task_struct(ts);
-		PROC_UNLOCK(td->td_proc);
-		return (ts);
-	}
-
-	/* try to find corresponding procedure */
-	p = pfind(pid);
-	if (p != NULL) {
-		FOREACH_THREAD_IN_PROC(p, td) {
-			struct task_struct *ts = td->td_lkpi_task;
-			if (ts != NULL) {
-				get_task_struct(ts);
-				PROC_UNLOCK(p);
-				return (ts);
-			}
-		}
-		PROC_UNLOCK(p);
-	}
-	return (NULL);
+	return (linux_get_pid_task_int(pid, true));
 }
 
 bool
 linux_task_exiting(struct task_struct *task)
 {
+	struct thread *td;
 	struct proc *p;
 	bool ret;
 
 	ret = false;
-	p = pfind(task->pid);
+
+	/* try to find corresponding thread */
+	td = tdfind(task->pid, -1);
+	if (td != NULL) {
+		p = td->td_proc;
+	} else {
+		/* try to find corresponding procedure */
+		p = pfind(task->pid);
+	}
+
 	if (p != NULL) {
 		if ((p->p_flag & P_WEXIT) != 0)
 			ret = true;
