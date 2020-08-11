@@ -340,9 +340,11 @@ SUBDIR=	\
 	${_rtwnfw} \
 	${_s3} \
 	${_safe} \
+	safexcel \
 	${_sbni} \
 	scc \
 	${_scsi_low} \
+	${_sctp} \
 	sdhci \
 	${_sdhci_acpi} \
 	sdhci_pci \
@@ -460,6 +462,9 @@ _if_gre=	if_gre
 _ipfw_pmod=	ipfw_pmod
 .if ${MK_IPSEC_SUPPORT} != "no"
 _ipsec=		ipsec
+.endif
+.if ${MK_SCTP_SUPPORT} != "no" || ${MK_SCTP} != "no"
+_sctp=		sctp
 .endif
 .endif
 
@@ -821,6 +826,8 @@ _wi=		wi
 _drm2=		drm2
 .endif
 _ipmi=		ipmi
+_ixl=		ixl
+_nvram=		opal_nvram
 .endif
 .if ${MACHINE_ARCH} == "powerpc64" || ${MACHINE_ARCH} == "powerpc"
 # Don't build powermac_nvram for powerpcspe, it's never supported.

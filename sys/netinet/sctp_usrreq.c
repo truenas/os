@@ -90,14 +90,15 @@ sctp_init(void)
 	SCTP_BASE_VAR(packet_log_end) = 0;
 	memset(&SCTP_BASE_VAR(packet_log_buffer), 0, SCTP_PACKET_LOG_SIZE);
 #endif
-	EVENTHANDLER_REGISTER(rt_addrmsg, sctp_addr_change_event_handler,
-	    NULL, EVENTHANDLER_PRI_FIRST);
+	SCTP_BASE_VAR(eh_tag) = EVENTHANDLER_REGISTER(rt_addrmsg,
+	    sctp_addr_change_event_handler, NULL, EVENTHANDLER_PRI_FIRST);
 }
 
 #ifdef VIMAGE
 static void
 sctp_finish(void *unused __unused)
 {
+	EVENTHANDLER_DEREGISTER(rt_addrmsg, SCTP_BASE_VAR(eh_tag));
 	sctp_pcb_finish();
 }
 

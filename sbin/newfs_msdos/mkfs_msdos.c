@@ -36,8 +36,10 @@ static const char rcsid[] =
 #include <sys/disklabel.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <sys/time.h>
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -59,6 +61,7 @@ static const char rcsid[] =
 
 #define	DOSMAGIC  0xaa55	/* DOS magic number */
 #define	MINBPS	  512		/* minimum bytes per sector */
+#define	MAXBPS    4096		/* maximum bytes per sector */
 #define	MAXSPC	  128		/* maximum sectors per cluster */
 #define	MAXNFT	  16		/* maximum number of FATs */
 #define	DEFBLK	  4096		/* default block size */
@@ -215,6 +218,7 @@ static volatile sig_atomic_t got_siginfo;
 static void infohandler(int);
 
 static int check_mounted(const char *, mode_t);
+static ssize_t getchunksize(void);
 static int getstdfmt(const char *, struct bpb *);
 static int getdiskinfo(int, const char *, const char *, int, struct bpb *);
 static void print_bpb(struct bpb *);
@@ -238,6 +242,7 @@ mkfs_msdos(const char *fname, const char *dtype, const struct msdos_options *op)
     struct bsx *bsx;
     struct de *de;
     u_int8_t *img;
+    u_int8_t *physbuf, *physbuf_end;
     const char *bname;
     ssize_t n;
     time_t now;
@@ -246,8 +251,9 @@ mkfs_msdos(const char *fname, const char *dtype, const struct msdos_options *op)
     bool set_res, set_spf, set_spc;
     int fd, fd1, rv;
     struct msdos_options o = *op;
+    ssize_t chunksize;
 
-    img = NULL;
+    physbuf = NULL;
     rv = -1;
     fd = fd1 = -1;
 
@@ -332,13 +338,11 @@ mkfs_msdos(const char *fname, const char *dtype, const struct msdos_options *op)
 		bpb.bpbSecPerClust = 64;		/* otherwise 32k */
 	}
     }
-    if (!powerof2(bpb.bpbBytesPerSec)) {
-	warnx("bytes/sector (%u) is not a power of 2", bpb.bpbBytesPerSec);
-	goto done;
-    }
-    if (bpb.bpbBytesPerSec < MINBPS) {
-	warnx("bytes/sector (%u) is too small; minimum is %u",
-	     bpb.bpbBytesPerSec, MINBPS);
+    if (bpb.bpbBytesPerSec < MINBPS ||
+        bpb.bpbBytesPerSec > MAXBPS ||
+	!powerof2(bpb.bpbBytesPerSec)) {
+	warnx("Invalid bytes/sector (%u): must be 512, 1024, 2048 or 4096",
+	    bpb.bpbBytesPerSec);
 	goto done;
     }
 
@@ -610,11 +614,15 @@ mkfs_msdos(const char *fname, const char *dtype, const struct msdos_options *op)
 	    tm = localtime(&now);
 	}
 
-
-	if (!(img = malloc(bpb.bpbBytesPerSec))) {
+	chunksize = getchunksize();
+	physbuf = malloc(chunksize);
+	if (physbuf == NULL) {
 	    warn(NULL);
 	    goto done;
 	}
+	physbuf_end = physbuf + chunksize;
+	img = physbuf;
+
 	dir = bpb.bpbResSectors + (bpb.bpbFATsecs ? bpb.bpbFATsecs :
 				   bpb.bpbBigFATsecs) * bpb.bpbFATs;
 	memset(&si_sa, 0, sizeof(si_sa));
@@ -737,19 +745,37 @@ mkfs_msdos(const char *fname, const char *dtype, const struct msdos_options *op)
 		    (u_int)tm->tm_mday;
 		mk2(de->deMDate, x);
 	    }
-	    if ((n = write(fd, img, bpb.bpbBytesPerSec)) == -1) {
-		warn("%s", fname);
-		goto done;
+	    /*
+	     * Issue a write of chunksize once we have collected
+	     * enough sectors.
+	     */
+	    img += bpb.bpbBytesPerSec;
+	    if (img >= physbuf_end) {
+		n = write(fd, physbuf, chunksize);
+		if (n != chunksize) {
+		    warnx("%s: can't write sector %u", fname, lsn);
+		    goto done;
+		}
+		img = physbuf;
 	    }
-	    if ((unsigned)n != bpb.bpbBytesPerSec) {
-		warnx("%s: can't write sector %u", fname, lsn);
-		goto done;
-	    }
+	}
+	/*
+	 * Write remaining sectors, if the last write didn't end
+	 * up filling a whole chunk.
+	 */
+	if (img != physbuf) {
+		ssize_t tailsize = img - physbuf;
+
+		n = write(fd, physbuf, tailsize);
+		if (n != tailsize) {
+		    warnx("%s: can't write sector %u", fname, lsn);
+		    goto done;
+		}
 	}
     }
     rv = 0;
 done:
-    free(img);
+    free(physbuf);
     if (fd != -1)
 	    close(fd);
     if (fd1 != -1)
@@ -789,6 +815,47 @@ check_mounted(const char *fname, mode_t mode)
 	}
     }
     return 0;
+}
+
+/*
+ * Get optimal I/O size
+ */
+static ssize_t
+getchunksize(void)
+{
+	static int chunksize;
+
+	if (chunksize != 0)
+		return ((ssize_t)chunksize);
+
+#ifdef	KERN_MAXPHYS
+	int mib[2];
+	size_t len;
+
+	mib[0] = CTL_KERN;
+	mib[1] = KERN_MAXPHYS;
+	len = sizeof(chunksize);
+
+	if (sysctl(mib, 2, &chunksize, &len, NULL, 0) == -1) {
+		warn("sysctl: KERN_MAXPHYS, using %zu", (size_t)MAXPHYS);
+		chunksize = 0;
+	}
+#endif
+	if (chunksize == 0)
+		chunksize = MAXPHYS;
+
+	/*
+	 * For better performance, we want to write larger chunks instead of
+	 * individual sectors (the size can only be 512, 1024, 2048 or 4096
+	 * bytes). Assert that chunksize can always hold an integer number of
+	 * sectors by asserting that both are power of two numbers and the
+	 * chunksize is greater than MAXBPS.
+	 */
+	static_assert(powerof2(MAXBPS), "MAXBPS is not power of 2");
+	assert(powerof2(chunksize));
+	assert(chunksize > MAXBPS);
+
+	return ((ssize_t)chunksize);
 }
 
 /*

@@ -408,4 +408,6 @@ MIASM =  \
 	getfhat.o \
 	fhlink.o \
 	fhlinkat.o \
-	fhreadlink.o
+	fhreadlink.o \
+	__sysctlbyname.o \
+	close_range.o

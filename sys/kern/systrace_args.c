@@ -3302,6 +3302,27 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
+	/* __sysctlbyname */
+	case 570: {
+		struct __sysctlbyname_args *p = params;
+		uarg[0] = (intptr_t) p->name; /* const char * */
+		uarg[1] = p->namelen; /* size_t */
+		uarg[2] = (intptr_t) p->old; /* void * */
+		uarg[3] = (intptr_t) p->oldlenp; /* size_t * */
+		uarg[4] = (intptr_t) p->new; /* void * */
+		uarg[5] = p->newlen; /* size_t */
+		*n_args = 6;
+		break;
+	}
+	/* close_range */
+	case 575: {
+		struct close_range_args *p = params;
+		uarg[0] = p->lowfd; /* u_int */
+		uarg[1] = p->highfd; /* u_int */
+		iarg[2] = p->flags; /* int */
+		*n_args = 3;
+		break;
+	}
 	default:
 		*n_args = 0;
 		break;
@@ -8810,6 +8831,47 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* __sysctlbyname */
+	case 570:
+		switch(ndx) {
+		case 0:
+			p = "userland const char *";
+			break;
+		case 1:
+			p = "size_t";
+			break;
+		case 2:
+			p = "userland void *";
+			break;
+		case 3:
+			p = "userland size_t *";
+			break;
+		case 4:
+			p = "userland void *";
+			break;
+		case 5:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* close_range */
+	case 575:
+		switch(ndx) {
+		case 0:
+			p = "u_int";
+			break;
+		case 1:
+			p = "u_int";
+			break;
+		case 2:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
 	default:
 		break;
 	};
@@ -10703,6 +10765,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* fhreadlink */
 	case 567:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* __sysctlbyname */
+	case 570:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* close_range */
+	case 575:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

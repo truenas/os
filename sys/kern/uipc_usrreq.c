@@ -1276,7 +1276,8 @@ uipc_ready_scan(struct socket *so, struct mbuf *m, int count, int *errorp)
 			mb = mb->m_next;
 			if (mb == NULL) {
 				mb = n;
-				n = mb->m_nextpkt;
+				if (mb != NULL)
+					n = mb->m_nextpkt;
 			}
 		}
 	}
@@ -1466,7 +1467,7 @@ uipc_ctloutput(struct socket *so, struct sockopt *sopt)
 	struct xucred xu;
 	int error, optval;
 
-	if (sopt->sopt_level != 0)
+	if (sopt->sopt_level != SOL_LOCAL)
 		return (EINVAL);
 
 	unp = sotounpcb(so);

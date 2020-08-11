@@ -1087,7 +1087,8 @@ mntsrv(struct svc_req *rqstp, SVCXPRT *transp)
 	struct sockaddr *saddr;
 	u_short sport;
 	char rpcpath[MNTPATHLEN + 1], dirpath[MAXPATHLEN];
-	int bad = 0, defset, hostset;
+	int defset, hostset;
+	long bad = 0;
 	sigset_t sighup_mask;
 	int numsecflavors, *secflavorsp;
 
@@ -3139,9 +3140,9 @@ do_mount(struct exportlist *ep, struct grouplist *grp, int exflags,
 					goto error_exit;
 				}
 				/* back up over the last component */
-				while (*cp == '/' && cp > dirp)
+				while (cp > dirp && *cp == '/')
 					cp--;
-				while (*(cp - 1) != '/' && cp > dirp)
+				while (cp > dirp && *(cp - 1) != '/')
 					cp--;
 				if (cp == dirp) {
 					if (debug)

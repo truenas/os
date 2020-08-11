@@ -198,7 +198,9 @@ __DEFAULT_NO_OPTIONS = \
     BSD_CRTBEGIN \
     BSD_GREP \
     CLANG_EXTRAS \
+    CLANG_FORMAT \
     DTRACE_TESTS \
+    GH_BC \
     GNU_GREP_COMPAT \
     HESIOD \
     LIBSOFT \
@@ -557,6 +559,7 @@ MK_LLDB:=	no
 
 .if ${MK_CLANG} == "no"
 MK_CLANG_EXTRAS:= no
+MK_CLANG_FORMAT:= no
 MK_CLANG_FULL:= no
 MK_LLVM_COV:= no
 .endif

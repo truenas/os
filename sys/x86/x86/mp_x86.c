@@ -44,6 +44,7 @@ __FBSDID("$FreeBSD$");
 #ifdef GPROF 
 #include <sys/gmon.h>
 #endif
+#include <sys/interrupt.h>
 #include <sys/kdb.h>
 #include <sys/kernel.h>
 #include <sys/ktr.h>
@@ -1350,6 +1351,21 @@ ipi_all_but_self(u_int ipi)
 	lapic_ipi_vectored(ipi, APIC_IPI_DEST_OTHERS);
 }
 
+void
+ipi_self_from_nmi(u_int vector)
+{
+
+	lapic_ipi_vectored(vector, APIC_IPI_DEST_SELF);
+
+	/* Wait for IPI to finish. */
+	if (!lapic_ipi_wait(50000)) {
+		if (panicstr != NULL)
+			return;
+		else
+			panic("APIC: IPI is stuck");
+	}
+}
+
 int
 ipi_nmi_handler(void)
 {
@@ -1550,6 +1566,16 @@ invlcache_handler(void)
 	generation = smp_tlb_generation;
 	wbinvd();
 	PCPU_SET(smp_tlb_done, generation);
+}
+
+/*
+ * Handle an IPI_SWI by waking delayed SWI thread.
+ */
+void
+ipi_swi_handler(struct trapframe frame)
+{
+
+	intr_event_handle(clk_intr_event, &frame);
 }
 
 /*

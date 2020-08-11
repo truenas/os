@@ -327,6 +327,10 @@ acpi_pcib_osc(struct acpi_hpcib_softc *sc, uint32_t osc_ctl)
 	cap_set[PCI_OSC_SUPPORT] = PCIM_OSC_SUPPORT_EXT_PCI_CONF |
 	    PCIM_OSC_SUPPORT_ASPM | PCIM_OSC_SUPPORT_CPMC |
 	    PCIM_OSC_SUPPORT_SEG_GROUP | PCIM_OSC_SUPPORT_MSI;
+	/* Active State Power Management, Clock Power Management Capability */
+	if (pci_enable_aspm)
+		cap_set[PCI_OSC_SUPPORT] |= PCIM_OSC_SUPPORT_ASPM |
+		    PCIM_OSC_SUPPORT_CPMC;
 
 	/* Control Field */
 	cap_set[PCI_OSC_CTL] = sc->ap_osc_ctl | osc_ctl;

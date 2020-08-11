@@ -3932,6 +3932,7 @@ vmspace_fork(struct vmspace *vm1, vm_ooffset_t *fork_charge)
 	}
 
 	new_map->anon_loc = old_map->anon_loc;
+	new_map->flags |= old_map->flags & (MAP_ASLR | MAP_ASLR_IGNSTART);
 
 	old_entry = old_map->header.next;
 
@@ -4851,6 +4852,13 @@ vm_map_pmap_KBI(vm_map_t map)
 {
 
 	return (map->pmap);
+}
+
+bool
+vm_map_range_valid_KBI(vm_map_t map, vm_offset_t start, vm_offset_t end)
+{
+
+	return (vm_map_range_valid(map, start, end));
 }
 
 #include "opt_ddb.h"

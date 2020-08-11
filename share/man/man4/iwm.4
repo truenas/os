@@ -25,7 +25,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd November 7, 2019
+.Dd June 28, 2020
 .Dt IWM 4
 .Os
 .Sh NAME
@@ -88,6 +88,7 @@ driver provides support for:
 .It Intel Dual Band Wireless AC 7260
 .It Intel Dual Band Wireless AC 7265
 .It Intel Dual Band Wireless AC 8260
+.It Intel Dual Band Wireless AC 8265
 .It Intel Dual Band Wireless AC 9260
 .It Intel Dual Band Wireless AC 9270
 .It Intel Dual Band Wireless AC 946X
@@ -105,6 +106,12 @@ For more information on configuring this device, see
 This driver requires the firmware built with the
 .Nm iwmfw
 module to work.
+.Pp
+Currently,
+.Nm
+only supports 802.11b and 802.11g modes.
+It will not associate to access points that are configured to operate only
+in 802.11n or 802.11ac modes.
 .Sh EXAMPLES
 Join an existing BSS network (i.e., connect to an access point):
 .Bd -literal -offset indent

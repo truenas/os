@@ -737,11 +737,6 @@ mps_attach_sas(struct mps_softc *sc)
 	mps_dprint(sc, MPS_INIT, "%s entered\n", __func__);
 
 	sassc = malloc(sizeof(struct mpssas_softc), M_MPT2, M_WAITOK|M_ZERO);
-	if(!sassc) {
-		mps_dprint(sc, MPS_INIT|MPS_ERROR,
-		    "Cannot allocate SAS controller memory\n");
-		return (ENOMEM);
-	}
 
 	/*
 	 * XXX MaxTargets could change during a reinit.  Since we don't
@@ -752,12 +747,6 @@ mps_attach_sas(struct mps_softc *sc)
 	sassc->maxtargets = sc->facts->MaxTargets + sc->facts->MaxVolumes;
 	sassc->targets = malloc(sizeof(struct mpssas_target) *
 	    sassc->maxtargets, M_MPT2, M_WAITOK|M_ZERO);
-	if(!sassc->targets) {
-		mps_dprint(sc, MPS_INIT|MPS_ERROR,
-		    "Cannot allocate SAS target memory\n");
-		free(sassc, M_MPT2);
-		return (ENOMEM);
-	}
 	sc->sassc = sassc;
 	sassc->sc = sc;
 
@@ -3670,8 +3659,4 @@ mpssas_realloc_targets(struct mps_softc *sc, int maxtargets)
 
 	sassc->targets = malloc(sizeof(struct mpssas_target) * maxtargets,
 	    M_MPT2, M_WAITOK|M_ZERO);
-	if (!sassc->targets) {
-		panic("%s failed to alloc targets with error %d\n",
-		    __func__, ENOMEM);
-	}
 }
