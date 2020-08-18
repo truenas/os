@@ -66,6 +66,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/resource.h>
 #include <sys/sbuf.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
 #include <sys/smp.h>
 #include <sys/socket.h>
 #include <sys/syscallsubr.h>
@@ -212,14 +213,59 @@ linprocfs_docpuinfo(PFS_FILL_ARGS)
 	 * We default the flags to include all non-conflicting flags,
 	 * and the Intel versions of conflicting flags.
 	 */
-	static char *flags[] = {
-		"fpu",	    "vme",     "de",	   "pse",      "tsc",
-		"msr",	    "pae",     "mce",	   "cx8",      "apic",
-		"sep",	    "sep",     "mtrr",	   "pge",      "mca",
-		"cmov",	    "pat",     "pse36",	   "pn",       "b19",
-		"b20",	    "b21",     "mmxext",   "mmx",      "fxsr",
-		"xmm",	    "sse2",    "b27",	   "b28",      "b29",
-		"3dnowext", "3dnow"
+	static char *cpu_feature_names[] = {
+		/*  0 */ "fpu", "vme", "de", "pse",
+		/*  4 */ "tsc", "msr", "pae", "mce",
+		/*  8 */ "cx8", "apic", "", "sep",
+		/* 12 */ "mtrr", "pge", "mca", "cmov",
+		/* 16 */ "pat", "pse36", "pn", "clflush",
+		/* 20 */ "", "dts", "acpi", "mmx",
+		/* 24 */ "fxsr", "sse", "sse2", "ss",
+		/* 28 */ "ht", "tm", "ia64", "pbe"
+	};
+
+	static char *amd_feature_names[] = {
+		/*  0 */ "", "", "", "",
+		/*  4 */ "", "", "", "",
+		/*  8 */ "", "", "", "syscall",
+		/* 12 */ "", "", "", "",
+		/* 16 */ "", "", "", "mp",
+		/* 20 */ "nx", "", "mmxext", "",
+		/* 24 */ "", "fxsr_opt", "pdpe1gb", "rdtscp",
+		/* 28 */ "", "lm", "3dnowext", "3dnow"
+	};
+
+	static char *cpu_feature2_names[] = {
+		/*  0 */ "pni", "pclmulqdq", "dtes64", "monitor",
+		/*  4 */ "ds_cpl", "vmx", "smx", "est",
+		/*  8 */ "tm2", "ssse3", "cid", "sdbg",
+		/* 12 */ "fma", "cx16", "xtpr", "pdcm",
+		/* 16 */ "", "pcid", "dca", "sse4_1",
+		/* 20 */ "sse4_2", "x2apic", "movbe", "popcnt",
+		/* 24 */ "tsc_deadline_timer", "aes", "xsave", "",
+		/* 28 */ "avx", "f16c", "rdrand", "hypervisor"
+	};
+
+	static char *amd_feature2_names[] = {
+		/*  0 */ "lahf_lm", "cmp_legacy", "svm", "extapic",
+		/*  4 */ "cr8_legacy", "abm", "sse4a", "misalignsse",
+		/*  8 */ "3dnowprefetch", "osvw", "ibs", "xop",
+		/* 12 */ "skinit", "wdt", "", "lwp",
+		/* 16 */ "fma4", "tce", "", "nodeid_msr",
+		/* 20 */ "", "tbm", "topoext", "perfctr_core",
+		/* 24 */ "perfctr_nb", "", "bpext", "ptsc",
+		/* 28 */ "perfctr_llc", "mwaitx", "", ""
+	};
+
+	static char *cpu_stdext_feature_names[] = {
+		/*  0 */ "fsgsbase", "tsc_adjust", "", "bmi1",
+		/*  4 */ "hle", "avx2", "", "smep",
+		/*  8 */ "bmi2", "erms", "invpcid", "rtm",
+		/* 12 */ "cqm", "", "mpx", "rdt_a",
+		/* 16 */ "avx512f", "avx512dq", "rdseed", "adx",
+		/* 20 */ "smap", "avx512ifma", "", "clflushopt",
+		/* 24 */ "clwb", "intel_pt", "avx512pf", "avx512er",
+		/* 28 */ "avx512cd", "sha_ni", "avx512bw", "avx512vl"
 	};
 
 	static char *power_flags[] = {
@@ -240,10 +286,10 @@ linprocfs_docpuinfo(PFS_FILL_ARGS)
 	switch (cpu_vendor_id) {
 	case CPU_VENDOR_AMD:
 		if (cpu_class < CPUCLASS_686)
-			flags[16] = "fcmov";
+			cpu_feature_names[16] = "fcmov";
 		break;
 	case CPU_VENDOR_CYRIX:
-		flags[24] = "cxmmx";
+		cpu_feature_names[24] = "cxmmx";
 		break;
 	}
 #endif
@@ -286,9 +332,27 @@ linprocfs_docpuinfo(PFS_FILL_ARGS)
 		    (cpu_feature & CPUID_FPU) ? "yes" : "no", "yes",
 		    CPUID_TO_FAMILY(cpu_id), "yes");
 		sbuf_cat(sb, "flags\t\t:");
-		for (j = 0; j < nitems(flags); j++)
-			if (cpu_feature & (1 << j))
-				sbuf_printf(sb, " %s", flags[j]);
+		for (j = 0; j < nitems(cpu_feature_names); j++)
+			if (cpu_feature & (1 << j) &&
+			    cpu_feature_names[j][0] != '\0')
+				sbuf_printf(sb, " %s", cpu_feature_names[j]);
+		for (j = 0; j < nitems(amd_feature_names); j++)
+			if (amd_feature & (1 << j) &&
+			    amd_feature_names[j][0] != '\0')
+				sbuf_printf(sb, " %s", amd_feature_names[j]);
+		for (j = 0; j < nitems(cpu_feature2_names); j++)
+			if (cpu_feature2 & (1 << j) &&
+			    cpu_feature2_names[j][0] != '\0')
+				sbuf_printf(sb, " %s", cpu_feature2_names[j]);
+		for (j = 0; j < nitems(amd_feature2_names); j++)
+			if (amd_feature2 & (1 << j) &&
+			    amd_feature2_names[j][0] != '\0')
+				sbuf_printf(sb, " %s", amd_feature2_names[j]);
+		for (j = 0; j < nitems(cpu_stdext_feature_names); j++)
+			if (cpu_stdext_feature & (1 << j) &&
+			    cpu_stdext_feature_names[j][0] != '\0')
+				sbuf_printf(sb, " %s",
+				    cpu_stdext_feature_names[j]);
 		sbuf_cat(sb, "\n");
 		sbuf_printf(sb,
 		    "bugs\t\t: %s\n"
@@ -301,7 +365,7 @@ linprocfs_docpuinfo(PFS_FILL_ARGS)
 #else
 		    "",
 #endif
-		    fqmhz, fqkhz,
+		    fqmhz * 2, fqkhz,
 		    cpu_clflush_line_size, cpu_clflush_line_size,
 		    cpu_maxphyaddr,
 		    (cpu_maxphyaddr > 32) ? 48 : 0);
@@ -398,6 +462,15 @@ linprocfs_domtab(PFS_FILL_ARGS)
 			mntfrom = fstype = "proc";
 		else if (strcmp(fstype, "procfs") == 0)
 			continue;
+
+		if (strcmp(fstype, "autofs") == 0) {
+			/*
+			 * FreeBSD uses eg "map -hosts", whereas Linux
+			 * expects just "-hosts".
+			 */
+			if (strncmp(mntfrom, "map ", 4) == 0)
+				mntfrom += 4;
+		}
 
 		if (strcmp(fstype, "linsysfs") == 0) {
 			sbuf_printf(sb, "/sys %s sysfs %s", mntto,
@@ -695,6 +768,32 @@ linprocfs_doloadavg(PFS_FILL_ARGS)
 	return (0);
 }
 
+static int
+linprocfs_get_tty_nr(struct proc *p)
+{
+	struct session *sp;
+	const char *ttyname;
+	int error, major, minor, nr;
+
+	PROC_LOCK_ASSERT(p, MA_OWNED);
+	sx_assert(&proctree_lock, SX_LOCKED);
+
+	if ((p->p_flag & P_CONTROLT) == 0)
+		return (-1);
+
+	sp = p->p_pgrp->pg_session;
+	if (sp == NULL)
+		return (-1);
+
+	ttyname = devtoname(sp->s_ttyp->t_dev);
+	error = linux_driver_get_major_minor(ttyname, &major, &minor);
+	if (error != 0)
+		return (-1);
+
+	nr = makedev(major, minor);
+	return (nr);
+}
+
 /*
  * Filler function for proc/pid/stat
  */
@@ -705,12 +804,14 @@ linprocfs_doprocstat(PFS_FILL_ARGS)
 	struct timeval boottime;
 	char state;
 	static int ratelimit = 0;
+	int tty_nr;
 	vm_offset_t startcode, startdata;
 
 	getboottime(&boottime);
 	sx_slock(&proctree_lock);
 	PROC_LOCK(p);
 	fill_kinfo_proc(p, &kp);
+	tty_nr = linprocfs_get_tty_nr(p);
 	sx_sunlock(&proctree_lock);
 	if (p->p_vmspace) {
 	   startcode = (vm_offset_t)p->p_vmspace->vm_taddr;
@@ -737,10 +838,7 @@ linprocfs_doprocstat(PFS_FILL_ARGS)
 	PS_ADD("pgrp",		"%d",	p->p_pgid);
 	PS_ADD("session",	"%d",	p->p_session->s_sid);
 	PROC_UNLOCK(p);
-	if (kp.ki_tdev == NODEV)
-		PS_ADD("tty",	"%s",	"-1");
-	else
-		PS_ADD("tty",		"%ju",	(uintmax_t)kp.ki_tdev);
+	PS_ADD("tty",		"%d",	tty_nr);
 	PS_ADD("tpgid",		"%d",	kp.ki_tpgid);
 	PS_ADD("flags",		"%u",	0); /* XXX */
 	PS_ADD("minflt",	"%lu",	kp.ki_rusage.ru_minflt);
@@ -875,6 +973,7 @@ linprocfs_doprocstatus(PFS_FILL_ARGS)
 	/*
 	 * Credentials
 	 */
+	sbuf_printf(sb, "Tgid:\t%d\n",		p->p_pid);
 	sbuf_printf(sb, "Pid:\t%d\n",		p->p_pid);
 	sbuf_printf(sb, "PPid:\t%d\n",		kp.ki_ppid );
 	sbuf_printf(sb, "TracerPid:\t%d\n",	kp.ki_tracer );
@@ -1321,6 +1420,17 @@ linprocfs_doosbuild(PFS_FILL_ARGS)
 }
 
 /*
+ * Filler function for proc/sys/kernel/msgmax
+ */
+static int
+linprocfs_domsgmax(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "%d\n", msginfo.msgmax);
+	return (0);
+}
+
+/*
  * Filler function for proc/sys/kernel/msgmni
  */
 static int
@@ -1328,6 +1438,17 @@ linprocfs_domsgmni(PFS_FILL_ARGS)
 {
 
 	sbuf_printf(sb, "%d\n", msginfo.msgmni);
+	return (0);
+}
+
+/*
+ * Filler function for proc/sys/kernel/msgmnb
+ */
+static int
+linprocfs_domsgmnb(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "%d\n", msginfo.msgmnb);
 	return (0);
 }
 
@@ -1351,6 +1472,50 @@ linprocfs_dosem(PFS_FILL_ARGS)
 
 	sbuf_printf(sb, "%d %d %d %d\n", seminfo.semmsl, seminfo.semmns,
 	    seminfo.semopm, seminfo.semmni);
+	return (0);
+}
+
+/*
+ * Filler function for proc/sys/kernel/shmall
+ */
+static int
+linprocfs_doshmall(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "%lu\n", shminfo.shmall);
+	return (0);
+}
+
+/*
+ * Filler function for proc/sys/kernel/shmmax
+ */
+static int
+linprocfs_doshmmax(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "%lu\n", shminfo.shmmax);
+	return (0);
+}
+
+/*
+ * Filler function for proc/sys/kernel/shmmni
+ */
+static int
+linprocfs_doshmmni(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "%lu\n", shminfo.shmmni);
+	return (0);
+}
+
+/*
+ * Filler function for proc/sys/kernel/tainted
+ */
+static int
+linprocfs_dotainted(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "0\n");
 	return (0);
 }
 
@@ -1437,22 +1602,22 @@ linprocfs_dofilesystems(PFS_FILL_ARGS)
 	return(0);
 }
 
-#if 0
 /*
  * Filler function for proc/modules
  */
 static int
 linprocfs_domodules(PFS_FILL_ARGS)
 {
+#if 0
 	struct linker_file *lf;
 
 	TAILQ_FOREACH(lf, &linker_files, link) {
 		sbuf_printf(sb, "%-20s%8lu%4d\n", lf->filename,
 		    (unsigned long)lf->size, lf->refs);
 	}
+#endif
 	return (0);
 }
-#endif
 
 /*
  * Filler function for proc/pid/fd
@@ -1561,6 +1726,28 @@ out:
 }
 
 /*
+ * The point of the following two functions is to work around
+ * an assertion in Chromium; see kern/240991 for details.
+ */
+static int
+linprocfs_dotaskattr(PFS_ATTR_ARGS)
+{
+
+	vap->va_nlink = 3;
+	return (0);
+}
+
+/*
+ * Filler function for proc/<pid>/task/.dummy
+ */
+static int
+linprocfs_dotaskdummy(PFS_FILL_ARGS)
+{
+
+	return (0);
+}
+
+/*
  * Filler function for proc/sys/kernel/random/uuid
  */
 static int
@@ -1646,10 +1833,8 @@ linprocfs_init(PFS_INIT_ARGS)
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(root, "meminfo", &linprocfs_domeminfo,
 	    NULL, NULL, NULL, PFS_RD);
-#if 0
 	pfs_create_file(root, "modules", &linprocfs_domodules,
 	    NULL, NULL, NULL, PFS_RD);
-#endif
 	pfs_create_file(root, "mounts", &linprocfs_domtab,
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(root, "mtab", &linprocfs_domtab,
@@ -1666,6 +1851,11 @@ linprocfs_init(PFS_INIT_ARGS)
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(root, "version", &linprocfs_doversion,
 	    NULL, NULL, NULL, PFS_RD);
+
+	/* /proc/bus/... */
+	dir = pfs_create_dir(root, "bus", NULL, NULL, NULL, 0);
+	dir = pfs_create_dir(dir, "pci", NULL, NULL, NULL, 0);
+	dir = pfs_create_dir(dir, "devices", NULL, NULL, NULL, 0);
 
 	/* /proc/net/... */
 	dir = pfs_create_dir(root, "net", NULL, NULL, NULL, 0);
@@ -1703,6 +1893,11 @@ linprocfs_init(PFS_INIT_ARGS)
 	pfs_create_file(dir, "limits", &linprocfs_doproclimits,
 	    NULL, NULL, NULL, PFS_RD);
 
+	/* /proc/<pid>/task/... */
+	dir = pfs_create_dir(dir, "task", linprocfs_dotaskattr, NULL, NULL, 0);
+	pfs_create_file(dir, ".dummy", &linprocfs_dotaskdummy,
+	    NULL, NULL, NULL, PFS_RD);
+
 	/* /proc/scsi/... */
 	dir = pfs_create_dir(root, "scsi", NULL, NULL, NULL, 0);
 	pfs_create_file(dir, "device_info", &linprocfs_doscsidevinfo,
@@ -1712,6 +1907,7 @@ linprocfs_init(PFS_INIT_ARGS)
 
 	/* /proc/sys/... */
 	sys = pfs_create_dir(root, "sys", NULL, NULL, NULL, 0);
+
 	/* /proc/sys/kernel/... */
 	dir = pfs_create_dir(sys, "kernel", NULL, NULL, NULL, 0);
 	pfs_create_file(dir, "osrelease", &linprocfs_doosrelease,
@@ -1720,11 +1916,23 @@ linprocfs_init(PFS_INIT_ARGS)
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(dir, "version", &linprocfs_doosbuild,
 	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "msgmax", &linprocfs_domsgmax,
+	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(dir, "msgmni", &linprocfs_domsgmni,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "msgmnb", &linprocfs_domsgmnb,
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(dir, "pid_max", &linprocfs_dopid_max,
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(dir, "sem", &linprocfs_dosem,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "shmall", &linprocfs_doshmall,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "shmmax", &linprocfs_doshmmax,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "shmmni", &linprocfs_doshmmni,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "tainted", &linprocfs_dotainted,
 	    NULL, NULL, NULL, PFS_RD);
 
 	/* /proc/sys/kernel/random/... */
@@ -1760,3 +1968,4 @@ MODULE_DEPEND(linprocfs, linux, 1, 1, 1);
 MODULE_DEPEND(linprocfs, procfs, 1, 1, 1);
 MODULE_DEPEND(linprocfs, sysvmsg, 1, 1, 1);
 MODULE_DEPEND(linprocfs, sysvsem, 1, 1, 1);
+MODULE_DEPEND(linprocfs, sysvshm, 1, 1, 1);

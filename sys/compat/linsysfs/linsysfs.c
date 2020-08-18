@@ -561,7 +561,7 @@ linsysfs_run_bus(device_t dev, struct pfs_node *dir, struct pfs_node *scsi,
 }
 
 /*
- * Filler function for sys/devices/system/cpu/online
+ * Filler function for sys/devices/system/cpu/{online,possible,present}
  */
 static int
 linsysfs_cpuonline(PFS_FILL_ARGS)
@@ -622,6 +622,7 @@ linsysfs_init(PFS_INIT_ARGS)
 	struct pfs_node *pci;
 	struct pfs_node *scsi;
 	struct pfs_node *net;
+	struct pfs_node *power_supply;
 	struct pfs_node *devdir, *chardev;
 	devclass_t devclass;
 	device_t dev;
@@ -634,6 +635,7 @@ linsysfs_init(PFS_INIT_ARGS)
 	class = pfs_create_dir(root, "class", NULL, NULL, NULL, 0);
 	scsi = pfs_create_dir(class, "scsi_host", NULL, NULL, NULL, 0);
 	drm = pfs_create_dir(class, "drm", NULL, NULL, NULL, 0);
+	power_supply = pfs_create_dir(class, "power_supply", NULL, NULL, NULL, 0);
 
 	/* /sys/class/net/.. */
 	net = pfs_create_dir(class, "net", NULL, NULL, NULL, 0);
@@ -661,6 +663,10 @@ linsysfs_init(PFS_INIT_ARGS)
 	cpu = pfs_create_dir(sys, "cpu", NULL, NULL, NULL, 0);
 
 	pfs_create_file(cpu, "online", &linsysfs_cpuonline,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(cpu, "possible", &linsysfs_cpuonline,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(cpu, "present", &linsysfs_cpuonline,
 	    NULL, NULL, NULL, PFS_RD);
 
 	linsysfs_listcpus(cpu);
