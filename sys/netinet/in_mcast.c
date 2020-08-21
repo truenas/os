@@ -51,7 +51,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/ktr.h>
 #include <sys/taskqueue.h>
-#include <sys/gtaskqueue.h>
 #include <sys/tree.h>
 
 #include <net/if.h>
@@ -223,23 +222,28 @@ inm_is_ifp_detached(const struct in_multi *inm)
 }
 #endif
 
-static struct grouptask free_gtask;
-static struct in_multi_head inm_free_list;
-static void inm_release_task(void *arg __unused);
-static void inm_init(void)
+/*
+ * Interface detach can happen in a taskqueue thread context, so we must use a
+ * dedicated thread to avoid deadlocks when draining inm_release tasks.
+ */
+TASKQUEUE_DEFINE_THREAD(inm_free);
+static struct in_multi_head inm_free_list = SLIST_HEAD_INITIALIZER();
+static void inm_release_task(void *arg __unused, int pending __unused);
+static struct task inm_free_task = TASK_INITIALIZER(0, inm_release_task, NULL);
+
+void
+inm_release_wait(void *arg __unused)
 {
-	SLIST_INIT(&inm_free_list);
-	taskqgroup_config_gtask_init(NULL, &free_gtask, inm_release_task, "inm release task");
+
+	/*
+	 * Make sure all pending multicast addresses are freed before
+	 * the VNET or network device is destroyed:
+	 */
+	taskqueue_drain(taskqueue_inm_free, &inm_free_task);
 }
-
-#ifdef EARLY_AP_STARTUP
-SYSINIT(inm_init, SI_SUB_SMP + 1, SI_ORDER_FIRST,
-	inm_init, NULL);
-#else
-SYSINIT(inm_init, SI_SUB_ROOT_CONF - 1, SI_ORDER_FIRST,
-	inm_init, NULL);
+#ifdef VIMAGE
+VNET_SYSUNINIT(inm_release_wait, SI_SUB_PROTO_DOMAIN, SI_ORDER_FIRST, inm_release_wait, NULL);
 #endif
-
 
 void
 inm_release_list_deferred(struct in_multi_head *inmh)
@@ -250,7 +254,7 @@ inm_release_list_deferred(struct in_multi_head *inmh)
 	mtx_lock(&in_multi_free_mtx);
 	SLIST_CONCAT(&inm_free_list, inmh, in_multi, inm_nrele);
 	mtx_unlock(&in_multi_free_mtx);
-	GROUPTASK_ENQUEUE(&free_gtask);
+	taskqueue_enqueue(taskqueue_inm_free, &inm_free_task);
 }
 
 void
@@ -303,7 +307,7 @@ inm_release_deferred(struct in_multi *inm)
 }
 
 static void
-inm_release_task(void *arg __unused)
+inm_release_task(void *arg __unused, int pending __unused)
 {
 	struct in_multi_head inm_free_tmp;
 	struct in_multi *inm, *tinm;
