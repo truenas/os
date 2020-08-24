@@ -543,14 +543,13 @@ __FBSDID("$FreeBSD$");
 #define SCTP_TIMER_TYPE_ASCONF		10
 #define SCTP_TIMER_TYPE_SHUTDOWNGUARD	11
 #define SCTP_TIMER_TYPE_AUTOCLOSE	12
-#define SCTP_TIMER_TYPE_EVENTWAKE	13
-#define SCTP_TIMER_TYPE_STRRESET        14
-#define SCTP_TIMER_TYPE_INPKILL         15
-#define SCTP_TIMER_TYPE_ASOCKILL        16
-#define SCTP_TIMER_TYPE_ADDR_WQ         17
-#define SCTP_TIMER_TYPE_PRIM_DELETED    18
+#define SCTP_TIMER_TYPE_STRRESET	13
+#define SCTP_TIMER_TYPE_INPKILL		14
+#define SCTP_TIMER_TYPE_ASOCKILL	15
+#define SCTP_TIMER_TYPE_ADDR_WQ		16
+#define SCTP_TIMER_TYPE_PRIM_DELETED	17
 /* add new timers here - and increment LAST */
-#define SCTP_TIMER_TYPE_LAST            19
+#define SCTP_TIMER_TYPE_LAST		18
 
 #define SCTP_IS_TIMER_TYPE_VALID(t)	(((t) > SCTP_TIMER_TYPE_NONE) && \
 					 ((t) < SCTP_TIMER_TYPE_LAST))
@@ -576,17 +575,6 @@ __FBSDID("$FreeBSD$");
  * not get impacted by the lower bandwidth sending a bunch of 1 byte chunks
  */
 #define SCTP_ASOC_MAX_CHUNKS_ON_QUEUE 512
-
-
-/* The conversion from time to ticks and vice versa is done by rounding
- * upwards. This way we can test in the code the time to be positive and
- * know that this corresponds to a positive number of ticks.
- */
-#define MSEC_TO_TICKS(x) ((hz == 1000) ? x : ((((x) * hz) + 999) / 1000))
-#define TICKS_TO_MSEC(x) ((hz == 1000) ? x : ((((x) * 1000) + (hz - 1)) / hz))
-
-#define SEC_TO_TICKS(x) ((x) * hz)
-#define TICKS_TO_SEC(x) (((x) + (hz - 1)) / hz)
 
 /*
  * Basically the minimum amount of time before I do a early FR. Making this
@@ -767,9 +755,8 @@ __FBSDID("$FreeBSD$");
 #define SCTP_FROM_SCTP_ASCONF       0x80000000
 #define SCTP_FROM_SCTP_OUTPUT       0x90000000
 #define SCTP_FROM_SCTP_PEELOFF      0xa0000000
-#define SCTP_FROM_SCTP_PANDA        0xb0000000
-#define SCTP_FROM_SCTP_SYSCTL       0xc0000000
-#define SCTP_FROM_SCTP_CC_FUNCTIONS 0xd0000000
+#define SCTP_FROM_SCTP_SYSCTL       0xb0000000
+#define SCTP_FROM_SCTP_CC_FUNCTIONS 0xc0000000
 
 /* Location ID's */
 #define SCTP_LOC_1  0x00000001
@@ -807,7 +794,8 @@ __FBSDID("$FreeBSD$");
 #define SCTP_LOC_33 0x00000021
 #define SCTP_LOC_34 0x00000022
 #define SCTP_LOC_35 0x00000023
-
+#define SCTP_LOC_36 0x00000024
+#define SCTP_LOC_37 0x00000025
 
 /* Free assoc codes */
 #define SCTP_NORMAL_PROC      0
@@ -956,7 +944,7 @@ __FBSDID("$FreeBSD$");
 
 /*-
  * defines for socket lock states.
- * Used by __APPLE__ and SCTP_SO_LOCK_TESTING
+ * Used by __APPLE__
  */
 #define SCTP_SO_LOCKED		1
 #define SCTP_SO_NOT_LOCKED	0
@@ -1005,7 +993,7 @@ do { \
 #define sctp_sowwakeup_locked(inp, so) \
 do { \
 	if (inp->sctp_flags & SCTP_PCB_FLAGS_DONT_WAKE) { \
-                SOCKBUF_UNLOCK(&((so)->so_snd)); \
+		SOCKBUF_UNLOCK(&((so)->so_snd)); \
 		inp->sctp_flags |= SCTP_PCB_FLAGS_WAKEOUTPUT; \
 	} else { \
 		sowwakeup_locked(so); \
@@ -1025,7 +1013,7 @@ do { \
 do { \
 	if (inp->sctp_flags & SCTP_PCB_FLAGS_DONT_WAKE) { \
 		inp->sctp_flags |= SCTP_PCB_FLAGS_WAKEINPUT; \
-                SOCKBUF_UNLOCK(&((so)->so_rcv)); \
+		SOCKBUF_UNLOCK(&((so)->so_rcv)); \
 	} else { \
 		sorwakeup_locked(so); \
 	} \

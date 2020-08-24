@@ -109,7 +109,7 @@ typedef void (*asoc_func) (struct sctp_inpcb *, struct sctp_tcb *, void *ptr,
 typedef int (*inp_func) (struct sctp_inpcb *, void *ptr, uint32_t val);
 typedef void (*end_func) (void *ptr, uint32_t val);
 
-#if defined(__FreeBSD__) && defined(SCTP_MCORE_INPUT) && defined(SMP)
+#if defined(SCTP_MCORE_INPUT) && defined(SMP)
 /* whats on the mcore control struct */
 struct sctp_mcore_queue {
 	TAILQ_ENTRY(sctp_mcore_queue) next;
@@ -129,10 +129,7 @@ struct sctp_mcore_ctrl {
 	int running;
 	int cpuid;
 };
-
-
 #endif
-
 
 struct sctp_iterator {
 	TAILQ_ENTRY(sctp_iterator) sctp_nxt_itr;
@@ -275,7 +272,7 @@ struct sctp_nets {
 	int lastsa;
 	int lastsv;
 	uint64_t rtt;		/* last measured rtt value in us */
-	unsigned int RTO;
+	uint32_t RTO;
 
 	/* This is used for SHUTDOWN/SHUTDOWN-ACK/SEND or INIT timers */
 	struct sctp_timer rxt_timer;
@@ -537,6 +534,7 @@ struct sctp_stream_queue_pending {
 	uint8_t sender_all_done;
 	uint8_t put_last_out;
 	uint8_t discard_rest;
+	uint8_t processing;
 };
 
 /*
@@ -806,7 +804,6 @@ struct sctp_association {
 	struct sctp_timer strreset_timer;	/* stream reset */
 	struct sctp_timer shut_guard_timer;	/* shutdown guard */
 	struct sctp_timer autoclose_timer;	/* automatic close timer */
-	struct sctp_timer delayed_event_timer;	/* timer for delayed events */
 	struct sctp_timer delete_prim_timer;	/* deleting primary dst */
 
 	/* list of restricted local addresses */
@@ -1063,7 +1060,7 @@ struct sctp_association {
 	uint32_t heart_beat_delay;
 
 	/* autoclose */
-	unsigned int sctp_autoclose_ticks;
+	uint32_t sctp_autoclose_ticks;
 
 	/* how many preopen streams we have */
 	unsigned int pre_open_streams;
@@ -1072,7 +1069,7 @@ struct sctp_association {
 	unsigned int max_inbound_streams;
 
 	/* the cookie life I award for any cookie, in seconds */
-	unsigned int cookie_life;
+	uint32_t cookie_life;
 	/* time to delay acks for */
 	unsigned int delayed_ack;
 	unsigned int old_delayed_ack;
@@ -1081,10 +1078,10 @@ struct sctp_association {
 
 	unsigned int numduptsns;
 	int dup_tsns[SCTP_MAX_DUP_TSNS];
-	unsigned int initial_init_rto_max;	/* initial RTO for INIT's */
-	unsigned int initial_rto;	/* initial send RTO */
-	unsigned int minrto;	/* per assoc RTO-MIN */
-	unsigned int maxrto;	/* per assoc RTO-MAX */
+	uint32_t initial_init_rto_max;	/* initial RTO for INIT's */
+	uint32_t initial_rto;	/* initial send RTO */
+	uint32_t minrto;	/* per assoc RTO-MIN */
+	uint32_t maxrto;	/* per assoc RTO-MAX */
 
 	/* authentication fields */
 	sctp_auth_chklist_t *local_auth_chunks;

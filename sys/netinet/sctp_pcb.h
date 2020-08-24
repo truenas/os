@@ -246,7 +246,7 @@ struct sctp_base_info {
 	 * All static structures that anchor the system must be here.
 	 */
 	struct sctp_epinfo sctppcbinfo;
-#if defined(__FreeBSD__) && defined(SMP) && defined(SCTP_USE_PERCPU_STAT)
+#if defined(SMP) && defined(SCTP_USE_PERCPU_STAT)
 	struct sctpstat *sctpstat;
 #else
 	struct sctpstat sctpstat;
@@ -273,11 +273,11 @@ struct sctp_pcb {
 	uint32_t secret_key[SCTP_HOW_MANY_SECRETS][SCTP_NUMBER_OF_SECRETS];
 	unsigned int size_of_a_cookie;
 
-	unsigned int sctp_timeoutticks[SCTP_NUM_TMRS];
-	unsigned int sctp_minrto;
-	unsigned int sctp_maxrto;
-	unsigned int initial_rto;
-	int initial_init_rto_max;
+	uint32_t sctp_timeoutticks[SCTP_NUM_TMRS];
+	uint32_t sctp_minrto;
+	uint32_t sctp_maxrto;
+	uint32_t initial_rto;
+	uint32_t initial_init_rto_max;
 
 	unsigned int sctp_sack_freq;
 	uint32_t sctp_sws_sender;
@@ -320,7 +320,7 @@ struct sctp_pcb {
 
 	uint32_t def_cookie_life;
 	/* defaults to 0 */
-	int auto_close_time;
+	uint32_t auto_close_time;
 	uint32_t initial_sequence_debug;
 	uint32_t adaptation_layer_indicator;
 	uint8_t adaptation_layer_indicator_provided;
@@ -478,7 +478,6 @@ struct sctp_tcb {
 #include <netinet/sctp_lock_bsd.h>
 
 
-/* TODO where to put non-_KERNEL things for __Userspace__? */
 #if defined(_KERNEL) || defined(__Userspace__)
 
 /* Attention Julian, this is the extern that
@@ -646,7 +645,7 @@ sctp_initiate_iterator(inp_func inpf,
     end_func ef,
     struct sctp_inpcb *,
     uint8_t co_off);
-#if defined(__FreeBSD__) && defined(SCTP_MCORE_INPUT) && defined(SMP)
+#if defined(SCTP_MCORE_INPUT) && defined(SMP)
 void
      sctp_queue_to_mcore(struct mbuf *m, int off, int cpu_to_use);
 

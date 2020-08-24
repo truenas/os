@@ -67,7 +67,6 @@ __FBSDID("$FreeBSD$");
 #include <i386/linux/linux.h>
 #include <i386/linux/linux_proto.h>
 #include <compat/linux/linux_emul.h>
-#include <compat/linux/linux_futex.h>
 #include <compat/linux/linux_ioctl.h>
 #include <compat/linux/linux_mib.h>
 #include <compat/linux/linux_misc.h>
@@ -990,7 +989,7 @@ static Elf32_Brandinfo linux_brand = {
 	.brand		= ELFOSABI_LINUX,
 	.machine	= EM_386,
 	.compat_3_brand	= "Linux",
-	.emul_path	= "/compat/linux",
+	.emul_path	= linux_emul_path,
 	.interp_path	= "/lib/ld-linux.so.1",
 	.sysvec		= &elf_linux_sysvec,
 	.interp_newpath	= NULL,
@@ -1002,7 +1001,7 @@ static Elf32_Brandinfo linux_glibc2brand = {
 	.brand		= ELFOSABI_LINUX,
 	.machine	= EM_386,
 	.compat_3_brand	= "Linux",
-	.emul_path	= "/compat/linux",
+	.emul_path	= linux_emul_path,
 	.interp_path	= "/lib/ld-linux.so.2",
 	.sysvec		= &elf_linux_sysvec,
 	.interp_newpath	= NULL,
@@ -1014,7 +1013,7 @@ static Elf32_Brandinfo linux_muslbrand = {
 	.brand		= ELFOSABI_LINUX,
 	.machine	= EM_386,
 	.compat_3_brand	= "Linux",
-	.emul_path	= "/compat/linux",
+	.emul_path	= linux_emul_path,
 	.interp_path	= "/lib/ld-musl-i386.so.1",
 	.sysvec		= &elf_linux_sysvec,
 	.interp_newpath	= NULL,

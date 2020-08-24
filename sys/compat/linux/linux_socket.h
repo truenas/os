@@ -196,6 +196,7 @@ int linux_accept(struct thread *td, struct linux_accept_args *args);
 #define	LINUX_SO_NO_CHECK	11
 #define	LINUX_SO_PRIORITY	12
 #define	LINUX_SO_LINGER		13
+#define	LINUX_SO_REUSEPORT	15
 #ifndef LINUX_SO_PASSCRED	/* powerpc differs */
 #define	LINUX_SO_PASSCRED	16
 #define	LINUX_SO_PEERCRED	17
@@ -206,12 +207,15 @@ int linux_accept(struct thread *td, struct linux_accept_args *args);
 #endif
 #define	LINUX_SO_TIMESTAMP	29
 #define	LINUX_SO_ACCEPTCONN	30
+#define	LINUX_SO_SNDBUFFORCE	32
+#define	LINUX_SO_RCVBUFFORCE	33
 
 /* Socket options */
 #define	LINUX_IP_TOS		1
 #define	LINUX_IP_TTL		2
 #define	LINUX_IP_HDRINCL	3
 #define	LINUX_IP_OPTIONS	4
+#define	LINUX_IP_RECVERR	11
 
 #define	LINUX_IP_MULTICAST_IF		32
 #define	LINUX_IP_MULTICAST_TTL		33
@@ -246,6 +250,7 @@ int linux_accept(struct thread *td, struct linux_accept_args *args);
 
 #define	LINUX_TCP_NODELAY	1
 #define	LINUX_TCP_MAXSEG	2
+#define	LINUX_TCP_CORK		3
 #define	LINUX_TCP_KEEPIDLE	4
 #define	LINUX_TCP_KEEPINTVL	5
 #define	LINUX_TCP_KEEPCNT	6

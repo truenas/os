@@ -517,6 +517,9 @@ sctp_ss_prio_select(struct sctp_tcb *stcb SCTP_UNUSED, struct sctp_nets *net,
 {
 	struct sctp_stream_out *strq, *strqt, *strqn;
 
+	if (asoc->ss_data.locked_on_sending) {
+		return (asoc->ss_data.locked_on_sending);
+	}
 	strqt = asoc->ss_data.last_out_stream;
 prio_again:
 	/* Find the next stream to use */
@@ -694,6 +697,9 @@ sctp_ss_fb_select(struct sctp_tcb *stcb SCTP_UNUSED, struct sctp_nets *net,
 {
 	struct sctp_stream_out *strq = NULL, *strqt;
 
+	if (asoc->ss_data.locked_on_sending) {
+		return (asoc->ss_data.locked_on_sending);
+	}
 	if (asoc->ss_data.last_out_stream == NULL ||
 	    TAILQ_FIRST(&asoc->ss_data.out.wheel) == TAILQ_LAST(&asoc->ss_data.out.wheel, sctpwheel_listhead)) {
 		strqt = TAILQ_FIRST(&asoc->ss_data.out.wheel);
@@ -761,8 +767,8 @@ sctp_ss_fb_scheduled(struct sctp_tcb *stcb, struct sctp_nets *net SCTP_UNUSED,
  */
 static void
 sctp_ss_fcfs_add(struct sctp_tcb *stcb, struct sctp_association *asoc,
-    struct sctp_stream_out *strq, struct sctp_stream_queue_pending *sp,
-    int holds_lock);
+    struct sctp_stream_out *strq SCTP_UNUSED,
+    struct sctp_stream_queue_pending *sp, int holds_lock);
 
 static void
 sctp_ss_fcfs_init(struct sctp_tcb *stcb, struct sctp_association *asoc,
@@ -900,6 +906,9 @@ sctp_ss_fcfs_select(struct sctp_tcb *stcb SCTP_UNUSED, struct sctp_nets *net,
 	struct sctp_stream_out *strq;
 	struct sctp_stream_queue_pending *sp;
 
+	if (asoc->ss_data.locked_on_sending) {
+		return (asoc->ss_data.locked_on_sending);
+	}
 	sp = TAILQ_FIRST(&asoc->ss_data.out.list);
 default_again:
 	if (sp != NULL) {

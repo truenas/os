@@ -71,6 +71,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/../linux/linux_proto.h>
 #endif
 #include <compat/linux/linux_file.h>
+#include <compat/linux/linux_mib.h>
 #include <compat/linux/linux_socket.h>
 #include <compat/linux/linux_timer.h>
 #include <compat/linux/linux_util.h>
@@ -363,8 +364,10 @@ linux_to_bsd_so_sockopt(int opt)
 	case LINUX_SO_BROADCAST:
 		return (SO_BROADCAST);
 	case LINUX_SO_SNDBUF:
+	case LINUX_SO_SNDBUFFORCE:
 		return (SO_SNDBUF);
 	case LINUX_SO_RCVBUF:
+	case LINUX_SO_RCVBUFFORCE:
 		return (SO_RCVBUF);
 	case LINUX_SO_KEEPALIVE:
 		return (SO_KEEPALIVE);
@@ -372,6 +375,8 @@ linux_to_bsd_so_sockopt(int opt)
 		return (SO_OOBINLINE);
 	case LINUX_SO_LINGER:
 		return (SO_LINGER);
+	case LINUX_SO_REUSEPORT:
+		return (SO_REUSEPORT_LB);
 	case LINUX_SO_PEERCRED:
 		return (LOCAL_PEERCRED);
 	case LINUX_SO_RCVLOWAT:
@@ -399,6 +404,8 @@ linux_to_bsd_tcp_sockopt(int opt)
 		return (TCP_NODELAY);
 	case LINUX_TCP_MAXSEG:
 		return (TCP_MAXSEG);
+	case LINUX_TCP_CORK:
+		return (TCP_NOPUSH);
 	case LINUX_TCP_KEEPIDLE:
 		return (TCP_KEEPIDLE);
 	case LINUX_TCP_KEEPINTVL:
@@ -1563,6 +1570,14 @@ linux_setsockopt(struct thread *td, struct linux_setsockopt_args *args)
 		}
 		break;
 	case IPPROTO_IP:
+		if (args->optname == LINUX_IP_RECVERR &&
+		    linux_ignore_ip_recverr) {
+			/*
+			 * XXX: This is a hack to unbreak DNS resolution
+			 *	with glibc 2.30 and above.
+			 */
+			return (0);
+		}
 		name = linux_to_bsd_ip_sockopt(args->optname);
 		break;
 	case IPPROTO_IPV6:

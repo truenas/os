@@ -81,7 +81,6 @@ __FBSDID("$FreeBSD$");
 #include <amd64/linux32/linux.h>
 #include <amd64/linux32/linux32_proto.h>
 #include <compat/linux/linux_emul.h>
-#include <compat/linux/linux_futex.h>
 #include <compat/linux/linux_ioctl.h>
 #include <compat/linux/linux_mib.h>
 #include <compat/linux/linux_misc.h>
@@ -1016,7 +1015,7 @@ static Elf32_Brandinfo linux_brand = {
 	.brand		= ELFOSABI_LINUX,
 	.machine	= EM_386,
 	.compat_3_brand	= "Linux",
-	.emul_path	= "/compat/linux",
+	.emul_path	= linux_emul_path,
 	.interp_path	= "/lib/ld-linux.so.1",
 	.sysvec		= &elf_linux_sysvec,
 	.interp_newpath	= NULL,
@@ -1028,7 +1027,7 @@ static Elf32_Brandinfo linux_glibc2brand = {
 	.brand		= ELFOSABI_LINUX,
 	.machine	= EM_386,
 	.compat_3_brand	= "Linux",
-	.emul_path	= "/compat/linux",
+	.emul_path	= linux_emul_path,
 	.interp_path	= "/lib/ld-linux.so.2",
 	.sysvec		= &elf_linux_sysvec,
 	.interp_newpath	= NULL,
@@ -1040,7 +1039,7 @@ static Elf32_Brandinfo linux_muslbrand = {
 	.brand		= ELFOSABI_LINUX,
 	.machine	= EM_386,
 	.compat_3_brand	= "Linux",
-	.emul_path	= "/compat/linux",
+	.emul_path	= linux_emul_path,
 	.interp_path	= "/lib/ld-musl-i386.so.1",
 	.sysvec		= &elf_linux_sysvec,
 	.interp_newpath	= NULL,
@@ -1073,8 +1072,6 @@ linux_elf_modevent(module_t mod, int type, void *data)
 		if (error == 0) {
 			SET_FOREACH(lihp, linux_ioctl_handler_set)
 				linux32_ioctl_register_handler(*lihp);
-			LIST_INIT(&futex_list);
-			mtx_init(&futex_mtx, "ftllk", NULL, MTX_DEF);
 			stclohz = (stathz ? stathz : hz);
 			if (bootverbose)
 				printf("Linux ELF exec handler installed\n");
@@ -1095,7 +1092,6 @@ linux_elf_modevent(module_t mod, int type, void *data)
 		if (error == 0) {
 			SET_FOREACH(lihp, linux_ioctl_handler_set)
 				linux32_ioctl_unregister_handler(*lihp);
-			mtx_destroy(&futex_mtx);
 			if (bootverbose)
 				printf("Linux ELF exec handler removed\n");
 		} else

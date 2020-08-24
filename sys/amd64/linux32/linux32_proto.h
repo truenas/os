@@ -1044,7 +1044,9 @@ struct linux_move_pages_args {
 	register_t dummy;
 };
 struct linux_getcpu_args {
-	register_t dummy;
+	char cpu_l_[PADL_(l_uint *)]; l_uint * cpu; char cpu_r_[PADR_(l_uint *)];
+	char node_l_[PADL_(l_uint *)]; l_uint * node; char node_r_[PADR_(l_uint *)];
+	char cache_l_[PADL_(void *)]; void * cache; char cache_r_[PADR_(void *)];
 };
 struct linux_epoll_pwait_args {
 	char epfd_l_[PADL_(l_int)]; l_int epfd; char epfd_r_[PADR_(l_int)];
@@ -1213,9 +1215,9 @@ struct linux_sched_getattr_args {
 	char flags_l_[PADL_(l_uint)]; l_uint flags; char flags_r_[PADR_(l_uint)];
 };
 struct linux_renameat2_args {
-	char oldfd_l_[PADL_(l_int)]; l_int oldfd; char oldfd_r_[PADR_(l_int)];
+	char olddfd_l_[PADL_(l_int)]; l_int olddfd; char olddfd_r_[PADR_(l_int)];
 	char oldname_l_[PADL_(const char *)]; const char * oldname; char oldname_r_[PADR_(const char *)];
-	char newfd_l_[PADL_(l_int)]; l_int newfd; char newfd_r_[PADR_(l_int)];
+	char newdfd_l_[PADL_(l_int)]; l_int newdfd; char newdfd_r_[PADR_(l_int)];
 	char newname_l_[PADL_(const char *)]; const char * newname; char newname_r_[PADR_(const char *)];
 	char flags_l_[PADL_(unsigned int)]; unsigned int flags; char flags_r_[PADR_(unsigned int)];
 };

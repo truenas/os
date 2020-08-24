@@ -47,6 +47,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/mman.h>
 #include <sys/mount.h>
+#include <sys/msgbuf.h>
 #include <sys/mutex.h>
 #include <sys/namei.h>
 #include <sys/priv.h>
@@ -775,7 +776,17 @@ linux_newuname(struct thread *td, struct linux_newuname_args *args)
 			*p = '\0';
 			break;
 		}
+#if defined(__amd64__)
+	/*
+	 * On amd64, Linux uname(2) needs to return "x86_64"
+	 * for both 64-bit and 32-bit applications.  On 32-bit,
+	 * the string returned by getauxval(AT_PLATFORM) needs
+	 * to remain "i686", though.
+	 */
+	strlcpy(utsname.machine, "x86_64", LINUX_MAX_UTSNAME);
+#else
 	strlcpy(utsname.machine, linux_kplatform, LINUX_MAX_UTSNAME);
+#endif
 
 	return (copyout(&utsname, args->buf, sizeof(utsname)));
 }
@@ -984,27 +995,53 @@ linux_futimesat(struct thread *td, struct linux_futimesat_args *args)
 }
 #endif
 
-int
-linux_common_wait(struct thread *td, int pid, int *status,
-    int options, struct rusage *ru)
+static int
+linux_common_wait(struct thread *td, int pid, int *statusp,
+    int options, struct __wrusage *wrup)
 {
-	int error, tmpstat;
+	siginfo_t siginfo;
+	idtype_t idtype;
+	id_t id;
+	int error, status, tmpstat;
 
-	error = kern_wait(td, pid, &tmpstat, options, ru);
+	if (pid == WAIT_ANY) {
+		idtype = P_ALL;
+		id = 0;
+	} else if (pid < 0) {
+		idtype = P_PGID;
+		id = (id_t)-pid;
+	} else {
+		idtype = P_PID;
+		id = (id_t)pid;
+	}
+
+	/*
+	 * For backward compatibility we implicitly add flags WEXITED
+	 * and WTRAPPED here.
+	 */
+	options |= WEXITED | WTRAPPED;
+	error = kern_wait6(td, idtype, id, &status, options, wrup, &siginfo);
 	if (error)
 		return (error);
 
-	if (status) {
-		tmpstat &= 0xffff;
-		if (WIFSIGNALED(tmpstat))
+	if (statusp) {
+		tmpstat = status & 0xffff;
+		if (WIFSIGNALED(tmpstat)) {
 			tmpstat = (tmpstat & 0xffffff80) |
 			    bsd_to_linux_signal(WTERMSIG(tmpstat));
-		else if (WIFSTOPPED(tmpstat))
+		} else if (WIFSTOPPED(tmpstat)) {
 			tmpstat = (tmpstat & 0xffff00ff) |
 			    (bsd_to_linux_signal(WSTOPSIG(tmpstat)) << 8);
-		else if (WIFCONTINUED(tmpstat))
+#if defined(__amd64__) && !defined(COMPAT_LINUX32)
+			if (WSTOPSIG(status) == SIGTRAP) {
+				tmpstat = linux_ptrace_status(td,
+				    siginfo.si_pid, tmpstat);
+			}
+#endif
+		} else if (WIFCONTINUED(tmpstat)) {
 			tmpstat = 0xffff;
-		error = copyout(&tmpstat, status, sizeof(int));
+		}
+		error = copyout(&tmpstat, statusp, sizeof(int));
 	}
 
 	return (error);
@@ -1035,7 +1072,7 @@ int
 linux_wait4(struct thread *td, struct linux_wait4_args *args)
 {
 	int error, options;
-	struct rusage ru, *rup;
+	struct __wrusage wru, *wrup;
 
 #ifdef DEBUG
 	if (ldebug(wait4))
@@ -1051,14 +1088,14 @@ linux_wait4(struct thread *td, struct linux_wait4_args *args)
 	linux_to_bsd_waitopts(args->options, &options);
 
 	if (args->rusage != NULL)
-		rup = &ru;
+		wrup = &wru;
 	else
-		rup = NULL;
-	error = linux_common_wait(td, args->pid, args->status, options, rup);
+		wrup = NULL;
+	error = linux_common_wait(td, args->pid, args->status, options, wrup);
 	if (error != 0)
 		return (error);
 	if (args->rusage != NULL)
-		error = linux_copyout_rusage(&ru, args->rusage);
+		error = linux_copyout_rusage(&wru.wru_self, args->rusage);
 	return (error);
 }
 
@@ -1559,6 +1596,33 @@ linux_sched_setscheduler(struct thread *td,
 	if (error)
 		return (error);
 
+	if (linux_map_sched_prio) {
+		switch (policy) {
+		case SCHED_OTHER:
+			if (sched_param.sched_priority != 0)
+				return (EINVAL);
+
+			sched_param.sched_priority =
+			    PRI_MAX_TIMESHARE - PRI_MIN_TIMESHARE;
+			break;
+		case SCHED_FIFO:
+		case SCHED_RR:
+			if (sched_param.sched_priority < 1 ||
+			    sched_param.sched_priority >= LINUX_MAX_RT_PRIO)
+				return (EINVAL);
+
+			/*
+			 * Map [1, LINUX_MAX_RT_PRIO - 1] to
+			 * [0, RTP_PRIO_MAX - RTP_PRIO_MIN] (rounding down).
+			 */
+			sched_param.sched_priority =
+			    (sched_param.sched_priority - 1) *
+			    (RTP_PRIO_MAX - RTP_PRIO_MIN + 1) /
+			    (LINUX_MAX_RT_PRIO - 1);
+			break;
+		}
+	}
+
 	tdt = linux_tdfind(td, args->pid, -1);
 	if (tdt == NULL)
 		return (ESRCH);
@@ -1612,6 +1676,20 @@ linux_sched_get_priority_max(struct thread *td,
 		printf(ARGS(sched_get_priority_max, "%d"), args->policy);
 #endif
 
+	if (linux_map_sched_prio) {
+		switch (args->policy) {
+		case LINUX_SCHED_OTHER:
+			td->td_retval[0] = 0;
+			return (0);
+		case LINUX_SCHED_FIFO:
+		case LINUX_SCHED_RR:
+			td->td_retval[0] = LINUX_MAX_RT_PRIO - 1;
+			return (0);
+		default:
+			return (EINVAL);
+		}
+	}
+
 	switch (args->policy) {
 	case LINUX_SCHED_OTHER:
 		bsd.policy = SCHED_OTHER;
@@ -1638,6 +1716,20 @@ linux_sched_get_priority_min(struct thread *td,
 	if (ldebug(sched_get_priority_min))
 		printf(ARGS(sched_get_priority_min, "%d"), args->policy);
 #endif
+
+	if (linux_map_sched_prio) {
+		switch (args->policy) {
+		case LINUX_SCHED_OTHER:
+			td->td_retval[0] = 0;
+			return (0);
+		case LINUX_SCHED_FIFO:
+		case LINUX_SCHED_RR:
+			td->td_retval[0] = 1;
+			return (0);
+		default:
+			return (EINVAL);
+		}
+	}
 
 	switch (args->policy) {
 	case LINUX_SCHED_OTHER:
@@ -2096,7 +2188,7 @@ linux_sched_setparam(struct thread *td,
 {
 	struct sched_param sched_param;
 	struct thread *tdt;
-	int error;
+	int error, policy;
 
 #ifdef DEBUG
 	if (ldebug(sched_setparam))
@@ -2111,8 +2203,41 @@ linux_sched_setparam(struct thread *td,
 	if (tdt == NULL)
 		return (ESRCH);
 
+	if (linux_map_sched_prio) {
+		error = kern_sched_getscheduler(td, tdt, &policy);
+		if (error)
+			goto out;
+
+		switch (policy) {
+		case SCHED_OTHER:
+			if (sched_param.sched_priority != 0) {
+				error = EINVAL;
+				goto out;
+			}
+			sched_param.sched_priority =
+			    PRI_MAX_TIMESHARE - PRI_MIN_TIMESHARE;
+			break;
+		case SCHED_FIFO:
+		case SCHED_RR:
+			if (sched_param.sched_priority < 1 ||
+			    sched_param.sched_priority >= LINUX_MAX_RT_PRIO) {
+				error = EINVAL;
+				goto out;
+			}
+			/*
+			 * Map [1, LINUX_MAX_RT_PRIO - 1] to
+			 * [0, RTP_PRIO_MAX - RTP_PRIO_MIN] (rounding down).
+			 */
+			sched_param.sched_priority =
+			    (sched_param.sched_priority - 1) *
+			    (RTP_PRIO_MAX - RTP_PRIO_MIN + 1) /
+			    (LINUX_MAX_RT_PRIO - 1);
+			break;
+		}
+	}
+
 	error = kern_sched_setparam(td, tdt, &sched_param);
-	PROC_UNLOCK(tdt->td_proc);
+out:	PROC_UNLOCK(tdt->td_proc);
 	return (error);
 }
 
@@ -2122,7 +2247,7 @@ linux_sched_getparam(struct thread *td,
 {
 	struct sched_param sched_param;
 	struct thread *tdt;
-	int error;
+	int error, policy;
 
 #ifdef DEBUG
 	if (ldebug(sched_getparam))
@@ -2134,10 +2259,38 @@ linux_sched_getparam(struct thread *td,
 		return (ESRCH);
 
 	error = kern_sched_getparam(td, tdt, &sched_param);
-	PROC_UNLOCK(tdt->td_proc);
-	if (error == 0)
-		error = copyout(&sched_param, uap->param,
-		    sizeof(sched_param));
+	if (error) {
+		PROC_UNLOCK(tdt->td_proc);
+		return (error);
+	}
+
+	if (linux_map_sched_prio) {
+		error = kern_sched_getscheduler(td, tdt, &policy);
+		PROC_UNLOCK(tdt->td_proc);
+		if (error)
+			return (error);
+
+		switch (policy) {
+		case SCHED_OTHER:
+			sched_param.sched_priority = 0;
+			break;
+		case SCHED_FIFO:
+		case SCHED_RR:
+			/*
+			 * Map [0, RTP_PRIO_MAX - RTP_PRIO_MIN] to
+			 * [1, LINUX_MAX_RT_PRIO - 1] (rounding up).
+			 */
+			sched_param.sched_priority =
+			    (sched_param.sched_priority *
+			    (LINUX_MAX_RT_PRIO - 1) +
+			    (RTP_PRIO_MAX - RTP_PRIO_MIN - 1)) /
+			    (RTP_PRIO_MAX - RTP_PRIO_MIN) + 1;
+			break;
+		}
+	} else
+		PROC_UNLOCK(tdt->td_proc);
+
+	error = copyout(&sched_param, uap->param, sizeof(sched_param));
 	return (error);
 }
 
@@ -2244,10 +2397,14 @@ linux_prlimit64(struct thread *td, struct linux_prlimit64_args *args)
 		flags |= PGET_CANDEBUG;
 	else
 		flags |= PGET_CANSEE;
-	error = pget(args->pid, flags, &p);
-	if (error != 0)
-		return (error);
-
+	if (args->pid == 0) {
+		p = td->td_proc;
+		PHOLD(p);
+	} else {
+		error = pget(args->pid, flags, &p);
+		if (error != 0)
+			return (error);
+	}
 	if (args->old != NULL) {
 		PROC_LOCK(p);
 		lim_rlimit_proc(p, which, &rlim);
@@ -2600,4 +2757,83 @@ linux_mincore(struct thread *td, struct linux_mincore_args *args)
 	if (args->start & PAGE_MASK)
 		return (EINVAL);
 	return (kern_mincore(td, args->start, args->len, args->vec));
+}
+
+#define	SYSLOG_TAG	"<6>"
+
+int
+linux_syslog(struct thread *td, struct linux_syslog_args *args)
+{
+	char buf[128], *src, *dst;
+	u_int seq;
+	int buflen, error;
+
+	if (args->type != LINUX_SYSLOG_ACTION_READ_ALL) {
+		linux_msg(td, "syslog unsupported type 0x%x", args->type);
+		return (EINVAL);
+	}
+
+	if (args->len < 6) {
+		td->td_retval[0] = 0;
+		return (0);
+	}
+
+	error = priv_check(td, PRIV_MSGBUF);
+	if (error)
+		return (error);
+
+	mtx_lock(&msgbuf_lock);
+	msgbuf_peekbytes(msgbufp, NULL, 0, &seq);
+	mtx_unlock(&msgbuf_lock);
+
+	dst = args->buf;
+	error = copyout(&SYSLOG_TAG, dst, sizeof(SYSLOG_TAG));
+	/* The -1 is to skip the trailing '\0'. */
+	dst += sizeof(SYSLOG_TAG) - 1;
+
+	while (error == 0) {
+		mtx_lock(&msgbuf_lock);
+		buflen = msgbuf_peekbytes(msgbufp, buf, sizeof(buf), &seq);
+		mtx_unlock(&msgbuf_lock);
+
+		if (buflen == 0)
+			break;
+
+		for (src = buf; src < buf + buflen && error == 0; src++) {
+			if (*src == '\0')
+				continue;
+
+			if (dst >= args->buf + args->len)
+				goto out;
+
+			error = copyout(src, dst, 1);
+			dst++;
+
+			if (*src == '\n' && *(src + 1) != '<' &&
+			    dst + sizeof(SYSLOG_TAG) < args->buf + args->len) {
+				error = copyout(&SYSLOG_TAG,
+				    dst, sizeof(SYSLOG_TAG));
+				dst += sizeof(SYSLOG_TAG) - 1;
+			}
+		}
+	}
+out:
+	td->td_retval[0] = dst - args->buf;
+	return (error);
+}
+
+int
+linux_getcpu(struct thread *td, struct linux_getcpu_args *args)
+{
+	int cpu, error, node;
+
+	cpu = td->td_oncpu; /* Make sure it doesn't change during copyout(9) */
+	error = 0;
+	node = cpuid_to_pcpu[cpu]->pc_domain;
+
+	if (args->cpu != NULL)
+		error = copyout(&cpu, args->cpu, sizeof(l_int));
+	if (args->node != NULL)
+		error = copyout(&node, args->node, sizeof(l_int));
+	return (error);
 }

@@ -285,8 +285,9 @@ linux_ioctl_disk(struct thread *td, struct linux_ioctl_args *args)
 {
 	struct file *fp;
 	int error;
-	u_int sectorsize;
-	off_t mediasize;
+	u_int sectorsize, psectorsize;
+	uint64_t blksize64;
+	off_t mediasize, stripesize;
 
 	error = fget(td, args->fd, &cap_ioctl_rights, &fp);
 	if (error != 0)
@@ -308,6 +309,15 @@ linux_ioctl_disk(struct thread *td, struct linux_ioctl_args *args)
 		return (copyout(&sectorsize, (void *)args->arg,
 		    sizeof(sectorsize)));
 		break;
+	case LINUX_BLKGETSIZE64:
+		error = fo_ioctl(fp, DIOCGMEDIASIZE,
+		    (caddr_t)&mediasize, td->td_ucred, td);
+		fdrop(fp, td);
+		if (error)
+			return (error);
+		blksize64 = mediasize;;
+		return (copyout(&blksize64, (void *)args->arg,
+		    sizeof(blksize64)));
 	case LINUX_BLKSSZGET:
 		error = fo_ioctl(fp, DIOCGSECTORSIZE,
 		    (caddr_t)&sectorsize, td->td_ucred, td);
@@ -317,6 +327,27 @@ linux_ioctl_disk(struct thread *td, struct linux_ioctl_args *args)
 		return (copyout(&sectorsize, (void *)args->arg,
 		    sizeof(sectorsize)));
 		break;
+	case LINUX_BLKPBSZGET:
+		error = fo_ioctl(fp, DIOCGSTRIPESIZE,
+		    (caddr_t)&stripesize, td->td_ucred, td);
+		if (error != 0) {
+			fdrop(fp, td);
+			return (error);
+		}
+		if (stripesize > 0 && stripesize <= 4096) {
+			psectorsize = stripesize;
+		} else  {
+			error = fo_ioctl(fp, DIOCGSECTORSIZE,
+			    (caddr_t)&sectorsize, td->td_ucred, td);
+			if (error != 0) {
+				fdrop(fp, td);
+				return (error);
+			}
+			psectorsize = sectorsize;
+		}
+		fdrop(fp, td);
+		return (copyout(&psectorsize, (void *)args->arg,
+		    sizeof(psectorsize)));
 	}
 	fdrop(fp, td);
 	return (ENOIOCTL);
@@ -521,6 +552,8 @@ bsd_to_linux_termios(struct termios *bios, struct linux_termios *lios)
 	lios->c_cc[LINUX_VDISCARD] = bios->c_cc[VDISCARD];
 	lios->c_cc[LINUX_VWERASE] = bios->c_cc[VWERASE];
 	lios->c_cc[LINUX_VLNEXT] = bios->c_cc[VLNEXT];
+	if (linux_preserve_vstatus)
+		lios->c_cc[LINUX_VSTATUS] = bios->c_cc[VSTATUS];
 
 	for (i=0; i<LINUX_NCCS; i++) {
 		if (i != LINUX_VMIN && i != LINUX_VTIME &&
@@ -661,6 +694,8 @@ linux_to_bsd_termios(struct linux_termios *lios, struct termios *bios)
 	bios->c_cc[VDISCARD] = lios->c_cc[LINUX_VDISCARD];
 	bios->c_cc[VWERASE] = lios->c_cc[LINUX_VWERASE];
 	bios->c_cc[VLNEXT] = lios->c_cc[LINUX_VLNEXT];
+	if (linux_preserve_vstatus)
+		bios->c_cc[VSTATUS] = lios->c_cc[LINUX_VSTATUS];
 
 	for (i=0; i<NCCS; i++) {
 		if (i != VMIN && i != VTIME &&
@@ -3671,6 +3706,7 @@ linux_ioctl(struct thread *td, struct linux_ioctl_args *args)
 
 	switch (args->cmd & 0xffff) {
 	case LINUX_BTRFS_IOC_CLONE:
+	case LINUX_FS_IOC_FIEMAP:
 		return (ENOTSUP);
 
 	default:

@@ -565,11 +565,7 @@ sctp_auth_key_acquire(struct sctp_tcb *stcb, uint16_t key_id)
 }
 
 void
-sctp_auth_key_release(struct sctp_tcb *stcb, uint16_t key_id, int so_locked
-#if !defined(__APPLE__) && !defined(SCTP_SO_LOCK_TESTING)
-    SCTP_UNUSED
-#endif
-)
+sctp_auth_key_release(struct sctp_tcb *stcb, uint16_t key_id, int so_locked)
 {
 	sctp_sharedkey_t *skey;
 
@@ -658,7 +654,6 @@ sctp_free_hmaclist(sctp_hmaclist_t *list)
 {
 	if (list != NULL) {
 		SCTP_FREE(list, SCTP_M_AUTH_HL);
-		list = NULL;
 	}
 }
 
@@ -1721,11 +1716,7 @@ sctp_handle_auth(struct sctp_tcb *stcb, struct sctp_auth_chunk *auth,
  */
 void
 sctp_notify_authentication(struct sctp_tcb *stcb, uint32_t indication,
-    uint16_t keyid, uint16_t alt_keyid, int so_locked
-#if !defined(__APPLE__) && !defined(SCTP_SO_LOCK_TESTING)
-    SCTP_UNUSED
-#endif
-)
+    uint16_t keyid, uint16_t alt_keyid, int so_locked)
 {
 	struct mbuf *m_notify;
 	struct sctp_authkey_event *auth;

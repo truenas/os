@@ -57,9 +57,11 @@
 #define	LINUX_BLKSECTSET	0x1266
 #define	LINUX_BLKSECTGET	0x1267
 #define	LINUX_BLKSSZGET		0x1268
+#define	LINUX_BLKGETSIZE64	0x1272
+#define	LINUX_BLKPBSZGET	0x127b
 
 #define LINUX_IOCTL_DISK_MIN    LINUX_BLKROSET
-#define LINUX_IOCTL_DISK_MAX    LINUX_BLKSSZGET
+#define LINUX_IOCTL_DISK_MAX    LINUX_BLKPBSZGET
 
 /*
  * hdio
@@ -435,6 +437,7 @@
 #define	LINUX_VWERASE		14
 #define	LINUX_VLNEXT		15
 #define	LINUX_VEOL2		16
+#define	LINUX_VSTATUS		18
 #define	LINUX_NCCS		19
 
 #define	LINUX_POSIX_VDISABLE	'\0'
@@ -750,6 +753,7 @@
  * Linux btrfs clone operation
  */
 #define LINUX_BTRFS_IOC_CLONE		0x9409 /* 0x40049409 */
+#define LINUX_FS_IOC_FIEMAP		0x660b
 
 /*
  * Linux evdev ioctl min and max

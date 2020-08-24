@@ -112,9 +112,11 @@ linux_common_open(struct thread *td, int dirfd, char *path, int l_flags, int mod
 		bsd_flags |= O_APPEND;
 	if (l_flags & LINUX_O_SYNC)
 		bsd_flags |= O_FSYNC;
+	if (l_flags & LINUX_O_CLOEXEC)
+		bsd_flags |= O_CLOEXEC;
 	if (l_flags & LINUX_O_NONBLOCK)
 		bsd_flags |= O_NONBLOCK;
-	if (l_flags & LINUX_FASYNC)
+	if (l_flags & LINUX_O_ASYNC)
 		bsd_flags |= O_ASYNC;
 	if (l_flags & LINUX_O_CREAT)
 		bsd_flags |= O_CREAT;
@@ -133,8 +135,11 @@ linux_common_open(struct thread *td, int dirfd, char *path, int l_flags, int mod
 	/* XXX LINUX_O_NOATIME: unable to be easily implemented. */
 
 	error = kern_openat(td, dirfd, path, UIO_SYSSPACE, bsd_flags, mode);
-	if (error != 0)
+	if (error != 0) {
+		if (error == EMLINK)
+			error = ELOOP;
 		goto done;
+	}
 	if (bsd_flags & O_NOCTTY)
 		goto done;
 
@@ -774,8 +779,28 @@ linux_rename(struct thread *td, struct linux_rename_args *args)
 int
 linux_renameat(struct thread *td, struct linux_renameat_args *args)
 {
+	struct linux_renameat2_args renameat2_args = {
+	    .olddfd = args->olddfd,
+	    .oldname = args->oldname,
+	    .newdfd = args->newdfd,
+	    .newname = args->newname,
+	    .flags = 0
+	};
+
+	return (linux_renameat2(td, &renameat2_args));
+}
+
+int
+linux_renameat2(struct thread *td, struct linux_renameat2_args *args)
+{
 	char *from, *to;
 	int error, olddfd, newdfd;
+
+	if (args->flags != 0) {
+		linux_msg(td, "renameat2 unsupported flags 0x%x",
+		    args->flags);
+		return (EINVAL);
+	}
 
 	olddfd = (args->olddfd == LINUX_AT_FDCWD) ? AT_FDCWD : args->olddfd;
 	newdfd = (args->newdfd == LINUX_AT_FDCWD) ? AT_FDCWD : args->newdfd;
@@ -1384,7 +1409,7 @@ fcntl_common(struct thread *td, struct linux_fcntl_args *args)
 		if (result & O_FSYNC)
 			td->td_retval[0] |= LINUX_O_SYNC;
 		if (result & O_ASYNC)
-			td->td_retval[0] |= LINUX_FASYNC;
+			td->td_retval[0] |= LINUX_O_ASYNC;
 #ifdef LINUX_O_NOFOLLOW
 		if (result & O_NOFOLLOW)
 			td->td_retval[0] |= LINUX_O_NOFOLLOW;
@@ -1403,7 +1428,7 @@ fcntl_common(struct thread *td, struct linux_fcntl_args *args)
 			arg |= O_APPEND;
 		if (args->arg & LINUX_O_SYNC)
 			arg |= O_FSYNC;
-		if (args->arg & LINUX_FASYNC)
+		if (args->arg & LINUX_O_ASYNC)
 			arg |= O_ASYNC;
 #ifdef LINUX_O_NOFOLLOW
 		if (args->arg & LINUX_O_NOFOLLOW)
