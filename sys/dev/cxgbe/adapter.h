@@ -187,6 +187,7 @@ enum {
 struct vi_info {
 	device_t dev;
 	struct port_info *pi;
+	struct adapter *adapter;
 
 	struct ifnet *ifp;
 
@@ -314,24 +315,17 @@ struct port_info {
 
 #define	IS_MAIN_VI(vi)		((vi) == &((vi)->pi->vi[0]))
 
-/* Where the cluster came from, how it has been carved up. */
-struct cluster_layout {
-	int8_t zidx;
-	int8_t hwidx;
-	uint16_t region1;	/* mbufs laid out within this region */
-				/* region2 is the DMA region */
-	uint16_t region3;	/* cluster_metadata within this region */
-};
-
 struct cluster_metadata {
+	uma_zone_t zone;
+	caddr_t cl;
 	u_int refcount;
-	struct fl_sdesc *sd;	/* For debug only.  Could easily be stale */
 };
 
 struct fl_sdesc {
 	caddr_t cl;
 	uint16_t nmbuf;	/* # of driver originated mbufs with ref on cluster */
-	struct cluster_layout cll;
+	int16_t moff;	/* offset of metadata from cl */
+	uint8_t zidx;
 };
 
 struct tx_desc {
@@ -463,18 +457,15 @@ struct sge_eq {
 	char lockname[16];
 };
 
-struct sw_zone_info {
+struct rx_buf_info {
 	uma_zone_t zone;	/* zone that this cluster comes from */
-	int size;		/* size of cluster: 2K, 4K, 9K, 16K, etc. */
-	int type;		/* EXT_xxx type of the cluster */
-	int8_t head_hwidx;
-	int8_t tail_hwidx;
-};
-
-struct hw_buf_info {
-	int8_t zidx;		/* backpointer to zone; -ve means unused */
-	int8_t next;		/* next hwidx for this zone; -1 means no more */
-	int size;
+	uint16_t size1;		/* same as size of cluster: 2K/4K/9K/16K.
+				 * hwsize[hwidx1] = size1.  No spare. */
+	uint16_t size2;		/* hwsize[hwidx2] = size2.
+				 * spare in cluster = size1 - size2. */
+	int8_t hwidx1;		/* SGE bufsize idx for size1 */
+	int8_t hwidx2;		/* SGE bufsize idx for size2 */
+	uint8_t type;		/* EXT_xxx type of the cluster */
 };
 
 enum {
@@ -516,7 +507,8 @@ struct sge_fl {
 	struct mtx fl_lock;
 	__be64 *desc;		/* KVA of descriptor ring, ptr to addresses */
 	struct fl_sdesc *sdesc;	/* KVA of software descriptor ring */
-	struct cluster_layout cll_def;	/* default refill zone, layout */
+	uint16_t zidx;		/* refill zone idx */
+	uint16_t safe_zidx;
 	uint16_t lowat;		/* # of buffers <= this means fl needs help */
 	int flags;
 	uint16_t buf_boundary;
@@ -534,8 +526,6 @@ struct sge_fl {
 	u_int rx_offset;	/* offset in fl buf (when buffer packing) */
 	volatile uint32_t *udb;
 
-	uint64_t mbuf_allocated;/* # of mbuf allocated from zone_mbuf */
-	uint64_t mbuf_inlined;	/* # of mbuf created within clusters */
 	uint64_t cl_allocated;	/* # of clusters allocated */
 	uint64_t cl_recycled;	/* # of clusters recycled */
 	uint64_t cl_fast_recycled; /* # of clusters recycled (fast) */
@@ -552,7 +542,6 @@ struct sge_fl {
 	bus_dmamap_t desc_map;
 	char lockname[16];
 	bus_addr_t ba;		/* bus address of descriptor ring */
-	struct cluster_layout cll_alt;	/* alternate refill zone, layout */
 };
 
 struct mp_ring;
@@ -766,10 +755,8 @@ struct sge {
 	struct sge_iq **iqmap;	/* iq->cntxt_id to iq mapping */
 	struct sge_eq **eqmap;	/* eq->cntxt_id to eq mapping */
 
-	int8_t safe_hwidx1;	/* may not have room for metadata */
-	int8_t safe_hwidx2;	/* with room for metadata and maybe more */
-	struct sw_zone_info sw_zone_info[SW_ZONE_SIZES];
-	struct hw_buf_info hw_buf_info[SGE_FLBUF_SIZES];
+	int8_t safe_zidx;
+	struct rx_buf_info rx_buf_info[SW_ZONE_SIZES];
 };
 
 struct devnames {
@@ -945,22 +932,22 @@ struct adapter {
 #define TXQ_LOCK_ASSERT_NOTOWNED(txq)	EQ_LOCK_ASSERT_NOTOWNED(&(txq)->eq)
 
 #define for_each_txq(vi, iter, q) \
-	for (q = &vi->pi->adapter->sge.txq[vi->first_txq], iter = 0; \
+	for (q = &vi->adapter->sge.txq[vi->first_txq], iter = 0; \
 	    iter < vi->ntxq; ++iter, ++q)
 #define for_each_rxq(vi, iter, q) \
-	for (q = &vi->pi->adapter->sge.rxq[vi->first_rxq], iter = 0; \
+	for (q = &vi->adapter->sge.rxq[vi->first_rxq], iter = 0; \
 	    iter < vi->nrxq; ++iter, ++q)
 #define for_each_ofld_txq(vi, iter, q) \
-	for (q = &vi->pi->adapter->sge.ofld_txq[vi->first_ofld_txq], iter = 0; \
+	for (q = &vi->adapter->sge.ofld_txq[vi->first_ofld_txq], iter = 0; \
 	    iter < vi->nofldtxq; ++iter, ++q)
 #define for_each_ofld_rxq(vi, iter, q) \
-	for (q = &vi->pi->adapter->sge.ofld_rxq[vi->first_ofld_rxq], iter = 0; \
+	for (q = &vi->adapter->sge.ofld_rxq[vi->first_ofld_rxq], iter = 0; \
 	    iter < vi->nofldrxq; ++iter, ++q)
 #define for_each_nm_txq(vi, iter, q) \
-	for (q = &vi->pi->adapter->sge.nm_txq[vi->first_nm_txq], iter = 0; \
+	for (q = &vi->adapter->sge.nm_txq[vi->first_nm_txq], iter = 0; \
 	    iter < vi->nnmtxq; ++iter, ++q)
 #define for_each_nm_rxq(vi, iter, q) \
-	for (q = &vi->pi->adapter->sge.nm_rxq[vi->first_nm_rxq], iter = 0; \
+	for (q = &vi->adapter->sge.nm_rxq[vi->first_nm_rxq], iter = 0; \
 	    iter < vi->nnmrxq; ++iter, ++q)
 #define for_each_vi(_pi, _iter, _vi) \
 	for ((_vi) = (_pi)->vi, (_iter) = 0; (_iter) < (_pi)->nvi; \
@@ -1326,5 +1313,13 @@ write_via_memwin(struct adapter *sc, int idx, uint32_t addr,
 {
 
 	return (rw_via_memwin(sc, idx, addr, (void *)(uintptr_t)val, len, 1));
+}
+
+/* Number of len16 -> number of descriptors */
+static inline int
+tx_len16_to_desc(int len16)
+{
+
+	return (howmany(len16, EQ_ESIZE / 16));
 }
 #endif

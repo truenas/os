@@ -125,7 +125,7 @@ alloc_nm_rxq_hwq(struct vi_info *vi, struct sge_nm_rxq *nm_rxq, int cong)
 {
 	int rc, cntxt_id, i;
 	__be32 v;
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	struct sge_params *sp = &sc->params.sge;
 	struct netmap_adapter *na = NA(vi->ifp);
 	struct fw_iq_cmd c;
@@ -245,7 +245,7 @@ alloc_nm_rxq_hwq(struct vi_info *vi, struct sge_nm_rxq *nm_rxq, int cong)
 static int
 free_nm_rxq_hwq(struct vi_info *vi, struct sge_nm_rxq *nm_rxq)
 {
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	int rc;
 
 	rc = -t4_iq_free(sc, sc->mbox, sc->pf, 0, FW_IQ_TYPE_FL_INT_CAP,
@@ -262,7 +262,7 @@ alloc_nm_txq_hwq(struct vi_info *vi, struct sge_nm_txq *nm_txq)
 {
 	int rc, cntxt_id;
 	size_t len;
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	struct netmap_adapter *na = NA(vi->ifp);
 	struct fw_eq_eth_cmd c;
 
@@ -335,7 +335,7 @@ alloc_nm_txq_hwq(struct vi_info *vi, struct sge_nm_txq *nm_txq)
 static int
 free_nm_txq_hwq(struct vi_info *vi, struct sge_nm_txq *nm_txq)
 {
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	int rc;
 
 	rc = -t4_eth_eq_free(sc, sc->mbox, sc->pf, 0, nm_txq->cntxt_id);
@@ -355,7 +355,7 @@ cxgbe_netmap_on(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
 	struct sge_nm_rxq *nm_rxq;
 	struct sge_nm_txq *nm_txq;
 	int rc, i, j, hwidx, defq, nrssq;
-	struct hw_buf_info *hwb;
+	struct rx_buf_info *rxb;
 
 	ASSERT_SYNCHRONIZED_OP(sc);
 
@@ -363,17 +363,22 @@ cxgbe_netmap_on(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
 	    (ifp->if_drv_flags & IFF_DRV_RUNNING) == 0)
 		return (EAGAIN);
 
-	hwb = &sc->sge.hw_buf_info[0];
-	for (i = 0; i < SGE_FLBUF_SIZES; i++, hwb++) {
-		if (hwb->size == NETMAP_BUF_SIZE(na))
+	rxb = &sc->sge.rx_buf_info[0];
+	for (i = 0; i < SW_ZONE_SIZES; i++, rxb++) {
+		if (rxb->size1 == NETMAP_BUF_SIZE(na)) {
+			hwidx = rxb->hwidx1;
 			break;
+		}
+		if (rxb->size2 == NETMAP_BUF_SIZE(na)) {
+			hwidx = rxb->hwidx2;
+			break;
+		}
 	}
-	if (i >= SGE_FLBUF_SIZES) {
+	if (i >= SW_ZONE_SIZES) {
 		if_printf(ifp, "no hwidx for netmap buffer size %d.\n",
 		    NETMAP_BUF_SIZE(na));
 		return (ENXIO);
 	}
-	hwidx = i;
 
 	/* Must set caps before calling netmap_reset */
 	nm_set_native_flags(na);
@@ -557,7 +562,7 @@ cxgbe_netmap_reg(struct netmap_adapter *na, int on)
 {
 	struct ifnet *ifp = na->ifp;
 	struct vi_info *vi = ifp->if_softc;
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	int rc;
 
 	rc = begin_synchronized_op(sc, vi, SLEEP_OK | INTR_OK, "t4nmreg");
@@ -812,7 +817,7 @@ cxgbe_netmap_txsync(struct netmap_kring *kring, int flags)
 	struct netmap_adapter *na = kring->na;
 	struct ifnet *ifp = na->ifp;
 	struct vi_info *vi = ifp->if_softc;
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	struct sge_nm_txq *nm_txq = &sc->sge.nm_txq[vi->first_nm_txq + kring->ring_id];
 	const u_int head = kring->rhead;
 	u_int reclaimed = 0;
@@ -876,7 +881,7 @@ cxgbe_netmap_rxsync(struct netmap_kring *kring, int flags)
 	struct netmap_ring *ring = kring->ring;
 	struct ifnet *ifp = na->ifp;
 	struct vi_info *vi = ifp->if_softc;
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	struct sge_nm_rxq *nm_rxq = &sc->sge.nm_rxq[vi->first_nm_rxq + kring->ring_id];
 	u_int const head = kring->rhead;
 	u_int n;
@@ -1033,7 +1038,7 @@ void
 service_nm_rxq(struct sge_nm_rxq *nm_rxq)
 {
 	struct vi_info *vi = nm_rxq->vi;
-	struct adapter *sc = vi->pi->adapter;
+	struct adapter *sc = vi->adapter;
 	struct ifnet *ifp = vi->ifp;
 	struct netmap_adapter *na = NA(ifp);
 	struct netmap_kring *kring = na->rx_rings[nm_rxq->nid];
