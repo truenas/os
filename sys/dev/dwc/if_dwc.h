@@ -37,6 +37,10 @@
 #ifndef __IF_DWC_H__
 #define __IF_DWC_H__
 
+#define	PHY_MODE_UNKNOWN	0x0
+#define	PHY_MODE_RMII		0x1
+#define	PHY_MODE_RGMII		0x2
+
 #define	MAC_CONFIGURATION	0x0
 #define	 CONF_JD		(1 << 22)	/* jabber timer disable */
 #define	 CONF_BE		(1 << 21)	/* Frame Burst Enable */
@@ -272,8 +276,9 @@
 #define	CURRENT_HOST_RECEIVE_BUF_ADDR	0x1054
 #define	HW_FEATURE			0x1058
 
-#define	DWC_GMAC			0x1
-#define	DWC_GMAC_ALT_DESC		0x2
+#define	DWC_GMAC_NORMAL_DESC		0x1
+#define	DWC_GMAC_EXT_DESC		0x2
+
 #define	GMAC_MII_CLK_60_100M_DIV42	0x0
 #define	GMAC_MII_CLK_100_150M_DIV62	0x1
 #define	GMAC_MII_CLK_25_35M_DIV16	0x2

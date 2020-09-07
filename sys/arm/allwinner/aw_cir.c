@@ -126,8 +126,10 @@ __FBSDID("$FreeBSD$");
 #define	AW_IR_DMAX			53
 
 /* Active Thresholds */
-#define	AW_IR_ACTIVE_T			((0 & 0xff) << 16)
-#define	AW_IR_ACTIVE_T_C		((1 & 0xff) << 23)
+#define	AW_IR_ACTIVE_T_VAL		AW_IR_L1_MIN
+#define	AW_IR_ACTIVE_T			(((AW_IR_ACTIVE_T_VAL - 1) & 0xff) << 16)
+#define	AW_IR_ACTIVE_T_C_VAL		0
+#define	AW_IR_ACTIVE_T_C		((AW_IR_ACTIVE_T_C_VAL & 0xff) << 23)
 
 /* Code masks */
 #define	CODE_MASK			0x00ff00ff
@@ -200,24 +202,24 @@ aw_ir_read_data(struct aw_ir_softc *sc)
 static unsigned long
 aw_ir_decode_packets(struct aw_ir_softc *sc)
 {
-	unsigned long len, code;
-	unsigned char val, last;
+	unsigned int len, code;
 	unsigned int active_delay;
+	unsigned char val, last;
 	int i, bitcount;
 
 	if (bootverbose)
 		device_printf(sc->dev, "sc->dcnt = %d\n", sc->dcnt);
 
 	/* Find Lead 1 (bit separator) */
-	active_delay = (AW_IR_ACTIVE_T + 1) * (AW_IR_ACTIVE_T_C != 0 ? 128 : 1);
-	len = 0;
-	len += (active_delay >> 1);
+	active_delay = AW_IR_ACTIVE_T_VAL *
+	    (AW_IR_ACTIVE_T_C_VAL != 0 ? 128 : 1);
+	len = active_delay;
 	if (bootverbose)
-		device_printf(sc->dev, "Initial len: %ld\n", len);
+		device_printf(sc->dev, "Initial len: %d\n", len);
 	for (i = 0;  i < sc->dcnt; i++) {
 		val = sc->buf[i];
 		if (val & VAL_MASK)
-			len += val & PERIOD_MASK;
+			len += (val & PERIOD_MASK) + 1;
 		else {
 			if (len > AW_IR_L1_MIN)
 				break;
@@ -225,7 +227,7 @@ aw_ir_decode_packets(struct aw_ir_softc *sc)
 		}
 	}
 	if (bootverbose)
-		device_printf(sc->dev, "len = %ld\n", len);
+		device_printf(sc->dev, "len = %d\n", len);
 	if ((val & VAL_MASK) || (len <= AW_IR_L1_MIN)) {
 		if (bootverbose)
 			device_printf(sc->dev, "Bit separator error\n");
@@ -241,7 +243,7 @@ aw_ir_decode_packets(struct aw_ir_softc *sc)
 				break;
 			len = 0;
 		} else
-			len += val & PERIOD_MASK;
+			len += (val & PERIOD_MASK) + 1;
 	}
 	if ((!(val & VAL_MASK)) || (len <= AW_IR_L0_MIN)) {
 		if (bootverbose)
@@ -258,23 +260,25 @@ aw_ir_decode_packets(struct aw_ir_softc *sc)
 		val = sc->buf[i];
 		if (last) {
 			if (val & VAL_MASK)
-				len += val & PERIOD_MASK;
+				len += (val & PERIOD_MASK) + 1;
 			else {
 				if (len > AW_IR_PMAX) {
 					if (bootverbose)
 						device_printf(sc->dev,
-						    "Pulse error\n");
+						    "Pulse error, len=%d\n",
+						    len);
 					goto error_code;
 				}
 				last = 0;
-				len = val & PERIOD_MASK;
+				len = (val & PERIOD_MASK) + 1;
 			}
 		} else {
 			if (val & VAL_MASK) {
 				if (len > AW_IR_DMAX) {
 					if (bootverbose)
 						device_printf(sc->dev,
-						    "Distant error\n");
+						    "Distance error, len=%d\n",
+						    len);
 					goto error_code;
 				} else {
 					if (len > AW_IR_DMID) {
@@ -286,9 +290,9 @@ aw_ir_decode_packets(struct aw_ir_softc *sc)
 						break;  /* Finish decoding */
 				}
 				last = 1;
-				len = val & PERIOD_MASK;
+				len = (val & PERIOD_MASK) + 1;
 			} else
-				len += val & PERIOD_MASK;
+				len += (val & PERIOD_MASK) + 1;
 		}
 	}
 	return (code);

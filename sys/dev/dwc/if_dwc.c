@@ -93,28 +93,95 @@ __FBSDID("$FreeBSD$");
 #define	DWC_ASSERT_LOCKED(sc)		mtx_assert(&(sc)->mtx, MA_OWNED)
 #define	DWC_ASSERT_UNLOCKED(sc)		mtx_assert(&(sc)->mtx, MA_NOTOWNED)
 
-#define	DDESC_TDES0_OWN			(1U << 31)
-#define	DDESC_TDES0_TXINT		(1U << 30)
-#define	DDESC_TDES0_TXLAST		(1U << 29)
-#define	DDESC_TDES0_TXFIRST		(1U << 28)
-#define	DDESC_TDES0_TXCRCDIS		(1U << 27)
-#define	DDESC_TDES0_TXRINGEND		(1U << 21)
-#define	DDESC_TDES0_TXCHAIN		(1U << 20)
+/* TX descriptors - TDESC0 is almost unified */
+#define	TDESC0_OWN		(1U << 31)
+#define	TDESC0_IHE		(1U << 16)	/* IP Header Error */
+#define	TDESC0_ES		(1U << 15)	/* Error Summary */
+#define	TDESC0_JT		(1U << 14)	/* Jabber Timeout */
+#define	TDESC0_FF		(1U << 13)	/* Frame Flushed */
+#define	TDESC0_PCE		(1U << 12)	/* Payload Checksum Error */
+#define	TDESC0_LOC		(1U << 11)	/* Loss of Carrier */
+#define	TDESC0_NC		(1U << 10)	/* No Carrier */
+#define	TDESC0_LC		(1U <<  9)	/* Late Collision */
+#define	TDESC0_EC		(1U <<  8)	/* Excessive Collision */
+#define	TDESC0_VF		(1U <<  7)	/* VLAN Frame */
+#define	TDESC0_CC_MASK		0xf
+#define	TDESC0_CC_SHIFT		3		/* Collision Count */
+#define	TDESC0_ED		(1U <<  2)	/* Excessive Deferral */
+#define	TDESC0_UF		(1U <<  1)	/* Underflow Error */
+#define	TDESC0_DB		(1U <<  0)	/* Deferred Bit */
+/* TX descriptors - TDESC0 extended format only */
+#define	ETDESC0_IC		(1U << 30)	/* Interrupt on Completion */
+#define	ETDESC0_LS		(1U << 29)	/* Last Segment */
+#define	ETDESC0_FS		(1U << 28)	/* First Segment */
+#define	ETDESC0_DC		(1U << 27)	/* Disable CRC */
+#define	ETDESC0_DP		(1U << 26)	/* Disable Padding */
+#define	ETDESC0_CIC_NONE	(0U << 22)	/* Checksum Insertion Control */
+#define	ETDESC0_CIC_HDR		(1U << 22)
+#define	ETDESC0_CIC_SEG 	(2U << 22)
+#define	ETDESC0_CIC_FULL	(3U << 22)
+#define	ETDESC0_TER		(1U << 21)	/* Transmit End of Ring */
+#define	ETDESC0_TCH		(1U << 20)	/* Second Address Chained */
 
-#define	DDESC_RDES0_OWN			(1U << 31)
-#define	DDESC_RDES0_FL_MASK		0x3fff
-#define	DDESC_RDES0_FL_SHIFT		16	/* Frame Length */
-#define	DDESC_RDES1_CHAINED		(1U << 14)
+/* TX descriptors - TDESC1 normal format */
+#define	NTDESC1_IC		(1U << 31)	/* Interrupt on Completion */
+#define	NTDESC1_LS		(1U << 30)	/* Last Segment */
+#define	NTDESC1_FS		(1U << 29)	/* First Segment */
+#define	NTDESC1_CIC_NONE	(0U << 27)	/* Checksum Insertion Control */
+#define	NTDESC1_CIC_HDR		(1U << 27)
+#define	NTDESC1_CIC_SEG 	(2U << 27)
+#define	NTDESC1_CIC_FULL	(3U << 27)
+#define	NTDESC1_DC		(1U << 26)	/* Disable CRC */
+#define	NTDESC1_TER		(1U << 25)	/* Transmit End of Ring */
+#define	NTDESC1_TCH		(1U << 24)	/* Second Address Chained */
+/* TX descriptors - TDESC1 extended format */
+#define	ETDESC1_DP		(1U << 23)	/* Disable Padding */
+#define	ETDESC1_TBS2_MASK	0x7ff
+#define	ETDESC1_TBS2_SHIFT	11		/* Receive Buffer 2 Size */
+#define	ETDESC1_TBS1_MASK	0x7ff
+#define	ETDESC1_TBS1_SHIFT	0		/* Receive Buffer 1 Size */
 
-/* Alt descriptor bits. */
-#define	DDESC_CNTL_TXINT		(1U << 31)
-#define	DDESC_CNTL_TXLAST		(1U << 30)
-#define	DDESC_CNTL_TXFIRST		(1U << 29)
-#define	DDESC_CNTL_TXCRCDIS		(1U << 26)
-#define	DDESC_CNTL_TXRINGEND		(1U << 25)
-#define	DDESC_CNTL_TXCHAIN		(1U << 24)
+/* RX descriptor - RDESC0 is unified */
+#define	RDESC0_OWN		(1U << 31)
+#define	RDESC0_AFM		(1U << 30)	/* Dest. Address Filter Fail */
+#define	RDESC0_FL_MASK		0x3fff
+#define	RDESC0_FL_SHIFT		16		/* Frame Length */
+#define	RDESC0_ES		(1U << 15)	/* Error Summary */
+#define	RDESC0_DE		(1U << 14)	/* Descriptor Error */
+#define	RDESC0_SAF		(1U << 13)	/* Source Address Filter Fail */
+#define	RDESC0_LE		(1U << 12)	/* Length Error */
+#define	RDESC0_OE		(1U << 11)	/* Overflow Error */
+#define	RDESC0_VLAN		(1U << 10)	/* VLAN Tag */
+#define	RDESC0_FS		(1U <<  9)	/* First Descriptor */
+#define	RDESC0_LS		(1U <<  8)	/* Last Descriptor */
+#define	RDESC0_ICE		(1U <<  7)	/* IPC Checksum Error */
+#define	RDESC0_GF		(1U <<  7)	/* Giant Frame */
+#define	RDESC0_LC		(1U <<  6)	/* Late Collision */
+#define	RDESC0_FT		(1U <<  5)	/* Frame Type */
+#define	RDESC0_RWT		(1U <<  4)	/* Receive Watchdog Timeout */
+#define	RDESC0_RE		(1U <<  3)	/* Receive Error */
+#define	RDESC0_DBE		(1U <<  2)	/* Dribble Bit Error */
+#define	RDESC0_CE		(1U <<  1)	/* CRC Error */
+#define	RDESC0_PCE		(1U <<  0)	/* Payload Checksum Error */
+#define	RDESC0_RXMA		(1U <<  0)	/* Rx MAC Address */
 
-#define	DDESC_CNTL_CHAINED		(1U << 24)
+/* RX descriptors - RDESC1 normal format */
+#define	NRDESC1_DIC		(1U << 31)	/* Disable Intr on Completion */
+#define	NRDESC1_RER		(1U << 25)	/* Receive End of Ring */
+#define	NRDESC1_RCH		(1U << 24)	/* Second Address Chained */
+#define	NRDESC1_RBS2_MASK	0x7ff
+#define	NRDESC1_RBS2_SHIFT	11		/* Receive Buffer 2 Size */
+#define	NRDESC1_RBS1_MASK	0x7ff
+#define	NRDESC1_RBS1_SHIFT	0		/* Receive Buffer 1 Size */
+
+/* RX descriptors - RDESC1 enhanced format */
+#define	ERDESC1_DIC		(1U << 31)	/* Disable Intr on Completion */
+#define	ERDESC1_RBS2_MASK	0x7ffff
+#define	ERDESC1_RBS2_SHIFT	16		/* Receive Buffer 2 Size */
+#define	ERDESC1_RER		(1U << 15)	/* Receive End of Ring */
+#define	ERDESC1_RCH		(1U << 14)	/* Second Address Chained */
+#define	ERDESC1_RBS1_MASK	0x7ffff
+#define	ERDESC1_RBS1_SHIFT	0		/* Receive Buffer 1 Size */
 
 /*
  * A hardware buffer descriptor.  Rx and Tx buffers have the same descriptor
@@ -122,17 +189,17 @@ __FBSDID("$FreeBSD$");
  */
 struct dwc_hwdesc
 {
-	uint32_t tdes0;		/* status for alt layout */
-	uint32_t tdes1;		/* cntl for alt layout */
-	uint32_t addr;		/* pointer to buffer data */
-	uint32_t addr_next;	/* link to next descriptor */
+	uint32_t desc0;
+	uint32_t desc1;
+	uint32_t addr1;		/* ptr to first buffer data */
+	uint32_t addr2;		/* ptr to next descriptor / second buffer data*/
 };
 
 /*
  * The hardware imposes alignment restrictions on various objects involved in
  * DMA transfers.  These values are expressed in bytes (not bits).
  */
-#define	DWC_DESC_RING_ALIGN		2048
+#define	DWC_DESC_RING_ALIGN	2048
 
 static struct resource_spec dwc_spec[] = {
 	{ SYS_RES_MEMORY,	0,	RF_ACTIVE },
@@ -168,45 +235,39 @@ dwc_get1paddr(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 	*(bus_addr_t *)arg = segs[0].ds_addr;
 }
 
-inline static uint32_t
+inline static void
 dwc_setup_txdesc(struct dwc_softc *sc, int idx, bus_addr_t paddr,
     uint32_t len)
 {
-	uint32_t flags;
-	uint32_t nidx;
-
-	nidx = next_txidx(sc, idx);
+	uint32_t desc0, desc1;
 
 	/* Addr/len 0 means we're clearing the descriptor after xmit done. */
 	if (paddr == 0 || len == 0) {
-		flags = 0;
+		desc0 = 0;
+		desc1 = 0;
 		--sc->txcount;
 	} else {
-		if (sc->mactype == DWC_GMAC_ALT_DESC)
-			flags = DDESC_CNTL_TXCHAIN | DDESC_CNTL_TXFIRST
-			    | DDESC_CNTL_TXLAST | DDESC_CNTL_TXINT;
-		else
-			flags = DDESC_TDES0_TXCHAIN | DDESC_TDES0_TXFIRST
-			    | DDESC_TDES0_TXLAST | DDESC_TDES0_TXINT;
+		if (sc->mactype != DWC_GMAC_EXT_DESC) {
+			desc0 = 0;
+			desc1 = NTDESC1_TCH | NTDESC1_FS | NTDESC1_LS |
+			    NTDESC1_IC | len;
+		} else {
+			desc0 = ETDESC0_TCH | ETDESC0_FS | ETDESC0_LS |
+			    ETDESC0_IC;
+			desc1 = len;
+		}
 		++sc->txcount;
 	}
 
-	sc->txdesc_ring[idx].addr = (uint32_t)(paddr);
-	if (sc->mactype == DWC_GMAC_ALT_DESC) {
-		sc->txdesc_ring[idx].tdes0 = 0;
-		sc->txdesc_ring[idx].tdes1 = flags | len;
-	} else {
-		sc->txdesc_ring[idx].tdes0 = flags;
-		sc->txdesc_ring[idx].tdes1 = len;
-	}
+	sc->txdesc_ring[idx].addr1 = (uint32_t)(paddr);
+	sc->txdesc_ring[idx].desc0 = desc0;
+	sc->txdesc_ring[idx].desc1 = desc1;
 
 	if (paddr && len) {
 		wmb();
-		sc->txdesc_ring[idx].tdes0 |= DDESC_TDES0_OWN;
+		sc->txdesc_ring[idx].desc0 |= TDESC0_OWN;
 		wmb();
 	}
-
-	return (nidx);
 }
 
 static int
@@ -252,14 +313,13 @@ dwc_txstart_locked(struct dwc_softc *sc)
 
 	ifp = sc->ifp;
 
-	if (ifp->if_drv_flags & IFF_DRV_OACTIVE) {
+	if (ifp->if_drv_flags & IFF_DRV_OACTIVE)
 		return;
-	}
 
 	enqueued = 0;
 
 	for (;;) {
-		if (sc->txcount == (TX_DESC_COUNT-1)) {
+		if (sc->txcount == (TX_DESC_COUNT - 1)) {
 			ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 			break;
 		}
@@ -268,7 +328,7 @@ dwc_txstart_locked(struct dwc_softc *sc)
 		if (m == NULL)
 			break;
 		if (dwc_setup_txbuf(sc, sc->tx_idx_head, &m) != 0) {
-			IFQ_DRV_PREPEND(&ifp->if_snd, m);
+			 IFQ_DRV_PREPEND(&ifp->if_snd, m);
 			break;
 		}
 		BPF_MTAP(ifp, m);
@@ -462,24 +522,26 @@ dwc_init(void *if_softc)
 	DWC_UNLOCK(sc);
 }
 
+
 inline static uint32_t
 dwc_setup_rxdesc(struct dwc_softc *sc, int idx, bus_addr_t paddr)
 {
 	uint32_t nidx;
 
-	sc->rxdesc_ring[idx].addr = (uint32_t)paddr;
+	sc->rxdesc_ring[idx].addr1 = (uint32_t)paddr;
 	nidx = next_rxidx(sc, idx);
-	sc->rxdesc_ring[idx].addr_next = sc->rxdesc_ring_paddr +	\
+	sc->rxdesc_ring[idx].addr2 = sc->rxdesc_ring_paddr +
 	    (nidx * sizeof(struct dwc_hwdesc));
-	if (sc->mactype == DWC_GMAC_ALT_DESC)
-		sc->rxdesc_ring[idx].tdes1 = DDESC_CNTL_CHAINED | RX_MAX_PACKET;
+	if (sc->mactype != DWC_GMAC_EXT_DESC)
+		sc->rxdesc_ring[idx].desc1 = NRDESC1_RCH |
+		    MIN(MCLBYTES, NRDESC1_RBS1_MASK);
 	else
-		sc->rxdesc_ring[idx].tdes1 = DDESC_RDES1_CHAINED | MCLBYTES;
+		sc->rxdesc_ring[idx].desc1 = ERDESC1_RCH |
+		    MIN(MCLBYTES, ERDESC1_RBS1_MASK);
 
 	wmb();
-	sc->rxdesc_ring[idx].tdes0 = DDESC_RDES0_OWN;
+	sc->rxdesc_ring[idx].desc0 = RDESC0_OWN;
 	wmb();
-
 	return (nidx);
 }
 
@@ -493,9 +555,8 @@ dwc_setup_rxbuf(struct dwc_softc *sc, int idx, struct mbuf *m)
 
 	error = bus_dmamap_load_mbuf_sg(sc->rxbuf_tag, sc->rxbuf_map[idx].map,
 	    m, &seg, &nsegs, 0);
-	if (error != 0) {
+	if (error != 0)
 		return (error);
-	}
 
 	KASSERT(nsegs == 1, ("%s: %d segments returned!", __func__, nsegs));
 
@@ -518,6 +579,74 @@ dwc_alloc_mbufcl(struct dwc_softc *sc)
 		m->m_pkthdr.len = m->m_len = m->m_ext.ext_size;
 
 	return (m);
+}
+
+static struct mbuf *
+dwc_rxfinish_one(struct dwc_softc *sc, struct dwc_hwdesc *desc,
+    struct dwc_bufmap *map)
+{
+	struct ifnet *ifp;
+	struct mbuf *m, *m0;
+	int len;
+	uint32_t rdesc0;
+
+	m = map->mbuf;
+	ifp = sc->ifp;
+	rdesc0 = desc ->desc0;
+	/* Validate descriptor. */
+	if (rdesc0 & RDESC0_ES) {
+		/*
+		 * Errored packet. Statistic counters are updated
+		 * globally, so do nothing
+		 */
+		return (NULL);
+	}
+
+	if ((rdesc0 & (RDESC0_FS | RDESC0_LS)) !=
+		    (RDESC0_FS | RDESC0_LS)) {
+		/*
+		 * Something very wrong happens. The whole packet should be
+		 * recevied in one descriptr. Report problem.
+		 */
+		device_printf(sc->dev,
+		    "%s: RX descriptor without FIRST and LAST bit set: 0x%08X",
+		    __func__, rdesc0);
+		return (NULL);
+	}
+
+	len = (rdesc0 >> RDESC0_FL_SHIFT) & RDESC0_FL_MASK;
+	if (len < 64) {
+		/*
+		 * Lenght is invalid, recycle old mbuf
+		 * Probably impossible case
+		 */
+		return (NULL);
+	}
+
+	/* Allocate new buffer */
+	m0 = dwc_alloc_mbufcl(sc);
+	if (m0 == NULL) {
+		/* no new mbuf available, recycle old */
+		if_inc_counter(sc->ifp, IFCOUNTER_IQDROPS, 1);
+		return (NULL);
+	}
+	/* Do dmasync for newly received packet */
+	bus_dmamap_sync(sc->rxbuf_tag, map->map, BUS_DMASYNC_POSTREAD);
+	bus_dmamap_unload(sc->rxbuf_tag, map->map);
+
+	/* Received packet is valid, process it */
+	m->m_pkthdr.rcvif = ifp;
+	m->m_pkthdr.len = len;
+	m->m_len = len;
+	if_inc_counter(ifp, IFCOUNTER_IPACKETS, 1);
+
+	/* Remove trailing FCS */
+	m_adj(m, -ETHER_CRC_LEN);
+
+	DWC_UNLOCK(sc);
+	(*ifp->if_input)(ifp, m);
+	DWC_LOCK(sc);
+	return (m0);
 }
 
 static void
@@ -581,19 +710,43 @@ bitreverse(uint8_t x)
 	return (nibbletab[x & 0xf] << 4) | nibbletab[x >> 4];
 }
 
+struct dwc_hash_maddr_ctx {
+	struct dwc_softc *sc;
+	uint32_t hash[8];
+};
+
+static u_int
+dwc_hash_maddr(void *arg, struct sockaddr_dl *sdl, u_int cnt)
+{
+	struct dwc_hash_maddr_ctx *ctx = arg;
+	uint32_t crc, hashbit, hashreg;
+	uint8_t val;
+
+	crc = ether_crc32_le(LLADDR(sdl), ETHER_ADDR_LEN);
+	/* Take lower 8 bits and reverse it */
+	val = bitreverse(~crc & 0xff);
+	if (ctx->sc->mactype != DWC_GMAC_EXT_DESC)
+		val >>= 2; /* Only need lower 6 bits */
+	hashreg = (val >> 5);
+	hashbit = (val & 31);
+	ctx->hash[hashreg] |= (1 << hashbit);
+
+	return (1);
+}
+
 static void
 dwc_setup_rxfilter(struct dwc_softc *sc)
 {
-	struct ifmultiaddr *ifma;
+	struct dwc_hash_maddr_ctx ctx;
 	struct ifnet *ifp;
-	uint8_t *eaddr, val;
-	uint32_t crc, ffval, hashbit, hashreg, hi, lo, hash[8];
+	uint8_t *eaddr;
+	uint32_t ffval, hi, lo;
 	int nhash, i;
 
 	DWC_ASSERT_LOCKED(sc);
 
 	ifp = sc->ifp;
-	nhash = sc->mactype == DWC_GMAC_ALT_DESC ? 2 : 8;
+	nhash = sc->mactype != DWC_GMAC_EXT_DESC ? 2 : 8;
 
 	/*
 	 * Set the multicast (group) filter hash.
@@ -601,27 +754,13 @@ dwc_setup_rxfilter(struct dwc_softc *sc)
 	if ((ifp->if_flags & IFF_ALLMULTI) != 0) {
 		ffval = (FRAME_FILTER_PM);
 		for (i = 0; i < nhash; i++)
-			hash[i] = ~0;
+			ctx.hash[i] = ~0;
 	} else {
 		ffval = (FRAME_FILTER_HMC);
 		for (i = 0; i < nhash; i++)
-			hash[i] = 0;
-		if_maddr_rlock(ifp);
-		CK_STAILQ_FOREACH(ifma, &sc->ifp->if_multiaddrs, ifma_link) {
-			if (ifma->ifma_addr->sa_family != AF_LINK)
-				continue;
-			crc = ether_crc32_le(LLADDR((struct sockaddr_dl *)
-				ifma->ifma_addr), ETHER_ADDR_LEN);
-
-			/* Take lower 8 bits and reverse it */
-			val = bitreverse(~crc & 0xff);
-			if (sc->mactype == DWC_GMAC_ALT_DESC)
-				val >>= nhash; /* Only need lower 6 bits */
-			hashreg = (val >> 5);
-			hashbit = (val & 31);
-			hash[hashreg] |= (1 << hashbit);
-		}
-		if_maddr_runlock(ifp);
+			ctx.hash[i] = 0;
+		ctx.sc = sc;
+		if_foreach_llmaddr(ifp, dwc_hash_maddr, &ctx);
 	}
 
 	/*
@@ -640,12 +779,12 @@ dwc_setup_rxfilter(struct dwc_softc *sc)
 	WRITE4(sc, MAC_ADDRESS_LOW(0), lo);
 	WRITE4(sc, MAC_ADDRESS_HIGH(0), hi);
 	WRITE4(sc, MAC_FRAME_FILTER, ffval);
-	if (sc->mactype == DWC_GMAC_ALT_DESC) {
-		WRITE4(sc, GMAC_MAC_HTLOW, hash[0]);
-		WRITE4(sc, GMAC_MAC_HTHIGH, hash[1]);
+	if (sc->mactype != DWC_GMAC_EXT_DESC) {
+		WRITE4(sc, GMAC_MAC_HTLOW, ctx.hash[0]);
+		WRITE4(sc, GMAC_MAC_HTHIGH, ctx.hash[1]);
 	} else {
 		for (i = 0; i < nhash; i++)
-			WRITE4(sc, HASH_TABLE_REG(i), hash[i]);
+			WRITE4(sc, HASH_TABLE_REG(i), ctx.hash[i]);
 	}
 }
 
@@ -721,7 +860,7 @@ dwc_txfinish_locked(struct dwc_softc *sc)
 	ifp = sc->ifp;
 	while (sc->tx_idx_tail != sc->tx_idx_head) {
 		desc = &sc->txdesc_ring[sc->tx_idx_tail];
-		if ((desc->tdes0 & DDESC_TDES0_OWN) != 0)
+		if ((desc->desc0 & TDESC0_OWN) != 0)
 			break;
 		bmap = &sc->txbuf_map[sc->tx_idx_tail];
 		bus_dmamap_sync(sc->txbuf_tag, bmap->map,
@@ -745,52 +884,30 @@ static void
 dwc_rxfinish_locked(struct dwc_softc *sc)
 {
 	struct ifnet *ifp;
-	struct mbuf *m0;
 	struct mbuf *m;
-	int error, idx, len;
-	uint32_t rdes0;
+	int error, idx;
+	struct dwc_hwdesc *desc;
 
+	DWC_ASSERT_LOCKED(sc);
 	ifp = sc->ifp;
-
 	for (;;) {
 		idx = sc->rx_idx;
-
-		rdes0 = sc->rxdesc_ring[idx].tdes0;
-		if ((rdes0 & DDESC_RDES0_OWN) != 0)
+		desc = sc->rxdesc_ring + idx;
+		if ((desc->desc0 & RDESC0_OWN) != 0)
 			break;
 
-		bus_dmamap_sync(sc->rxbuf_tag, sc->rxbuf_map[idx].map,
-		    BUS_DMASYNC_POSTREAD);
-		bus_dmamap_unload(sc->rxbuf_tag, sc->rxbuf_map[idx].map);
-
-		len = (rdes0 >> DDESC_RDES0_FL_SHIFT) & DDESC_RDES0_FL_MASK;
-		if (len != 0) {
-			m = sc->rxbuf_map[idx].mbuf;
-			m->m_pkthdr.rcvif = ifp;
-			m->m_pkthdr.len = len;
-			m->m_len = len;
-			if_inc_counter(ifp, IFCOUNTER_IPACKETS, 1);
-
-			/* Remove trailing FCS */
-			m_adj(m, -ETHER_CRC_LEN);
-
-			DWC_UNLOCK(sc);
-			(*ifp->if_input)(ifp, m);
-			DWC_LOCK(sc);
+		m = dwc_rxfinish_one(sc, desc, sc->rxbuf_map + idx);
+		if (m == NULL) {
+			wmb();
+			desc->desc0 = RDESC0_OWN;
+			wmb();
 		} else {
-			/* XXX Zero-length packet ? */
+			/* We cannot create hole in RX ring */
+			error = dwc_setup_rxbuf(sc, idx, m);
+			if (error != 0)
+				panic("dwc_setup_rxbuf failed:  error %d\n",
+				    error);
 		}
-
-		if ((m0 = dwc_alloc_mbufcl(sc)) != NULL) {
-			if ((error = dwc_setup_rxbuf(sc, idx, m0)) != 0) {
-				/*
-				 * XXX Now what?
-				 * We've got a hole in the rx ring.
-				 */
-			}
-		} else
-			if_inc_counter(sc->ifp, IFCOUNTER_IQDROPS, 1);
-
 		sc->rx_idx = next_rxidx(sc, sc->rx_idx);
 	}
 }
@@ -882,7 +999,7 @@ setup_dma(struct dwc_softc *sc)
 
 	for (idx = 0; idx < TX_DESC_COUNT; idx++) {
 		nidx = next_txidx(sc, idx);
-		sc->txdesc_ring[idx].addr_next = sc->txdesc_ring_paddr +
+		sc->txdesc_ring[idx].addr2 = sc->txdesc_ring_paddr +
 		    (nidx * sizeof(struct dwc_hwdesc));
 	}
 
@@ -1092,14 +1209,23 @@ dwc_clock_init(device_t dev)
 	hwreset_t rst;
 	clk_t clk;
 	int error;
+	int64_t freq;
 
-	/* Enable clock */
+	/* Enable clocks */
 	if (clk_get_by_ofw_name(dev, 0, "stmmaceth", &clk) == 0) {
 		error = clk_enable(clk);
 		if (error != 0) {
 			device_printf(dev, "could not enable main clock\n");
 			return (error);
 		}
+		if (bootverbose) {
+			clk_get_freq(clk, &freq);
+			device_printf(dev, "MAC clock(%s) freq: %jd\n",
+					clk_get_name(clk), (intmax_t)freq);
+		}
+	}
+	else {
+		device_printf(dev, "could not find clock stmmaceth\n");
 	}
 
 	/* De-assert reset */
@@ -1137,6 +1263,8 @@ dwc_attach(device_t dev)
 	struct ifnet *ifp;
 	int error, i;
 	uint32_t reg;
+	char *phy_mode;
+	phandle_t node;
 
 	sc = device_get_softc(dev);
 	sc->dev = dev;
@@ -1144,6 +1272,15 @@ dwc_attach(device_t dev)
 	sc->txcount = TX_DESC_COUNT;
 	sc->mii_clk = IF_DWC_MII_CLK(dev);
 	sc->mactype = IF_DWC_MAC_TYPE(dev);
+
+	node = ofw_bus_get_node(dev);
+	if (OF_getprop_alloc(node, "phy-mode", (void **)&phy_mode)) {
+		if (strcmp(phy_mode, "rgmii") == 0)
+			sc->phy_mode = PHY_MODE_RGMII;
+		if (strcmp(phy_mode, "rmii") == 0)
+			sc->phy_mode = PHY_MODE_RMII;
+		OF_prop_free(phy_mode);
+	}
 
 	if (IF_DWC_INIT(dev) != 0)
 		return (ENXIO);
@@ -1157,10 +1294,6 @@ dwc_attach(device_t dev)
 		device_printf(dev, "could not allocate resources\n");
 		return (ENXIO);
 	}
-
-	/* Memory interface */
-	sc->bst = rman_get_bustag(sc->res[0]);
-	sc->bsh = rman_get_bushandle(sc->res[0]);
 
 	/* Read MAC before reset */
 	if (dwc_get_hwaddr(sc, macaddr)) {
@@ -1189,7 +1322,7 @@ dwc_attach(device_t dev)
 		return (ENXIO);
 	}
 
-	if (sc->mactype == DWC_GMAC_ALT_DESC) {
+	if (sc->mactype != DWC_GMAC_EXT_DESC) {
 		reg = BUS_MODE_FIXEDBURST;
 		reg |= (BUS_MODE_PRIORXTX_41 << BUS_MODE_PRIORXTX_SHIFT);
 	} else
@@ -1362,6 +1495,9 @@ dwc_miibus_statchg(device_t dev)
 	else
 		reg &= ~(CONF_DM);
 	WRITE4(sc, MAC_CONFIGURATION, reg);
+
+	IF_DWC_SET_SPEED(dev, IFM_SUBTYPE(mii->mii_media_active));
+
 }
 
 static device_method_t dwc_methods[] = {
