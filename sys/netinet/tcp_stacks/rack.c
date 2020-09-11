@@ -127,10 +127,6 @@ uma_zone_t rack_pcb_zone;
 struct sysctl_ctx_list rack_sysctl_ctx;
 struct sysctl_oid *rack_sysctl_root;
 
-#ifndef TCPHPTS
-#error Kernel option TCPHPTS is required
-#endif
-
 #define CUM_ACKED 1
 #define SACKED 2
 
@@ -483,7 +479,7 @@ sysctl_rack_clear(SYSCTL_HANDLER_ARGS)
 
 
 static void
-rack_init_sysctls()
+rack_init_sysctls(void)
 {
 	SYSCTL_ADD_S32(&rack_sysctl_ctx,
 	    SYSCTL_CHILDREN(rack_sysctl_root),
@@ -1134,7 +1130,7 @@ rack_log_to_processing(struct tcp_rack *rack, uint32_t cts, int32_t ret, int32_t
 }
 
 static void
-rack_counter_destroy()
+rack_counter_destroy(void)
 {
 	counter_u64_free(rack_badfr);
 	counter_u64_free(rack_badfr_bytes);
@@ -1322,8 +1318,7 @@ rack_ack_received(struct tcpcb *tp, struct tcp_rack *rack, struct tcphdr *th, ui
 		}
 #endif
 		if (tp->snd_cwnd > tp->snd_ssthresh) {
-			tp->t_bytes_acked += min(tp->ccv->bytes_this_ack,
-			    nsegs * V_tcp_abc_l_var * tp->t_maxseg);
+			tp->t_bytes_acked += tp->ccv->bytes_this_ack;
 			if (tp->t_bytes_acked >= tp->snd_cwnd) {
 				tp->t_bytes_acked -= tp->snd_cwnd;
 				tp->ccv->flags |= CCF_ABC_SENTAWND;
@@ -1444,6 +1439,8 @@ rack_cong_signal(struct tcpcb *tp, struct tcphdr *th, uint32_t type)
 		tp->snd_ssthresh = max(2, min(tp->snd_wnd, tp->snd_cwnd) / 2 /
 		    tp->t_maxseg) * tp->t_maxseg;
 		tp->snd_cwnd = tp->t_maxseg;
+		if (tp->t_flags & TF_ECN_PERMIT)
+			tp->t_flags |= TF_ECN_SND_CWR;
 		break;
 	case CC_RTO_ERR:
 		TCPSTAT_INC(tcps_sndrexmitbad);
@@ -1800,6 +1797,11 @@ rack_drop_checks(struct tcpopt *to, struct mbuf *m, struct tcphdr *th, struct tc
 		if (tp->t_flags & TF_SACK_PERMIT) {
 			tcp_update_sack_list(tp, th->th_seq,
 			    th->th_seq + todrop);
+			/*
+			 * ACK now, as the next in-sequence segment
+			 * will clear the DSACK block again
+			 */
+			tp->t_flags |= TF_ACKNOW;
 			/*
 			 * ACK now, as the next in-sequence segment
 			 * will clear the DSACK block again
@@ -2353,7 +2355,7 @@ rack_start_hpts_timer(struct tcp_rack *rack, struct tcpcb *tp, uint32_t cts, int
 	}
 	hpts_timeout = rack_timer_start(tp, rack, cts);
 	if (tp->t_flags & TF_DELACK) {
-		delayed_ack = tcp_delacktime;
+		delayed_ack = TICKS_2_MSEC(tcp_delacktime);
 		rack->r_ctl.rc_hpts_flags |= PACE_TMR_DELACK;
 	}
 	if (delayed_ack && ((hpts_timeout == 0) ||
@@ -2934,6 +2936,7 @@ rack_timeout_rxt(struct tcpcb *tp, struct tcp_rack *rack, uint32_t cts)
 	int32_t rexmt;
 	struct inpcb *inp;
 	int32_t retval = 0;
+	bool isipv6;
 
 	inp = tp->t_inpcb;
 	if (tp->t_timers->tt_flags & TT_STOPPED) {
@@ -3010,11 +3013,16 @@ rack_timeout_rxt(struct tcpcb *tp, struct tcp_rack *rack, uint32_t cts)
 	 * of packets and process straight to FIN. In that case we won't
 	 * catch ESTABLISHED state.
 	 */
-	if (V_tcp_pmtud_blackhole_detect && (((tp->t_state == TCPS_ESTABLISHED))
-	    || (tp->t_state == TCPS_FIN_WAIT_1))) {
 #ifdef INET6
-		int32_t isipv6;
+	isipv6 = (tp->t_inpcb->inp_vflag & INP_IPV6) ? true : false;
+#else
+	isipv6 = false;
 #endif
+	if (((V_tcp_pmtud_blackhole_detect == 1) ||
+	    (V_tcp_pmtud_blackhole_detect == 2 && !isipv6) ||
+	    (V_tcp_pmtud_blackhole_detect == 3 && isipv6)) &&
+	    ((tp->t_state == TCPS_ESTABLISHED) ||
+	    (tp->t_state == TCPS_FIN_WAIT_1))) {
 
 		/*
 		 * Idea here is that at each stage of mtu probe (usually,
@@ -3044,7 +3052,6 @@ rack_timeout_rxt(struct tcpcb *tp, struct tcp_rack *rack, uint32_t cts)
 			 * default in an attempt to retransmit.
 			 */
 #ifdef INET6
-			isipv6 = (tp->t_inpcb->inp_vflag & INP_IPV6) ? 1 : 0;
 			if (isipv6 &&
 			    tp->t_maxseg > V_tcp_v6pmtud_blackhole_mss) {
 				/* Use the sysctl tuneable blackhole MSS. */
@@ -5411,7 +5418,8 @@ rack_do_syn_sent(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			tp->t_flags |= TF_ACKNOW;
 		}
 
-		if ((thflags & TH_ECE) && V_tcp_do_ecn) {
+		if (((thflags & (TH_CWR | TH_ECE)) == TH_ECE) &&
+		    (V_tcp_do_ecn == 1)) {
 			tp->t_flags |= TF_ECN_PERMIT;
 			TCPSTAT_INC(tcps_ecn_shs);
 		}
@@ -6728,8 +6736,10 @@ rack_hpts_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * this to occur after we've validated the segment.
 	 */
 	if (tp->t_flags & TF_ECN_PERMIT) {
-		if (thflags & TH_CWR)
+		if (thflags & TH_CWR) {
 			tp->t_flags &= ~TF_ECN_SND_ECE;
+			tp->t_flags |= TF_ACKNOW;
+		}
 		switch (iptos & IPTOS_ECN_MASK) {
 		case IPTOS_ECN_CE:
 			tp->t_flags |= TF_ECN_SND_ECE;
@@ -6742,6 +6752,10 @@ rack_hpts_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			TCPSTAT_INC(tcps_ecn_ect1);
 			break;
 		}
+
+		/* Process a packet differently from RFC3168. */
+		cc_ecnpkt_handler(tp, th, iptos);
+
 		/* Congestion experienced. */
 		if (thflags & TH_ECE) {
 			rack_cong_signal(tp, th, CC_ECN);
@@ -6986,7 +7000,7 @@ rack_output(struct tcpcb *tp)
 	struct mbuf *m;
 	struct mbuf *mb;
 	uint32_t if_hw_tsomaxsegcount = 0;
-	uint32_t if_hw_tsomaxsegsize;
+	uint32_t if_hw_tsomaxsegsize = 0;
 	long tot_len_this_send = 0;
 	struct ip *ip = NULL;
 #ifdef TCPDEBUG
@@ -7462,9 +7476,6 @@ again:
 		    (tp->t_state == TCPS_SYN_RECEIVED))
 			flags &= ~TH_SYN;
 #endif
-		sb_offset--, len++;
-		if (sbavail(sb) == 0)
-			len = 0;
 	}
 	/*
 	 * Be careful not to send data and/or FIN on SYN segments. This
@@ -8264,6 +8275,7 @@ send:
 		 * retransmissions and window probes.
 		 */
 		if (len > 0 && SEQ_GEQ(tp->snd_nxt, tp->snd_max) &&
+		    (sack_rxmit == 0) &&
 		    !((tp->t_flags & TF_FORCEDATA) && len == 1)) {
 #ifdef INET6
 			if (isipv6)
@@ -9286,3 +9298,4 @@ static moduledata_t tcp_rack = {
 
 MODULE_VERSION(MODNAME, 1);
 DECLARE_MODULE(MODNAME, tcp_rack, SI_SUB_PROTO_DOMAIN, SI_ORDER_ANY);
+MODULE_DEPEND(MODNAME, tcphpts, 1, 1, 1);

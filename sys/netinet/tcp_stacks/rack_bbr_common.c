@@ -85,7 +85,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet/ip6.h>
 #include <netinet6/in6_pcb.h>
 #include <netinet6/ip6_var.h>
-#define	TCPOUTFLAGS
 #include <netinet/tcp.h>
 #include <netinet/tcp_fsm.h>
 #include <netinet/tcp_seq.h>
@@ -495,7 +494,7 @@ ctf_drop_checks(struct tcpopt *to, struct mbuf *m, struct tcphdr *th, struct tcp
 		/*
 		 * DSACK - add SACK block for dropped range
 		 */
-		if (tp->t_flags & TF_SACK_PERMIT) {
+		if ((todrop > 0) && (tp->t_flags & TF_SACK_PERMIT)) {
 			tcp_update_sack_list(tp, th->th_seq, th->th_seq + tlen);
 			/*
 			 * ACK now, as the next in-sequence segment

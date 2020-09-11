@@ -589,6 +589,7 @@ tcp_timer_rexmt(void * xtp)
 	int rexmt;
 	struct inpcb *inp;
 	struct epoch_tracker et;
+	bool isipv6;
 #ifdef TCPDEBUG
 	int ostate;
 
@@ -687,22 +688,50 @@ tcp_timer_rexmt(void * xtp)
 	 * packets and process straight to FIN. In that case we won't catch
 	 * ESTABLISHED state.
 	 */
-	if (V_tcp_pmtud_blackhole_detect && (((tp->t_state == TCPS_ESTABLISHED))
-	    || (tp->t_state == TCPS_FIN_WAIT_1))) {
 #ifdef INET6
-		int isipv6;
+	isipv6 = (tp->t_inpcb->inp_vflag & INP_IPV6) ? true : false;
+#else
+	isipv6 = false;
 #endif
-
-		/*
-		 * Idea here is that at each stage of mtu probe (usually, 1448
-		 * -> 1188 -> 524) should be given 2 chances to recover before
-		 *  further clamping down. 'tp->t_rxtshift % 2 == 0' should
-		 *  take care of that.
-		 */
+	if (((V_tcp_pmtud_blackhole_detect == 1) ||
+	    (V_tcp_pmtud_blackhole_detect == 2 && !isipv6) ||
+	    (V_tcp_pmtud_blackhole_detect == 3 && isipv6)) &&
+	    ((tp->t_state == TCPS_ESTABLISHED) ||
+	    (tp->t_state == TCPS_FIN_WAIT_1))) {
+		if (tp->t_rxtshift == 1) {
+			/*
+			 * We enter blackhole detection after the first
+			 * unsuccessful timer based retransmission.
+			 * Then we reduce up to two times the MSS, each
+			 * candidate giving two tries of retransmissions.
+			 * But we give a candidate only two tries, if it
+			 * actually reduces the MSS.
+			 */
+			tp->t_blackhole_enter = 2;
+			tp->t_blackhole_exit = tp->t_blackhole_enter;
+			if (isipv6) {
+#ifdef INET6
+				if (tp->t_maxseg > V_tcp_v6pmtud_blackhole_mss)
+					tp->t_blackhole_exit += 2;
+				if (tp->t_maxseg > V_tcp_v6mssdflt &&
+				    V_tcp_v6pmtud_blackhole_mss > V_tcp_v6mssdflt)
+					tp->t_blackhole_exit += 2;
+#endif
+			} else {
+#ifdef INET
+				if (tp->t_maxseg > V_tcp_pmtud_blackhole_mss)
+					tp->t_blackhole_exit += 2;
+				if (tp->t_maxseg > V_tcp_mssdflt &&
+				    V_tcp_pmtud_blackhole_mss > V_tcp_mssdflt)
+					tp->t_blackhole_exit += 2;
+#endif
+			}
+		}
 		if (((tp->t_flags2 & (TF2_PLPMTU_PMTUD|TF2_PLPMTU_MAXSEGSNT)) ==
 		    (TF2_PLPMTU_PMTUD|TF2_PLPMTU_MAXSEGSNT)) &&
-		    (tp->t_rxtshift >= 2 && tp->t_rxtshift < 6 &&
-		    tp->t_rxtshift % 2 == 0)) {
+		    (tp->t_rxtshift >= tp->t_blackhole_enter &&
+		    tp->t_rxtshift < tp->t_blackhole_exit &&
+		    (tp->t_rxtshift - tp->t_blackhole_enter) % 2 == 0)) {
 			/*
 			 * Enter Path MTU Black-hole Detection mechanism:
 			 * - Disable Path MTU Discovery (IP "DF" bit).
@@ -721,9 +750,9 @@ tcp_timer_rexmt(void * xtp)
 			 * in an attempt to retransmit.
 			 */
 #ifdef INET6
-			isipv6 = (tp->t_inpcb->inp_vflag & INP_IPV6) ? 1 : 0;
 			if (isipv6 &&
-			    tp->t_maxseg > V_tcp_v6pmtud_blackhole_mss) {
+			    tp->t_maxseg > V_tcp_v6pmtud_blackhole_mss &&
+			    V_tcp_v6pmtud_blackhole_mss > V_tcp_v6mssdflt) {
 				/* Use the sysctl tuneable blackhole MSS. */
 				tp->t_maxseg = V_tcp_v6pmtud_blackhole_mss;
 				TCPSTAT_INC(tcps_pmtud_blackhole_activated);
@@ -742,7 +771,8 @@ tcp_timer_rexmt(void * xtp)
 			else
 #endif
 #ifdef INET
-			if (tp->t_maxseg > V_tcp_pmtud_blackhole_mss) {
+			if (tp->t_maxseg > V_tcp_pmtud_blackhole_mss &&
+			    V_tcp_pmtud_blackhole_mss > V_tcp_mssdflt) {
 				/* Use the sysctl tuneable blackhole MSS. */
 				tp->t_maxseg = V_tcp_pmtud_blackhole_mss;
 				TCPSTAT_INC(tcps_pmtud_blackhole_activated);
@@ -769,11 +799,9 @@ tcp_timer_rexmt(void * xtp)
 			 * with a lowered MTU, maybe this isn't a blackhole and
 			 * we restore the previous MSS and blackhole detection
 			 * flags.
-			 * The limit '6' is determined by giving each probe
-			 * stage (1448, 1188, 524) 2 chances to recover.
 			 */
 			if ((tp->t_flags2 & TF2_PLPMTU_BLACKHOLE) &&
-			    (tp->t_rxtshift >= 6)) {
+			    (tp->t_rxtshift >= tp->t_blackhole_exit)) {
 				tp->t_flags2 |= TF2_PLPMTU_PMTUD;
 				tp->t_flags2 &= ~TF2_PLPMTU_BLACKHOLE;
 				tp->t_maxseg = tp->t_pmtud_saved_maxseg;

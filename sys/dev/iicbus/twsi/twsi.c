@@ -484,7 +484,7 @@ twsi_transfer(device_t dev, struct iic_msg *msgs, uint32_t nmsgs)
 
 	sc = device_get_softc(dev);
 
-	if (sc->have_intr == false)
+	if (!sc->have_intr)
 		return (iicbus_transfer_gen(dev, msgs, nmsgs));
 
 	sc->error = 0;
@@ -573,7 +573,7 @@ twsi_intr(void *arg)
 	case TWSI_STATUS_ADDR_R_NACK:
 		debugf(sc->dev, "No ack received after transmitting the address\n");
 		sc->transfer = 0;
-		sc->error = ETIMEDOUT;
+		sc->error = IIC_ENOACK;
 		sc->control_val = 0;
 		wakeup(sc);
 		break;
@@ -642,7 +642,7 @@ twsi_intr(void *arg)
 	default:
 		debugf(sc->dev, "status=%x hot handled\n", status);
 		sc->transfer = 0;
-		sc->error = ENXIO;
+		sc->error = IIC_EBUSERR;
 		sc->control_val = 0;
 		wakeup(sc);
 		break;
