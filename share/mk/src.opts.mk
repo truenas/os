@@ -143,6 +143,7 @@ __DEFAULT_YES_OPTIONS = \
     MAIL \
     MAILWRAPPER \
     MAKE \
+    MALLOC_PRODUCTION \
     NDIS \
     NETCAT \
     NETGRAPH \
@@ -525,11 +526,6 @@ MK_AUTHPF:=	no
 
 .if ${MK_OFED} == "no"
 MK_OFED_EXTRA:=	no
-.endif
-
-.if ${MK_PORTSNAP} == "no"
-# freebsd-update depends on phttpget from portsnap
-MK_FREEBSD_UPDATE:=	no
 .endif
 
 .if ${MK_TESTS} == "no"
