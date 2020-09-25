@@ -5692,8 +5692,14 @@ nfsrv_checkgetattr(struct nfsrv_descript *nd, vnode_t vp,
 		goto out;
 	}
 	clp = stp->ls_clp;
-	delegfilerev = stp->ls_filerev;
 
+	/* If the clientid is not confirmed, ignore the delegation. */
+	if (clp->lc_flags & LCL_NEEDSCONFIRM) {
+		NFSUNLOCKSTATE();
+		goto out;
+	}
+
+	delegfilerev = stp->ls_filerev;
 	/*
 	 * If the Write delegation was issued as a part of this Compound RPC
 	 * or if we have an Implied Clientid (used in a previous Op in this
@@ -6208,6 +6214,7 @@ nfsrv_checksequence(struct nfsrv_descript *nd, uint32_t sequenceid,
 	 * bound as well, do the implicit binding unless a
 	 * BindConnectiontoSession has already been done on the session.
 	 */
+	savxprt = NULL;
 	if (sep->sess_clp->lc_req.nr_client != NULL &&
 	    sep->sess_cbsess.nfsess_xprt != nd->nd_xprt &&
 	    (sep->sess_crflags & NFSV4CRSESS_CONNBACKCHAN) != 0 &&
@@ -6220,14 +6227,14 @@ nfsrv_checksequence(struct nfsrv_descript *nd, uint32_t sequenceid,
 		    sep->sess_clp->lc_req.nr_client->cl_private;
 		nd->nd_xprt->xp_idletimeout = 0;	/* Disable timeout. */
 		sep->sess_cbsess.nfsess_xprt = nd->nd_xprt;
-		if (savxprt != NULL)
-			SVC_RELEASE(savxprt);
 	}
 
 	*sflagsp = 0;
 	if (sep->sess_clp->lc_req.nr_client == NULL)
 		*sflagsp |= NFSV4SEQ_CBPATHDOWN;
 	NFSUNLOCKSESSION(shp);
+	if (savxprt != NULL)
+		SVC_RELEASE(savxprt);
 	if (error == NFSERR_EXPIRED) {
 		*sflagsp |= NFSV4SEQ_EXPIREDALLSTATEREVOKED;
 		error = 0;
@@ -6398,6 +6405,7 @@ nfsrv_bindconnsess(struct nfsrv_descript *nd, uint8_t *sessionid, int *foreaftp)
 	int error;
 
 	error = 0;
+	savxprt = NULL;
 	shp = NFSSESSIONHASH(sessionid);
 	NFSLOCKSTATE();
 	NFSLOCKSESSION(shp);
@@ -6425,8 +6433,6 @@ nfsrv_bindconnsess(struct nfsrv_descript *nd, uint8_t *sessionid, int *foreaftp)
 				/* Disable idle timeout. */
 				nd->nd_xprt->xp_idletimeout = 0;
 				sep->sess_cbsess.nfsess_xprt = nd->nd_xprt;
-				if (savxprt != NULL)
-					SVC_RELEASE(savxprt);
 				sep->sess_crflags |= NFSV4CRSESS_CONNBACKCHAN;
 				clp->lc_flags |= LCL_DONEBINDCONN;
 				if (*foreaftp == NFSCDFS4_BACK)
@@ -6453,6 +6459,8 @@ nfsrv_bindconnsess(struct nfsrv_descript *nd, uint8_t *sessionid, int *foreaftp)
 		error = NFSERR_BADSESSION;
 	NFSUNLOCKSESSION(shp);
 	NFSUNLOCKSTATE();
+	if (savxprt != NULL)
+		SVC_RELEASE(savxprt);
 	return (error);
 }
 
