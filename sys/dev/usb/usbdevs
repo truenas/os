@@ -103,7 +103,7 @@ vendor CREATIVE		0x041e	Creative Labs
 vendor NOKIA		0x0421	Nokia
 vendor ADI		0x0422	ADI Systems
 vendor CATC		0x0423	Computer Access Technology
-vendor SMC2		0x0424	Microchip (Standard Microsystems)
+vendor SMC2		0x0424	Microchip Technology
 vendor MOTOROLA_HK	0x0425	Motorola HK
 vendor GRAVIS		0x0428	Advanced Gravis Computer
 vendor CIRRUSLOGIC	0x0429	Cirrus Logic
@@ -1367,6 +1367,7 @@ product BELKIN F5U109		0x0109	F5U109 Serial
 product BELKIN USB2SCSI		0x0115	USB to SCSI
 product BELKIN F8T012		0x0121	F8T012xx1 Bluetooth USB Adapter
 product BELKIN USB2LAN		0x0121	USB to LAN
+product BELKIN B2B128		0x0128	USB3 to LAN
 product BELKIN F5U208		0x0208	F5U208 VideoBus II
 product BELKIN F5U237		0x0237	F5U237 USB 2.0 7-Port Hub
 product BELKIN F5U257		0x0257	F5U257 Serial
@@ -4426,13 +4427,15 @@ product SMART2 G2MEMKEY		0x1700	G2 Memory Key
 product SMARTBRIDGES SMARTLINK	0x0001	SmartLink USB Ethernet
 product SMARTBRIDGES SMARTNIC	0x0003	smartNIC 2 PnP Ethernet
 
-/* SMC products */
+/* Microchip Technology (formerly SMC) products */
 product SMC 2102USB		0x0100	10Mbps Ethernet
 product SMC 2202USB		0x0200	10/100 Ethernet
 product SMC 2206USB		0x0201	EZ Connect USB Ethernet
 product SMC 2862WG		0xee13	EZ Connect Wireless Adapter
 product SMC2 2020HUB		0x2020	USB Hub
+product SMC2 2513HUB		0x2513	USB Hub
 product SMC2 2514HUB		0x2514	USB Hub
+product SMC2 2517HUB		0x2517	USB Hub
 product SMC3 2662WUSB		0xa002	2662W-AR Wireless
 product SMC2 LAN7800_ETH	0x7800	USB/Ethernet
 product SMC2 LAN7801_ETH	0x7801	USB/Ethernet

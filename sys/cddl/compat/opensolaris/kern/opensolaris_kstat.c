@@ -55,6 +55,7 @@ kstat_create(char *module, int instance, char *name, char *class, uchar_t type,
 {
 	struct sysctl_oid *root;
 	kstat_t *ksp;
+	char *pool;
 
 	KASSERT(instance == 0, ("instance=%d", instance));
 	KASSERT(type == KSTAT_TYPE_NAMED, ("type=%hhu", type));
@@ -70,9 +71,18 @@ kstat_create(char *module, int instance, char *name, char *class, uchar_t type,
 	ksp->ks_update = kstat_default_update;
 
 	/*
+	 * Some kstats use a module name like "zfs/poolname" to distinguish a
+	 * set of kstats belonging to a specific pool.  Split on '/' to add an
+	 * extra node for the pool name if needed.
+	 */
+	pool = strchr(module, '/');
+	if (pool != NULL)
+		*pool++ = '\0';
+
+	/*
 	 * Create sysctl tree for those statistics:
 	 *
-	 *	kstat.<module>.<class>.<name>.
+	 *	kstat.<module>[.<pool>].<class>.<name>
 	 */
 	sysctl_ctx_init(&ksp->ks_sysctl_ctx);
 	root = SYSCTL_ADD_NODE(&ksp->ks_sysctl_ctx,
@@ -84,11 +94,26 @@ kstat_create(char *module, int instance, char *name, char *class, uchar_t type,
 		free(ksp, M_KSTAT);
 		return (NULL);
 	}
+	if (pool != NULL) {
+		root = SYSCTL_ADD_NODE(&ksp->ks_sysctl_ctx,
+		    SYSCTL_CHILDREN(root), OID_AUTO, pool, CTLFLAG_RW, 0, "");
+		if (root == NULL) {
+			printf("%s: Cannot create kstat.%s.%s tree!\n",
+			    __func__, module, pool);
+			sysctl_ctx_free(&ksp->ks_sysctl_ctx);
+			free(ksp, M_KSTAT);
+			return (NULL);
+		}
+	}
 	root = SYSCTL_ADD_NODE(&ksp->ks_sysctl_ctx, SYSCTL_CHILDREN(root),
 	    OID_AUTO, class, CTLFLAG_RW, 0, "");
 	if (root == NULL) {
-		printf("%s: Cannot create kstat.%s.%s tree!\n", __func__,
-		    module, class);
+		if (pool != NULL)
+			printf("%s: Cannot create kstat.%s.%s.%s tree!\n",
+			    __func__, module, pool, class);
+		else
+			printf("%s: Cannot create kstat.%s.%s tree!\n",
+			    __func__, module, class);
 		sysctl_ctx_free(&ksp->ks_sysctl_ctx);
 		free(ksp, M_KSTAT);
 		return (NULL);
@@ -96,8 +121,13 @@ kstat_create(char *module, int instance, char *name, char *class, uchar_t type,
 	root = SYSCTL_ADD_NODE(&ksp->ks_sysctl_ctx, SYSCTL_CHILDREN(root),
 	    OID_AUTO, name, CTLFLAG_RW, 0, "");
 	if (root == NULL) {
-		printf("%s: Cannot create kstat.%s.%s.%s tree!\n", __func__,
-		    module, class, name);
+		if (pool != NULL)
+			printf("%s: Cannot create kstat.%s.%s.%s.%s "
+			    "tree!\n", __func__, module, pool, class,
+			    name);
+		else
+			printf("%s: Cannot create kstat.%s.%s.%s "
+			    "tree!\n", __func__, module, class, name);
 		sysctl_ctx_free(&ksp->ks_sysctl_ctx);
 		free(ksp, M_KSTAT);
 		return (NULL);
@@ -154,16 +184,16 @@ kstat_install(kstat_t *ksp)
 			SYSCTL_ADD_PROC(&ksp->ks_sysctl_ctx,
 			    SYSCTL_CHILDREN(ksp->ks_sysctl_root),
 			    OID_AUTO, ksent->name,
-			    CTLTYPE_STRING | CTLFLAG_RD, ksp, i,
-			    kstat_sysctl_string, "A", ksent->desc);
+			    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
+			    ksp, i, kstat_sysctl_string, "A", ksent->desc);
 			continue;
 		}
 		KASSERT(ksent->data_type == KSTAT_DATA_UINT64,
 		    ("data_type=%d", ksent->data_type));
 		SYSCTL_ADD_PROC(&ksp->ks_sysctl_ctx,
 		    SYSCTL_CHILDREN(ksp->ks_sysctl_root), OID_AUTO, ksent->name,
-		    CTLTYPE_U64 | CTLFLAG_RD, ksp, i,
-		    kstat_sysctl, "QU", ksent->desc);
+		    CTLTYPE_U64 | CTLFLAG_RD | CTLFLAG_MPSAFE,
+		    ksp, i, kstat_sysctl, "QU", ksent->desc);
 	}
 }
 

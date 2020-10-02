@@ -62,6 +62,8 @@ struct sockaddr;
 struct stat;
 struct thr_param;
 struct uio;
+struct vm_map;
+struct vmspace;
 
 typedef int (*mmap_check_fp_fn)(struct file *, int, int, int);
 
@@ -116,7 +118,7 @@ int	kern_cpuset_setid(struct thread *td, cpuwhich_t which,
 	    id_t id, cpusetid_t setid);
 int	kern_dup(struct thread *td, u_int mode, int flags, int old, int new);
 int	kern_execve(struct thread *td, struct image_args *args,
-	    struct mac *mac_p);
+	    struct mac *mac_p, struct vmspace *oldvmspace);
 int	kern_fchmodat(struct thread *td, int fd, char *path,
 	    enum uio_seg pathseg, mode_t mode, int flag);
 int	kern_fchownat(struct thread *td, int fd, char *path,
@@ -185,6 +187,8 @@ int	kern_mmap(struct thread *td, uintptr_t addr, size_t size, int prot,
 int	kern_mmap_fpcheck(struct thread *td, uintptr_t addr, size_t len,
 	    int prot, int flags, int fd, off_t pos,
 	    mmap_check_fp_fn check_fp_fn);
+int	kern_mmap_racct_check(struct thread *td, struct vm_map *map,
+	    vm_size_t size);
 int	kern_mprotect(struct thread *td, uintptr_t addr, size_t size, int prot);
 int	kern_msgctl(struct thread *, int, int, struct msqid_ds *);
 int	kern_msgrcv(struct thread *, int, void *, size_t, long, int, long *);

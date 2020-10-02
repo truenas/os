@@ -477,6 +477,7 @@ MK_CTF:=	no
 MK_OPENSSL:=	no
 MK_OPENSSH:=	no
 MK_KERBEROS:=	no
+MK_KERBEROS_SUPPORT:=	no
 .endif
 
 .if ${MK_CXX} == "no"
@@ -487,6 +488,10 @@ MK_TESTS:=	no
 
 .if ${MK_DIALOG} == "no"
 MK_BSDINSTALL:=	no
+.endif
+
+.if ${MK_FILE} == "no"
+MK_SVNLITE:=	no
 .endif
 
 .if ${MK_MAIL} == "no"
@@ -508,6 +513,7 @@ MK_NLS_CATALOGS:= no
 MK_DMAGENT:=	no
 MK_OPENSSH:=	no
 MK_KERBEROS:=	no
+MK_KERBEROS_SUPPORT:=	no
 MK_LDNS:=	no
 MK_PKGBOOTSTRAP:=	no
 MK_SVN:=		no

@@ -1188,6 +1188,9 @@ _callout_stop_safe(struct callout *c, int flags, callout_func_t *drain)
 		WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, c->c_lock,
 		    "calling %s", __func__);
 
+	KASSERT((flags & CS_DRAIN) == 0 || drain == NULL,
+	    ("Cannot set drain callback and CS_DRAIN flag at the same time"));
+
 	/*
 	 * Some old subsystems don't hold Giant while running a callout_stop(),
 	 * so just discard this check for the moment.
@@ -1379,15 +1382,22 @@ again:
 			CTR3(KTR_CALLOUT, "postponing stop %p func %p arg %p",
 			    c, c->c_func, c->c_arg);
  			if (drain) {
+				KASSERT(cc_exec_drain(cc, direct) == NULL,
+				    ("callout drain function already set to %p",
+				    cc_exec_drain(cc, direct)));
 				cc_exec_drain(cc, direct) = drain;
 			}
 			CC_UNLOCK(cc);
 			return ((flags & CS_EXECUTING) != 0);
-		}
-		CTR3(KTR_CALLOUT, "failed to stop %p func %p arg %p",
-		    c, c->c_func, c->c_arg);
-		if (drain) {
-			cc_exec_drain(cc, direct) = drain;
+		} else {
+			CTR3(KTR_CALLOUT, "failed to stop %p func %p arg %p",
+			    c, c->c_func, c->c_arg);
+			if (drain) {
+				KASSERT(cc_exec_drain(cc, direct) == NULL,
+				    ("callout drain function already set to %p",
+				    cc_exec_drain(cc, direct)));
+				cc_exec_drain(cc, direct) = drain;
+			}
 		}
 		KASSERT(!sq_locked, ("sleepqueue chain still locked"));
 		cancelled = ((flags & CS_EXECUTING) != 0);

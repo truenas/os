@@ -1530,7 +1530,7 @@ skip:
 	setusercontext(lc, pw, 0, LOGIN_SETRESOURCES);
 #endif
 
-	if (guest && stats && statfd < 0)
+	if (guest && stats && statfd < 0) {
 #ifdef VIRTUAL_HOSTING
 		statfd = open(thishost->statfile, O_WRONLY|O_APPEND);
 #else
@@ -1538,6 +1538,7 @@ skip:
 #endif
 		if (statfd < 0)
 			stats = 0;
+	}
 
 	/*
 	 * For a chrooted local user,
@@ -1595,13 +1596,20 @@ skip:
 	 *    (uid 0 has no root power over NFS if not mapped explicitly.)
 	 */
 	if (seteuid(pw->pw_uid) < 0) {
-		reply(550, "Can't set uid.");
-		goto bad;
+		if (guest || dochroot) {
+			fatalerror("Can't set uid.");
+		} else {
+			reply(550, "Can't set uid.");
+			goto bad;
+		}
 	}
+	/*
+	 * Do not allow the session to live if we're chroot()'ed and chdir()
+	 * fails. Otherwise the chroot jail can be escaped.
+	 */
 	if (chdir(homedir) < 0) {
 		if (guest || dochroot) {
-			reply(550, "Can't change to base directory.");
-			goto bad;
+			fatalerror("Can't change to base directory.");
 		} else {
 			if (chdir("/") < 0) {
 				reply(550, "Root is inaccessible.");
