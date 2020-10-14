@@ -7,8 +7,9 @@ PROGS	=	pkt-gen nmreplay bridge lb
 
 CLEANFILES = $(PROGS) *.o
 MAN=
-CFLAGS += -Werror -Wall
-CFLAGS += -Wextra
+
+.include <bsd.prog.mk>
+.include <bsd.lib.mk>
 
 LDFLAGS += -lpthread
 .ifdef WITHOUT_PCAP
@@ -18,8 +19,7 @@ LDFLAGS += -lpcap
 .endif
 LDFLAGS += -lm # used by nmreplay
 
-.include <bsd.prog.mk>
-.include <bsd.lib.mk>
+CFLAGS += -Wno-cast-align
 
 all: $(PROGS)
 

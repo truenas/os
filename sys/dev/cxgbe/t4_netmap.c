@@ -196,6 +196,9 @@ alloc_nm_rxq_hwq(struct vi_info *vi, struct sge_nm_rxq *nm_rxq, int cong)
 
 	nm_rxq->fl_cntxt_id = be16toh(c.fl0id);
 	nm_rxq->fl_pidx = nm_rxq->fl_cidx = 0;
+	nm_rxq->fl_db_saved = 0;
+	/* matches the X_FETCHBURSTMAX_512B or X_FETCHBURSTMAX_256B above. */
+	nm_rxq->fl_db_threshold = chip_id(sc) <= CHELSIO_T5 ? 8 : 4;
 	MPASS(nm_rxq->fl_sidx == na->num_rx_desc);
 	cntxt_id = nm_rxq->fl_cntxt_id - sc->sge.eq_start;
 	if (cntxt_id >= sc->sge.neq) {
@@ -210,9 +213,6 @@ alloc_nm_rxq_hwq(struct vi_info *vi, struct sge_nm_rxq *nm_rxq, int cong)
 	if (chip_id(sc) >= CHELSIO_T5 && cong >= 0) {
 		uint32_t param, val;
 
-		param = V_FW_PARAMS_MNEM(FW_PARAMS_MNEM_DMAQ) |
-		    V_FW_PARAMS_PARAM_X(FW_PARAMS_PARAM_DMAQ_CONM_CTXT) |
-		    V_FW_PARAMS_PARAM_YZ(nm_rxq->iq_cntxt_id);
 		param = V_FW_PARAMS_MNEM(FW_PARAMS_MNEM_DMAQ) |
 		    V_FW_PARAMS_PARAM_X(FW_PARAMS_PARAM_DMAQ_CONM_CTXT) |
 		    V_FW_PARAMS_PARAM_YZ(nm_rxq->iq_cntxt_id);
@@ -329,6 +329,22 @@ alloc_nm_txq_hwq(struct vi_info *vi, struct sge_nm_txq *nm_txq)
 		nm_txq->udb = (volatile void *)udb;
 	}
 
+	if (sc->params.fw_vers < FW_VERSION32(1, 25, 1, 0)) {
+		uint32_t param, val;
+
+		param = V_FW_PARAMS_MNEM(FW_PARAMS_MNEM_DMAQ) |
+		    V_FW_PARAMS_PARAM_X(FW_PARAMS_PARAM_DMAQ_EQ_SCHEDCLASS_ETH) |
+		    V_FW_PARAMS_PARAM_YZ(nm_txq->cntxt_id);
+		val = 0xff;
+		rc = -t4_set_params(sc, sc->mbox, sc->pf, 0, 1, &param, &val);
+		if (rc != 0) {
+			device_printf(vi->dev,
+			    "failed to bind netmap txq %d to class 0xff: %d\n",
+			    nm_txq->cntxt_id, rc);
+			rc = 0;
+		}
+	}
+
 	return (rc);
 }
 
@@ -347,6 +363,180 @@ free_nm_txq_hwq(struct vi_info *vi, struct sge_nm_txq *nm_txq)
 }
 
 static int
+cxgbe_netmap_simple_rss(struct adapter *sc, struct vi_info *vi,
+    struct ifnet *ifp, struct netmap_adapter *na)
+{
+	struct netmap_kring *kring;
+	struct sge_nm_rxq *nm_rxq;
+	int rc, i, j, nm_state, defq;
+	uint16_t *rss;
+
+	/*
+	 * Check if there's at least one active (or about to go active) netmap
+	 * rx queue.
+	 */
+	defq = -1;
+	for_each_nm_rxq(vi, j, nm_rxq) {
+		nm_state = atomic_load_int(&nm_rxq->nm_state);
+		kring = na->rx_rings[nm_rxq->nid];
+		if ((nm_state != NM_OFF && !nm_kring_pending_off(kring)) ||
+		    (nm_state == NM_OFF && nm_kring_pending_on(kring))) {
+			MPASS(nm_rxq->iq_cntxt_id != INVALID_NM_RXQ_CNTXT_ID);
+			if (defq == -1) {
+				defq = nm_rxq->iq_abs_id;
+				break;
+			}
+		}
+	}
+
+	if (defq == -1) {
+		/* No active netmap queues.  Switch back to NIC queues. */
+		rss = vi->rss;
+		defq = vi->rss[0];
+	} else {
+		for (i = 0; i < vi->rss_size;) {
+			for_each_nm_rxq(vi, j, nm_rxq) {
+				nm_state = atomic_load_int(&nm_rxq->nm_state);
+				kring = na->rx_rings[nm_rxq->nid];
+				if ((nm_state != NM_OFF &&
+				    !nm_kring_pending_off(kring)) ||
+				    (nm_state == NM_OFF &&
+				    nm_kring_pending_on(kring))) {
+					MPASS(nm_rxq->iq_cntxt_id !=
+					    INVALID_NM_RXQ_CNTXT_ID);
+					vi->nm_rss[i++] = nm_rxq->iq_abs_id;
+					if (i == vi->rss_size)
+						break;
+				}
+			}
+		}
+		rss = vi->nm_rss;
+	}
+
+	rc = -t4_config_rss_range(sc, sc->mbox, vi->viid, 0, vi->rss_size, rss,
+	    vi->rss_size);
+	if (rc != 0)
+		if_printf(ifp, "netmap rss_config failed: %d\n", rc);
+
+	rc = -t4_config_vi_rss(sc, sc->mbox, vi->viid, vi->hashen, defq, 0, 0);
+	if (rc != 0) {
+		if_printf(ifp, "netmap defaultq config failed: %d\n", rc);
+	}
+
+	return (rc);
+}
+
+/*
+ * Odd number of rx queues work best for split RSS mode as the first queue can
+ * be dedicated for non-RSS traffic and the rest divided into two equal halves.
+ */
+static int
+cxgbe_netmap_split_rss(struct adapter *sc, struct vi_info *vi,
+    struct ifnet *ifp, struct netmap_adapter *na)
+{
+	struct netmap_kring *kring;
+	struct sge_nm_rxq *nm_rxq;
+	int rc, i, j, nm_state, defq;
+	int nactive[2] = {0, 0};
+	int dq[2] = {-1, -1};
+	bool dq_norss;		/* default queue should not be in RSS table. */
+
+	MPASS(nm_split_rss != 0);
+	MPASS(vi->nnmrxq > 1);
+
+	for_each_nm_rxq(vi, i, nm_rxq) {
+		j = i / ((vi->nnmrxq + 1) / 2);
+		nm_state = atomic_load_int(&nm_rxq->nm_state);
+		kring = na->rx_rings[nm_rxq->nid];
+		if ((nm_state != NM_OFF && !nm_kring_pending_off(kring)) ||
+		    (nm_state == NM_OFF && nm_kring_pending_on(kring))) {
+			MPASS(nm_rxq->iq_cntxt_id != INVALID_NM_RXQ_CNTXT_ID);
+			nactive[j]++;
+			if (dq[j] == -1) {
+				dq[j] = nm_rxq->iq_abs_id;
+				break;
+			}
+		}
+	}
+
+	if (nactive[0] == 0 || nactive[1] == 0)
+		return (cxgbe_netmap_simple_rss(sc, vi, ifp, na));
+
+	MPASS(dq[0] != -1 && dq[1] != -1);
+	if (nactive[0] > nactive[1]) {
+		defq = dq[0];
+		dq_norss = true;
+	} else if (nactive[0] < nactive[1]) {
+		defq = dq[1];
+		dq_norss = true;
+	} else {
+		defq = dq[0];
+		dq_norss = false;
+	}
+
+	i = 0;
+	nm_rxq = &sc->sge.nm_rxq[vi->first_nm_rxq];
+	while (i < vi->rss_size / 2) {
+		for (j = 0; j < (vi->nnmrxq + 1) / 2; j++) {
+			nm_state = atomic_load_int(&nm_rxq[j].nm_state);
+			kring = na->rx_rings[nm_rxq[j].nid];
+			if ((nm_state == NM_OFF &&
+			    !nm_kring_pending_on(kring)) ||
+			    (nm_state == NM_ON &&
+			    nm_kring_pending_off(kring))) {
+				continue;
+			}
+			MPASS(nm_rxq[j].iq_cntxt_id != INVALID_NM_RXQ_CNTXT_ID);
+			if (dq_norss && defq == nm_rxq[j].iq_abs_id)
+				continue;
+			vi->nm_rss[i++] = nm_rxq[j].iq_abs_id;
+			if (i == vi->rss_size / 2)
+				break;
+		}
+	}
+	while (i < vi->rss_size) {
+		for (j = (vi->nnmrxq + 1) / 2; j < vi->nnmrxq; j++) {
+			nm_state = atomic_load_int(&nm_rxq[j].nm_state);
+			kring = na->rx_rings[nm_rxq[j].nid];
+			if ((nm_state == NM_OFF &&
+			    !nm_kring_pending_on(kring)) ||
+			    (nm_state == NM_ON &&
+			    nm_kring_pending_off(kring))) {
+				continue;
+			}
+			MPASS(nm_rxq[j].iq_cntxt_id != INVALID_NM_RXQ_CNTXT_ID);
+			if (dq_norss && defq == nm_rxq[j].iq_abs_id)
+				continue;
+			vi->nm_rss[i++] = nm_rxq[j].iq_abs_id;
+			if (i == vi->rss_size)
+				break;
+		}
+	}
+
+	rc = -t4_config_rss_range(sc, sc->mbox, vi->viid, 0, vi->rss_size,
+	    vi->nm_rss, vi->rss_size);
+	if (rc != 0)
+		if_printf(ifp, "netmap split_rss_config failed: %d\n", rc);
+
+	rc = -t4_config_vi_rss(sc, sc->mbox, vi->viid, vi->hashen, defq, 0, 0);
+	if (rc != 0)
+		if_printf(ifp, "netmap defaultq config failed: %d\n", rc);
+
+	return (rc);
+}
+
+static inline int
+cxgbe_netmap_rss(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
+    struct netmap_adapter *na)
+{
+
+	if (nm_split_rss == 0 || vi->nnmrxq == 1)
+		return (cxgbe_netmap_simple_rss(sc, vi, ifp, na));
+	else
+		return (cxgbe_netmap_split_rss(sc, vi, ifp, na));
+}
+
+static int
 cxgbe_netmap_on(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
     struct netmap_adapter *na)
 {
@@ -354,14 +544,19 @@ cxgbe_netmap_on(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
 	struct netmap_kring *kring;
 	struct sge_nm_rxq *nm_rxq;
 	struct sge_nm_txq *nm_txq;
-	int rc, i, j, hwidx, defq, nrssq;
+	int i, j, hwidx;
 	struct rx_buf_info *rxb;
 
 	ASSERT_SYNCHRONIZED_OP(sc);
+	MPASS(vi->nnmrxq > 0);
+	MPASS(vi->nnmtxq > 0);
 
 	if ((vi->flags & VI_INIT_DONE) == 0 ||
-	    (ifp->if_drv_flags & IFF_DRV_RUNNING) == 0)
+	    (ifp->if_drv_flags & IFF_DRV_RUNNING) == 0) {
+		if_printf(ifp, "cannot enable netmap operation because "
+		    "interface is not UP.\n");
 		return (EAGAIN);
+	}
 
 	rxb = &sc->sge.rx_buf_info[0];
 	for (i = 0; i < SW_ZONE_SIZES; i++, rxb++) {
@@ -430,72 +625,7 @@ cxgbe_netmap_on(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
 		    M_ZERO | M_WAITOK);
 	}
 
-	MPASS(vi->nnmrxq > 0);
-	if (nm_split_rss == 0 || vi->nnmrxq == 1) {
-		for (i = 0; i < vi->rss_size;) {
-			for_each_nm_rxq(vi, j, nm_rxq) {
-				vi->nm_rss[i++] = nm_rxq->iq_abs_id;
-				if (i == vi->rss_size)
-					break;
-			}
-		}
-		defq = vi->nm_rss[0];
-	} else {
-		/* We have multiple queues and we want to split the table. */
-		MPASS(nm_split_rss != 0);
-		MPASS(vi->nnmrxq > 1);
-
-		nm_rxq = &sc->sge.nm_rxq[vi->first_nm_rxq];
-		nrssq = vi->nnmrxq;
-		if (vi->nnmrxq & 1) {
-			/*
-			 * Odd number of queues. The first rxq is designated the
-			 * default queue, the rest are split evenly.
-			 */
-			defq = nm_rxq->iq_abs_id;
-			nm_rxq++;
-			nrssq--;
-		} else {
-			/*
-			 * Even number of queues split into two halves.  The
-			 * first rxq in one of the halves is designated the
-			 * default queue.
-			 */
-#if 1
-			/* First rxq in the first half. */
-			defq = nm_rxq->iq_abs_id;
-#else
-			/* First rxq in the second half. */
-			defq = nm_rxq[vi->nnmrxq / 2].iq_abs_id;
-#endif
-		}
-
-		i = 0;
-		while (i < vi->rss_size / 2) {
-			for (j = 0; j < nrssq / 2; j++) {
-				vi->nm_rss[i++] = nm_rxq[j].iq_abs_id;
-				if (i == vi->rss_size / 2)
-					break;
-			}
-		}
-		while (i < vi->rss_size) {
-			for (j = nrssq / 2; j < nrssq; j++) {
-				vi->nm_rss[i++] = nm_rxq[j].iq_abs_id;
-				if (i == vi->rss_size)
-					break;
-			}
-		}
-	}
-	rc = -t4_config_rss_range(sc, sc->mbox, vi->viid, 0, vi->rss_size,
-	    vi->nm_rss, vi->rss_size);
-	if (rc != 0)
-		if_printf(ifp, "netmap rss_config failed: %d\n", rc);
-
-	rc = -t4_config_vi_rss(sc, sc->mbox, vi->viid, vi->hashen, defq, 0, 0);
-	if (rc != 0)
-		if_printf(ifp, "netmap rss hash/defaultq config failed: %d\n", rc);
-
-	return (rc);
+	return (cxgbe_netmap_rss(sc, vi, ifp, na));
 }
 
 static int
@@ -503,11 +633,13 @@ cxgbe_netmap_off(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
     struct netmap_adapter *na)
 {
 	struct netmap_kring *kring;
-	int rc, i;
+	int rc, i, nm_state, nactive;
 	struct sge_nm_txq *nm_txq;
 	struct sge_nm_rxq *nm_rxq;
 
 	ASSERT_SYNCHRONIZED_OP(sc);
+	MPASS(vi->nnmrxq > 0);
+	MPASS(vi->nnmtxq > 0);
 
 	if (!nm_netmap_on(na))
 		return (0);
@@ -515,14 +647,10 @@ cxgbe_netmap_off(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
 	if ((vi->flags & VI_INIT_DONE) == 0)
 		return (0);
 
-	rc = -t4_config_rss_range(sc, sc->mbox, vi->viid, 0, vi->rss_size,
-	    vi->rss, vi->rss_size);
+	/* First remove the queues that are stopping from the RSS table. */
+	rc = cxgbe_netmap_rss(sc, vi, ifp, na);
 	if (rc != 0)
-		if_printf(ifp, "failed to restore RSS config: %d\n", rc);
-	rc = -t4_config_vi_rss(sc, sc->mbox, vi->viid, vi->hashen, vi->rss[0], 0, 0);
-	if (rc != 0)
-		if_printf(ifp, "failed to restore RSS hash/defaultq: %d\n", rc);
-	nm_clear_native_flags(na);
+		return (rc);	/* error message logged already. */
 
 	for_each_nm_txq(vi, i, nm_txq) {
 		struct sge_qstat *spg = (void *)&nm_txq->desc[nm_txq->sidx];
@@ -541,18 +669,33 @@ cxgbe_netmap_off(struct adapter *sc, struct vi_info *vi, struct ifnet *ifp,
 			pause("nmcidx", 1);
 
 		free_nm_txq_hwq(vi, nm_txq);
+
+		/* XXX: netmap, not the driver, should do this. */
+		kring->rhead = kring->rcur = kring->nr_hwcur = 0;
+		kring->rtail = kring->nr_hwtail = kring->nkr_num_slots - 1;
 	}
+	nactive = 0;
 	for_each_nm_rxq(vi, i, nm_rxq) {
+		nm_state = atomic_load_int(&nm_rxq->nm_state);
 		kring = na->rx_rings[nm_rxq->nid];
-		if (!nm_kring_pending_off(kring) ||
-		    nm_rxq->iq_cntxt_id == INVALID_NM_RXQ_CNTXT_ID)
+		if (nm_state != NM_OFF && !nm_kring_pending_off(kring))
+			nactive++;
+		if (nm_state == NM_OFF || !nm_kring_pending_off(kring))
 			continue;
 
+		MPASS(nm_rxq->iq_cntxt_id != INVALID_NM_RXQ_CNTXT_ID);
 		while (!atomic_cmpset_int(&nm_rxq->nm_state, NM_ON, NM_OFF))
 			pause("nmst", 1);
 
 		free_nm_rxq_hwq(vi, nm_rxq);
+
+		/* XXX: netmap, not the driver, should do this. */
+		kring->rhead = kring->rcur = kring->nr_hwcur = 0;
+		kring->rtail = kring->nr_hwtail = 0;
 	}
+	netmap_krings_mode_commit(na, 0);
+	if (nactive == 0)
+		nm_clear_native_flags(na);
 
 	return (rc);
 }
@@ -936,7 +1079,7 @@ cxgbe_netmap_rxsync(struct netmap_kring *kring, int flags)
 				fl_pidx = 0;
 				slot = &ring->slot[0];
 			}
-			if (++dbinc == 8 && n >= 32) {
+			if (++dbinc == nm_rxq->fl_db_threshold) {
 				wmb();
 				if (starve_fl)
 					nm_rxq->fl_db_saved += dbinc;

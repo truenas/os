@@ -120,7 +120,10 @@ enum {
 	SGE_MAX_WR_NDESC = SGE_MAX_WR_LEN / EQ_ESIZE, /* max WR size in desc */
 	TX_SGL_SEGS = 39,
 	TX_SGL_SEGS_TSO = 38,
+	TX_SGL_SEGS_VM = 38,
+	TX_SGL_SEGS_VM_TSO = 37,
 	TX_SGL_SEGS_EO_TSO = 30,	/* XXX: lower for IPv6. */
+	TX_SGL_SEGS_VXLAN_TSO = 37,
 	TX_WR_FLITS = SGE_MAX_WR_LEN / 8
 };
 
@@ -173,6 +176,7 @@ enum {
 	DOOMED		= (1 << 0),
 	VI_INIT_DONE	= (1 << 1),
 	VI_SYSCTL_CTX	= (1 << 2),
+	TX_USES_VM_WR 	= (1 << 3),
 
 	/* adapter debug_flags */
 	DF_DUMP_MBOX		= (1 << 0),	/* Log all mbox cmd/rpl. */
@@ -286,6 +290,7 @@ struct port_info {
 	int nvi;
 	int up_vis;
 	int uld_vis;
+	bool vxlan_tcam_entry;
 
 	struct tx_sched_params *sched_params;
 
@@ -593,6 +598,8 @@ struct sge_txq {
 	uint64_t txpkts0_pkts;	/* # of frames in type0 coalesced tx WRs */
 	uint64_t txpkts1_pkts;	/* # of frames in type1 coalesced tx WRs */
 	uint64_t raw_wrs;	/* # of raw work requests (alloc_wr_mbuf) */
+	uint64_t vxlan_tso_wrs;	/* # of VXLAN TSO work requests */
+	uint64_t vxlan_txcsum;
 
 	/* stats for not-that-common events */
 } __aligned(CACHE_LINE_SIZE);
@@ -611,6 +618,7 @@ struct sge_rxq {
 
 	uint64_t rxcsum;	/* # of times hardware assisted with checksum */
 	uint64_t vlan_extraction;/* # of times VLAN tag was extracted */
+	uint64_t vxlan_rxcsum;
 
 	/* stats for not-that-common events */
 
@@ -708,6 +716,7 @@ struct sge_nm_rxq {
 	uint32_t fl_sidx2;	/* copy of fl_sidx */
 	uint32_t fl_db_val;
 	u_int fl_db_saved;
+	u_int fl_db_threshold;	/* in descriptors */
 	u_int fl_hwidx:4;
 
 	/*
@@ -833,6 +842,11 @@ struct adapter {
 	struct sge sge;
 	int lro_timeout;
 	int sc_do_rxcopy;
+
+	int vxlan_port;
+	u_int vxlan_refcount;
+	int rawf_base;
+	int nrawf;
 
 	struct taskqueue *tq[MAX_NCHAN];	/* General purpose taskqueues */
 	struct port_info *port[MAX_NPORTS];
@@ -1228,7 +1242,7 @@ void t4_intr_evt(void *);
 void t4_wrq_tx_locked(struct adapter *, struct sge_wrq *, struct wrqe *);
 void t4_update_fl_bufsize(struct ifnet *);
 struct mbuf *alloc_wr_mbuf(int, int);
-int parse_pkt(struct adapter *, struct mbuf **);
+int parse_pkt(struct mbuf **, bool);
 void *start_wrq_wr(struct sge_wrq *, int, struct wrq_cookie *);
 void commit_wrq_wr(struct sge_wrq *, void *, struct wrq_cookie *);
 int tnl_cong(struct port_info *, int);
