@@ -248,7 +248,6 @@ menu.welcome = {
 			boot_entry_2,
 			menu_entries.prompt,
 			menu_entries.reboot,
-			menu_entries.console,
 			{
 				entry_type = core.MENU_SEPARATOR,
 			},
