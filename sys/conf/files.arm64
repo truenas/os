@@ -104,12 +104,16 @@ arm/broadcom/bcm2835/bcm2835_wdog.c		optional soc_brcm_bcm2837 fdt | soc_brcm_bc
 arm/broadcom/bcm2835/bcm2836.c			optional soc_brcm_bcm2837 fdt | soc_brcm_bcm2838 fdt
 arm/broadcom/bcm2835/bcm283x_dwc_fdt.c		optional dwcotg fdt soc_brcm_bcm2837 | dwcotg fdt soc_brcm_bcm2838
 arm/mv/a37x0_gpio.c				optional a37x0_gpio gpio fdt
+arm/mv/armada38x/armada38x_rtc.c		optional mv_rtc fdt
 arm/mv/gpio.c					optional mv_gpio fdt
+arm/mv/mvebu_gpio.c				optional mv_gpio fdt
 arm/mv/mvebu_pinctrl.c				optional mvebu_pinctrl fdt
-arm/mv/mv_cp110_icu.c				optional mv_cp110_icu fdt
-arm/mv/mv_ap806_gicp.c				optional mv_ap806_gicp fdt
 arm/mv/mv_ap806_clock.c				optional SOC_MARVELL_8K fdt
+arm/mv/mv_ap806_gicp.c				optional mv_ap806_gicp fdt
+arm/mv/mv_ap806_sei.c				optional mv_ap806_sei fdt
 arm/mv/mv_cp110_clock.c				optional SOC_MARVELL_8K fdt
+arm/mv/mv_cp110_icu.c				optional mv_cp110_icu fdt
+arm/mv/mv_cp110_icu_bus.c			optional mv_cp110_icu fdt
 arm/mv/mv_thermal.c				optional SOC_MARVELL_8K mv_thermal fdt
 arm/mv/armada38x/armada38x_rtc.c		optional mv_rtc fdt
 arm/xilinx/uart_dev_cdnc.c			optional uart soc_xilinx_zynq
@@ -285,6 +289,9 @@ dev/ofw/ofwpci.c		optional 	fdt pci
 dev/pci/pci_host_generic.c	optional	pci
 dev/pci/pci_host_generic_acpi.c	optional	pci acpi
 dev/pci/pci_host_generic_fdt.c	optional	pci fdt
+dev/pci/pci_dw_mv.c		optional	pci fdt
+dev/pci/pci_dw.c		optional	pci fdt
+dev/pci/pci_dw_if.m		optional	pci fdt
 dev/psci/psci.c			standard
 dev/psci/psci_arm64.S		standard
 dev/psci/smccc.c		standard
@@ -347,6 +354,8 @@ arm64/rockchip/rk_typec_phy.c		optional fdt rk_typec_phy soc_rockchip_rk3399
 arm64/rockchip/if_dwc_rk.c		optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399
 arm64/rockchip/rk_tsadc_if.m		optional fdt soc_rockchip_rk3399
 arm64/rockchip/rk_tsadc.c		optional fdt soc_rockchip_rk3399
+arm64/rockchip/rk_pcie.c		optional fdt pci soc_rockchip_rk3399
+arm64/rockchip/rk_pcie_phy.c		optional fdt pci soc_rockchip_rk3399
 arm64/rockchip/rk_pwm.c			optional fdt rk_pwm
 dev/dwc/if_dwc.c			optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399
 dev/dwc/if_dwc_if.m			optional fdt dwc_rk soc_rockchip_rk3328 | fdt dwc_rk soc_rockchip_rk3399

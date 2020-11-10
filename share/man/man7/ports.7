@@ -372,14 +372,7 @@ You can change all of these.
 Location of the ports tree.
 This is
 .Pa /usr/ports
-on
-.Fx
-and
-.Ox ,
-and
-.Pa /usr/pkgsrc
-on
-.Nx .
+by default.
 .It Va WRKDIRPREFIX
 Where to create any temporary files.
 Useful if
@@ -525,7 +518,7 @@ instead of the OpenSSL from the base system.
 If set, debugging symbols are installed for ports binaries.
 .It Va WITH_DEBUG_PORTS
 A list of origins for which to set
-.Va WITH_DEBUG_PORTS .
+.Va WITH_DEBUG .
 .It Va WITH_SSP_PORTS
 .Pq Vt bool
 If set, enables

@@ -1149,7 +1149,11 @@ npx_fill_fpregs_xmm1(struct savexmm *sv_xmm, struct save87 *sv_87)
 {
 	struct env87 *penv_87;
 	struct envxmm *penv_xmm;
-	int i;
+	struct fpacc87 *fx_reg;
+	int i, st;
+	uint64_t mantissa;
+	uint16_t tw, exp;
+	uint8_t ab_tw;
 
 	penv_87 = &sv_87->sv_env;
 	penv_xmm = &sv_xmm->sv_env;
@@ -1163,14 +1167,39 @@ npx_fill_fpregs_xmm1(struct savexmm *sv_xmm, struct save87 *sv_87)
 	penv_87->en_foo = penv_xmm->en_foo;
 	penv_87->en_fos = penv_xmm->en_fos;
 
-	/* FPU registers and tags */
-	penv_87->en_tw = 0xffff;
-	for (i = 0; i < 8; ++i) {
-		sv_87->sv_ac[i] = sv_xmm->sv_fp[i].fp_acc;
-		if ((penv_xmm->en_tw & (1 << i)) != 0)
-			/* zero and special are set as valid */
-			penv_87->en_tw &= ~(3 << i * 2);
+	/*
+	 * FPU registers and tags.
+	 * For ST(i), i = fpu_reg - top; we start with fpu_reg=7.
+	 */
+	st = 7 - ((penv_xmm->en_sw >> 11) & 7);
+	ab_tw = penv_xmm->en_tw;
+	tw = 0;
+	for (i = 0x80; i != 0; i >>= 1) {
+		sv_87->sv_ac[st] = sv_xmm->sv_fp[st].fp_acc;
+		tw <<= 2;
+		if (ab_tw & i) {
+			/* Non-empty - we need to check ST(i) */
+			fx_reg = &sv_xmm->sv_fp[st].fp_acc;
+			/* The first 64 bits contain the mantissa. */
+			mantissa = *((uint64_t *)fx_reg->fp_bytes);
+			/*
+			 * The final 16 bits contain the sign bit and the exponent.
+			 * Mask the sign bit since it is of no consequence to these
+			 * tests.
+			 */
+			exp = *((uint16_t *)&fx_reg->fp_bytes[8]) & 0x7fff;
+			if (exp == 0) {
+				if (mantissa == 0)
+					tw |= 1; /* Zero */
+				else
+					tw |= 2; /* Denormal */
+			} else if (exp == 0x7fff)
+				tw |= 2; /* Infinity or NaN */
+		} else
+			tw |= 3; /* Empty */
+		st = (st - 1) & 7;
 	}
+	penv_87->en_tw = tw;
 }
 
 void
@@ -1427,11 +1456,12 @@ fpu_kern_leave(struct thread *td, struct fpu_kern_ctx *ctx)
 		npxdrop();
 	pcb->pcb_save = ctx->prev;
 	if (pcb->pcb_save == get_pcb_user_save_pcb(pcb)) {
-		if ((pcb->pcb_flags & PCB_NPXUSERINITDONE) != 0)
+		if ((pcb->pcb_flags & PCB_NPXUSERINITDONE) != 0) {
 			pcb->pcb_flags |= PCB_NPXINITDONE;
-		else
-			pcb->pcb_flags &= ~PCB_NPXINITDONE;
-		pcb->pcb_flags &= ~PCB_KERNNPX;
+			if ((pcb->pcb_flags & PCB_KERNNPX_THR) == 0)
+				pcb->pcb_flags &= ~PCB_KERNNPX;
+		} else if ((pcb->pcb_flags & PCB_KERNNPX_THR) == 0)
+			pcb->pcb_flags &= ~(PCB_NPXINITDONE | PCB_KERNNPX);
 	} else {
 		if ((ctx->flags & FPU_KERN_CTX_NPXINITDONE) != 0)
 			pcb->pcb_flags |= PCB_NPXINITDONE;
@@ -1453,7 +1483,7 @@ fpu_kern_thread(u_int flags)
 	    ("mangled pcb_save"));
 	KASSERT(PCB_USER_FPU(curpcb), ("recursive call"));
 
-	curpcb->pcb_flags |= PCB_KERNNPX;
+	curpcb->pcb_flags |= PCB_KERNNPX | PCB_KERNNPX_THR;
 	return (0);
 }
 
@@ -1463,7 +1493,7 @@ is_fpu_kern_thread(u_int flags)
 
 	if ((curthread->td_pflags & TDP_KTHREAD) == 0)
 		return (0);
-	return ((curpcb->pcb_flags & PCB_KERNNPX) != 0);
+	return ((curpcb->pcb_flags & PCB_KERNNPX_THR) != 0);
 }
 
 /*

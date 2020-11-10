@@ -164,7 +164,7 @@ passthru(const struct cmd *f, int argc, char *argv[])
 
 	if (arg_parse(argc, argv, f))
 		return;
-	open_dev(argv[optind], &fd, 1, 1);
+	open_dev(opt.dev, &fd, 1, 1);
 
 	if (opt.read && opt.write)
 		errx(1, "need exactly one of --read or --write");
@@ -292,7 +292,7 @@ static struct cmd io_pass_cmd = {
 	.ctx_size = sizeof(struct options),
 	.opts = opts,
 	.args = args,
-	.descr = "Send a pass through Admin command to the specified device",
+	.descr = "Send a pass through I/O command to the specified device",
 };
 
 CMD_COMMAND(admin_pass_cmd);

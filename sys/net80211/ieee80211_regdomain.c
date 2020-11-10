@@ -151,21 +151,20 @@ ieee80211_init_channels(struct ieee80211com *ic,
 	if (isset(bands, IEEE80211_MODE_VHT_5GHZ)) {
 		cbw_flags |= NET80211_CBW_FLAG_HT40;  /* Make sure this is set; or assert?  */
 		cbw_flags |= NET80211_CBW_FLAG_VHT80;
-#define	MS(_v, _f)	(((_v) & _f) >> _f##_S)
-		if (MS(ic->ic_vhtcaps, IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_MASK) >= 1)
+		if (IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_IS_160MHZ(ic->ic_vhtcaps))
 			cbw_flags |= NET80211_CBW_FLAG_VHT160;
-		if (MS(ic->ic_vhtcaps, IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_MASK) == 2)
+		if (IEEE80211_VHTCAP_SUPP_CHAN_WIDTH_IS_160_80P80MHZ(
+		    ic->ic_vhtcaps))
 			cbw_flags |= NET80211_CBW_FLAG_VHT80P80;
-#undef MS
 		ieee80211_add_channel_list_5ghz(chans, IEEE80211_CHAN_MAX,
-		   nchans, def_chan_5ghz_band1, nitems(def_chan_5ghz_band1),
-		   bands, cbw_flags);
+		    nchans, def_chan_5ghz_band1, nitems(def_chan_5ghz_band1),
+		    bands, cbw_flags);
 		ieee80211_add_channel_list_5ghz(chans, IEEE80211_CHAN_MAX,
 		    nchans, def_chan_5ghz_band2, nitems(def_chan_5ghz_band2),
-		   bands, cbw_flags);
+		    bands, cbw_flags);
 		ieee80211_add_channel_list_5ghz(chans, IEEE80211_CHAN_MAX,
 		    nchans, def_chan_5ghz_band3, nitems(def_chan_5ghz_band3),
-		   bands, cbw_flags);
+		    bands, cbw_flags);
 	}
 	if (rd != NULL)
 		ic->ic_regdomain = *rd;

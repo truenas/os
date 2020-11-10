@@ -324,6 +324,8 @@ SUBDIR=	\
 	pty  \
 	puc \
 	pwm \
+	${_qat} \
+	${_qatfw} \
 	${_qlxge} \
 	${_qlxgb} \
 	${_qlxgbe} \
@@ -528,6 +530,7 @@ _mthca=		mthca
 _mlx4ib=	mlx4ib
 _mlx5ib=	mlx5ib
 .endif
+_vmware=	vmware
 .endif
 
 .if ${MK_NAND} != "no" || defined(ALL_MODULES)
@@ -661,6 +664,8 @@ _nctgpio=	nctgpio
 _ndis=		ndis
 _ocs_fc=	ocs_fc
 _pccard=	pccard
+_qat=		qat
+_qatfw=		qatfw
 .if ${MK_OFED} != "no" || defined(ALL_MODULES)
 _rdma=		rdma
 .endif
@@ -669,7 +674,6 @@ _scsi_low=	scsi_low
 _speaker=	speaker
 _splash=	splash
 _sppp=		sppp
-_vmware=	vmware
 _wbwd=		wbwd
 _wi=		wi
 _xe=		xe

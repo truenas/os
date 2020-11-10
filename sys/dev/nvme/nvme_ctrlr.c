@@ -1232,10 +1232,8 @@ nvme_ctrlr_passthrough_cmd(struct nvme_controller *ctrlr,
 			 */
 			PHOLD(curproc);
 			buf = getpbuf(NULL);
-			buf->b_data = pt->buf;
-			buf->b_bufsize = pt->len;
 			buf->b_iocmd = pt->is_read ? BIO_READ : BIO_WRITE;
-			if (vmapbuf(buf, 1) < 0) {
+			if (vmapbuf(buf, pt->buf, pt->len, 1) < 0) {
 				ret = EFAULT;
 				goto err;
 			}
@@ -1331,7 +1329,7 @@ nvme_ctrlr_construct(struct nvme_controller *ctrlr, device_t dev)
 	struct make_dev_args	md_args;
 	uint32_t	cap_lo;
 	uint32_t	cap_hi;
-	uint32_t	to;
+	uint32_t	to, vs;
 	uint8_t		mpsmin;
 	int		status, timeout_period;
 
@@ -1341,14 +1339,41 @@ nvme_ctrlr_construct(struct nvme_controller *ctrlr, device_t dev)
 	if (bus_get_domain(dev, &ctrlr->domain) != 0)
 		ctrlr->domain = 0;
 
+	cap_lo = nvme_mmio_read_4(ctrlr, cap_lo);
+	if (bootverbose) {
+		device_printf(dev, "CapLo: 0x%08x: MQES %u%s%s%s%s, TO %u\n",
+		    cap_lo, NVME_CAP_LO_MQES(cap_lo),
+		    NVME_CAP_LO_CQR(cap_lo) ? ", CQR" : "",
+		    NVME_CAP_LO_AMS(cap_lo) ? ", AMS" : "",
+		    (NVME_CAP_LO_AMS(cap_lo) & 0x1) ? " WRRwUPC" : "",
+		    (NVME_CAP_LO_AMS(cap_lo) & 0x2) ? " VS" : "",
+		    NVME_CAP_LO_TO(cap_lo));
+	}
 	cap_hi = nvme_mmio_read_4(ctrlr, cap_hi);
+	if (bootverbose) {
+		device_printf(dev, "CapHi: 0x%08x: DSTRD %u%s, CSS %x%s, "
+		    "MPSMIN %u, MPSMAX %u %s%s\n", cap_hi,
+		    NVME_CAP_HI_DSTRD(cap_hi),
+		    NVME_CAP_HI_NSSRS(cap_lo) ? ", NSSRS" : "",
+		    NVME_CAP_HI_CSS(cap_hi),
+		    NVME_CAP_HI_BPS(cap_lo) ? ", BPS" : "",
+		    NVME_CAP_HI_MPSMIN(cap_hi),
+		    NVME_CAP_HI_MPSMAX(cap_hi),
+		    NVME_CAP_HI_PMRS(cap_lo) ? ", PMRS" : "",
+		    NVME_CAP_HI_CMBS(cap_lo) ? ", CMBS" : "");
+	}
+	if (bootverbose) {
+		vs = nvme_mmio_read_4(ctrlr, vs);
+		device_printf(dev, "Version: 0x%08x: %d.%d\n", vs,
+		    NVME_MAJOR(vs), NVME_MINOR(vs));
+	}
+
 	ctrlr->dstrd = NVME_CAP_HI_DSTRD(cap_hi) + 2;
 
 	mpsmin = NVME_CAP_HI_MPSMIN(cap_hi);
 	ctrlr->min_page_size = 1 << (12 + mpsmin);
 
 	/* Get ready timeout value from controller, in units of 500ms. */
-	cap_lo = nvme_mmio_read_4(ctrlr, cap_lo);
 	to = NVME_CAP_LO_TO(cap_lo) + 1;
 	ctrlr->ready_timeout_in_ms = to * 500;
 
@@ -1474,22 +1499,24 @@ nvme_ctrlr_shutdown(struct nvme_controller *ctrlr)
 {
 	uint32_t	cc;
 	uint32_t	csts;
-	int		ticks = 0;
+	int		ticks = 0, timeout;
 
 	cc = nvme_mmio_read_4(ctrlr, cc);
 	cc &= ~(NVME_CC_REG_SHN_MASK << NVME_CC_REG_SHN_SHIFT);
 	cc |= NVME_SHN_NORMAL << NVME_CC_REG_SHN_SHIFT;
 	nvme_mmio_write_4(ctrlr, cc, cc);
 
+	timeout = ctrlr->cdata.rtd3e == 0 ? 5 * hz :
+	    ((uint64_t)ctrlr->cdata.rtd3e * hz + 999999) / 1000000;
 	while (1) {
 		csts = nvme_mmio_read_4(ctrlr, csts);
 		if (csts == 0xffffffff)		/* Hot unplug. */
 			break;
 		if (NVME_CSTS_GET_SHST(csts) == NVME_SHST_COMPLETE)
 			break;
-		if (ticks++ > 5*hz) {
+		if (ticks++ > timeout) {
 			nvme_printf(ctrlr, "did not complete shutdown within"
-			    " 5 seconds of notification\n");
+			    " %d ticks of notification\n", timeout);
 			break;
 		}
 		pause("nvme shn", 1);
