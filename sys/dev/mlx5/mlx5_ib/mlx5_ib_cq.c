@@ -31,7 +31,7 @@
 #include <rdma/ib_cache.h>
 #include "mlx5_ib.h"
 
-static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq)
+static void mlx5_ib_cq_comp(struct mlx5_core_cq *cq, struct mlx5_eqe *eqe __unused)
 {
 	struct ib_cq *ibcq = &to_mibcq(cq)->ibcq;
 
@@ -905,6 +905,7 @@ struct ib_cq *mlx5_ib_create_cq(struct ib_device *ibdev,
 	int entries = attr->cqe;
 	int vector = attr->comp_vector;
 	struct mlx5_ib_dev *dev = to_mdev(ibdev);
+	u32 out[MLX5_ST_SZ_DW(create_cq_out)];
 	struct mlx5_ib_cq *cq;
 	int uninitialized_var(index);
 	int uninitialized_var(inlen);
@@ -969,7 +970,7 @@ struct ib_cq *mlx5_ib_create_cq(struct ib_device *ibdev,
 	if (cq->create_flags & IB_CQ_FLAGS_IGNORE_OVERRUN)
 		MLX5_SET(cqc, cqc, oi, 1);
 
-	err = mlx5_core_create_cq(dev->mdev, &cq->mcq, cqb, inlen);
+	err = mlx5_core_create_cq(dev->mdev, &cq->mcq, cqb, inlen, out, sizeof(out));
 	if (err)
 		goto err_cqb;
 

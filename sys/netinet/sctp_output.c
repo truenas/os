@@ -2783,8 +2783,7 @@ sctp_select_nth_preferred_addr_from_ifn_boundall(struct sctp_ifn *ifn,
     uint8_t dest_is_priv,
     int addr_wanted,
     sa_family_t fam,
-    sctp_route_t *ro
-)
+    sctp_route_t *ro)
 {
 	struct sctp_ifa *ifa, *sifa;
 	int num_eligible_addr = 0;
@@ -4834,7 +4833,7 @@ sctp_send_initiate(struct sctp_inpcb *inp, struct sctp_tcb *stcb, int so_locked)
 	}
 
 	/* now any cookie time extensions */
-	if (stcb->asoc.cookie_preserve_req) {
+	if (stcb->asoc.cookie_preserve_req > 0) {
 		struct sctp_cookie_perserve_param *cookie_preserve;
 
 		if (padding_len > 0) {
@@ -8822,7 +8821,7 @@ no_data_fill:
 				 * the top of the for, but just to make sure
 				 * I will reset these again here.
 				 */
-				ctl_cnt = bundle_at = 0;
+				ctl_cnt = 0;
 				continue;	/* This takes us back to the
 						 * for() for the nets. */
 			} else {
@@ -9423,7 +9422,7 @@ sctp_chunk_retransmission(struct sctp_inpcb *inp,
 	uint32_t dmtu = 0;
 
 	SCTP_TCB_LOCK_ASSERT(stcb);
-	tmr_started = ctl_cnt = bundle_at = error = 0;
+	tmr_started = ctl_cnt = 0;
 	no_fragmentflg = 1;
 	fwd_tsn = 0;
 	*cnt_out = 0;

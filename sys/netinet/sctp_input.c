@@ -1168,13 +1168,10 @@ sctp_handle_error(struct sctp_chunkhdr *ch,
 				struct sctp_error_stale_cookie *stale_cookie;
 
 				stale_cookie = (struct sctp_error_stale_cookie *)cause;
-				asoc->cookie_preserve_req = ntohl(stale_cookie->stale_time);
-				/* Double it to be more robust on RTX */
-				if (asoc->cookie_preserve_req <= UINT32_MAX / 2) {
-					asoc->cookie_preserve_req *= 2;
-				} else {
-					asoc->cookie_preserve_req = UINT32_MAX;
-				}
+				/* stable_time is in usec, convert to msec. */
+				asoc->cookie_preserve_req = ntohl(stale_cookie->stale_time) / 1000;
+				/* Double it to be more robust on RTX. */
+				asoc->cookie_preserve_req *= 2;
 				asoc->stale_cookie_count++;
 				if (asoc->stale_cookie_count >
 				    asoc->max_init_times) {
@@ -1515,7 +1512,7 @@ sctp_process_cookie_existing(struct mbuf *m, int iphlen, int offset,
 			 *   ----INIT-ACK(tag=t)-->
 			 *   ----INIT(tag=t)------> *1
 			 *   <---INIT-ACK(tag=a)---
-                         *   <----CE(tag=t)------------- *2
+			 *   <----CE(tag=t)------------- *2
 			 *
 			 * At point *1 we should be generating a different
 			 * tag t'. Which means we would throw away the CE and send
@@ -1748,8 +1745,7 @@ sctp_process_cookie_existing(struct mbuf *m, int iphlen, int offset,
 			if (((stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_TCPTYPE) ||
 			    (stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL)) &&
 			    (!SCTP_IS_LISTENING(inp))) {
-				stcb->sctp_ep->sctp_flags |=
-				    SCTP_PCB_FLAGS_CONNECTED;
+				stcb->sctp_ep->sctp_flags |= SCTP_PCB_FLAGS_CONNECTED;
 				soisconnected(stcb->sctp_socket);
 			}
 			if (SCTP_GET_STATE(stcb) == SCTP_STATE_COOKIE_ECHOED)
@@ -1838,17 +1834,14 @@ sctp_process_cookie_existing(struct mbuf *m, int iphlen, int offset,
 			/* move to OPEN state, if not in SHUTDOWN_SENT */
 			SCTP_SET_STATE(stcb, SCTP_STATE_OPEN);
 		}
-		asoc->pre_open_streams =
-		    ntohs(initack_cp->init.num_outbound_streams);
+		asoc->pre_open_streams = ntohs(initack_cp->init.num_outbound_streams);
 		asoc->init_seq_number = ntohl(initack_cp->init.initial_tsn);
 		asoc->sending_seq = asoc->asconf_seq_out = asoc->str_reset_seq_out = asoc->init_seq_number;
 		asoc->asconf_seq_out_acked = asoc->asconf_seq_out - 1;
-
 		asoc->asconf_seq_in = asoc->last_acked_seq = asoc->init_seq_number - 1;
-
 		asoc->str_reset_seq_in = asoc->init_seq_number;
-
 		asoc->advanced_peer_ack_point = asoc->last_acked_seq;
+		asoc->send_sack = 1;
 		if (asoc->mapping_array) {
 			memset(asoc->mapping_array, 0,
 			    asoc->mapping_array_size);
@@ -2267,7 +2260,7 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,
 	unsigned int sig_offset, cookie_offset;
 	unsigned int cookie_len;
 	struct timeval now;
-	struct timeval time_expires;
+	struct timeval time_entered, time_expires;
 	int notification = 0;
 	struct sctp_nets *netl;
 	int had_a_existing_tcb = 0;
@@ -2395,13 +2388,30 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,
 		return (NULL);
 	}
 
-	/*
-	 * check the cookie timestamps to be sure it's not stale
-	 */
+	if (sctp_ticks_to_msecs(cookie->cookie_life) > SCTP_MAX_COOKIE_LIFE) {
+		SCTPDBG(SCTP_DEBUG_INPUT2, "handle_cookie_echo: Invalid cookie lifetime\n");
+		return (NULL);
+	}
+	time_entered.tv_sec = cookie->time_entered.tv_sec;
+	time_entered.tv_usec = cookie->time_entered.tv_usec;
+	if ((time_entered.tv_sec < 0) ||
+	    (time_entered.tv_usec < 0) ||
+	    (time_entered.tv_usec >= 1000000)) {
+		/* Invalid time stamp. Cookie must have been modified. */
+		SCTPDBG(SCTP_DEBUG_INPUT2, "handle_cookie_echo: Invalid time stamp\n");
+		return (NULL);
+	}
 	(void)SCTP_GETTIME_TIMEVAL(&now);
-	/* Expire time is in Ticks, so we convert to seconds */
-	time_expires.tv_sec = cookie->time_entered.tv_sec + sctp_ticks_to_secs(cookie->cookie_life);
-	time_expires.tv_usec = cookie->time_entered.tv_usec;
+	if (timevalcmp(&now, &time_entered, <)) {
+		SCTPDBG(SCTP_DEBUG_INPUT2, "handle_cookie_echo: cookie generated in the future!\n");
+		return (NULL);
+	}
+	/*
+	 * Check the cookie timestamps to be sure it's not stale.
+	 * cookie_life is in ticks, so we convert to seconds.
+	 */
+	time_expires.tv_sec = time_entered.tv_sec + sctp_ticks_to_secs(cookie->cookie_life);
+	time_expires.tv_usec = time_entered.tv_usec;
 	if (timevalcmp(&now, &time_expires, >)) {
 		/* cookie is stale! */
 		struct mbuf *op_err;
@@ -2419,8 +2429,7 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,
 		SCTP_BUF_LEN(op_err) = sizeof(struct sctp_error_stale_cookie);
 		cause = mtod(op_err, struct sctp_error_stale_cookie *);
 		cause->cause.code = htons(SCTP_CAUSE_STALE_COOKIE);
-		cause->cause.length = htons((sizeof(struct sctp_paramhdr) +
-		    (sizeof(uint32_t))));
+		cause->cause.length = htons(sizeof(struct sctp_error_stale_cookie));
 		diff = now;
 		timevalsub(&diff, &time_expires);
 		if ((uint32_t)diff.tv_sec > UINT32_MAX / 1000000) {
@@ -4132,7 +4141,6 @@ sctp_handle_packet_dropped(struct sctp_pktdrop_chunk *cp,
 	struct sctp_idata_chunk *idata_chunk;
 	uint32_t bottle_bw, on_queue;
 	uint32_t offset, chk_len;
-	uint16_t trunc_len;
 	uint16_t pktdrp_len;
 	uint8_t pktdrp_flags;
 
@@ -4142,13 +4150,10 @@ sctp_handle_packet_dropped(struct sctp_pktdrop_chunk *cp,
 	pktdrp_len = ntohs(cp->ch.chunk_length);
 	KASSERT(limit <= pktdrp_len, ("Inconsistent limit"));
 	if (pktdrp_flags & SCTP_PACKET_TRUNCATED) {
-		trunc_len = ntohs(cp->trunc_len);
-		if (trunc_len <= pktdrp_len - sizeof(struct sctp_pktdrop_chunk)) {
+		if (ntohs(cp->trunc_len) <= pktdrp_len - sizeof(struct sctp_pktdrop_chunk)) {
 			/* The peer plays games with us. */
 			return;
 		}
-	} else {
-		trunc_len = 0;
 	}
 	limit -= sizeof(struct sctp_pktdrop_chunk);
 	offset = 0;
@@ -5575,7 +5580,9 @@ sctp_common_input_processing(struct mbuf **mm, int iphlen, int offset, int lengt
 			stcb = NULL;
 			goto out;
 		}
-		data_processed = 1;
+		if (retval == 0) {
+			data_processed = 1;
+		}
 		/*
 		 * Anything important needs to have been m_copy'ed in
 		 * process_data

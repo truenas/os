@@ -691,6 +691,8 @@ void t4_idma_monitor_init(struct adapter *adapter,
 void t4_idma_monitor(struct adapter *adapter,
 		     struct sge_idma_monitor_state *idma,
 		     int hz, int ticks);
+int t4_set_vf_mac(struct adapter *adapter, unsigned int pf, unsigned int vf,
+		  unsigned int naddr, u8 *addr);
 
 unsigned int t4_get_regs_len(struct adapter *adapter);
 void t4_get_regs(struct adapter *adap, u8 *buf, size_t buf_size);
@@ -912,6 +914,8 @@ int t4vf_get_sge_params(struct adapter *adapter);
 int t4vf_get_rss_glb_config(struct adapter *adapter);
 int t4vf_get_vfres(struct adapter *adapter);
 int t4vf_prep_adapter(struct adapter *adapter);
+int t4vf_get_vf_mac(struct adapter *adapter, unsigned int port,
+		    unsigned int *naddr, u8 *addr);
 int t4_bar2_sge_qregs(struct adapter *adapter, unsigned int qid,
 		enum t4_bar2_qtype qtype, int user, u64 *pbar2_qoffset,
 		unsigned int *pbar2_qid);

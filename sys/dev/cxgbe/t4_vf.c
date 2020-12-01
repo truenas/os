@@ -481,7 +481,7 @@ static int
 t4vf_attach(device_t dev)
 {
 	struct adapter *sc;
-	int rc = 0, i, j, rqidx, tqidx;
+	int rc = 0, i, j, rqidx, tqidx, n, p, pmask;
 	struct make_dev_args mda;
 	struct intrs_and_queues iaq;
 	struct sge *s;
@@ -618,8 +618,10 @@ t4vf_attach(device_t dev)
 	 * First pass over all the ports - allocate VIs and initialize some
 	 * basic parameters like mac address, port type, etc.
 	 */
+	pmask = sc->params.vfres.pmask;
 	for_each_port(sc, i) {
 		struct port_info *pi;
+		uint8_t mac[ETHER_ADDR_LEN];
 
 		pi = malloc(sizeof(*pi), M_CXGBE, M_ZERO | M_WAITOK);
 		sc->port[i] = pi;
@@ -644,6 +646,15 @@ t4vf_attach(device_t dev)
 			sc->port[i] = NULL;
 			goto done;
 		}
+
+		/* Prefer the MAC address set by the PF, if there is one. */
+		n = 1;
+		p = ffs(pmask) - 1;
+		MPASS(p >= 0);
+		rc = t4vf_get_vf_mac(sc, p, &n, mac);
+		if (rc == 0 && n == 1)
+			t4_os_set_hw_addr(pi, mac);
+		pmask &= ~(1 << p);
 
 		/* No t4_link_start. */
 
@@ -684,13 +695,16 @@ t4vf_attach(device_t dev)
 	s->neq += sc->params.nports;	/* ctrl queues: 1 per port */
 	s->niq = s->nrxq + 1;		/* 1 extra for firmware event queue */
 
+	s->iqmap_sz = s->niq;
+	s->eqmap_sz = s->neq;
+
 	s->rxq = malloc(s->nrxq * sizeof(struct sge_rxq), M_CXGBE,
 	    M_ZERO | M_WAITOK);
 	s->txq = malloc(s->ntxq * sizeof(struct sge_txq), M_CXGBE,
 	    M_ZERO | M_WAITOK);
-	s->iqmap = malloc(s->niq * sizeof(struct sge_iq *), M_CXGBE,
+	s->iqmap = malloc(s->iqmap_sz * sizeof(struct sge_iq *), M_CXGBE,
 	    M_ZERO | M_WAITOK);
-	s->eqmap = malloc(s->neq * sizeof(struct sge_eq *), M_CXGBE,
+	s->eqmap = malloc(s->eqmap_sz * sizeof(struct sge_eq *), M_CXGBE,
 	    M_ZERO | M_WAITOK);
 
 	sc->irq = malloc(sc->intr_count * sizeof(struct irq), M_CXGBE,

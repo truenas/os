@@ -32,17 +32,15 @@
 #include <dev/mlx5/driver.h>
 #include <dev/mlx5/mlx5_ifc.h>
 
-
+struct mlx5_eqe;
 struct mlx5_core_cq {
 	u32			cqn;
 	int			cqe_sz;
 	__be32		       *set_ci_db;
 	__be32		       *arm_db;
-	atomic_t		refcount;
-	struct completion	free;
 	unsigned		vector;
 	int			irqn;
-	void (*comp)		(struct mlx5_core_cq *);
+	void (*comp)		(struct mlx5_core_cq *, struct mlx5_eqe *);
 	void (*event)		(struct mlx5_core_cq *, int);
 	struct mlx5_uar	       *uar;
 	u32			cons_index;
@@ -157,7 +155,7 @@ static inline void mlx5_cq_arm(struct mlx5_core_cq *cq, u32 cmd,
 int mlx5_init_cq_table(struct mlx5_core_dev *dev);
 void mlx5_cleanup_cq_table(struct mlx5_core_dev *dev);
 int mlx5_core_create_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
-			u32 *in, int inlen);
+			u32 *in, int inlen, u32 *out, int outlen);
 int mlx5_core_destroy_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq);
 int mlx5_core_query_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 		       u32 *out, int outlen);

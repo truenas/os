@@ -314,6 +314,8 @@ struct port_info {
  	struct port_stats stats;
 	u_int tnl_cong_drops;
 	u_int tx_parse_error;
+	int fcs_reg;
+	uint64_t fcs_base;
 	u_long	tx_toe_tls_records;
 	u_long	tx_toe_tls_octets;
 	u_long	rx_toe_tls_records;
@@ -783,6 +785,8 @@ struct sge {
 	uint16_t iq_base;	/* first abs_id */
 	int eq_start;		/* first cntxt_id */
 	int eq_base;		/* first abs_id */
+	int iqmap_sz;
+	int eqmap_sz;
 	struct sge_iq **iqmap;	/* iq->cntxt_id to iq mapping */
 	struct sge_eq **eqmap;	/* eq->cntxt_id to eq mapping */
 

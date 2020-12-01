@@ -33,6 +33,9 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/linker_set.h>
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -45,6 +48,8 @@ __FBSDID("$FreeBSD$");
 #include <stdbool.h>
 
 #include <machine/vmm.h>
+#include <machine/cpufunc.h>
+#include <machine/specialreg.h>
 #include <vmmapi.h>
 
 #include "acpi.h"
@@ -97,6 +102,7 @@ SET_DECLARE(pci_devemu_set, struct pci_devemu);
 static uint64_t pci_emul_iobase;
 static uint64_t pci_emul_membase32;
 static uint64_t pci_emul_membase64;
+static uint64_t pci_emul_memlim64;
 
 #define	PCI_EMUL_IOBASE		0x2000
 #define	PCI_EMUL_IOLIMIT	0x10000
@@ -106,9 +112,6 @@ static uint64_t pci_emul_membase64;
 SYSRES_MEM(PCI_EMUL_ECFG_BASE, PCI_EMUL_ECFG_SIZE);
 
 #define	PCI_EMUL_MEMLIMIT32	PCI_EMUL_ECFG_BASE
-
-#define	PCI_EMUL_MEMBASE64	0xD000000000UL
-#define	PCI_EMUL_MEMLIMIT64	0xFD00000000UL
 
 static struct pci_devemu *pci_emul_finddev(char *name);
 static void pci_lintr_route(struct pci_devinst *pi);
@@ -450,14 +453,6 @@ pci_emul_alloc_resource(uint64_t *baseptr, uint64_t limit, uint64_t size,
 		return (-1);
 }
 
-int
-pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
-		   uint64_t size)
-{
-
-	return (pci_emul_alloc_pbar(pdi, idx, 0, type, size));
-}
-
 /*
  * Register (or unregister) the MMIO or I/O region associated with the BAR
  * register 'idx' of an emulated pci device.
@@ -582,8 +577,8 @@ update_bar_address(struct pci_devinst *pi, uint64_t addr, int idx, int type)
 }
 
 int
-pci_emul_alloc_pbar(struct pci_devinst *pdi, int idx, uint64_t hostbase,
-		    enum pcibar_type type, uint64_t size)
+pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
+    uint64_t size)
 {
 	int error;
 	uint64_t *baseptr, limit, addr, mask, lobits, bar;
@@ -621,17 +616,11 @@ pci_emul_alloc_pbar(struct pci_devinst *pdi, int idx, uint64_t hostbase,
 		 * Some drivers do not work well if the 64-bit BAR is allocated
 		 * above 4GB. Allow for this by allocating small requests under
 		 * 4GB unless then allocation size is larger than some arbitrary
-		 * number (32MB currently).
+		 * number (128MB currently).
 		 */
-		if (size > 32 * 1024 * 1024) {
-			/*
-			 * XXX special case for device requiring peer-peer DMA
-			 */
-			if (size == 0x100000000UL)
-				baseptr = &hostbase;
-			else
-				baseptr = &pci_emul_membase64;
-			limit = PCI_EMUL_MEMLIMIT64;
+		if (size > 128 * 1024 * 1024) {
+			baseptr = &pci_emul_membase64;
+			limit = pci_emul_memlim64;
 			mask = PCIM_BAR_MEM_BASE;
 			lobits = PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_64 |
 				 PCIM_BAR_MEM_PREFETCH;
@@ -1100,12 +1089,25 @@ init_pci(struct vmctx *ctx)
 	struct slotinfo *si;
 	struct funcinfo *fi;
 	size_t lowmem;
-	int bus, slot, func;
-	int error;
+	uint64_t cpu_maxphysaddr, pci_emul_memresv64;
+	u_int regs[4];
+	int bus, slot, func, error;
 
 	pci_emul_iobase = PCI_EMUL_IOBASE;
 	pci_emul_membase32 = vm_get_lowmem_limit(ctx);
-	pci_emul_membase64 = PCI_EMUL_MEMBASE64;
+
+	do_cpuid(0x80000008, regs);
+	cpu_maxphysaddr = 1ULL << (regs[0] & 0xff);
+	if (cpu_maxphysaddr > VM_MAXUSER_ADDRESS)
+		cpu_maxphysaddr = VM_MAXUSER_ADDRESS;
+	pci_emul_memresv64 = cpu_maxphysaddr / 4;
+	/*
+	 * Max power of 2 that is less then
+	 * cpu_maxphysaddr - pci_emul_memresv64.
+	 */
+	pci_emul_membase64 = 1ULL << (flsl(cpu_maxphysaddr -
+	    pci_emul_memresv64) - 1);
+	pci_emul_memlim64 = cpu_maxphysaddr;
 
 	for (bus = 0; bus < MAXBUSES; bus++) {
 		if ((bi = pci_businfo[bus]) == NULL)
