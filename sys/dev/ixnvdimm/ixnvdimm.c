@@ -1257,10 +1257,12 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 	    sas[sai]->Address + mm->RegionOffset + size - 1, size);
 	ivar->handle = handle;
 	ivar->adr = adr;
-	if (sas[sai]->Flags & ACPI_NFIT_PROXIMITY_VALID)
-		ivar->domain = sas[sai]->ProximityDomain;
-	else
+	if (sas[sai]->Flags & ACPI_NFIT_PROXIMITY_VALID) {
+		ivar->domain = acpi_map_pxm_to_vm_domainid(
+		    sas[sai]->ProximityDomain);
+	} else {
 		ivar->domain = -1;
+	}
 	ivar->size = mm->RegionSize;
 	ivar->interleave = mm->InterleaveWays;
 
@@ -1339,10 +1341,12 @@ nvdimm_root_attach(device_t dev)
 		resource_list_init(&ivar->resources);
 		resource_list_add(&ivar->resources, SYS_RES_MEMORY,
 		    0, sa->Address, sa->Address + sa->Length, sa->Length);
-		if (sa->Flags & ACPI_NFIT_PROXIMITY_VALID)
-			ivar->domain = sa->ProximityDomain;
-		else
+		if (sa->Flags & ACPI_NFIT_PROXIMITY_VALID) {
+			ivar->domain = acpi_map_pxm_to_vm_domainid(
+			    sa->ProximityDomain);
+		} else {
 			ivar->domain = -1;
+		}
 		ivar->size = sa->Length;
 
 		child = device_add_child(dev, "pmem", sa->RangeIndex - 1);
