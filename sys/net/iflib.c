@@ -591,6 +591,10 @@ SYSCTL_INT(_net_iflib, OID_AUTO, min_tx_latency, CTLFLAG_RW,
 static int iflib_no_tx_batch = 0;
 SYSCTL_INT(_net_iflib, OID_AUTO, no_tx_batch, CTLFLAG_RW,
 		   &iflib_no_tx_batch, 0, "minimize transmit latency at the possible expense of throughput");
+static int iflib_timer_default = 1000;
+SYSCTL_INT(_net_iflib, OID_AUTO, timer_default, CTLFLAG_RW,
+		   &iflib_timer_default, 0, "number of ticks between iflib_timer calls");
+
 
 
 #if IFLIB_DEBUG_COUNTERS
@@ -2462,7 +2466,7 @@ iflib_timer(void *arg)
 	** can be done without the lock because its RO
 	** and the HUNG state will be static if set.
 	*/
-	if (this_tick - txq->ift_last_timer_tick >= hz / 2) {
+	if (this_tick - txq->ift_last_timer_tick >= iflib_timer_default) {
 		txq->ift_last_timer_tick = this_tick;
 		IFDI_TIMER(ctx, txq->ift_id);
 		if ((txq->ift_qstatus == IFLIB_QUEUE_HUNG) &&
@@ -2484,7 +2488,8 @@ iflib_timer(void *arg)
 
 	sctx->isc_pause_frames = 0;
 	if (if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_RUNNING) 
-		callout_reset_on(&txq->ift_timer, hz / 2, iflib_timer, txq, txq->ift_timer.c_cpu);
+		callout_reset_on(&txq->ift_timer, iflib_timer_default, iflib_timer,
+		    txq, txq->ift_timer.c_cpu);
 	return;
 
  hung:
@@ -2602,7 +2607,7 @@ done:
 	IFDI_INTR_ENABLE(ctx);
 	txq = ctx->ifc_txqs;
 	for (i = 0; i < sctx->isc_ntxqsets; i++, txq++)
-		callout_reset_on(&txq->ift_timer, hz/2, iflib_timer, txq,
+		callout_reset_on(&txq->ift_timer, iflib_timer_default, iflib_timer, txq,
 			txq->ift_timer.c_cpu);
 
         /* Re-enable txsync/rxsync. */
@@ -4054,7 +4059,7 @@ _task_fn_admin(void *context)
 	}
 	IFDI_UPDATE_ADMIN_STATUS(ctx);
 	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_ntxqsets; i++, txq++) {
-		callout_reset_on(&txq->ift_timer, hz / 2, iflib_timer, txq,
+		callout_reset_on(&txq->ift_timer, iflib_timer_default, iflib_timer, txq,
 		    txq->ift_timer.c_cpu);
 	}
 	IFDI_LINK_INTR_ENABLE(ctx);
@@ -5684,6 +5689,7 @@ iflib_device_iov_add_vf(device_t dev, uint16_t vfnum, const nvlist_t *params)
 static int
 iflib_module_init(void)
 {
+	iflib_timer_default = hz / 2;
 	return (0);
 }
 
