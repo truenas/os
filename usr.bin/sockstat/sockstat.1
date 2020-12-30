@@ -27,7 +27,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd July 3, 2018
+.Dd December 30, 2020
 .Dt SOCKSTAT 1
 .Os
 .Sh NAME
@@ -35,7 +35,7 @@
 .Nd list open sockets
 .Sh SYNOPSIS
 .Nm
-.Op Fl 46cLlSsUuvw
+.Op Fl 46cLlnSsUuvw
 .Op Fl j Ar jid
 .Op Fl p Ar ports
 .Op Fl P Ar protocols
@@ -68,6 +68,8 @@ or do not contain the IPv6 loopback address
 .Li ::1 .
 .It Fl l
 Show listening sockets.
+.It Fl n
+Do not resolve numeric UIDs to user names.
 .It Fl p Ar ports
 Only show Internet sockets if the local or foreign port number
 is on the specified list.
