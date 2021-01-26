@@ -36,6 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/bio.h>
 #include <sys/bus.h>
 #include <sys/conf.h>
+#include <sys/endian.h>
 #include <sys/malloc.h>
 #include <sys/linker.h>
 #include <sys/priv.h>
@@ -826,7 +827,7 @@ evaluate_dsm_int(ACPI_HANDLE handle, const uint8_t *uuid, int rev, int func,
 }
 
 static int
-nvdimm_sysctl_raw(SYSCTL_HANDLER_ARGS)
+nvdimm_mdsm_sysctl_raw(SYSCTL_HANDLER_ARGS)
 {
 	device_t dev = arg1;
 	ACPI_OBJECT *obj, arg, argb;
@@ -896,7 +897,7 @@ nvdimm_read_i2c(device_t dev, int page, int off)
 }
 
 static int
-nvdimm_sysctl_dump_i2c(SYSCTL_HANDLER_ARGS)
+nvdimm_mdsm_sysctl_dump_i2c(SYSCTL_HANDLER_ARGS)
 {
 	device_t dev = arg1;
 	struct nvdimm_child *ivar;
@@ -957,7 +958,7 @@ nvdimm_sysctl_dump_i2c(SYSCTL_HANDLER_ARGS)
 }
 
 static int
-nvdimm_sysctl(SYSCTL_HANDLER_ARGS)
+nvdimm_mdsm_sysctl(SYSCTL_HANDLER_ARGS)
 {
 	device_t dev = arg1;
 	ACPI_OBJECT *obj;
@@ -1091,6 +1092,8 @@ nvdimm_attach(device_t dev)
 	struct nvdimm_child *ivar;
 	char buf[16];
 	uint64_t val;
+	ACPI_BUFFER output;
+	ACPI_OBJECT *obj;
 	ACPI_STATUS status;
 	int i;
 
@@ -1102,6 +1105,57 @@ nvdimm_attach(device_t dev)
 	if (ACPI_FAILURE(status))
 		device_printf(dev, "failed to install notify handler\n");
 
+	output.Length = ACPI_ALLOCATE_BUFFER;
+	output.Pointer = NULL;
+	status = AcpiEvaluateObject(ivar->handle, "_NCH", NULL, &output);
+	if (!ACPI_FAILURE(status)) {
+		obj = (ACPI_OBJECT *)output.Pointer;
+		if (obj->Type == ACPI_TYPE_BUFFER &&
+		    le16dec(&obj->Buffer.Pointer[0]) == 0) {
+			val = le16dec(&obj->Buffer.Pointer[4]);
+			if (val & 1) {
+				device_printf(dev,
+				    "Overall Health Status Flags: 0x%b\n",
+				    le32dec(&obj->Buffer.Pointer[6]),
+				    "\020"
+				    "\001MAINTENANCE_NEEDED"
+				    "\002PERFORMANCE_DEGRADED"
+				    "\011WRITE_PERSISTENCY_LOSS_IN_EVENT_OF_POWER_LOSS"
+				    "\012WRITE_PERSISTENCY_LOSS_IN_EVENT_OF_OFFLINE"
+				    "\013WRITE_PERSISTENCY_LOSS_IMMINENT"
+				    "\021ALL_DATA_LOSS_IN_THE_EVENT_OF_POWER_LOSS"
+				    "\022ALL_DATA_LOSS_IN_THE_EVENT_OF_OFFLINE"
+				    "\023ALL_DATA_LOSS_IMMINENT"
+				    );
+			}
+			if (val & 2) {
+				device_printf(dev,
+				    "Overall Health Status Attributes: 0x%b\n",
+				    le32dec(&obj->Buffer.Pointer[10]),
+				    "\020"
+				    "\001PERMANENT_HEALTH_CONDITION"
+				    );
+			}
+		}
+		AcpiOsFree(obj);
+	}
+	output.Length = ACPI_ALLOCATE_BUFFER;
+	output.Pointer = NULL;
+	status = AcpiEvaluateObject(ivar->handle, "_NBS", NULL, &output);
+	if (!ACPI_FAILURE(status)) {
+		obj = (ACPI_OBJECT *)output.Pointer;
+		if (obj->Type == ACPI_TYPE_BUFFER &&
+		    le16dec(&obj->Buffer.Pointer[0]) == 0) {
+			val = le16dec(&obj->Buffer.Pointer[4]);
+			if (val & 1) {
+				device_printf(dev,
+				    "Data Loss Count: %u\n",
+				    le32dec(&obj->Buffer.Pointer[6]));
+			}
+		}
+		AcpiOsFree(obj);
+	}
+
 	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid1, 1, 0, NULL, &val) == 0
 	    && val > 1) {
 		if (bootverbose)
@@ -1109,19 +1163,19 @@ nvdimm_attach(device_t dev)
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		    "critical_health", CTLFLAG_RD | CTLTYPE_STRING |
 		    CTLFLAG_MPSAFE, dev, 10,
-		    nvdimm_sysctl, "A", "Get Critical Health Info");
+		    nvdimm_mdsm_sysctl, "A", "Get Critical Health Info");
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		    "nvdimm_health", CTLFLAG_RD | CTLTYPE_STRING |
 		    CTLFLAG_MPSAFE, dev, 11,
-		    nvdimm_sysctl, "A", "Get NVDIMM-N Health Info");
+		    nvdimm_mdsm_sysctl, "A", "Get NVDIMM-N Health Info");
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		    "es_health", CTLFLAG_RD | CTLTYPE_STRING |
 		    CTLFLAG_MPSAFE, dev, 12,
-		    nvdimm_sysctl, "A", "Get Energy Source Health Info");
+		    nvdimm_mdsm_sysctl, "A", "Get Energy Source Health Info");
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		    "dump_i2c", CTLFLAG_RD | CTLTYPE_STRING |
 		    CTLFLAG_MPSAFE | CTLFLAG_SKIP, dev, 0,
-		    nvdimm_sysctl_dump_i2c, "A", "Dump all i2c pages");
+		    nvdimm_mdsm_sysctl_dump_i2c, "A", "Dump all i2c pages");
 		SYSCTL_ADD_QUAD(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		    "arg3", CTLFLAG_RW | CTLFLAG_SKIP,
 		    &ivar->arg3, "Argument 3 for raw function calls");
@@ -1130,7 +1184,7 @@ nvdimm_attach(device_t dev)
 			SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 			    buf, CTLFLAG_RD | CTLTYPE_OPAQUE |
 			    CTLFLAG_MPSAFE | CTLFLAG_SKIP, dev, i,
-			    nvdimm_sysctl_raw, "S", "Raw result of function call");
+			    nvdimm_mdsm_sysctl_raw, "S", "Raw result of function call");
 		}
 	}
 	if (evaluate_dsm_int(ivar->handle, nvdimm_dsm_guid2, 1, 0, NULL, &val) == 0
