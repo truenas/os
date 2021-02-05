@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/smp.h>
 #include <sys/sysctl.h>
 #include <sys/uio.h>
+#include <sys/uuid.h>
 #include <sys/vmmeter.h>
 
 #include <vm/vm.h>      /* vtophys */
@@ -72,6 +73,13 @@ __FBSDID("$FreeBSD$");
 #define	ELF_KERN_STR	("elf"__XSTRING(__ELF_WORD_SIZE)" kernel")
 
 #define	PMEM_NUM_TR	256
+
+#define	ACPI_ADR_NVDIMM_DIMM(adr)	(((adr) & 0x0000000f))
+#define	ACPI_ADR_NVDIMM_CHAN(adr)	(((adr) & 0x000000f0) >> 4)
+#define	ACPI_ADR_NVDIMM_CTRL(adr)	(((adr) & 0x00000f00) >> 8)
+#define	ACPI_ADR_NVDIMM_SOCK(adr)	(((adr) & 0x0000f000) >> 12)
+#define	ACPI_ADR_NVDIMM_NODE(adr)	(((adr) & 0x0fff0000) >> 16)
+#define	ACPI_ADR_NVDIMM_PU(adr)		(((adr) & 0x80000000) >> 31)
 
 struct pmem_dma_ch;
 struct pmem_disk;
@@ -725,6 +733,9 @@ struct nvdimm_root {
 };
 
 struct nvdimm_child {
+	ACPI_NFIT_SYSTEM_ADDRESS sa;
+	ACPI_NFIT_MEMORY_MAP mm;
+	ACPI_NFIT_CONTROL_REGION cr;
 	struct resource_list resources;
 	ACPI_HANDLE handle;
 	int adr;
@@ -1259,7 +1270,8 @@ struct nvdimm_root_walk_ctx {
 	device_t	dev;
 	ACPI_NFIT_SYSTEM_ADDRESS **sas;
 	ACPI_NFIT_MEMORY_MAP **mms;
-	u_int		san, mmn;
+	ACPI_NFIT_CONTROL_REGION **crs;
+	u_int		san, mmn, crn;
 };
 
 static ACPI_STATUS
@@ -1270,10 +1282,11 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 	ACPI_STATUS status;
 	ACPI_NFIT_SYSTEM_ADDRESS **sas = wctx->sas;
 	ACPI_NFIT_MEMORY_MAP *mm;
+	ACPI_NFIT_CONTROL_REGION **crs = wctx->crs;
 	struct nvdimm_child	*ivar;
 	device_t	child;
 	uint64_t	size;
-	u_int adr, sai, mmi;
+	u_int adr, sai, mmi, cri;
 
 	status = acpi_GetInteger(handle, "_ADR", &adr);
 	if (ACPI_FAILURE(status))
@@ -1299,11 +1312,26 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 		return_ACPI_STATUS(AE_OK);
 	}
 
+	if (mm->RegionIndex == 0)
+		return_ACPI_STATUS(AE_OK);
+	for (cri = 0; cri < wctx->crn; cri++) {
+		if (crs[cri]->RegionIndex == mm->RegionIndex)
+			break;
+	}
+	if (cri >= wctx->crn) {
+		device_printf(dev, "Unknown NVDIMM Control Region Structure Index: %u\n",
+		    mm->RegionIndex);
+		return_ACPI_STATUS(AE_OK);
+	}
+
 	if (device_find_child(dev, "nvdimm", mm->RegionId) != NULL)
 		return_ACPI_STATUS(AE_OK);
 
 	ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
 		M_WAITOK | M_ZERO);
+	ivar->sa = *sas[sai];
+	ivar->mm = *mm;
+	ivar->cr = *crs[cri];
 	resource_list_init(&ivar->resources);
 	size = mm->RegionSize * MAX(1, mm->InterleaveWays);
 	resource_list_add(&ivar->resources, SYS_RES_MEMORY,
@@ -1348,11 +1376,12 @@ nvdimm_root_attach(device_t dev)
 	uint8_t		*end;
 	ACPI_NFIT_SYSTEM_ADDRESS *sas[64], *sa;
 	ACPI_NFIT_MEMORY_MAP *mms[64];
+	ACPI_NFIT_CONTROL_REGION *crs[64];
 	struct nvdimm_root_walk_ctx wctx;
 	struct nvdimm_child	*ivar;
 	device_t	child;
 	uint64_t	val;
-	int		error, sai, san = 0, mmn = 0;
+	int		error, sai, san = 0, mmn = 0, crn = 0;
 
 	/* Search for NFIT table. */
 	status = AcpiGetTable("NFIT", 0, (ACPI_TABLE_HEADER **)&nfit);
@@ -1371,6 +1400,8 @@ nvdimm_root_attach(device_t dev)
 			sas[san++] = (ACPI_NFIT_SYSTEM_ADDRESS *)subtable;
 		if (subtable->Type == ACPI_NFIT_TYPE_MEMORY_MAP)
 			mms[mmn++] = (ACPI_NFIT_MEMORY_MAP *)subtable;
+		if (subtable->Type == ACPI_NFIT_TYPE_CONTROL_REGION)
+			crs[crn++] = (ACPI_NFIT_CONTROL_REGION *)subtable;
 		subtable = (ACPI_NFIT_HEADER *)((char *)subtable +
 		    subtable->Length);
 	}
@@ -1378,8 +1409,10 @@ nvdimm_root_attach(device_t dev)
 	wctx.dev = dev;
 	wctx.sas = sas;
 	wctx.mms = mms;
+	wctx.crs = crs;
 	wctx.san = san;
 	wctx.mmn = mmn;
+	wctx.crn = crn;
 	status = AcpiWalkNamespace(ACPI_TYPE_DEVICE, acpi_get_handle(dev), 100,
 	    nvdimm_root_walk_dev, NULL, &wctx, NULL);
 
@@ -1392,6 +1425,7 @@ nvdimm_root_attach(device_t dev)
 
 		ivar = malloc(sizeof(struct nvdimm_child), M_DEVBUF,
 		    M_WAITOK | M_ZERO);
+		ivar->sa = *sa;
 		resource_list_init(&ivar->resources);
 		resource_list_add(&ivar->resources, SYS_RES_MEMORY,
 		    0, sa->Address, sa->Address + sa->Length, sa->Length);
@@ -1486,15 +1520,54 @@ nvdimm_root_print_child(device_t dev, device_t child)
 }
 
 static int
+nvdimm_root_child_pnpinfo_str(device_t dev, device_t child, char *buf,
+    size_t buflen)
+{
+	struct nvdimm_child *ivar;
+	struct uuid uuid;
+	char ubuf[38];
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	if (ivar->handle != NULL) {
+		snprintf(buf, buflen,
+		    "vendor=0x%04x device=0x%04x revision=0x%02x "
+		    "subvendor=0x%04x subdevice=0x%04x subrevision=0x%02x "
+		    "class=0x%04x",
+		    ivar->cr.VendorId, ivar->cr.DeviceId, ivar->cr.RevisionId,
+		    ivar->cr.SubsystemVendorId, ivar->cr.SubsystemDeviceId,
+		    ivar->cr.SubsystemRevisionId, ivar->cr.Code);
+	} else {
+		le_uuid_dec(ivar->sa.RangeGuid, &uuid);
+		snprintf_uuid(ubuf, sizeof(ubuf), &uuid);
+		snprintf(buf, buflen, "type=%s", ubuf);
+	}
+	return (0);
+}
+
+static int
 nvdimm_root_child_location_str(device_t dev, device_t child, char *buf,
     size_t buflen)
 {
 	struct nvdimm_child *ivar;
+	int n = 0;
+	uint32_t a;
 
 	ivar = (struct nvdimm_child *)device_get_ivars(child);
 	if (ivar->handle != NULL) {
-		snprintf(buf, buflen, "handle=%s _ADR=%u",
-		    acpi_name(ivar->handle), ivar->adr);
+		a = ivar->adr;
+		if (!ACPI_ADR_NVDIMM_PU(ivar->adr)) {
+			n = snprintf(buf, buflen, "node=%u socket=%u "
+			    "controller=%u channel=%u dimm=%u ",
+			    ACPI_ADR_NVDIMM_NODE(a), ACPI_ADR_NVDIMM_SOCK(a),
+			    ACPI_ADR_NVDIMM_CTRL(a), ACPI_ADR_NVDIMM_CHAN(a),
+			    ACPI_ADR_NVDIMM_DIMM(a));
+		}
+		snprintf(buf + n, buflen - n,
+		    "handle=%s _ADR=0x%x PhysicalId=0x%04x SerialNumber=0x%08X",
+		    acpi_name(ivar->handle), a, ivar->mm.PhysicalId,
+		    be32toh(ivar->cr.SerialNumber));
+	} else {
+		snprintf(buf, buflen, "RangeIndex=0x%04x", ivar->sa.RangeIndex);
 	}
 	return (0);
 }
@@ -1506,6 +1579,7 @@ static device_method_t nvdimm_root_methods[] = {
 	DEVMETHOD(device_detach,	nvdimm_root_detach),
 
 	DEVMETHOD(bus_print_child,	nvdimm_root_print_child),
+	DEVMETHOD(bus_child_pnpinfo_str, nvdimm_root_child_pnpinfo_str),
 	DEVMETHOD(bus_child_location_str, nvdimm_root_child_location_str),
 	DEVMETHOD(bus_get_domain,	nvdimm_root_get_domain),
 	DEVMETHOD(bus_get_resource_list,nvdimm_root_get_resource_list),
