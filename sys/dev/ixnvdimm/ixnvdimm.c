@@ -1,6 +1,5 @@
 /*-
- * Copyright (c) 2016-2019 Alexander Motin <mav@FreeBSD.org>
- * All rights reserved.
+ * Copyright (c) 2016-2020 Alexander Motin <mav@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -67,6 +66,7 @@ __FBSDID("$FreeBSD$");
 
 #include <dev/acpica/acpivar.h>
 
+#include "ixnvdimm.h"
 #include "../ntb/ntb.h"
 #include "../ioat/ioat.h"
 
@@ -745,6 +745,18 @@ struct nvdimm_child {
 	uint64_t arg3;
 };
 
+struct nvdimm_softc {
+	device_t sc_dev;
+	struct cdev *sc_devnode;
+};
+
+static d_ioctl_t nvdimm_ioctl;
+static struct cdevsw nvdimm_cdevsw = {
+        .d_version =    D_VERSION,
+        .d_ioctl =      nvdimm_ioctl,
+        .d_name =       "nvdimm",
+};
+
 /* 2f10e7a4-9e91-11e4-89d3-123b93f75cba */
 static const uint8_t nvdimm_root_dsm_guid[] = {
 	0xa4, 0xe7, 0x10, 0x2f,
@@ -1069,6 +1081,70 @@ nvdimm_mdsm_sysctl(SYSCTL_HANDLER_ARGS)
 	return (EINVAL);
 }
 
+int
+nvdimm_ioctl(struct cdev *cdev, u_long cmd, caddr_t data,
+    int flags, struct thread *td)
+{
+	device_t dev = cdev->si_drv1;
+	struct nvdimm_child *ivar = (struct nvdimm_child *)device_get_ivars(dev);
+	int error = EINVAL;
+
+	switch (cmd) {
+	case IXNVDIMM_INFO:
+	{
+		struct ixnvdimm_info *i = (struct ixnvdimm_info *)data;
+
+		i->VendorId = ivar->cr.VendorId;
+		i->DeviceId = ivar->cr.DeviceId;
+		i->RevisionId = ivar->cr.RevisionId;
+		i->SubsystemVendorId = ivar->cr.SubsystemVendorId;
+		i->SubsystemDeviceId = ivar->cr.SubsystemDeviceId;
+		i->SubsystemRevisionId = ivar->cr.SubsystemRevisionId;
+		i->SerialNumber = ivar->cr.SerialNumber;
+		return (0);
+	}
+	case IXNVDIMM_DSM:
+	{
+		struct ixnvdimm_dsm *d = (struct ixnvdimm_dsm *)data;
+		ACPI_OBJECT *obj, arg, argb;
+		uint8_t *buf;
+		char uuid[16];
+
+		buf = malloc(d->in_size, M_DEVBUF, M_WAITOK | M_ZERO);
+		error = copyin(d->in_buf, buf, d->in_size);
+		if (error) {
+			free(buf, M_DEVBUF);
+			return (error);
+		}
+		argb.Type = ACPI_TYPE_BUFFER;
+		argb.Buffer.Pointer = (void *)buf;
+		argb.Buffer.Length = d->in_size;
+		arg.Type = ACPI_TYPE_PACKAGE;
+		arg.Package.Count = 1;
+		arg.Package.Elements = &argb;
+		le_uuid_enc(uuid, &d->guid);
+		obj = evaluate_dsm(ivar->handle, uuid, d->rev, d->func, &arg);
+		if (obj == NULL) {
+			free(buf, M_DEVBUF);
+			return (EIO);
+		}
+		if (obj->Type != ACPI_TYPE_BUFFER) {
+			AcpiOsFree(obj);
+			free(buf, M_DEVBUF);
+			return (EIO);
+		}
+		error = copyout(obj->Buffer.Pointer, d->out_buf,
+		    MIN(d->out_size, obj->Buffer.Length));
+		d->out_size = obj->Buffer.Length;
+		AcpiOsFree(obj);
+		free(buf, M_DEVBUF);
+		return (error);
+	}
+	};
+
+	return (error);
+}
+
 static void
 nvdimm_notify(ACPI_HANDLE handle, UINT32 notify, void *context)
 {
@@ -1098,15 +1174,17 @@ nvdimm_probe(device_t dev)
 static int
 nvdimm_attach(device_t dev)
 {
+	struct nvdimm_softc *sc = device_get_softc(dev);
 	struct sysctl_ctx_list *ctx = device_get_sysctl_ctx(dev);
 	struct sysctl_oid *tree = device_get_sysctl_tree(dev);
 	struct nvdimm_child *ivar;
+	struct make_dev_args devargs;
 	char buf[16];
 	uint64_t val;
 	ACPI_BUFFER output;
 	ACPI_OBJECT *obj;
 	ACPI_STATUS status;
-	int i;
+	int i, err;
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
 	ivar->arg3 = UINT64_MAX;
@@ -1204,15 +1282,30 @@ nvdimm_attach(device_t dev)
 			device_printf(dev, "Intel _DSM supported (0x%jx)\n", val);
 	}
 
+	make_dev_args_init(&devargs);
+	devargs.mda_devsw = &nvdimm_cdevsw;
+	devargs.mda_uid = UID_ROOT;
+	devargs.mda_gid = GID_WHEEL;
+	devargs.mda_mode = 0600;
+	devargs.mda_si_drv1 = dev;
+	err = make_dev_s(&devargs, &sc->sc_devnode, "nvdimm%d",
+	    device_get_unit(dev));
+	if (err != 0)
+		device_printf(dev, "failed to create character device\n");
+
 	return (0);
 }
 
 static int
 nvdimm_detach(device_t dev)
 {
+	struct nvdimm_softc *sc = device_get_softc(dev);
 	struct nvdimm_child *ivar;
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+
+	if (sc->sc_devnode)
+		destroy_dev(sc->sc_devnode);
 
 	AcpiRemoveNotifyHandler(ivar->handle, ACPI_DEVICE_NOTIFY,
 	    nvdimm_notify);
@@ -1231,7 +1324,7 @@ static device_method_t nvdimm_methods[] = {
 static driver_t nvdimm_driver = {
 	"nvdimm",
 	nvdimm_methods,
-	0,
+	sizeof(struct nvdimm_softc),
 };
 
 static devclass_t nvdimm_devclass;
