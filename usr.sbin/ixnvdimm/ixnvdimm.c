@@ -972,7 +972,8 @@ main(int argc, char *argv[])
 	if (r) {
 		if (off >= 0) {
 			for (b = 0; b < size; b++)
-				printf("%02x\n", i2c_read(fd, page, off + size - b - 1));
+				printf("%02x", i2c_read(fd, page, off + size - b - 1));
+			printf("\n");
 			goto done;
 		}
 		for (i = 0; regs[i].name != NULL; i++) {
