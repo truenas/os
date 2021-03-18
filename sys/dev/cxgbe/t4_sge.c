@@ -198,6 +198,10 @@ static int lro_mbufs = 0;
 SYSCTL_INT(_hw_cxgbe, OID_AUTO, lro_mbufs, CTLFLAG_RDTUN, &lro_mbufs, 0,
     "Enable presorting of LRO frames");
 
+static int t4_tx_coalesce = 0;
+SYSCTL_INT(_hw_cxgbe, OID_AUTO, tx_coalesce, CTLFLAG_RWTUN, &t4_tx_coalesce, 0,
+    "tx coalescing allowed");
+
 static int service_iq(struct sge_iq *, int);
 static int service_iq_fl(struct sge_iq *, int);
 static struct mbuf *get_fl_payload(struct adapter *, struct sge_fl *, uint32_t);
@@ -2777,6 +2781,8 @@ eth_tx(struct mp_ring *r, u_int cidx, u_int pidx, bool *coalescing)
 		if (avail < 2 * SGE_MAX_WR_NDESC)
 			avail += reclaim_tx_descs(txq, 64);
 
+		if (t4_tx_coalesce == 0 && txp->npkt == 0)
+			goto skip_coalescing;
 		if (txp->npkt > 0 || remaining > 1 || txp->score > 3 ||
 		    atomic_load_int(&txq->eq.equiq) != 0) {
 			if (sc->flags & IS_VF)
@@ -2833,6 +2839,7 @@ eth_tx(struct mp_ring *r, u_int cidx, u_int pidx, bool *coalescing)
 
 		MPASS(rc != 0 && rc != EAGAIN);
 		MPASS(txp->npkt == 0);
+skip_coalescing:
 		wr = &eq->desc[eq->pidx];
 		if (mbuf_cflags(m0) & MC_RAW_WR) {
 			n = write_raw_wr(txq, wr, m0, avail);
