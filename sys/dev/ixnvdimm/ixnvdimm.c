@@ -180,6 +180,10 @@ static u_int ntb_pmem_min_dma_size = 24*1024;
 SYSCTL_UINT(_hw_pmem, OID_AUTO, min_dma_size, CTLFLAG_RWTUN,
     &ntb_pmem_min_dma_size, 0, "Minimal I/O size to use DMA");
 
+#ifndef MAXPHYS
+#define MAXPHYS maxphys
+#endif
+
 static void
 pmem_dma_init(device_t dev)
 {
@@ -647,7 +651,7 @@ pmem_attach(device_t dev)
 	/* Get NUMA domain of the NVDIMM. */
 	if (bus_get_domain(dev, &sc->domain) != 0)
 #if (__FreeBSD_version >= 1200000)
-		sc->domain = _vm_phys_domain(sc->paddr);
+		sc->domain = vm_phys_domain(sc->paddr);
 #else
 		sc->domain = 0;
 #endif
@@ -1352,7 +1356,7 @@ nvdimm_root_probe(device_t dev)
 	if (acpi_disabled("nvdimm"))
 		return (ENXIO);
 	if (acpi_get_handle(dev) != NULL &&
-	    ACPI_ID_PROBE(device_get_parent(dev), dev, nvdimm_root_ids) == NULL)
+	    ACPI_ID_PROBE(device_get_parent(dev), dev, nvdimm_root_ids, NULL) > 0)
 		return (ENXIO);
 
 	device_set_desc(dev, "NVDIMM root");
