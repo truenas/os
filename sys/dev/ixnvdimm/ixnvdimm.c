@@ -1020,7 +1020,8 @@ nvdimm_mdsm_sysctl(SYSCTL_HANDLER_ARGS)
 		    "\003PERSISTENCY_RESTORED"
 		    "\004BELOW_WARNING_THRESHOLD"
 		    "\005PERMANENT_HARDWARE_FAILURE"
-		    "\006EVENT_N_LOW");
+		    "\006EVENT_N_LOW"
+		    "\007ARM_INFO");
 	} else if (arg2 == 11) {
 		sbuf_printf(&sb, "Module Health: 0x%b\n",
 		    ((uint16_t)obj->Buffer.Pointer[5] << 8) | obj->Buffer.Pointer[4],
