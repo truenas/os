@@ -105,6 +105,7 @@ static int	realtimer_settime(struct itimer *, int,
 static int	realtimer_delete(struct itimer *);
 static void	realtimer_clocktime(clockid_t, struct timespec *);
 static void	realtimer_expire(void *);
+static void	realtimer_expire_l(struct itimer *it, bool proc_locked);
 
 static int	register_posix_clock(int, const struct kclock *);
 static void	itimer_fire(struct itimer *it);
@@ -881,6 +882,52 @@ kern_setitimer(struct thread *td, u_int which, struct itimerval *aitv,
 	return (0);
 }
 
+static void
+realitexpire_reset_callout(struct proc *p, sbintime_t *isbtp)
+{
+	sbintime_t prec;
+
+	prec = isbtp == NULL ? tvtosbt(p->p_realtimer.it_interval) : *isbtp;
+	callout_reset_sbt(&p->p_itcallout, tvtosbt(p->p_realtimer.it_value),
+	    prec >> tc_precexp, realitexpire, p, C_ABSOLUTE);
+}
+
+void
+itimer_proc_continue(struct proc *p)
+{
+	struct timeval ctv;
+	struct itimer *it;
+	int id;
+
+	PROC_LOCK_ASSERT(p, MA_OWNED);
+
+	if ((p->p_flag2 & P2_ITSTOPPED) != 0) {
+		p->p_flag2 &= ~P2_ITSTOPPED;
+		microuptime(&ctv);
+		if (timevalcmp(&p->p_realtimer.it_value, &ctv, >=))
+			realitexpire(p);
+		else
+			realitexpire_reset_callout(p, NULL);
+	}
+
+	if (p->p_itimers != NULL) {
+		for (id = 3; id < TIMER_MAX; id++) {
+			it = p->p_itimers->its_timers[id];
+			if (it == NULL)
+				continue;
+			if ((it->it_flags & ITF_PSTOPPED) != 0) {
+				ITIMER_LOCK(it);
+				if ((it->it_flags & ITF_PSTOPPED) != 0) {
+					it->it_flags &= ~ITF_PSTOPPED;
+					if ((it->it_flags & ITF_DELETING) == 0)
+						realtimer_expire_l(it, true);
+				}
+				ITIMER_UNLOCK(it);
+			}
+		}
+	}
+}
+
 /*
  * Real interval timer expired:
  * send process whose timer expired an alarm signal.
@@ -908,6 +955,7 @@ realitexpire(void *arg)
 			wakeup(&p->p_itcallout);
 		return;
 	}
+
 	isbt = tvtosbt(p->p_realtimer.it_interval);
 	if (isbt >= sbt_timethreshold)
 		getmicrouptime(&ctv);
@@ -917,8 +965,14 @@ realitexpire(void *arg)
 		timevaladd(&p->p_realtimer.it_value,
 		    &p->p_realtimer.it_interval);
 	} while (timevalcmp(&p->p_realtimer.it_value, &ctv, <=));
-	callout_reset_sbt(&p->p_itcallout, tvtosbt(p->p_realtimer.it_value),
-	    isbt >> tc_precexp, realitexpire, p, C_ABSOLUTE);
+
+	if (P_SHOULDSTOP(p) || P_KILLED(p)) {
+		p->p_flag2 |= P2_ITSTOPPED;
+		return;
+	}
+
+	p->p_flag2 &= ~P2_ITSTOPPED;
+	realitexpire_reset_callout(p, &isbt);
 }
 
 /*
@@ -1610,16 +1664,13 @@ itimespecfix(struct timespec *ts)
 	.tv_nsec = (ns) % 1000000000		\
 }
 
-/* Timeout callback for realtime timer */
 static void
-realtimer_expire(void *arg)
+realtimer_expire_l(struct itimer *it, bool proc_locked)
 {
 	struct timespec cts, ts;
 	struct timeval tv;
-	struct itimer *it;
+	struct proc *p;
 	uint64_t interval, now, overruns, value;
-
-	it = (struct itimer *)arg;
 
 	realtimer_clocktime(it->it_clockid, &cts);
 	/* Only fire if time is reached. */
@@ -1654,24 +1705,47 @@ realtimer_expire(void *arg)
 			/* single shot timer ? */
 			timespecclear(&it->it_time.it_value);
 		}
+
+		p = it->it_proc;
 		if (timespecisset(&it->it_time.it_value)) {
-			timespecsub(&it->it_time.it_value, &cts, &ts);
+			if (P_SHOULDSTOP(p) || P_KILLED(p)) {
+				it->it_flags |= ITF_PSTOPPED;
+			} else {
+				timespecsub(&it->it_time.it_value, &cts, &ts);
+				TIMESPEC_TO_TIMEVAL(&tv, &ts);
+				callout_reset(&it->it_callout, tvtohz(&tv),
+				    realtimer_expire, it);
+			}
+		}
+
+		itimer_enter(it);
+		ITIMER_UNLOCK(it);
+		if (proc_locked)
+			PROC_UNLOCK(p);
+		itimer_fire(it);
+		if (proc_locked)
+			PROC_LOCK(p);
+		ITIMER_LOCK(it);
+		itimer_leave(it);
+	} else if (timespecisset(&it->it_time.it_value)) {
+		p = it->it_proc;
+		if (P_SHOULDSTOP(p) || P_KILLED(p)) {
+			it->it_flags |= ITF_PSTOPPED;
+		} else {
+			ts = it->it_time.it_value;
+			timespecsub(&ts, &cts, &ts);
 			TIMESPEC_TO_TIMEVAL(&tv, &ts);
 			callout_reset(&it->it_callout, tvtohz(&tv),
 			    realtimer_expire, it);
 		}
-		itimer_enter(it);
-		ITIMER_UNLOCK(it);
-		itimer_fire(it);
-		ITIMER_LOCK(it);
-		itimer_leave(it);
-	} else if (timespecisset(&it->it_time.it_value)) {
-		ts = it->it_time.it_value;
-		timespecsub(&ts, &cts, &ts);
-		TIMESPEC_TO_TIMEVAL(&tv, &ts);
-		callout_reset(&it->it_callout, tvtohz(&tv), realtimer_expire,
-		    it);
 	}
+}
+
+/* Timeout callback for realtime timer */
+static void
+realtimer_expire(void *arg)
+{
+	realtimer_expire_l(arg, false);
 }
 
 static void

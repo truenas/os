@@ -52,7 +52,7 @@
  * there.
  * Currently this lives here in the doc/ repository:
  *
- *	documentation/content/en/books/porters-handbook/versions/chapter.adoc
+ *	documentation/content/en/books/porters-handbook/versions/_index.adoc
  *
  * scheme is:  <major><two digit minor>Rxx
  *		'R' is in the range 0 to 4 if this is a release branch or
@@ -60,7 +60,7 @@
  *		in the range 5 to 9.
  */
 #undef __FreeBSD_version
-#define __FreeBSD_version 1300500	/* Master, propagated to newvers */
+#define __FreeBSD_version 1300504	/* Master, propagated to newvers */
 
 /*
  * __FreeBSD_kernel__ indicates that this system uses the kernel of FreeBSD,

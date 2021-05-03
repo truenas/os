@@ -710,15 +710,19 @@ linux_get_fop(struct linux_file *filp, const struct file_operations **fop,
 	ldev = filp->f_cdev;
 	*fop = filp->f_op;
 	if (ldev != NULL) {
-		for (siref = ldev->siref;;) {
-			if ((siref & LDEV_SI_DTR) != 0) {
-				ldev = &dummy_ldev;
-				siref = ldev->siref;
-				*fop = ldev->ops;
-				MPASS((ldev->siref & LDEV_SI_DTR) == 0);
-			} else if (atomic_fcmpset_int(&ldev->siref, &siref,
-			    siref + LDEV_SI_REF)) {
-				break;
+		if (ldev->kobj.ktype == &linux_cdev_static_ktype) {
+			refcount_acquire(&ldev->refs);
+		} else {
+			for (siref = ldev->siref;;) {
+				if ((siref & LDEV_SI_DTR) != 0) {
+					ldev = &dummy_ldev;
+					*fop = ldev->ops;
+					siref = ldev->siref;
+					MPASS((ldev->siref & LDEV_SI_DTR) == 0);
+				} else if (atomic_fcmpset_int(&ldev->siref,
+				    &siref, siref + LDEV_SI_REF)) {
+					break;
+				}
 			}
 		}
 	}
@@ -731,8 +735,13 @@ linux_drop_fop(struct linux_cdev *ldev)
 
 	if (ldev == NULL)
 		return;
-	MPASS((ldev->siref & ~LDEV_SI_DTR) != 0);
-	atomic_subtract_int(&ldev->siref, LDEV_SI_REF);
+	if (ldev->kobj.ktype == &linux_cdev_static_ktype) {
+		linux_cdev_deref(ldev);
+	} else {
+		MPASS(ldev->kobj.ktype == &linux_cdev_ktype);
+		MPASS((ldev->siref & ~LDEV_SI_DTR) != 0);
+		atomic_subtract_int(&ldev->siref, LDEV_SI_REF);
+	}
 }
 
 #define	OPW(fp,td,code) ({			\
@@ -1513,8 +1522,9 @@ linux_file_close(struct file *file, struct thread *td)
 	if (filp->f_vnode != NULL)
 		vdrop(filp->f_vnode);
 	linux_drop_fop(ldev);
-	if (filp->f_cdev != NULL)
-		linux_cdev_deref(filp->f_cdev);
+	ldev = filp->f_cdev;
+	if (ldev != NULL)
+		linux_cdev_deref(ldev);
 	kfree(filp);
 
 	return (error);
@@ -2191,8 +2201,8 @@ linux_completion_done(struct completion *c)
 static void
 linux_cdev_deref(struct linux_cdev *ldev)
 {
-
-	if (refcount_release(&ldev->refs))
+	if (refcount_release(&ldev->refs) &&
+	    ldev->kobj.ktype == &linux_cdev_ktype)
 		kfree(ldev);
 }
 
@@ -2212,13 +2222,16 @@ linux_cdev_release(struct kobject *kobj)
 static void
 linux_cdev_static_release(struct kobject *kobj)
 {
-	struct linux_cdev *cdev;
-	struct kobject *parent;
+	struct cdev *cdev;
+	struct linux_cdev *ldev;
 
-	cdev = container_of(kobj, struct linux_cdev, kobj);
-	parent = kobj->parent;
-	linux_destroy_dev(cdev);
-	kobject_put(parent);
+	ldev = container_of(kobj, struct linux_cdev, kobj);
+	cdev = ldev->cdev;
+	if (cdev != NULL) {
+		destroy_dev(cdev);
+		ldev->cdev = NULL;
+	}
+	kobject_put(kobj->parent);
 }
 
 void
@@ -2229,6 +2242,8 @@ linux_destroy_dev(struct linux_cdev *ldev)
 		return;
 
 	MPASS((ldev->siref & LDEV_SI_DTR) == 0);
+	MPASS(ldev->kobj.ktype == &linux_cdev_ktype);
+
 	atomic_set_int(&ldev->siref, LDEV_SI_DTR);
 	while ((atomic_load_int(&ldev->siref) & ~LDEV_SI_DTR) != 0)
 		pause("ldevdtr", hz / 4);

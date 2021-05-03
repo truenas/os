@@ -102,7 +102,6 @@ static fo_truncate_t	vn_truncate;
 static fo_ioctl_t	vn_ioctl;
 static fo_poll_t	vn_poll;
 static fo_kqfilter_t	vn_kqfilter;
-static fo_stat_t	vn_statfile;
 static fo_close_t	vn_closefile;
 static fo_mmap_t	vn_mmap;
 static fo_fallocate_t	vn_fallocate;
@@ -386,31 +385,38 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	accmode_t accmode;
 	int error;
 
-	if (vp->v_type == VLNK)
-		return (EMLINK);
+	if (vp->v_type == VLNK) {
+		if ((fmode & O_PATH) == 0 || (fmode & FEXEC) != 0)
+			return (EMLINK);
+	}
 	if (vp->v_type == VSOCK)
 		return (EOPNOTSUPP);
 	if (vp->v_type != VDIR && fmode & O_DIRECTORY)
 		return (ENOTDIR);
+
 	accmode = 0;
-	if (fmode & (FWRITE | O_TRUNC)) {
-		if (vp->v_type == VDIR)
-			return (EISDIR);
-		accmode |= VWRITE;
-	}
-	if (fmode & FREAD)
-		accmode |= VREAD;
-	if (fmode & FEXEC)
-		accmode |= VEXEC;
-	if ((fmode & O_APPEND) && (fmode & FWRITE))
-		accmode |= VAPPEND;
+	if ((fmode & O_PATH) == 0) {
+		if ((fmode & (FWRITE | O_TRUNC)) != 0) {
+			if (vp->v_type == VDIR)
+				return (EISDIR);
+			accmode |= VWRITE;
+		}
+		if ((fmode & FREAD) != 0)
+			accmode |= VREAD;
+		if ((fmode & O_APPEND) && (fmode & FWRITE))
+			accmode |= VAPPEND;
 #ifdef MAC
-	if (fmode & O_CREAT)
-		accmode |= VCREAT;
-	if (fmode & O_VERIFY)
+		if ((fmode & O_CREAT) != 0)
+			accmode |= VCREAT;
+#endif
+	}
+	if ((fmode & FEXEC) != 0)
+		accmode |= VEXEC;
+#ifdef MAC
+	if ((fmode & O_VERIFY) != 0)
 		accmode |= VVERIFY;
 	error = mac_vnode_check_open(cred, vp, accmode);
-	if (error)
+	if (error != 0)
 		return (error);
 
 	accmode &= ~(VCREAT | VVERIFY);
@@ -420,6 +426,13 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 		if (error != 0)
 			return (error);
 	}
+	if ((fmode & O_PATH) != 0) {
+		error = VOP_ACCESS(vp, VREAD, cred, td);
+		if (error == 0)
+			fp->f_flag |= FKQALLOWED;
+		return (0);
+	}
+
 	if (vp->v_type == VFIFO && VOP_ISLOCKED(vp) != LK_EXCLUSIVE)
 		vn_lock(vp, LK_UPGRADE | LK_RETRY);
 	error = VOP_OPEN(vp, fmode, cred, td, fp);
@@ -438,16 +451,34 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	/*
 	 * Error from advlock or VOP_ADD_WRITECOUNT() still requires
 	 * calling VOP_CLOSE() to pair with earlier VOP_OPEN().
-	 * Arrange for that by having fdrop() to use vn_closefile().
 	 */
 	if (error != 0) {
-		fp->f_flag |= FOPENFAILED;
-		fp->f_vnode = vp;
-		if (fp->f_ops == &badfileops) {
-			fp->f_type = DTYPE_VNODE;
-			fp->f_ops = &vnops;
+		if (fp != NULL) {
+			/*
+			 * Arrange the call by having fdrop() to use
+			 * vn_closefile().  This is to satisfy
+			 * filesystems like devfs or tmpfs, which
+			 * override fo_close().
+			 */
+			fp->f_flag |= FOPENFAILED;
+			fp->f_vnode = vp;
+			if (fp->f_ops == &badfileops) {
+				fp->f_type = DTYPE_VNODE;
+				fp->f_ops = &vnops;
+			}
+			vref(vp);
+		} else {
+			/*
+			 * If there is no fp, due to kernel-mode open,
+			 * we can call VOP_CLOSE() now.
+			 */
+			if (vp->v_type != VFIFO && (fmode & FWRITE) != 0 &&
+			    !MNT_EXTENDED_SHARED(vp->v_mount) &&
+			    VOP_ISLOCKED(vp) != LK_EXCLUSIVE)
+				vn_lock(vp, LK_UPGRADE | LK_RETRY);
+			(void)VOP_CLOSE(vp, fmode & (FREAD | FWRITE | FEXEC),
+			    cred, td);
 		}
-		vref(vp);
 	}
 
 	ASSERT_VOP_LOCKED(vp, "vn_open_vnode");
@@ -1616,7 +1647,7 @@ vn_truncate_locked(struct vnode *vp, off_t length, bool sync,
 /*
  * File table vnode stat routine.
  */
-static int
+int
 vn_statfile(struct file *fp, struct stat *sb, struct ucred *active_cred,
     struct thread *td)
 {
@@ -1775,7 +1806,7 @@ vn_closefile(struct file *fp, struct thread *td)
 
 	vp = fp->f_vnode;
 	fp->f_ops = &badfileops;
-	ref= (fp->f_flag & FHASLOCK) != 0 && fp->f_type == DTYPE_VNODE;
+	ref = (fp->f_flag & FHASLOCK) != 0 && fp->f_type == DTYPE_VNODE;
 
 	error = vn_close1(vp, fp->f_flag, fp->f_cred, td, ref);
 
@@ -2128,6 +2159,14 @@ vn_kqfilter(struct file *fp, struct knote *kn)
 {
 
 	return (VOP_KQFILTER(fp->f_vnode, kn));
+}
+
+int
+vn_kqfilter_opath(struct file *fp, struct knote *kn)
+{
+	if ((fp->f_flag & FKQALLOWED) == 0)
+		return (EBADF);
+	return (vn_kqfilter(fp, kn));
 }
 
 /*

@@ -306,6 +306,7 @@ struct port_info {
 	uint8_t  tx_chan;
 	uint8_t  mps_bg_map;	/* rx MPS buffer group bitmap */
 	uint8_t  rx_e_chan_map;	/* rx TP e-channel bitmap */
+	uint8_t  rx_c_chan;	/* rx TP c-channel */
 
 	struct link_config link_cfg;
 	struct ifmedia media;
@@ -316,10 +317,6 @@ struct port_info {
 	u_int tx_parse_error;
 	int fcs_reg;
 	uint64_t fcs_base;
-	u_long	tx_toe_tls_records;
-	u_long	tx_toe_tls_octets;
-	u_long	rx_toe_tls_records;
-	u_long	rx_toe_tls_octets;
 
 	struct callout tick;
 };
@@ -654,6 +651,8 @@ iq_to_rxq(struct sge_iq *iq)
 struct sge_ofld_rxq {
 	struct sge_iq iq;	/* MUST be first */
 	struct sge_fl fl;	/* MUST follow iq */
+	u_long	rx_toe_tls_records;
+	u_long	rx_toe_tls_octets;
 } __aligned(CACHE_LINE_SIZE);
 
 static inline struct sge_ofld_rxq *
@@ -677,8 +676,8 @@ struct wrq_cookie {
 };
 
 /*
- * wrq: SGE egress queue that is given prebuilt work requests.  Both the control
- * and offload tx queues are of this type.
+ * wrq: SGE egress queue that is given prebuilt work requests.  Control queues
+ * are of this type.
  */
 struct sge_wrq {
 	struct sge_eq eq;	/* MUST be first */
@@ -710,6 +709,15 @@ struct sge_wrq {
 	uint16_t ss_len;
 	uint8_t ss[SGE_MAX_WR_LEN];
 
+} __aligned(CACHE_LINE_SIZE);
+
+/* ofld_txq: SGE egress queue + miscellaneous items */
+struct sge_ofld_txq {
+	struct sge_wrq wrq;
+	counter_u64_t tx_iscsi_pdus;
+	counter_u64_t tx_iscsi_octets;
+	counter_u64_t tx_toe_tls_records;
+	counter_u64_t tx_toe_tls_octets;
 } __aligned(CACHE_LINE_SIZE);
 
 #define INVALID_NM_RXQ_CNTXT_ID ((uint16_t)(-1))
@@ -792,7 +800,7 @@ struct sge {
 	struct sge_wrq *ctrlq;	/* Control queues */
 	struct sge_txq *txq;	/* NIC tx queues */
 	struct sge_rxq *rxq;	/* NIC rx queues */
-	struct sge_wrq *ofld_txq;	/* TOE tx queues */
+	struct sge_ofld_txq *ofld_txq;	/* TOE tx queues */
 	struct sge_ofld_rxq *ofld_rxq;	/* TOE rx queues */
 	struct sge_nm_txq *nm_txq;	/* netmap tx queues */
 	struct sge_nm_rxq *nm_rxq;	/* netmap rx queues */

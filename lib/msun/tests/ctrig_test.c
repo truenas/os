@@ -38,8 +38,6 @@ __FBSDID("$FreeBSD$");
 #include <math.h>
 #include <stdio.h>
 
-#include <atf-c.h>
-
 #include "test-utils.h"
 
 #pragma STDC FENV_ACCESS	ON
@@ -58,14 +56,18 @@ __FBSDID("$FreeBSD$");
  * XXX The volatile here is to avoid gcc's bogus constant folding and work
  *     around the lack of support for the FENV_ACCESS pragma.
  */
-#define	test_p(func, z, result, exceptmask, excepts, checksign)	do {	\
-	volatile long double complex _d = z;				\
-	debug("  testing %s(%Lg + %Lg I) == %Lg + %Lg I\n", #func,	\
-	    creall(_d), cimagl(_d), creall(result), cimagl(result));	\
-	ATF_CHECK(feclearexcept(FE_ALL_EXCEPT) == 0);			\
-	ATF_CHECK(cfpequal_cs((func)(_d), (result), (checksign)));		\
-	ATF_CHECK(((void)(func), fetestexcept(exceptmask) == (excepts)));	\
-} while (0)
+#define test_p(func, z, result, exceptmask, excepts, checksign)			\
+	do {									\
+		volatile long double complex _d = z;				\
+		debug("  testing %s(%Lg + %Lg I) == %Lg + %Lg I\n", #func,	\
+		    creall(_d), cimagl(_d), creall(result), cimagl(result));	\
+		ATF_CHECK(feclearexcept(FE_ALL_EXCEPT) == 0);			\
+		CHECK_CFPEQUAL_CS((func)(_d), (result), (checksign));		\
+		volatile int _e = fetestexcept(exceptmask);			\
+		ATF_CHECK_MSG(_e == (excepts),					\
+		    "%s fetestexcept(%s) (%#x) != %#x",	__XSTRING(func),	\
+		    __XSTRING(exceptmask), _e, (excepts));			\
+	} while (0)
 
 /*
  * Test within a given tolerance.  The tolerance indicates relative error
@@ -73,10 +75,9 @@ __FBSDID("$FreeBSD$");
  * of <format>_EPSILON.
  */
 #define	test_p_tol(func, z, result, tol)			do {	\
-	volatile long double complex _d = z;				\
 	debug("  testing %s(%Lg + %Lg I) ~= %Lg + %Lg I\n", #func,	\
-	    creall(_d), cimagl(_d), creall(result), cimagl(result));	\
-	ATF_CHECK(cfpequal_tol((func)(_d), (result), (tol), FPE_ABS_ZERO)); \
+	    creall(z), cimagl(z), creall(result), cimagl(result));	\
+	CHECK_CFPEQUAL_TOL((func)(z), (result), (tol), FPE_ABS_ZERO); \
 } while (0)
 
 /* These wrappers apply the identities f(conj(z)) = conj(f(z)). */

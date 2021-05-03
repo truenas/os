@@ -70,7 +70,7 @@ t4_set_tls_tcb_field(struct toepcb *toep, uint16_t word, uint64_t mask,
 {
 	struct adapter *sc = td_adapter(toep->td);
 
-	t4_set_tcb_field(sc, toep->ofld_txq, toep, word, mask, val, 0, 0);
+	t4_set_tcb_field(sc, &toep->ofld_txq->wrq, toep, word, mask, val, 0, 0);
 }
 
 /* TLS and DTLS common routines */
@@ -518,7 +518,7 @@ tls_program_key_id(struct toepcb *toep, struct tls_key_context *k_ctx)
 		keyid = get_keyid(tls_ofld, k_ctx->l_p_key);
 	}
 
-	wr = alloc_wrqe(len, toep->ofld_txq);
+	wr = alloc_wrqe(len, &toep->ofld_txq->wrq);
 	if (wr == NULL) {
 		free_keyid(toep, keyid);
 		return (ENOMEM);
@@ -1596,7 +1596,7 @@ t4_push_tls_records(struct adapter *sc, struct toepcb *toep, int drop)
 			    ((3 * (nsegs - 1)) / 2 + ((nsegs - 1) & 1)) * 8;
 		}
 
-		wr = alloc_wrqe(roundup2(wr_len, 16), toep->ofld_txq);
+		wr = alloc_wrqe(roundup2(wr_len, 16), &toep->ofld_txq->wrq);
 		if (wr == NULL) {
 			/* XXX: how will we recover from this? */
 			toep->flags |= TPF_TX_SUSPENDED;
@@ -1664,8 +1664,8 @@ t4_push_tls_records(struct adapter *sc, struct toepcb *toep, int drop)
 		}
 		toep->txsd_avail--;
 
-		atomic_add_long(&toep->vi->pi->tx_toe_tls_records, 1);
-		atomic_add_long(&toep->vi->pi->tx_toe_tls_octets, plen);
+		counter_u64_add(toep->ofld_txq->tx_toe_tls_records, 1);
+		counter_u64_add(toep->ofld_txq->tx_toe_tls_octets, plen);
 
 		t4_l2t_send(sc, wr, toep->l2te);
 	}
@@ -1907,7 +1907,7 @@ t4_push_ktls(struct adapter *sc, struct toepcb *toep, int drop)
 		if (__predict_false(toep->flags & TPF_FIN_SENT))
 			panic("%s: excess tx.", __func__);
 
-		wr = alloc_wrqe(roundup2(wr_len, 16), toep->ofld_txq);
+		wr = alloc_wrqe(roundup2(wr_len, 16), &toep->ofld_txq->wrq);
 		if (wr == NULL) {
 			/* XXX: how will we recover from this? */
 			toep->flags |= TPF_TX_SUSPENDED;
@@ -1966,8 +1966,8 @@ t4_push_ktls(struct adapter *sc, struct toepcb *toep, int drop)
 		}
 		toep->txsd_avail--;
 
-		atomic_add_long(&toep->vi->pi->tx_toe_tls_records, 1);
-		atomic_add_long(&toep->vi->pi->tx_toe_tls_octets, m->m_len);
+		counter_u64_add(toep->ofld_txq->tx_toe_tls_records, 1);
+		counter_u64_add(toep->ofld_txq->tx_toe_tls_octets, m->m_len);
 
 		t4_l2t_send(sc, wr, toep->l2te);
 	}
@@ -2003,7 +2003,7 @@ do_tls_data(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	m_adj(m, sizeof(*cpl));
 	len = m->m_pkthdr.len;
 
-	atomic_add_long(&toep->vi->pi->rx_toe_tls_octets, len);
+	toep->ofld_rxq->rx_toe_tls_octets += len;
 
 	KASSERT(len == G_CPL_TLS_DATA_LENGTH(be32toh(cpl->length_pkd)),
 	    ("%s: payload length mismatch", __func__));
@@ -2070,7 +2070,7 @@ do_rx_tls_cmp(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 	m_adj(m, sizeof(*cpl));
 	len = m->m_pkthdr.len;
 
-	atomic_add_long(&toep->vi->pi->rx_toe_tls_records, 1);
+	toep->ofld_rxq->rx_toe_tls_records++;
 
 	KASSERT(len == G_CPL_RX_TLS_CMP_LENGTH(be32toh(cpl->pdulength_length)),
 	    ("%s: payload length mismatch", __func__));
