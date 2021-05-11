@@ -1641,7 +1641,7 @@ pf_purge_expired_src_nodes()
 			pf_unlink_src_node(cur);
 			LIST_INSERT_HEAD(&freelist, cur, entry);
 		} else if (cur->rule.ptr != NULL)
-			cur->rule.ptr->rule_flag |= PFRULE_REFS;
+			cur->rule.ptr->rule_ref |= PFRULE_REFS;
 	    PF_HASHROW_UNLOCK(sh);
 	}
 
@@ -1783,11 +1783,11 @@ relock:
 					    pf_unlink_state(s, PF_ENTER_LOCKED);
 					goto relock;
 				}
-				s->rule.ptr->rule_flag |= PFRULE_REFS;
+				s->rule.ptr->rule_ref |= PFRULE_REFS;
 				if (s->nat_rule.ptr != NULL)
-					s->nat_rule.ptr->rule_flag |= PFRULE_REFS;
+					s->nat_rule.ptr->rule_ref |= PFRULE_REFS;
 				if (s->anchor.ptr != NULL)
-					s->anchor.ptr->rule_flag |= PFRULE_REFS;
+					s->anchor.ptr->rule_ref |= PFRULE_REFS;
 				s->kif->pfik_flags |= PFI_IFLAG_REFS;
 				if (s->rt_kif)
 					s->rt_kif->pfik_flags |= PFI_IFLAG_REFS;
@@ -1839,11 +1839,11 @@ pf_purge_unlinked_rules()
 	TAILQ_INIT(&tmpq);
 	PF_UNLNKDRULES_LOCK();
 	TAILQ_FOREACH_SAFE(r, &V_pf_unlinked_rules, entries, r1) {
-		if (!(r->rule_flag & PFRULE_REFS)) {
+		if (!(r->rule_ref & PFRULE_REFS)) {
 			TAILQ_REMOVE(&V_pf_unlinked_rules, r, entries);
 			TAILQ_INSERT_TAIL(&tmpq, r, entries);
 		} else
-			r->rule_flag &= ~PFRULE_REFS;
+			r->rule_ref &= ~PFRULE_REFS;
 	}
 	PF_UNLNKDRULES_UNLOCK();
 
@@ -6401,7 +6401,7 @@ pf_test6(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb 
 	pd.sidx = (dir == PF_IN) ? 0 : 1;
 	pd.didx = (dir == PF_IN) ? 1 : 0;
 	pd.af = AF_INET6;
-	pd.tos = (ntohl(h->ip6_flow) >> 20) & 0xfc;
+	pd.tos = IPV6_DSCP(h);
 	pd.tot_len = ntohs(h->ip6_plen) + sizeof(struct ip6_hdr);
 
 	off = ((caddr_t)h - m->m_data) + sizeof(struct ip6_hdr);

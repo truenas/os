@@ -56,13 +56,16 @@ __FBSDID("$FreeBSD$");
  */
 
 #include <sys/param.h>
+#include <sys/ptrace.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/linker_set.h>
 #include <sys/sysctl.h>
+#include <sys/wait.h>
 
 #include <err.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,27 +78,86 @@ static void	killed(int);
 static void	usage(void) __dead2;
 
 static pid_t pid;
+static bool kflag = false;
 
 SET_DECLARE(dumpset, struct dumpers);
+
+static int
+open_corefile(char *corefile)
+{
+	char fname[MAXPATHLEN];
+	int fd;
+
+	if (corefile == NULL) {
+		(void)snprintf(fname, sizeof(fname), "core.%d", pid);
+		corefile = fname;
+	}
+	fd = open(corefile, O_RDWR | O_CREAT | O_TRUNC, DEFFILEMODE);
+	if (fd < 0)
+		err(1, "%s", corefile);
+	return (fd);
+}
+
+static void
+kcoredump(int fd, pid_t pid)
+{
+	struct ptrace_coredump pc;
+	int error, res, ret, waited;
+
+	error = ptrace(PT_ATTACH, pid, NULL, 0);
+	if (error != 0)
+		err(1, "attach");
+
+	waited = waitpid(pid, &res, 0);
+	if (waited == -1)
+		err(1, "wait for STOP");
+
+	ret = 0;
+	memset(&pc, 0, sizeof(pc));
+	pc.pc_fd = fd;
+	pc.pc_flags = (pflags & PFLAGS_FULL) != 0 ? PC_ALL : 0;
+	error = ptrace(PT_COREDUMP, pid, (void *)&pc, sizeof(pc));
+	if (error == -1) {
+		warn("coredump");
+		ret = 1;
+	}
+
+	waited = waitpid(pid, &res, WNOHANG);
+	if (waited == -1) {
+		warn("wait after coredump");
+		ret = 1;
+	}
+
+	error = ptrace(PT_DETACH, pid, NULL, 0);
+	if (error == -1) {
+		warn("detach failed, check process status");
+		ret = 1;
+	}
+
+	exit(ret);
+}
 
 int
 main(int argc, char *argv[])
 {
 	int ch, efd, fd, name[4];
 	char *binfile, *corefile;
-	char passpath[MAXPATHLEN], fname[MAXPATHLEN];
+	char passpath[MAXPATHLEN];
 	struct dumpers **d, *dumper;
 	size_t len;
 
 	pflags = 0;
 	corefile = NULL;
-        while ((ch = getopt(argc, argv, "c:f")) != -1) {
+        while ((ch = getopt(argc, argv, "c:fk")) != -1) {
                 switch (ch) {
                 case 'c':
 			corefile = optarg;
                         break;
 		case 'f':
 			pflags |= PFLAGS_FULL;
+			break;
+		case 'k':
+			kflag = true;
 			break;
 		default:
 			usage();
@@ -104,10 +166,26 @@ main(int argc, char *argv[])
 	}
 	argv += optind;
 	argc -= optind;
+
 	/* XXX we should check that the pid argument is really a number */
 	switch (argc) {
 	case 1:
 		pid = atoi(argv[0]);
+		break;
+	case 2:
+		binfile = argv[0];
+		pid = atoi(argv[1]);
+		break;
+	default:
+		usage();
+	}
+
+	if (kflag) {
+		fd = open_corefile(corefile);
+		kcoredump(fd, pid);
+	}
+
+	if (argc == 1) {
 		name[0] = CTL_KERN;
 		name[1] = KERN_PROC;
 		name[2] = KERN_PROC_PATHNAME;
@@ -116,13 +194,6 @@ main(int argc, char *argv[])
 		if (sysctl(name, 4, passpath, &len, NULL, 0) == -1)
 			errx(1, "kern.proc.pathname failure");
 		binfile = passpath;
-		break;
-	case 2:
-		pid = atoi(argv[1]);
-		binfile = argv[0];
-		break;
-	default:
-		usage();
 	}
 	efd = open(binfile, O_RDONLY, 0);
 	if (efd < 0)
@@ -138,13 +209,7 @@ main(int argc, char *argv[])
 	}
 	if (dumper == NULL)
 		errx(1, "Invalid executable file");
-	if (corefile == NULL) {
-		(void)snprintf(fname, sizeof(fname), "core.%d", pid);
-		corefile = fname;
-	}
-	fd = open(corefile, O_RDWR|O_CREAT|O_TRUNC, DEFFILEMODE);
-	if (fd < 0)
-		err(1, "%s", corefile);
+	fd = open_corefile(corefile);
 
 	dumper->dump(efd, fd, pid);
 	(void)close(fd);
@@ -156,6 +221,7 @@ void
 usage(void)
 {
 
-	(void)fprintf(stderr, "usage: gcore [-c core] [executable] pid\n");
+	(void)fprintf(stderr,
+	    "usage: gcore [-kf] [-c core] [executable] pid\n");
 	exit(1);
 }

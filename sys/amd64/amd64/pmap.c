@@ -2015,8 +2015,7 @@ pmap_bootstrap_la57(void *arg __unused)
 
 	if ((cpu_stdext_feature2 & CPUID_STDEXT2_LA57) == 0)
 		return;
-	if (!TUNABLE_INT_FETCH("vm.pmap.la57", &la57))
-		la57 = 1;
+	TUNABLE_INT_FETCH("vm.pmap.la57", &la57);
 	if (!la57)
 		return;
 
@@ -2103,6 +2102,7 @@ pmap_bootstrap_la57(void *arg __unused)
 	*(u_long *)(v_code + 2 + (la57_trampoline_gdt_desc - la57_trampoline)) =
 	    la57_trampoline_gdt - la57_trampoline + VM_PAGE_TO_PHYS(m_code);
 	la57_tramp = (void (*)(uint64_t))VM_PAGE_TO_PHYS(m_code);
+	invlpg((vm_offset_t)la57_tramp);
 	la57_tramp(KPML5phys);
 
 	/*

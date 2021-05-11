@@ -61,6 +61,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/mbuf.h>
 #include <sys/module.h>
+#include <sys/nv.h>
 #include <sys/proc.h>
 #include <sys/smp.h>
 #include <sys/socket.h>
@@ -82,6 +83,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/ip_var.h>
 #include <netinet6/ip6_var.h>
 #include <netinet/ip_icmp.h>
+#include <netpfil/pf/pf_nv.h>
 
 #ifdef INET6
 #include <netinet/ip6.h>
@@ -424,7 +426,7 @@ pf_unlink_rule(struct pf_krulequeue *rulequeue, struct pf_krule *rule)
 	TAILQ_REMOVE(rulequeue, rule, entries);
 
 	PF_UNLNKDRULES_LOCK();
-	rule->rule_flag |= PFRULE_REFS;
+	rule->rule_ref |= PFRULE_REFS;
 	TAILQ_INSERT_TAIL(&V_pf_unlinked_rules, rule, entries);
 	PF_UNLNKDRULES_UNLOCK();
 }
@@ -989,7 +991,8 @@ pf_hash_rule(MD5_CTX *ctx, struct pf_krule *rule)
 
 	pf_hash_rule_addr(ctx, &rule->src);
 	pf_hash_rule_addr(ctx, &rule->dst);
-	PF_MD5_UPD_STR(rule, label);
+	for (int i = 0; i < PF_RULE_MAX_LABEL_COUNT; i++)
+		PF_MD5_UPD_STR(rule, label[i]);
 	PF_MD5_UPD_STR(rule, ifname);
 	PF_MD5_UPD_STR(rule, match_tagname);
 	PF_MD5_UPD_HTONS(rule, match_tag, x); /* dup? */
@@ -1514,7 +1517,7 @@ pf_krule_to_rule(const struct pf_krule *krule, struct pf_rule *rule)
 			rule->skip[i].nr = krule->skip[i].ptr->nr;
 	}
 
-	strlcpy(rule->label, krule->label, sizeof(rule->label));
+	strlcpy(rule->label, krule->label[0], sizeof(rule->label));
 	strlcpy(rule->ifname, krule->ifname, sizeof(rule->ifname));
 	strlcpy(rule->qname, krule->qname, sizeof(rule->qname));
 	strlcpy(rule->pqname, krule->pqname, sizeof(rule->pqname));
@@ -1546,7 +1549,6 @@ pf_krule_to_rule(const struct pf_krule *krule, struct pf_rule *rule)
 	rule->max_src_conn_rate.seconds = krule->max_src_conn_rate.seconds;
 	rule->qid = krule->qid;
 	rule->pqid = krule->pqid;
-	rule->rt_listid = krule->rt_listid;
 	rule->nr = krule->nr;
 	rule->prob = krule->prob;
 	rule->cuid = krule->cuid;
@@ -1624,6 +1626,588 @@ pf_check_rule_addr(const struct pf_rule_addr *addr)
 }
 
 static int
+pf_nvaddr_to_addr(const nvlist_t *nvl, struct pf_addr *paddr)
+{
+	return (pf_nvbinary(nvl, "addr", paddr, sizeof(*paddr)));
+}
+
+static nvlist_t *
+pf_addr_to_nvaddr(const struct pf_addr *paddr)
+{
+	nvlist_t *nvl;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (NULL);
+
+	nvlist_add_binary(nvl, "addr", paddr, sizeof(*paddr));
+
+	return (nvl);
+}
+
+static int
+pf_nvpool_to_pool(const nvlist_t *nvl, struct pf_kpool *kpool)
+{
+	int error = 0;
+
+	bzero(kpool, sizeof(*kpool));
+
+	PFNV_CHK(pf_nvbinary(nvl, "key", &kpool->key, sizeof(kpool->key)));
+
+	if (nvlist_exists_nvlist(nvl, "counter")) {
+		PFNV_CHK(pf_nvaddr_to_addr(nvlist_get_nvlist(nvl, "counter"),
+		    &kpool->counter));
+	}
+
+	PFNV_CHK(pf_nvint(nvl, "tblidx", &kpool->tblidx));
+	PFNV_CHK(pf_nvuint16_array(nvl, "proxy_port", kpool->proxy_port, 2,
+	    NULL));
+	PFNV_CHK(pf_nvuint8(nvl, "opts", &kpool->opts));
+
+errout:
+	return (error);
+}
+
+static nvlist_t *
+pf_pool_to_nvpool(const struct pf_kpool *pool)
+{
+	nvlist_t *nvl;
+	nvlist_t *tmp;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (NULL);
+
+	nvlist_add_binary(nvl, "key", &pool->key, sizeof(pool->key));
+	tmp = pf_addr_to_nvaddr(&pool->counter);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "counter", tmp);
+
+	nvlist_add_number(nvl, "tblidx", pool->tblidx);
+	pf_uint16_array_nv(nvl, "proxy_port", pool->proxy_port, 2);
+	nvlist_add_number(nvl, "opts", pool->opts);
+
+	return (nvl);
+
+error:
+	nvlist_destroy(nvl);
+	return (NULL);
+}
+
+static int
+pf_nvaddr_wrap_to_addr_wrap(const nvlist_t *nvl, struct pf_addr_wrap *addr)
+{
+	int error = 0;
+
+	bzero(addr, sizeof(*addr));
+
+	PFNV_CHK(pf_nvuint8(nvl, "type", &addr->type));
+	PFNV_CHK(pf_nvuint8(nvl, "iflags", &addr->iflags));
+	if (addr->type == PF_ADDR_DYNIFTL)
+		PFNV_CHK(pf_nvstring(nvl, "ifname", addr->v.ifname,
+		    sizeof(addr->v.ifname)));
+	if (addr->type == PF_ADDR_TABLE)
+		PFNV_CHK(pf_nvstring(nvl, "tblname", addr->v.tblname,
+		    sizeof(addr->v.tblname)));
+
+	if (! nvlist_exists_nvlist(nvl, "addr"))
+		return (EINVAL);
+	PFNV_CHK(pf_nvaddr_to_addr(nvlist_get_nvlist(nvl, "addr"),
+	    &addr->v.a.addr));
+
+	if (! nvlist_exists_nvlist(nvl, "mask"))
+		return (EINVAL);
+	PFNV_CHK(pf_nvaddr_to_addr(nvlist_get_nvlist(nvl, "mask"),
+	    &addr->v.a.mask));
+
+	switch (addr->type) {
+	case PF_ADDR_DYNIFTL:
+	case PF_ADDR_TABLE:
+	case PF_ADDR_RANGE:
+	case PF_ADDR_ADDRMASK:
+	case PF_ADDR_NOROUTE:
+	case PF_ADDR_URPFFAILED:
+		break;
+	default:
+		return (EINVAL);
+	}
+
+errout:
+	return (error);
+}
+
+static nvlist_t *
+pf_addr_wrap_to_nvaddr_wrap(const struct pf_addr_wrap *addr)
+{
+	nvlist_t *nvl;
+	nvlist_t *tmp;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (NULL);
+
+	nvlist_add_number(nvl, "type", addr->type);
+	nvlist_add_number(nvl, "iflags", addr->iflags);
+	if (addr->type == PF_ADDR_DYNIFTL)
+		nvlist_add_string(nvl, "ifname", addr->v.ifname);
+	if (addr->type == PF_ADDR_TABLE)
+		nvlist_add_string(nvl, "tblname", addr->v.tblname);
+
+	tmp = pf_addr_to_nvaddr(&addr->v.a.addr);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "addr", tmp);
+	tmp = pf_addr_to_nvaddr(&addr->v.a.mask);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "mask", tmp);
+
+	return (nvl);
+
+error:
+	nvlist_destroy(nvl);
+	return (NULL);
+}
+
+static int
+pf_validate_op(uint8_t op)
+{
+	switch (op) {
+	case PF_OP_NONE:
+	case PF_OP_IRG:
+	case PF_OP_EQ:
+	case PF_OP_NE:
+	case PF_OP_LT:
+	case PF_OP_LE:
+	case PF_OP_GT:
+	case PF_OP_GE:
+	case PF_OP_XRG:
+	case PF_OP_RRG:
+		break;
+	default:
+		return (EINVAL);
+	}
+
+	return (0);
+}
+
+static int
+pf_nvrule_addr_to_rule_addr(const nvlist_t *nvl, struct pf_rule_addr *addr)
+{
+	int error = 0;
+
+	if (! nvlist_exists_nvlist(nvl, "addr"))
+		return (EINVAL);
+
+	PFNV_CHK(pf_nvaddr_wrap_to_addr_wrap(nvlist_get_nvlist(nvl, "addr"),
+	    &addr->addr));
+	PFNV_CHK(pf_nvuint16_array(nvl, "port", addr->port, 2, NULL));
+	PFNV_CHK(pf_nvuint8(nvl, "neg", &addr->neg));
+	PFNV_CHK(pf_nvuint8(nvl, "port_op", &addr->port_op));
+
+	PFNV_CHK(pf_validate_op(addr->port_op));
+
+errout:
+	return (error);
+}
+
+static nvlist_t *
+pf_rule_addr_to_nvrule_addr(const struct pf_rule_addr *addr)
+{
+	nvlist_t *nvl;
+	nvlist_t *tmp;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (NULL);
+
+	tmp = pf_addr_wrap_to_nvaddr_wrap(&addr->addr);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "addr", tmp);
+	pf_uint16_array_nv(nvl, "port", addr->port, 2);
+	nvlist_add_number(nvl, "neg", addr->neg);
+	nvlist_add_number(nvl, "port_op", addr->port_op);
+
+	return (nvl);
+
+error:
+	nvlist_destroy(nvl);
+	return (NULL);
+}
+
+static int
+pf_nvrule_uid_to_rule_uid(const nvlist_t *nvl, struct pf_rule_uid *uid)
+{
+	int error = 0;
+
+	bzero(uid, sizeof(*uid));
+
+	PFNV_CHK(pf_nvuint32_array(nvl, "uid", uid->uid, 2, NULL));
+	PFNV_CHK(pf_nvuint8(nvl, "op", &uid->op));
+
+	PFNV_CHK(pf_validate_op(uid->op));
+
+errout:
+	return (error);
+}
+
+static nvlist_t *
+pf_rule_uid_to_nvrule_uid(const struct pf_rule_uid *uid)
+{
+	nvlist_t *nvl;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (NULL);
+
+	pf_uint32_array_nv(nvl, "uid", uid->uid, 2);
+	nvlist_add_number(nvl, "op", uid->op);
+
+	return (nvl);
+}
+
+static int
+pf_nvrule_gid_to_rule_gid(const nvlist_t *nvl, struct pf_rule_gid *gid)
+{
+	/* Cheat a little. These stucts are the same, other than the name of
+	 * the first field. */
+	return (pf_nvrule_uid_to_rule_uid(nvl, (struct pf_rule_uid *)gid));
+}
+
+static int
+pf_nvrule_to_krule(const nvlist_t *nvl, struct pf_krule **prule)
+{
+	struct pf_krule *rule;
+	int error = 0;
+
+	rule = malloc(sizeof(*rule), M_PFRULE, M_WAITOK | M_ZERO);
+
+	PFNV_CHK(pf_nvuint32(nvl, "nr", &rule->nr));
+
+	if (! nvlist_exists_nvlist(nvl, "src")) {
+		error = EINVAL;
+		goto errout;
+	}
+	error = pf_nvrule_addr_to_rule_addr(nvlist_get_nvlist(nvl, "src"),
+	    &rule->src);
+	if (error != 0)
+		goto errout;
+
+	if (! nvlist_exists_nvlist(nvl, "dst")) {
+		error = EINVAL;
+		goto errout;
+	}
+	PFNV_CHK(pf_nvrule_addr_to_rule_addr(nvlist_get_nvlist(nvl, "dst"),
+	    &rule->dst));
+
+	if (nvlist_exists_string(nvl, "label")) {
+		PFNV_CHK(pf_nvstring(nvl, "label", rule->label[0],
+		    sizeof(rule->label[0])));
+	} else if (nvlist_exists_string_array(nvl, "labels")) {
+		const char *const *strs;
+		size_t items;
+		int ret;
+
+		strs = nvlist_get_string_array(nvl, "labels", &items);
+		if (items > PF_RULE_MAX_LABEL_COUNT) {
+			error = E2BIG;
+			goto errout;
+		}
+
+		for (size_t i = 0; i < items; i++) {
+			ret = strlcpy(rule->label[i], strs[i],
+			    sizeof(rule->label[0]));
+			if (ret >= sizeof(rule->label[0])) {
+				error = E2BIG;
+				goto errout;
+			}
+		}
+	}
+
+	PFNV_CHK(pf_nvstring(nvl, "ifname", rule->ifname,
+	    sizeof(rule->ifname)));
+	PFNV_CHK(pf_nvstring(nvl, "qname", rule->qname, sizeof(rule->qname)));
+	PFNV_CHK(pf_nvstring(nvl, "pqname", rule->pqname,
+	    sizeof(rule->pqname)));
+	PFNV_CHK(pf_nvstring(nvl, "tagname", rule->tagname,
+	    sizeof(rule->tagname)));
+	PFNV_CHK(pf_nvstring(nvl, "match_tagname", rule->match_tagname,
+	    sizeof(rule->match_tagname)));
+	PFNV_CHK(pf_nvstring(nvl, "overload_tblname", rule->overload_tblname,
+	    sizeof(rule->overload_tblname)));
+
+	if (! nvlist_exists_nvlist(nvl, "rpool")) {
+		error = EINVAL;
+		goto errout;
+	}
+	PFNV_CHK(pf_nvpool_to_pool(nvlist_get_nvlist(nvl, "rpool"),
+	    &rule->rpool));
+
+	PFNV_CHK(pf_nvuint32(nvl, "os_fingerprint", &rule->os_fingerprint));
+
+	PFNV_CHK(pf_nvint(nvl, "rtableid", &rule->rtableid));
+	PFNV_CHK(pf_nvuint32_array(nvl, "timeout", rule->timeout, PFTM_MAX, NULL));
+	PFNV_CHK(pf_nvuint32(nvl, "max_states", &rule->max_states));
+	PFNV_CHK(pf_nvuint32(nvl, "max_src_nodes", &rule->max_src_nodes));
+	PFNV_CHK(pf_nvuint32(nvl, "max_src_states", &rule->max_src_states));
+	PFNV_CHK(pf_nvuint32(nvl, "max_src_conn", &rule->max_src_conn));
+	PFNV_CHK(pf_nvuint32(nvl, "max_src_conn_rate.limit",
+	    &rule->max_src_conn_rate.limit));
+	PFNV_CHK(pf_nvuint32(nvl, "max_src_conn_rate.seconds",
+	    &rule->max_src_conn_rate.seconds));
+	PFNV_CHK(pf_nvuint32(nvl, "prob", &rule->prob));
+	PFNV_CHK(pf_nvuint32(nvl, "cuid", &rule->cuid));
+	PFNV_CHK(pf_nvuint32(nvl, "cpid", &rule->cpid));
+
+	PFNV_CHK(pf_nvuint16(nvl, "return_icmp", &rule->return_icmp));
+	PFNV_CHK(pf_nvuint16(nvl, "return_icmp6", &rule->return_icmp6));
+
+	PFNV_CHK(pf_nvuint16(nvl, "max_mss", &rule->max_mss));
+	PFNV_CHK(pf_nvuint16(nvl, "scrub_flags", &rule->scrub_flags));
+
+	if (! nvlist_exists_nvlist(nvl, "uid")) {
+		error = EINVAL;
+		goto errout;
+	}
+	PFNV_CHK(pf_nvrule_uid_to_rule_uid(nvlist_get_nvlist(nvl, "uid"),
+	    &rule->uid));
+
+	if (! nvlist_exists_nvlist(nvl, "gid")) {
+		error = EINVAL;
+		goto errout;
+	}
+	PFNV_CHK(pf_nvrule_gid_to_rule_gid(nvlist_get_nvlist(nvl, "gid"),
+	    &rule->gid));
+
+	PFNV_CHK(pf_nvuint32(nvl, "rule_flag", &rule->rule_flag));
+	PFNV_CHK(pf_nvuint8(nvl, "action", &rule->action));
+	PFNV_CHK(pf_nvuint8(nvl, "direction", &rule->direction));
+	PFNV_CHK(pf_nvuint8(nvl, "log", &rule->log));
+	PFNV_CHK(pf_nvuint8(nvl, "logif", &rule->logif));
+	PFNV_CHK(pf_nvuint8(nvl, "quick", &rule->quick));
+	PFNV_CHK(pf_nvuint8(nvl, "ifnot", &rule->ifnot));
+	PFNV_CHK(pf_nvuint8(nvl, "match_tag_not", &rule->match_tag_not));
+	PFNV_CHK(pf_nvuint8(nvl, "natpass", &rule->natpass));
+
+	PFNV_CHK(pf_nvuint8(nvl, "keep_state", &rule->keep_state));
+	PFNV_CHK(pf_nvuint8(nvl, "af", &rule->af));
+	PFNV_CHK(pf_nvuint8(nvl, "proto", &rule->proto));
+	PFNV_CHK(pf_nvuint8(nvl, "type", &rule->type));
+	PFNV_CHK(pf_nvuint8(nvl, "code", &rule->code));
+	PFNV_CHK(pf_nvuint8(nvl, "flags", &rule->flags));
+	PFNV_CHK(pf_nvuint8(nvl, "flagset", &rule->flagset));
+	PFNV_CHK(pf_nvuint8(nvl, "min_ttl", &rule->min_ttl));
+	PFNV_CHK(pf_nvuint8(nvl, "allow_opts", &rule->allow_opts));
+	PFNV_CHK(pf_nvuint8(nvl, "rt", &rule->rt));
+	PFNV_CHK(pf_nvuint8(nvl, "return_ttl", &rule->return_ttl));
+	PFNV_CHK(pf_nvuint8(nvl, "tos", &rule->tos));
+	PFNV_CHK(pf_nvuint8(nvl, "set_tos", &rule->set_tos));
+	PFNV_CHK(pf_nvuint8(nvl, "anchor_relative", &rule->anchor_relative));
+	PFNV_CHK(pf_nvuint8(nvl, "anchor_wildcard", &rule->anchor_wildcard));
+
+	PFNV_CHK(pf_nvuint8(nvl, "flush", &rule->flush));
+	PFNV_CHK(pf_nvuint8(nvl, "prio", &rule->prio));
+
+	PFNV_CHK(pf_nvuint8_array(nvl, "set_prio", &rule->prio, 2, NULL));
+
+	if (nvlist_exists_nvlist(nvl, "divert")) {
+		const nvlist_t *nvldivert = nvlist_get_nvlist(nvl, "divert");
+
+		if (! nvlist_exists_nvlist(nvldivert, "addr")) {
+			error = EINVAL;
+			goto errout;
+		}
+		PFNV_CHK(pf_nvaddr_to_addr(nvlist_get_nvlist(nvldivert, "addr"),
+		    &rule->divert.addr));
+		PFNV_CHK(pf_nvuint16(nvldivert, "port", &rule->divert.port));
+	}
+
+	/* Validation */
+#ifndef INET
+	if (rule->af == AF_INET) {
+		error = EAFNOSUPPORT;
+		goto errout;
+	}
+#endif /* INET */
+#ifndef INET6
+	if (rule->af == AF_INET6) {
+		error = EAFNOSUPPORT;
+		goto errout;
+	}
+#endif /* INET6 */
+
+	PFNV_CHK(pf_check_rule_addr(&rule->src));
+	PFNV_CHK(pf_check_rule_addr(&rule->dst));
+
+	*prule = rule;
+
+	return (0);
+
+errout:
+	pf_krule_free(rule);
+	*prule = NULL;
+
+	return (error);
+}
+
+static nvlist_t *
+pf_divert_to_nvdivert(const struct pf_krule *rule)
+{
+	nvlist_t *nvl;
+	nvlist_t *tmp;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (NULL);
+
+	tmp = pf_addr_to_nvaddr(&rule->divert.addr);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "addr", tmp);
+	nvlist_add_number(nvl, "port", rule->divert.port);
+
+	return (nvl);
+
+error:
+	nvlist_destroy(nvl);
+	return (NULL);
+}
+
+static nvlist_t *
+pf_krule_to_nvrule(const struct pf_krule *rule)
+{
+	nvlist_t *nvl, *tmp;
+
+	nvl = nvlist_create(0);
+	if (nvl == NULL)
+		return (nvl);
+
+	nvlist_add_number(nvl, "nr", rule->nr);
+	tmp = pf_rule_addr_to_nvrule_addr(&rule->src);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "src", tmp);
+	tmp = pf_rule_addr_to_nvrule_addr(&rule->dst);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "dst", tmp);
+
+	for (int i = 0; i < PF_SKIP_COUNT; i++) {
+		nvlist_append_number_array(nvl, "skip",
+		    rule->skip[i].ptr ? rule->skip[i].ptr->nr : -1);
+	}
+
+	for (int i = 0; i < PF_RULE_MAX_LABEL_COUNT; i++) {
+		nvlist_append_string_array(nvl, "labels", rule->label[i]);
+	}
+	nvlist_add_string(nvl, "label", rule->label[0]);
+	nvlist_add_string(nvl, "ifname", rule->ifname);
+	nvlist_add_string(nvl, "qname", rule->qname);
+	nvlist_add_string(nvl, "pqname", rule->pqname);
+	nvlist_add_string(nvl, "tagname", rule->tagname);
+	nvlist_add_string(nvl, "match_tagname", rule->match_tagname);
+	nvlist_add_string(nvl, "overload_tblname", rule->overload_tblname);
+
+	tmp = pf_pool_to_nvpool(&rule->rpool);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "rpool", tmp);
+
+	nvlist_add_number(nvl, "evaluations",
+	    counter_u64_fetch(rule->evaluations));
+	for (int i = 0; i < 2; i++) {
+		nvlist_append_number_array(nvl, "packets",
+		    counter_u64_fetch(rule->packets[i]));
+		nvlist_append_number_array(nvl, "bytes",
+		    counter_u64_fetch(rule->bytes[i]));
+	}
+
+	nvlist_add_number(nvl, "os_fingerprint", rule->os_fingerprint);
+
+	nvlist_add_number(nvl, "rtableid", rule->rtableid);
+	pf_uint32_array_nv(nvl, "timeout", rule->timeout, PFTM_MAX);
+	nvlist_add_number(nvl, "max_states", rule->max_states);
+	nvlist_add_number(nvl, "max_src_nodes", rule->max_src_nodes);
+	nvlist_add_number(nvl, "max_src_states", rule->max_src_states);
+	nvlist_add_number(nvl, "max_src_conn", rule->max_src_conn);
+	nvlist_add_number(nvl, "max_src_conn_rate.limit",
+	    rule->max_src_conn_rate.limit);
+	nvlist_add_number(nvl, "max_src_conn_rate.seconds",
+	    rule->max_src_conn_rate.seconds);
+	nvlist_add_number(nvl, "qid", rule->qid);
+	nvlist_add_number(nvl, "pqid", rule->pqid);
+	nvlist_add_number(nvl, "prob", rule->prob);
+	nvlist_add_number(nvl, "cuid", rule->cuid);
+	nvlist_add_number(nvl, "cpid", rule->cpid);
+
+	nvlist_add_number(nvl, "states_cur",
+	    counter_u64_fetch(rule->states_cur));
+	nvlist_add_number(nvl, "states_tot",
+	    counter_u64_fetch(rule->states_tot));
+	nvlist_add_number(nvl, "src_nodes",
+	    counter_u64_fetch(rule->src_nodes));
+
+	nvlist_add_number(nvl, "return_icmp", rule->return_icmp);
+	nvlist_add_number(nvl, "return_icmp6", rule->return_icmp6);
+
+	nvlist_add_number(nvl, "max_mss", rule->max_mss);
+	nvlist_add_number(nvl, "scrub_flags", rule->scrub_flags);
+
+	tmp = pf_rule_uid_to_nvrule_uid(&rule->uid);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "uid", tmp);
+	tmp = pf_rule_uid_to_nvrule_uid((const struct pf_rule_uid *)&rule->gid);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "gid", tmp);
+
+	nvlist_add_number(nvl, "rule_flag", rule->rule_flag);
+	nvlist_add_number(nvl, "action", rule->action);
+	nvlist_add_number(nvl, "direction", rule->direction);
+	nvlist_add_number(nvl, "log", rule->log);
+	nvlist_add_number(nvl, "logif", rule->logif);
+	nvlist_add_number(nvl, "quick", rule->quick);
+	nvlist_add_number(nvl, "ifnot", rule->ifnot);
+	nvlist_add_number(nvl, "match_tag_not", rule->match_tag_not);
+	nvlist_add_number(nvl, "natpass", rule->natpass);
+
+	nvlist_add_number(nvl, "keep_state", rule->keep_state);
+	nvlist_add_number(nvl, "af", rule->af);
+	nvlist_add_number(nvl, "proto", rule->proto);
+	nvlist_add_number(nvl, "type", rule->type);
+	nvlist_add_number(nvl, "code", rule->code);
+	nvlist_add_number(nvl, "flags", rule->flags);
+	nvlist_add_number(nvl, "flagset", rule->flagset);
+	nvlist_add_number(nvl, "min_ttl", rule->min_ttl);
+	nvlist_add_number(nvl, "allow_opts", rule->allow_opts);
+	nvlist_add_number(nvl, "rt", rule->rt);
+	nvlist_add_number(nvl, "return_ttl", rule->return_ttl);
+	nvlist_add_number(nvl, "tos", rule->tos);
+	nvlist_add_number(nvl, "set_tos", rule->set_tos);
+	nvlist_add_number(nvl, "anchor_relative", rule->anchor_relative);
+	nvlist_add_number(nvl, "anchor_wildcard", rule->anchor_wildcard);
+
+	nvlist_add_number(nvl, "flush", rule->flush);
+	nvlist_add_number(nvl, "prio", rule->prio);
+
+	pf_uint8_array_nv(nvl, "set_prio", &rule->prio, 2);
+
+	tmp = pf_divert_to_nvdivert(rule);
+	if (tmp == NULL)
+		goto error;
+	nvlist_add_nvlist(nvl, "divert", tmp);
+
+	return (nvl);
+
+error:
+	nvlist_destroy(nvl);
+	return (NULL);
+}
+
+static int
 pf_rule_to_krule(const struct pf_rule *rule, struct pf_krule *krule)
 {
 	int ret;
@@ -1651,7 +2235,7 @@ pf_rule_to_krule(const struct pf_rule *rule, struct pf_krule *krule)
 	bcopy(&rule->src, &krule->src, sizeof(rule->src));
 	bcopy(&rule->dst, &krule->dst, sizeof(rule->dst));
 
-	strlcpy(krule->label, rule->label, sizeof(rule->label));
+	strlcpy(krule->label[0], rule->label, sizeof(rule->label));
 	strlcpy(krule->ifname, rule->ifname, sizeof(rule->ifname));
 	strlcpy(krule->qname, rule->qname, sizeof(rule->qname));
 	strlcpy(krule->pqname, rule->pqname, sizeof(rule->pqname));
@@ -1680,7 +2264,6 @@ pf_rule_to_krule(const struct pf_rule *rule, struct pf_krule *krule)
 	krule->max_src_conn_rate.seconds = rule->max_src_conn_rate.seconds;
 	krule->qid = rule->qid;
 	krule->pqid = rule->pqid;
-	krule->rt_listid = rule->rt_listid;
 	krule->nr = rule->nr;
 	krule->prob = rule->prob;
 	krule->cuid = rule->cuid;
@@ -1732,6 +2315,20 @@ pf_rule_to_krule(const struct pf_rule *rule, struct pf_krule *krule)
 	return (0);
 }
 
+static bool
+pf_label_match(const struct pf_krule *rule, const char *label)
+{
+	int i = 0;
+
+	while (*rule->label[i]) {
+		if (strcmp(rule->label[i], label) == 0)
+			return (true);
+		i++;
+	}
+
+	return (false);
+}
+
 static int
 pf_killstates_row(struct pfioc_state_kill *psk, struct pf_idhash *ih)
 {
@@ -1781,8 +2378,8 @@ relock_DIOCKILLSTATES:
 		    psk->psk_dst.port[0], psk->psk_dst.port[1], dstport))
 			continue;
 
-		if (psk->psk_label[0] && (! s->rule.ptr->label[0] ||
-		    strcmp(psk->psk_label, s->rule.ptr->label)))
+		if (psk->psk_label[0] &&
+		    ! pf_label_match(s->rule.ptr, psk->psk_label))
 			continue;
 
 		if (psk->psk_ifname[0] && strcmp(psk->psk_ifname,
@@ -1799,6 +2396,164 @@ relock_DIOCKILLSTATES:
 }
 
 static int
+pf_ioctl_addrule(struct pf_krule *rule, uint32_t ticket,
+    uint32_t pool_ticket, const char *anchor, const char *anchor_call,
+    struct thread *td)
+{
+	struct pf_kruleset	*ruleset;
+	struct pf_krule		*tail;
+	struct pf_kpooladdr	*pa;
+	struct pfi_kkif		*kif = NULL;
+	int			 rs_num;
+	int			 error = 0;
+
+	if ((rule->return_icmp >> 8) > ICMP_MAXTYPE) {
+		error = EINVAL;
+		goto errout_unlocked;
+	}
+
+#define	ERROUT(x)	{ error = (x); goto errout; }
+
+	if (rule->ifname[0])
+		kif = pf_kkif_create(M_WAITOK);
+	rule->evaluations = counter_u64_alloc(M_WAITOK);
+	for (int i = 0; i < 2; i++) {
+		rule->packets[i] = counter_u64_alloc(M_WAITOK);
+		rule->bytes[i] = counter_u64_alloc(M_WAITOK);
+	}
+	rule->states_cur = counter_u64_alloc(M_WAITOK);
+	rule->states_tot = counter_u64_alloc(M_WAITOK);
+	rule->src_nodes = counter_u64_alloc(M_WAITOK);
+	rule->cuid = td->td_ucred->cr_ruid;
+	rule->cpid = td->td_proc ? td->td_proc->p_pid : 0;
+	TAILQ_INIT(&rule->rpool.list);
+
+	PF_RULES_WLOCK();
+	ruleset = pf_find_kruleset(anchor);
+	if (ruleset == NULL)
+		ERROUT(EINVAL);
+	rs_num = pf_get_ruleset_number(rule->action);
+	if (rs_num >= PF_RULESET_MAX)
+		ERROUT(EINVAL);
+	if (ticket != ruleset->rules[rs_num].inactive.ticket) {
+		DPFPRINTF(PF_DEBUG_MISC,
+		    ("ticket: %d != [%d]%d\n", ticket, rs_num,
+		    ruleset->rules[rs_num].inactive.ticket));
+		ERROUT(EBUSY);
+	}
+	if (pool_ticket != V_ticket_pabuf) {
+		DPFPRINTF(PF_DEBUG_MISC,
+		    ("pool_ticket: %d != %d\n", pool_ticket,
+		    V_ticket_pabuf));
+		ERROUT(EBUSY);
+	}
+
+	tail = TAILQ_LAST(ruleset->rules[rs_num].inactive.ptr,
+	    pf_krulequeue);
+	if (tail)
+		rule->nr = tail->nr + 1;
+	else
+		rule->nr = 0;
+	if (rule->ifname[0]) {
+		rule->kif = pfi_kkif_attach(kif, rule->ifname);
+		kif = NULL;
+		pfi_kkif_ref(rule->kif);
+	} else
+		rule->kif = NULL;
+
+	if (rule->rtableid > 0 && rule->rtableid >= rt_numfibs)
+		error = EBUSY;
+
+#ifdef ALTQ
+	/* set queue IDs */
+	if (rule->qname[0] != 0) {
+		if ((rule->qid = pf_qname2qid(rule->qname)) == 0)
+			error = EBUSY;
+		else if (rule->pqname[0] != 0) {
+			if ((rule->pqid =
+			    pf_qname2qid(rule->pqname)) == 0)
+				error = EBUSY;
+		} else
+			rule->pqid = rule->qid;
+	}
+#endif
+	if (rule->tagname[0])
+		if ((rule->tag = pf_tagname2tag(rule->tagname)) == 0)
+			error = EBUSY;
+	if (rule->match_tagname[0])
+		if ((rule->match_tag =
+		    pf_tagname2tag(rule->match_tagname)) == 0)
+			error = EBUSY;
+	if (rule->rt && !rule->direction)
+		error = EINVAL;
+	if (!rule->log)
+		rule->logif = 0;
+	if (rule->logif >= PFLOGIFS_MAX)
+		error = EINVAL;
+	if (pf_addr_setup(ruleset, &rule->src.addr, rule->af))
+		error = ENOMEM;
+	if (pf_addr_setup(ruleset, &rule->dst.addr, rule->af))
+		error = ENOMEM;
+	if (pf_kanchor_setup(rule, ruleset, anchor_call))
+		error = EINVAL;
+	if (rule->scrub_flags & PFSTATE_SETPRIO &&
+	    (rule->set_prio[0] > PF_PRIO_MAX ||
+	    rule->set_prio[1] > PF_PRIO_MAX))
+		error = EINVAL;
+	TAILQ_FOREACH(pa, &V_pf_pabuf, entries)
+		if (pa->addr.type == PF_ADDR_TABLE) {
+			pa->addr.p.tbl = pfr_attach_table(ruleset,
+			    pa->addr.v.tblname);
+			if (pa->addr.p.tbl == NULL)
+				error = ENOMEM;
+		}
+
+	rule->overload_tbl = NULL;
+	if (rule->overload_tblname[0]) {
+		if ((rule->overload_tbl = pfr_attach_table(ruleset,
+		    rule->overload_tblname)) == NULL)
+			error = EINVAL;
+		else
+			rule->overload_tbl->pfrkt_flags |=
+			    PFR_TFLAG_ACTIVE;
+	}
+
+	pf_mv_kpool(&V_pf_pabuf, &rule->rpool.list);
+	if (((((rule->action == PF_NAT) || (rule->action == PF_RDR) ||
+	    (rule->action == PF_BINAT)) && rule->anchor == NULL) ||
+	    (rule->rt > PF_NOPFROUTE)) &&
+	    (TAILQ_FIRST(&rule->rpool.list) == NULL))
+		error = EINVAL;
+
+	if (error) {
+		pf_free_rule(rule);
+		rule = NULL;
+		ERROUT(error);
+	}
+
+	rule->rpool.cur = TAILQ_FIRST(&rule->rpool.list);
+	counter_u64_zero(rule->evaluations);
+	for (int i = 0; i < 2; i++) {
+		counter_u64_zero(rule->packets[i]);
+		counter_u64_zero(rule->bytes[i]);
+	}
+	TAILQ_INSERT_TAIL(ruleset->rules[rs_num].inactive.ptr,
+	    rule, entries);
+	ruleset->rules[rs_num].inactive.rcount++;
+	PF_RULES_WUNLOCK();
+
+	return (0);
+
+#undef ERROUT
+errout:
+	PF_RULES_WUNLOCK();
+errout_unlocked:
+	pf_kkif_free(kif);
+	pf_krule_free(rule);
+	return (error);
+}
+
+static int
 pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td)
 {
 	int			 error = 0;
@@ -1809,6 +2564,7 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 		switch (cmd) {
 		case DIOCGETRULES:
 		case DIOCGETRULE:
+		case DIOCGETRULENV:
 		case DIOCGETADDRS:
 		case DIOCGETADDR:
 		case DIOCGETSTATE:
@@ -1890,6 +2646,7 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 		case DIOCIGETIFACES:
 		case DIOCGIFSPEEDV1:
 		case DIOCGIFSPEEDV0:
+		case DIOCGETRULENV:
 			break;
 		case DIOCRCLRTABLES:
 		case DIOCRADDTABLES:
@@ -1948,18 +2705,70 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 		}
 		break;
 
+	case DIOCADDRULENV: {
+		struct pfioc_nv	*nv = (struct pfioc_nv *)addr;
+		nvlist_t	*nvl = NULL;
+		void		*nvlpacked = NULL;
+		struct pf_krule	*rule = NULL;
+		const char	*anchor = "", *anchor_call = "";
+		uint32_t	 ticket = 0, pool_ticket = 0;
+
+#define	ERROUT(x)	do { error = (x); goto DIOCADDRULENV_error; } while (0)
+
+		if (nv->len > pf_ioctl_maxcount)
+			ERROUT(ENOMEM);
+
+		nvlpacked = malloc(nv->len, M_TEMP, M_WAITOK);
+		error = copyin(nv->data, nvlpacked, nv->len);
+		if (error)
+			ERROUT(error);
+
+		nvl = nvlist_unpack(nvlpacked, nv->len, 0);
+		if (nvl == NULL)
+			ERROUT(EBADMSG);
+
+		if (! nvlist_exists_number(nvl, "ticket"))
+			ERROUT(EINVAL);
+		ticket = nvlist_get_number(nvl, "ticket");
+
+		if (! nvlist_exists_number(nvl, "pool_ticket"))
+			ERROUT(EINVAL);
+		pool_ticket = nvlist_get_number(nvl, "pool_ticket");
+
+		if (! nvlist_exists_nvlist(nvl, "rule"))
+			ERROUT(EINVAL);
+
+		error = pf_nvrule_to_krule(nvlist_get_nvlist(nvl, "rule"),
+		    &rule);
+		if (error)
+			ERROUT(error);
+
+		if (nvlist_exists_string(nvl, "anchor"))
+			anchor = nvlist_get_string(nvl, "anchor");
+		if (nvlist_exists_string(nvl, "anchor_call"))
+			anchor_call = nvlist_get_string(nvl, "anchor_call");
+
+		if ((error = nvlist_error(nvl)))
+			ERROUT(error);
+
+		/* Frees rule on error */
+		error = pf_ioctl_addrule(rule, ticket, pool_ticket, anchor,
+		    anchor_call, td);
+
+		nvlist_destroy(nvl);
+		free(nvlpacked, M_TEMP);
+		break;
+#undef ERROUT
+DIOCADDRULENV_error:
+		pf_krule_free(rule);
+		nvlist_destroy(nvl);
+		free(nvlpacked, M_TEMP);
+
+		break;
+	}
 	case DIOCADDRULE: {
 		struct pfioc_rule	*pr = (struct pfioc_rule *)addr;
-		struct pf_kruleset	*ruleset;
-		struct pf_krule		*rule, *tail;
-		struct pf_kpooladdr	*pa;
-		struct pfi_kkif		*kif = NULL;
-		int			 rs_num;
-
-		if (pr->rule.return_icmp >> 8 > ICMP_MAXTYPE) {
-			error = EINVAL;
-			break;
-		}
+		struct pf_krule		*rule;
 
 		rule = malloc(sizeof(*rule), M_PFRULE, M_WAITOK);
 		error = pf_rule_to_krule(&pr->rule, rule);
@@ -1968,141 +2777,11 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 			break;
 		}
 
-		if (rule->ifname[0])
-			kif = pf_kkif_create(M_WAITOK);
-		rule->evaluations = counter_u64_alloc(M_WAITOK);
-		for (int i = 0; i < 2; i++) {
-			rule->packets[i] = counter_u64_alloc(M_WAITOK);
-			rule->bytes[i] = counter_u64_alloc(M_WAITOK);
-		}
-		rule->states_cur = counter_u64_alloc(M_WAITOK);
-		rule->states_tot = counter_u64_alloc(M_WAITOK);
-		rule->src_nodes = counter_u64_alloc(M_WAITOK);
-		rule->cuid = td->td_ucred->cr_ruid;
-		rule->cpid = td->td_proc ? td->td_proc->p_pid : 0;
-		TAILQ_INIT(&rule->rpool.list);
-#define	ERROUT(x)	{ error = (x); goto DIOCADDRULE_error; }
-
-		PF_RULES_WLOCK();
 		pr->anchor[sizeof(pr->anchor) - 1] = 0;
-		ruleset = pf_find_kruleset(pr->anchor);
-		if (ruleset == NULL)
-			ERROUT(EINVAL);
-		rs_num = pf_get_ruleset_number(pr->rule.action);
-		if (rs_num >= PF_RULESET_MAX)
-			ERROUT(EINVAL);
-		if (pr->ticket != ruleset->rules[rs_num].inactive.ticket) {
-			DPFPRINTF(PF_DEBUG_MISC,
-			    ("ticket: %d != [%d]%d\n", pr->ticket, rs_num,
-			    ruleset->rules[rs_num].inactive.ticket));
-			ERROUT(EBUSY);
-		}
-		if (pr->pool_ticket != V_ticket_pabuf) {
-			DPFPRINTF(PF_DEBUG_MISC,
-			    ("pool_ticket: %d != %d\n", pr->pool_ticket,
-			    V_ticket_pabuf));
-			ERROUT(EBUSY);
-		}
 
-		tail = TAILQ_LAST(ruleset->rules[rs_num].inactive.ptr,
-		    pf_krulequeue);
-		if (tail)
-			rule->nr = tail->nr + 1;
-		else
-			rule->nr = 0;
-		if (rule->ifname[0]) {
-			rule->kif = pfi_kkif_attach(kif, rule->ifname);
-			pfi_kkif_ref(rule->kif);
-		} else
-			rule->kif = NULL;
-
-		if (rule->rtableid > 0 && rule->rtableid >= rt_numfibs)
-			error = EBUSY;
-
-#ifdef ALTQ
-		/* set queue IDs */
-		if (rule->qname[0] != 0) {
-			if ((rule->qid = pf_qname2qid(rule->qname)) == 0)
-				error = EBUSY;
-			else if (rule->pqname[0] != 0) {
-				if ((rule->pqid =
-				    pf_qname2qid(rule->pqname)) == 0)
-					error = EBUSY;
-			} else
-				rule->pqid = rule->qid;
-		}
-#endif
-		if (rule->tagname[0])
-			if ((rule->tag = pf_tagname2tag(rule->tagname)) == 0)
-				error = EBUSY;
-		if (rule->match_tagname[0])
-			if ((rule->match_tag =
-			    pf_tagname2tag(rule->match_tagname)) == 0)
-				error = EBUSY;
-		if (rule->rt && !rule->direction)
-			error = EINVAL;
-		if (!rule->log)
-			rule->logif = 0;
-		if (rule->logif >= PFLOGIFS_MAX)
-			error = EINVAL;
-		if (pf_addr_setup(ruleset, &rule->src.addr, rule->af))
-			error = ENOMEM;
-		if (pf_addr_setup(ruleset, &rule->dst.addr, rule->af))
-			error = ENOMEM;
-		if (pf_kanchor_setup(rule, ruleset, pr->anchor_call))
-			error = EINVAL;
-		if (rule->scrub_flags & PFSTATE_SETPRIO &&
-		    (rule->set_prio[0] > PF_PRIO_MAX ||
-		    rule->set_prio[1] > PF_PRIO_MAX))
-			error = EINVAL;
-		TAILQ_FOREACH(pa, &V_pf_pabuf, entries)
-			if (pa->addr.type == PF_ADDR_TABLE) {
-				pa->addr.p.tbl = pfr_attach_table(ruleset,
-				    pa->addr.v.tblname);
-				if (pa->addr.p.tbl == NULL)
-					error = ENOMEM;
-			}
-
-		rule->overload_tbl = NULL;
-		if (rule->overload_tblname[0]) {
-			if ((rule->overload_tbl = pfr_attach_table(ruleset,
-			    rule->overload_tblname)) == NULL)
-				error = EINVAL;
-			else
-				rule->overload_tbl->pfrkt_flags |=
-				    PFR_TFLAG_ACTIVE;
-		}
-
-		pf_mv_kpool(&V_pf_pabuf, &rule->rpool.list);
-		if (((((rule->action == PF_NAT) || (rule->action == PF_RDR) ||
-		    (rule->action == PF_BINAT)) && rule->anchor == NULL) ||
-		    (rule->rt > PF_NOPFROUTE)) &&
-		    (TAILQ_FIRST(&rule->rpool.list) == NULL))
-			error = EINVAL;
-
-		if (error) {
-			pf_free_rule(rule);
-			PF_RULES_WUNLOCK();
-			break;
-		}
-
-		rule->rpool.cur = TAILQ_FIRST(&rule->rpool.list);
-		counter_u64_zero(rule->evaluations);
-		for (int i = 0; i < 2; i++) {
-			counter_u64_zero(rule->packets[i]);
-			counter_u64_zero(rule->bytes[i]);
-		}
-		TAILQ_INSERT_TAIL(ruleset->rules[rs_num].inactive.ptr,
-		    rule, entries);
-		ruleset->rules[rs_num].inactive.rcount++;
-		PF_RULES_WUNLOCK();
-		break;
-
-#undef ERROUT
-DIOCADDRULE_error:
-		PF_RULES_WUNLOCK();
-		pf_krule_free(rule);
-		pf_kkif_free(kif);
+		/* Frees rule on error */
+		error = pf_ioctl_addrule(rule, pr->ticket, pr->pool_ticket,
+		    pr->anchor, pr->anchor_call, td);
 		break;
 	}
 
@@ -2193,6 +2872,138 @@ DIOCADDRULE_error:
 		break;
 	}
 
+	case DIOCGETRULENV: {
+		struct pfioc_nv		*nv = (struct pfioc_nv *)addr;
+		nvlist_t		*nvrule = NULL;
+		nvlist_t		*nvl = NULL;
+		struct pf_kruleset	*ruleset;
+		struct pf_krule		*rule;
+		void			*nvlpacked = NULL;
+		int			 rs_num, nr;
+		bool			 clear_counter = false;
+
+#define	ERROUT(x)	do { error = (x); goto DIOCGETRULENV_error; } while (0)
+
+		if (nv->len > pf_ioctl_maxcount)
+			ERROUT(ENOMEM);
+
+		/* Copy the request in */
+		nvlpacked = malloc(nv->len, M_TEMP, M_WAITOK);
+		if (nvlpacked == NULL)
+			ERROUT(ENOMEM);
+
+		error = copyin(nv->data, nvlpacked, nv->len);
+		if (error)
+			ERROUT(error);
+
+		nvl = nvlist_unpack(nvlpacked, nv->len, 0);
+		if (nvl == NULL)
+			ERROUT(EBADMSG);
+
+		if (! nvlist_exists_string(nvl, "anchor"))
+			ERROUT(EBADMSG);
+		if (! nvlist_exists_number(nvl, "ruleset"))
+			ERROUT(EBADMSG);
+		if (! nvlist_exists_number(nvl, "ticket"))
+			ERROUT(EBADMSG);
+		if (! nvlist_exists_number(nvl, "nr"))
+			ERROUT(EBADMSG);
+
+		if (nvlist_exists_bool(nvl, "clear_counter"))
+			clear_counter = nvlist_get_bool(nvl, "clear_counter");
+
+		if (clear_counter && !(flags & FWRITE))
+			ERROUT(EACCES);
+
+		nr = nvlist_get_number(nvl, "nr");
+
+		PF_RULES_WLOCK();
+		ruleset = pf_find_kruleset(nvlist_get_string(nvl, "anchor"));
+		if (ruleset == NULL) {
+			PF_RULES_WUNLOCK();
+			ERROUT(ENOENT);
+		}
+
+		rs_num = pf_get_ruleset_number(nvlist_get_number(nvl, "ruleset"));
+		if (rs_num >= PF_RULESET_MAX) {
+			PF_RULES_WUNLOCK();
+			ERROUT(EINVAL);
+		}
+
+		if (nvlist_get_number(nvl, "ticket") !=
+		    ruleset->rules[rs_num].active.ticket) {
+			PF_RULES_WUNLOCK();
+			ERROUT(EBUSY);
+			break;
+		}
+
+		if ((error = nvlist_error(nvl))) {
+			PF_RULES_WUNLOCK();
+			ERROUT(error);
+		}
+
+		rule = TAILQ_FIRST(ruleset->rules[rs_num].active.ptr);
+		while ((rule != NULL) && (rule->nr != nr))
+			rule = TAILQ_NEXT(rule, entries);
+		if (rule == NULL) {
+			PF_RULES_WUNLOCK();
+			ERROUT(EBUSY);
+			break;
+		}
+
+		nvrule = pf_krule_to_nvrule(rule);
+
+		nvlist_destroy(nvl);
+		nvl = nvlist_create(0);
+		if (nvl == NULL) {
+			PF_RULES_WUNLOCK();
+			ERROUT(ENOMEM);
+		}
+		nvlist_add_number(nvl, "nr", nr);
+		nvlist_add_nvlist(nvl, "rule", nvrule);
+		nvrule = NULL;
+		if (pf_kanchor_nvcopyout(ruleset, rule, nvl)) {
+			PF_RULES_WUNLOCK();
+			ERROUT(EBUSY);
+		}
+
+		free(nvlpacked, M_TEMP);
+		nvlpacked = nvlist_pack(nvl, &nv->len);
+		if (nvlpacked == NULL) {
+			PF_RULES_WUNLOCK();
+			ERROUT(ENOMEM);
+		}
+
+		if (nv->size == 0) {
+			PF_RULES_WUNLOCK();
+			ERROUT(0);
+		}
+		else if (nv->size < nv->len) {
+			PF_RULES_WUNLOCK();
+			ERROUT(ENOSPC);
+		}
+
+		error = copyout(nvlpacked, nv->data, nv->len);
+
+		if (clear_counter) {
+			counter_u64_zero(rule->evaluations);
+			for (int i = 0; i < 2; i++) {
+				counter_u64_zero(rule->packets[i]);
+				counter_u64_zero(rule->bytes[i]);
+			}
+			counter_u64_zero(rule->states_tot);
+		}
+		PF_RULES_WUNLOCK();
+
+#undef ERROUT
+DIOCGETRULENV_error:
+		free(nvlpacked, M_TEMP);
+		nvlist_destroy(nvrule);
+		nvlist_destroy(nvl);
+
+		break;
+	}
+
 	case DIOCCHANGERULE: {
 		struct pfioc_rule	*pcr = (struct pfioc_rule *)addr;
 		struct pf_kruleset	*ruleset;
@@ -2263,6 +3074,7 @@ DIOCADDRULE_error:
 			if (newrule->ifname[0]) {
 				newrule->kif = pfi_kkif_attach(kif,
 				    newrule->ifname);
+				kif = NULL;
 				pfi_kkif_ref(newrule->kif);
 			} else
 				newrule->kif = NULL;
@@ -2996,6 +3808,7 @@ DIOCGETSTATES_full:
 		}
 		if (pa->ifname[0]) {
 			pa->kif = pfi_kkif_attach(kif, pa->ifname);
+			kif = NULL;
 			pfi_kkif_ref(pa->kif);
 		} else
 			pa->kif = NULL;

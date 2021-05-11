@@ -2254,10 +2254,12 @@ product FUJITSU AH_F401U	0x105b	AH-F401U Air H device
 product FUJITSUSIEMENS SCR	0x0009	Fujitsu-Siemens SCR USB Reader
 
 /* Garmin products */
-product GARMIN DAKOTA20		0x23c0	Dakota 20
-product GARMIN FORERUNNER230	0x086d	ForeRunner 230
-product GARMIN GPSMAP62S	0x2459	GPSMAP 62s
 product GARMIN IQUE_3600	0x0004	iQue 3600
+product GARMIN FORERUNNER230	0x086d	ForeRunner 230
+product GARMIN INSTINCTSOLAR	0x0d8a	Instinct Solar
+product GARMIN DAKOTA20		0x23c0	Dakota 20
+product GARMIN GPSMAP62S	0x2459	GPSMAP 62s
+product GARMIN EDGETOURINGPLUS	0x26c8	Edge Touring+
 
 /* Gemalto products */
 product GEMALTO PROXPU		0x5501	Prox-PU/CU RFID Card Reader
@@ -2724,6 +2726,7 @@ product KEYSPAN UIA11		0x0202	UIA-11 remote control
 product KINGSTON XX1		0x0008	Ethernet
 product KINGSTON KNU101TX	0x000a	KNU101TX USB Ethernet
 product KINGSTON HYPERX3_0	0x162b	DT HyperX 3.0
+product KINGSTON DATATRAVELER3_0 0x1666 DataTraveler 3.0
 
 /* Kawasaki products */
 product KLSI DUH3E10BT		0x0008	USB Ethernet

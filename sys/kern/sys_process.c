@@ -51,6 +51,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/malloc.h>
 #include <sys/signalvar.h>
+#include <sys/caprights.h>
+#include <sys/filedesc.h>
 
 #include <machine/reg.h>
 
@@ -469,6 +471,7 @@ sys_ptrace(struct thread *td, struct ptrace_args *uap)
 		struct ptrace_io_desc piod;
 		struct ptrace_lwpinfo pl;
 		struct ptrace_vm_entry pve;
+		struct ptrace_coredump pc;
 		struct dbreg dbreg;
 		struct fpreg fpreg;
 		struct reg reg;
@@ -518,6 +521,12 @@ sys_ptrace(struct thread *td, struct ptrace_args *uap)
 		break;
 	case PT_VM_ENTRY:
 		error = copyin(uap->addr, &r.pve, sizeof(r.pve));
+		break;
+	case PT_COREDUMP:
+		if (uap->data != sizeof(r.pc))
+			error = EINVAL;
+		else
+			error = copyin(uap->addr, &r.pc, uap->data);
 		break;
 	default:
 		addr = uap->addr;
@@ -601,6 +610,53 @@ proc_set_traced(struct proc *p, bool stop)
 	p->p_ptevents = PTRACE_DEFAULT;
 }
 
+static int
+proc_can_ptrace(struct thread *td, struct proc *p)
+{
+	int error;
+
+	PROC_LOCK_ASSERT(p, MA_OWNED);
+
+	if ((p->p_flag & P_WEXIT) != 0)
+		return (ESRCH);
+
+	if ((error = p_cansee(td, p)) != 0)
+		return (error);
+	if ((error = p_candebug(td, p)) != 0)
+		return (error);
+
+	/* not being traced... */
+	if ((p->p_flag & P_TRACED) == 0)
+		return (EPERM);
+
+	/* not being traced by YOU */
+	if (p->p_pptr != td->td_proc)
+		return (EBUSY);
+
+	/* not currently stopped */
+	if ((p->p_flag & P_STOPPED_TRACE) == 0 ||
+	    p->p_suspcount != p->p_numthreads  ||
+	    (p->p_flag & P_WAITED) == 0)
+		return (EBUSY);
+
+	return (0);
+}
+
+static struct thread *
+ptrace_sel_coredump_thread(struct proc *p)
+{
+	struct thread *td2;
+
+	PROC_LOCK_ASSERT(p, MA_OWNED);
+	MPASS((p->p_flag & P_STOPPED_TRACE) != 0);
+
+	FOREACH_THREAD_IN_PROC(p, td2) {
+		if ((td2->td_dbgflags & TDB_SSWITCH) != 0)
+			return (td2);
+	}
+	return (NULL);
+}
+
 int
 kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 {
@@ -611,14 +667,19 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 	struct ptrace_io_desc *piod = NULL;
 	struct ptrace_lwpinfo *pl;
 	struct ptrace_sc_ret *psr;
+	struct file *fp;
+	struct ptrace_coredump *pc;
+	struct thr_coredump_req *tcq;
 	int error, num, tmp;
-	int proctree_locked = 0;
 	lwpid_t tid = 0, *buf;
 #ifdef COMPAT_FREEBSD32
 	int wrap32 = 0, safe = 0;
 #endif
+	bool proctree_locked, p2_req_set;
 
 	curp = td->td_proc;
+	proctree_locked = false;
+	p2_req_set = false;
 
 	/* Lock proctree before locking the process. */
 	switch (req) {
@@ -636,7 +697,7 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 	case PT_DETACH:
 	case PT_GET_SC_ARGS:
 		sx_xlock(&proctree_lock);
-		proctree_locked = 1;
+		proctree_locked = true;
 		break;
 	default:
 		break;
@@ -757,31 +818,47 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 
 		/* FALLTHROUGH */
 	default:
-		/* not being traced... */
-		if ((p->p_flag & P_TRACED) == 0) {
-			error = EPERM;
+		/*
+		 * Check for ptrace eligibility before waiting for
+		 * holds to drain.
+		 */
+		error = proc_can_ptrace(td, p);
+		if (error != 0)
 			goto fail;
+
+		/*
+		 * Block parallel ptrace requests.  Most important, do
+		 * not allow other thread in debugger to continue the
+		 * debuggee until coredump finished.
+		 */
+		while ((p->p_flag2 & P2_PTRACEREQ) != 0) {
+			if (proctree_locked)
+				sx_xunlock(&proctree_lock);
+			error = msleep(&p->p_flag2, &p->p_mtx, PPAUSE | PCATCH |
+			    (proctree_locked ? PDROP : 0), "pptrace", 0);
+			if (proctree_locked) {
+				sx_xlock(&proctree_lock);
+				PROC_LOCK(p);
+			}
+			if (error == 0 && td2->td_proc != p)
+				error = ESRCH;
+			if (error == 0)
+				error = proc_can_ptrace(td, p);
+			if (error != 0)
+				goto fail;
 		}
 
-		/* not being traced by YOU */
-		if (p->p_pptr != td->td_proc) {
-			error = EBUSY;
-			goto fail;
-		}
-
-		/* not currently stopped */
-		if ((p->p_flag & P_STOPPED_TRACE) == 0 ||
-		    p->p_suspcount != p->p_numthreads  ||
-		    (p->p_flag & P_WAITED) == 0) {
-			error = EBUSY;
-			goto fail;
-		}
-
-		/* OK */
+		/* Ok */
 		break;
 	}
 
-	/* Keep this process around until we finish this request. */
+	/*
+	 * Keep this process around and request parallel ptrace()
+	 * request to wait until we finish this request.
+	 */
+	MPASS((p->p_flag2 & P2_PTRACEREQ) == 0);
+	p->p_flag2 |= P2_PTRACEREQ;
+	p2_req_set = true;
 	_PHOLD(p);
 
 	/*
@@ -816,7 +893,7 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		    p->p_oppid);
 
 		sx_xunlock(&proctree_lock);
-		proctree_locked = 0;
+		proctree_locked = false;
 		MPASS(p->p_xthread == NULL);
 		MPASS((p->p_flag & P_STOPPED_TRACE) == 0);
 
@@ -1053,10 +1130,10 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		}
 
 		sx_xunlock(&proctree_lock);
-		proctree_locked = 0;
+		proctree_locked = false;
 
 	sendsig:
-		MPASS(proctree_locked == 0);
+		MPASS(!proctree_locked);
 
 		/*
 		 * Clear the pending event for the thread that just
@@ -1299,6 +1376,62 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		PROC_LOCK(p);
 		break;
 
+	case PT_COREDUMP:
+		pc = addr;
+		CTR2(KTR_PTRACE, "PT_COREDUMP: pid %d, fd %d",
+		    p->p_pid, pc->pc_fd);
+
+		if ((pc->pc_flags & ~(PC_COMPRESS | PC_ALL)) != 0) {
+			error = EINVAL;
+			break;
+		}
+		PROC_UNLOCK(p);
+
+		tcq = malloc(sizeof(*tcq), M_TEMP, M_WAITOK | M_ZERO);
+		fp = NULL;
+		error = fget_write(td, pc->pc_fd, &cap_write_rights, &fp);
+		if (error != 0)
+			goto coredump_cleanup_nofp;
+		if (fp->f_type != DTYPE_VNODE || fp->f_vnode->v_type != VREG) {
+			error = EPIPE;
+			goto coredump_cleanup;
+		}
+
+		PROC_LOCK(p);
+		error = proc_can_ptrace(td, p);
+		if (error != 0)
+			goto coredump_cleanup_locked;
+
+		td2 = ptrace_sel_coredump_thread(p);
+		if (td2 == NULL) {
+			error = EBUSY;
+			goto coredump_cleanup_locked;
+		}
+		KASSERT((td2->td_dbgflags & TDB_COREDUMPRQ) == 0,
+		    ("proc %d tid %d req coredump", p->p_pid, td2->td_tid));
+
+		tcq->tc_vp = fp->f_vnode;
+		tcq->tc_limit = pc->pc_limit == 0 ? OFF_MAX : pc->pc_limit;
+		tcq->tc_flags = SVC_PT_COREDUMP;
+		if ((pc->pc_flags & PC_COMPRESS) == 0)
+			tcq->tc_flags |= SVC_NOCOMPRESS;
+		if ((pc->pc_flags & PC_ALL) != 0)
+			tcq->tc_flags |= SVC_ALL;
+		td2->td_coredump = tcq;
+		td2->td_dbgflags |= TDB_COREDUMPRQ;
+		thread_run_flash(td2);
+		while ((td2->td_dbgflags & TDB_COREDUMPRQ) != 0)
+			msleep(p, &p->p_mtx, PPAUSE, "crdmp", 0);
+		error = tcq->tc_error;
+coredump_cleanup_locked:
+		PROC_UNLOCK(p);
+coredump_cleanup:
+		fdrop(fp, td);
+coredump_cleanup_nofp:
+		free(tcq, M_TEMP);
+		PROC_LOCK(p);
+		break;
+
 	default:
 #ifdef __HAVE_PTRACE_MACHDEP
 		if (req >= PT_FIRSTMACH) {
@@ -1311,11 +1444,15 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 			error = EINVAL;
 		break;
 	}
-
 out:
 	/* Drop our hold on this process now that the request has completed. */
 	_PRELE(p);
 fail:
+	if (p2_req_set) {
+		if ((p->p_flag2 & P2_PTRACEREQ) != 0)
+			wakeup(&p->p_flag2);
+		p->p_flag2 &= ~P2_PTRACEREQ;
+	}
 	PROC_UNLOCK(p);
 	if (proctree_locked)
 		sx_xunlock(&proctree_lock);
