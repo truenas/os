@@ -962,23 +962,8 @@ nfs_getattr(struct vop_getattr_args *ap)
 	 * First look in the cache.
 	 */
 	if (ncl_getattrcache(vp, &vattr) == 0) {
-		vap->va_type = vattr.va_type;
-		vap->va_mode = vattr.va_mode;
-		vap->va_nlink = vattr.va_nlink;
-		vap->va_uid = vattr.va_uid;
-		vap->va_gid = vattr.va_gid;
-		vap->va_fsid = vattr.va_fsid;
-		vap->va_fileid = vattr.va_fileid;
-		vap->va_size = vattr.va_size;
-		vap->va_blocksize = vattr.va_blocksize;
-		vap->va_atime = vattr.va_atime;
-		vap->va_mtime = vattr.va_mtime;
-		vap->va_ctime = vattr.va_ctime;
-		vap->va_gen = vattr.va_gen;
-		vap->va_flags = vattr.va_flags;
-		vap->va_rdev = vattr.va_rdev;
-		vap->va_bytes = vattr.va_bytes;
-		vap->va_filerev = vattr.va_filerev;
+		ncl_copy_vattr(vap, &vattr);
+
 		/*
 		 * Get the local modify time for the case of a write
 		 * delegation.
@@ -1039,7 +1024,9 @@ nfs_setattr(struct vop_setattr_args *ap)
 	 */
   	if ((vap->va_flags != VNOVAL || vap->va_uid != (uid_t)VNOVAL ||
 	    vap->va_gid != (gid_t)VNOVAL || vap->va_atime.tv_sec != VNOVAL ||
-	    vap->va_mtime.tv_sec != VNOVAL || vap->va_mode != (mode_t)VNOVAL) &&
+	    vap->va_mtime.tv_sec != VNOVAL ||
+	    vap->va_birthtime.tv_sec != VNOVAL ||
+	    vap->va_mode != (mode_t)VNOVAL) &&
 	    (vp->v_mount->mnt_flag & MNT_RDONLY))
 		return (EROFS);
 	if (vap->va_size != VNOVAL) {
@@ -1052,6 +1039,7 @@ nfs_setattr(struct vop_setattr_args *ap)
  		case VFIFO:
 			if (vap->va_mtime.tv_sec == VNOVAL &&
 			    vap->va_atime.tv_sec == VNOVAL &&
+			    vap->va_birthtime.tv_sec == VNOVAL &&
 			    vap->va_mode == (mode_t)VNOVAL &&
 			    vap->va_uid == (uid_t)VNOVAL &&
 			    vap->va_gid == (gid_t)VNOVAL)

@@ -400,6 +400,29 @@ nfscl_warn_fileid(struct nfsmount *nmp, struct nfsvattr *oldnap,
 		    ncl_fileid_maxwarnings);
 }
 
+void
+ncl_copy_vattr(struct vattr *dst, struct vattr *src)
+{
+	dst->va_type = src->va_type;
+	dst->va_mode = src->va_mode;
+	dst->va_nlink = src->va_nlink;
+	dst->va_uid = src->va_uid;
+	dst->va_gid = src->va_gid;
+	dst->va_fsid = src->va_fsid;
+	dst->va_fileid = src->va_fileid;
+	dst->va_size = src->va_size;
+	dst->va_blocksize = src->va_blocksize;
+	dst->va_atime = src->va_atime;
+	dst->va_mtime = src->va_mtime;
+	dst->va_ctime = src->va_ctime;
+	dst->va_birthtime = src->va_birthtime;
+	dst->va_gen = src->va_gen;
+	dst->va_flags = src->va_flags;
+	dst->va_rdev = src->va_rdev;
+	dst->va_bytes = src->va_bytes;
+	dst->va_filerev = src->va_filerev;
+}
+
 /*
  * Load the attribute cache (that lives in the nfsnode entry) with
  * the attributes of the second argument and
@@ -444,6 +467,7 @@ nfscl_loadattrcache(struct vnode **vpp, struct nfsvattr *nap, void *nvaper,
 		np->n_vattr.na_size = nap->na_size;
 		np->n_vattr.na_mtime = nap->na_mtime;
 		np->n_vattr.na_ctime = nap->na_ctime;
+		np->n_vattr.na_btime = nap->na_btime;
 		np->n_vattr.na_fsid = nap->na_fsid;
 		np->n_vattr.na_mode = nap->na_mode;
 	} else {
@@ -551,7 +575,7 @@ nfscl_loadattrcache(struct vnode **vpp, struct nfsvattr *nap, void *nvaper,
 		KDTRACE_NFS_ATTRCACHE_FLUSH_DONE(vp);
 	}
 	if (vaper != NULL) {
-		NFSBCOPY((caddr_t)vap, (caddr_t)vaper, sizeof(*vap));
+		ncl_copy_vattr(vaper, vap);
 		if (np->n_flag & NCHG) {
 			if (np->n_flag & NACC)
 				vaper->va_atime = np->n_atim;

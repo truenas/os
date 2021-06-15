@@ -10,6 +10,12 @@ TAP_TESTS_SH+=	ng_macfilter_test
 TEST_METADATA.ng_macfilter_test+=	required_user="root"
 TEST_METADATA.ng_macfilter_test+=	required_programs="perl"
 
-MAN=
+ATF_TESTS_C+=	basic	\
+		bridge	\
+
+SRCS.basic=	basic.c util.c
+SRCS.bridge=	bridge.c util.c
+
+LIBADD+=	netgraph
 
 .include <bsd.test.mk>

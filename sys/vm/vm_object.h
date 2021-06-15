@@ -140,7 +140,7 @@ struct vm_object {
 		 */
 		struct {
 			TAILQ_HEAD(, vm_page) devp_pglist;
-			struct cdev_pager_ops *ops;
+			const struct cdev_pager_ops *ops;
 			struct cdev *dev;
 		} devp;
 
@@ -178,7 +178,7 @@ struct vm_object {
 		 * Phys pager
 		 */
 		struct {
-			struct phys_pager_ops *ops;
+			const struct phys_pager_ops *ops;
 			union {
 				void *data_ptr;
 				uintptr_t data_val;
@@ -201,13 +201,14 @@ struct vm_object {
 #define	OBJ_UMTXDEAD	0x0020		/* umtx pshared was terminated */
 #define	OBJ_SIZEVNLOCK	0x0040		/* lock vnode to check obj size */
 #define	OBJ_PG_DTOR	0x0080		/* dont reset object, leave that for dtor */
-#define	OBJ_TMPFS_NODE	0x0200		/* object belongs to tmpfs VREG node */
+#define	OBJ_PAGERPRIV2	0x0100		/* Pager private */
+#define	OBJ_SWAP	0x0200		/* object swaps */
 #define	OBJ_SPLIT	0x0400		/* object is being split */
 #define	OBJ_COLLAPSING	0x0800		/* Parent of collapse. */
 #define	OBJ_COLORED	0x1000		/* pg_color is defined */
 #define	OBJ_ONEMAPPING	0x2000		/* One USE (a single, non-forked) mapping flag */
-#define	OBJ_SHADOWLIST	0x4000		/* Object is on the shadow list. */
-#define	OBJ_TMPFS	0x8000		/* has tmpfs vnode allocated */
+#define	OBJ_PAGERPRIV1	0x4000		/* Pager private */
+#define	OBJ_SHADOWLIST	0x8000		/* Object is on the shadow list. */
 
 /*
  * Helpers to perform conversion between vm_object page indexes and offsets.
@@ -330,21 +331,6 @@ vm_object_reserv(vm_object_t object)
 	return (false);
 }
 
-static __inline bool
-vm_object_mightbedirty(vm_object_t object)
-{
-
-	if (object->type != OBJT_VNODE) {
-		if ((object->flags & OBJ_TMPFS_NODE) == 0)
-			return (false);
-#ifdef KASSERT
-		KASSERT(object->type == OBJT_SWAP,
-		    ("TMPFS_NODE obj %p is not swap", object));
-#endif
-	}
-	return (object->generation != object->cleangeneration);
-}
-
 void vm_object_clear_flag(vm_object_t object, u_short bits);
 void vm_object_pip_add(vm_object_t object, short i);
 void vm_object_pip_wakeup(vm_object_t object);
@@ -371,6 +357,7 @@ extern int umtx_shm_vnobj_persistent;
 vm_object_t vm_object_allocate (objtype_t, vm_pindex_t);
 vm_object_t vm_object_allocate_anon(vm_pindex_t, vm_object_t, struct ucred *,
    vm_size_t);
+vm_object_t vm_object_allocate_dyn(objtype_t, vm_pindex_t, u_short);
 boolean_t vm_object_coalesce(vm_object_t, vm_ooffset_t, vm_size_t, vm_size_t,
    boolean_t);
 void vm_object_collapse (vm_object_t);
@@ -378,6 +365,9 @@ void vm_object_deallocate (vm_object_t);
 void vm_object_destroy (vm_object_t);
 void vm_object_terminate (vm_object_t);
 void vm_object_set_writeable_dirty (vm_object_t);
+void vm_object_set_writeable_dirty_(vm_object_t object);
+bool vm_object_mightbedirty(vm_object_t object);
+bool vm_object_mightbedirty_(vm_object_t object);
 void vm_object_init (void);
 int  vm_object_kvme_type(vm_object_t object, struct vnode **vpp);
 void vm_object_madvise(vm_object_t, vm_pindex_t, vm_pindex_t, int);

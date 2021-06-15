@@ -47,6 +47,7 @@
 #include <sys/queue.h>
 
 TAILQ_HEAD(pagerlst, vm_object);
+struct vnode;
 
 typedef void pgo_init_t(void);
 typedef vm_object_t pgo_alloc_t(void *, vm_ooffset_t, vm_prot_t, vm_ooffset_t,
@@ -62,8 +63,15 @@ typedef int pgo_populate_t(vm_object_t, vm_pindex_t, int, vm_prot_t,
     vm_pindex_t *, vm_pindex_t *);
 typedef void pgo_pageunswapped_t(vm_page_t);
 typedef void pgo_writecount_t(vm_object_t, vm_offset_t, vm_offset_t);
+typedef void pgo_set_writeable_dirty_t(vm_object_t);
+typedef bool pgo_mightbedirty_t(vm_object_t);
+typedef void pgo_getvp_t(vm_object_t object, struct vnode **vpp,
+    bool *vp_heldp);
+typedef void pgo_freespace_t(vm_object_t object, vm_pindex_t start,
+    vm_size_t size);
 
 struct pagerops {
+	int			pgo_kvme_type;
 	pgo_init_t		*pgo_init;		/* Initialize pager. */
 	pgo_alloc_t		*pgo_alloc;		/* Allocate pager. */
 	pgo_dealloc_t		*pgo_dealloc;		/* Disassociate. */
@@ -73,18 +81,22 @@ struct pagerops {
 	pgo_haspage_t		*pgo_haspage;		/* Query page. */
 	pgo_populate_t		*pgo_populate;		/* Bulk spec pagein. */
 	pgo_pageunswapped_t	*pgo_pageunswapped;
-	/* Operations for specialized writecount handling */
 	pgo_writecount_t	*pgo_update_writecount;
 	pgo_writecount_t	*pgo_release_writecount;
+	pgo_set_writeable_dirty_t *pgo_set_writeable_dirty;
+	pgo_mightbedirty_t	*pgo_mightbedirty;
+	pgo_getvp_t		*pgo_getvp;
+	pgo_freespace_t		*pgo_freespace;
 };
 
-extern struct pagerops defaultpagerops;
-extern struct pagerops swappagerops;
-extern struct pagerops vnodepagerops;
-extern struct pagerops devicepagerops;
-extern struct pagerops physpagerops;
-extern struct pagerops sgpagerops;
-extern struct pagerops mgtdevicepagerops;
+extern const struct pagerops defaultpagerops;
+extern const struct pagerops swappagerops;
+extern const struct pagerops vnodepagerops;
+extern const struct pagerops devicepagerops;
+extern const struct pagerops physpagerops;
+extern const struct pagerops sgpagerops;
+extern const struct pagerops mgtdevicepagerops;
+extern const struct pagerops swaptmpfspagerops;
 
 /*
  * get/put return values
@@ -109,7 +121,7 @@ extern struct pagerops mgtdevicepagerops;
 
 #ifdef _KERNEL
 
-extern struct pagerops *pagertab[];
+extern const struct pagerops *pagertab[] __read_mostly;
 extern struct mtx_padalign pbuf_mtx;
 
 /*
@@ -129,13 +141,9 @@ void vm_pager_init(void);
 vm_object_t vm_pager_object_lookup(struct pagerlst *, void *);
 
 static __inline void
-vm_pager_put_pages(
-	vm_object_t object,
-	vm_page_t *m,
-	int count,
-	int flags,
-	int *rtvals
-) {
+vm_pager_put_pages(vm_object_t object, vm_page_t *m, int count, int flags,
+    int *rtvals)
+{
 	VM_OBJECT_ASSERT_WLOCKED(object);
 	(*pagertab[object->type]->pgo_putpages)
 	    (object, m, count, flags, rtvals);
@@ -152,12 +160,9 @@ vm_pager_put_pages(
  *	The object must be locked.
  */
 static __inline boolean_t
-vm_pager_has_page(
-	vm_object_t object,
-	vm_pindex_t offset, 
-	int *before,
-	int *after
-) {
+vm_pager_has_page(vm_object_t object, vm_pindex_t offset, int *before,
+    int *after)
+{
 	boolean_t ret;
 
 	VM_OBJECT_ASSERT_LOCKED(object);
@@ -191,30 +196,61 @@ vm_pager_populate(vm_object_t object, vm_pindex_t pidx, int fault_type,
 static __inline void
 vm_pager_page_unswapped(vm_page_t m)
 {
+	pgo_pageunswapped_t *method;
 
-	if (pagertab[m->object->type]->pgo_pageunswapped)
-		(*pagertab[m->object->type]->pgo_pageunswapped)(m);
+	method = pagertab[m->object->type]->pgo_pageunswapped;
+	if (method != NULL)
+		method(m);
 }
 
 static __inline void
 vm_pager_update_writecount(vm_object_t object, vm_offset_t start,
     vm_offset_t end)
 {
+	pgo_writecount_t *method;
 
-	if (pagertab[object->type]->pgo_update_writecount)
-		pagertab[object->type]->pgo_update_writecount(object, start,
-		    end);
+	method = pagertab[object->type]->pgo_update_writecount;
+	if (method != NULL)
+		method(object, start, end);
 }
 
 static __inline void
 vm_pager_release_writecount(vm_object_t object, vm_offset_t start,
     vm_offset_t end)
 {
+	pgo_writecount_t *method;
 
-	if (pagertab[object->type]->pgo_release_writecount)
-		pagertab[object->type]->pgo_release_writecount(object, start,
-		    end);
+	method = pagertab[object->type]->pgo_release_writecount;
+	if (method != NULL)
+		method(object, start, end);
 }
+
+static __inline void
+vm_pager_getvp(vm_object_t object, struct vnode **vpp, bool *vp_heldp)
+{
+	pgo_getvp_t *method;
+
+	*vpp = NULL;
+	if (vp_heldp != NULL)
+		*vp_heldp = false;
+	method = pagertab[object->type]->pgo_getvp;
+	if (method != NULL)
+		method(object, vpp, vp_heldp);
+}
+
+static __inline void
+vm_pager_freespace(vm_object_t object, vm_pindex_t start,
+    vm_size_t size)
+{
+	pgo_freespace_t *method;
+
+	method = pagertab[object->type]->pgo_freespace;
+	if (method != NULL)
+		method(object, start, size);
+}
+
+int vm_pager_alloc_dyn_type(struct pagerops *ops, int base_type);
+void vm_pager_free_dyn_type(objtype_t type);
 
 struct cdev_pager_ops {
 	int (*cdev_pg_fault)(vm_object_t vm_obj, vm_ooffset_t offset,
@@ -228,7 +264,7 @@ struct cdev_pager_ops {
 };
 
 vm_object_t cdev_pager_allocate(void *handle, enum obj_type tp,
-    struct cdev_pager_ops *ops, vm_ooffset_t size, vm_prot_t prot,
+    const struct cdev_pager_ops *ops, vm_ooffset_t size, vm_prot_t prot,
     vm_ooffset_t foff, struct ucred *cred);
 vm_object_t cdev_pager_lookup(void *handle);
 void cdev_pager_free_page(vm_object_t object, vm_page_t m);
@@ -245,8 +281,8 @@ struct phys_pager_ops {
 	    vm_ooffset_t foff, struct ucred *cred);
 	void (*phys_pg_dtor)(vm_object_t vm_obj);
 };
-extern struct phys_pager_ops default_phys_pg_ops;
-vm_object_t phys_pager_allocate(void *handle, struct phys_pager_ops *ops,
+extern const struct phys_pager_ops default_phys_pg_ops;
+vm_object_t phys_pager_allocate(void *handle, const struct phys_pager_ops *ops,
     void *data, vm_ooffset_t size, vm_prot_t prot, vm_ooffset_t foff,
     struct ucred *cred);
 

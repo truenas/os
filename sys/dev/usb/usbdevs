@@ -1266,6 +1266,7 @@ product ASUS USBN66		0x17ad	USB-N66
 product ASUS USBN10NANO		0x17ba	USB-N10 Nano
 product ASUS USBAC51		0x17d1	USB-AC51
 product ASUS USBAC56		0x17d2	USB-AC56
+product ASUS USBN14		0x17e8	USB-N14
 product ASUS A730W		0x4202	ASUS MyPal A730W
 product ASUS P535		0x420f	ASUS P535 PDA
 product ASUS GMSC		0x422f	ASUS Generic Mass Storage
@@ -1735,6 +1736,7 @@ product DLINK DWA160B2		0x3c1a	DWA-160 rev B2
 product DLINK DWA127		0x3c1b	DWA-127 Wireless Adapter
 product DLINK DWA162		0x3c1f	DWA-162 Wireless Adapter
 product DLINK DWA140D1		0x3c20	DWA-140 rev D1
+product DLINK DWA130F1		0x3c25	DWA-130 rev F1
 product DLINK DSB650C		0x4000	10Mbps Ethernet
 product DLINK DSB650TX1		0x4001	10/100 Ethernet
 product DLINK DSB650TX		0x4002	10/100 Ethernet
@@ -4697,6 +4699,7 @@ product TPLINK T4UV2		0x010d	Archer T4U ver 2
 product TPLINK T4UHV1		0x0103	Archer T4UH ver 1
 product TPLINK T4UHV2		0x010e	Archer T4UH ver 2
 product TPLINK T2UNANO		0x011e	Archer T2U Nano
+product TPLINK T2UV3		0x011f	Archer T2U ver 3
 product TPLINK T2UPLUS		0x0120	Archer T2U Plus
 product TPLINK RTL8153		0x0601	RTL8153 USB 10/100/1000 LAN
 

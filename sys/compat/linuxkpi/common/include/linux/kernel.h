@@ -235,6 +235,8 @@ extern int linuxkpi_debug;
 	log(LOG_CRIT, pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_err(fmt, ...) \
 	log(LOG_ERR, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_err_once(fmt, ...) \
+	log_once(LOG_ERR, pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_warning(fmt, ...) \
 	log(LOG_WARNING, pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_warn(...) \
@@ -282,6 +284,8 @@ extern int linuxkpi_debug;
 #define	ARRAY_SIZE(x)	(sizeof(x) / sizeof((x)[0]))
 
 #define	u64_to_user_ptr(val)	((void *)(uintptr_t)(val))
+
+#define _RET_IP_		__builtin_return_address(0)
 
 static inline unsigned long long
 simple_strtoull(const char *cp, char **endp, unsigned int base)

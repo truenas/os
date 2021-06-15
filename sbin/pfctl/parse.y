@@ -309,6 +309,7 @@ static struct pool_opts {
 	int			 type;
 	int			 staticport;
 	struct pf_poolhashkey	*key;
+	struct pf_mape_portset	 mape;
 
 } pool_opts;
 
@@ -463,8 +464,8 @@ int	parseport(char *, struct range *r, int);
 %token	REASSEMBLE FRAGDROP FRAGCROP ANCHOR NATANCHOR RDRANCHOR BINATANCHOR
 %token	SET OPTIMIZATION TIMEOUT LIMIT LOGINTERFACE BLOCKPOLICY FAILPOLICY
 %token	RANDOMID REQUIREORDER SYNPROXY FINGERPRINTS NOSYNC DEBUG SKIP HOSTID
-%token	ANTISPOOF FOR INCLUDE
-%token	BITMASK RANDOM SOURCEHASH ROUNDROBIN STATICPORT PROBABILITY
+%token	ANTISPOOF FOR INCLUDE KEEPCOUNTERS
+%token	BITMASK RANDOM SOURCEHASH ROUNDROBIN STATICPORT PROBABILITY MAPEPORTSET
 %token	ALTQ CBQ CODEL PRIQ HFSC FAIRQ BANDWIDTH TBRSIZE LINKSHARE REALTIME
 %token	UPPERLIMIT QUEUE PRIORITY QLIMIT HOGS BUCKETS RTABLE TARGET INTERVAL
 %token	LOAD RULESET_OPTIMIZATION PRIO
@@ -720,6 +721,9 @@ option		: SET OPTIMIZATION STRING		{
 				YYERROR;
 			}
 			keep_state_defaults = $3;
+		}
+		| SET KEEPCOUNTERS {
+			pf->keep_counters = true;
 		}
 		;
 
@@ -4021,6 +4025,36 @@ pool_opt	: BITMASK	{
 			pool_opts.marker |= POM_STICKYADDRESS;
 			pool_opts.opts |= PF_POOL_STICKYADDR;
 		}
+		| MAPEPORTSET number '/' number '/' number {
+			if (pool_opts.mape.offset) {
+				yyerror("map-e-portset cannot be redefined");
+				YYERROR;
+			}
+			if (pool_opts.type) {
+				yyerror("map-e-portset cannot be used with "
+					"address pools");
+				YYERROR;
+			}
+			if ($2 <= 0 || $2 >= 16) {
+				yyerror("MAP-E PSID offset must be 1-15");
+				YYERROR;
+			}
+			if ($4 < 0 || $4 >= 16 || $2 + $4 > 16) {
+				yyerror("Invalid MAP-E PSID length");
+				YYERROR;
+			} else if ($4 == 0) {
+				yyerror("PSID Length = 0: this means"
+				    " you do not need MAP-E");
+				YYERROR;
+			}
+			if ($6 < 0 || $6 > 65535) {
+				yyerror("Invalid MAP-E PSID");
+				YYERROR;
+			}
+			pool_opts.mape.offset = $2;
+			pool_opts.mape.psidlen = $4;
+			pool_opts.mape.psid = $6;
+		}
 		;
 
 redirection	: /* empty */			{ $$ = NULL; }
@@ -4224,6 +4258,29 @@ natrule		: nataction interface af proto fromto tag tagged rtable
 				}
 				r.rpool.proxy_port[0] = 0;
 				r.rpool.proxy_port[1] = 0;
+			}
+
+			if ($10.mape.offset) {
+				if (r.action != PF_NAT) {
+					yyerror("the 'map-e-portset' option is"
+					    " only valid with nat rules");
+					YYERROR;
+				}
+				if ($10.staticport) {
+					yyerror("the 'map-e-portset' option"
+					    " can't be used 'static-port'");
+					YYERROR;
+				}
+				if (r.rpool.proxy_port[0] !=
+				    PF_NAT_PROXY_PORT_LOW &&
+				    r.rpool.proxy_port[1] !=
+				    PF_NAT_PROXY_PORT_HIGH) {
+					yyerror("the 'map-e-portset' option"
+					    " can't be used when specifying"
+					    " a port range");
+					YYERROR;
+				}
+				r.rpool.mape = $10.mape;
 			}
 
 			expand_rule(&r, $2, $9 == NULL ? NULL : $9->host, $4,
@@ -5050,7 +5107,8 @@ expand_altq(struct pf_altq *a, struct node_if *interfaces,
 			}
 
 			if (pa.scheduler == ALTQT_CBQ ||
-			    pa.scheduler == ALTQT_HFSC) {
+			    pa.scheduler == ALTQT_HFSC ||
+			    pa.scheduler == ALTQT_FAIRQ) {
 				/* now create a root queue */
 				memset(&pb, 0, sizeof(struct pf_altq));
 				if (strlcpy(qname, "root_", sizeof(qname)) >=
@@ -5081,7 +5139,8 @@ expand_altq(struct pf_altq *a, struct node_if *interfaces,
 				if (n == NULL)
 					err(1, "expand_altq: calloc");
 				if (pa.scheduler == ALTQT_CBQ ||
-				    pa.scheduler == ALTQT_HFSC)
+				    pa.scheduler == ALTQT_HFSC ||
+				    pa.scheduler == ALTQT_FAIRQ)
 					if (strlcpy(n->parent, qname,
 					    sizeof(n->parent)) >=
 					    sizeof(n->parent))
@@ -5545,12 +5604,14 @@ lookup(char *s)
 		{ "inet6",		INET6},
 		{ "interval",		INTERVAL},
 		{ "keep",		KEEP},
+		{ "keepcounters",	KEEPCOUNTERS},
 		{ "label",		LABEL},
 		{ "limit",		LIMIT},
 		{ "linkshare",		LINKSHARE},
 		{ "load",		LOAD},
 		{ "log",		LOG},
 		{ "loginterface",	LOGINTERFACE},
+		{ "map-e-portset",	MAPEPORTSET},
 		{ "max",		MAXIMUM},
 		{ "max-mss",		MAXMSS},
 		{ "max-src-conn",	MAXSRCCONN},

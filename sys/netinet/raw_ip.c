@@ -996,6 +996,8 @@ rip_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 	struct inpcb *inp;
 	int error;
 
+	if (nam->sa_family != AF_INET)
+		return (EAFNOSUPPORT);
 	if (nam->sa_len != sizeof(*addr))
 		return (EINVAL);
 
@@ -1070,27 +1072,42 @@ rip_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 {
 	struct inpcb *inp;
 	u_long dst;
+	int error;
 
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("rip_send: inp == NULL"));
+
+	if (control != NULL) {
+		m_freem(control);
+		control = NULL;
+	}
 
 	/*
 	 * Note: 'dst' reads below are unlocked.
 	 */
 	if (so->so_state & SS_ISCONNECTED) {
 		if (nam) {
-			m_freem(m);
-			return (EISCONN);
+			error = EISCONN;
+			goto release;
 		}
 		dst = inp->inp_faddr.s_addr;	/* Unlocked read. */
 	} else {
-		if (nam == NULL) {
-			m_freem(m);
-			return (ENOTCONN);
-		}
+		error = 0;
+		if (nam == NULL)
+			error = ENOTCONN;
+		else if (nam->sa_family != AF_INET)
+			error = EAFNOSUPPORT;
+		else if (nam->sa_len != sizeof(struct sockaddr_in))
+			error = EINVAL;
+		if (error != 0)
+			goto release;
 		dst = ((struct sockaddr_in *)nam)->sin_addr.s_addr;
 	}
 	return (rip_output(m, so, dst));
+
+release:
+	m_freem(m);
+	return (error);
 }
 #endif /* INET */
 

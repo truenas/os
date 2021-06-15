@@ -1141,10 +1141,11 @@ zfs_acl_chown_setattr(znode_t *zp)
 	int error;
 	zfs_acl_t *aclp;
 
-	if (zp->z_zfsvfs->z_replay == B_FALSE)
+	if (zp->z_zfsvfs->z_replay == B_FALSE) {
 		ASSERT_VOP_ELOCKED(ZTOV(zp), __func__);
+		ASSERT_VOP_IN_SEQC(ZTOV(zp));
+	}
 	ASSERT(MUTEX_HELD(&zp->z_acl_lock));
-	ASSERT_VOP_IN_SEQC(ZTOV(zp));
 
 	if ((error = zfs_acl_node_read(zp, B_TRUE, &aclp, B_FALSE)) == 0)
 		zp->z_mode = zfs_mode_compute(zp->z_mode, aclp,
@@ -1172,7 +1173,9 @@ zfs_aclset_common(znode_t *zp, zfs_acl_t *aclp, cred_t *cr, dmu_tx_t *tx)
 	int			count = 0;
 	zfs_acl_phys_t		acl_phys;
 
-	ASSERT_VOP_IN_SEQC(ZTOV(zp));
+	if (zp->z_zfsvfs->z_replay == B_FALSE) {
+		ASSERT_VOP_IN_SEQC(ZTOV(zp));
+	}
 
 	mode = zp->z_mode;
 
@@ -2346,7 +2349,6 @@ zfs_zaccess(znode_t *zp, int mode, int flags, boolean_t skipaclchk, cred_t *cr)
 
 	is_attr = ((zp->z_pflags & ZFS_XATTR) && (ZTOV(zp)->v_type == VDIR));
 
-#ifdef __FreeBSD_kernel__
 	/*
 	 * In FreeBSD, we don't care about permissions of individual ADS.
 	 * Note that not checking them is not just an optimization - without
@@ -2354,42 +2356,9 @@ zfs_zaccess(znode_t *zp, int mode, int flags, boolean_t skipaclchk, cred_t *cr)
 	 */
 	if (zp->z_pflags & ZFS_XATTR)
 		return (0);
-#else
-	/*
-	 * If attribute then validate against base file
-	 */
-	if (is_attr) {
-		uint64_t	parent;
-
-		if ((error = sa_lookup(zp->z_sa_hdl,
-		    SA_ZPL_PARENT(zp->z_zfsvfs), &parent,
-		    sizeof (parent))) != 0)
-			return (error);
-
-		if ((error = zfs_zget(zp->z_zfsvfs,
-		    parent, &xzp)) != 0)	{
-			return (error);
-		}
-
-		check_zp = xzp;
-
-		/*
-		 * fixup mode to map to xattr perms
-		 */
-
-		if (mode & (ACE_WRITE_DATA|ACE_APPEND_DATA)) {
-			mode &= ~(ACE_WRITE_DATA|ACE_APPEND_DATA);
-			mode |= ACE_WRITE_NAMED_ATTRS;
-		}
-
-		if (mode & (ACE_READ_DATA|ACE_EXECUTE)) {
-			mode &= ~(ACE_READ_DATA|ACE_EXECUTE);
-			mode |= ACE_READ_NAMED_ATTRS;
-		}
-	}
-#endif
 
 	owner = zfs_fuid_map_id(zp->z_zfsvfs, zp->z_uid, cr, ZFS_OWNER);
+
 	/*
 	 * Map the bits required to the standard vnode flags VREAD|VWRITE|VEXEC
 	 * in needed_bits.  Map the bits mapped by working_mode (currently

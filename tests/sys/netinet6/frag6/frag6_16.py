@@ -29,6 +29,8 @@
 #
 
 import argparse
+import logging
+logging.getLogger("scapy").setLevel(logging.CRITICAL)
 import scapy.all as sp
 import socket
 import sys
@@ -109,7 +111,7 @@ def main():
 	foffset=(int)(1288/8)
 	mbit=1
 	for i in range(1,30):
-		if i is 29:
+		if i == 29:
 			mbit=0
 		ip6f0n = sp.Ether() / \
 			sp.IPv6(src=args.src[0], dst=args.to[0]) / \

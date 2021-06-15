@@ -233,7 +233,7 @@ unsigned long zfs_max_nvlist_src_size = 0;
 
 /*
  * When logging the output nvlist of an ioctl in the on-disk history, limit
- * the logged size to this many bytes.  This must be less then DMU_MAX_ACCESS.
+ * the logged size to this many bytes.  This must be less than DMU_MAX_ACCESS.
  * This applies primarily to zfs_ioc_channel_program().
  */
 unsigned long zfs_history_output_max = 1024 * 1024;
@@ -2521,6 +2521,26 @@ zfs_prop_set_special(const char *dsname, zprop_source_t source,
 	return (err);
 }
 
+static boolean_t
+zfs_is_namespace_prop(zfs_prop_t prop)
+{
+	switch (prop) {
+
+	case ZFS_PROP_ATIME:
+	case ZFS_PROP_RELATIME:
+	case ZFS_PROP_DEVICES:
+	case ZFS_PROP_EXEC:
+	case ZFS_PROP_SETUID:
+	case ZFS_PROP_READONLY:
+	case ZFS_PROP_XATTR:
+	case ZFS_PROP_NBMAND:
+		return (B_TRUE);
+
+	default:
+		return (B_FALSE);
+	}
+}
+
 /*
  * This function is best effort. If it fails to set any of the given properties,
  * it continues to set as many as it can and returns the last error
@@ -2540,6 +2560,7 @@ zfs_set_prop_nvlist(const char *dsname, zprop_source_t source, nvlist_t *nvl,
 	int rv = 0;
 	uint64_t intval;
 	const char *strval;
+	boolean_t should_update_mount_cache = B_FALSE;
 
 	nvlist_t *genericnvl = fnvlist_alloc();
 	nvlist_t *retrynvl = fnvlist_alloc();
@@ -2637,6 +2658,9 @@ retry:
 				fnvlist_add_int32(errlist, propname, err);
 			rv = err;
 		}
+
+		if (zfs_is_namespace_prop(prop))
+			should_update_mount_cache = B_TRUE;
 	}
 
 	if (nvl != retrynvl && !nvlist_empty(retrynvl)) {
@@ -2685,6 +2709,9 @@ retry:
 			}
 		}
 	}
+	if (should_update_mount_cache)
+		zfs_ioctl_update_mount_cache(dsname);
+
 	nvlist_free(genericnvl);
 	nvlist_free(retrynvl);
 

@@ -30,11 +30,15 @@
 
 #include "linux_assym.h"		/* system definitions */
 #include <machine/asmacros.h>		/* miscellaneous asm macros */
+#include <machine/specialreg.h>
 
 #include "assym.inc"
 
 futex_fault:
-	movq	$0,PCB_ONFAULT(%r8)
+	testl	$CPUID_STDEXT_SMAP,cpu_stdext_feature(%rip)
+	je	1f
+	clac
+1:	movq	$0,PCB_ONFAULT(%r8)
 	movl	$-EFAULT,%eax
 	ret
 
@@ -126,16 +130,16 @@ ENTRY(futex_orl_smap)
 	movq	$VM_MAXUSER_ADDRESS-4,%rax
 	cmpq	%rax,%rsi
 	ja	futex_fault
+	stac
 	movl	(%rsi),%eax
 1:	movl	%eax,%ecx
 	orl	%edi,%ecx
-	stac
 #ifdef SMP
 	lock
 #endif
 	cmpxchgl %ecx,(%rsi)
-	clac
 	jnz	1b
+	clac
 	movl	%eax,(%rdx)
 	xorl	%eax,%eax
 	movq	%rax,PCB_ONFAULT(%r8)
@@ -168,16 +172,16 @@ ENTRY(futex_andl_smap)
 	movq	$VM_MAXUSER_ADDRESS-4,%rax
 	cmpq	%rax,%rsi
 	ja	futex_fault
+	stac
 	movl	(%rsi),%eax
 1:	movl	%eax,%ecx
 	andl	%edi,%ecx
-	stac
 #ifdef SMP
 	lock
 #endif
 	cmpxchgl %ecx,(%rsi)
-	clac
 	jnz	1b
+	clac
 	movl	%eax,(%rdx)
 	xorl	%eax,%eax
 	movq	%rax,PCB_ONFAULT(%r8)
@@ -210,16 +214,16 @@ ENTRY(futex_xorl_smap)
 	movq	$VM_MAXUSER_ADDRESS-4,%rax
 	cmpq	%rax,%rsi
 	ja	futex_fault
+	stac
 	movl	(%rsi),%eax
 1:	movl	%eax,%ecx
 	xorl	%edi,%ecx
-	stac
 #ifdef SMP
 	lock
 #endif
 	cmpxchgl %ecx,(%rsi)
-	clac
 	jnz	1b
+	clac
 	movl	%eax,(%rdx)
 	xorl	%eax,%eax
 	movq	%rax,PCB_ONFAULT(%r8)

@@ -206,7 +206,7 @@ static struct filterops user_filtops = {
 };
 
 static uma_zone_t	knote_zone;
-static unsigned int	kq_ncallouts = 0;
+static unsigned int __exclusive_cache_line	kq_ncallouts;
 static unsigned int 	kq_calloutmax = 4 * 1024;
 SYSCTL_UINT(_kern, OID_AUTO, kq_calloutmax, CTLFLAG_RW,
     &kq_calloutmax, 0, "Maximum number of callouts allocated for kqueue");
@@ -680,10 +680,13 @@ struct kq_timer_cb_data {
 	struct proc *p;
 	struct knote *kn;
 	int cpuid;
+	int flags;
 	TAILQ_ENTRY(kq_timer_cb_data) link;
 	sbintime_t next;	/* next timer event fires at */
 	sbintime_t to;		/* precalculated timer period, 0 for abs */
 };
+
+#define	KQ_TIMER_CB_ENQUEUED	0x01
 
 static void
 kqtimer_sched_callout(struct kq_timer_cb_data *kc)
@@ -706,6 +709,7 @@ kqtimer_proc_continue(struct proc *p)
 
 	TAILQ_FOREACH_SAFE(kc, &p->p_kqtim_stop, link, kc1) {
 		TAILQ_REMOVE(&p->p_kqtim_stop, kc, link);
+		kc->flags &= ~KQ_TIMER_CB_ENQUEUED;
 		if (kc->next <= now)
 			filt_timerexpire_l(kc->kn, true);
 		else
@@ -753,7 +757,10 @@ filt_timerexpire_l(struct knote *kn, bool proc_locked)
 		if (!proc_locked)
 			PROC_LOCK(p);
 		if (P_SHOULDSTOP(p) || P_KILLED(p)) {
-			TAILQ_INSERT_TAIL(&p->p_kqtim_stop, kc, link);
+			if ((kc->flags & KQ_TIMER_CB_ENQUEUED) == 0) {
+				kc->flags |= KQ_TIMER_CB_ENQUEUED;
+				TAILQ_INSERT_TAIL(&p->p_kqtim_stop, kc, link);
+			}
 			if (!proc_locked)
 				PROC_UNLOCK(p);
 			return;
@@ -806,18 +813,16 @@ filt_timerattach(struct knote *kn)
 {
 	struct kq_timer_cb_data *kc;
 	sbintime_t to;
-	unsigned int ncallouts;
 	int error;
 
 	error = filt_timervalidate(kn, &to);
 	if (error != 0)
 		return (error);
 
-	do {
-		ncallouts = kq_ncallouts;
-		if (ncallouts >= kq_calloutmax)
-			return (ENOMEM);
-	} while (!atomic_cmpset_int(&kq_ncallouts, ncallouts, ncallouts + 1));
+	if (atomic_fetchadd_int(&kq_ncallouts, 1) + 1 > kq_calloutmax) {
+		atomic_subtract_int(&kq_ncallouts, 1);
+		return (ENOMEM);
+	}
 
 	if ((kn->kn_sfflags & NOTE_ABSTIME) == 0)
 		kn->kn_flags |= EV_CLEAR;	/* automatically set */
@@ -826,6 +831,7 @@ filt_timerattach(struct knote *kn)
 	kc->kn = kn;
 	kc->p = curproc;
 	kc->cpuid = PCPU_GET(cpuid);
+	kc->flags = 0;
 	callout_init(&kc->c, 1);
 	filt_timerstart(kn, to);
 
@@ -856,6 +862,11 @@ filt_timerdetach(struct knote *kn)
 
 	kc = kn->kn_ptr.p_v;
 	callout_drain(&kc->c);
+	if ((kc->flags & KQ_TIMER_CB_ENQUEUED) != 0) {
+		PROC_LOCK(kc->p);
+		TAILQ_REMOVE(&kc->p->p_kqtim_stop, kc, link);
+		PROC_UNLOCK(kc->p);
+	}
 	free(kc, M_KQUEUE);
 	old = atomic_fetchadd_int(&kq_ncallouts, -1);
 	KASSERT(old > 0, ("Number of callouts cannot become negative"));

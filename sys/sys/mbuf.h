@@ -198,13 +198,16 @@ struct pkthdr {
 	} PH_loc;
 };
 #define	ether_vtag	PH_per.sixteen[0]
+#define tcp_tun_port	PH_per.sixteen[0] /* outbound */
 #define	PH_vt		PH_per
 #define	vt_nrecs	sixteen[0]	  /* mld and v6-ND */
 #define	tso_segsz	PH_per.sixteen[1] /* inbound after LRO */
 #define	lro_nsegs	tso_segsz	  /* inbound after LRO */
 #define	csum_data	PH_per.thirtytwo[1] /* inbound from hardware up */
-#define lro_len		PH_loc.sixteen[0] /* inbound during LRO (no reassembly) */
-#define lro_csum	PH_loc.sixteen[1] /* inbound during LRO (no reassembly) */
+#define	lro_tcp_d_len	PH_loc.sixteen[0] /* inbound during LRO (no reassembly) */
+#define	lro_tcp_d_csum	PH_loc.sixteen[1] /* inbound during LRO (no reassembly) */
+#define	lro_tcp_h_off	PH_loc.sixteen[2] /* inbound during LRO (no reassembly) */
+#define	lro_etype	PH_loc.sixteen[3] /* inbound during LRO (no reassembly) */
 /* Note PH_loc is used during IP reassembly (all 8 bytes as a ptr) */
 
 /*

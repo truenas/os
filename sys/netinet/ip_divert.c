@@ -327,6 +327,22 @@ div_output(struct socket *so, struct mbuf *m, struct sockaddr_in *sin,
 	struct ipfw_rule_ref *dt;
 	int error, family;
 
+	if (control) {
+		m_freem(control);		/* XXX */
+		control = NULL;
+	}
+
+	if (sin != NULL) {
+		if (sin->sin_family != AF_INET) {
+			m_freem(m);
+			return (EAFNOSUPPORT);
+		}
+		if (sin->sin_len != sizeof(*sin)) {
+			m_freem(m);
+			return (EINVAL);
+		}
+	}
+
 	/*
 	 * An mbuf may hasn't come from userland, but we pretend
 	 * that it has.
@@ -334,9 +350,6 @@ div_output(struct socket *so, struct mbuf *m, struct sockaddr_in *sin,
 	m->m_pkthdr.rcvif = NULL;
 	m->m_nextpkt = NULL;
 	M_SETFIB(m, so->so_fibnum);
-
-	if (control)
-		m_freem(control);		/* XXX */
 
 	mtag = m_tag_locate(m, MTAG_IPFW_RULE, 0, NULL);
 	if (mtag == NULL) {
@@ -629,6 +642,8 @@ div_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 	 */
 	if (nam->sa_family != AF_INET)
 		return EAFNOSUPPORT;
+	if (nam->sa_len != sizeof(struct sockaddr_in))
+		return EINVAL;
 	((struct sockaddr_in *)nam)->sin_addr.s_addr = INADDR_ANY;
 	INP_INFO_WLOCK(&V_divcbinfo);
 	INP_WLOCK(inp);
@@ -662,6 +677,8 @@ div_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 	if (m->m_len < sizeof (struct ip) &&
 	    (m = m_pullup(m, sizeof (struct ip))) == NULL) {
 		KMOD_IPSTAT_INC(ips_toosmall);
+		if (control != NULL)
+			m_freem(control);
 		m_freem(m);
 		return EINVAL;
 	}

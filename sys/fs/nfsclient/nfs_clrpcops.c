@@ -1229,7 +1229,7 @@ nfsrpc_getattr(vnode_t vp, struct ucred *cred, NFSPROC_T *p,
 }
 
 /*
- * nfs getattr call with non-vnode arguemnts.
+ * nfs getattr call with non-vnode arguments.
  */
 int
 nfsrpc_getattrnovp(struct nfsmount *nmp, u_int8_t *fhp, int fhlen, int syscred,
@@ -3548,6 +3548,9 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 		if (gotmnton)
 			NFSSETBIT_ATTRBIT(&attrbits,
 			    NFSATTRBIT_MOUNTEDONFILEID);
+		if (!NFSISSET_ATTRBIT(&dnp->n_vattr.na_suppattr,
+		    NFSATTRBIT_TIMECREATE))
+			NFSCLRBIT_ATTRBIT(&attrbits, NFSATTRBIT_TIMECREATE);
 	}
 
 	/*

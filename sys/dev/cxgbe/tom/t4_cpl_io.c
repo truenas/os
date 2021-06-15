@@ -1263,6 +1263,7 @@ do_peer_close(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 		break;
 
 	case TCPS_FIN_WAIT_2:
+		restore_so_proto(so, inp->inp_vflag & INP_IPV6);
 		tcp_twstart(tp);
 		INP_UNLOCK_ASSERT(inp);	 /* safe, we have a ref on the inp */
 		NET_EPOCH_EXIT(et);
@@ -1323,6 +1324,7 @@ do_close_con_rpl(struct sge_iq *iq, const struct rss_header *rss,
 
 	switch (tp->t_state) {
 	case TCPS_CLOSING:	/* see TCPS_FIN_WAIT_2 in do_peer_close too */
+		restore_so_proto(so, inp->inp_vflag & INP_IPV6);
 		tcp_twstart(tp);
 release:
 		INP_UNLOCK_ASSERT(inp);	/* safe, we have a ref on the  inp */
@@ -2202,8 +2204,7 @@ out:
 		job->aio_error = (void *)(intptr_t)error;
 		aiotx_free_job(job);
 	}
-	if (m != NULL)
-		m_free(m);
+	m_freem(m);
 	SOCKBUF_LOCK(sb);
 }
 

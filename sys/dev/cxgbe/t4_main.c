@@ -593,7 +593,7 @@ SYSCTL_INT(_hw_cxgbe, OID_AUTO, pcie_relaxed_ordering, CTLFLAG_RDTUN,
     "PCIe Relaxed Ordering: 0 = disable, 1 = enable, 2 = leave alone");
 
 static int t4_panic_on_fatal_err = 0;
-SYSCTL_INT(_hw_cxgbe, OID_AUTO, panic_on_fatal_err, CTLFLAG_RDTUN,
+SYSCTL_INT(_hw_cxgbe, OID_AUTO, panic_on_fatal_err, CTLFLAG_RWTUN,
     &t4_panic_on_fatal_err, 0, "panic on fatal errors");
 
 static int t4_tx_vm_wr = 0;
@@ -735,9 +735,10 @@ static int t4_free_irq(struct adapter *, struct irq *);
 static void t4_init_atid_table(struct adapter *);
 static void t4_free_atid_table(struct adapter *);
 static void get_regs(struct adapter *, struct t4_regdump *, uint8_t *);
-static void vi_refresh_stats(struct adapter *, struct vi_info *);
-static void cxgbe_refresh_stats(struct adapter *, struct port_info *);
+static void vi_refresh_stats(struct vi_info *);
+static void cxgbe_refresh_stats(struct vi_info *);
 static void cxgbe_tick(void *);
+static void vi_tick(void *);
 static void cxgbe_sysctls(struct port_info *);
 static int sysctl_int_array(SYSCTL_HANDLER_ARGS);
 static int sysctl_bitfield_8b(SYSCTL_HANDLER_ARGS);
@@ -812,11 +813,17 @@ static int read_card_mem(struct adapter *, int, struct t4_mem_range *);
 static int read_i2c(struct adapter *, struct t4_i2c_data *);
 static int clear_stats(struct adapter *, u_int);
 #ifdef TCP_OFFLOAD
-static int toe_capability(struct vi_info *, int);
+static int toe_capability(struct vi_info *, bool);
 static void t4_async_event(void *, int);
+#endif
+#ifdef KERN_TLS
+static int ktls_capability(struct adapter *, bool);
 #endif
 static int mod_event(module_t, int, void *);
 static int notify_siblings(device_t, int);
+static uint64_t vi_get_counter(struct ifnet *, ift_counter);
+static uint64_t cxgbe_get_counter(struct ifnet *, ift_counter);
+static void enable_vxlan_rx(struct adapter *);
 
 struct {
 	uint16_t device;
@@ -1794,7 +1801,8 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 	struct adapter *sc = vi->adapter;
 
 	vi->xact_addr_filt = -1;
-	callout_init(&vi->tick, 1);
+	mtx_init(&vi->tick_mtx, "vi tick", NULL, MTX_DEF);
+	callout_init_mtx(&vi->tick, &vi->tick_mtx, 0);
 	if (sc->flags & IS_VF || t4_tx_vm_wr != 0)
 		vi->flags |= TX_USES_VM_WR;
 
@@ -1814,7 +1822,10 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 	ifp->if_ioctl = cxgbe_ioctl;
 	ifp->if_transmit = cxgbe_transmit;
 	ifp->if_qflush = cxgbe_qflush;
-	ifp->if_get_counter = cxgbe_get_counter;
+	if (vi->pi->nvi > 1 || sc->flags & IS_VF)
+		ifp->if_get_counter = vi_get_counter;
+	else
+		ifp->if_get_counter = cxgbe_get_counter;
 #if defined(KERN_TLS) || defined(RATELIMIT)
 	ifp->if_snd_tag_alloc = cxgbe_snd_tag_alloc;
 	ifp->if_snd_tag_modify = cxgbe_snd_tag_modify;
@@ -1838,7 +1849,7 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 	}
 
 #ifdef TCP_OFFLOAD
-	if (vi->nofldrxq != 0 && (sc->flags & KERN_TLS_OK) == 0)
+	if (vi->nofldrxq != 0)
 		ifp->if_capabilities |= IFCAP_TOE;
 #endif
 #ifdef RATELIMIT
@@ -1859,9 +1870,10 @@ cxgbe_vi_attach(device_t dev, struct vi_info *vi)
 #endif
 	ifp->if_hw_tsomaxsegsize = 65536;
 #ifdef KERN_TLS
-	if (sc->flags & KERN_TLS_OK) {
+	if (is_ktls(sc)) {
 		ifp->if_capabilities |= IFCAP_TXTLS;
-		ifp->if_capenable |= IFCAP_TXTLS;
+		if (sc->flags & KERN_TLS_ON)
+			ifp->if_capenable |= IFCAP_TXTLS;
 	}
 #endif
 
@@ -1916,8 +1928,6 @@ cxgbe_attach(device_t dev)
 	struct adapter *sc = pi->adapter;
 	struct vi_info *vi;
 	int i, rc;
-
-	callout_init_mtx(&pi->tick, &pi->pi_lock, 0);
 
 	rc = cxgbe_vi_attach(dev, &pi->vi[0]);
 	if (rc)
@@ -1987,7 +1997,6 @@ cxgbe_detach(device_t dev)
 	}
 
 	cxgbe_vi_detach(&pi->vi[0]);
-	callout_drain(&pi->tick);
 	ifmedia_removeall(&pi->media);
 
 	end_synchronized_op(sc, 0);
@@ -2186,8 +2195,15 @@ cxgbe_ioctl(struct ifnet *ifp, unsigned long cmd, caddr_t data)
 			ifp->if_capenable ^= IFCAP_MEXTPG;
 
 #ifdef KERN_TLS
-		if (mask & IFCAP_TXTLS)
+		if (mask & IFCAP_TXTLS) {
+			int enable = (ifp->if_capenable ^ mask) & IFCAP_TXTLS;
+
+			rc = ktls_capability(sc, enable);
+			if (rc != 0)
+				goto fail;
+
 			ifp->if_capenable ^= (mask & IFCAP_TXTLS);
+		}
 #endif
 		if (mask & IFCAP_VXLAN_HWCSUM) {
 			ifp->if_capenable ^= IFCAP_VXLAN_HWCSUM;
@@ -2327,7 +2343,9 @@ vi_get_counter(struct ifnet *ifp, ift_counter c)
 	struct vi_info *vi = ifp->if_softc;
 	struct fw_vi_stats_vf *s = &vi->stats;
 
-	vi_refresh_stats(vi->adapter, vi);
+	mtx_lock(&vi->tick_mtx);
+	vi_refresh_stats(vi);
+	mtx_unlock(&vi->tick_mtx);
 
 	switch (c) {
 	case IFCOUNTER_IPACKETS:
@@ -2371,18 +2389,16 @@ vi_get_counter(struct ifnet *ifp, ift_counter c)
 	}
 }
 
-uint64_t
+static uint64_t
 cxgbe_get_counter(struct ifnet *ifp, ift_counter c)
 {
 	struct vi_info *vi = ifp->if_softc;
 	struct port_info *pi = vi->pi;
-	struct adapter *sc = pi->adapter;
 	struct port_stats *s = &pi->stats;
 
-	if (pi->nvi > 1 || sc->flags & IS_VF)
-		return (vi_get_counter(ifp, c));
-
-	cxgbe_refresh_stats(sc, pi);
+	mtx_lock(&vi->tick_mtx);
+	cxgbe_refresh_stats(vi);
+	mtx_unlock(&vi->tick_mtx);
 
 	switch (c) {
 	case IFCOUNTER_IPACKETS:
@@ -2875,7 +2891,8 @@ t4_fatal_err(struct adapter *sc, bool fw_error)
 	log(LOG_ALERT, "%s: encountered fatal error, adapter stopped.\n",
 	    device_get_nameunit(sc->dev));
 	if (fw_error) {
-		ASSERT_SYNCHRONIZED_OP(sc);
+		if (sc->flags & CHK_MBOX_ACCESS)
+			ASSERT_SYNCHRONIZED_OP(sc);
 		sc->flags |= ADAP_ERR;
 	} else {
 		ADAPTER_LOCK(sc);
@@ -3030,16 +3047,18 @@ setup_memwin(struct adapter *sc)
 	}
 
 	for (i = 0, mw = &sc->memwin[0]; i < NUM_MEMWIN; i++, mw_init++, mw++) {
-		rw_init(&mw->mw_lock, "memory window access");
-		mw->mw_base = mw_init->base;
-		mw->mw_aperture = mw_init->aperture;
-		mw->mw_curpos = 0;
+		if (!rw_initialized(&mw->mw_lock)) {
+			rw_init(&mw->mw_lock, "memory window access");
+			mw->mw_base = mw_init->base;
+			mw->mw_aperture = mw_init->aperture;
+			mw->mw_curpos = 0;
+		}
 		t4_write_reg(sc,
 		    PCIE_MEM_ACCESS_REG(A_PCIE_MEM_ACCESS_BASE_WIN, i),
 		    (mw->mw_base + bar0) | V_BIR(0) |
 		    V_WINDOW(ilog2(mw->mw_aperture) - 10));
 		rw_wlock(&mw->mw_lock);
-		position_memwin(sc, i, 0);
+		position_memwin(sc, i, mw->mw_curpos);
 		rw_wunlock(&mw->mw_lock);
 	}
 
@@ -4754,13 +4773,19 @@ get_params__post_init(struct adapter *sc)
 		sc->vres.key.size = val[1] - val[0] + 1;
 	}
 
-	t4_init_sge_params(sc);
-
 	/*
-	 * We've got the params we wanted to query via the firmware.  Now grab
-	 * some others directly from the chip.
+	 * We've got the params we wanted to query directly from the firmware.
+	 * Grab some others via other means.
 	 */
-	rc = t4_read_chip_settings(sc);
+	t4_init_sge_params(sc);
+	t4_init_tp_params(sc);
+	t4_read_mtu_tbl(sc, sc->params.mtus, NULL);
+	t4_load_mtus(sc, sc->params.mtus, sc->params.a_wnd, sc->params.b_wnd);
+
+	rc = t4_verify_chip_settings(sc);
+	if (rc != 0)
+		return (rc);
+	t4_init_rx_buf_info(sc);
 
 	return (rc);
 }
@@ -4773,47 +4798,36 @@ ktls_tick(void *arg)
 	uint32_t tstamp;
 
 	sc = arg;
-
-	tstamp = tcp_ts_getticks();
-	t4_write_reg(sc, A_TP_SYNC_TIME_HI, tstamp >> 1);
-	t4_write_reg(sc, A_TP_SYNC_TIME_LO, tstamp << 31);
-
+	if (sc->flags & KERN_TLS_ON) {
+		tstamp = tcp_ts_getticks();
+		t4_write_reg(sc, A_TP_SYNC_TIME_HI, tstamp >> 1);
+		t4_write_reg(sc, A_TP_SYNC_TIME_LO, tstamp << 31);
+	}
 	callout_schedule_sbt(&sc->ktls_tick, SBT_1MS, 0, C_HARDCLOCK);
 }
 
-static void
-t4_enable_kern_tls(struct adapter *sc)
+static int
+t4_config_kern_tls(struct adapter *sc, bool enable)
 {
-	uint32_t m, v;
+	int rc;
+	uint32_t param = V_FW_PARAMS_MNEM(FW_PARAMS_MNEM_DEV) |
+	    V_FW_PARAMS_PARAM_X(FW_PARAMS_PARAM_DEV_KTLS_HW) |
+	    V_FW_PARAMS_PARAM_Y(enable ? 1 : 0) |
+	    V_FW_PARAMS_PARAM_Z(FW_PARAMS_PARAM_DEV_KTLS_HW_USER_ENABLE);
 
-	m = F_ENABLECBYP;
-	v = F_ENABLECBYP;
-	t4_set_reg_field(sc, A_TP_PARA_REG6, m, v);
+	rc = -t4_set_params(sc, sc->mbox, sc->pf, 0, 1, &param, &param);
+	if (rc != 0) {
+		CH_ERR(sc, "failed to %s NIC TLS: %d\n",
+		    enable ?  "enable" : "disable", rc);
+		return (rc);
+	}
 
-	m = F_CPL_FLAGS_UPDATE_EN | F_SEQ_UPDATE_EN;
-	v = F_CPL_FLAGS_UPDATE_EN | F_SEQ_UPDATE_EN;
-	t4_set_reg_field(sc, A_ULP_TX_CONFIG, m, v);
+	if (enable)
+		sc->flags |= KERN_TLS_ON;
+	else
+		sc->flags &= ~KERN_TLS_ON;
 
-	m = F_NICMODE;
-	v = F_NICMODE;
-	t4_set_reg_field(sc, A_TP_IN_CONFIG, m, v);
-
-	m = F_LOOKUPEVERYPKT;
-	v = 0;
-	t4_set_reg_field(sc, A_TP_INGRESS_CONFIG, m, v);
-
-	m = F_TXDEFERENABLE | F_DISABLEWINDOWPSH | F_DISABLESEPPSHFLAG;
-	v = F_DISABLEWINDOWPSH;
-	t4_set_reg_field(sc, A_TP_PC_CONFIG, m, v);
-
-	m = V_TIMESTAMPRESOLUTION(M_TIMESTAMPRESOLUTION);
-	v = V_TIMESTAMPRESOLUTION(0x1f);
-	t4_set_reg_field(sc, A_TP_TIMER_RESOLUTION, m, v);
-
-	sc->flags |= KERN_TLS_OK;
-
-	sc->tlst.inline_keys = t4_tls_inline_keys;
-	sc->tlst.combo_wrs = t4_tls_combo_wrs;
+	return (rc);
 }
 #endif
 
@@ -4927,18 +4941,19 @@ set_params__post_init(struct adapter *sc)
 #ifdef KERN_TLS
 	if (sc->cryptocaps & FW_CAPS_CONFIG_TLSKEYS &&
 	    sc->toecaps & FW_CAPS_CONFIG_TOE) {
-		if (t4_kern_tls != 0)
-			t4_enable_kern_tls(sc);
-		else {
-			/*
-			 * Limit TOE connections to 2 reassembly
-			 * "islands".  This is required for TOE TLS
-			 * connections to downgrade to plain TOE
-			 * connections if an unsupported TLS version
-			 * or ciphersuite is used.
-			 */
-			t4_tp_wr_bits_indirect(sc, A_TP_FRAG_CONFIG,
-			    V_PASSMODE(M_PASSMODE), V_PASSMODE(2));
+		/*
+		 * Limit TOE connections to 2 reassembly "islands".  This is
+		 * required for TOE TLS connections to downgrade to plain TOE
+		 * connections if an unsupported TLS version or ciphersuite is
+		 * used.
+		 */
+		t4_tp_wr_bits_indirect(sc, A_TP_FRAG_CONFIG,
+		    V_PASSMODE(M_PASSMODE), V_PASSMODE(2));
+		if (is_ktls(sc)) {
+			sc->tlst.inline_keys = t4_tls_inline_keys;
+			sc->tlst.combo_wrs = t4_tls_combo_wrs;
+			if (t4_kern_tls != 0)
+				t4_config_kern_tls(sc, true);
 		}
 	}
 #endif
@@ -5573,14 +5588,16 @@ cxgbe_init_synchronized(struct vi_info *vi)
 	/* all ok */
 	pi->up_vis++;
 	ifp->if_drv_flags |= IFF_DRV_RUNNING;
-
-	if (pi->nvi > 1 || sc->flags & IS_VF)
-		callout_reset(&vi->tick, hz, vi_tick, vi);
-	else
-		callout_reset(&pi->tick, hz, cxgbe_tick, pi);
 	if (pi->link_cfg.link_ok)
 		t4_os_link_changed(pi);
 	PORT_UNLOCK(pi);
+
+	mtx_lock(&vi->tick_mtx);
+	if (ifp->if_get_counter == vi_get_counter)
+		callout_reset(&vi->tick, hz, vi_tick, vi);
+	else
+		callout_reset(&vi->tick, hz, cxgbe_tick, vi);
+	mtx_unlock(&vi->tick_mtx);
 done:
 	if (rc != 0)
 		cxgbe_uninit_synchronized(vi);
@@ -5632,11 +5649,11 @@ cxgbe_uninit_synchronized(struct vi_info *vi)
 		TXQ_UNLOCK(txq);
 	}
 
+	mtx_lock(&vi->tick_mtx);
+	callout_stop(&vi->tick);
+	mtx_unlock(&vi->tick_mtx);
+
 	PORT_LOCK(pi);
-	if (pi->nvi > 1 || sc->flags & IS_VF)
-		callout_stop(&vi->tick);
-	else
-		callout_stop(&pi->tick);
 	if (!(ifp->if_drv_flags & IFF_DRV_RUNNING)) {
 		PORT_UNLOCK(pi);
 		return (0);
@@ -5801,14 +5818,28 @@ t4_setup_intr_handlers(struct adapter *sc)
 	return (0);
 }
 
+static void
+write_global_rss_key(struct adapter *sc)
+{
+#ifdef RSS
+	int i;
+	uint32_t raw_rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
+	uint32_t rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
+
+	CTASSERT(RSS_KEYSIZE == 40);
+
+	rss_getkey((void *)&raw_rss_key[0]);
+	for (i = 0; i < nitems(rss_key); i++) {
+		rss_key[i] = htobe32(raw_rss_key[nitems(rss_key) - 1 - i]);
+	}
+	t4_write_rss_key(sc, &rss_key[0], -1, 1);
+#endif
+}
+
 int
 adapter_full_init(struct adapter *sc)
 {
 	int rc, i;
-#ifdef RSS
-	uint32_t raw_rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
-	uint32_t rss_key[RSS_KEYSIZE / sizeof(uint32_t)];
-#endif
 
 	ASSERT_SYNCHRONIZED_OP(sc);
 	ADAPTER_LOCK_ASSERT_NOTOWNED(sc);
@@ -5834,19 +5865,13 @@ adapter_full_init(struct adapter *sc)
 		taskqueue_start_threads(&sc->tq[i], 1, PI_NET, "%s tq%d",
 		    device_get_nameunit(sc->dev), i);
 	}
-#ifdef RSS
-	MPASS(RSS_KEYSIZE == 40);
-	rss_getkey((void *)&raw_rss_key[0]);
-	for (i = 0; i < nitems(rss_key); i++) {
-		rss_key[i] = htobe32(raw_rss_key[nitems(rss_key) - 1 - i]);
-	}
-	t4_write_rss_key(sc, &rss_key[0], -1, 1);
-#endif
 
-	if (!(sc->flags & IS_VF))
+	if (!(sc->flags & IS_VF)) {
+		write_global_rss_key(sc);
 		t4_intr_enable(sc);
+	}
 #ifdef KERN_TLS
-	if (sc->flags & KERN_TLS_OK)
+	if (is_ktls(sc))
 		callout_reset_sbt(&sc->ktls_tick, SBT_1MS, 0, ktls_tick, sc,
 		    C_HARDCLOCK);
 #endif
@@ -6259,11 +6284,11 @@ read_vf_stat(struct adapter *sc, u_int vin, int reg)
 {
 	u32 stats[2];
 
-	mtx_assert(&sc->reg_lock, MA_OWNED);
 	if (sc->flags & IS_VF) {
 		stats[0] = t4_read_reg(sc, VF_MPS_REG(reg));
 		stats[1] = t4_read_reg(sc, VF_MPS_REG(reg + 4));
 	} else {
+		mtx_assert(&sc->reg_lock, MA_OWNED);
 		t4_write_reg(sc, A_PL_INDIR_CMD, V_PL_AUTOINC(1) |
 		    V_PL_VFID(vin) | V_PL_ADDR(VF_MPS_REG(reg)));
 		stats[0] = t4_read_reg(sc, A_PL_INDIR_DATA);
@@ -6279,6 +6304,8 @@ t4_get_vi_stats(struct adapter *sc, u_int vin, struct fw_vi_stats_vf *stats)
 #define GET_STAT(name) \
 	read_vf_stat(sc, vin, A_MPS_VF_STAT_##name##_L)
 
+	if (!(sc->flags & IS_VF))
+		mtx_lock(&sc->reg_lock);
 	stats->tx_bcast_bytes    = GET_STAT(TX_VF_BCAST_BYTES);
 	stats->tx_bcast_frames   = GET_STAT(TX_VF_BCAST_FRAMES);
 	stats->tx_mcast_bytes    = GET_STAT(TX_VF_MCAST_BYTES);
@@ -6295,6 +6322,8 @@ t4_get_vi_stats(struct adapter *sc, u_int vin, struct fw_vi_stats_vf *stats)
 	stats->rx_ucast_bytes    = GET_STAT(RX_VF_UCAST_BYTES);
 	stats->rx_ucast_frames   = GET_STAT(RX_VF_UCAST_FRAMES);
 	stats->rx_err_frames     = GET_STAT(RX_VF_ERR_FRAMES);
+	if (!(sc->flags & IS_VF))
+		mtx_unlock(&sc->reg_lock);
 
 #undef GET_STAT
 }
@@ -6312,12 +6341,14 @@ t4_clr_vi_stats(struct adapter *sc, u_int vin)
 }
 
 static void
-vi_refresh_stats(struct adapter *sc, struct vi_info *vi)
+vi_refresh_stats(struct vi_info *vi)
 {
 	struct timeval tv;
 	const struct timeval interval = {0, 250000};	/* 250ms */
 
-	if (!(vi->flags & VI_INIT_DONE))
+	mtx_assert(&vi->tick_mtx, MA_OWNED);
+
+	if (!(vi->flags & VI_INIT_DONE) || vi->flags & VI_SKIP_STATS)
 		return;
 
 	getmicrotime(&tv);
@@ -6325,24 +6356,31 @@ vi_refresh_stats(struct adapter *sc, struct vi_info *vi)
 	if (timevalcmp(&tv, &vi->last_refreshed, <))
 		return;
 
-	mtx_lock(&sc->reg_lock);
-	t4_get_vi_stats(sc, vi->vin, &vi->stats);
+	t4_get_vi_stats(vi->adapter, vi->vin, &vi->stats);
 	getmicrotime(&vi->last_refreshed);
-	mtx_unlock(&sc->reg_lock);
 }
 
 static void
-cxgbe_refresh_stats(struct adapter *sc, struct port_info *pi)
+cxgbe_refresh_stats(struct vi_info *vi)
 {
 	u_int i, v, tnl_cong_drops, chan_map;
 	struct timeval tv;
 	const struct timeval interval = {0, 250000};	/* 250ms */
+	struct port_info *pi;
+	struct adapter *sc;
+
+	mtx_assert(&vi->tick_mtx, MA_OWNED);
+
+	if (vi->flags & VI_SKIP_STATS)
+		return;
 
 	getmicrotime(&tv);
 	timevalsub(&tv, &interval);
-	if (timevalcmp(&tv, &pi->last_refreshed, <))
+	if (timevalcmp(&tv, &vi->last_refreshed, <))
 		return;
 
+	pi = vi->pi;
+	sc = vi->adapter;
 	tnl_cong_drops = 0;
 	t4_get_port_stats(sc, pi->tx_chan, &pi->stats);
 	chan_map = pi->rx_e_chan_map;
@@ -6356,29 +6394,29 @@ cxgbe_refresh_stats(struct adapter *sc, struct port_info *pi)
 		chan_map &= ~(1 << i);
 	}
 	pi->tnl_cong_drops = tnl_cong_drops;
-	getmicrotime(&pi->last_refreshed);
+	getmicrotime(&vi->last_refreshed);
 }
 
 static void
 cxgbe_tick(void *arg)
 {
-	struct port_info *pi = arg;
-	struct adapter *sc = pi->adapter;
+	struct vi_info *vi = arg;
 
-	PORT_LOCK_ASSERT_OWNED(pi);
-	cxgbe_refresh_stats(sc, pi);
+	MPASS(IS_MAIN_VI(vi));
+	mtx_assert(&vi->tick_mtx, MA_OWNED);
 
-	callout_schedule(&pi->tick, hz);
+	cxgbe_refresh_stats(vi);
+	callout_schedule(&vi->tick, hz);
 }
 
-void
+static void
 vi_tick(void *arg)
 {
 	struct vi_info *vi = arg;
-	struct adapter *sc = vi->adapter;
 
-	vi_refresh_stats(sc, vi);
+	mtx_assert(&vi->tick_mtx, MA_OWNED);
 
+	vi_refresh_stats(vi);
 	callout_schedule(&vi->tick, hz);
 }
 
@@ -6398,7 +6436,8 @@ static char *caps_decoder[] = {
 	    "\005INITIATOR_SSNOFLD\006TARGET_SSNOFLD"
 	    "\007T10DIF"
 	    "\010INITIATOR_CMDOFLD\011TARGET_CMDOFLD",
-	"\20\001LOOKASIDE\002TLSKEYS",			/* 7: Crypto */
+	"\20\001LOOKASIDE\002TLSKEYS\003IPSEC_INLINE"	/* 7: Crypto */
+	    "\004TLS_HW",
 	"\20\001INITIATOR\002TARGET\003CTRL_OFLD"	/* 8: FCoE */
 		    "\004PO_INITIATOR\005PO_TARGET",
 };
@@ -6735,7 +6774,7 @@ t4_sysctls(struct adapter *sc)
 	}
 
 #ifdef KERN_TLS
-	if (sc->flags & KERN_TLS_OK) {
+	if (is_ktls(sc)) {
 		/*
 		 * dev.t4nex.0.tls.
 		 */
@@ -9118,7 +9157,7 @@ sysctl_mps_tcam_t6(SYSCTL_HANDLER_ARGS)
 		if (lookup_type && lookup_type != M_DATALKPTYPE) {
 			sbuf_printf(sb, "\n%3u %02x:%02x:%02x:%02x:%02x:%02x "
 			    "%012jx %06x %06x    -    -   %3c"
-			    "      'I'  %4x   %3c   %#x%4u%4d", i, addr[0],
+			    "        I  %4x   %3c   %#x%4u%4d", i, addr[0],
 			    addr[1], addr[2], addr[3], addr[4], addr[5],
 			    (uintmax_t)mask, vniy, vnix, dip_hit ? 'Y' : 'N',
 			    port_num, cls_lo & F_T6_SRAM_VLD ? 'Y' : 'N',
@@ -10962,6 +11001,9 @@ t4_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data, int fflag,
 	case CHELSIO_T4_SET_FILTER_MODE:
 		rc = set_filter_mode(sc, *(uint32_t *)data);
 		break;
+	case CHELSIO_T4_SET_FILTER_MASK:
+		rc = set_filter_mask(sc, *(uint32_t *)data);
+		break;
 	case CHELSIO_T4_GET_FILTER:
 		rc = get_filter(sc, (struct t4_filter *)data);
 		break;
@@ -11022,7 +11064,7 @@ t4_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data, int fflag,
 
 #ifdef TCP_OFFLOAD
 static int
-toe_capability(struct vi_info *vi, int enable)
+toe_capability(struct vi_info *vi, bool enable)
 {
 	int rc;
 	struct port_info *pi = vi->pi;
@@ -11034,6 +11076,39 @@ toe_capability(struct vi_info *vi, int enable)
 		return (ENODEV);
 
 	if (enable) {
+#ifdef KERN_TLS
+		if (sc->flags & KERN_TLS_ON) {
+			int i, j, n;
+			struct port_info *p;
+			struct vi_info *v;
+
+			/*
+			 * Reconfigure hardware for TOE if TXTLS is not enabled
+			 * on any ifnet.
+			 */
+			n = 0;
+			for_each_port(sc, i) {
+				p = sc->port[i];
+				for_each_vi(p, j, v) {
+					if (v->ifp->if_capenable & IFCAP_TXTLS) {
+						CH_WARN(sc,
+						    "%s has NIC TLS enabled.\n",
+						    device_get_nameunit(v->dev));
+						n++;
+					}
+				}
+			}
+			if (n > 0) {
+				CH_WARN(sc, "Disable NIC TLS on all interfaces "
+				    "associated with this adapter before "
+				    "trying to enable TOE.\n");
+				return (EAGAIN);
+			}
+			rc = t4_config_kern_tls(sc, false);
+			if (rc)
+				return (rc);
+		}
+#endif
 		if ((vi->ifp->if_capenable & IFCAP_TOE) != 0) {
 			/* TOE is already enabled. */
 			return (0);
@@ -11239,6 +11314,35 @@ uld_active(struct adapter *sc, int uld_id)
 	MPASS(uld_id >= 0 && uld_id <= ULD_MAX);
 
 	return (isset(&sc->active_ulds, uld_id));
+}
+#endif
+
+#ifdef KERN_TLS
+static int
+ktls_capability(struct adapter *sc, bool enable)
+{
+	ASSERT_SYNCHRONIZED_OP(sc);
+
+	if (!is_ktls(sc))
+		return (ENODEV);
+
+	if (enable) {
+		if (sc->flags & KERN_TLS_ON)
+			return (0);	/* already on */
+		if (sc->offload_map != 0) {
+			CH_WARN(sc,
+			    "Disable TOE on all interfaces associated with "
+			    "this adapter before trying to enable NIC TLS.\n");
+			return (EAGAIN);
+		}
+		return (t4_config_kern_tls(sc, true));
+	} else {
+		/*
+		 * Nothing to do for disable.  If TOE is enabled sometime later
+		 * then toe_capability will reconfigure the hardware.
+		 */
+		return (0);
+	}
 }
 #endif
 
@@ -11562,12 +11666,38 @@ struct vxlan_evargs {
 };
 
 static void
+enable_vxlan_rx(struct adapter *sc)
+{
+	int i, rc;
+	struct port_info *pi;
+	uint8_t match_all_mac[ETHER_ADDR_LEN] = {0};
+
+	ASSERT_SYNCHRONIZED_OP(sc);
+
+	t4_write_reg(sc, A_MPS_RX_VXLAN_TYPE, V_VXLAN(sc->vxlan_port) |
+	    F_VXLAN_EN);
+	for_each_port(sc, i) {
+		pi = sc->port[i];
+		if (pi->vxlan_tcam_entry == true)
+			continue;
+		rc = t4_alloc_raw_mac_filt(sc, pi->vi[0].viid, match_all_mac,
+		    match_all_mac, sc->rawf_base + pi->port_id, 1, pi->port_id,
+		    true);
+		if (rc < 0) {
+			rc = -rc;
+			CH_ERR(&pi->vi[0],
+			    "failed to add VXLAN TCAM entry: %d.\n", rc);
+		} else {
+			MPASS(rc == sc->rawf_base + pi->port_id);
+			pi->vxlan_tcam_entry = true;
+		}
+	}
+}
+
+static void
 t4_vxlan_start(struct adapter *sc, void *arg)
 {
 	struct vxlan_evargs *v = arg;
-	struct port_info *pi;
-	uint8_t match_all_mac[ETHER_ADDR_LEN] = {0};
-	int i, rc;
 
 	if (sc->nrawf == 0 || chip_id(sc) <= CHELSIO_T5)
 		return;
@@ -11577,32 +11707,13 @@ t4_vxlan_start(struct adapter *sc, void *arg)
 	if (sc->vxlan_refcount == 0) {
 		sc->vxlan_port = v->port;
 		sc->vxlan_refcount = 1;
-		t4_write_reg(sc, A_MPS_RX_VXLAN_TYPE,
-		    V_VXLAN(v->port) | F_VXLAN_EN);
-		for_each_port(sc, i) {
-			pi = sc->port[i];
-			if (pi->vxlan_tcam_entry == true)
-				continue;
-			rc = t4_alloc_raw_mac_filt(sc, pi->vi[0].viid,
-			    match_all_mac, match_all_mac,
-			    sc->rawf_base + pi->port_id, 1, pi->port_id, true);
-			if (rc < 0) {
-				rc = -rc;
-				log(LOG_ERR,
-				    "%s: failed to add VXLAN TCAM entry: %d.\n",
-				    device_get_name(pi->vi[0].dev), rc);
-			} else {
-				MPASS(rc == sc->rawf_base + pi->port_id);
-				rc = 0;
-				pi->vxlan_tcam_entry = true;
-			}
-		}
+		enable_vxlan_rx(sc);
 	} else if (sc->vxlan_port == v->port) {
 		sc->vxlan_refcount++;
 	} else {
-		log(LOG_ERR, "%s: VXLAN already configured on port  %d; "
+		CH_ERR(sc, "VXLAN already configured on port  %d; "
 		    "ignoring attempt to configure it on port %d\n",
-		    device_get_nameunit(sc->dev), sc->vxlan_port, v->port);
+		    sc->vxlan_port, v->port);
 	}
 	end_synchronized_op(sc, 0);
 }

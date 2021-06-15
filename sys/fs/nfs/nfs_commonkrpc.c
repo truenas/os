@@ -767,11 +767,13 @@ tryagain:
 	 * use the same xid.
 	 */
 	if (nmp == NULL) {
-		timo.tv_usec = 0;
-		if (clp == NULL)
+		if (clp == NULL) {
 			timo.tv_sec = NFSV4_UPCALLTIMEO;
-		else
-			timo.tv_sec = NFSV4_CALLBACKTIMEO;
+			timo.tv_usec = 0;
+		} else {
+			timo.tv_sec = NFSV4_CALLBACKTIMEO / 1000;
+			timo.tv_usec = NFSV4_CALLBACKTIMEO * 1000;
+		}
 	} else {
 		if (nrp->nr_sotype != SOCK_DGRAM) {
 			timo.tv_usec = 0;
@@ -1067,7 +1069,9 @@ tryagain:
 			     nd->nd_procnum != NFSPROC_WRITE &&
 			     nd->nd_procnum != NFSPROC_WRITEDS &&
 			     nd->nd_procnum != NFSPROC_OPEN &&
+			     nd->nd_procnum != NFSPROC_OPENLAYGET &&
 			     nd->nd_procnum != NFSPROC_CREATE &&
+			     nd->nd_procnum != NFSPROC_CREATELAYGET &&
 			     nd->nd_procnum != NFSPROC_OPENCONFIRM &&
 			     nd->nd_procnum != NFSPROC_OPENDOWNGRADE &&
 			     nd->nd_procnum != NFSPROC_CLOSE &&

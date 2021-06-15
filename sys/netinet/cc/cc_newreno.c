@@ -86,8 +86,8 @@ static void	newreno_cong_signal(struct cc_var *ccv, uint32_t type);
 static void	newreno_post_recovery(struct cc_var *ccv);
 static int newreno_ctl_output(struct cc_var *ccv, struct sockopt *sopt, void *buf);
 
-VNET_DEFINE_STATIC(uint32_t, newreno_beta) = 50;
-VNET_DEFINE_STATIC(uint32_t, newreno_beta_ecn) = 80;
+VNET_DEFINE(uint32_t, newreno_beta) = 50;
+VNET_DEFINE(uint32_t, newreno_beta_ecn) = 80;
 #define V_newreno_beta VNET(newreno_beta)
 #define V_newreno_beta_ecn VNET(newreno_beta_ecn)
 
@@ -101,11 +101,6 @@ struct cc_algo newreno_cc_algo = {
 	.ctl_output = newreno_ctl_output,
 };
 
-struct newreno {
-	uint32_t beta;
-	uint32_t beta_ecn;
-};
-
 static inline struct newreno *
 newreno_malloc(struct cc_var *ccv)
 {
@@ -116,6 +111,7 @@ newreno_malloc(struct cc_var *ccv)
 		/* NB: nreno is not zeroed, so initialise all fields. */
 		nreno->beta = V_newreno_beta;
 		nreno->beta_ecn = V_newreno_beta_ecn;
+		nreno->newreno_flags = 0;
 		ccv->cc_data = nreno;
 	}
 
@@ -182,9 +178,15 @@ newreno_ack_received(struct cc_var *ccv, uint16_t type)
 			 * XXXLAS: Find a way to signal SS after RTO that
 			 * doesn't rely on tcpcb vars.
 			 */
+			uint16_t abc_val;
+
+			if (ccv->flags & CCF_USE_LOCAL_ABC)
+				abc_val = ccv->labc;
+			else
+				abc_val = V_tcp_abc_l_var;
 			if (CCV(ccv, snd_nxt) == CCV(ccv, snd_max))
 				incr = min(ccv->bytes_this_ack,
-				    ccv->nsegs * V_tcp_abc_l_var *
+				    ccv->nsegs * abc_val *
 				    CCV(ccv, t_maxseg));
 			else
 				incr = min(ccv->bytes_this_ack, CCV(ccv, t_maxseg));
@@ -237,11 +239,25 @@ newreno_cong_signal(struct cc_var *ccv, uint32_t type)
 	u_int mss;
 
 	cwin = CCV(ccv, snd_cwnd);
-	mss = tcp_maxseg(ccv->ccvc.tcp);
-	nreno = ccv->cc_data;
+	mss = tcp_fixed_maxseg(ccv->ccvc.tcp);
+	/*
+	 * Other TCP congestion controls use newreno_cong_signal(), but
+	 * with their own private cc_data. Make sure the cc_data is used
+	 * correctly.
+	 */
+	nreno = (CC_ALGO(ccv->ccvc.tcp) == &newreno_cc_algo) ? ccv->cc_data : NULL;
 	beta = (nreno == NULL) ? V_newreno_beta : nreno->beta;
 	beta_ecn = (nreno == NULL) ? V_newreno_beta_ecn : nreno->beta_ecn;
-	if (V_cc_do_abe && type == CC_ECN)
+
+	/*
+	 * Note that we only change the backoff for ECN if the
+	 * global sysctl V_cc_do_abe is set <or> the stack itself
+	 * has set a flag in our newreno_flags (due to pacing) telling
+	 * us to use the lower valued back-off.
+	 */
+	if ((type == CC_ECN) &&
+	    (V_cc_do_abe ||
+	    ((nreno != NULL) && (nreno->newreno_flags & CC_NEWRENO_BETA_ECN))))
 		factor = beta_ecn;
 	else
 		factor = beta;
@@ -260,8 +276,7 @@ newreno_cong_signal(struct cc_var *ccv, uint32_t type)
 			    V_cc_do_abe && V_cc_abe_frlossreduce)) {
 				CCV(ccv, snd_ssthresh) =
 				    ((uint64_t)CCV(ccv, snd_ssthresh) *
-				    (uint64_t)beta) /
-				    (100ULL * (uint64_t)beta_ecn);
+				     (uint64_t)beta) / (uint64_t)beta_ecn;
 			}
 			if (!IN_CONGRECOVERY(CCV(ccv, t_flags)))
 				CCV(ccv, snd_ssthresh) = cwin;
@@ -328,6 +343,9 @@ newreno_ctl_output(struct cc_var *ccv, struct sockopt *sopt, void *buf)
 	if (sopt->sopt_valsize != sizeof(struct cc_newreno_opts))
 		return (EMSGSIZE);
 
+	if (CC_ALGO(ccv->ccvc.tcp) != &newreno_cc_algo)
+		return (ENOPROTOOPT);
+
 	nreno = ccv->cc_data;
 	opt = buf;
 
@@ -344,7 +362,7 @@ newreno_ctl_output(struct cc_var *ccv, struct sockopt *sopt, void *buf)
 			nreno->beta = opt->val;
 			break;
 		case CC_NEWRENO_BETA_ECN:
-			if (!V_cc_do_abe)
+			if ((!V_cc_do_abe) && ((nreno->newreno_flags & CC_NEWRENO_BETA_ECN) == 0))
 				return (EACCES);
 			nreno->beta_ecn = opt->val;
 			break;

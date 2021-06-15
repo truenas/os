@@ -163,8 +163,7 @@ enum {
 	ADAP_ERR	= (1 << 5),
 	BUF_PACKING_OK	= (1 << 6),
 	IS_VF		= (1 << 7),
-	KERN_TLS_OK	= (1 << 8),
-
+	KERN_TLS_ON	= (1 << 8),	/* HW is configured for KERN_TLS */
 	CXGBE_BUSY	= (1 << 9),
 
 	/* port flags */
@@ -176,6 +175,7 @@ enum {
 	VI_INIT_DONE	= (1 << 1),
 	VI_SYSCTL_CTX	= (1 << 2),
 	TX_USES_VM_WR 	= (1 << 3),
+	VI_SKIP_STATS 	= (1 << 4),
 
 	/* adapter debug_flags */
 	DF_DUMP_MBOX		= (1 << 0),	/* Log all mbox cmd/rpl. */
@@ -238,8 +238,9 @@ struct vi_info {
 
 	struct timeval last_refreshed;
 	struct fw_vi_stats_vf stats;
-
+	struct mtx tick_mtx;
 	struct callout tick;
+
 	struct sysctl_ctx_list ctx;	/* from ifconfig up to driver detach */
 
 	uint8_t hw_addr[ETHER_ADDR_LEN]; /* factory MAC address, won't change */
@@ -311,14 +312,11 @@ struct port_info {
 	struct link_config link_cfg;
 	struct ifmedia media;
 
-	struct timeval last_refreshed;
  	struct port_stats stats;
 	u_int tnl_cong_drops;
 	u_int tx_parse_error;
 	int fcs_reg;
 	uint64_t fcs_base;
-
-	struct callout tick;
 };
 
 #define	IS_MAIN_VI(vi)		((vi) == &((vi)->pi->vi[0]))
@@ -1215,11 +1213,9 @@ void end_synchronized_op(struct adapter *, int);
 int update_mac_settings(struct ifnet *, int);
 int adapter_full_init(struct adapter *);
 int adapter_full_uninit(struct adapter *);
-uint64_t cxgbe_get_counter(struct ifnet *, ift_counter);
 int vi_full_init(struct vi_info *);
 int vi_full_uninit(struct vi_info *);
 void vi_sysctls(struct vi_info *);
-void vi_tick(void *);
 int rw_via_memwin(struct adapter *, int, uint32_t, uint32_t *, int, int);
 int alloc_atid(struct adapter *, void *);
 void *lookup_atid(struct adapter *, int);
@@ -1270,7 +1266,8 @@ void t4_sge_modload(void);
 void t4_sge_modunload(void);
 uint64_t t4_sge_extfree_refs(void);
 void t4_tweak_chip_settings(struct adapter *);
-int t4_read_chip_settings(struct adapter *);
+int t4_verify_chip_settings(struct adapter *);
+void t4_init_rx_buf_info(struct adapter *);
 int t4_create_dma_tag(struct adapter *);
 void t4_sge_sysctls(struct adapter *, struct sysctl_ctx_list *,
     struct sysctl_oid_list *);
@@ -1279,7 +1276,6 @@ int alloc_ring(struct adapter *, size_t, bus_dma_tag_t *, bus_dmamap_t *,
     bus_addr_t *, void **);
 int free_ring(struct adapter *, bus_dma_tag_t, bus_dmamap_t, bus_addr_t,
     void *);
-int sysctl_uint16(SYSCTL_HANDLER_ARGS);
 int t4_setup_adapter_queues(struct adapter *);
 int t4_teardown_adapter_queues(struct adapter *);
 int t4_setup_vi_queues(struct vi_info *);
@@ -1344,6 +1340,7 @@ void cxgbe_ratelimit_query(struct ifnet *, struct if_ratelimit_query_results *);
 /* t4_filter.c */
 int get_filter_mode(struct adapter *, uint32_t *);
 int set_filter_mode(struct adapter *, uint32_t);
+int set_filter_mask(struct adapter *, uint32_t);
 int get_filter(struct adapter *, struct t4_filter *);
 int set_filter(struct adapter *, struct t4_filter *);
 int del_filter(struct adapter *, struct t4_filter *);

@@ -31,7 +31,7 @@
 #include <sys/sbuf.h>
 #include <machine/_inttypes.h>
 
-#define em_mac_min e1000_82547
+#define em_mac_min e1000_82571
 #define igb_mac_min e1000_82575
 
 /*********************************************************************
@@ -51,195 +51,195 @@ char em_driver_version[] = "7.6.1-k";
 
 static pci_vendor_info_t em_vendor_info_array[] =
 {
-	/* Intel(R) PRO/1000 Network Connection - Legacy em*/
-	PVID(0x8086, E1000_DEV_ID_82540EM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82540EM_LOM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82540EP, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82540EP_LOM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82540EP_LP, "Intel(R) PRO/1000 Network Connection"),
+	/* Intel(R) - lem-class legacy devices */
+	PVID(0x8086, E1000_DEV_ID_82540EM, "Intel(R) Legacy PRO/1000 MT 82540EM"),
+	PVID(0x8086, E1000_DEV_ID_82540EM_LOM, "Intel(R) Legacy PRO/1000 MT 82540EM (LOM)"),
+	PVID(0x8086, E1000_DEV_ID_82540EP, "Intel(R) Legacy PRO/1000 MT 82540EP"),
+	PVID(0x8086, E1000_DEV_ID_82540EP_LOM, "Intel(R) Legacy PRO/1000 MT 82540EP (LOM)"),
+	PVID(0x8086, E1000_DEV_ID_82540EP_LP, "Intel(R) Legacy PRO/1000 MT 82540EP (Mobile)"),
 
-	PVID(0x8086, E1000_DEV_ID_82541EI, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82541ER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82541ER_LOM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82541EI_MOBILE, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82541GI, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82541GI_LF, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82541GI_MOBILE, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82541EI, "Intel(R) Legacy PRO/1000 MT 82541EI (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82541ER, "Intel(R) Legacy PRO/1000 82541ER"),
+	PVID(0x8086, E1000_DEV_ID_82541ER_LOM, "Intel(R) Legacy PRO/1000 MT 82541ER"),
+	PVID(0x8086, E1000_DEV_ID_82541EI_MOBILE, "Intel(R) Legacy PRO/1000 MT 82541EI (Mobile)"),
+	PVID(0x8086, E1000_DEV_ID_82541GI, "Intel(R) Legacy PRO/1000 MT 82541GI"),
+	PVID(0x8086, E1000_DEV_ID_82541GI_LF, "Intel(R) Legacy PRO/1000 GT 82541PI"),
+	PVID(0x8086, E1000_DEV_ID_82541GI_MOBILE, "Intel(R) Legacy PRO/1000 MT 82541GI (Mobile)"),
 
-	PVID(0x8086, E1000_DEV_ID_82542, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82542, "Intel(R) Legacy PRO/1000 82542 (Fiber)"),
 
-	PVID(0x8086, E1000_DEV_ID_82543GC_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82543GC_COPPER, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82543GC_FIBER, "Intel(R) Legacy PRO/1000 F 82543GC (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82543GC_COPPER, "Intel(R) Legacy PRO/1000 T 82543GC (Copper)"),
 
-	PVID(0x8086, E1000_DEV_ID_82544EI_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82544EI_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82544GC_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82544GC_LOM, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82544EI_COPPER, "Intel(R) Legacy PRO/1000 XT 82544EI (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82544EI_FIBER, "Intel(R) Legacy PRO/1000 XF 82544EI (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82544GC_COPPER, "Intel(R) Legacy PRO/1000 T 82544GC (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82544GC_LOM, "Intel(R) Legacy PRO/1000 XT 82544GC (LOM)"),
 
-	PVID(0x8086, E1000_DEV_ID_82545EM_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82545EM_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82545GM_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82545GM_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82545GM_SERDES, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82545EM_COPPER, "Intel(R) Legacy PRO/1000 MT 82545EM (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82545EM_FIBER, "Intel(R) Legacy PRO/1000 MF 82545EM (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82545GM_COPPER, "Intel(R) Legacy PRO/1000 MT 82545GM (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82545GM_FIBER, "Intel(R) Legacy PRO/1000 MF 82545GM (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82545GM_SERDES, "Intel(R) Legacy PRO/1000 MB 82545GM (SERDES)"),
 
-	PVID(0x8086, E1000_DEV_ID_82546EB_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546EB_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546EB_QUAD_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546GB_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546GB_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546GB_SERDES, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546GB_PCIE, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546GB_QUAD_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82546GB_QUAD_COPPER_KSP3, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82546EB_COPPER, "Intel(R) Legacy PRO/1000 MT 82546EB (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82546EB_FIBER, "Intel(R) Legacy PRO/1000 MF 82546EB (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82546EB_QUAD_COPPER, "Intel(R) Legacy PRO/1000 MT 82546EB (Quad Copper"),
+	PVID(0x8086, E1000_DEV_ID_82546GB_COPPER, "Intel(R) Legacy PRO/1000 MT 82546GB (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82546GB_FIBER, "Intel(R) Legacy PRO/1000 MF 82546GB (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82546GB_SERDES, "Intel(R) Legacy PRO/1000 MB 82546GB (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82546GB_PCIE, "Intel(R) Legacy PRO/1000 P 82546GB (PCIe)"),
+	PVID(0x8086, E1000_DEV_ID_82546GB_QUAD_COPPER, "Intel(R) Legacy PRO/1000 GT 82546GB (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82546GB_QUAD_COPPER_KSP3, "Intel(R) Legacy PRO/1000 GT 82546GB (Quad Copper)"),
 
-	PVID(0x8086, E1000_DEV_ID_82547EI, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82547EI_MOBILE, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82547GI, "Intel(R) PRO/1000 Network Connection"),
+	PVID(0x8086, E1000_DEV_ID_82547EI, "Intel(R) Legacy PRO/1000 CT 82547EI"),
+	PVID(0x8086, E1000_DEV_ID_82547EI_MOBILE, "Intel(R) Legacy PRO/1000 CT 82547EI (Mobile)"),
+	PVID(0x8086, E1000_DEV_ID_82547GI, "Intel(R) Legacy PRO/1000 CT 82547GI"),
 
-	/* Intel(R) PRO/1000 Network Connection - em */
-	PVID(0x8086, E1000_DEV_ID_82571EB_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_SERDES, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_SERDES_DUAL, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_SERDES_QUAD, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_QUAD_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_QUAD_COPPER_LP, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571EB_QUAD_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82571PT_QUAD_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82572EI, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82572EI_COPPER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82572EI_FIBER, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82572EI_SERDES, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82573E, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82573E_IAMT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82573L, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82583V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_COPPER_SPT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_SERDES_SPT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_COPPER_DPT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_SERDES_DPT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_M_AMT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_AMT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_C, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IFE, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IFE_GT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IFE_G, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_M, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH8_82567V_3, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_M_AMT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_AMT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_C, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_M, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_M_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IFE, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IFE_GT, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_IFE_G, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH9_BM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82574L, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_82574LA, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH10_R_BM_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH10_R_BM_LF, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH10_R_BM_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH10_D_BM_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH10_D_BM_LF, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_ICH10_D_BM_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_M_HV_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_M_HV_LC, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_D_HV_DM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_D_HV_DC, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH2_LV_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH2_LV_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_LPT_I217_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_LPT_I217_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_LPTLP_I218_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_LPTLP_I218_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_I218_LM2, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_I218_V2, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_I218_LM3, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_I218_V3, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM2, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V2, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_LBG_I219_LM3, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM4, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V4, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM5, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V5, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_LM6, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_V6, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_LM7, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_V7, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_LM8, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_V8, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_LM9, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_V9, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_LM10, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_V10, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_LM11, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_V11, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_LM12, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_V12, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_LM13, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_V13, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_LM14, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_V14, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_LM15, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_V15, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_LM16, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_V16, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_LM17, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_V17, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_LM18, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_V18, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_LM19, "Intel(R) PRO/1000 Network Connection"),
-	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_V19, "Intel(R) PRO/1000 Network Connection"),
+	/* Intel(R) - em-class devices */
+	PVID(0x8086, E1000_DEV_ID_82571EB_COPPER, "Intel(R) PRO/1000 PT 82571EB/82571GB (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_FIBER, "Intel(R) PRO/1000 PF 82571EB/82571GB (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_SERDES, "Intel(R) PRO/1000 PB 82571EB (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_SERDES_DUAL, "Intel(R) PRO/1000 82571EB (Dual Mezzanine)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_SERDES_QUAD, "Intel(R) PRO/1000 82571EB (Quad Mezzanine)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_QUAD_COPPER, "Intel(R) PRO/1000 PT 82571EB/82571GB (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_QUAD_COPPER_LP, "Intel(R) PRO/1000 PT 82571EB/82571GB (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82571EB_QUAD_FIBER, "Intel(R) PRO/1000 PF 82571EB (Quad Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82571PT_QUAD_COPPER, "Intel(R) PRO/1000 PT 82571PT (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82572EI, "Intel(R) PRO/1000 PT 82572EI (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82572EI_COPPER, "Intel(R) PRO/1000 PT 82572EI (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82572EI_FIBER, "Intel(R) PRO/1000 PF 82572EI (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82572EI_SERDES, "Intel(R) PRO/1000 82572EI (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82573E, "Intel(R) PRO/1000 82573E (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82573E_IAMT, "Intel(R) PRO/1000 82573E AMT (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82573L, "Intel(R) PRO/1000 82573L"),
+	PVID(0x8086, E1000_DEV_ID_82583V, "Intel(R) 82583V"),
+	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_COPPER_SPT, "Intel(R) 80003ES2LAN (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_SERDES_SPT, "Intel(R) 80003ES2LAN (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_COPPER_DPT, "Intel(R) 80003ES2LAN (Dual Copper)"),
+	PVID(0x8086, E1000_DEV_ID_80003ES2LAN_SERDES_DPT, "Intel(R) 80003ES2LAN (Dual SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_M_AMT, "Intel(R) 82566MM ICH8 AMT (Mobile)"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_AMT, "Intel(R) 82566DM ICH8 AMT"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_C, "Intel(R) 82566DC ICH8"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IFE, "Intel(R) 82562V ICH8"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IFE_GT, "Intel(R) 82562GT ICH8"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IFE_G, "Intel(R) 82562G ICH8"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_IGP_M, "Intel(R) 82566MC ICH8"),
+	PVID(0x8086, E1000_DEV_ID_ICH8_82567V_3, "Intel(R) 82567V-3 ICH8"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_M_AMT, "Intel(R) 82567LM ICH9 AMT"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_AMT, "Intel(R) 82566DM-2 ICH9 AMT"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_C, "Intel(R) 82566DC-2 ICH9"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_M, "Intel(R) 82567LF ICH9"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IGP_M_V, "Intel(R) 82567V ICH9"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IFE, "Intel(R) 82562V-2 ICH9"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IFE_GT, "Intel(R) 82562GT-2 ICH9"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_IFE_G, "Intel(R) 82562G-2 ICH9"),
+	PVID(0x8086, E1000_DEV_ID_ICH9_BM, "Intel(R) 82567LM-4 ICH9"),
+	PVID(0x8086, E1000_DEV_ID_82574L, "Intel(R) Gigabit CT 82574L"),
+	PVID(0x8086, E1000_DEV_ID_82574LA, "Intel(R) 82574L-Apple"),
+	PVID(0x8086, E1000_DEV_ID_ICH10_R_BM_LM, "Intel(R) 82567LM-2 ICH10"),
+	PVID(0x8086, E1000_DEV_ID_ICH10_R_BM_LF, "Intel(R) 82567LF-2 ICH10"),
+	PVID(0x8086, E1000_DEV_ID_ICH10_R_BM_V, "Intel(R) 82567V-2 ICH10"),
+	PVID(0x8086, E1000_DEV_ID_ICH10_D_BM_LM, "Intel(R) 82567LM-3 ICH10"),
+	PVID(0x8086, E1000_DEV_ID_ICH10_D_BM_LF, "Intel(R) 82567LF-3 ICH10"),
+	PVID(0x8086, E1000_DEV_ID_ICH10_D_BM_V, "Intel(R) 82567V-4 ICH10"),
+	PVID(0x8086, E1000_DEV_ID_PCH_M_HV_LM, "Intel(R) 82577LM"),
+	PVID(0x8086, E1000_DEV_ID_PCH_M_HV_LC, "Intel(R) 82577LC"),
+	PVID(0x8086, E1000_DEV_ID_PCH_D_HV_DM, "Intel(R) 82578DM"),
+	PVID(0x8086, E1000_DEV_ID_PCH_D_HV_DC, "Intel(R) 82578DC"),
+	PVID(0x8086, E1000_DEV_ID_PCH2_LV_LM, "Intel(R) 82579LM"),
+	PVID(0x8086, E1000_DEV_ID_PCH2_LV_V, "Intel(R) 82579V"),
+	PVID(0x8086, E1000_DEV_ID_PCH_LPT_I217_LM, "Intel(R) I217-LM LPT"),
+	PVID(0x8086, E1000_DEV_ID_PCH_LPT_I217_V, "Intel(R) I217-V LPT"),
+	PVID(0x8086, E1000_DEV_ID_PCH_LPTLP_I218_LM, "Intel(R) I218-LM LPTLP"),
+	PVID(0x8086, E1000_DEV_ID_PCH_LPTLP_I218_V, "Intel(R) I218-V LPTLP"),
+	PVID(0x8086, E1000_DEV_ID_PCH_I218_LM2, "Intel(R) I218-LM (2)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_I218_V2, "Intel(R) I218-V (2)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_I218_LM3, "Intel(R) I218-LM (3)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_I218_V3, "Intel(R) I218-V (3)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM, "Intel(R) I219-LM SPT"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V, "Intel(R) I219-V SPT"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM2, "Intel(R) I219-LM SPT-H(2)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V2, "Intel(R) I219-V SPT-H(2)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_LBG_I219_LM3, "Intel(R) I219-LM LBG(3)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM4, "Intel(R) I219-LM SPT(4)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V4, "Intel(R) I219-V SPT(4)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_LM5, "Intel(R) I219-LM SPT(5)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_SPT_I219_V5, "Intel(R) I219-V SPT(5)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_LM6, "Intel(R) I219-LM CNP(6)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_V6, "Intel(R) I219-V CNP(6)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_LM7, "Intel(R) I219-LM CNP(7)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CNP_I219_V7, "Intel(R) I219-V CNP(7)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_LM8, "Intel(R) I219-LM ICP(8)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_V8, "Intel(R) I219-V ICP(8)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_LM9, "Intel(R) I219-LM ICP(9)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ICP_I219_V9, "Intel(R) I219-V ICP(9)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_LM10, "Intel(R) I219-LM CMP(10)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_V10, "Intel(R) I219-V CMP(10)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_LM11, "Intel(R) I219-LM CMP(11)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_V11, "Intel(R) I219-V CMP(11)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_LM12, "Intel(R) I219-LM CMP(12)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_CMP_I219_V12, "Intel(R) I219-V CMP(12)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_LM13, "Intel(R) I219-LM TGP(13)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_V13, "Intel(R) I219-V TGP(13)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_LM14, "Intel(R) I219-LM TGP(14)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_V14, "Intel(R) I219-V GTP(14)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_LM15, "Intel(R) I219-LM TGP(15)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_TGP_I219_V15, "Intel(R) I219-V TGP(15)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_LM16, "Intel(R) I219-LM ADL(16)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_V16, "Intel(R) I219-V ADL(16)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_LM17, "Intel(R) I219-LM ADL(17)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_ADL_I219_V17, "Intel(R) I219-V ADL(17)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_LM18, "Intel(R) I219-LM MTP(18)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_V18, "Intel(R) I219-V MTP(18)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_LM19, "Intel(R) I219-LM MTP(19)"),
+	PVID(0x8086, E1000_DEV_ID_PCH_MTP_I219_V19, "Intel(R) I219-V MTP(19)"),
 	/* required last entry */
 	PVID_END
 };
 
 static pci_vendor_info_t igb_vendor_info_array[] =
 {
-	/* Intel(R) PRO/1000 Network Connection - igb */
-	PVID(0x8086, E1000_DEV_ID_82575EB_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82575EB_FIBER_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82575GB_QUAD_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_NS, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_NS_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_FIBER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_SERDES_QUAD, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_QUAD_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_QUAD_COPPER_ET2, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82576_VF, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82580_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82580_FIBER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82580_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82580_SGMII, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82580_COPPER_DUAL, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_82580_QUAD_FIBER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_DH89XXCC_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_DH89XXCC_SGMII, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_DH89XXCC_SFP, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_DH89XXCC_BACKPLANE, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I350_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I350_FIBER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I350_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I350_SGMII, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I350_VF, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_COPPER_IT, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_COPPER_OEM1, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_COPPER_FLASHLESS, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_SERDES_FLASHLESS, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_FIBER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_SERDES, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I210_SGMII, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I211_COPPER, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I354_BACKPLANE_1GBPS, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I354_BACKPLANE_2_5GBPS, "Intel(R) PRO/1000 PCI-Express Network Driver"),
-	PVID(0x8086, E1000_DEV_ID_I354_SGMII, "Intel(R) PRO/1000 PCI-Express Network Driver"),
+	/* Intel(R) - igb-class devices */
+	PVID(0x8086, E1000_DEV_ID_82575EB_COPPER, "Intel(R) PRO/1000 82575EB (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82575EB_FIBER_SERDES, "Intel(R) PRO/1000 82575EB (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82575GB_QUAD_COPPER, "Intel(R) PRO/1000 VT 82575GB (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82576, "Intel(R) PRO/1000 82576"),
+	PVID(0x8086, E1000_DEV_ID_82576_NS, "Intel(R) PRO/1000 82576NS"),
+	PVID(0x8086, E1000_DEV_ID_82576_NS_SERDES, "Intel(R) PRO/1000 82576NS (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82576_FIBER, "Intel(R) PRO/1000 EF 82576 (Dual Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82576_SERDES, "Intel(R) PRO/1000 82576 (Dual SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82576_SERDES_QUAD, "Intel(R) PRO/1000 ET 82576 (Quad SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82576_QUAD_COPPER, "Intel(R) PRO/1000 ET 82576 (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82576_QUAD_COPPER_ET2, "Intel(R) PRO/1000 ET(2) 82576 (Quad Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82576_VF, "Intel(R) PRO/1000 82576 Virtual Function"),
+	PVID(0x8086, E1000_DEV_ID_82580_COPPER, "Intel(R) I340 82580 (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82580_FIBER, "Intel(R) I340 82580 (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_82580_SERDES, "Intel(R) I340 82580 (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_82580_SGMII, "Intel(R) I340 82580 (SGMII)"),
+	PVID(0x8086, E1000_DEV_ID_82580_COPPER_DUAL, "Intel(R) I340-T2 82580 (Dual Copper)"),
+	PVID(0x8086, E1000_DEV_ID_82580_QUAD_FIBER, "Intel(R) I340-F4 82580 (Quad Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_DH89XXCC_SERDES, "Intel(R) DH89XXCC (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_DH89XXCC_SGMII, "Intel(R) I347-AT4 DH89XXCC"),
+	PVID(0x8086, E1000_DEV_ID_DH89XXCC_SFP, "Intel(R) DH89XXCC (SFP)"),
+	PVID(0x8086, E1000_DEV_ID_DH89XXCC_BACKPLANE, "Intel(R) DH89XXCC (Backplane)"),
+	PVID(0x8086, E1000_DEV_ID_I350_COPPER, "Intel(R) I350 (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_I350_FIBER, "Intel(R) I350 (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_I350_SERDES, "Intel(R) I350 (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_I350_SGMII, "Intel(R) I350 (SGMII)"),
+	PVID(0x8086, E1000_DEV_ID_I350_VF, "Intel(R) I350 Virtual Function"),
+	PVID(0x8086, E1000_DEV_ID_I210_COPPER, "Intel(R) I210 (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_I210_COPPER_IT, "Intel(R) I210 IT (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_I210_COPPER_OEM1, "Intel(R) I210 (OEM)"),
+	PVID(0x8086, E1000_DEV_ID_I210_COPPER_FLASHLESS, "Intel(R) I210 Flashless (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_I210_SERDES_FLASHLESS, "Intel(R) I210 Flashless (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_I210_FIBER, "Intel(R) I210 (Fiber)"),
+	PVID(0x8086, E1000_DEV_ID_I210_SERDES, "Intel(R) I210 (SERDES)"),
+	PVID(0x8086, E1000_DEV_ID_I210_SGMII, "Intel(R) I210 (SGMII)"),
+	PVID(0x8086, E1000_DEV_ID_I211_COPPER, "Intel(R) I211 (Copper)"),
+	PVID(0x8086, E1000_DEV_ID_I354_BACKPLANE_1GBPS, "Intel(R) I354 (1.0 GbE Backplane)"),
+	PVID(0x8086, E1000_DEV_ID_I354_BACKPLANE_2_5GBPS, "Intel(R) I354 (2.5 GbE Backplane)"),
+	PVID(0x8086, E1000_DEV_ID_I354_SGMII, "Intel(R) I354 (SGMII)"),
 	/* required last entry */
 	PVID_END
 };
@@ -317,7 +317,6 @@ static int	em_enable_phy_wakeup(struct adapter *);
 static void	em_disable_aspm(struct adapter *);
 
 int		em_intr(void *arg);
-static void	em_disable_promisc(if_ctx_t ctx);
 
 /* MSI-X handlers */
 static int	em_if_msix_intr_assign(if_ctx_t, int);
@@ -509,7 +508,7 @@ SYSCTL_INT(_hw_em, OID_AUTO, smart_pwr_down, CTLFLAG_RDTUN, &em_smart_pwr_down,
     0, "Set to true to leave smart power down enabled on newer adapters");
 
 /* Controls whether promiscuous also shows bad packets */
-static int em_debug_sbp = TRUE;
+static int em_debug_sbp = FALSE;
 SYSCTL_INT(_hw_em, OID_AUTO, sbp, CTLFLAG_RDTUN, &em_debug_sbp, 0,
     "Show bad packets in promiscuous mode");
 
@@ -1505,6 +1504,7 @@ em_msix_link(void *arg)
 {
 	struct adapter *adapter = arg;
 	u32 reg_icr;
+	bool notlink = false;
 
 	++adapter->link_irq;
 	MPASS(adapter->hw.back != NULL);
@@ -1513,15 +1513,19 @@ em_msix_link(void *arg)
 	if (reg_icr & E1000_ICR_RXO)
 		adapter->rx_overruns++;
 
-	if (reg_icr & (E1000_ICR_RXSEQ | E1000_ICR_LSC)) {
+	if (reg_icr & (E1000_ICR_RXSEQ | E1000_ICR_LSC))
 		em_handle_link(adapter->ctx);
-	} else if (adapter->hw.mac.type == e1000_82574) {
-		/* Only re-arm 82574 if em_if_update_admin_status() won't. */
-		E1000_WRITE_REG(&adapter->hw, E1000_IMS, EM_MSIX_LINK |
-		    E1000_IMS_LSC);
-	}
+	else
+		notlink = true;
 
-	if (adapter->hw.mac.type == e1000_82574) {
+	/* Re-arm for other/spurious interrupts */
+	if (notlink && adapter->hw.mac.type >= igb_mac_min) {
+		E1000_WRITE_REG(&adapter->hw, E1000_IMS, E1000_IMS_LSC);
+		E1000_WRITE_REG(&adapter->hw, E1000_EIMS, adapter->link_mask);
+	} else if (adapter->hw.mac.type == e1000_82574) {
+		if (notlink)
+			E1000_WRITE_REG(&adapter->hw, E1000_IMS, E1000_IMS_LSC |
+			    E1000_IMS_OTHER);
 		/*
 		 * Because we must read the ICR for this interrupt it may
 		 * clear other causes using autoclear, for this reason we
@@ -1529,10 +1533,6 @@ em_msix_link(void *arg)
 		 */
 		if (reg_icr)
 			E1000_WRITE_REG(&adapter->hw, E1000_ICS, adapter->ims);
-	} else {
-		/* Re-arm unconditionally */
-		E1000_WRITE_REG(&adapter->hw, E1000_IMS, E1000_IMS_LSC);
-		E1000_WRITE_REG(&adapter->hw, E1000_EIMS, adapter->link_mask);
 	}
 
 	return (FILTER_HANDLED);
@@ -1658,11 +1658,20 @@ static int
 em_if_set_promisc(if_ctx_t ctx, int flags)
 {
 	struct adapter *adapter = iflib_get_softc(ctx);
+	struct ifnet *ifp = iflib_get_ifp(ctx);
 	u32 reg_rctl;
-
-	em_disable_promisc(ctx);
+	int mcnt = 0;
 
 	reg_rctl = E1000_READ_REG(&adapter->hw, E1000_RCTL);
+	reg_rctl &= ~(E1000_RCTL_SBP | E1000_RCTL_UPE);
+	if (flags & IFF_ALLMULTI)
+		mcnt = MAX_NUM_MULTICAST_ADDRESSES;
+	else
+		mcnt = min(if_llmaddr_count(ifp), MAX_NUM_MULTICAST_ADDRESSES);
+
+	if (mcnt < MAX_NUM_MULTICAST_ADDRESSES)
+		reg_rctl &= (~E1000_RCTL_MPE);
+	E1000_WRITE_REG(&adapter->hw, E1000_RCTL, reg_rctl);
 
 	if (flags & IFF_PROMISC) {
 		reg_rctl |= (E1000_RCTL_UPE | E1000_RCTL_MPE);
@@ -1678,37 +1687,15 @@ em_if_set_promisc(if_ctx_t ctx, int flags)
 	return (0);
 }
 
-static void
-em_disable_promisc(if_ctx_t ctx)
-{
-	struct adapter *adapter = iflib_get_softc(ctx);
-	struct ifnet *ifp = iflib_get_ifp(ctx);
-	u32 reg_rctl;
-	int mcnt = 0;
-
-	reg_rctl = E1000_READ_REG(&adapter->hw, E1000_RCTL);
-	reg_rctl &= (~E1000_RCTL_UPE);
-	if (if_getflags(ifp) & IFF_ALLMULTI)
-		mcnt = MAX_NUM_MULTICAST_ADDRESSES;
-	else
-		mcnt = if_llmaddr_count(ifp);
-	/* Don't disable if in MAX groups */
-	if (mcnt < MAX_NUM_MULTICAST_ADDRESSES)
-		reg_rctl &=  (~E1000_RCTL_MPE);
-	reg_rctl &=  (~E1000_RCTL_SBP);
-	E1000_WRITE_REG(&adapter->hw, E1000_RCTL, reg_rctl);
-}
-
-
 static u_int
-em_copy_maddr(void *arg, struct sockaddr_dl *sdl, u_int cnt)
+em_copy_maddr(void *arg, struct sockaddr_dl *sdl, u_int idx)
 {
 	u8 *mta = arg;
 
-	if (cnt == MAX_NUM_MULTICAST_ADDRESSES)
-		return (1);
+	if (idx == MAX_NUM_MULTICAST_ADDRESSES)
+		return (0);
 
-	bcopy(LLADDR(sdl), &mta[cnt * ETHER_ADDR_LEN], ETHER_ADDR_LEN);
+	bcopy(LLADDR(sdl), &mta[idx * ETHER_ADDR_LEN], ETHER_ADDR_LEN);
 
 	return (1);
 }
@@ -1719,14 +1706,13 @@ em_copy_maddr(void *arg, struct sockaddr_dl *sdl, u_int cnt)
  *  This routine is called whenever multicast address list is updated.
  *
  **********************************************************************/
-
 static void
 em_if_multi_set(if_ctx_t ctx)
 {
 	struct adapter *adapter = iflib_get_softc(ctx);
 	struct ifnet *ifp = iflib_get_ifp(ctx);
-	u32 reg_rctl = 0;
 	u8  *mta; /* Multicast array memory */
+	u32 reg_rctl = 0;
 	int mcnt = 0;
 
 	IOCTL_DEBUGOUT("em_set_multi: begin");
@@ -1746,11 +1732,20 @@ em_if_multi_set(if_ctx_t ctx)
 
 	mcnt = if_foreach_llmaddr(ifp, em_copy_maddr, mta);
 
-	if (mcnt >= MAX_NUM_MULTICAST_ADDRESSES) {
-		reg_rctl = E1000_READ_REG(&adapter->hw, E1000_RCTL);
+	reg_rctl = E1000_READ_REG(&adapter->hw, E1000_RCTL);
+
+	if (if_getflags(ifp) & IFF_PROMISC)
+		reg_rctl |= (E1000_RCTL_UPE | E1000_RCTL_MPE);
+	else if (mcnt >= MAX_NUM_MULTICAST_ADDRESSES ||
+	    if_getflags(ifp) & IFF_ALLMULTI) {
 		reg_rctl |= E1000_RCTL_MPE;
-		E1000_WRITE_REG(&adapter->hw, E1000_RCTL, reg_rctl);
+		reg_rctl &= ~E1000_RCTL_UPE;
 	} else
+		reg_rctl &= ~(E1000_RCTL_UPE | E1000_RCTL_MPE);
+
+	E1000_WRITE_REG(&adapter->hw, E1000_RCTL, reg_rctl);
+
+	if (mcnt < MAX_NUM_MULTICAST_ADDRESSES)
 		e1000_update_mc_addr_list(&adapter->hw, mta, mcnt);
 
 	if (adapter->hw.mac.type == e1000_82542 &&
@@ -1882,10 +1877,13 @@ em_if_update_admin_status(if_ctx_t ctx)
 
 	if (hw->mac.type < em_mac_min)
 		lem_smartspeed(adapter);
-	else if (hw->mac.type == e1000_82574 &&
+	else if (hw->mac.type >= igb_mac_min &&
+	    adapter->intr_type == IFLIB_INTR_MSIX) {
+		E1000_WRITE_REG(&adapter->hw, E1000_IMS, E1000_IMS_LSC);
+		E1000_WRITE_REG(&adapter->hw, E1000_EIMS, adapter->link_mask);
+	} else if (hw->mac.type == e1000_82574 &&
 	    adapter->intr_type == IFLIB_INTR_MSIX)
-		E1000_WRITE_REG(&adapter->hw, E1000_IMS, EM_MSIX_LINK |
-		    E1000_IMS_LSC);
+		E1000_WRITE_REG(hw, E1000_IMS, E1000_IMS_LSC | E1000_IMS_OTHER);
 }
 
 static void
@@ -2097,7 +2095,10 @@ em_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	if (adapter->hw.mac.type < igb_mac_min) {
 		adapter->ivars |=  (8 | rx_vectors) << 16;
 		adapter->ivars |= 0x80000000;
+		/* Enable the "Other" interrupt type for link status change */
+		adapter->ims |= E1000_IMS_OTHER;
 	}
+
 	return (0);
 fail:
 	iflib_irq_free(ctx, &adapter->irq);
@@ -2502,13 +2503,22 @@ em_reset(if_ctx_t ctx)
 	 * the remainder is used for the transmit buffer.
 	 */
 	switch (hw->mac.type) {
-	/* Total Packet Buffer on these is 48K */
+	/* 82547: Total Packet Buffer is 40K */
+	case e1000_82547:
+	case e1000_82547_rev_2:
+		if (hw->mac.max_frame_size > 8192)
+			pba = E1000_PBA_22K; /* 22K for Rx, 18K for Tx */
+		else
+			pba = E1000_PBA_30K; /* 30K for Rx, 10K for Tx */
+		break;
+	/* 82571/82572/80003es2lan: Total Packet Buffer is 48K */
 	case e1000_82571:
 	case e1000_82572:
 	case e1000_80003es2lan:
 			pba = E1000_PBA_32K; /* 32K for Rx, 16K for Tx */
 		break;
-	case e1000_82573: /* 82573: Total Packet Buffer is 32K */
+	/* 82573: Total Packet Buffer is 32K */
+	case e1000_82573:
 			pba = E1000_PBA_12K; /* 12K for Rx, 20K for Tx */
 		break;
 	case e1000_82574:
@@ -2556,7 +2566,8 @@ em_reset(if_ctx_t ctx)
 		pba = E1000_PBA_34K;
 		break;
 	default:
-		if (adapter->hw.mac.max_frame_size > 8192)
+		/* Remaining devices assumed to have a Packet Buffer of 64K. */
+		if (hw->mac.max_frame_size > 8192)
 			pba = E1000_PBA_40K; /* 40K for Rx, 24K for Tx */
 		else
 			pba = E1000_PBA_48K; /* 48K for Rx, 16K for Tx */
@@ -3470,8 +3481,8 @@ em_if_intr_enable(if_ctx_t ctx)
 	struct e1000_hw *hw = &adapter->hw;
 	u32 ims_mask = IMS_ENABLE_MASK;
 
-	if (hw->mac.type == e1000_82574) {
-		E1000_WRITE_REG(hw, EM_EIAC, EM_MSIX_MASK);
+	if (adapter->intr_type == IFLIB_INTR_MSIX) {
+		E1000_WRITE_REG(hw, EM_EIAC, adapter->ims);
 		ims_mask |= adapter->ims;
 	}
 	E1000_WRITE_REG(hw, E1000_IMS, ims_mask);
@@ -3483,7 +3494,7 @@ em_if_intr_disable(if_ctx_t ctx)
 	struct adapter *adapter = iflib_get_softc(ctx);
 	struct e1000_hw *hw = &adapter->hw;
 
-	if (hw->mac.type == e1000_82574)
+	if (adapter->intr_type == IFLIB_INTR_MSIX)
 		E1000_WRITE_REG(hw, EM_EIAC, 0);
 	E1000_WRITE_REG(hw, E1000_IMC, 0xffffffff);
 }

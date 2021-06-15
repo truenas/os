@@ -45,6 +45,9 @@
 MALLOC_DECLARE(M_TMPFSNAME);
 #endif
 
+#define	OBJ_TMPFS	OBJ_PAGERPRIV1	/* has tmpfs vnode allocated */
+#define	OBJ_TMPFS_VREF	OBJ_PAGERPRIV2	/* vnode is referenced */
+
 /*
  * Internal representation of a tmpfs directory entry.
  */
@@ -514,8 +517,10 @@ tmpfs_update(struct vnode *vp)
 
 size_t tmpfs_mem_avail(void);
 size_t tmpfs_pages_used(struct tmpfs_mount *tmp);
-void tmpfs_subr_init(void);
+int tmpfs_subr_init(void);
 void tmpfs_subr_uninit(void);
+
+extern int tmpfs_pager_type;
 
 /*
  * Macros/functions to convert from generic data structures to tmpfs

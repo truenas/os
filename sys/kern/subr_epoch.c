@@ -219,12 +219,14 @@ epoch_trace_enter(struct thread *td, epoch_t epoch, epoch_tracker_t et,
 {
 	epoch_tracker_t iet;
 
-	SLIST_FOREACH(iet, &td->td_epochs, et_tlink)
-		if (iet->et_epoch == epoch)
-			epoch_trace_report("Recursively entering epoch %s "
-			    "at %s:%d, previously entered at %s:%d\n",
-			    epoch->e_name, file, line,
-			    iet->et_file, iet->et_line);
+	SLIST_FOREACH(iet, &td->td_epochs, et_tlink) {
+		if (iet->et_epoch != epoch)
+			continue;
+		epoch_trace_report("Recursively entering epoch %s "
+		    "at %s:%d, previously entered at %s:%d\n",
+		    epoch->e_name, file, line,
+		    iet->et_file, iet->et_line);
+	}
 	et->et_epoch = epoch;
 	et->et_file = file;
 	et->et_line = line;
@@ -440,13 +442,14 @@ _epoch_enter_preempt(epoch_t epoch, epoch_tracker_t et EPOCH_FILE_LINE)
 	struct thread *td;
 
 	MPASS(cold || epoch != NULL);
-	MPASS(epoch->e_flags & EPOCH_PREEMPT);
 	td = curthread;
 	MPASS((vm_offset_t)et >= td->td_kstack &&
 	    (vm_offset_t)et + sizeof(struct epoch_tracker) <=
 	    td->td_kstack + td->td_kstack_pages * PAGE_SIZE);
 
 	INIT_CHECK(epoch);
+	MPASS(epoch->e_flags & EPOCH_PREEMPT);
+
 #ifdef EPOCH_TRACE
 	epoch_trace_enter(td, epoch, et, file, line);
 #endif
@@ -454,7 +457,7 @@ _epoch_enter_preempt(epoch_t epoch, epoch_tracker_t et EPOCH_FILE_LINE)
 	THREAD_NO_SLEEPING();
 	critical_enter();
 	sched_pin();
-	td->td_pre_epoch_prio = td->td_priority;
+	et->et_old_priority = td->td_priority;
 	er = epoch_currecord(epoch);
 	/* Record-level tracking is reserved for non-preemptible epochs. */
 	MPASS(er->er_td == NULL);
@@ -507,8 +510,8 @@ _epoch_exit_preempt(epoch_t epoch, epoch_tracker_t et EPOCH_FILE_LINE)
 	ck_epoch_end(&er->er_record, &et->et_section);
 	TAILQ_REMOVE(&er->er_tdlist, et, et_link);
 	er->er_gen++;
-	if (__predict_false(td->td_pre_epoch_prio != td->td_priority))
-		epoch_adjust_prio(td, td->td_pre_epoch_prio);
+	if (__predict_false(et->et_old_priority != td->td_priority))
+		epoch_adjust_prio(td, et->et_old_priority);
 	critical_exit();
 #ifdef EPOCH_TRACE
 	epoch_trace_exit(td, epoch, et, file, line);
@@ -868,7 +871,7 @@ epoch_assert_nocpu(epoch_t epoch, struct thread *td)
 	}
 }
 #else
-#define	epoch_assert_nocpu(e, td)
+#define	epoch_assert_nocpu(e, td) do {} while (0)
 #endif
 
 int

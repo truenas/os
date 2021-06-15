@@ -74,6 +74,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/rwlock.h>
 #include <sys/sf_buf.h>
 #include <sys/domainset.h>
+#include <sys/user.h>
 
 #include <machine/atomic.h>
 
@@ -105,8 +106,10 @@ static void vnode_pager_update_writecount(vm_object_t, vm_offset_t,
     vm_offset_t);
 static void vnode_pager_release_writecount(vm_object_t, vm_offset_t,
     vm_offset_t);
+static void vnode_pager_getvp(vm_object_t, struct vnode **, bool *);
 
-struct pagerops vnodepagerops = {
+const struct pagerops vnodepagerops = {
+	.pgo_kvme_type = KVME_TYPE_VNODE,
 	.pgo_alloc =	vnode_pager_alloc,
 	.pgo_dealloc =	vnode_pager_dealloc,
 	.pgo_getpages =	vnode_pager_getpages,
@@ -115,6 +118,9 @@ struct pagerops vnodepagerops = {
 	.pgo_haspage =	vnode_pager_haspage,
 	.pgo_update_writecount = vnode_pager_update_writecount,
 	.pgo_release_writecount = vnode_pager_release_writecount,
+	.pgo_set_writeable_dirty = vm_object_set_writeable_dirty_,
+	.pgo_mightbedirty = vm_object_mightbedirty_,
+	.pgo_getvp = vnode_pager_getvp,
 };
 
 static struct domainset *vnode_domainset = NULL;
@@ -1601,4 +1607,10 @@ vnode_pager_release_writecount(vm_object_t object, vm_offset_t start,
 	vdrop(vp);
 	if (mp != NULL)
 		vn_finished_write(mp);
+}
+
+static void
+vnode_pager_getvp(vm_object_t object, struct vnode **vpp, bool *vp_heldp)
+{
+	*vpp = object->handle;
 }

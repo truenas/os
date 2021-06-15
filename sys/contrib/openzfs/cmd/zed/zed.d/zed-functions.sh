@@ -126,10 +126,8 @@ zed_lock()
 
     # Obtain a lock on the file bound to the given file descriptor.
     #
-    eval "exec ${fd}> '${lockfile}'"
-    err="$(flock --exclusive "${fd}" 2>&1)"
-    # shellcheck disable=SC2181
-    if [ $? -ne 0 ]; then
+    eval "exec ${fd}>> '${lockfile}'"
+    if ! err="$(flock --exclusive "${fd}" 2>&1)"; then
         zed_log_err "failed to lock \"${lockfile}\": ${err}"
     fi
 
@@ -165,9 +163,7 @@ zed_unlock()
     fi
 
     # Release the lock and close the file descriptor.
-    err="$(flock --unlock "${fd}" 2>&1)"
-    # shellcheck disable=SC2181
-    if [ $? -ne 0 ]; then
+    if ! err="$(flock --unlock "${fd}" 2>&1)"; then
         zed_log_err "failed to unlock \"${lockfile}\": ${err}"
     fi
     eval "exec ${fd}>&-"
@@ -267,7 +263,7 @@ zed_notify_email()
                 -e "s/@SUBJECT@/${subject}/g")"
 
     # shellcheck disable=SC2086
-    eval "${ZED_EMAIL_PROG}" ${ZED_EMAIL_OPTS} < "${pathname}" >/dev/null 2>&1
+    ${ZED_EMAIL_PROG} ${ZED_EMAIL_OPTS} < "${pathname}" >/dev/null 2>&1
     rv=$?
     if [ "${rv}" -ne 0 ]; then
         zed_log_err "$(basename "${ZED_EMAIL_PROG}") exit=${rv}"
@@ -367,7 +363,7 @@ zed_notify_pushbullet()
 #
 # Notification via Slack Webhook <https://api.slack.com/incoming-webhooks>.
 # The Webhook URL (ZED_SLACK_WEBHOOK_URL) identifies this client to the
-# Slack channel. 
+# Slack channel.
 #
 # Requires awk, curl, and sed executables to be installed in the standard PATH.
 #
@@ -511,10 +507,8 @@ zed_guid_to_pool()
 		return
 	fi
 
-	guid=$(printf "%llu" "$1")
-	if [ -n "$guid" ] ; then
-		$ZPOOL get -H -ovalue,name guid | awk '$1=='"$guid"' {print $2}'
-	fi
+	guid="$(printf "%u" "$1")"
+	$ZPOOL get -H -ovalue,name guid | awk '$1 == '"$guid"' {print $2; exit}'
 }
 
 # zed_exit_if_ignoring_this_event

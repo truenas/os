@@ -55,6 +55,7 @@
 #define PF_OPT_NUMERIC		0x1000
 #define PF_OPT_MERGE		0x2000
 #define PF_OPT_RECURSE		0x4000
+#define PF_OPT_KILLMATCH	0x8000
 
 #define PF_TH_ALL		0xFF
 
@@ -98,6 +99,7 @@ struct pfctl {
 	u_int32_t	 debug;
 	u_int32_t	 hostid;
 	char		*ifname;
+	bool		 keep_counters;
 
 	u_int8_t	 timeout_set[PFTM_MAX];
 	u_int8_t	 limit_set[PF_LIMIT_MAX];

@@ -580,9 +580,6 @@ static long cache_lock_vnodes_cel_3_failures;
 DEBUGNODE_ULONG(vnodes_cel_3_failures, cache_lock_vnodes_cel_3_failures,
     "Number of times 3-way vnode locking failed");
 
-static void cache_fplookup_lockout(void);
-static void cache_fplookup_restore(void);
-
 static void cache_zap_locked(struct namecache *ncp);
 static int vn_fullpath_hardlink(struct nameidata *ndp, char **retbuf,
     char **freebuf, size_t *buflen);
@@ -2468,12 +2465,12 @@ cache_enter_time(struct vnode *dvp, struct vnode *vp, struct componentname *cnp,
 			MPASS(cache_ncp_canuse(n2));
 			if ((n2->nc_flag & NCF_NEGATIVE) != 0)
 				KASSERT(vp == NULL,
-				    ("%s: found entry pointing to a different vnode (%p != %p)",
-				    __func__, NULL, vp));
+				    ("%s: found entry pointing to a different vnode (%p != %p) ; name [%s]",
+				    __func__, NULL, vp, cnp->cn_nameptr));
 			else
 				KASSERT(n2->nc_vp == vp,
-				    ("%s: found entry pointing to a different vnode (%p != %p)",
-				    __func__, n2->nc_vp, vp));
+				    ("%s: found entry pointing to a different vnode (%p != %p) ; name [%s]",
+				    __func__, n2->nc_vp, vp, cnp->cn_nameptr));
 			/*
 			 * Entries are supposed to be immutable unless in the
 			 * process of getting destroyed. Accommodating for
@@ -2771,7 +2768,6 @@ cache_changesize(u_long newmaxvnodes)
 	 * None of the namecache entries in the table can be removed
 	 * because to do so, they have to be removed from the hash table.
 	 */
-	cache_fplookup_lockout();
 	cache_lock_all_vnodes();
 	cache_lock_all_buckets();
 	old_nchashtbl = nchashtbl;
@@ -2790,7 +2786,6 @@ cache_changesize(u_long newmaxvnodes)
 	cache_changesize_set_new(new_nchashtbl, new_nchash);
 	cache_unlock_all_buckets();
 	cache_unlock_all_vnodes();
-	cache_fplookup_restore();
 	ncfreetbl(old_nchashtbl);
 	ncfreetbl(temptbl);
 }
@@ -3651,9 +3646,9 @@ vn_fullpath_hardlink(struct nameidata *ndp, char **retbuf, char **freebuf,
 		error = vn_fullpath_dir(vp, pwd->pwd_rdir, buf, retbuf, buflen,
 		    addend);
 		pwd_drop(pwd);
-		if (error != 0)
-			goto out_bad;
 	}
+	if (error != 0)
+		goto out_bad;
 
 	*freebuf = buf;
 
@@ -3866,33 +3861,6 @@ SYSCTL_PROC(_vfs, OID_AUTO, cache_fast_lookup, CTLTYPE_INT|CTLFLAG_RW|CTLFLAG_MP
     &cache_fast_lookup, 0, syscal_vfs_cache_fast_lookup, "IU", "");
 
 /*
- * Disable lockless lookup and observe all CPUs not executing it.
- *
- * Used when resizing the hash table.
- *
- * TODO: no provisions are made to handle tweaking of the knob at the same time
- */
-static void
-cache_fplookup_lockout(void)
-{
-	bool on;
-
-	on = atomic_load_char(&cache_fast_lookup_enabled);
-	if (on) {
-		atomic_store_char(&cache_fast_lookup_enabled, false);
-		atomic_thread_fence_rel();
-		vfs_smr_synchronize();
-	}
-}
-
-static void
-cache_fplookup_restore(void)
-{
-
-	cache_fast_lookup_enabled_recalc();
-}
-
-/*
  * Components of nameidata (or objects it can point to) which may
  * need restoring in case fast path lookup fails.
  */
@@ -3936,6 +3904,7 @@ struct cache_fpl {
 #endif
 };
 
+static bool cache_fplookup_mp_supported(struct mount *mp);
 static bool cache_fplookup_is_mp(struct cache_fpl *fpl);
 static int cache_fplookup_cross_mount(struct cache_fpl *fpl);
 static int cache_fplookup_partial_setup(struct cache_fpl *fpl);
@@ -5173,6 +5142,19 @@ cache_fplookup_symlink(struct cache_fpl *fpl)
 		fpl->dvp_seqc = vn_seqc_read_any(fpl->dvp);
 		if (seqc_in_modify(fpl->dvp_seqc)) {
 			return (cache_fpl_aborted(fpl));
+		}
+		/*
+		 * The main loop assumes that ->dvp points to a vnode belonging
+		 * to a filesystem which can do lockless lookup, but the absolute
+		 * symlink can be wandering off to one which does not.
+		 */
+		mp = atomic_load_ptr(&fpl->dvp->v_mount);
+		if (__predict_false(mp == NULL)) {
+			return (cache_fpl_aborted(fpl));
+		}
+		if (!cache_fplookup_mp_supported(mp)) {
+			cache_fpl_checkpoint(fpl);
+			return (cache_fpl_partial(fpl));
 		}
 	}
 	return (0);

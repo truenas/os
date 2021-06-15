@@ -831,16 +831,15 @@ hwsz_ok(struct adapter *sc, int hwsz)
 }
 
 /*
- * XXX: driver really should be able to deal with unexpected settings.
+ * Initialize the rx buffer sizes and figure out which zones the buffers will
+ * be allocated from.
  */
-int
-t4_read_chip_settings(struct adapter *sc)
+void
+t4_init_rx_buf_info(struct adapter *sc)
 {
 	struct sge *s = &sc->sge;
 	struct sge_params *sp = &sc->params.sge;
-	int i, j, n, rc = 0;
-	uint32_t m, v, r;
-	uint16_t indsz = min(RX_COPY_THRESHOLD - 1, M_INDICATESIZE);
+	int i, j, n;
 	static int sw_buf_sizes[] = {	/* Sorted by size */
 		MCLBYTES,
 #if MJUMPAGESIZE != MCLBYTES
@@ -850,23 +849,6 @@ t4_read_chip_settings(struct adapter *sc)
 		MJUM16BYTES
 	};
 	struct rx_buf_info *rxb;
-
-	m = F_RXPKTCPLMODE;
-	v = F_RXPKTCPLMODE;
-	r = sc->params.sge.sge_control;
-	if ((r & m) != v) {
-		device_printf(sc->dev, "invalid SGE_CONTROL(0x%x)\n", r);
-		rc = EINVAL;
-	}
-
-	/*
-	 * If this changes then every single use of PAGE_SHIFT in the driver
-	 * needs to be carefully reviewed for PAGE_SHIFT vs sp->page_shift.
-	 */
-	if (sp->page_shift != PAGE_SHIFT) {
-		device_printf(sc->dev, "invalid SGE_HOST_PAGE_SIZE(0x%x)\n", r);
-		rc = EINVAL;
-	}
 
 	s->safe_zidx = -1;
 	rxb = &s->rx_buf_info[0];
@@ -912,6 +894,36 @@ t4_read_chip_settings(struct adapter *sc)
 		if (s->safe_zidx == -1 && rxb->size1 == safest_rx_cluster)
 			s->safe_zidx = i;
 	}
+}
+
+/*
+ * Verify some basic SGE settings for the PF and VF driver, and other
+ * miscellaneous settings for the PF driver.
+ */
+int
+t4_verify_chip_settings(struct adapter *sc)
+{
+	struct sge_params *sp = &sc->params.sge;
+	uint32_t m, v, r;
+	int rc = 0;
+	const uint16_t indsz = min(RX_COPY_THRESHOLD - 1, M_INDICATESIZE);
+
+	m = F_RXPKTCPLMODE;
+	v = F_RXPKTCPLMODE;
+	r = sp->sge_control;
+	if ((r & m) != v) {
+		device_printf(sc->dev, "invalid SGE_CONTROL(0x%x)\n", r);
+		rc = EINVAL;
+	}
+
+	/*
+	 * If this changes then every single use of PAGE_SHIFT in the driver
+	 * needs to be carefully reviewed for PAGE_SHIFT vs sp->page_shift.
+	 */
+	if (sp->page_shift != PAGE_SHIFT) {
+		device_printf(sc->dev, "invalid SGE_HOST_PAGE_SIZE(0x%x)\n", r);
+		rc = EINVAL;
+	}
 
 	if (sc->flags & IS_VF)
 		return (0);
@@ -920,14 +932,16 @@ t4_read_chip_settings(struct adapter *sc)
 	r = t4_read_reg(sc, A_ULP_RX_TDDP_PSZ);
 	if (r != v) {
 		device_printf(sc->dev, "invalid ULP_RX_TDDP_PSZ(0x%x)\n", r);
-		rc = EINVAL;
+		if (sc->vres.ddp.size != 0)
+			rc = EINVAL;
 	}
 
 	m = v = F_TDDPTAGTCB;
 	r = t4_read_reg(sc, A_ULP_RX_CTL);
 	if ((r & m) != v) {
 		device_printf(sc->dev, "invalid ULP_RX_CTL(0x%x)\n", r);
-		rc = EINVAL;
+		if (sc->vres.ddp.size != 0)
+			rc = EINVAL;
 	}
 
 	m = V_INDICATESIZE(M_INDICATESIZE) | F_REARMDDPOFFSET |
@@ -936,13 +950,9 @@ t4_read_chip_settings(struct adapter *sc)
 	r = t4_read_reg(sc, A_TP_PARA_REG5);
 	if ((r & m) != v) {
 		device_printf(sc->dev, "invalid TP_PARA_REG5(0x%x)\n", r);
-		rc = EINVAL;
+		if (sc->vres.ddp.size != 0)
+			rc = EINVAL;
 	}
-
-	t4_init_tp_params(sc, 1);
-
-	t4_read_mtu_tbl(sc, sc->params.mtus, NULL);
-	t4_load_mtus(sc, sc->params.mtus, sc->params.a_wnd, sc->params.b_wnd);
 
 	return (rc);
 }
@@ -2062,6 +2072,8 @@ have_mbuf:
 			rxq->rxcsum++;
 		} else {
 			MPASS(tnl_type == RX_PKT_TNL_TYPE_VXLAN);
+
+			M_HASHTYPE_SETINNER(m0);
 			if (__predict_false(cpl->ip_frag)) {
 				/*
 				 * csum_data is for the inner frame (which is an
@@ -2700,6 +2712,9 @@ max_nsegs_allowed(struct mbuf *m, bool vm_wr)
 	return (TX_SGL_SEGS);
 }
 
+static struct timeval txerr_ratecheck = {0};
+static const struct timeval txerr_interval = {3, 0};
+
 /*
  * Analyze the mbuf to determine its tx needs.  The mbuf passed in may change:
  * a) caller can assume it's been freed if this function returns with an error.
@@ -2851,9 +2866,14 @@ restart:
 	}
 #endif
 	default:
-		panic("%s: ethertype 0x%04x unknown.  if_cxgbe must be compiled"
-		    " with the same INET/INET6 options as the kernel.",
-		    __func__, eh_type);
+		if (ratecheck(&txerr_ratecheck, &txerr_interval)) {
+			log(LOG_ERR, "%s: ethertype 0x%04x unknown.  "
+			    "if_cxgbe must be compiled with the same "
+			    "INET/INET6 options as the kernel.\n", __func__,
+			    eh_type);
+		}
+		rc = EINVAL;
+		goto fail;
 	}
 
 	if (needs_vxlan_csum(m0)) {
@@ -2889,10 +2909,15 @@ restart:
 		}
 #endif
 		default:
-			panic("%s: VXLAN hw offload requested with unknown "
-			    "ethertype 0x%04x.  if_cxgbe must be compiled"
-			    " with the same INET/INET6 options as the kernel.",
-			    __func__, eh_type);
+			if (ratecheck(&txerr_ratecheck, &txerr_interval)) {
+				log(LOG_ERR, "%s: VXLAN hw offload requested"
+				    "with unknown ethertype 0x%04x.  if_cxgbe "
+				    "must be compiled with the same INET/INET6 "
+				    "options as the kernel.\n", __func__,
+				    eh_type);
+			}
+			rc = EINVAL;
+			goto fail;
 		}
 #if defined(INET) || defined(INET6)
 		if (needs_inner_tcp_csum(m0)) {
@@ -3724,15 +3749,12 @@ add_iq_sysctls(struct sysctl_ctx_list *ctx, struct sysctl_oid *oid,
 	    "bus address of descriptor ring");
 	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
 	    iq->qsize * IQ_ESIZE, "descriptor ring size in bytes");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "abs_id",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &iq->abs_id, 0,
-	    sysctl_uint16, "I", "absolute id of the queue");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "cntxt_id",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &iq->cntxt_id, 0,
-	    sysctl_uint16, "I", "SGE context id of the queue");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "cidx",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &iq->cidx, 0,
-	    sysctl_uint16, "I", "consumer index");
+	SYSCTL_ADD_U16(ctx, children, OID_AUTO, "abs_id", CTLFLAG_RD,
+	    &iq->abs_id, 0, "absolute id of the queue");
+	SYSCTL_ADD_U16(ctx, children, OID_AUTO, "cntxt_id", CTLFLAG_RD,
+	    &iq->cntxt_id, 0, "SGE context id of the queue");
+	SYSCTL_ADD_U16(ctx, children, OID_AUTO, "cidx", CTLFLAG_RD, &iq->cidx,
+	    0, "consumer index");
 }
 
 static void
@@ -3750,9 +3772,8 @@ add_fl_sysctls(struct adapter *sc, struct sysctl_ctx_list *ctx,
 	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "dmalen", CTLFLAG_RD, NULL,
 	    fl->sidx * EQ_ESIZE + sc->params.sge.spg_len,
 	    "desc ring size in bytes");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "cntxt_id",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &fl->cntxt_id, 0,
-	    sysctl_uint16, "I", "SGE context id of the freelist");
+	SYSCTL_ADD_U16(ctx, children, OID_AUTO, "cntxt_id", CTLFLAG_RD,
+	    &fl->cntxt_id, 0, "SGE context id of the freelist");
 	SYSCTL_ADD_UINT(ctx, children, OID_AUTO, "padding", CTLFLAG_RD, NULL,
 	    fl_pad ? 1 : 0, "padding enabled");
 	SYSCTL_ADD_UINT(ctx, children, OID_AUTO, "packing", CTLFLAG_RD, NULL,
@@ -4269,12 +4290,10 @@ alloc_wrq(struct adapter *sc, struct vi_info *vi, struct sge_wrq *wrq,
 	    "desc ring size in bytes");
 	SYSCTL_ADD_UINT(ctx, children, OID_AUTO, "cntxt_id", CTLFLAG_RD,
 	    &wrq->eq.cntxt_id, 0, "SGE context id of the queue");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "cidx",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &wrq->eq.cidx, 0,
-	    sysctl_uint16, "I", "consumer index");
-	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "pidx",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &wrq->eq.pidx, 0,
-	    sysctl_uint16, "I", "producer index");
+	SYSCTL_ADD_U16(ctx, children, OID_AUTO, "cidx", CTLFLAG_RD,
+	    &wrq->eq.cidx, 0, "consumer index");
+	SYSCTL_ADD_U16(ctx, children, OID_AUTO, "pidx", CTLFLAG_RD,
+	    &wrq->eq.pidx, 0, "producer index");
 	SYSCTL_ADD_INT(ctx, children, OID_AUTO, "sidx", CTLFLAG_RD, NULL,
 	    wrq->eq.sidx, "status page index");
 	SYSCTL_ADD_UQUAD(ctx, children, OID_AUTO, "tx_wrs_direct", CTLFLAG_RD,
@@ -4371,12 +4390,10 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 	    &eq->abs_id, 0, "absolute id of the queue");
 	SYSCTL_ADD_UINT(&vi->ctx, children, OID_AUTO, "cntxt_id", CTLFLAG_RD,
 	    &eq->cntxt_id, 0, "SGE context id of the queue");
-	SYSCTL_ADD_PROC(&vi->ctx, children, OID_AUTO, "cidx",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &eq->cidx, 0,
-	    sysctl_uint16, "I", "consumer index");
-	SYSCTL_ADD_PROC(&vi->ctx, children, OID_AUTO, "pidx",
-	    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, &eq->pidx, 0,
-	    sysctl_uint16, "I", "producer index");
+	SYSCTL_ADD_U16(&vi->ctx, children, OID_AUTO, "cidx", CTLFLAG_RD,
+	    &eq->cidx, 0, "consumer index");
+	SYSCTL_ADD_U16(&vi->ctx, children, OID_AUTO, "pidx", CTLFLAG_RD,
+	    &eq->pidx, 0, "producer index");
 	SYSCTL_ADD_INT(&vi->ctx, children, OID_AUTO, "sidx", CTLFLAG_RD, NULL,
 	    eq->sidx, "status page index");
 
@@ -4421,7 +4438,7 @@ alloc_txq(struct vi_info *vi, struct sge_txq *txq, int idx,
 	    "# of times hardware assisted with inner checksums (VXLAN)");
 
 #ifdef KERN_TLS
-	if (sc->flags & KERN_TLS_OK) {
+	if (is_ktls(sc)) {
 		SYSCTL_ADD_UQUAD(&vi->ctx, children, OID_AUTO,
 		    "kern_tls_records", CTLFLAG_RD, &txq->kern_tls_records,
 		    "# of NIC TLS records transmitted");
@@ -6086,15 +6103,6 @@ t4_handle_wrerr_rpl(struct adapter *adap, const __be64 *rpl)
 		return (EINVAL);
 	}
 	return (0);
-}
-
-int
-sysctl_uint16(SYSCTL_HANDLER_ARGS)
-{
-	uint16_t *id = arg1;
-	int i = *id;
-
-	return sysctl_handle_int(oidp, &i, 0, req);
 }
 
 static inline bool

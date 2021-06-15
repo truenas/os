@@ -576,7 +576,7 @@ ckfini(int markclean)
 			rerun = 1;
 		}
 	}
-	if (debug && totalreads > 0)
+	if (debug && cachelookups > 0)
 		printf("cache with %d buffers missed %d of %d (%d%%)\n",
 		    numbufs, cachereads, cachelookups,
 		    (int)(cachereads * 100 / cachelookups));
@@ -948,6 +948,7 @@ check_cgmagic(int cg, struct bufarea *cgbp, int request_rebuild)
 {
 	struct cg *cgp = cgbp->b_un.b_cg;
 	uint32_t cghash, calchash;
+	static int prevfailcg = -1;
 
 	/*
 	 * Extended cylinder group checks.
@@ -973,9 +974,14 @@ check_cgmagic(int cg, struct bufarea *cgbp, int request_rebuild)
 	      cgp->cg_initediblk <= sblock.fs_ipg))) {
 		return (1);
 	}
-	pfatal("CYLINDER GROUP %d: INTEGRITY CHECK FAILED", cg);
-	if (!request_rebuild)
+	if (prevfailcg == cg)
 		return (0);
+	prevfailcg = cg;
+	pfatal("CYLINDER GROUP %d: INTEGRITY CHECK FAILED", cg);
+	if (!request_rebuild) {
+		printf("\n");
+		return (0);
+	}
 	if (!reply("REBUILD CYLINDER GROUP")) {
 		printf("YOU WILL NEED TO RERUN FSCK.\n");
 		rerun = 1;
@@ -1048,8 +1054,10 @@ allocblk(long frags)
 			cg = dtog(&sblock, i + j);
 			cgbp = cglookup(cg);
 			cgp = cgbp->b_un.b_cg;
-			if (!check_cgmagic(cg, cgbp, 0))
-				return (0);
+			if (!check_cgmagic(cg, cgbp, 0)) {
+				i = (cg + 1) * sblock.fs_fpg - sblock.fs_frag;
+				continue;
+			}
 			baseblk = dtogd(&sblock, i + j);
 			for (k = 0; k < frags; k++) {
 				setbmap(i + j + k);

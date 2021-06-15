@@ -47,8 +47,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/ioccom.h>
 #include <sys/mman.h>
 #include <sys/mount.h>
+#include <sys/poll.h>
 #include <sys/ptrace.h>
 #include <sys/resource.h>
+#include <sys/sched.h>
 #include <sys/socket.h>
 #define _WANT_FREEBSD11_STAT
 #include <sys/stat.h>
@@ -66,8 +68,6 @@ __FBSDID("$FreeBSD$");
 #define _WANT_KERNEL_ERRNO
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
-#include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -85,8 +85,13 @@ __FBSDID("$FreeBSD$");
 
 /*
  * This should probably be in its own file, sorted alphabetically.
+ *
+ * Note: We only scan this table on the initial syscall number to calling
+ * convention lookup, i.e. once each time a new syscall is encountered. This
+ * is unlikely to be a performance issue, but if it is we could sort this array
+ * and use a binary search instead.
  */
-static struct syscall decoded_syscalls[] = {
+static const struct syscall_decode decoded_syscalls[] = {
 	/* Native ABI */
 	{ .name = "__acl_aclcheck_fd", .ret_type = 1, .nargs = 3,
 	  .args = { { Int, 0 }, { Acltype, 1 }, { Ptr, 2 } } },
@@ -188,6 +193,10 @@ static struct syscall decoded_syscalls[] = {
 		    { Kevent11 | OUT, 3 }, { Int, 4 }, { Timespec, 5 } } },
 	{ .name = "compat11.lstat", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { Stat11 | OUT, 1 } } },
+	{ .name = "compat11.mknod", .ret_type = 1, .nargs = 3,
+	  .args = { { Name, 0 }, { Octal, 1 }, { Int, 2 } } },
+	{ .name = "compat11.mknodat", .ret_type = 1, .nargs = 4,
+	  .args = { { Atfd, 0 }, { Name, 1 }, { Octal, 2 }, { Int, 3 } } },
 	{ .name = "compat11.stat", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { Stat11 | OUT, 1 } } },
 	{ .name = "connect", .ret_type = 1, .nargs = 3,
@@ -367,9 +376,9 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "mkfifoat", .ret_type = 1, .nargs = 3,
 	  .args = { { Atfd, 0 }, { Name, 1 }, { Octal, 2 } } },
 	{ .name = "mknod", .ret_type = 1, .nargs = 3,
-	  .args = { { Name, 0 }, { Octal, 1 }, { Int, 2 } } },
+	  .args = { { Name, 0 }, { Octal, 1 }, { Quad, 2 } } },
 	{ .name = "mknodat", .ret_type = 1, .nargs = 4,
-	  .args = { { Atfd, 0 }, { Name, 1 }, { Octal, 2 }, { Int, 3 } } },
+	  .args = { { Atfd, 0 }, { Name, 1 }, { Octal, 2 }, { Quad, 3 } } },
 	{ .name = "mlock", .ret_type = 1, .nargs = 2,
 	  .args = { { Ptr, 0 }, { Sizet, 1 } } },
 	{ .name = "mlockall", .ret_type = 1, .nargs = 1,
@@ -706,10 +715,8 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "cloudabi_sys_thread_exit", .ret_type = 1, .nargs = 2,
 	  .args = { { Ptr, 0 }, { CloudABIMFlags, 1 } } },
 	{ .name = "cloudabi_sys_thread_yield", .ret_type = 1, .nargs = 0 },
-
-	{ .name = 0 },
 };
-static STAILQ_HEAD(, syscall) syscalls;
+static STAILQ_HEAD(, syscall) seen_syscalls;
 
 /* Xlat idea taken from strace */
 struct xlat {
@@ -960,7 +967,6 @@ print_mask_arg32(bool (*decoder)(FILE *, uint32_t, uint32_t *), FILE *fp,
 		fprintf(fp, "|0x%x", rem);
 }
 
-#ifndef __LP64__
 /*
  * Add argument padding to subsequent system calls after Quad
  * syscall arguments as needed.  This used to be done by hand in the
@@ -969,7 +975,7 @@ print_mask_arg32(bool (*decoder)(FILE *, uint32_t, uint32_t *), FILE *fp,
  * decoding arguments.
  */
 static void
-quad_fixup(struct syscall *sc)
+quad_fixup(struct syscall_decode *sc)
 {
 	int offset, prev;
 	u_int i;
@@ -1005,21 +1011,6 @@ quad_fixup(struct syscall *sc)
 		}
 	}
 }
-#endif
-
-void
-init_syscalls(void)
-{
-	struct syscall *sc;
-
-	STAILQ_INIT(&syscalls);
-	for (sc = decoded_syscalls; sc->name != NULL; sc++) {
-#ifndef __LP64__
-		quad_fixup(sc);
-#endif
-		STAILQ_INSERT_HEAD(&syscalls, sc, entries);
-	}
-}
 
 static struct syscall *
 find_syscall(struct procabi *abi, u_int number)
@@ -1040,6 +1031,14 @@ add_syscall(struct procabi *abi, u_int number, struct syscall *sc)
 {
 	struct extra_syscall *es;
 
+	/*
+	 * quad_fixup() is currently needed for all 32-bit ABIs.
+	 * TODO: This should probably be a function pointer inside struct
+	 *  procabi instead.
+	 */
+	if (abi->pointer_size == 4)
+		quad_fixup(&sc->decode);
+
 	if (number < nitems(abi->syscalls)) {
 		assert(abi->syscalls[number] == NULL);
 		abi->syscalls[number] = sc;
@@ -1049,6 +1048,8 @@ add_syscall(struct procabi *abi, u_int number, struct syscall *sc)
 		es->number = number;
 		STAILQ_INSERT_TAIL(&abi->extra_syscalls, es, entries);
 	}
+
+	STAILQ_INSERT_HEAD(&seen_syscalls, sc, entries);
 }
 
 /*
@@ -1059,24 +1060,37 @@ struct syscall *
 get_syscall(struct threadinfo *t, u_int number, u_int nargs)
 {
 	struct syscall *sc;
+	struct procabi *procabi;
+	const char *sysdecode_name;
+	const char *lookup_name;
 	const char *name;
-	char *new_name;
 	u_int i;
 
-	sc = find_syscall(t->proc->abi, number);
+	procabi = t->proc->abi;
+	sc = find_syscall(procabi, number);
 	if (sc != NULL)
 		return (sc);
 
-	name = sysdecode_syscallname(t->proc->abi->abi, number);
-	if (name == NULL) {
-		asprintf(&new_name, "#%d", number);
-		name = new_name;
-	} else
-		new_name = NULL;
-	STAILQ_FOREACH(sc, &syscalls, entries) {
-		if (strcmp(name, sc->name) == 0) {
+	/* Memory is not explicitly deallocated, it's released on exit(). */
+	sysdecode_name = sysdecode_syscallname(procabi->abi, number);
+	if (sysdecode_name == NULL)
+		asprintf(__DECONST(char **, &name), "#%d", number);
+	else
+		name = sysdecode_name;
+
+	sc = calloc(1, sizeof(*sc));
+	sc->name = name;
+
+	/* Also decode compat syscalls arguments by stripping the prefix. */
+	lookup_name = name;
+	if (procabi->compat_prefix != NULL && strncmp(procabi->compat_prefix,
+	    name, strlen(procabi->compat_prefix)) == 0)
+		lookup_name += strlen(procabi->compat_prefix);
+
+	for (i = 0; i < nitems(decoded_syscalls); i++) {
+		if (strcmp(lookup_name, decoded_syscalls[i].name) == 0) {
+			sc->decode = decoded_syscalls[i];
 			add_syscall(t->proc->abi, number, sc);
-			free(new_name);
 			return (sc);
 		}
 	}
@@ -1086,21 +1100,15 @@ get_syscall(struct threadinfo *t, u_int number, u_int nargs)
 	fprintf(stderr, "unknown syscall %s -- setting args to %d\n", name,
 	    nargs);
 #endif
-
-	sc = calloc(1, sizeof(struct syscall));
-	sc->name = name;
-	if (new_name != NULL)
-		sc->unknown = true;
-	sc->ret_type = 1;
-	sc->nargs = nargs;
+	sc->unknown = sysdecode_name == NULL;
+	sc->decode.ret_type = 1; /* Assume 1 return value. */
+	sc->decode.nargs = nargs;
 	for (i = 0; i < nargs; i++) {
-		sc->args[i].offset = i;
+		sc->decode.args[i].offset = i;
 		/* Treat all unknown arguments as LongHex. */
-		sc->args[i].type = LongHex;
+		sc->decode.args[i].type = LongHex;
 	}
-	STAILQ_INSERT_HEAD(&syscalls, sc, entries);
 	add_syscall(t->proc->abi, number, sc);
-
 	return (sc);
 }
 
@@ -1717,7 +1725,7 @@ print_sysctl(FILE *fp, int *oid, size_t len)
  * an array of all of the system call arguments.
  */
 char *
-print_arg(struct syscall_args *sc, unsigned long *args, register_t *retval,
+print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
     struct trussinfo *trussinfo)
 {
 	FILE *fp;
@@ -1823,12 +1831,15 @@ print_arg(struct syscall_args *sc, unsigned long *args, register_t *retval,
 	case StringArray: {
 		uintptr_t addr;
 		union {
-			char *strarray[0];
+			int32_t strarray32[PAGE_SIZE / sizeof(int32_t)];
+			int64_t strarray64[PAGE_SIZE / sizeof(int64_t)];
 			char buf[PAGE_SIZE];
 		} u;
 		char *string;
 		size_t len;
 		u_int first, i;
+		size_t pointer_size =
+		    trussinfo->curthread->proc->abi->pointer_size;
 
 		/*
 		 * Only parse argv[] and environment arrays from exec calls
@@ -1848,7 +1859,7 @@ print_arg(struct syscall_args *sc, unsigned long *args, register_t *retval,
 		 * a partial page.
 		 */
 		addr = args[sc->offset];
-		if (addr % sizeof(char *) != 0) {
+		if (addr % pointer_size != 0) {
 			print_pointer(fp, args[sc->offset]);
 			break;
 		}
@@ -1858,22 +1869,36 @@ print_arg(struct syscall_args *sc, unsigned long *args, register_t *retval,
 			print_pointer(fp, args[sc->offset]);
 			break;
 		}
+		assert(len > 0);
 
 		fputc('[', fp);
 		first = 1;
 		i = 0;
-		while (u.strarray[i] != NULL) {
-			string = get_string(pid, (uintptr_t)u.strarray[i], 0);
+		for (;;) {
+			uintptr_t straddr;
+			if (pointer_size == 4) {
+				if (u.strarray32[i] == 0)
+					break;
+				/* sign-extend 32-bit pointers */
+				straddr = (intptr_t)u.strarray32[i];
+			} else if (pointer_size == 8) {
+				if (u.strarray64[i] == 0)
+					break;
+				straddr = (intptr_t)u.strarray64[i];
+			} else {
+				errx(1, "Unsupported pointer size: %zu",
+				    pointer_size);
+			}
+			string = get_string(pid, straddr, 0);
 			fprintf(fp, "%s \"%s\"", first ? "" : ",", string);
 			free(string);
 			first = 0;
 
 			i++;
-			if (i == len / sizeof(char *)) {
+			if (i == len / pointer_size) {
 				addr += len;
 				len = PAGE_SIZE;
-				if (get_struct(pid, addr, u.buf, len) ==
-				    -1) {
+				if (get_struct(pid, addr, u.buf, len) == -1) {
 					fprintf(fp, ", <inval>");
 					break;
 				}
@@ -2992,7 +3017,7 @@ print_syscall_ret(struct trussinfo *trussinfo, int error, register_t *retval)
 		    strerror(error));
 	}
 #ifndef __LP64__
-	else if (sc->ret_type == 2) {
+	else if (sc->decode.ret_type == 2) {
 		off_t off;
 
 #if _BYTE_ORDER == _LITTLE_ENDIAN
@@ -3019,7 +3044,7 @@ print_summary(struct trussinfo *trussinfo)
 	fprintf(trussinfo->outfile, "%-20s%15s%8s%8s\n",
 	    "syscall", "seconds", "calls", "errors");
 	ncall = nerror = 0;
-	STAILQ_FOREACH(sc, &syscalls, entries)
+	STAILQ_FOREACH(sc, &seen_syscalls, entries) {
 		if (sc->ncalls) {
 			fprintf(trussinfo->outfile, "%-20s%5jd.%09ld%8d%8d\n",
 			    sc->name, (intmax_t)sc->time.tv_sec,
@@ -3028,6 +3053,7 @@ print_summary(struct trussinfo *trussinfo)
 			ncall += sc->ncalls;
 			nerror += sc->nerror;
 		}
+	}
 	fprintf(trussinfo->outfile, "%20s%15s%8s%8s\n",
 	    "", "-------------", "-------", "-------");
 	fprintf(trussinfo->outfile, "%-20s%5jd.%09ld%8d%8d\n",

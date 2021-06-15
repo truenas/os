@@ -416,14 +416,14 @@ void
 ginode(ino_t inumber, struct inode *ip)
 {
 	ufs2_daddr_t iblk;
-	static ino_t startinum = -1;
 
 	if (inumber < UFS_ROOTINO || inumber > maxino)
 		errx(EEXIT, "bad inode number %ju to ginode",
 		    (uintmax_t)inumber);
 	ip->i_number = inumber;
-	if (startinum != -1 &&
-	    inumber >= startinum && inumber < startinum + INOPB(&sblock)) {
+	if (icachebp != NULL &&
+	    inumber >= icachebp->b_index &&
+	    inumber < icachebp->b_index + INOPB(&sblock)) {
 		/* take an additional reference for the returned inode */
 		icachebp->b_refcnt++;
 	} else {
@@ -433,14 +433,14 @@ ginode(ino_t inumber, struct inode *ip)
 			brelse(icachebp);
 		icachebp = getdatablk(iblk, sblock.fs_bsize, BT_INODES);
 		if (icachebp->b_errs != 0) {
+			icachebp = NULL;
 			ip->i_bp = NULL;
 			ip->i_dp = &zino;
 			return;
 		}
-		startinum = rounddown(inumber, INOPB(&sblock));
 		/* take a cache-hold reference on new icachebp */
 		icachebp->b_refcnt++;
-		icachebp->b_index = startinum;
+		icachebp->b_index = rounddown(inumber, INOPB(&sblock));
 	}
 	ip->i_bp = icachebp;
 	if (sblock.fs_magic == FS_UFS1_MAGIC) {
@@ -902,22 +902,29 @@ allocino(ino_t request, int type)
 	union dinode *dp;
 	struct bufarea *cgbp;
 	struct cg *cgp;
-	int cg;
+	int cg, anyino;
 
-	if (request == 0)
+	anyino = 0;
+	if (request == 0) {
 		request = UFS_ROOTINO;
-	else if (inoinfo(request)->ino_state != USTATE)
+		anyino = 1;
+	} else if (inoinfo(request)->ino_state != USTATE)
 		return (0);
+retry:
 	for (ino = request; ino < maxino; ino++)
 		if (inoinfo(ino)->ino_state == USTATE)
 			break;
-	if (ino == maxino)
+	if (ino >= maxino)
 		return (0);
 	cg = ino_to_cg(&sblock, ino);
 	cgbp = cglookup(cg);
 	cgp = cgbp->b_un.b_cg;
-	if (!check_cgmagic(cg, cgbp, 0))
-		return (0);
+	if (!check_cgmagic(cg, cgbp, 0)) {
+		if (anyino == 0)
+			return (0);
+		request = (cg + 1) * sblock.fs_ipg;
+		goto retry;
+	}
 	setbit(cg_inosused(cgp), ino % sblock.fs_ipg);
 	cgp->cg_cs.cs_nifree--;
 	switch (type & IFMT) {

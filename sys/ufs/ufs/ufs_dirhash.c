@@ -65,7 +65,6 @@ __FBSDID("$FreeBSD$");
 
 #define WRAPINCR(val, limit)	(((val) + 1 == (limit)) ? 0 : ((val) + 1))
 #define WRAPDECR(val, limit)	(((val) == 0) ? ((limit) - 1) : ((val) - 1))
-#define OFSFMT(vp)		((vp)->v_mount->mnt_maxsymlinklen <= 0)
 #define BLKFREE2IDX(n)		((n) > DH_NFSTATS ? DH_NFSTATS : (n))
 
 static MALLOC_DEFINE(M_DIRHASH, "ufs_dirhash", "UFS directory hash tables");
@@ -108,7 +107,7 @@ static uma_zone_t	ufsdirhash_zone;
 
 #define DIRHASHLIST_LOCK() 		mtx_lock(&ufsdirhash_mtx)
 #define DIRHASHLIST_UNLOCK() 		mtx_unlock(&ufsdirhash_mtx)
-#define DIRHASH_BLKALLOC_WAITOK() 	uma_zalloc(ufsdirhash_zone, M_WAITOK)
+#define DIRHASH_BLKALLOC() 		uma_zalloc(ufsdirhash_zone, M_NOWAIT)
 #define DIRHASH_BLKFREE(ptr) 		uma_zfree(ufsdirhash_zone, (ptr))
 #define	DIRHASH_ASSERT_LOCKED(dh)					\
     sx_assert(&(dh)->dh_lock, SA_LOCKED)
@@ -425,7 +424,7 @@ ufsdirhash_build(struct inode *ip)
 	if (dh->dh_blkfree == NULL)
 		goto fail;
 	for (i = 0; i < narrays; i++) {
-		if ((dh->dh_hash[i] = DIRHASH_BLKALLOC_WAITOK()) == NULL)
+		if ((dh->dh_hash[i] = DIRHASH_BLKALLOC()) == NULL)
 			goto fail;
 		for (j = 0; j < DH_NBLKOFF; j++)
 			dh->dh_hash[i][j] = DIRHASH_EMPTY;

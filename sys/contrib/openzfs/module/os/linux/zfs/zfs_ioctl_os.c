@@ -212,6 +212,12 @@ zfs_max_nvlist_src_size_os(void)
 	return (MIN(ptob(zfs_totalram_pages) / 4, 128 * 1024 * 1024));
 }
 
+/* Update the VFS's cache of mountpoint properties */
+void
+zfs_ioctl_update_mount_cache(const char *dsname)
+{
+}
+
 void
 zfs_ioctl_init_os(void)
 {
@@ -283,7 +289,7 @@ zfsdev_detach(void)
 #endif
 
 static int __init
-_init(void)
+openzfs_init(void)
 {
 	int error;
 
@@ -309,7 +315,7 @@ _init(void)
 }
 
 static void __exit
-_fini(void)
+openzfs_fini(void)
 {
 	zfs_sysfs_fini();
 	zfs_kmod_fini();
@@ -319,8 +325,8 @@ _fini(void)
 }
 
 #if defined(_KERNEL)
-module_init(_init);
-module_exit(_fini);
+module_init(openzfs_init);
+module_exit(openzfs_fini);
 #endif
 
 ZFS_MODULE_DESCRIPTION("ZFS");

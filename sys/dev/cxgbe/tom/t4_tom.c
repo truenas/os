@@ -79,9 +79,11 @@ __FBSDID("$FreeBSD$");
 #include "tom/t4_tom.h"
 #include "tom/t4_tls.h"
 
+static struct protosw *tcp_protosw;
 static struct protosw toe_protosw;
 static struct pr_usrreqs toe_usrreqs;
 
+static struct protosw *tcp6_protosw;
 static struct protosw toe6_protosw;
 static struct pr_usrreqs toe6_usrreqs;
 
@@ -263,6 +265,15 @@ offload_socket(struct socket *so, struct toepcb *toep)
 	mtx_unlock(&td->toep_list_lock);
 }
 
+void
+restore_so_proto(struct socket *so, bool v6)
+{
+	if (v6)
+		so->so_proto = tcp6_protosw;
+	else
+		so->so_proto = tcp_protosw;
+}
+
 /* This is _not_ the normal way to "unoffload" a socket. */
 void
 undo_offload_socket(struct socket *so)
@@ -282,6 +293,7 @@ undo_offload_socket(struct socket *so)
 	sb = &so->so_rcv;
 	SOCKBUF_LOCK(sb);
 	sb->sb_flags &= ~SB_NOCOALESCE;
+	restore_so_proto(so, inp->inp_vflag & INP_IPV6);
 	SOCKBUF_UNLOCK(sb);
 
 	tp->tod = NULL;
@@ -1066,7 +1078,7 @@ select_ntuple(struct vi_info *vi, struct l2t_entry *e)
 	if (tp->protocol_shift >= 0)
 		ntuple |= (uint64_t)IPPROTO_TCP << tp->protocol_shift;
 
-	if (tp->vnic_shift >= 0 && tp->ingress_config & F_VNIC) {
+	if (tp->vnic_shift >= 0 && tp->vnic_mode == FW_VNIC_MODE_PF_VF) {
 		ntuple |= (uint64_t)(V_FT_VNID_ID_VF(vi->vin) |
 		    V_FT_VNID_ID_PF(sc->pf) | V_FT_VNID_ID_VLD(vi->vfvld)) <<
 		    tp->vnic_shift;
@@ -1837,8 +1849,6 @@ t4_ctloutput_tom(struct socket *so, struct sockopt *sopt)
 static int
 t4_tom_mod_load(void)
 {
-	struct protosw *tcp_protosw, *tcp6_protosw;
-
 	/* CPL handlers */
 	t4_register_cpl_handler(CPL_GET_TCB_RPL, do_get_tcb_rpl);
 	t4_register_shared_cpl_handler(CPL_L2T_WRITE_RPL, do_l2t_write_rpl2,

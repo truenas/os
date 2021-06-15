@@ -1364,7 +1364,7 @@ static int vnlruproc_sig;
 #define VNLRU_FREEVNODES_SLOP 128
 
 static __inline void
-vn_freevnodes_inc(void)
+vfs_freevnodes_inc(void)
 {
 	struct vdbatch *vd;
 
@@ -1375,7 +1375,7 @@ vn_freevnodes_inc(void)
 }
 
 static __inline void
-vn_freevnodes_dec(void)
+vfs_freevnodes_dec(void)
 {
 	struct vdbatch *vd;
 
@@ -1998,13 +1998,11 @@ bufobj_invalbuf(struct bufobj *bo, int flags, int slpflag, int slptimeo)
 			} while (error == ERELOOKUP);
 			if (error != 0)
 				return (error);
-			/*
-			 * XXX We could save a lock/unlock if this was only
-			 * enabled under INVARIANTS
-			 */
 			BO_LOCK(bo);
-			if (bo->bo_numoutput > 0 || bo->bo_dirty.bv_cnt > 0)
-				panic("vinvalbuf: dirty bufs");
+			if (bo->bo_numoutput > 0 || bo->bo_dirty.bv_cnt > 0) {
+				BO_UNLOCK(bo);
+				return (EBUSY);
+			}
 		}
 	}
 	/*
@@ -3059,6 +3057,31 @@ vlazy(struct vnode *vp)
 	mtx_unlock(&mp->mnt_listmtx);
 }
 
+static void
+vunlazy(struct vnode *vp)
+{
+	struct mount *mp;
+
+	ASSERT_VI_LOCKED(vp, __func__);
+	VNPASS(!VN_IS_DOOMED(vp), vp);
+
+	mp = vp->v_mount;
+	mtx_lock(&mp->mnt_listmtx);
+	VNPASS(vp->v_mflag & VMP_LAZYLIST, vp);
+	/*
+	 * Don't remove the vnode from the lazy list if another thread
+	 * has increased the hold count. It may have re-enqueued the
+	 * vnode to the lazy list and is now responsible for its
+	 * removal.
+	 */
+	if (vp->v_holdcnt == 0) {
+		vp->v_mflag &= ~VMP_LAZYLIST;
+		TAILQ_REMOVE(&mp->mnt_lazyvnodelist, vp, v_lazylist);
+		mp->mnt_lazyvnodelistsize--;
+	}
+	mtx_unlock(&mp->mnt_listmtx);
+}
+
 /*
  * This routine is only meant to be called from vgonel prior to dooming
  * the vnode.
@@ -3308,7 +3331,7 @@ vhold(struct vnode *vp)
 	VNASSERT(old >= 0 && (old & VHOLD_ALL_FLAGS) == 0, vp,
 	    ("%s: wrong hold count %d", __func__, old));
 	if (old == 0)
-		vn_freevnodes_dec();
+		vfs_freevnodes_dec();
 }
 
 void
@@ -3361,7 +3384,7 @@ vhold_smr(struct vnode *vp)
 		VNASSERT(count >= 0, vp, ("invalid hold count %d\n", count));
 		if (atomic_fcmpset_int(&vp->v_holdcnt, &count, count + 1)) {
 			if (count == 0)
-				vn_freevnodes_dec();
+				vfs_freevnodes_dec();
 			return (true);
 		}
 	}
@@ -3402,7 +3425,7 @@ vhold_recycle_free(struct vnode *vp)
 			return (false);
 		}
 		if (atomic_fcmpset_int(&vp->v_holdcnt, &count, count + 1)) {
-			vn_freevnodes_dec();
+			vfs_freevnodes_dec();
 			return (true);
 		}
 	}
@@ -3514,42 +3537,6 @@ vdbatch_dequeue(struct vnode *vp)
  * there is at least one resident non-cached page, the vnode cannot
  * leave the active list without the page cleanup done.
  */
-static void
-vdrop_deactivate(struct vnode *vp)
-{
-	struct mount *mp;
-
-	ASSERT_VI_LOCKED(vp, __func__);
-	/*
-	 * Mark a vnode as free: remove it from its active list
-	 * and put it up for recycling on the freelist.
-	 */
-	VNASSERT(!VN_IS_DOOMED(vp), vp,
-	    ("vdrop: returning doomed vnode"));
-	VNASSERT((vp->v_iflag & VI_OWEINACT) == 0, vp,
-	    ("vnode with VI_OWEINACT set"));
-	VNASSERT((vp->v_iflag & VI_DEFINACT) == 0, vp,
-	    ("vnode with VI_DEFINACT set"));
-	if (vp->v_mflag & VMP_LAZYLIST) {
-		mp = vp->v_mount;
-		mtx_lock(&mp->mnt_listmtx);
-		VNASSERT(vp->v_mflag & VMP_LAZYLIST, vp, ("lost VMP_LAZYLIST"));
-		/*
-		 * Don't remove the vnode from the lazy list if another thread
-		 * has increased the hold count. It may have re-enqueued the
-		 * vnode to the lazy list and is now responsible for its
-		 * removal.
-		 */
-		if (vp->v_holdcnt == 0) {
-			vp->v_mflag &= ~VMP_LAZYLIST;
-			TAILQ_REMOVE(&mp->mnt_lazyvnodelist, vp, v_lazylist);
-			mp->mnt_lazyvnodelistsize--;
-		}
-		mtx_unlock(&mp->mnt_listmtx);
-	}
-	vdbatch_enqueue(vp);
-}
-
 static void __noinline
 vdropl_final(struct vnode *vp)
 {
@@ -3563,7 +3550,7 @@ vdropl_final(struct vnode *vp)
 	 * we never got this far, they will vdrop later.
 	 */
 	if (__predict_false(!atomic_cmpset_int(&vp->v_holdcnt, 0, VHOLD_NO_SMR))) {
-		vn_freevnodes_inc();
+		vfs_freevnodes_inc();
 		VI_UNLOCK(vp);
 		/*
 		 * We lost the aforementioned race. Any subsequent access is
@@ -3599,17 +3586,23 @@ vdropl(struct vnode *vp)
 		VI_UNLOCK(vp);
 		return;
 	}
-	if (!VN_IS_DOOMED(vp)) {
-		vn_freevnodes_inc();
-		vdrop_deactivate(vp);
-		/*
-		 * Also unlocks the interlock. We can't assert on it as we
-		 * released our hold and by now the vnode might have been
-		 * freed.
-		 */
+	VNPASS((vp->v_iflag & VI_OWEINACT) == 0, vp);
+	VNPASS((vp->v_iflag & VI_DEFINACT) == 0, vp);
+	if (VN_IS_DOOMED(vp)) {
+		vdropl_final(vp);
 		return;
 	}
-	vdropl_final(vp);
+
+	vfs_freevnodes_inc();
+	if (vp->v_mflag & VMP_LAZYLIST) {
+		vunlazy(vp);
+	}
+	/*
+	 * Also unlocks the interlock. We can't assert on it as we
+	 * released our hold and by now the vnode might have been
+	 * freed.
+	 */
+	vdbatch_enqueue(vp);
 }
 
 /*
@@ -4408,7 +4401,6 @@ DB_SHOW_COMMAND(mount, db_show_mount)
 	    mp->mnt_lazyvnodelistsize);
 	db_printf("    mnt_writeopcount = %d (with %d in the struct)\n",
 	    vfs_mount_fetch_counter(mp, MNT_COUNT_WRITEOPCOUNT), mp->mnt_writeopcount);
-	db_printf("    mnt_maxsymlinklen = %d\n", mp->mnt_maxsymlinklen);
 	db_printf("    mnt_iosize_max = %d\n", mp->mnt_iosize_max);
 	db_printf("    mnt_hashseed = %u\n", mp->mnt_hashseed);
 	db_printf("    mnt_lockref = %d (with %d in the struct)\n",
@@ -5127,14 +5119,10 @@ int
 vn_need_pageq_flush(struct vnode *vp)
 {
 	struct vm_object *obj;
-	int need;
 
-	MPASS(mtx_owned(VI_MTX(vp)));
-	need = 0;
-	if ((obj = vp->v_object) != NULL && (vp->v_vflag & VV_NOSYNC) == 0 &&
-	    vm_object_mightbedirty(obj))
-		need = 1;
-	return (need);
+	obj = vp->v_object;
+	return (obj != NULL && (vp->v_vflag & VV_NOSYNC) == 0 &&
+	    vm_object_mightbedirty(obj));
 }
 
 /*
@@ -6836,23 +6824,15 @@ vn_dir_check_exec(struct vnode *vp, struct componentname *cnp)
  * to prevent the vnode from getting freed.
  */
 void
-vn_seqc_write_begin_unheld_locked(struct vnode *vp)
-{
-
-	ASSERT_VI_LOCKED(vp, __func__);
-	VNPASS(vp->v_seqc_users >= 0, vp);
-	vp->v_seqc_users++;
-	if (vp->v_seqc_users == 1)
-		seqc_sleepable_write_begin(&vp->v_seqc);
-}
-
-void
 vn_seqc_write_begin_locked(struct vnode *vp)
 {
 
 	ASSERT_VI_LOCKED(vp, __func__);
 	VNPASS(vp->v_holdcnt > 0, vp);
-	vn_seqc_write_begin_unheld_locked(vp);
+	VNPASS(vp->v_seqc_users >= 0, vp);
+	vp->v_seqc_users++;
+	if (vp->v_seqc_users == 1)
+		seqc_sleepable_write_begin(&vp->v_seqc);
 }
 
 void
@@ -6861,15 +6841,6 @@ vn_seqc_write_begin(struct vnode *vp)
 
 	VI_LOCK(vp);
 	vn_seqc_write_begin_locked(vp);
-	VI_UNLOCK(vp);
-}
-
-void
-vn_seqc_write_begin_unheld(struct vnode *vp)
-{
-
-	VI_LOCK(vp);
-	vn_seqc_write_begin_unheld_locked(vp);
 	VI_UNLOCK(vp);
 }
 
