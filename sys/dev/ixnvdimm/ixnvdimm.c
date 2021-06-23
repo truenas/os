@@ -1617,6 +1617,57 @@ nvdimm_root_print_child(device_t dev, device_t child)
 	return (retval);
 }
 
+#if (__FreeBSD_version >= 1400024)
+static int
+nvdimm_root_child_pnpinfo(device_t dev, device_t child, struct sbuf *sb)
+{
+	struct nvdimm_child *ivar;
+	struct uuid uuid;
+	char ubuf[38];
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	if (ivar->handle != NULL) {
+		sbuf_printf(sb,
+		    "vendor=0x%04x device=0x%04x revision=0x%02x "
+		    "subvendor=0x%04x subdevice=0x%04x subrevision=0x%02x "
+		    "class=0x%04x",
+		    ivar->cr.VendorId, ivar->cr.DeviceId, ivar->cr.RevisionId,
+		    ivar->cr.SubsystemVendorId, ivar->cr.SubsystemDeviceId,
+		    ivar->cr.SubsystemRevisionId, ivar->cr.Code);
+	} else {
+		le_uuid_dec(ivar->sa.RangeGuid, &uuid);
+		snprintf_uuid(ubuf, sizeof(ubuf), &uuid);
+		sbuf_printf(sb, "type=%s", ubuf);
+	}
+	return (0);
+}
+
+static int
+nvdimm_root_child_location(device_t dev, device_t child, struct sbuf *sb)
+{
+	struct nvdimm_child *ivar;
+	uint32_t a;
+
+	ivar = (struct nvdimm_child *)device_get_ivars(child);
+	if (ivar->handle != NULL) {
+		a = ivar->adr;
+		if (!ACPI_ADR_NVDIMM_PU(ivar->adr)) {
+			sbuf_printf(sb, "node=%u socket=%u "
+			    "controller=%u channel=%u dimm=%u ",
+			    ACPI_ADR_NVDIMM_NODE(a), ACPI_ADR_NVDIMM_SOCK(a),
+			    ACPI_ADR_NVDIMM_CTRL(a), ACPI_ADR_NVDIMM_CHAN(a),
+			    ACPI_ADR_NVDIMM_DIMM(a));
+		}
+		sbuf_printf(sb,
+		    "handle=%s _ADR=0x%x PhysicalId=0x%04x SerialNumber=0x%08X",
+		    acpi_name(ivar->handle), a, ivar->mm.PhysicalId,
+		    be32toh(ivar->cr.SerialNumber));
+	} else {
+		sbuf_printf(sb, "RangeIndex=0x%04x", ivar->sa.RangeIndex);
+	}
+	return (0);
+}
+#else
 static int
 nvdimm_root_child_pnpinfo_str(device_t dev, device_t child, char *buf,
     size_t buflen)
@@ -1669,6 +1720,7 @@ nvdimm_root_child_location_str(device_t dev, device_t child, char *buf,
 	}
 	return (0);
 }
+#endif
 
 static device_method_t nvdimm_root_methods[] = {
 	/* Device interface */
@@ -1677,8 +1729,13 @@ static device_method_t nvdimm_root_methods[] = {
 	DEVMETHOD(device_detach,	nvdimm_root_detach),
 
 	DEVMETHOD(bus_print_child,	nvdimm_root_print_child),
+#if (__FreeBSD_version >= 1400024)
+	DEVMETHOD(bus_child_pnpinfo, nvdimm_root_child_pnpinfo),
+	DEVMETHOD(bus_child_location, nvdimm_root_child_location),
+#else
 	DEVMETHOD(bus_child_pnpinfo_str, nvdimm_root_child_pnpinfo_str),
 	DEVMETHOD(bus_child_location_str, nvdimm_root_child_location_str),
+#endif
 	DEVMETHOD(bus_get_domain,	nvdimm_root_get_domain),
 	DEVMETHOD(bus_get_resource_list,nvdimm_root_get_resource_list),
 	DEVMETHOD(bus_alloc_resource,	bus_generic_rl_alloc_resource),
