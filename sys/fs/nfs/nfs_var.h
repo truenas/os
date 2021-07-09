@@ -232,6 +232,8 @@ int nfsrvd_renew(struct nfsrv_descript *, int,
     vnode_t, struct nfsexstuff *);
 int nfsrvd_secinfo(struct nfsrv_descript *, int,
     vnode_t, struct nfsexstuff *);
+int nfsrvd_secinfononame(struct nfsrv_descript *, int,
+    vnode_t, struct nfsexstuff *);
 int nfsrvd_setclientid(struct nfsrv_descript *, int,
     vnode_t, struct nfsexstuff *);
 int nfsrvd_setclientidcfrm(struct nfsrv_descript *, int,
@@ -379,8 +381,9 @@ int nfscl_request(struct nfsrv_descript *, vnode_t,
 
 /* nfs_nfsdsubs.c */
 void nfsd_fhtovp(struct nfsrv_descript *, struct nfsrvfh *, int,
-    vnode_t *, struct nfsexstuff *, mount_t *, int);
-int nfsd_excred(struct nfsrv_descript *, struct nfsexstuff *, struct ucred *);
+    vnode_t *, struct nfsexstuff *, mount_t *, int, int);
+int nfsd_excred(struct nfsrv_descript *, struct nfsexstuff *, struct ucred *,
+    bool);
 int nfsrv_mtofh(struct nfsrv_descript *, struct nfsrvfh *);
 int nfsrv_putattrbit(struct nfsrv_descript *, nfsattrbit_t *);
 void nfsrv_wcc(struct nfsrv_descript *, int, struct nfsvattr *, int,
@@ -571,7 +574,7 @@ int nfscl_getstateid(vnode_t, u_int8_t *, int, u_int32_t, int, struct ucred *,
     NFSPROC_T *, nfsv4stateid_t *, void **);
 void nfscl_ownerrelease(struct nfsmount *, struct nfsclowner *, int, int, int);
 void nfscl_openrelease(struct nfsmount *, struct nfsclopen *, int, int);
-int nfscl_getcl(struct mount *, struct ucred *, NFSPROC_T *, int,
+int nfscl_getcl(struct mount *, struct ucred *, NFSPROC_T *, bool,
     struct nfsclclient **);
 struct nfsclclient *nfscl_findcl(struct nfsmount *);
 void nfscl_clientrelease(struct nfsclclient *);
@@ -757,6 +760,7 @@ int nfsvno_listxattr(struct vnode *, uint64_t, struct ucred *, struct thread *,
     u_char **, uint32_t *, bool *);
 void nfsm_trimtrailing(struct nfsrv_descript *, struct mbuf *, char *, int,
     int);
+bool nfsrv_checkwrongsec(struct nfsrv_descript *, int, enum vtype);
 
 /* nfs_commonkrpc.c */
 int newnfs_nmcancelreqs(struct nfsmount *);

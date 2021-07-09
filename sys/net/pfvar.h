@@ -50,6 +50,13 @@
 
 #include <net/radix.h>
 #include <netinet/in.h>
+#ifdef _KERNEL
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/icmp6.h>
+#endif
 
 #include <netpfil/pf/pf.h>
 #include <netpfil/pf/pf_altq.h>
@@ -526,8 +533,8 @@ struct pf_state {
 	struct pfi_kkif		*rt_kif;
 	struct pf_ksrc_node	*src_node;
 	struct pf_ksrc_node	*nat_src_node;
-	counter_u64_t		 packets[2];
-	counter_u64_t		 bytes[2];
+	u_int64_t		 packets[2];
+	u_int64_t		 bytes[2];
 	u_int32_t		 creation;
 	u_int32_t	 	 expire;
 	u_int32_t		 pfsync_time;
@@ -541,6 +548,11 @@ struct pf_state {
 	u_int8_t		 sync_updates;
 	u_int8_t		_tail[3];
 };
+
+/*
+ * Size <= fits 13 objects per page on LP64. Try to not grow the struct beyond that.
+ */
+_Static_assert(sizeof(struct pf_state) <= 312, "pf_state size crosses 312 bytes");
 #endif
 
 /*
@@ -896,6 +908,7 @@ struct pfi_kkif {
 #define	PFI_IFLAG_REFS		0x0001	/* has state references */
 #define PFI_IFLAG_SKIP		0x0100	/* skip filtering on interface */
 
+#ifdef _KERNEL
 struct pf_pdesc {
 	struct {
 		int	 done;
@@ -903,14 +916,14 @@ struct pf_pdesc {
 		gid_t	 gid;
 	}		 lookup;
 	u_int64_t	 tot_len;	/* Make Mickey money */
-	union {
-		struct tcphdr		*tcp;
-		struct udphdr		*udp;
-		struct icmp		*icmp;
+	union pf_headers {
+		struct tcphdr		tcp;
+		struct udphdr		udp;
+		struct icmp		icmp;
 #ifdef INET6
-		struct icmp6_hdr	*icmp6;
+		struct icmp6_hdr	icmp6;
 #endif /* INET6 */
-		void			*any;
+		char any[0];
 	} hdr;
 
 	struct pf_krule	*nat_rule;	/* nat/rdr rule applied to packet */
@@ -935,6 +948,7 @@ struct pf_pdesc {
 	u_int8_t	 sidx;		/* key index for source */
 	u_int8_t	 didx;		/* key index for destination */
 };
+#endif
 
 /* flags for RDR options */
 #define PF_DPORT_RANGE	0x01		/* Dest port uses range */
@@ -1478,6 +1492,7 @@ extern int			 pf_state_insert(struct pfi_kkif *,
 				    struct pf_state_key *,
 				    struct pf_state_key *,
 				    struct pf_state *);
+extern struct pf_state		*pf_alloc_state(int);
 extern void			 pf_free_state(struct pf_state *);
 
 static __inline void
@@ -1492,6 +1507,17 @@ pf_release_state(struct pf_state *s)
 {
 
 	if (refcount_release(&s->refs)) {
+		pf_free_state(s);
+		return (1);
+	} else
+		return (0);
+}
+
+static __inline int
+pf_release_staten(struct pf_state *s, u_int n)
+{
+
+	if (refcount_releasen(&s->refs, n)) {
 		pf_free_state(s);
 		return (1);
 	} else
