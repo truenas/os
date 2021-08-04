@@ -189,7 +189,7 @@ sctp_notify(struct sctp_inpcb *inp,
 	} else if ((icmp_code == ICMP_UNREACH_PROTOCOL) ||
 	    (icmp_code == ICMP_UNREACH_PORT)) {
 		/* Treat it like an ABORT. */
-		sctp_abort_notification(stcb, 1, 0, NULL, SCTP_SO_NOT_LOCKED);
+		sctp_abort_notification(stcb, true, false, 0, NULL, SCTP_SO_NOT_LOCKED);
 		(void)sctp_free_assoc(inp, stcb, SCTP_NORMAL_PROC,
 		    SCTP_FROM_SCTP_USRREQ + SCTP_LOC_2);
 		/* no need to unlock here, since the TCB is gone */
@@ -960,7 +960,7 @@ sctp_shutdown(struct socket *so)
 				stcb->sctp_ep->last_abort_code = SCTP_FROM_SCTP_USRREQ + SCTP_LOC_6;
 				SCTP_INP_RUNLOCK(inp);
 				sctp_abort_an_association(stcb->sctp_ep, stcb,
-				    op_err, SCTP_SO_LOCKED);
+				    op_err, false, SCTP_SO_LOCKED);
 				NET_EPOCH_EXIT(et);
 				return (0);
 			}
@@ -1425,7 +1425,7 @@ sctp_do_connect_x(struct socket *so, struct sctp_inpcb *inp, void *optval,
 	vrf_id = inp->def_vrf_id;
 
 	/* We are GOOD to go */
-	stcb = sctp_aloc_assoc(inp, sa, &error, 0, vrf_id,
+	stcb = sctp_aloc_assoc(inp, sa, &error, 0, 0, vrf_id,
 	    inp->sctp_ep.pre_open_stream_count,
 	    inp->sctp_ep.port,
 	    (struct thread *)p,
@@ -7076,7 +7076,7 @@ sctp_connect(struct socket *so, struct sockaddr *addr, struct thread *p)
 
 	vrf_id = inp->def_vrf_id;
 	/* We are GOOD to go */
-	stcb = sctp_aloc_assoc(inp, addr, &error, 0, vrf_id,
+	stcb = sctp_aloc_assoc(inp, addr, &error, 0, 0, vrf_id,
 	    inp->sctp_ep.pre_open_stream_count,
 	    inp->sctp_ep.port, p,
 	    SCTP_INITIALIZE_AUTH_PARAMS);

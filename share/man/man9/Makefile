@@ -859,6 +859,7 @@ MLINKS+=condvar.9 cv_broadcast.9 \
 	condvar.9 cv_wait_unlock.9 \
 	condvar.9 cv_wmesg.9
 MLINKS+=config_intrhook.9 config_intrhook_disestablish.9 \
+	config_intrhook.9 config_intrhook_drain.9 \
 	config_intrhook.9 config_intrhook_establish.9 \
 	config_intrhook.9 config_intrhook_oneshot.9
 MLINKS+=contigmalloc.9 contigmalloc_domainset.9 \
@@ -1672,9 +1673,12 @@ MLINKS+=osd.9 osd_call.9 \
 	osd.9 osd_del.9 \
 	osd.9 osd_deregister.9 \
 	osd.9 osd_exit.9 \
+	osd.9 osd_free_reserved.9 \
 	osd.9 osd_get.9 \
 	osd.9 osd_register.9 \
-	osd.9 osd_set.9
+	osd.9 osd_reserve.9 \
+	osd.9 osd_set.9 \
+	osd.9 osd_set_reserved.9
 MLINKS+=panic.9 vpanic.9
 MLINKS+=PCBGROUP.9 in_pcbgroup_byhash.9 \
 	PCBGROUP.9 in_pcbgroup_byinpcb.9 \

@@ -42,6 +42,7 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("--32");
     break;
   case llvm::Triple::ppc:
+  case llvm::Triple::ppcle:
     CmdArgs.push_back("-a32");
     break;
   case llvm::Triple::mips:
@@ -128,8 +129,9 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(II.getFilename());
 
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("as"));
-  C.addCommand(std::make_unique<Command>(
-      JA, *this, ResponseFileSupport::AtFileCurCP(), Exec, CmdArgs, Inputs));
+  C.addCommand(std::make_unique<Command>(JA, *this,
+                                         ResponseFileSupport::AtFileCurCP(),
+                                         Exec, CmdArgs, Inputs, Output));
 }
 
 void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
@@ -190,6 +192,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::ppc:
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf32ppc_fbsd");
+    break;
+  case llvm::Triple::ppcle:
+    CmdArgs.push_back("-m");
+    // Use generic -- only usage is for freestanding.
+    CmdArgs.push_back("elf32lppc");
     break;
   case llvm::Triple::mips:
     CmdArgs.push_back("-m");
@@ -286,6 +293,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   addLinkerCompressDebugSectionsOption(ToolChain, Args, CmdArgs);
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs, JA);
 
+  bool Profiling = Args.hasArg(options::OPT_pg) &&
+                   ToolChain.getTriple().getOSMajorVersion() < 14;
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // Use the static OpenMP runtime with -static-openmp
     bool StaticOpenMP = Args.hasArg(options::OPT_static_openmp) &&
@@ -295,7 +304,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (D.CCCIsCXX()) {
       if (ToolChain.ShouldLinkCXXStdlib(Args))
         ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
-      if (Args.hasArg(options::OPT_pg))
+      if (Profiling)
         CmdArgs.push_back("-lm_p");
       else
         CmdArgs.push_back("-lm");
@@ -306,13 +315,13 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       linkXRayRuntimeDeps(ToolChain, CmdArgs);
     // FIXME: For some reason GCC passes -lgcc and -lgcc_s before adding
     // the default system libraries. Just mimic this for now.
-    if (Args.hasArg(options::OPT_pg))
+    if (Profiling)
       CmdArgs.push_back("-lgcc_p");
     else
       CmdArgs.push_back("-lgcc");
     if (Args.hasArg(options::OPT_static)) {
       CmdArgs.push_back("-lgcc_eh");
-    } else if (Args.hasArg(options::OPT_pg)) {
+    } else if (Profiling) {
       CmdArgs.push_back("-lgcc_eh_p");
     } else {
       CmdArgs.push_back("--as-needed");
@@ -321,13 +330,13 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
 
     if (Args.hasArg(options::OPT_pthread)) {
-      if (Args.hasArg(options::OPT_pg))
+      if (Profiling)
         CmdArgs.push_back("-lpthread_p");
       else
         CmdArgs.push_back("-lpthread");
     }
 
-    if (Args.hasArg(options::OPT_pg)) {
+    if (Profiling) {
       if (Args.hasArg(options::OPT_shared))
         CmdArgs.push_back("-lc");
       else
@@ -340,7 +349,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasArg(options::OPT_static)) {
       CmdArgs.push_back("-lgcc_eh");
-    } else if (Args.hasArg(options::OPT_pg)) {
+    } else if (Profiling) {
       CmdArgs.push_back("-lgcc_eh_p");
     } else {
       CmdArgs.push_back("--as-needed");
@@ -360,8 +369,9 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   ToolChain.addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
-  C.addCommand(std::make_unique<Command>(
-      JA, *this, ResponseFileSupport::AtFileCurCP(), Exec, CmdArgs, Inputs));
+  C.addCommand(std::make_unique<Command>(JA, *this,
+                                         ResponseFileSupport::AtFileCurCP(),
+                                         Exec, CmdArgs, Inputs, Output));
 }
 
 /// FreeBSD - FreeBSD tool chain which can call as(1) and ld(1) directly.
@@ -373,7 +383,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
   // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
   // back to '/usr/lib' if it doesn't exist.
   if ((Triple.getArch() == llvm::Triple::x86 || Triple.isMIPS32() ||
-       Triple.getArch() == llvm::Triple::ppc) &&
+       Triple.isPPC32()) &&
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
   else
@@ -408,7 +418,8 @@ void FreeBSD::addLibStdCxxIncludePaths(
 void FreeBSD::AddCXXStdlibLibArgs(const ArgList &Args,
                                   ArgStringList &CmdArgs) const {
   CXXStdlibType Type = GetCXXStdlibType(Args);
-  bool Profiling = Args.hasArg(options::OPT_pg);
+  bool Profiling =
+      Args.hasArg(options::OPT_pg) && getTriple().getOSMajorVersion() < 14;
 
   switch (Type) {
   case ToolChain::CST_Libcxx:

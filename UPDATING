@@ -12,6 +12,42 @@ Items affecting the ports and packages system can be found in
 /usr/ports/UPDATING.  Please read that file before updating system packages
 and/or ports.
 
+20210803:
+	Commits 9fb6e613373c and 9ec7dbf46b0a both changed the internal
+	KAPI between the NFS modules.  Bump __FreeBSD_version to 1300514.
+	All NFS modules must be rebuilt from sources.
+
+20210718:
+	Bump __FreeBSD_version to 1300512 after merging LinuxKPI, OFED,
+	net80211, and driver changes in order to support building
+	Intel wireless iwlwifi drivers.  This is especially needed for
+	drm-kmod which needs updates after this.
+
+20210715:
+	The 20210707 awk update brought in a change in behavior. This has
+	been corrected as of d4d252c49976. Between these dates, if you
+	installed a new awk binary, you may not be able to build a new
+	kernel because the change in behavior affected the genoffset
+	script used to build the kernel. If you did update, the fix is
+	to update your sources past the above hash and do
+		% cd usr.bin/awk
+		% make clean all
+		% sudo -E make install
+	to enable building kernels again.
+
+20210711:
+	Commit 8a04edfdcbd2 changes the default minor version
+	used for NFSv4 mounts to the highest minor version supported
+	by the NFSv4 server.  This default can be overridden by using
+	the "minorversion" mount option.
+	The consensus of a discussion on freebsd-current@ indicated
+	that this would be acceptable to do and would not be considered
+	a POLA violation.
+
+20210710:
+	awk has been updated to the latest one-true-awk version 20210215.
+	This contains a number of minor bug fixes.
+
 20210630:
         Commit ca179c4d74f2/632e3f2f3a66 changed the package in which
 	the OpenSSL libraries and utilities are packaged.

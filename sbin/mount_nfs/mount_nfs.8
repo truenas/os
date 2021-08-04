@@ -28,7 +28,7 @@
 .\"	@(#)mount_nfs.8	8.3 (Berkeley) 3/29/95
 .\" $FreeBSD$
 .\"
-.Dd January 17, 2021
+.Dd July 10, 2021
 .Dt MOUNT_NFS 8
 .Os
 .Sh NAME
@@ -196,6 +196,25 @@ If this is set to 0 it disables positive name caching for the mount point.
 Override the default of NFS_DEFAULT_NEGNAMETIMEO for the timeout (in seconds)
 for negative name cache entries.
 If this is set to 0 it disables negative name caching for the mount point.
+.It Cm nconnect Ns = Ns Aq Ar value
+Specify the number of TCP connections (1-16) to be used
+for an NFS Version 4, minor version 1 or 2 mount.
+Multiple TCP connections can provide more client to server network
+bandwidth for certain network configurations such as:
+.Bd -literal
+- Multiple network interfaces that are aggregated together.
+- A fast network interface that uses multiple queues.
+.Ed
+.sp
+The first TCP connection will be used for all RPCs that consist
+entirely of small RPC messages.
+The RPCs that can have large RPC messages (Read/Readdir/Write) are
+distributed over the additional TCP connections in a round robin
+fashion.
+This option will result in more IP port#s being used.
+This option requires the
+.Cm nfsv4
+option.
 .It Cm nfsv2
 Use the NFS Version 2 protocol (the default is to try version 3 first
 then version 2).
@@ -206,9 +225,15 @@ Use the NFS Version 3 protocol.
 Use the NFS Version 4 protocol.
 This option will force the mount to use
 TCP transport.
+By default, the highest minor version of NFS Version 4 that is
+supported by the NFS Version 4 server will be used.
+See the
+.Cm minorversion
+option.
 .It Cm minorversion Ns = Ns Aq Ar value
-Override the default of 0 for the minor version of the NFS Version 4 protocol.
-The minor versions other than 0 currently supported are 1 and 2.
+Use the specified minor version for a NFS Version 4 mount,
+overriding the default.
+The minor versions supported are 0, 1, and 2.
 This option is only meaningful when used with the
 .Cm nfsv4
 option.
@@ -221,7 +246,7 @@ It may be required when an accumulation of NFS version 4 Opens occurs,
 as indicated by the
 .Dq Opens
 count displayed by
-.Xr nfsstat 8
+.Xr nfsstat 1
 with the
 .Fl c
 and
@@ -231,22 +256,16 @@ A common case for an accumulation of Opens is a shared library within
 the NFS mount that is used by several
 processes, where at least one of these processes is always running.
 This option cannot be used for an NFS Version 4, minor version 0 mount.
-As such, this option requires the
-.Cm minorversion
-option be specified with a value of 1 for AmazonEFS, because AmazonEFS does
-not support minor version 2 at this time.
 It may not work correctly when Delegations are being issued by a server,
 but note that the AmazonEFS server does not issued delegations at this time.
 This option is only meaningful when used with the
 .Cm nfsv4
-and
-.Cm minorversion
-options.
+option.
 .It Cm pnfs
 Enable support for parallel NFS (pNFS) for minor version 1 or 2 of the
 NFS Version 4 protocol.
 This option is only meaningful when used with the
-.Cm minorversion
+.Cm nfsv4
 option.
 .It Cm noac
 Disable attribute caching.
@@ -586,9 +605,31 @@ Same as
 Same as
 .Fl o Cm nfsv4
 .El
+.Sh IMPLEMENTATION NOTES
+When neither the
+.Cm rsize
+nor
+.Cm wsize
+options are specified, the I/O size will be set to the largest value
+supported by both the NFS client and server.
+The largest value supported by the NFS client is defined by
+the tunable
+.Cd vfs.maxbcachebuf
+which can be set to a power of two up to
+.Cd kern.maxphys .
+.Pp
+The
+.Xr nfsstat 1
+command with the
+.Ic -m
+command line option will show what
+.Nm
+option settings are actually in use for the mount.
 .Sh SEE ALSO
+.Xr nfsstat 1 ,
 .Xr nmount 2 ,
 .Xr unmount 2 ,
+.Xr lagg 4 ,
 .Xr nfsv4 4 ,
 .Xr fstab 5 ,
 .Xr gssd 8 ,

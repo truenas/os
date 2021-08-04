@@ -6,6 +6,7 @@ TESTSDIR=	${TESTSBASE}/sys/netpfil/common
 
 
 ATF_TESTS_SH+=	\
+		dummynet \
 		pass_block \
 		nat \
 		tos \
@@ -16,8 +17,10 @@ ${PACKAGE}FILES+=	\
 		utils.subr \
 		runner.subr \
 		pft_ping.py \
+		pft_synflood.py \
 		sniffer.py
 
 ${PACKAGE}FILESMODE_pft_ping.py=	0555
+${PACKAGE}FILESMODE_pft_synflood.py=	0555
 
 .include <bsd.test.mk>

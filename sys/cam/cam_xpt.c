@@ -2689,6 +2689,8 @@ xpt_action_default(union ccb *start_ccb)
 	case XPT_NVME_IO:
 	case XPT_NVME_ADMIN:
 	case XPT_MMC_IO:
+	case XPT_MMC_GET_TRAN_SETTINGS:
+	case XPT_MMC_SET_TRAN_SETTINGS:
 	case XPT_RESET_DEV:
 	case XPT_ENG_EXEC:
 	case XPT_SMP_IO:
@@ -4648,6 +4650,7 @@ xpt_done_direct(union ccb *done_ccb)
 
 	/* Store the time the ccb was in the sim */
 	done_ccb->ccb_h.qos.periph_data = cam_iosched_delta_t(done_ccb->ccb_h.qos.periph_data);
+	done_ccb->ccb_h.status |= CAM_QOS_VALID;
 	xpt_done_process(&done_ccb->ccb_h);
 }
 

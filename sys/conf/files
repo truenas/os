@@ -121,6 +121,8 @@ cam/ctl/ctl_error.c		optional ctl
 cam/ctl/ctl_util.c		optional ctl
 cam/ctl/scsi_ctl.c		optional ctl
 cam/mmc/mmc_xpt.c		optional scbus mmccam
+cam/mmc/mmc_sim.c		optional scbus mmccam
+cam/mmc/mmc_sim_if.m		optional scbus mmccam
 cam/mmc/mmc_da.c		optional scbus mmccam da
 cam/scsi/scsi_da.c		optional da
 cam/scsi/scsi_pass.c		optional pass
@@ -2471,7 +2473,9 @@ dev/mmc/mmc.c			optional mmc !mmccam
 dev/mmc/mmcbr_if.m		standard
 dev/mmc/mmcbus_if.m		standard
 dev/mmc/mmcsd.c			optional mmcsd !mmccam
-dev/mmc/mmc_fdt_helpers.c	optional mmc fdt | mmccam fdt
+dev/mmc/mmc_fdt_helpers.c	optional ext_resources mmc fdt | ext_resources mmccam fdt
+dev/mmc/mmc_pwrseq.c		optional ext_resources mmc fdt | ext_resources mmccam fdt
+dev/mmc/mmc_pwrseq_if.m		optional ext_resources mmc fdt | ext_resources mmccam fdt
 dev/mmcnull/mmcnull.c		optional mmcnull
 dev/mn/if_mn.c			optional mn pci
 dev/mpr/mpr.c			optional mpr
@@ -4090,6 +4094,7 @@ libkern/strncat.c		standard
 libkern/strncmp.c		standard
 libkern/strncpy.c		standard
 libkern/strnlen.c		standard
+libkern/strnstr.c		standard
 libkern/strrchr.c		standard
 libkern/strsep.c		standard
 libkern/strspn.c		standard
@@ -4526,6 +4531,7 @@ netpfil/pf/pf_norm.c		optional pf inet
 netpfil/pf/pf_nv.c		optional pf inet
 netpfil/pf/pf_osfp.c		optional pf inet
 netpfil/pf/pf_ruleset.c		optional pf inet
+netpfil/pf/pf_syncookies.c	optional pf inet
 netpfil/pf/pf_table.c		optional pf inet
 netpfil/pf/in4_cksum.c		optional pf inet
 netsmb/smb_conn.c		optional netsmb

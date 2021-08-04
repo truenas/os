@@ -181,12 +181,17 @@ arm64_allocate_pmc(int cpu, int ri, struct pmc *pm,
 	}
 	pe = a->pm_ev;
 
-	config = (pe & EVENT_ID_MASK);
+	/* Adjust the config value if needed. */
+	config = a->pm_md.pm_md_config;
+	if ((a->pm_md.pm_md_flags & PM_MD_RAW_EVENT) == 0) {
+		config = (uint32_t)pe - PMC_EV_ARMV8_FIRST;
+		if (config > (PMC_EV_ARMV8_LAST - PMC_EV_ARMV8_FIRST))
+			return (EINVAL);
+	}
 	pm->pm_md.pm_arm64.pm_arm64_evsel = config;
-
 	PMCDBG2(MDP, ALL, 2, "arm64-allocate ri=%d -> config=0x%x", ri, config);
 
-	return 0;
+	return (0);
 }
 
 
@@ -229,7 +234,7 @@ arm64_read_pmc(int cpu, int ri, pmc_value_t *v)
 	else
 		*v = tmp;
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -252,7 +257,7 @@ arm64_write_pmc(int cpu, int ri, pmc_value_t v)
 	pm->pm_pcpu_state[cpu].pps_overflowcnt = v >> 32;
 	arm64_pmcn_write(ri, v);
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -275,7 +280,7 @@ arm64_config_pmc(int cpu, int ri, struct pmc *pm)
 
 	phw->phw_pmc = pm;
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -303,7 +308,7 @@ arm64_start_pmc(int cpu, int ri)
 	arm64_interrupt_enable(ri);
 	arm64_counter_enable(ri);
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -321,7 +326,7 @@ arm64_stop_pmc(int cpu, int ri)
 	arm64_counter_disable(ri);
 	arm64_interrupt_disable(ri);
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -338,7 +343,7 @@ arm64_release_pmc(int cpu, int ri, struct pmc *pmc)
 	KASSERT(phw->phw_pmc == NULL,
 	    ("[arm64,%d] PHW pmc %p non-NULL", __LINE__, phw->phw_pmc));
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -353,6 +358,9 @@ arm64_intr(struct trapframe *tf)
 	cpu = curcpu;
 	KASSERT(cpu >= 0 && cpu < pmc_cpu_max(),
 	    ("[arm64,%d] CPU %d out of range", __LINE__, cpu));
+
+	PMCDBG3(MDP,INT,1, "cpu=%d tf=%p um=%d", cpu, (void *)tf,
+	    TRAPF_USERMODE(tf));
 
 	retval = 0;
 	pc = arm64_pcpu[cpu];
@@ -503,6 +511,7 @@ pmc_arm64_initialize()
 	struct pmc_classdep *pcd;
 	int idcode, impcode;
 	int reg;
+	uint64_t midr;
 
 	reg = arm64_pmcr_read();
 	arm64_npmcs = (reg & PMCR_N_MASK) >> PMCR_N_SHIFT;
@@ -510,6 +519,18 @@ pmc_arm64_initialize()
 	idcode = (reg & PMCR_IDCODE_MASK) >> PMCR_IDCODE_SHIFT;
 
 	PMCDBG1(MDP, INI, 1, "arm64-init npmcs=%d", arm64_npmcs);
+
+	/*
+	 * Write the CPU model to kern.hwpmc.cpuid.
+	 *
+	 * We zero the variant and revision fields.
+	 *
+	 * TODO: how to handle differences between cores due to big.LITTLE?
+	 * For now, just use MIDR from CPU 0.
+	 */
+	midr = (uint64_t)(pcpu_find(0)->pc_midr);
+	midr &= ~(CPU_VAR_MASK | CPU_REV_MASK);
+	snprintf(pmc_cpuid, sizeof(pmc_cpuid), "0x%016lx", midr);
 
 	/*
 	 * Allocate space for pointers to PMC HW descriptors and for

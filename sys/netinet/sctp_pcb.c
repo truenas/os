@@ -4154,8 +4154,8 @@ try_again:
  */
 struct sctp_tcb *
 sctp_aloc_assoc(struct sctp_inpcb *inp, struct sockaddr *firstaddr,
-    int *error, uint32_t override_tag, uint32_t vrf_id,
-    uint16_t o_streams, uint16_t port,
+    int *error, uint32_t override_tag, uint32_t initial_tsn,
+    uint32_t vrf_id, uint16_t o_streams, uint16_t port,
     struct thread *p,
     int initialize_auth_params)
 {
@@ -4312,7 +4312,7 @@ sctp_aloc_assoc(struct sctp_inpcb *inp, struct sockaddr *firstaddr,
 	/* setup back pointer's */
 	stcb->sctp_ep = inp;
 	stcb->sctp_socket = inp->sctp_socket;
-	if ((err = sctp_init_asoc(inp, stcb, override_tag, vrf_id, o_streams))) {
+	if ((err = sctp_init_asoc(inp, stcb, override_tag, initial_tsn, vrf_id, o_streams))) {
 		/* failed */
 		SCTP_TCB_LOCK_DESTROY(stcb);
 		SCTP_TCB_SEND_LOCK_DESTROY(stcb);
@@ -6198,7 +6198,7 @@ sctp_load_addresses_from_init(struct sctp_tcb *stcb, struct mbuf *m,
 							op_err = sctp_generate_cause(SCTP_BASE_SYSCTL(sctp_diag_info_code),
 							    msg);
 							sctp_abort_an_association(stcb_tmp->sctp_ep,
-							    stcb_tmp, op_err,
+							    stcb_tmp, op_err, false,
 							    SCTP_SO_NOT_LOCKED);
 							goto add_it_now;
 						}
@@ -6298,7 +6298,7 @@ sctp_load_addresses_from_init(struct sctp_tcb *stcb, struct mbuf *m,
 							op_err = sctp_generate_cause(SCTP_BASE_SYSCTL(sctp_diag_info_code),
 							    msg);
 							sctp_abort_an_association(stcb_tmp->sctp_ep,
-							    stcb_tmp, op_err,
+							    stcb_tmp, op_err, false,
 							    SCTP_SO_NOT_LOCKED);
 							goto add_it_now6;
 						}

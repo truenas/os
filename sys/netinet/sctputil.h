@@ -79,7 +79,7 @@ uint32_t sctp_select_initial_TSN(struct sctp_pcb *);
 
 uint32_t sctp_select_a_tag(struct sctp_inpcb *, uint16_t lport, uint16_t rport, int);
 
-int sctp_init_asoc(struct sctp_inpcb *, struct sctp_tcb *, uint32_t, uint32_t, uint16_t);
+int sctp_init_asoc(struct sctp_inpcb *, struct sctp_tcb *, uint32_t, uint32_t, uint32_t, uint16_t);
 
 void sctp_fill_random_store(struct sctp_pcb *);
 
@@ -167,7 +167,7 @@ void sctp_report_all_outbound(struct sctp_tcb *, uint16_t, int);
 int sctp_expand_mapping_array(struct sctp_association *, uint32_t);
 
 void
-sctp_abort_notification(struct sctp_tcb *, uint8_t, uint16_t,
+sctp_abort_notification(struct sctp_tcb *, bool, bool, uint16_t,
     struct sctp_abort_chunk *, int);
 
 /* We abort responding to an IP packet for some reason */
@@ -181,7 +181,7 @@ sctp_abort_association(struct sctp_inpcb *, struct sctp_tcb *, struct mbuf *,
 /* We choose to abort via user input */
 void
 sctp_abort_an_association(struct sctp_inpcb *, struct sctp_tcb *,
-    struct mbuf *, int);
+    struct mbuf *, bool, int);
 
 void
 sctp_handle_ootb(struct mbuf *, int, int,

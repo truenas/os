@@ -51,6 +51,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/rwlock.h>
 #include <sys/mman.h>
 #include <sys/stack.h>
+#include <sys/time.h>
 #include <sys/user.h>
 
 #include <vm/vm.h>
@@ -66,6 +67,7 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <linux/kobject.h>
+#include <linux/cpu.h>
 #include <linux/device.h>
 #include <linux/slab.h>
 #include <linux/module.h>
@@ -99,6 +101,12 @@ int linuxkpi_debug;
 SYSCTL_INT(_compat_linuxkpi, OID_AUTO, debug, CTLFLAG_RWTUN,
     &linuxkpi_debug, 0, "Set to enable pr_debug() prints. Clear to disable.");
 
+static struct timeval lkpi_net_lastlog;
+static int lkpi_net_curpps;
+static int lkpi_net_maxpps = 99;
+SYSCTL_INT(_compat_linuxkpi, OID_AUTO, net_ratelimit, CTLFLAG_RWTUN,
+    &lkpi_net_maxpps, 0, "Limit number of LinuxKPI net messages per second.");
+
 MALLOC_DEFINE(M_KMALLOC, "linux", "Linux kmalloc compat");
 
 #include <linux/rbtree.h>
@@ -112,6 +120,7 @@ static void linux_destroy_dev(struct linux_cdev *);
 static void linux_cdev_deref(struct linux_cdev *ldev);
 static struct vm_area_struct *linux_cdev_handle_find(void *handle);
 
+cpumask_t cpu_online_mask;
 struct kobject linux_class_root;
 struct device linux_root_device;
 struct class linux_class_misc;
@@ -2303,48 +2312,63 @@ static void
 linux_handle_ifnet_link_event(void *arg, struct ifnet *ifp, int linkstate)
 {
 	struct notifier_block *nb;
+	struct netdev_notifier_info ni;
 
 	nb = arg;
+	ni.ifp = ifp;
+	ni.dev = (struct net_device *)ifp;
 	if (linkstate == LINK_STATE_UP)
-		nb->notifier_call(nb, NETDEV_UP, ifp);
+		nb->notifier_call(nb, NETDEV_UP, &ni);
 	else
-		nb->notifier_call(nb, NETDEV_DOWN, ifp);
+		nb->notifier_call(nb, NETDEV_DOWN, &ni);
 }
 
 static void
 linux_handle_ifnet_arrival_event(void *arg, struct ifnet *ifp)
 {
 	struct notifier_block *nb;
+	struct netdev_notifier_info ni;
 
 	nb = arg;
-	nb->notifier_call(nb, NETDEV_REGISTER, ifp);
+	ni.ifp = ifp;
+	ni.dev = (struct net_device *)ifp;
+	nb->notifier_call(nb, NETDEV_REGISTER, &ni);
 }
 
 static void
 linux_handle_ifnet_departure_event(void *arg, struct ifnet *ifp)
 {
 	struct notifier_block *nb;
+	struct netdev_notifier_info ni;
 
 	nb = arg;
-	nb->notifier_call(nb, NETDEV_UNREGISTER, ifp);
+	ni.ifp = ifp;
+	ni.dev = (struct net_device *)ifp;
+	nb->notifier_call(nb, NETDEV_UNREGISTER, &ni);
 }
 
 static void
 linux_handle_iflladdr_event(void *arg, struct ifnet *ifp)
 {
 	struct notifier_block *nb;
+	struct netdev_notifier_info ni;
 
 	nb = arg;
-	nb->notifier_call(nb, NETDEV_CHANGEADDR, ifp);
+	ni.ifp = ifp;
+	ni.dev = (struct net_device *)ifp;
+	nb->notifier_call(nb, NETDEV_CHANGEADDR, &ni);
 }
 
 static void
 linux_handle_ifaddr_event(void *arg, struct ifnet *ifp)
 {
 	struct notifier_block *nb;
+	struct netdev_notifier_info ni;
 
 	nb = arg;
-	nb->notifier_call(nb, NETDEV_CHANGEIFADDR, ifp);
+	ni.ifp = ifp;
+	ni.dev = (struct net_device *)ifp;
+	nb->notifier_call(nb, NETDEV_CHANGEIFADDR, &ni);
 }
 
 int
@@ -2440,6 +2464,30 @@ list_sort(void *priv, struct list_head *head, int (*cmp)(void *priv,
 }
 
 void
+lkpi_irq_release(struct device *dev, struct irq_ent *irqe)
+{
+
+	if (irqe->tag != NULL)
+		bus_teardown_intr(dev->bsddev, irqe->res, irqe->tag);
+	if (irqe->res != NULL)
+		bus_release_resource(dev->bsddev, SYS_RES_IRQ,
+		    rman_get_rid(irqe->res), irqe->res);
+	list_del(&irqe->links);
+}
+
+void
+lkpi_devm_irq_release(struct device *dev, void *p)
+{
+	struct irq_ent *irqe;
+
+	if (dev == NULL || p == NULL)
+		return;
+
+	irqe = p;
+	lkpi_irq_release(dev, irqe);
+}
+
+void
 linux_irq_handler(void *ent)
 {
 	struct irq_ent *irqe;
@@ -2448,7 +2496,12 @@ linux_irq_handler(void *ent)
 		return;
 
 	irqe = ent;
-	irqe->handler(irqe->irq, irqe->arg);
+	if (irqe->handler(irqe->irq, irqe->arg) == IRQ_WAKE_THREAD &&
+	    irqe->thread_handler != NULL) {
+		THREAD_SLEEPING_OK();
+		irqe->thread_handler(irqe->irq, irqe->arg);
+		THREAD_NO_SLEEPING();
+	}
 }
 
 #if defined(__i386__) || defined(__amd64__)
@@ -2565,6 +2618,14 @@ linux_dump_stack(void)
 #endif
 }
 
+int
+linuxkpi_net_ratelimit(void)
+{
+
+	return (ppsratecheck(&lkpi_net_lastlog, &lkpi_net_curpps,
+	   lkpi_net_maxpps));
+}
+
 #if defined(__i386__) || defined(__amd64__)
 bool linux_cpu_has_clflush;
 #endif
@@ -2602,6 +2663,8 @@ linux_compat_init(void *arg)
 		LIST_INIT(&vmmaphead[i]);
 	init_waitqueue_head(&linux_bit_waitq);
 	init_waitqueue_head(&linux_var_waitq);
+
+	CPU_COPY(&all_cpus, &cpu_online_mask);
 }
 SYSINIT(linux_compat, SI_SUB_DRIVERS, SI_ORDER_SECOND, linux_compat_init, NULL);
 

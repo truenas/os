@@ -450,13 +450,16 @@ native_start_all_aps(void)
 	}
 
 	/* save the current value of the warm-start vector */
-	mpbioswarmvec = *((u_int32_t *) WARMBOOT_OFF);
+	if (!efi_boot)
+		mpbioswarmvec = *((u_int32_t *) WARMBOOT_OFF);
 	outb(CMOS_REG, BIOS_RESET);
 	mpbiosreason = inb(CMOS_DATA);
 
 	/* setup a vector to our boot code */
-	*((volatile u_short *) WARMBOOT_OFF) = WARMBOOT_TARGET;
-	*((volatile u_short *) WARMBOOT_SEG) = (boot_address >> 4);
+	if (!efi_boot) {
+		*((volatile u_short *)WARMBOOT_OFF) = WARMBOOT_TARGET;
+		*((volatile u_short *)WARMBOOT_SEG) = (boot_address >> 4);
+	}
 	outb(CMOS_REG, BIOS_RESET);
 	outb(CMOS_DATA, BIOS_WARM);	/* 'warm-start' */
 
@@ -499,7 +502,8 @@ native_start_all_aps(void)
 		/* attempt to start the Application Processor */
 		if (!start_ap(apic_id)) {
 			/* restore the warmstart vector */
-			*(u_int32_t *) WARMBOOT_OFF = mpbioswarmvec;
+			if (!efi_boot)
+				*(u_int32_t *)WARMBOOT_OFF = mpbioswarmvec;
 			panic("AP #%d (PHY# %d) failed!", cpu, apic_id);
 		}
 
@@ -507,7 +511,8 @@ native_start_all_aps(void)
 	}
 
 	/* restore the warmstart vector */
-	*(u_int32_t *) WARMBOOT_OFF = mpbioswarmvec;
+	if (!efi_boot)
+		*(u_int32_t *)WARMBOOT_OFF = mpbioswarmvec;
 
 	outb(CMOS_REG, BIOS_RESET);
 	outb(CMOS_DATA, mpbiosreason);

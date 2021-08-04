@@ -197,19 +197,10 @@ struct pfctl_kill {
 	bool			kill_match;
 };
 
-struct pfctl_state_scrub {
-	bool		timestamp;
-	uint8_t		ttl;
-	uint32_t	ts_mod;
-};
-
 struct pfctl_state_peer {
-	struct pfctl_state_scrub	*scrub;
 	uint32_t			 seqlo;
 	uint32_t			 seqhi;
 	uint32_t			 seqdiff;
-	uint16_t			 max_win;
-	uint16_t			 mss;
 	uint8_t				 state;
 	uint8_t				 wscale;
 };
@@ -243,10 +234,7 @@ struct pfctl_state {
 	uint32_t		 creation;
 	uint32_t		 expire;
 	uint32_t		 pfsync_time;
-	uint16_t		 tag;
-	uint8_t			 log;
 	uint8_t			 state_flags;
-	uint8_t			 timeout;
 	uint32_t		 sync_flags;
 };
 
@@ -254,6 +242,15 @@ TAILQ_HEAD(pfctl_statelist, pfctl_state);
 struct pfctl_states {
 	struct pfctl_statelist	states;
 	size_t 			count;
+};
+
+enum pfctl_syncookies_mode {
+	PFCTL_SYNCOOKIES_NEVER,
+	PFCTL_SYNCOOKIES_ALWAYS
+};
+
+struct pfctl_syncookies {
+	enum pfctl_syncookies_mode	mode;
 };
 
 int	pfctl_get_rule(int dev, u_int32_t nr, u_int32_t ticket,
@@ -272,5 +269,7 @@ int	pfctl_clear_states(int dev, const struct pfctl_kill *kill,
 	    unsigned int *killed);
 int	pfctl_kill_states(int dev, const struct pfctl_kill *kill,
 	    unsigned int *killed);
+int	pfctl_set_syncookies(int dev, const struct pfctl_syncookies *s);
+int	pfctl_get_syncookies(int dev, struct pfctl_syncookies *s);
 
 #endif
