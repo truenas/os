@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sbuf.h>
 #include <sys/smp.h>
 #include <sys/sysctl.h>
+#include <sys/taskqueue.h>
 #include <sys/uio.h>
 #include <sys/uuid.h>
 #include <sys/vmmeter.h>
@@ -149,7 +150,8 @@ struct pmem_disk {
 /* NTB PMEM device */
 struct ntb_pmem {
 	device_t		 nvd_dev;	/* PMEM device. */
-	struct callout		 ntb_link_work;
+	struct taskqueue	*ntb_link_tq;
+	struct timeout_task	 ntb_link_task;
 	struct callout		 ntb_start;
 	vm_paddr_t		 ntb_paddr;	/* MW physical address */
 	vm_paddr_t		 ntb_size;	/* MW size */
@@ -1767,7 +1769,7 @@ ntb_pmem_sync(void *data)
 	if (dir > 0) {
 		device_printf(dev, "Copying local to remote.\n");
 		b = ticks;
-		memcpy(sc->rvaddr, sc->vaddr, sc->size - PAGE_SIZE);
+		ntb_copy1(sc->rvaddr, sc->vaddr, sc->size - PAGE_SIZE);
 		device_printf(dev, "Copied %juMB at %juMB/s\n",
 		    sc->size / 1024 / 1024,
 		    sc->size * hz / 1024 / 1024 / imax(ticks - b, 1));
@@ -1776,7 +1778,6 @@ ntb_pmem_sync(void *data)
 		rl->dirty = 0;
 		ll->empty = 0;
 		ll->dirty = 0;
-		pmap_invalidate_cache();
 		atomic_store_rel_32(&ll->state, STATE_READY);
 		atomic_store_rel_32(&rl->state, STATE_READY);
 	} else if (dir < 0) {
@@ -1795,7 +1796,7 @@ ntb_pmem_sync(void *data)
 }
 
 static void
-ntb_pmem_link_work(void *data)
+ntb_pmem_link_work(void *data, int pending)
 {
 	device_t dev = data;
 	struct ntb_pmem *sc = device_get_softc(dev);
@@ -1835,8 +1836,10 @@ ntb_pmem_link_work(void *data)
 	ntb_pmem_start(dev);
 	return;
 out:
-	if (ntb_link_is_up(dev, NULL, NULL))
-		callout_reset(&sc->ntb_link_work, hz/10, ntb_pmem_link_work, dev);
+	if (ntb_link_is_up(dev, NULL, NULL)) {
+		taskqueue_enqueue_timeout_sbt(sc->ntb_link_tq,
+		    &sc->ntb_link_task, SBT_1S / 10, 0, C_PREL(1));
+	}
 }
 
 static void
@@ -1847,10 +1850,12 @@ ntb_pmem_link_event(void *data)
 	struct pmem_disk *scd = device_get_softc(sc->nvd_dev);
 
 	if (ntb_link_is_up(dev, NULL, NULL)) {
-		ntb_pmem_link_work(dev);
+		taskqueue_enqueue_timeout_sbt(sc->ntb_link_tq,
+		    &sc->ntb_link_task, 0, 0, 0);
 	} else {
 		device_printf(dev, "Connection is down\n");
-		callout_stop(&sc->ntb_link_work);
+		taskqueue_cancel_timeout(sc->ntb_link_tq,
+		    &sc->ntb_link_task, NULL);
 
 		/*
 		 * The scratchpad registers keep the values if the remote side
@@ -1928,7 +1933,16 @@ ntb_pmem_attach(device_t dev)
 		    sc->ntb_size, 2 * scd->size);
 	}
 
-	callout_init(&sc->ntb_link_work, 1);
+	/* Get NUMA domain of the NTB for pmem driver. */
+	bus_get_domain(dev, &scd->rdomain);
+
+	/* Prepare taskqueue to handle link events (sync). */
+	sc->ntb_link_tq = taskqueue_create(device_get_nameunit(dev), M_WAITOK,
+	    taskqueue_thread_enqueue, &sc->ntb_link_tq);
+	(void) taskqueue_start_threads_cpuset(&sc->ntb_link_tq, 1, PUSER,
+	    &cpuset_domain[scd->rdomain], "%s", device_get_nameunit(dev));
+	TIMEOUT_TASK_INIT(sc->ntb_link_tq, &sc->ntb_link_task, 0,
+	    ntb_pmem_link_work, dev);
 	callout_init(&sc->ntb_start, 1);
 
 	/* Allow write combining for the memory window. */
@@ -1942,9 +1956,6 @@ ntb_pmem_attach(device_t dev)
 		device_printf(dev, "ntb_mw_set_trans() error %d\n", error);
 		return (ENXIO);
 	}
-
-	/* Get NUMA domain of the NTB for pmem driver. */
-	bus_get_domain(dev, &scd->rdomain);
 
 	/* Delay boot if this PMEM ever saw NTB. */
 	if (scd->label->state >= STATE_IDLE) {
@@ -1987,7 +1998,8 @@ ntb_pmem_detach(device_t dev)
 	error = ntb_mw_clear_trans(dev, 0);
 	if (error != 0)
 		device_printf(dev, "ntb_mw_clear_trans() error %d\n", error);
-	callout_drain(&sc->ntb_link_work);
+	taskqueue_drain_timeout(sc->ntb_link_tq, &sc->ntb_link_task);
+	taskqueue_free(sc->ntb_link_tq);
 	return (0);
 }
 
