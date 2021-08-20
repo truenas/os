@@ -662,6 +662,8 @@ mpr_alloc_command(struct mpr_softc *sc)
 	return (cm);
 }
 
+void mprsas_prepare_remove_retry(struct mprsas_softc *sassc);
+
 static __inline void
 mpr_free_high_priority_command(struct mpr_softc *sc, struct mpr_command *cm)
 {
@@ -684,6 +686,9 @@ mpr_free_high_priority_command(struct mpr_softc *sc, struct mpr_command *cm)
 		mpr_free_chain(sc, chain);
 	}
 	TAILQ_INSERT_TAIL(&sc->high_priority_req_list, cm, cm_link);
+
+	if (sc->sassc)
+		mprsas_prepare_remove_retry(sc->sassc);
 }
 
 static __inline struct mpr_command *
