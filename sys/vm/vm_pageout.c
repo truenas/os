@@ -539,7 +539,7 @@ vm_pageout_flush(vm_page_t *mc, int count, int flags, int mreq, int *prunlen,
 			 * the PQ_UNSWAPPABLE holding queue.  This is an
 			 * optimization that prevents the page daemon from
 			 * wasting CPU cycles on pages that cannot be reclaimed
-			 * becase no swap device is configured.
+			 * because no swap device is configured.
 			 *
 			 * Otherwise, reactivate the page so that it doesn't
 			 * clog the laundry and inactive queues.  (We will try
@@ -606,7 +606,7 @@ vm_pageout_clean(vm_page_t m, int *numpagedout)
 	struct mount *mp;
 	vm_object_t object;
 	vm_pindex_t pindex;
-	int error, lockmode;
+	int error;
 
 	object = m->object;
 	VM_OBJECT_ASSERT_WLOCKED(object);
@@ -640,9 +640,7 @@ vm_pageout_clean(vm_page_t m, int *numpagedout)
 		vm_object_reference_locked(object);
 		pindex = m->pindex;
 		VM_OBJECT_WUNLOCK(object);
-		lockmode = MNT_SHARED_WRITES(vp->v_mount) ?
-		    LK_SHARED : LK_EXCLUSIVE;
-		if (vget(vp, lockmode | LK_TIMELOCK)) {
+		if (vget(vp, vn_lktype_write(NULL, vp) | LK_TIMELOCK) != 0) {
 			vp = NULL;
 			error = EDEADLK;
 			goto unlock_mp;

@@ -359,11 +359,10 @@ __DEFAULT_NO_OPTIONS+=OPENMP
 .endif
 
 .if ${.MAKE.OS} != "FreeBSD"
-# Building the target compiler requires building tablegen on the host
-# which is (currently) not possible on non-FreeBSD.
-BROKEN_OPTIONS+=CLANG LLD LLDB
-# The same also applies to the bootstrap LLVM.
-BROKEN_OPTIONS+=CLANG_BOOTSTRAP LLD_BOOTSTRAP
+# Bootstrapping the toolchain and building LLDB currently results in build
+# failures non-FreeBSD, so disable these options until the fixes that are
+# currently under review have landed.
+BROKEN_OPTIONS+=LLDB CLANG_BOOTSTRAP LLD_BOOTSTRAP
 .endif
 
 .include <bsd.mkopt.mk>
