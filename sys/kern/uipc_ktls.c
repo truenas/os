@@ -643,6 +643,7 @@ ktls_clone_session(struct ktls_session *tls)
 	counter_u64_add(ktls_offload_active, 1);
 
 	refcount_init(&tls_new->refcount, 1);
+	TASK_INIT(&tls_new->reset_tag_task, 0, ktls_reset_send_tag, tls_new);
 
 	/* Copy fields from existing session. */
 	tls_new->params = tls->params;
@@ -1043,8 +1044,10 @@ ktls_enable_rx(struct socket *so, struct tls_enable *en)
 	so->so_rcv.sb_flags |= SB_TLS_RX;
 
 	/* Mark existing data as not ready until it can be decrypted. */
-	sb_mark_notready(&so->so_rcv);
-	ktls_check_rx(&so->so_rcv);
+	if (tls->mode != TCP_TLS_MODE_TOE) {
+		sb_mark_notready(&so->so_rcv);
+		ktls_check_rx(&so->so_rcv);
+	}
 	SOCKBUF_UNLOCK(&so->so_rcv);
 
 	counter_u64_add(ktls_offload_total, 1);
@@ -1576,12 +1579,12 @@ ktls_frame(struct mbuf *top, struct ktls_session *tls, int *enq_cnt,
 		 */
 		if (tls->mode == TCP_TLS_MODE_SW) {
 			m->m_flags |= M_NOTREADY;
-			m->m_epg_nrdy = m->m_epg_npgs;
 			if (__predict_false(tls_len == 0)) {
 				/* TLS 1.0 empty fragment. */
-				*enq_cnt += 1;
+				m->m_epg_nrdy = 1;
 			} else
-				*enq_cnt += m->m_epg_npgs;
+				m->m_epg_nrdy = m->m_epg_npgs;
+			*enq_cnt += m->m_epg_nrdy;
 		}
 	}
 }
@@ -2046,11 +2049,7 @@ retry_page:
 			dst_iov[i].iov_len = len;
 		}
 
-		if (__predict_false(m->m_epg_npgs == 0)) {
-			/* TLS 1.0 empty fragment. */
-			npages++;
-		} else
-			npages += i;
+		npages += m->m_epg_nrdy;
 
 		error = (*tls->sw_encrypt)(tls,
 		    (const struct tls_record_layer *)m->m_epg_hdr,
