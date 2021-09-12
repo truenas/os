@@ -94,6 +94,9 @@ X${COMPILER}?=	${${COMPILER}}
 # a cross compiler.
 .if ${XCC:N${CCACHE_BIN}:M/*}
 MK_CLANG_BOOTSTRAP=	no
+# Make sure sub-makes see the option as disabled so the hack in bsd.sys.mk to
+# work around incompatible headers in Clang's resource directory is enabled.
+.MAKEOVERRIDES+=	MK_CLANG_BOOTSTRAP
 .endif
 
 # Pull in compiler metadata from buildworld/toolchain if possible to avoid
@@ -735,7 +738,6 @@ BSARGS= 	DESTDIR= \
 		MK_CLANG_FORMAT=no \
 		MK_CLANG_FULL=no \
 		MK_HTML=no \
-		MK_LLDB=no \
 		MK_MAN=no \
 		MK_PROFILE=no \
 		MK_RETPOLINE=no \
@@ -776,6 +778,7 @@ TMAKE=		\
 XMAKE=		${BMAKE} \
 		TARGET=${TARGET} TARGET_ARCH=${TARGET_ARCH} \
 		MK_CLANG_IS_CC=${MK_CLANG_BOOTSTRAP} \
+		MK_LLDB=no \
 		MK_TESTS=no
 
 # kernel-tools stage
@@ -2778,7 +2781,6 @@ SUBDIR=	${SUBDIR_OVERRIDE}
 NXBMAKEARGS+= \
 	OBJTOP=${NXBOBJTOP:Q} \
 	OBJROOT=${NXBOBJROOT:Q} \
-	MAKEOBJDIRPREFIX= \
 	-DNO_SHARED \
 	-DNO_CPU_CFLAGS \
 	-DNO_PIC \
@@ -2802,6 +2804,9 @@ NXBMAKEARGS+= \
 	MK_TESTS=no \
 	MK_WERROR=no \
 	MK_ZFS=no
+
+NXBMAKEENV+= \
+	MAKEOBJDIRPREFIX=
 
 .if make(native-xtools*) && \
     (!defined(NXB_TARGET) || !defined(NXB_TARGET_ARCH))

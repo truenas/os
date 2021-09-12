@@ -207,7 +207,6 @@ rib_add_redirect(u_int fibnum, struct sockaddr *dst, struct sockaddr *gateway,
 	/* Get the best ifa for the given interface and gateway. */
 	if ((ifa = ifaof_ifpforaddr(gateway, ifp)) == NULL)
 		return (ENETUNREACH);
-	ifa_ref(ifa);
 
 	bzero(&info, sizeof(info));
 	info.rti_info[RTAX_DST] = dst;
@@ -224,7 +223,6 @@ rib_add_redirect(u_int fibnum, struct sockaddr *dst, struct sockaddr *gateway,
 	info.rti_rmx = &rti_rmx;
 
 	error = rib_action(fibnum, RTM_ADD, &info, &rc);
-	ifa_free(ifa);
 
 	if (error != 0) {
 		/* TODO: add per-fib redirect stats. */
@@ -503,8 +501,39 @@ rt_flushifroutes(struct ifnet *ifp)
 }
 
 /*
- * Look up rt_addrinfo for a specific fib.  Note that if rti_ifa is defined,
- * it will be referenced so the caller must free it.
+ * Tries to extract interface from RTAX_IFP passed in rt_addrinfo.
+ * Interface can be specified ether as interface index (sdl_index) or
+ * the interface name (sdl_data).
+ *
+ * Returns found ifp or NULL
+ */
+static struct ifnet *
+info_get_ifp(struct rt_addrinfo *info)
+{
+	const struct sockaddr_dl *sdl;
+
+	sdl = (const struct sockaddr_dl *)info->rti_info[RTAX_IFP];
+	if (sdl->sdl_family != AF_LINK)
+		return (NULL);
+
+	if (sdl->sdl_index != 0)
+		return (ifnet_byindex(sdl->sdl_index));
+	if (sdl->sdl_nlen > 0) {
+		char if_name[IF_NAMESIZE];
+		if (sdl->sdl_nlen + offsetof(struct sockaddr_dl, sdl_data) > sdl->sdl_len)
+			return (NULL);
+		if (sdl->sdl_nlen >= IF_NAMESIZE)
+			return (NULL);
+		bzero(if_name, sizeof(if_name));
+		memcpy(if_name, sdl->sdl_data, sdl->sdl_nlen);
+		return (ifunit(if_name));
+	}
+
+	return (NULL);
+}
+
+/*
+ * Look up rt_addrinfo for a specific fib.
  *
  * Assume basic consistency checks are executed by callers:
  * RTAX_DST exists, if RTF_GATEWAY is set, RTAX_GATEWAY exists as well.
@@ -512,13 +541,11 @@ rt_flushifroutes(struct ifnet *ifp)
 int
 rt_getifa_fib(struct rt_addrinfo *info, u_int fibnum)
 {
-	const struct sockaddr *dst, *gateway, *ifpaddr, *ifaaddr;
-	struct epoch_tracker et;
-	int needref, error, flags;
+	const struct sockaddr *dst, *gateway, *ifaaddr;
+	int error, flags;
 
 	dst = info->rti_info[RTAX_DST];
 	gateway = info->rti_info[RTAX_GATEWAY];
-	ifpaddr = info->rti_info[RTAX_IFP];
 	ifaaddr = info->rti_info[RTAX_IFA];
 	flags = info->rti_flags;
 
@@ -527,16 +554,10 @@ rt_getifa_fib(struct rt_addrinfo *info, u_int fibnum)
 	 * when protocol address is ambiguous.
 	 */
 	error = 0;
-	needref = (info->rti_ifa == NULL);
-	NET_EPOCH_ENTER(et);
 
-	/* If we have interface specified by the ifindex in the address, use it */
-	if (info->rti_ifp == NULL && ifpaddr != NULL &&
-	    ifpaddr->sa_family == AF_LINK) {
-	    const struct sockaddr_dl *sdl = (const struct sockaddr_dl *)ifpaddr;
-	    if (sdl->sdl_index != 0)
-		    info->rti_ifp = ifnet_byindex(sdl->sdl_index);
-	}
+	/* If we have interface specified by RTAX_IFP address, try to use it */
+	if ((info->rti_ifp == NULL) && (info->rti_info[RTAX_IFP] != NULL))
+		info->rti_ifp = info_get_ifp(info);
 	/*
 	 * If we have source address specified, try to find it
 	 * TODO: avoid enumerating all ifas on all interfaces.
@@ -583,13 +604,11 @@ rt_getifa_fib(struct rt_addrinfo *info, u_int fibnum)
 			info->rti_ifa = ifa_ifwithroute(flags, sa, sa,
 							fibnum);
 	}
-	if (needref && info->rti_ifa != NULL) {
+	if (info->rti_ifa != NULL) {
 		if (info->rti_ifp == NULL)
 			info->rti_ifp = info->rti_ifa->ifa_ifp;
-		ifa_ref(info->rti_ifa);
 	} else
 		error = ENETUNREACH;
-	NET_EPOCH_EXIT(et);
 	return (error);
 }
 

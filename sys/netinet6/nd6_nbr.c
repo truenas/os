@@ -623,7 +623,6 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 	struct mbuf *chain;
 	struct nd_neighbor_advert *nd_na;
 	struct in6_addr daddr6, taddr6;
-	struct sockaddr_in6 sin6;
 	union nd_opts ndopts;
 	u_char linkhdr[LLE_MAX_LINKHDR];
 	char ip6bufs[INET6_ADDRSTRLEN], ip6bufd[INET6_ADDRSTRLEN];
@@ -631,6 +630,7 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 	size_t linkhdrsize;
 	int flags, is_override, is_router, is_solicited;
 	int lladdr_off, lladdrlen, checklink;
+	bool flush_holdchain = false;
 
 	NET_EPOCH_ASSERT();
 
@@ -748,7 +748,7 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 	 * If no neighbor cache entry is found, NA SHOULD silently be
 	 * discarded.
 	 */
-	ln = nd6_lookup(&taddr6, LLE_EXCLUSIVE, ifp);
+	ln = nd6_lookup(&taddr6, LLE_SF(AF_INET6, LLE_EXCLUSIVE), ifp);
 	if (ln == NULL) {
 		goto freeit;
 	}
@@ -771,16 +771,10 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 		/*
 		 * Record link-layer address, and update the state.
 		 */
-		linkhdrsize = sizeof(linkhdr);
-		if (lltable_calc_llheader(ifp, AF_INET6, lladdr,
-		    linkhdr, &linkhdrsize, &lladdr_off) != 0)
-			return;
-
-		if (lltable_try_set_entry_addr(ifp, ln, linkhdr, linkhdrsize,
-		    lladdr_off) == 0) {
-			ln = NULL;
+		if (!nd6_try_set_entry_addr(ifp, ln, lladdr))
 			goto freeit;
-		}
+
+		flush_holdchain = true;
 		EVENTHANDLER_INVOKE(lle_event, ln, LLENTRY_RESOLVED);
 		if (is_solicited)
 			nd6_llinfo_setstate(ln, ND6_LLINFO_REACHABLE);
@@ -899,16 +893,16 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 	 *  rt->rt_flags &= ~RTF_REJECT;
 	 */
 	ln->la_asked = 0;
-	if (ln->la_hold != NULL) {
-		memset(&sin6, 0, sizeof(sin6));
-		nd6_grab_holdchain(ln, &chain, &sin6);
-	}
+	if (ln->la_hold != NULL)
+		chain = nd6_grab_holdchain(ln);
  freeit:
 	if (ln != NULL)
 		LLE_WUNLOCK(ln);
 
 	if (chain != NULL)
-		nd6_flush_holdchain(ifp, chain, &sin6);
+		nd6_flush_holdchain(ifp, ln, chain);
+	if (flush_holdchain)
+		nd6_flush_children_holdchain(ifp, ln);
 
 	if (checklink)
 		pfxlist_onlink_check();

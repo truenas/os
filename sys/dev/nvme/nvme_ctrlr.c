@@ -1203,7 +1203,7 @@ nvme_ctrlr_poll(struct nvme_controller *ctrlr)
  * interrupts in the controller.
  */
 void
-nvme_ctrlr_intx_handler(void *arg)
+nvme_ctrlr_shared_handler(void *arg)
 {
 	struct nvme_controller *ctrlr = arg;
 
@@ -1474,6 +1474,8 @@ nvme_ctrlr_destruct(struct nvme_controller *ctrlr, device_t dev)
 
 	if (ctrlr->resource == NULL)
 		goto nores;
+	if (!mtx_initialized(&ctrlr->adminq.lock))
+		goto noadminq;
 
 	/*
 	 * Check whether it is a hot unplug or a clean driver detach.
@@ -1519,6 +1521,7 @@ nvme_ctrlr_destruct(struct nvme_controller *ctrlr, device_t dev)
 	if (!gone)
 		nvme_ctrlr_disable(ctrlr);
 
+noadminq:
 	if (ctrlr->taskqueue)
 		taskqueue_free(ctrlr->taskqueue);
 
