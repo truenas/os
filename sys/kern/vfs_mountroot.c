@@ -369,6 +369,7 @@ vfs_mountroot_shuffle(struct thread *td, struct mount *mpdevfs)
 				cache_purge(vp);
 				mporoot->mnt_vnodecovered = vp;
 				vp->v_mountedhere = mporoot;
+				vn_irflag_set(vp, VIRF_MOUNTPOINT);
 				strlcpy(mporoot->mnt_stat.f_mntonname,
 				    fspath, MNAMELEN);
 				VOP_UNLOCK(vp);
