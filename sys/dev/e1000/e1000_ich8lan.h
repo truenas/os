@@ -329,7 +329,6 @@
 #define E1000_SVT_OFF_HWM_MASK		0x0000001F
 
 #define E1000_PCI_VENDOR_ID_REGISTER	0x00
-#define E1000_PCI_REVISION_ID_REG	0x08
 
 void e1000_set_kmrn_lock_loss_workaround_ich8lan(struct e1000_hw *hw,
 						 bool state);

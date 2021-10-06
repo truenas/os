@@ -1060,7 +1060,7 @@ ipf_proxy_check(fin, nat)
 /*              pr(I)   - protocol number for proxy                         */
 /*              name(I) - proxy name                                        */
 /*                                                                          */
-/* Search for an proxy by the protocol it is being used with and its name.  */
+/* Search for a proxy by the protocol being used and by its name.           */
 /* ------------------------------------------------------------------------ */
 aproxy_t *
 ipf_proxy_lookup(arg, pr, name)
@@ -1354,8 +1354,8 @@ ipf_proxy_rule_rev(nat)
 		if (ipn->in_v[0] == 4) {
 			ipn->in_snip = ntohl(nat->nat_odstaddr);
 			ipn->in_dnip = ntohl(nat->nat_nsrcaddr);
-		} else {
 #ifdef USE_INET6
+		} else {
 			ipn->in_snip6 = nat->nat_odst6;
 			ipn->in_dnip6 = nat->nat_nsrc6;
 #endif

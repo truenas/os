@@ -275,7 +275,7 @@ enum e1000_mac_type {
 	e1000_i211,
 	e1000_vfadapt,
 	e1000_vfadapt_i350,
-	e1000_num_macs  /* List is 1-based, so subtract 1 for TRUE count. */
+	e1000_num_macs  /* List is 1-based, so subtract 1 for true count. */
 };
 
 enum e1000_media_type {
@@ -998,7 +998,6 @@ struct e1000_dev_spec_ich8lan {
 	enum e1000_ulp_state ulp_state;
 	bool ulp_capability_disabled;
 	bool during_suspend_flow;
-	bool during_dpg_exit;
 	bool smbus_disable;
 };
 
@@ -1060,6 +1059,7 @@ struct e1000_hw {
 #include "e1000_ich8lan.h"
 #include "e1000_82575.h"
 #include "e1000_i210.h"
+#include "e1000_base.h"
 
 /* These functions must be implemented by drivers */
 void e1000_pci_clear_mwi(struct e1000_hw *hw);

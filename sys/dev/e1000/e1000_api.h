@@ -46,7 +46,6 @@ extern void e1000_init_function_pointers_82541(struct e1000_hw *hw);
 extern void e1000_init_function_pointers_80003es2lan(struct e1000_hw *hw);
 extern void e1000_init_function_pointers_ich8lan(struct e1000_hw *hw);
 extern void e1000_init_function_pointers_82575(struct e1000_hw *hw);
-extern void e1000_rx_fifo_flush_82575(struct e1000_hw *hw);
 extern void e1000_init_function_pointers_vf(struct e1000_hw *hw);
 extern void e1000_power_up_fiber_serdes_link(struct e1000_hw *hw);
 extern void e1000_shutdown_fiber_serdes_link(struct e1000_hw *hw);
@@ -98,9 +97,9 @@ s32 e1000_phy_commit(struct e1000_hw *hw);
 void e1000_power_up_phy(struct e1000_hw *hw);
 void e1000_power_down_phy(struct e1000_hw *hw);
 s32 e1000_read_mac_addr(struct e1000_hw *hw);
+s32 e1000_read_pba_num(struct e1000_hw *hw, u32 *part_num);
 s32 e1000_read_pba_string(struct e1000_hw *hw, u8 *pba_num, u32 pba_num_size);
 s32 e1000_read_pba_length(struct e1000_hw *hw, u32 *pba_num_size);
-s32 e1000_read_pba_num(struct e1000_hw *hw, u32 *part_num);
 void e1000_reload_nvm(struct e1000_hw *hw);
 s32 e1000_update_nvm_checksum(struct e1000_hw *hw);
 s32 e1000_validate_nvm_checksum(struct e1000_hw *hw);
@@ -141,11 +140,11 @@ u32  e1000_translate_register_82542(u32 reg);
  * Typical use:
  *  ...
  *  if (TBI_ACCEPT) {
- *      accept_frame = TRUE;
+ *      accept_frame = true;
  *      e1000_tbi_adjust_stats(adapter, MacAddress);
  *      frame_length--;
  *  } else {
- *      accept_frame = FALSE;
+ *      accept_frame = false;
  *  }
  *  ...
  */

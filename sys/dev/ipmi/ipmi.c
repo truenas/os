@@ -96,11 +96,14 @@ static int wd_shutdown_countdown = 0; /* sec */
 static int wd_startup_countdown = 0; /* sec */
 static int wd_pretimeout_countdown = 120; /* sec */
 static int cycle_wait = 10; /* sec */
+static int wd_init_enable = 1;
 
 static SYSCTL_NODE(_hw, OID_AUTO, ipmi, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
     "IPMI driver parameters");
 SYSCTL_INT(_hw_ipmi, OID_AUTO, on, CTLFLAG_RWTUN,
 	&on, 0, "");
+SYSCTL_INT(_hw_ipmi, OID_AUTO, wd_init_enable, CTLFLAG_RWTUN,
+	&wd_init_enable, 1, "Enable watchdog initialization");
 SYSCTL_INT(_hw_ipmi, OID_AUTO, wd_timer_actions, CTLFLAG_RW,
 	&wd_timer_actions, 0,
 	"IPMI watchdog timer actions (including pre-timeout interrupt)");
@@ -665,7 +668,8 @@ ipmi_set_watchdog(struct ipmi_softc *sc, unsigned int sec)
 		req->ir_request[0] = IPMI_SET_WD_TIMER_DONT_STOP
 		    | IPMI_SET_WD_TIMER_SMS_OS;
 		req->ir_request[1] = (wd_timer_actions & 0xff);
-		req->ir_request[2] = (wd_pretimeout_countdown & 0xff);
+		req->ir_request[2] = min(0xff,
+		    min(wd_pretimeout_countdown, (sec + 2) / 4));
 		req->ir_request[3] = 0;	/* Timer use */
 		req->ir_request[4] = (sec * 10) & 0xff;
 		req->ir_request[5] = (sec * 10) >> 8;
@@ -909,7 +913,7 @@ ipmi_startup(void *arg)
 	 * Probe for watchdog, but only for backends which support
 	 * polled driver requests.
 	 */
-	if (sc->ipmi_driver_requests_polled) {
+	if (wd_init_enable && sc->ipmi_driver_requests_polled) {
 		IPMI_INIT_DRIVER_REQUEST(req, IPMI_ADDR(IPMI_APP_REQUEST, 0),
 		    IPMI_GET_WDOG, 0, 0);
 

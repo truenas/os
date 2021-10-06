@@ -578,7 +578,7 @@ s32 e1000_read_nvm_eerd(struct e1000_hw *hw, u16 offset, u16 words, u16 *data)
 	}
 
 	for (i = 0; i < words; i++) {
-		eerd = ((offset+i) << E1000_NVM_RW_ADDR_SHIFT) +
+		eerd = ((offset + i) << E1000_NVM_RW_ADDR_SHIFT) +
 		       E1000_NVM_RW_REG_START;
 
 		E1000_WRITE_REG(hw, E1000_EERD, eerd);
@@ -1321,7 +1321,7 @@ void e1000_get_fw_version(struct e1000_hw *hw, struct e1000_fw_version *fw_vers)
 			e1000_read_invm_version(hw, fw_vers);
 			return;
 		}
-		/* fall through */
+		/* FALLTHROUGH */
 	case e1000_i350:
 		hw->nvm.ops.read(hw, NVM_ETRACK_HIWORD, 1, &etrack_test);
 		/* find combo image version */

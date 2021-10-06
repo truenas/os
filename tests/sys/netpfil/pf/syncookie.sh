@@ -29,6 +29,48 @@
 
 common_dir=$(atf_get_srcdir)/../common
 
+atf_test_case "basic" "cleanup"
+basic_head()
+{
+	atf_set descr 'Basic syncookie test'
+	atf_set require.user root
+}
+
+basic_body()
+{
+	pft_init
+
+	epair=$(vnet_mkepair)
+
+	vnet_mkjail alcatraz ${epair}b
+	jexec alcatraz ifconfig ${epair}b 192.0.2.1/24 up
+	jexec alcatraz /usr/sbin/inetd -p inetd-alcatraz.pid \
+	    $(atf_get_srcdir)/echo_inetd.conf
+
+	ifconfig ${epair}a 192.0.2.2/24 up
+
+	jexec alcatraz pfctl -e
+	pft_set_rules alcatraz \
+		"set syncookies always" \
+		"pass in" \
+		"pass out"
+
+	# Sanity check
+	atf_check -s exit:0 -o ignore ping -c 1 192.0.2.1
+
+	reply=$(echo foo | nc -N -w 5 192.0.2.1 7)
+	if [ "${reply}" != "foo" ];
+	then
+		atf_fail "Failed to connect to syncookie protected echo daemon"
+	fi
+}
+
+basic_cleanup()
+{
+	rm -f inetd-alcatraz.pid
+	pft_cleanup
+}
+
 atf_test_case "forward" "cleanup"
 forward_head()
 {
@@ -126,8 +168,59 @@ nostate_cleanup()
 	pft_cleanup
 }
 
+atf_test_case "adaptive" "cleanup"
+adaptive_head()
+{
+	atf_set descr 'Adaptive mode test'
+	atf_set require.user root
+	atf_set require.progs scapy
+}
+
+adaptive_body()
+{
+	pft_init
+
+	epair=$(vnet_mkepair)
+	ifconfig ${epair}a 192.0.2.2/24 up
+
+	vnet_mkjail alcatraz ${epair}b
+	jexec alcatraz ifconfig ${epair}b 192.0.2.1/24 up
+
+	jexec alcatraz pfctl -e
+	pft_set_rules alcatraz \
+		"set limit states 100" \
+		"set syncookies adaptive (start 10%%, end 5%%)" \
+		"pass in" \
+		"pass out"
+
+	# Sanity check
+	atf_check -s exit:0 -o ignore ping -c 1 192.0.2.1
+
+	# Now syn flood to create many states
+	${common_dir}/pft_synflood.py \
+		--sendif ${epair}a \
+		--to 192.0.2.2 \
+		--count 100
+
+	# Adaptive mode should kick in and stop us from creating more than
+	# about 10 states
+	states=$(jexec alcatraz pfctl -ss | grep tcp | wc -l)
+	if [ "$states" -gt 20 ];
+	then
+		echo "$states"
+		atf_fail "Found unexpected states"
+	fi
+}
+
+adaptive_cleanup()
+{
+	pft_cleanup
+}
+
 atf_init_test_cases()
 {
+	atf_add_test_case "basic"
 	atf_add_test_case "forward"
 	atf_add_test_case "nostate"
+	atf_add_test_case "adaptive"
 }

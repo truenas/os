@@ -558,8 +558,8 @@ struct pf_kpool {
 };
 
 struct pf_rule_actions {
-	u_int32_t       qid;
-	u_int32_t       pqid;
+	uint16_t	 qid;
+	uint16_t	 pqid;
 };
 
 union pf_krule_ptr {
@@ -603,8 +603,8 @@ struct pf_krule {
 		u_int32_t		limit;
 		u_int32_t		seconds;
 	}			 max_src_conn_rate;
-	u_int32_t		 qid;
-	u_int32_t		 pqid;
+	u_int16_t		 qid;
+	u_int16_t		 pqid;
 	u_int32_t		 nr;
 	u_int32_t		 prob;
 	uid_t			 cuid;
@@ -853,8 +853,8 @@ struct pf_kstate {
 	u_int32_t		 creation;
 	u_int32_t	 	 expire;
 	u_int32_t		 pfsync_time;
-	u_int32_t                qid;
-	u_int32_t                pqid;
+	u_int16_t                qid;
+	u_int16_t                pqid;
 	u_int16_t		 tag;
 	u_int8_t		 log;
 };
@@ -1369,8 +1369,12 @@ struct pf_pdesc {
 enum pf_syncookies_mode {
 	PF_SYNCOOKIES_NEVER = 0,
 	PF_SYNCOOKIES_ALWAYS = 1,
-	PF_SYNCOOKIES_MODE_MAX = PF_SYNCOOKIES_ALWAYS
+	PF_SYNCOOKIES_ADAPTIVE = 2,
+	PF_SYNCOOKIES_MODE_MAX = PF_SYNCOOKIES_ADAPTIVE
 };
+
+#define	PF_SYNCOOKIES_HIWATPCT	25
+#define	PF_SYNCOOKIES_LOWATPCT	(PF_SYNCOOKIES_HIWATPCT / 2)
 
 #ifdef _KERNEL
 struct pf_kstatus {
@@ -1389,6 +1393,8 @@ struct pf_kstatus {
 	bool		keep_counters;
 	enum pf_syncookies_mode	syncookies_mode;
 	bool		syncookies_active;
+	uint64_t	syncookies_inflight[2];
+	uint32_t	states_halfopen;
 };
 #endif
 
@@ -2079,7 +2085,6 @@ int		 pf_match_tag(struct mbuf *, struct pf_krule *, int *, int);
 int		 pf_tag_packet(struct mbuf *, struct pf_pdesc *, int);
 int		 pf_addr_cmp(struct pf_addr *, struct pf_addr *,
 		    sa_family_t);
-void		 pf_qid2qname(u_int32_t, char *);
 
 u_int16_t	 pf_get_mss(struct mbuf *, int, u_int16_t, sa_family_t);
 u_int8_t	 pf_get_wscale(struct mbuf *, int, u_int16_t, sa_family_t);

@@ -171,7 +171,8 @@
 #define E1000_RADV	0x0282C  /* Rx Interrupt Absolute Delay Timer - RW */
 #define E1000_EMIADD	0x10     /* Extended Memory Indirect Address */
 #define E1000_EMIDATA	0x11     /* Extended Memory Indirect Data */
-#define E1000_SRWR		0x12018  /* Shadow Ram Write Register - RW */
+/* Shadow Ram Write Register - RW */
+#define E1000_SRWR		0x12018
 #define E1000_EEC_REG		0x12010
 
 #define E1000_I210_FLMNGCTL	0x12038
@@ -538,7 +539,8 @@
 #define E1000_GSCL_2	0x05B14 /* PCI-Ex Statistic Control #2 */
 #define E1000_GSCL_3	0x05B18 /* PCI-Ex Statistic Control #3 */
 #define E1000_GSCL_4	0x05B1C /* PCI-Ex Statistic Control #4 */
-#define E1000_FACTPS	0x05B30 /* Function Active and Power State to MNG */
+/* Function Active and Power State to MNG */
+#define E1000_FACTPS	0x05B30
 #define E1000_SWSM	0x05B50 /* SW Semaphore */
 #define E1000_FWSM	0x05B54 /* FW Semaphore */
 /* Driver-only SW semaphore (not used by BOOT agents) */
@@ -557,8 +559,10 @@
 #define E1000_IMIREXT(_i)	(0x05AA0 + ((_i) * 4)) /* Immediate INTR Ext*/
 #define E1000_IMIRVP		0x05AC0 /* Immediate INT Rx VLAN Priority -RW */
 #define E1000_MSIXBM(_i)	(0x01600 + ((_i) * 4)) /* MSI-X Alloc Reg -RW */
-#define E1000_RETA(_i)	(0x05C00 + ((_i) * 4)) /* Redirection Table - RW */
-#define E1000_RSSRK(_i)	(0x05C80 + ((_i) * 4)) /* RSS Random Key - RW */
+/* Redirection Table - RW Array */
+#define E1000_RETA(_i)	(0x05C00 + ((_i) * 4))
+/* RSS Random Key - RW Array */
+#define E1000_RSSRK(_i)	(0x05C80 + ((_i) * 4))
 #define E1000_RSSIM	0x05864 /* RSS Interrupt Mask */
 #define E1000_RSSIR	0x05868 /* RSS Interrupt Request */
 /* VT Registers */
@@ -627,6 +631,14 @@
 #define E1000_TTQF(_n)	(0x059E0 + (4 * (_n))) /* 2-tuple Queue Fltr */
 #define E1000_SYNQF(_n)	(0x055FC + (4 * (_n))) /* SYN Packet Queue Fltr */
 #define E1000_ETQF(_n)	(0x05CB0 + (4 * (_n))) /* EType Queue Fltr */
+
+/* ETQF register bit definitions */
+#define E1000_ETQF_FILTER_ENABLE	(1 << 26)
+#define E1000_ETQF_IMM_INT		(1 << 29)
+#define E1000_ETQF_QUEUE_ENABLE		(1U << 31)
+#define E1000_ETQF_QUEUE_SHIFT		16
+#define E1000_ETQF_QUEUE_MASK		0x00070000
+#define E1000_ETQF_ETYPE_MASK		0x0000FFFF
 
 #define E1000_RTTDCS	0x3600 /* Reedtown Tx Desc plane control and status */
 #define E1000_RTTPCS	0x3474 /* Reedtown Tx Packet Plane control and status */

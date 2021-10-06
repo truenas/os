@@ -595,7 +595,13 @@ vt_window_switch(struct vt_window *vw)
 
 	VT_LOCK(vd);
 	if (curvw == vw) {
-		/* Nothing to do. */
+		/*
+		 * Nothing to do, except ensure the driver has the opportunity to
+		 * switch to console mode when panicking, making sure the panic
+		 * is readable (even when a GUI was using ttyv0).
+		 */
+		if ((kdb_active || panicstr) && vd->vd_driver->vd_postswitch)
+			vd->vd_driver->vd_postswitch(vd);
 		VT_UNLOCK(vd);
 		return (0);
 	}
@@ -2890,7 +2896,7 @@ vt_allocate_window(struct vt_device *vd, unsigned int window)
 
 	terminal_set_winsize(tm, &wsz);
 	vd->vd_windows[window] = vw;
-	callout_init(&vw->vw_proc_dead_timer, 0);
+	callout_init(&vw->vw_proc_dead_timer, 1);
 
 	return (vw);
 }
@@ -2914,7 +2920,7 @@ vt_upgrade(struct vt_device *vd)
 			vw = vt_allocate_window(vd, i);
 		}
 		if (!(vw->vw_flags & VWF_READY)) {
-			callout_init(&vw->vw_proc_dead_timer, 0);
+			callout_init(&vw->vw_proc_dead_timer, 1);
 			terminal_maketty(vw->vw_terminal, "v%r", VT_UNIT(vw));
 			vw->vw_flags |= VWF_READY;
 			if (vw->vw_flags & VWF_CONSOLE) {

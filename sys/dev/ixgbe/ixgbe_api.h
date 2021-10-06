@@ -1,7 +1,7 @@
 /******************************************************************************
   SPDX-License-Identifier: BSD-3-Clause
 
-  Copyright (c) 2001-2017, Intel Corporation
+  Copyright (c) 2001-2020, Intel Corporation
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -217,6 +217,7 @@ void ixgbe_disable_mdd(struct ixgbe_hw *hw);
 void ixgbe_enable_mdd(struct ixgbe_hw *hw);
 void ixgbe_mdd_event(struct ixgbe_hw *hw, u32 *vf_bitmap);
 void ixgbe_restore_mdd_vf(struct ixgbe_hw *hw, u32 vf);
+bool ixgbe_fw_recovery_mode(struct ixgbe_hw *hw);
 s32 ixgbe_enter_lplu(struct ixgbe_hw *hw);
 s32 ixgbe_handle_lasi(struct ixgbe_hw *hw);
 void ixgbe_set_rate_select_speed(struct ixgbe_hw *hw, ixgbe_link_speed speed);

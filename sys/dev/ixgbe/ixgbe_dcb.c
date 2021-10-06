@@ -1,7 +1,7 @@
 /******************************************************************************
   SPDX-License-Identifier: BSD-3-Clause
 
-  Copyright (c) 2001-2017, Intel Corporation
+  Copyright (c) 2001-2020, Intel Corporation
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -301,11 +301,11 @@ void ixgbe_dcb_unpack_map_cee(struct ixgbe_dcb_config *cfg, int direction,
  * The following rules are checked:
  * 1. The sum of bandwidth percentages of all Bandwidth Groups must total 100%.
  * 2. The sum of bandwidth percentages of all Traffic Classes within a Bandwidth
- *    Group must total 100.
+ *   Group must total 100.
  * 3. A Traffic Class should not be set to both Link Strict Priority
- *    and Group Strict Priority.
+ *   and Group Strict Priority.
  * 4. Link strict Bandwidth Groups can only have link strict traffic classes
- *    with zero bandwidth.
+ *   with zero bandwidth.
  */
 s32 ixgbe_dcb_check_config_cee(struct ixgbe_dcb_config *dcb_config)
 {
@@ -332,7 +332,7 @@ s32 ixgbe_dcb_check_config_cee(struct ixgbe_dcb_config *dcb_config)
 				goto err_config;
 			}
 			if (p->tsa == ixgbe_dcb_tsa_strict) {
-				link_strict[i][bw_id] = TRUE;
+				link_strict[i][bw_id] = true;
 				/* Link strict should have zero bandwidth */
 				if (bw) {
 					ret_val = IXGBE_ERR_CONFIG;

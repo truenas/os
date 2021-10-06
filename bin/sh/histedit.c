@@ -501,6 +501,13 @@ bindcmd(int argc, char **argv)
 
 	fclose(out);
 
+	if (argc > 1 && argv[1][0] == '-' &&
+	    memchr("ve", argv[1][1], 2) != NULL) {
+		Vflag = argv[1][1] == 'v';
+		Eflag = !Vflag;
+		histedit();
+	}
+
 	INTON;
 
 	return ret;
@@ -530,8 +537,8 @@ static char
 	char *free_path = NULL, *path;
 	const char *dirname;
 	char **matches = NULL;
-	size_t i = 0, size = 16, j, k;
-	size_t curpos = end - start;
+	size_t i = 0, size = 16, uniq;
+	size_t curpos = end - start, lcstring = -1;
 
 	if (start > 0 || memchr("/.~", text[0], 3) != NULL)
 		return (NULL);
@@ -579,6 +586,30 @@ static char
 	}
 out:
 	free(free_path);
+	if (i == 0) {
+		free(matches);
+		return (NULL);
+	}
+	uniq = 1;
+	if (i > 1) {
+		qsort_s(matches + 1, i, sizeof(matches[0]), comparator,
+			(void *)(intptr_t)curpos);
+		for (size_t k = 2; k <= i; k++) {
+			const char *l = matches[uniq] + curpos;
+			const char *r = matches[k] + curpos;
+			size_t common = 0;
+
+			while (*l != '\0' && *r != '\0' && *l == *r)
+				(void)l++, r++, common++;
+			if (common < lcstring)
+				lcstring = common;
+			if (*l == *r)
+				free(matches[k]);
+			else
+				matches[++uniq] = matches[k];
+		}
+	}
+	matches[uniq + 1] = NULL;
 	/*
 	 * matches[0] is special: it's not a real matching file name but a common
 	 * prefix for all matching names. It can't be null, unlike any other
@@ -588,30 +619,18 @@ out:
 	 * string in matches[0] which is the reason to copy the full name of the
 	 * only match.
 	 */
-	if (i == 0) {
-		free(matches);
-		return (NULL);
-	} else if (i == 1) {
+	if (uniq == 1)
 		matches[0] = strdup(matches[1]);
-		matches[2] = NULL;
-		if (matches[0] != NULL)
-			return (matches);
-	} else
+	else if (lcstring != (size_t)-1)
+		matches[0] = strndup(matches[1], curpos + lcstring);
+	else
 		matches[0] = strdup(text);
 	if (matches[0] == NULL) {
-		for (j = 1; j <= i; j++)
-			free(matches[j]);
+		for (size_t k = 1; k <= uniq; k++)
+			free(matches[k]);
 		free(matches);
 		return (NULL);
 	}
-	qsort_s(matches + 1, i, sizeof(matches[0]), comparator,
-		(void *)(intptr_t)curpos);
-	for (j = 1, k = 2; k <= i; k++)
-		if (strcmp(matches[j] + curpos, matches[k] + curpos) == 0)
-			free(matches[k]);
-		else
-			matches[++j] = matches[k];
-	matches[j + 1] = NULL;
 	return (matches);
 }
 

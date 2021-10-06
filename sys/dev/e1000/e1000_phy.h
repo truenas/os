@@ -122,6 +122,11 @@ s32 e1000_write_phy_reg_mphy(struct e1000_hw *hw, u32 address, u32 data,
 			     bool line_override);
 bool e1000_is_mphy_ready(struct e1000_hw *hw);
 
+s32 e1000_read_xmdio_reg(struct e1000_hw *hw, u16 addr, u8 dev_addr,
+			 u16 *data);
+s32 e1000_write_xmdio_reg(struct e1000_hw *hw, u16 addr, u8 dev_addr,
+			  u16 data);
+
 #define E1000_MAX_PHY_ADDR		8
 
 /* IGP01E1000 Specific Registers */
@@ -283,8 +288,6 @@ bool e1000_is_mphy_ready(struct e1000_hw *hw);
 	(3 << E1000_KMRNCTRLSTA_K0S_CTRL_ENTRY_LTNCY_SHIFT)
 #define E1000_KMRNCTRLSTA_K0S_CTRL_MIN_TIME_MASK \
 	(7 << E1000_KMRNCTRLSTA_K0S_CTRL_MIN_TIME_SHIFT)
-#define E1000_KMRNCTRLSTA_OP_MODES	0x1F   /* Kumeran Modes of Operation */
-#define E1000_KMRNCTRLSTA_OP_MODES_LSC2CSC	0x0002 /* change LSC to CSC */
 
 #define IFE_PHY_EXTENDED_STATUS_CONTROL	0x10
 #define IFE_PHY_SPECIAL_CONTROL		0x11 /* 100BaseTx PHY Special Ctrl */
