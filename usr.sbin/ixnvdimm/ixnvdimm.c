@@ -169,7 +169,7 @@ factory_default(int fd)
 }
 
 static void
-firmware_update(int fd, struct ixnvdimm_info *info, const char *f)
+firmware_update(int fd, struct ixnvdimm_info *info, const char *f, int I)
 {
 	struct ixnvdimm_dsm dsm;
 	int b, error = 0, ffd, r, rbs, regions, t, timeout, atimeout, try;
@@ -206,7 +206,9 @@ firmware_update(int fd, struct ixnvdimm_info *info, const char *f)
 	close(ffd);
 
 	/* Validate firmware image header. */
-	if (image[31] == 0)
+	if (I)
+		t = 0;		/* Ignore any identifiers difference. */
+	else if (image[31] == 0)
 		t = 0x03;
 	else if (image[31] == 1)
 		t = image[19];
@@ -826,7 +828,7 @@ usage(const char *progname)
 	fprintf(stderr, "usage: %s {nvdimm}\n", progname);
 	fprintf(stderr, "       %s -F {nvdimm}\n", progname);
 	fprintf(stderr, "       %s -d {nvdimm}\n", progname);
-	fprintf(stderr, "       %s -f {firmware} {nvdimm}\n", progname);
+	fprintf(stderr, "       %s -f {firmware} [-I] {nvdimm}\n", progname);
 	fprintf(stderr, "       %s -r [-h] {nvdimm} [{page} [{off}] | {reg}]\n", progname);
 	fprintf(stderr, "       %s -w [-h] {nvdimm} ({page} {off} | {reg}) {val}\n", progname);
 	exit(1);
@@ -839,7 +841,7 @@ main(int argc, char *argv[])
 	const char *progname, *devname, *f = NULL;
 	char *e;
 	struct ixnvdimm_dsm dsm;
-	int F = 0, b, c, d = 0, i, fd, h = 0, r = 0, w = 0;
+	int F = 0, I = 0, b, c, d = 0, i, fd, h = 0, r = 0, w = 0;
 	int page = -1, off = -1, size = 1;
 	uint32_t status, funcs, val;
 	uint8_t	buf[4];
@@ -848,13 +850,16 @@ main(int argc, char *argv[])
 	uuid_from_string(MGUID, &mguid, &status);
 	assert(status == uuid_s_ok);
 
-	while ((c = getopt(argc, argv, "Fdf:hrw")) != -1) {
+	while ((c = getopt(argc, argv, "FIdf:hrw")) != -1) {
 		switch (c) {
 		case 'd':
 			d = 1;
 			break;
 		case 'F':
 			F = 1;
+			break;
+		case 'I':
+			I = 1;
 			break;
 		case 'f':
 			f = optarg;
@@ -941,7 +946,7 @@ main(int argc, char *argv[])
 			errx(EX_UNAVAILABLE, "Required Microsoft DSM functions "
 			    "are not supported: 0x%08x\n", funcs);
 		}
-		firmware_update(fd, &info, f);
+		firmware_update(fd, &info, f, I);
 		goto done;
 	}
 	if (r || w) {
