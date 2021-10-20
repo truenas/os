@@ -123,6 +123,12 @@ options		PCI_IOV			# PCI SR-IOV support
 
 options 	COMPAT_LINUXKPI
 
+# Enable support for the kernel PLL to use an external PPS signal,
+# under supervision of [x]ntpd(8)
+# More info in ntpd documentation: http://www.eecis.udel.edu/~ntp
+
+options 	PPS_SYNC
+
 # Floppy drives
 device		fdc
 
@@ -361,6 +367,9 @@ device		vtnet			# VirtIO Ethernet device
 device		virtio_blk		# VirtIO Block device
 device		virtio_scsi		# VirtIO SCSI device
 device		virtio_balloon		# VirtIO Memory Balloon device
+
+# Linux KVM paravirtualization support
+device		kvm_clock		# KVM paravirtual clock driver
 
 # HyperV drivers and enhancement support
 device		hyperv			# HyperV drivers 

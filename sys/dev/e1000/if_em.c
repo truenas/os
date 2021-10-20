@@ -248,55 +248,55 @@ static pci_vendor_info_t igb_vendor_info_array[] =
 /*********************************************************************
  *  Function prototypes
  *********************************************************************/
-static void	*em_register(device_t dev);
-static void	*igb_register(device_t dev);
-static int	em_if_attach_pre(if_ctx_t ctx);
-static int	em_if_attach_post(if_ctx_t ctx);
-static int	em_if_detach(if_ctx_t ctx);
-static int	em_if_shutdown(if_ctx_t ctx);
-static int	em_if_suspend(if_ctx_t ctx);
-static int	em_if_resume(if_ctx_t ctx);
+static void	*em_register(device_t);
+static void	*igb_register(device_t);
+static int	em_if_attach_pre(if_ctx_t);
+static int	em_if_attach_post(if_ctx_t);
+static int	em_if_detach(if_ctx_t);
+static int	em_if_shutdown(if_ctx_t);
+static int	em_if_suspend(if_ctx_t);
+static int	em_if_resume(if_ctx_t);
 
-static int	em_if_tx_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs, int ntxqs, int ntxqsets);
-static int	em_if_rx_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs, int nrxqs, int nrxqsets);
-static void	em_if_queues_free(if_ctx_t ctx);
+static int	em_if_tx_queues_alloc(if_ctx_t, caddr_t *, uint64_t *, int, int);
+static int	em_if_rx_queues_alloc(if_ctx_t, caddr_t *, uint64_t *, int, int);
+static void	em_if_queues_free(if_ctx_t);
 
 static uint64_t	em_if_get_counter(if_ctx_t, ift_counter);
-static void	em_if_init(if_ctx_t ctx);
-static void	em_if_stop(if_ctx_t ctx);
+static void	em_if_init(if_ctx_t);
+static void	em_if_stop(if_ctx_t);
 static void	em_if_media_status(if_ctx_t, struct ifmediareq *);
-static int	em_if_media_change(if_ctx_t ctx);
-static int	em_if_mtu_set(if_ctx_t ctx, uint32_t mtu);
-static void	em_if_timer(if_ctx_t ctx, uint16_t qid);
-static void	em_if_vlan_register(if_ctx_t ctx, u16 vtag);
-static void	em_if_vlan_unregister(if_ctx_t ctx, u16 vtag);
-static void	em_if_watchdog_reset(if_ctx_t ctx);
-static bool	em_if_needs_restart(if_ctx_t ctx, enum iflib_restart_event event);
+static int	em_if_media_change(if_ctx_t);
+static int	em_if_mtu_set(if_ctx_t, uint32_t);
+static void	em_if_timer(if_ctx_t, uint16_t);
+static void	em_if_vlan_register(if_ctx_t, u16);
+static void	em_if_vlan_unregister(if_ctx_t, u16);
+static void	em_if_watchdog_reset(if_ctx_t);
+static bool	em_if_needs_restart(if_ctx_t, enum iflib_restart_event);
 
-static void	em_identify_hardware(if_ctx_t ctx);
-static int	em_allocate_pci_resources(if_ctx_t ctx);
-static void	em_free_pci_resources(if_ctx_t ctx);
-static void	em_reset(if_ctx_t ctx);
-static int	em_setup_interface(if_ctx_t ctx);
-static int	em_setup_msix(if_ctx_t ctx);
+static void	em_identify_hardware(if_ctx_t);
+static int	em_allocate_pci_resources(if_ctx_t);
+static void	em_free_pci_resources(if_ctx_t);
+static void	em_reset(if_ctx_t);
+static int	em_setup_interface(if_ctx_t);
+static int	em_setup_msix(if_ctx_t);
 
-static void	em_initialize_transmit_unit(if_ctx_t ctx);
-static void	em_initialize_receive_unit(if_ctx_t ctx);
+static void	em_initialize_transmit_unit(if_ctx_t);
+static void	em_initialize_receive_unit(if_ctx_t);
 
-static void	em_if_intr_enable(if_ctx_t ctx);
-static void	em_if_intr_disable(if_ctx_t ctx);
-static void	igb_if_intr_enable(if_ctx_t ctx);
-static void	igb_if_intr_disable(if_ctx_t ctx);
-static int	em_if_rx_queue_intr_enable(if_ctx_t ctx, uint16_t rxqid);
-static int	em_if_tx_queue_intr_enable(if_ctx_t ctx, uint16_t txqid);
-static int	igb_if_rx_queue_intr_enable(if_ctx_t ctx, uint16_t rxqid);
-static int	igb_if_tx_queue_intr_enable(if_ctx_t ctx, uint16_t txqid);
-static void	em_if_multi_set(if_ctx_t ctx);
-static void	em_if_update_admin_status(if_ctx_t ctx);
-static void	em_if_debug(if_ctx_t ctx);
+static void	em_if_intr_enable(if_ctx_t);
+static void	em_if_intr_disable(if_ctx_t);
+static void	igb_if_intr_enable(if_ctx_t);
+static void	igb_if_intr_disable(if_ctx_t);
+static int	em_if_rx_queue_intr_enable(if_ctx_t, uint16_t);
+static int	em_if_tx_queue_intr_enable(if_ctx_t, uint16_t);
+static int	igb_if_rx_queue_intr_enable(if_ctx_t, uint16_t);
+static int	igb_if_tx_queue_intr_enable(if_ctx_t, uint16_t);
+static void	em_if_multi_set(if_ctx_t);
+static void	em_if_update_admin_status(if_ctx_t);
+static void	em_if_debug(if_ctx_t);
 static void	em_update_stats_counters(struct e1000_softc *);
 static void	em_add_hw_stats(struct e1000_softc *);
-static int	em_if_set_promisc(if_ctx_t ctx, int flags);
+static int	em_if_set_promisc(if_ctx_t, int);
 static bool	em_if_vlan_filter_capable(struct e1000_softc *);
 static bool	em_if_vlan_filter_used(struct e1000_softc *);
 static void	em_if_vlan_filter_enable(struct e1000_softc *);
@@ -305,6 +305,10 @@ static void	em_if_vlan_filter_write(struct e1000_softc *);
 static void	em_setup_vlan_hw_support(struct e1000_softc *);
 static int	em_sysctl_nvm_info(SYSCTL_HANDLER_ARGS);
 static void	em_print_nvm_info(struct e1000_softc *);
+static void	em_fw_version_locked(if_ctx_t);
+static void	em_sbuf_fw_version(struct e1000_fw_version *, struct sbuf *);
+static void	em_print_fw_version(struct e1000_softc *);
+static int	em_sysctl_print_fw_version(SYSCTL_HANDLER_ARGS);
 static int	em_sysctl_debug_info(SYSCTL_HANDLER_ARGS);
 static int	em_get_rs(SYSCTL_HANDLER_ARGS);
 static void	em_print_debug_info(struct e1000_softc *);
@@ -317,23 +321,23 @@ static void	em_init_manageability(struct e1000_softc *);
 static void	em_release_manageability(struct e1000_softc *);
 static void	em_get_hw_control(struct e1000_softc *);
 static void	em_release_hw_control(struct e1000_softc *);
-static void	em_get_wakeup(if_ctx_t ctx);
-static void	em_enable_wakeup(if_ctx_t ctx);
+static void	em_get_wakeup(if_ctx_t);
+static void	em_enable_wakeup(if_ctx_t);
 static int	em_enable_phy_wakeup(struct e1000_softc *);
 static void	em_disable_aspm(struct e1000_softc *);
 
-int		em_intr(void *arg);
+int		em_intr(void *);
 
 /* MSI-X handlers */
 static int	em_if_msix_intr_assign(if_ctx_t, int);
 static int	em_msix_link(void *);
-static void	em_handle_link(void *context);
+static void	em_handle_link(void *);
 
 static void	em_enable_vectors_82574(if_ctx_t);
 
 static int	em_set_flowcntl(SYSCTL_HANDLER_ARGS);
 static int	em_sysctl_eee(SYSCTL_HANDLER_ARGS);
-static void	em_if_led_func(if_ctx_t ctx, int onoff);
+static void	em_if_led_func(if_ctx_t, int);
 
 static int	em_get_regs(SYSCTL_HANDLER_ARGS);
 
@@ -792,6 +796,8 @@ em_if_attach_pre(if_ctx_t ctx)
 	if_softc_ctx_t scctx;
 	device_t dev;
 	struct e1000_hw *hw;
+	struct sysctl_oid_list *child;
+	struct sysctl_ctx_list *ctx_list;
 	int error = 0;
 
 	INIT_DEBUGOUT("em_if_attach_pre: begin");
@@ -806,36 +812,37 @@ em_if_attach_pre(if_ctx_t ctx)
 
 	sc->tx_process_limit = scctx->isc_ntxd[0];
 
+	/* Determine hardware and mac info */
+	em_identify_hardware(ctx);
+
 	/* SYSCTL stuff */
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "nvm", CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT,
-	    sc, 0, em_sysctl_nvm_info, "I", "NVM Information");
+	ctx_list = device_get_sysctl_ctx(dev);
+	child = SYSCTL_CHILDREN(device_get_sysctl_tree(dev));
 
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "debug", CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT,
-	    sc, 0, em_sysctl_debug_info, "I", "Debug Information");
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "nvm",
+	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, sc, 0,
+	    em_sysctl_nvm_info, "I", "NVM Information");
 
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "fc", CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT,
-	    sc, 0, em_set_flowcntl, "I", "Flow Control");
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "fw_version",
+	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT, sc, 0,
+	    em_sysctl_print_fw_version, "A",
+	    "Prints FW/NVM Versions");
 
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "reg_dump",
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "debug",
+	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, sc, 0,
+	    em_sysctl_debug_info, "I", "Debug Information");
+
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "fc",
+	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, sc, 0,
+	    em_set_flowcntl, "I", "Flow Control");
+
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "reg_dump",
 	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_NEEDGIANT, sc, 0,
 	    em_get_regs, "A", "Dump Registers");
 
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "rs_dump",
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "rs_dump",
 	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, sc, 0,
 	    em_get_rs, "I", "Dump RS indexes");
-
-	/* Determine hardware and mac info */
-	em_identify_hardware(ctx);
 
 	scctx->isc_tx_nsegments = EM_MAX_SCATTER;
 	scctx->isc_nrxqsets_max = scctx->isc_ntxqsets_max = em_set_num_queues(ctx);
@@ -1045,12 +1052,9 @@ em_if_attach_pre(if_ctx_t ctx)
 
 	/* Sysctl for setting Energy Efficient Ethernet */
 	hw->dev_spec.ich8lan.eee_disable = eee_setting;
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "eee_control",
-	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT,
-	    sc, 0, em_sysctl_eee, "I",
-	    "Disable Energy Efficient Ethernet");
+	SYSCTL_ADD_PROC(ctx_list, child, OID_AUTO, "eee_control",
+	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, sc, 0,
+	    em_sysctl_eee, "I", "Disable Energy Efficient Ethernet");
 
 	/*
 	** Start from a known state, this is
@@ -1092,6 +1096,11 @@ em_if_attach_pre(if_ctx_t ctx)
 			goto err_late;
 		}
 	}
+
+	/* Save the EEPROM/NVM versions, must be done under IFLIB_CTX_LOCK */
+	em_fw_version_locked(ctx);
+
+	em_print_fw_version(sc);
 
 	/* Disable ULP support */
 	e1000_disable_ulp_lpt_lp(hw, true);
@@ -4476,6 +4485,122 @@ em_add_hw_stats(struct e1000_softc *sc)
 			"Interrupt Cause Receiver Overrun Count");
 }
 
+static void
+em_fw_version_locked(if_ctx_t ctx)
+{
+	struct e1000_softc *sc = iflib_get_softc(ctx);
+	struct e1000_hw *hw = &sc->hw;
+	struct e1000_fw_version *fw_ver = &sc->fw_ver;
+	uint16_t eep = 0;
+
+	/*
+	 * em_fw_version_locked() must run under the IFLIB_CTX_LOCK to meet the
+	 * NVM locking model, so we do it in em_if_attach_pre() and store the
+	 * info in the softc
+	 */
+	ASSERT_CTX_LOCK_HELD(hw);
+
+	*fw_ver = (struct e1000_fw_version){0};
+
+	if (hw->mac.type >= igb_mac_min) {
+		/*
+		 * Use the Shared Code for igb(4)
+		 */
+		e1000_get_fw_version(hw, fw_ver);
+	} else {
+		/*
+		 * Otherwise, EEPROM version should be present on (almost?) all
+		 * devices here
+		 */
+		if(e1000_read_nvm(hw, NVM_VERSION, 1, &eep)) {
+			INIT_DEBUGOUT("can't get EEPROM version");
+			return;
+		}
+
+		fw_ver->eep_major = (eep & NVM_MAJOR_MASK) >> NVM_MAJOR_SHIFT;
+		fw_ver->eep_minor = (eep & NVM_MINOR_MASK) >> NVM_MINOR_SHIFT;
+		fw_ver->eep_build = (eep & NVM_IMAGE_ID_MASK);
+	}
+}
+
+static void
+em_sbuf_fw_version(struct e1000_fw_version *fw_ver, struct sbuf *buf)
+{
+	const char *space = "";
+
+	if (fw_ver->eep_major || fw_ver->eep_minor || fw_ver->eep_build) {
+		sbuf_printf(buf, "EEPROM V%d.%d-%d", fw_ver->eep_major,
+			    fw_ver->eep_minor, fw_ver->eep_build);
+		space = " ";
+	}
+
+	if (fw_ver->invm_major || fw_ver->invm_minor || fw_ver->invm_img_type) {
+		sbuf_printf(buf, "%sNVM V%d.%d imgtype%d",
+			    space, fw_ver->invm_major, fw_ver->invm_minor,
+			    fw_ver->invm_img_type);
+		space = " ";
+	}
+
+	if (fw_ver->or_valid) {
+		sbuf_printf(buf, "%sOption ROM V%d-b%d-p%d",
+			    space, fw_ver->or_major, fw_ver->or_build,
+			    fw_ver->or_patch);
+		space = " ";
+	}
+
+	if (fw_ver->etrack_id)
+		sbuf_printf(buf, "%seTrack 0x%08x", space, fw_ver->etrack_id);
+}
+
+static void
+em_print_fw_version(struct e1000_softc *sc )
+{
+	device_t dev = sc->dev;
+	struct sbuf *buf;
+	int error = 0;
+
+	buf = sbuf_new_auto();
+	if (!buf) {
+		device_printf(dev, "Could not allocate sbuf for output.\n");
+		return;
+	}
+
+	em_sbuf_fw_version(&sc->fw_ver, buf);
+
+	error = sbuf_finish(buf);
+	if (error)
+		device_printf(dev, "Error finishing sbuf: %d\n", error);
+	else if (sbuf_len(buf))
+		device_printf(dev, "%s\n", sbuf_data(buf));
+
+	sbuf_delete(buf);
+}
+
+static int
+em_sysctl_print_fw_version(SYSCTL_HANDLER_ARGS)
+{
+	struct e1000_softc *sc = (struct e1000_softc *)arg1;
+	device_t dev = sc->dev;
+	struct sbuf *buf;
+	int error = 0;
+
+	buf = sbuf_new_for_sysctl(NULL, NULL, 128, req);
+	if (!buf) {
+		device_printf(dev, "Could not allocate sbuf for output.\n");
+		return (ENOMEM);
+	}
+
+	em_sbuf_fw_version(&sc->fw_ver, buf);
+
+	error = sbuf_finish(buf);
+	if (error)
+		device_printf(dev, "Error finishing sbuf: %d\n", error);
+
+	sbuf_delete(buf);
+
+	return (0);
+}
+
 /**********************************************************************
  *
  *  This routine provides a way to dump out the adapter eeprom,
@@ -4510,20 +4635,27 @@ em_sysctl_nvm_info(SYSCTL_HANDLER_ARGS)
 static void
 em_print_nvm_info(struct e1000_softc *sc)
 {
+	struct e1000_hw *hw = &sc->hw;
+	struct sx *iflib_ctx_lock = iflib_ctx_lock_get(sc->ctx);
 	u16 eeprom_data;
 	int i, j, row = 0;
 
 	/* Its a bit crude, but it gets the job done */
 	printf("\nInterface EEPROM Dump:\n");
 	printf("Offset\n0x0000  ");
+
+	/* We rely on the IFLIB_CTX_LOCK as part of NVM locking model */
+	sx_xlock(iflib_ctx_lock);
+	ASSERT_CTX_LOCK_HELD(hw);
 	for (i = 0, j = 0; i < 32; i++, j++) {
 		if (j == 8) { /* Make the offset block */
 			j = 0; ++row;
 			printf("\n0x00%x0  ",row);
 		}
-		e1000_read_nvm(&sc->hw, i, 1, &eeprom_data);
+		e1000_read_nvm(hw, i, 1, &eeprom_data);
 		printf("%04x ", eeprom_data);
 	}
+	sx_xunlock(iflib_ctx_lock);
 	printf("\n");
 }
 

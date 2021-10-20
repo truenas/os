@@ -1700,6 +1700,8 @@ dev/ena/ena_datapath.c		optional ena \
 	compile-with "${NORMAL_C} -I$S/contrib"
 dev/ena/ena_netmap.c		optional ena \
 	compile-with "${NORMAL_C} -I$S/contrib"
+dev/ena/ena_rss.c		optional ena \
+	compile-with "${NORMAL_C} -I$S/contrib"
 dev/ena/ena_sysctl.c 		optional ena \
 	compile-with "${NORMAL_C} -I$S/contrib"
 contrib/ena-com/ena_com.c	optional ena
@@ -4583,6 +4585,8 @@ compat/linuxkpi/common/src/linux_domain.c	optional compat_linuxkpi \
 compat/linuxkpi/common/src/linux_firmware.c	optional compat_linuxkpi \
 	compile-with "${LINUXKPI_C}"
 compat/linuxkpi/common/src/linux_hrtimer.c	optional compat_linuxkpi \
+	compile-with "${LINUXKPI_C}"
+compat/linuxkpi/common/src/linux_interrupt.c	optional compat_linuxkpi \
 	compile-with "${LINUXKPI_C}"
 compat/linuxkpi/common/src/linux_kthread.c	optional compat_linuxkpi \
 	compile-with "${LINUXKPI_C}"

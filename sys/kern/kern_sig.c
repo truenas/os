@@ -214,7 +214,6 @@ SYSCTL_INT(_kern, OID_AUTO, coredump_devctl, CTLFLAG_RW, &coredump_devctl,
 #define	SIGPROP_TTYSTOP		0x08	/* ditto, from tty */
 #define	SIGPROP_IGNORE		0x10	/* ignore by default */
 #define	SIGPROP_CONT		0x20	/* continue if suspended */
-#define	SIGPROP_CANTMASK	0x40	/* non-maskable, catchable */
 
 static int sigproptbl[NSIG] = {
 	[SIGHUP] =	SIGPROP_KILL,
@@ -1297,8 +1296,11 @@ kern_sigtimedwait(struct thread *td, sigset_t waitset, ksiginfo_t *ksi,
 	saved_mask = td->td_sigmask;
 	SIGSETNAND(td->td_sigmask, waitset);
 	if ((p->p_sysent->sv_flags & SV_SIG_DISCIGN) != 0 ||
-	    !kern_sig_discard_ign)
-		td->td_pflags2 |= TDP2_SIGWAIT;
+	    !kern_sig_discard_ign) {
+		thread_lock(td);
+		td->td_flags |= TDF_SIGWAIT;
+		thread_unlock(td);
+	}
 	for (;;) {
 		mtx_lock(&ps->ps_mtx);
 		sig = cursig(td);
@@ -1362,7 +1364,9 @@ kern_sigtimedwait(struct thread *td, sigset_t waitset, ksiginfo_t *ksi,
 		if (error == 0 && (p->p_ptevents & PTRACE_SYSCALL) != 0)
 			traced = true;
 	}
-	td->td_pflags2 &= ~TDP2_SIGWAIT;
+	thread_lock(td);
+	td->td_flags &= ~TDF_SIGWAIT;
+	thread_unlock(td);
 
 	new_block = saved_mask;
 	SIGSETNAND(new_block, td->td_sigmask);
@@ -2046,7 +2050,7 @@ trapsignal(struct thread *td, ksiginfo_t *ksi)
 			    &td->td_sigmask, code);
 #endif
 		(*p->p_sysent->sv_sendsig)(ps->ps_sigact[_SIG_IDX(sig)],
-				ksi, &td->td_sigmask);
+		    ksi, &td->td_sigmask);
 		postsig_done(sig, td, ps);
 		mtx_unlock(&ps->ps_mtx);
 	} else {
@@ -2170,6 +2174,18 @@ tdksignal(struct thread *td, int sig, ksiginfo_t *ksi)
 	(void) tdsendsignal(td->td_proc, td, sig, ksi);
 }
 
+static int
+sig_sleepq_abort(struct thread *td, int intrval)
+{
+	THREAD_LOCK_ASSERT(td, MA_OWNED);
+
+	if (intrval == 0 && (td->td_flags & TDF_SIGWAIT) == 0) {
+		thread_unlock(td);
+		return (0);
+	}
+	return (sleepq_abort(td, intrval));
+}
+
 int
 tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 {
@@ -2228,17 +2244,20 @@ tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 			return (ret);
 		} else {
 			action = SIG_CATCH;
+			intrval = 0;
 		}
-	} else if (SIGISMEMBER(td->td_sigmask, sig))
-		action = SIG_HOLD;
-	else if (SIGISMEMBER(ps->ps_sigcatch, sig))
-		action = SIG_CATCH;
-	else
-		action = SIG_DFL;
-	if (SIGISMEMBER(ps->ps_sigintr, sig))
-		intrval = EINTR;
-	else
-		intrval = ERESTART;
+	} else {
+		if (SIGISMEMBER(td->td_sigmask, sig))
+			action = SIG_HOLD;
+		else if (SIGISMEMBER(ps->ps_sigcatch, sig))
+			action = SIG_CATCH;
+		else
+			action = SIG_DFL;
+		if (SIGISMEMBER(ps->ps_sigintr, sig))
+			intrval = EINTR;
+		else
+			intrval = ERESTART;
+	}
 	mtx_unlock(&ps->ps_mtx);
 
 	if (prop & SIGPROP_CONT)
@@ -2385,7 +2404,7 @@ tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 		PROC_SLOCK(p);
 		thread_lock(td);
 		if (TD_CAN_ABORT(td))
-			wakeup_swapper = sleepq_abort(td, intrval);
+			wakeup_swapper = sig_sleepq_abort(td, intrval);
 		else
 			thread_unlock(td);
 		PROC_SUNLOCK(p);
@@ -2516,7 +2535,7 @@ tdsigwakeup(struct thread *td, int sig, sig_t action, int intrval)
 		if (td->td_priority > PUSER && !TD_IS_IDLETHREAD(td))
 			sched_prio(td, PUSER);
 
-		wakeup_swapper = sleepq_abort(td, intrval);
+		wakeup_swapper = sig_sleepq_abort(td, intrval);
 		PROC_SUNLOCK(p);
 		if (wakeup_swapper)
 			kick_proc0();
@@ -2970,7 +2989,7 @@ issignal(struct thread *td)
 		 */
 		if (SIGISMEMBER(ps->ps_sigignore, sig) &&
 		    (p->p_flag & P_TRACED) == 0 &&
-		    (td->td_pflags2 & TDP2_SIGWAIT) == 0) {
+		    (td->td_flags & TDF_SIGWAIT) == 0) {
 			sigqueue_delete(&td->td_sigqueue, sig);
 			sigqueue_delete(&p->p_sigqueue, sig);
 			continue;
@@ -3083,7 +3102,7 @@ issignal(struct thread *td)
 				mtx_lock(&ps->ps_mtx);
 				goto next;
 			} else if ((prop & SIGPROP_IGNORE) != 0 &&
-			    (td->td_pflags2 & TDP2_SIGWAIT) == 0) {
+			    (td->td_flags & TDF_SIGWAIT) == 0) {
 				/*
 				 * Default action is to ignore; drop it if
 				 * not in kern_sigtimedwait().
@@ -3094,7 +3113,7 @@ issignal(struct thread *td)
 			/*NOTREACHED*/
 
 		case (intptr_t)SIG_IGN:
-			if ((td->td_pflags2 & TDP2_SIGWAIT) == 0)
+			if ((td->td_flags & TDF_SIGWAIT) == 0)
 				break;		/* == ignore */
 			else
 				return (sig);
@@ -3294,6 +3313,29 @@ sig_intr(void)
 		ret = sig_ast_needsigchk(td);
 	PROC_UNLOCK(p);
 	return (ret);
+}
+
+bool
+curproc_sigkilled(void)
+{
+	struct thread *td;
+	struct proc *p;
+	struct sigacts *ps;
+	bool res;
+
+	td = curthread;
+	if ((td->td_flags & TDF_NEEDSIGCHK) == 0)
+		return (false);
+
+	p = td->td_proc;
+	PROC_LOCK(p);
+	ps = p->p_sigacts;
+	mtx_lock(&ps->ps_mtx);
+	res = SIGISMEMBER(td->td_sigqueue.sq_signals, SIGKILL) ||
+	    SIGISMEMBER(p->p_sigqueue.sq_signals, SIGKILL);
+	mtx_unlock(&ps->ps_mtx);
+	PROC_UNLOCK(p);
+	return (res);
 }
 
 void

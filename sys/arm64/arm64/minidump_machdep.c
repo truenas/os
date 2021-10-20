@@ -62,24 +62,9 @@ static struct kerneldumpheader kdh;
 /* Handle chunked writes. */
 static size_t fragsz;
 static void *dump_va;
-static size_t counter, progress, dumpsize;
+static size_t dumpsize;
 
 static uint64_t tmpbuffer[Ln_ENTRIES];
-
-static int
-is_dumpable(vm_paddr_t pa)
-{
-	vm_page_t m;
-	int i;
-
-	if ((m = vm_phys_paddr_to_vm_page(pa)) != NULL)
-		return ((m->flags & PG_NODUMP) == 0);
-	for (i = 0; dump_avail[i] != 0 || dump_avail[i + 1] != 0; i += 2) {
-		if (pa >= dump_avail[i] && pa < dump_avail[i + 1])
-			return (1);
-	}
-	return (0);
-}
 
 static int
 blk_flush(struct dumperinfo *di)
@@ -92,41 +77,6 @@ blk_flush(struct dumperinfo *di)
 	error = dump_append(di, dump_va, 0, fragsz);
 	fragsz = 0;
 	return (error);
-}
-
-static struct {
-	int min_per;
-	int max_per;
-	int visited;
-} progress_track[10] = {
-	{  0,  10, 0},
-	{ 10,  20, 0},
-	{ 20,  30, 0},
-	{ 30,  40, 0},
-	{ 40,  50, 0},
-	{ 50,  60, 0},
-	{ 60,  70, 0},
-	{ 70,  80, 0},
-	{ 80,  90, 0},
-	{ 90, 100, 0}
-};
-
-static void
-report_progress(size_t progress, size_t dumpsize)
-{
-	int sofar, i;
-
-	sofar = 100 - ((progress * 100) / dumpsize);
-	for (i = 0; i < nitems(progress_track); i++) {
-		if (sofar < progress_track[i].min_per ||
-		    sofar > progress_track[i].max_per)
-			continue;
-		if (progress_track[i].visited)
-			return;
-		progress_track[i].visited = 1;
-		printf("..%d%%", sofar);
-		return;
-	}
 }
 
 static int
@@ -165,13 +115,8 @@ blk_write(struct dumperinfo *di, char *ptr, vm_paddr_t pa, size_t sz)
 		len = maxdumpsz - fragsz;
 		if (len > sz)
 			len = sz;
-		counter += len;
-		progress -= len;
-		if (counter >> 22) {
-			report_progress(progress, dumpsize);
-			counter &= (1 << 22) - 1;
-		}
 
+		dumpsys_pb_progress(len);
 		wdog_kern_pat(WD_LASTVAL);
 
 		if (ptr) {
@@ -226,14 +171,14 @@ minidumpsys(struct dumperinfo *di)
 			pa = *l1 & ~ATTR_MASK;
 			for (i = 0; i < Ln_ENTRIES * Ln_ENTRIES;
 			    i++, pa += PAGE_SIZE)
-				if (is_dumpable(pa))
+				if (vm_phys_is_dumpable(pa))
 					dump_add_page(pa);
 			pmapsize += (Ln_ENTRIES - 1) * PAGE_SIZE;
 			va += L1_SIZE - L2_SIZE;
 		} else if ((*l2 & ATTR_DESCR_MASK) == L2_BLOCK) {
 			pa = *l2 & ~ATTR_MASK;
 			for (i = 0; i < Ln_ENTRIES; i++, pa += PAGE_SIZE) {
-				if (is_dumpable(pa))
+				if (vm_phys_is_dumpable(pa))
 					dump_add_page(pa);
 			}
 		} else if ((*l2 & ATTR_DESCR_MASK) == L2_TABLE) {
@@ -241,7 +186,7 @@ minidumpsys(struct dumperinfo *di)
 				if ((l3[i] & ATTR_DESCR_MASK) != L3_PAGE)
 					continue;
 				pa = l3[i] & ~ATTR_MASK;
-				if (is_dumpable(pa))
+				if (vm_phys_is_dumpable(pa))
 					dump_add_page(pa);
 			}
 		}
@@ -253,14 +198,14 @@ minidumpsys(struct dumperinfo *di)
 	dumpsize += round_page(sizeof(dump_avail));
 	dumpsize += round_page(BITSET_SIZE(vm_page_dump_pages));
 	VM_PAGE_DUMP_FOREACH(pa) {
-		if (is_dumpable(pa))
+		if (vm_phys_is_dumpable(pa))
 			dumpsize += PAGE_SIZE;
 		else
 			dump_drop_page(pa);
 	}
 	dumpsize += PAGE_SIZE;
 
-	progress = dumpsize;
+	dumpsys_pb_init(dumpsize);
 
 	/* Initialize mdhdr */
 	bzero(&mdhdr, sizeof(mdhdr));

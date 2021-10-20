@@ -60,24 +60,6 @@ static struct kerneldumpheader kdh;
 /* Handle chunked writes. */
 static size_t fragsz;
 static void *dump_va;
-static uint64_t counter, progress;
-
-static int
-is_dumpable(vm_paddr_t pa)
-{
-	vm_page_t m;
-	int i;
-
-	if ((m = vm_phys_paddr_to_vm_page(pa)) != NULL)
-		return ((m->flags & PG_NODUMP) == 0);
-	for (i = 0; dump_avail[i] != 0 || dump_avail[i + 1] != 0; i += 2) {
-		if (pa >= dump_avail[i] && pa < dump_avail[i + 1])
-			return (1);
-	}
-	return (0);
-}
-
-#define PG2MB(pgs) (((pgs) + (1 << 8) - 1) >> 8)
 
 static int
 blk_flush(struct dumperinfo *di)
@@ -125,13 +107,8 @@ blk_write(struct dumperinfo *di, char *ptr, vm_paddr_t pa, size_t sz)
 		len = maxdumpsz - fragsz;
 		if (len > sz)
 			len = sz;
-		counter += len;
-		progress -= len;
-		if (counter >> 24) {
-			printf(" %lld", PG2MB(progress >> PAGE_SHIFT));
-			counter &= (1<<24) - 1;
-		}
 
+		dumpsys_pb_progress(len);
 		wdog_kern_pat(WD_LASTVAL);
 
 		if (ptr) {
@@ -188,7 +165,6 @@ minidumpsys(struct dumperinfo *di)
 	int j, k;
 	struct minidumphdr mdhdr;
 
-	counter = 0;
 	/* Walk page table pages, set bits in vm_page_dump */
 	ptesize = 0;
 	for (va = KERNBASE; va < kernel_vm_end; va += NBPDR) {
@@ -203,7 +179,7 @@ minidumpsys(struct dumperinfo *di)
 			/* This is an entire 2M page. */
 			pa = pd[j] & PG_PS_FRAME;
 			for (k = 0; k < NPTEPG; k++) {
-				if (is_dumpable(pa))
+				if (vm_phys_is_dumpable(pa))
 					dump_add_page(pa);
 				pa += PAGE_SIZE;
 			}
@@ -215,7 +191,7 @@ minidumpsys(struct dumperinfo *di)
 			for (k = 0; k < NPTEPG; k++) {
 				if ((pt[k] & PG_V) == PG_V) {
 					pa = pt[k] & PG_FRAME;
-					if (is_dumpable(pa))
+					if (vm_phys_is_dumpable(pa))
 						dump_add_page(pa);
 				}
 			}
@@ -231,7 +207,7 @@ minidumpsys(struct dumperinfo *di)
 	dumpsize += round_page(BITSET_SIZE(vm_page_dump_pages));
 	VM_PAGE_DUMP_FOREACH(pa) {
 		/* Clear out undumpable pages now if needed */
-		if (is_dumpable(pa)) {
+		if (vm_phys_is_dumpable(pa)) {
 			dumpsize += PAGE_SIZE;
 		} else {
 			dump_drop_page(pa);
@@ -239,7 +215,7 @@ minidumpsys(struct dumperinfo *di)
 	}
 	dumpsize += PAGE_SIZE;
 
-	progress = dumpsize;
+	dumpsys_pb_init(dumpsize);
 
 	/* Initialize mdhdr */
 	bzero(&mdhdr, sizeof(mdhdr));

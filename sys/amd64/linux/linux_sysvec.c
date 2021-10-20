@@ -524,10 +524,9 @@ linux_rt_sigreturn(struct thread *td, struct linux_rt_sigreturn_args *args)
 	 * Corruption of the PSL_RF bit at worst causes one more or
 	 * one less debugger trap, so allowing it is fairly harmless.
 	 */
-
-#define RFLAG_SECURE(ef, oef)     ((((ef) ^ (oef)) & ~PSL_USERCHANGE) == 0)
-	if (!RFLAG_SECURE(rflags & ~PSL_RF, regs->tf_rflags & ~PSL_RF)) {
-		printf("linux_rt_sigreturn: rflags = 0x%lx\n", rflags);
+	if (!EFL_SECURE(rflags & ~PSL_RF, regs->tf_rflags & ~PSL_RF)) {
+		uprintf("pid %d comm %s linux mangled rflags %#lx\n",
+		    p->p_pid, p->p_comm, rflags);
 		return (EINVAL);
 	}
 
@@ -536,9 +535,9 @@ linux_rt_sigreturn(struct thread *td, struct linux_rt_sigreturn_args *args)
 	 * hardware check for invalid selectors, excess privilege in
 	 * other selectors, invalid %eip's and invalid %esp's.
 	 */
-#define CS_SECURE(cs)           (ISPL(cs) == SEL_UPL)
 	if (!CS_SECURE(context->sc_cs)) {
-		printf("linux_rt_sigreturn: cs = 0x%x\n", context->sc_cs);
+		uprintf("pid %d comm %s linux mangled cs %#x\n",
+		    p->p_pid, p->p_comm, context->sc_cs);
 		ksiginfo_init_trap(&ksi);
 		ksi.ksi_signo = SIGBUS;
 		ksi.ksi_code = BUS_OBJERR;

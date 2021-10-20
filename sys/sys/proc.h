@@ -305,7 +305,7 @@ struct thread {
 	struct osd	td_osd;		/* (k) Object specific data. */
 	struct vm_map_entry *td_map_def_user; /* (k) Deferred entries. */
 	pid_t		td_dbg_forked;	/* (c) Child pid for debugger. */
-	struct vnode	*td_vp_reserved;/* (k) Prealloated vnode. */
+	struct vnode	*td_vp_reserved;/* (k) Preallocated vnode. */
 	u_int		td_no_sleeping;	/* (k) Sleeping disabled count. */
 	void		*td_su;		/* (k) FFS SU private */
 	sbintime_t	td_sleeptimo;	/* (t) Sleep timeout. */
@@ -444,7 +444,7 @@ do {									\
 #define	TDF_TIMEOUT	0x00000010 /* Timing out during sleep. */
 #define	TDF_IDLETD	0x00000020 /* This is a per-CPU idle thread. */
 #define	TDF_CANSWAP	0x00000040 /* Thread can be swapped. */
-#define	TDF_UNUSED80	0x00000080 /* unused. */
+#define	TDF_SIGWAIT	0x00000080 /* Ignore ignored signals */
 #define	TDF_KTH_SUSP	0x00000100 /* kthread is suspended */
 #define	TDF_ALLPROCSUSP	0x00000200 /* suspended by SINGLE_ALLPROC */
 #define	TDF_BOUNDARY	0x00000400 /* Thread suspended at user boundary */
@@ -529,7 +529,6 @@ do {									\
 #define	TDP2_SBPAGES	0x00000001 /* Owns sbusy on some pages */
 #define	TDP2_COMPAT32RB	0x00000002 /* compat32 ABI for robust lists */
 #define	TDP2_ACCT	0x00000004 /* Doing accounting */
-#define	TDP2_SIGWAIT	0x00000008 /* Ignore ignored signals */
 
 /*
  * Reasons that the current thread can not be run yet.
@@ -1149,7 +1148,7 @@ int	cpu_idle_wakeup(int);
 extern	void (*cpu_idle_hook)(sbintime_t);	/* Hook to machdep CPU idler. */
 void	cpu_switch(struct thread *, struct thread *, struct mtx *);
 void	cpu_throw(struct thread *, struct thread *) __dead2;
-void	unsleep(struct thread *);
+bool	curproc_sigkilled(void);
 void	userret(struct thread *, struct trapframe *);
 
 void	cpu_exit(struct thread *);
