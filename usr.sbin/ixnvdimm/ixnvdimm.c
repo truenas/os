@@ -263,6 +263,18 @@ firmware_update(int fd, struct ixnvdimm_info *info, const char *f, int I)
 	printf("Start Firmware Update succeeded\n");
 	fflush(stdout);
 
+	/*
+	 * Wait for the Operation In Progress bit in the NVDIMM_CMD_STATUS0
+	 * register to be clear.  I have no clue why ACPI DSM does not do it.
+	 */
+	for (t = 0; (i2c_read(fd, 0, NVDIMM_CMD_STATUS0) & 1) && t < timeout; t++)
+		usleep(1000);
+	if (t >= timeout) {
+		warnx("Start Firmware Update DSM timeout: %04x",
+		    i2c_read16(fd, 0, NVDIMM_CMD_STATUS0));
+		goto timeout;
+	}
+
 	/* Check ACPI enabled firmware update mode. */
 	if ((i2c_read(fd, 0, FIRMWARE_OPS_STATUS) & 0x04) == 0) {
 		warnx("Firmware update mode is not enabled: %02x",
