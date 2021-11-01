@@ -838,6 +838,8 @@ static int set_offload_policy(struct adapter *, struct t4_offload_policy *);
 static int read_card_mem(struct adapter *, int, struct t4_mem_range *);
 static int read_i2c(struct adapter *, struct t4_i2c_data *);
 static int clear_stats(struct adapter *, u_int);
+static int hold_clip_addr(struct adapter *, struct t4_clip_addr *);
+static int release_clip_addr(struct adapter *, struct t4_clip_addr *);
 #ifdef TCP_OFFLOAD
 static int toe_capability(struct vi_info *, bool);
 static void t4_async_event(void *, int);
@@ -5220,12 +5222,28 @@ get_params__post_init(struct adapter *sc)
 	else
 		sc->params.fr_nsmr_tpte_wr_support = false;
 
+	/* Support for 512 SGL entries per FR MR. */
+	param[0] = FW_PARAM_DEV(DEV_512SGL_MR);
+	rc = -t4_query_params(sc, sc->mbox, sc->pf, 0, 1, param, val);
+	if (rc == 0)
+		sc->params.dev_512sgl_mr = val[0] != 0;
+	else
+		sc->params.dev_512sgl_mr = false;
+
 	param[0] = FW_PARAM_PFVF(MAX_PKTS_PER_ETH_TX_PKTS_WR);
 	rc = -t4_query_params(sc, sc->mbox, sc->pf, 0, 1, param, val);
 	if (rc == 0)
 		sc->params.max_pkts_per_eth_tx_pkts_wr = val[0];
 	else
 		sc->params.max_pkts_per_eth_tx_pkts_wr = 15;
+
+	param[0] = FW_PARAM_DEV(NUM_TM_CLASS);
+	rc = -t4_query_params(sc, sc->mbox, sc->pf, 0, 1, param, val);
+	if (rc == 0) {
+		MPASS(val[0] > 0 && val[0] < 256);	/* nsched_cls is 8b */
+		sc->params.nsched_cls = val[0];
+	} else
+		sc->params.nsched_cls = sc->chip_params->nsched_cls;
 
 	/* get capabilites */
 	bzero(&caps, sizeof(caps));
@@ -7567,6 +7585,10 @@ t4_sysctls(struct adapter *sc)
 		    CTLFLAG_RW, &sc->tt.autorcvbuf_inc, 0,
 		    "autorcvbuf increment");
 
+		sc->tt.iso = 1;
+		SYSCTL_ADD_INT(ctx, children, OID_AUTO, "iso", CTLFLAG_RW,
+		    &sc->tt.iso, 0, "Enable iSCSI segmentation offload");
+
 		SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "timer_tick",
 		    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE, sc, 0,
 		    sysctl_tp_tick, "A", "TP timer tick (us)");
@@ -7766,7 +7788,7 @@ cxgbe_sysctls(struct port_info *pi)
 	struct adapter *sc = pi->adapter;
 	int i;
 	char name[16];
-	static char *tc_flags = {"\20\1USER\2SYNC\3ASYNC\4ERR"};
+	static char *tc_flags = {"\20\1USER"};
 
 	ctx = device_get_sysctl_ctx(pi->dev);
 
@@ -7836,13 +7858,15 @@ cxgbe_sysctls(struct port_info *pi)
 	SYSCTL_ADD_UINT(ctx, children2, OID_AUTO, "burstsize",
 	    CTLFLAG_RW, &pi->sched_params->burstsize, 0,
 	    "burstsize for per-flow cl-rl (0 means up to the driver)");
-	for (i = 0; i < sc->chip_params->nsched_cls; i++) {
+	for (i = 0; i < sc->params.nsched_cls; i++) {
 		struct tx_cl_rl_params *tc = &pi->sched_params->cl_rl[i];
 
 		snprintf(name, sizeof(name), "%d", i);
 		children2 = SYSCTL_CHILDREN(SYSCTL_ADD_NODE(ctx,
 		    SYSCTL_CHILDREN(oid), OID_AUTO, name,
 		    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "traffic class"));
+		SYSCTL_ADD_UINT(ctx, children2, OID_AUTO, "state",
+		    CTLFLAG_RD, &tc->state, 0, "current state");
 		SYSCTL_ADD_PROC(ctx, children2, OID_AUTO, "flags",
 		    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE, tc_flags,
 		    (uintptr_t)&tc->flags, sysctl_bitfield_8b, "A", "flags");
@@ -9571,7 +9595,9 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 	struct sbuf *sb;
 	int rc, i, n;
 	uint32_t lo, hi, used, alloc;
-	static const char *memory[] = {"EDC0:", "EDC1:", "MC:", "MC0:", "MC1:"};
+	static const char *memory[] = {
+		"EDC0:", "EDC1:", "MC:", "MC0:", "MC1:", "HMA:"
+	};
 	static const char *region[] = {
 		"DBQ contexts:", "IMSG contexts:", "FLM cache:", "TCBs:",
 		"Pstructs:", "Timers:", "Rx FL:", "Tx FL:", "Pstruct FL:",
@@ -9624,19 +9650,25 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 	if (lo & F_EXT_MEM_ENABLE) {
 		hi = t4_read_reg(sc, A_MA_EXT_MEMORY_BAR);
 		avail[i].base = G_EXT_MEM_BASE(hi) << 20;
-		avail[i].limit = avail[i].base +
-		    (G_EXT_MEM_SIZE(hi) << 20);
+		avail[i].limit = avail[i].base + (G_EXT_MEM_SIZE(hi) << 20);
 		avail[i].idx = is_t5(sc) ? 3 : 2;	/* Call it MC0 for T5 */
 		i++;
 	}
 	if (is_t5(sc) && lo & F_EXT_MEM1_ENABLE) {
 		hi = t4_read_reg(sc, A_MA_EXT_MEMORY1_BAR);
 		avail[i].base = G_EXT_MEM1_BASE(hi) << 20;
-		avail[i].limit = avail[i].base +
-		    (G_EXT_MEM1_SIZE(hi) << 20);
+		avail[i].limit = avail[i].base + (G_EXT_MEM1_SIZE(hi) << 20);
 		avail[i].idx = 4;
 		i++;
 	}
+	if (is_t6(sc) && lo & F_HMA_MUX) {
+		hi = t4_read_reg(sc, A_MA_EXT_MEMORY1_BAR);
+		avail[i].base = G_EXT_MEM1_BASE(hi) << 20;
+		avail[i].limit = avail[i].base + (G_EXT_MEM1_SIZE(hi) << 20);
+		avail[i].idx = 5;
+		i++;
+	}
+	MPASS(i <= nitems(avail));
 	if (!i)                                    /* no memory available */
 		goto done;
 	qsort(avail, i, sizeof(struct mem_desc), mem_desc_cmp);
@@ -9691,23 +9723,24 @@ sysctl_meminfo(SYSCTL_HANDLER_ARGS)
 #undef ulp_region
 
 	md->base = 0;
-	md->idx = nitems(region);
-	if (!is_t4(sc)) {
+	if (is_t4(sc))
+		md->idx = nitems(region);
+	else {
 		uint32_t size = 0;
 		uint32_t sge_ctrl = t4_read_reg(sc, A_SGE_CONTROL2);
 		uint32_t fifo_size = t4_read_reg(sc, A_SGE_DBVFIFO_SIZE);
 
 		if (is_t5(sc)) {
 			if (sge_ctrl & F_VFIFO_ENABLE)
-				size = G_DBVFIFO_SIZE(fifo_size);
+				size = fifo_size << 2;
 		} else
-			size = G_T6_DBVFIFO_SIZE(fifo_size);
+			size = G_T6_DBVFIFO_SIZE(fifo_size) << 6;
 
 		if (size) {
-			md->base = G_BASEADDR(t4_read_reg(sc,
-			    A_SGE_DBVFIFO_BADDR));
-			md->limit = md->base + (size << 2) - 1;
-		}
+			md->base = t4_read_reg(sc, A_SGE_DBVFIFO_BADDR);
+			md->limit = md->base + size - 1;
+		} else
+			md->idx = nitems(region);
 	}
 	md++;
 
@@ -11660,7 +11693,7 @@ error:
 		if ((s->offload != 0 && s->offload != 1) ||
 		    s->cong_algo < -1 || s->cong_algo > CONG_ALG_HIGHSPEED ||
 		    s->sched_class < -1 ||
-		    s->sched_class >= sc->chip_params->nsched_cls) {
+		    s->sched_class >= sc->params.nsched_cls) {
 			rc = EINVAL;
 			goto error;
 		}
@@ -11871,6 +11904,7 @@ clear_stats(struct adapter *sc, u_int port_id)
 				ofld_txq->wrq.tx_wrs_copied = 0;
 				counter_u64_zero(ofld_txq->tx_iscsi_pdus);
 				counter_u64_zero(ofld_txq->tx_iscsi_octets);
+				counter_u64_zero(ofld_txq->tx_iscsi_iso_wrs);
 				counter_u64_zero(ofld_txq->tx_toe_tls_records);
 				counter_u64_zero(ofld_txq->tx_toe_tls_octets);
 			}
@@ -11880,6 +11914,14 @@ clear_stats(struct adapter *sc, u_int port_id)
 				ofld_rxq->fl.cl_allocated = 0;
 				ofld_rxq->fl.cl_recycled = 0;
 				ofld_rxq->fl.cl_fast_recycled = 0;
+				counter_u64_zero(
+				    ofld_rxq->rx_iscsi_ddp_setup_ok);
+				counter_u64_zero(
+				    ofld_rxq->rx_iscsi_ddp_setup_error);
+				ofld_rxq->rx_iscsi_ddp_pdus = 0;
+				ofld_rxq->rx_iscsi_ddp_octets = 0;
+				ofld_rxq->rx_iscsi_fl_pdus = 0;
+				ofld_rxq->rx_iscsi_fl_octets = 0;
 				ofld_rxq->rx_toe_tls_records = 0;
 				ofld_rxq->rx_toe_tls_octets = 0;
 			}
@@ -11894,6 +11936,35 @@ clear_stats(struct adapter *sc, u_int port_id)
 	}
 
 	return (0);
+}
+
+static int
+hold_clip_addr(struct adapter *sc, struct t4_clip_addr *ca)
+{
+#ifdef INET6
+	struct in6_addr in6;
+
+	bcopy(&ca->addr[0], &in6.s6_addr[0], sizeof(in6.s6_addr));
+	if (t4_get_clip_entry(sc, &in6, true) != NULL)
+		return (0);
+	else
+		return (EIO);
+#else
+	return (ENOTSUP);
+#endif
+}
+
+static int
+release_clip_addr(struct adapter *sc, struct t4_clip_addr *ca)
+{
+#ifdef INET6
+	struct in6_addr in6;
+
+	bcopy(&ca->addr[0], &in6.s6_addr[0], sizeof(in6.s6_addr));
+	return (t4_release_clip_addr(sc, &in6));
+#else
+	return (ENOTSUP);
+#endif
 }
 
 int
@@ -12166,6 +12237,12 @@ t4_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data, int fflag,
 		break;
 	case CHELSIO_T4_SET_OFLD_POLICY:
 		rc = set_offload_policy(sc, (struct t4_offload_policy *)data);
+		break;
+	case CHELSIO_T4_HOLD_CLIP_ADDR:
+		rc = hold_clip_addr(sc, (struct t4_clip_addr *)data);
+		break;
+	case CHELSIO_T4_RELEASE_CLIP_ADDR:
+		rc = release_clip_addr(sc, (struct t4_clip_addr *)data);
 		break;
 	default:
 		rc = ENOTTY;

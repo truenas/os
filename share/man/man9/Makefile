@@ -929,6 +929,7 @@ MLINKS+=crypto_buffer.9 crypto_apply.9 \
 	crypto_buffer.9 crypto_cursor_copydata_noadv.9 \
 	crypto_buffer.9 crypto_cursor_segbase.9 \
 	crypto_buffer.9 crypto_cursor_seglen.9 \
+	crypto_buffer.9 crypto_cursor_segment.9 \
 	crypto_buffer.9 CRYPTO_HAS_OUTPUT_BUFFER.9
 MLINKS+=crypto_driver.9 crypto_copyback.9 \
 	crypto_driver.9 crypto_copydata.9 \
@@ -1946,6 +1947,7 @@ MLINKS+=sglist.9 sglist_alloc.9 \
 	sglist.9 sglist_append_mbuf_epg.9 \
 	sglist.9 sglist_append_phys.9 \
 	sglist.9 sglist_append_sglist.9 \
+	sglist.9 sglist_append_single_mbuf.9 \
 	sglist.9 sglist_append_uio.9 \
 	sglist.9 sglist_append_user.9 \
 	sglist.9 sglist_append_vmpages.9 \
