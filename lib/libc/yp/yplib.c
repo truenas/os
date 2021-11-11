@@ -88,7 +88,7 @@ struct dom_binding {
 #ifndef BINDINGDIR
 #define BINDINGDIR "/var/yp/binding"
 #endif
-#define MAX_RETRIES 20
+#define MAX_RETRIES 5
 
 bool_t xdr_ypresp_all_seq(XDR *xdrs, u_long *objp);
 
