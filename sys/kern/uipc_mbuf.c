@@ -268,13 +268,14 @@ m_demote(struct mbuf *m0, int all, int flags)
 {
 	struct mbuf *m;
 
+	flags |= M_DEMOTEFLAGS;
+
 	for (m = all ? m0 : m0->m_next; m != NULL; m = m->m_next) {
 		KASSERT(m->m_nextpkt == NULL, ("%s: m_nextpkt in m %p, m0 %p",
 		    __func__, m, m0));
 		if (m->m_flags & M_PKTHDR)
 			m_demote_pkthdr(m);
-		m->m_flags = m->m_flags & (M_EXT | M_RDONLY | M_NOFREE |
-		    M_EXTPG | flags);
+		m->m_flags &= flags;
 	}
 }
 
@@ -1757,8 +1758,7 @@ m_uiotombuf_nomap(struct uio *uio, int how, int len, int maxseg, int flags)
 	vm_page_t pg_array[MBUF_PEXT_MAX_PGS];
 	int error, length, i, needed;
 	ssize_t total;
-	int pflags = malloc2vm_flags(how) | VM_ALLOC_NOOBJ | VM_ALLOC_NODUMP |
-	    VM_ALLOC_WIRED;
+	int pflags = malloc2vm_flags(how) | VM_ALLOC_NODUMP | VM_ALLOC_WIRED;
 
 	MPASS((flags & M_PKTHDR) == 0);
 	MPASS((how & M_ZERO) == 0);
@@ -1806,7 +1806,7 @@ m_uiotombuf_nomap(struct uio *uio, int how, int len, int maxseg, int flags)
 		needed = length = MIN(maxseg, total);
 		for (i = 0; needed > 0; i++, needed -= PAGE_SIZE) {
 retry_page:
-			pg_array[i] = vm_page_alloc(NULL, 0, pflags);
+			pg_array[i] = vm_page_alloc_noobj(pflags);
 			if (pg_array[i] == NULL) {
 				if (how & M_NOWAIT) {
 					goto failed;

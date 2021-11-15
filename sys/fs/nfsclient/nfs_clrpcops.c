@@ -3384,7 +3384,8 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 	nfsattrbit_t attrbits, dattrbits;
 	size_t tresid;
 	u_int32_t *tl2 = NULL, rderr;
-	struct timespec dctime;
+	struct timespec dctime, ts;
+	bool attr_ok;
 
 	KASSERT(uiop->uio_iovcnt == 1 &&
 	    (uiop->uio_resid & (DIRBLKSIZ - 1)) == 0,
@@ -3569,6 +3570,7 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 			*tl = txdr_unsigned(NFSV4OP_GETATTR);
 			(void) nfsrv_putattrbit(nd, &dattrbits);
 		}
+		nanouptime(&ts);
 		error = nfscl_request(nd, vp, p, cred, stuff);
 		if (error)
 			return (error);
@@ -3726,6 +3728,7 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 				ncookie.lval[1];
 
 			    if (nfhp != NULL) {
+				attr_ok = true;
 				if (NFSRV_CMPFH(nfhp->nfh_fh, nfhp->nfh_len,
 				    dnp->n_fhp->nfh_fh, dnp->n_fhp->nfh_len)) {
 				    VREF(vp);
@@ -3755,12 +3758,32 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 				    if (!error) {
 					newvp = NFSTOV(np);
 					unlocknewvp = 1;
+					/*
+					 * If n_localmodtime >= time before RPC,
+					 * then a file modification operation,
+					 * such as VOP_SETATTR() of size, has
+					 * occurred while the Lookup RPC and
+					 * acquisition of the vnode happened. As
+					 * such, the attributes might be stale,
+					 * with possibly an incorrect size.
+					 */
+					NFSLOCKNODE(np);
+					if (timespecisset(
+					    &np->n_localmodtime) &&
+					    timespeccmp(&np->n_localmodtime,
+					    &ts, >=)) {
+					    NFSCL_DEBUG(4, "nfsrpc_readdirplus:"
+						" localmod stale attributes\n");
+					    attr_ok = false;
+					}
+					NFSUNLOCKNODE(np);
 				    }
 				}
 				nfhp = NULL;
 				if (newvp != NULLVP) {
-				    error = nfscl_loadattrcache(&newvp,
-					&nfsva, NULL, NULL, 0, 0);
+				    if (attr_ok)
+					error = nfscl_loadattrcache(&newvp,
+					    &nfsva, NULL, NULL, 0, 0);
 				    if (error) {
 					if (unlocknewvp)
 					    vput(newvp);
@@ -5799,6 +5822,8 @@ nfscl_doiods(vnode_t vp, struct uio *uiop, int *iomode, int *must_commit,
 	if (layp == NULL || rflp == NULL) {
 		if (recalled != 0) {
 			NFSFREECRED(newcred);
+			if (lckp != NULL)
+				nfscl_lockderef(lckp);
 			nfscl_relref(nmp);
 			return (EIO);
 		}
@@ -8674,13 +8699,8 @@ nfsm_split(struct mbuf *mp, uint64_t xfer)
 	 * page.
 	 */
 	if (left < plen) {
-		do {
-			pg = vm_page_alloc(NULL, 0, VM_ALLOC_NORMAL |
-			    VM_ALLOC_NOOBJ | VM_ALLOC_NODUMP |
-			    VM_ALLOC_WIRED);
-			if (pg == NULL)
-				vm_wait(NULL);
-		} while (pg == NULL);
+		pg = vm_page_alloc_noobj(VM_ALLOC_WAITOK | VM_ALLOC_NODUMP |
+		    VM_ALLOC_WIRED);
 		m2->m_epg_pa[0] = VM_PAGE_TO_PHYS(pg);
 		m2->m_epg_npgs = 1;
 
