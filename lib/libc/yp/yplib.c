@@ -90,7 +90,7 @@ struct dom_binding {
 #ifndef BINDINGDIR
 #define BINDINGDIR "/var/yp/binding"
 #endif
-#define MAX_RETRIES 20
+#define MAX_RETRIES 5
 
 extern bool_t xdr_domainname(), xdr_ypbind_resp();
 extern bool_t xdr_ypreq_key(), xdr_ypresp_val();
