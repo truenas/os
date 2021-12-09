@@ -159,6 +159,7 @@ MAN=	accept_filter.9 \
 	g_provider_by_name.9 \
 	groupmember.9 \
 	g_wither_geom.9 \
+	gone_in.9 \
 	hash.9 \
 	hashinit.9 \
 	hexdump.9 \
@@ -1123,6 +1124,7 @@ MLINKS+=g_geom.9 g_destroy_geom.9 \
 MLINKS+=g_provider.9 g_destroy_provider.9 \
 	g_provider.9 g_error_provider.9 \
 	g_provider.9 g_new_providerf.9
+MLINKS+=gone_in.9 gone_in_dev.9
 MLINKS+=hash.9 hash32.9 \
 	hash.9 hash32_buf.9 \
 	hash.9 hash32_str.9 \
@@ -2325,13 +2327,10 @@ MLINKS+=vm_page_busy.9 vm_page_busied.9 \
 	vm_page_busy.9 vm_page_busy_downgrade.9 \
 	vm_page_busy.9 vm_page_busy_sleep.9 \
 	vm_page_busy.9 vm_page_sbusied.9 \
-	vm_page_busy.9 vm_page_sbusy.9 \
-	vm_page_busy.9 vm_page_sleep_if_busy.9 \
 	vm_page_busy.9 vm_page_sunbusy.9 \
 	vm_page_busy.9 vm_page_trysbusy.9 \
 	vm_page_busy.9 vm_page_tryxbusy.9 \
 	vm_page_busy.9 vm_page_xbusied.9 \
-	vm_page_busy.9 vm_page_xbusy.9 \
 	vm_page_busy.9 vm_page_xunbusy.9 \
 	vm_page_busy.9 vm_page_assert_sbusied.9 \
 	vm_page_busy.9 vm_page_assert_unbusied.9 \

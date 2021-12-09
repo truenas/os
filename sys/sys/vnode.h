@@ -763,6 +763,8 @@ int	vn_open_cred(struct nameidata *ndp, int *flagp, int cmode,
 int	vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	    struct thread *td, struct file *fp);
 void	vn_pages_remove(struct vnode *vp, vm_pindex_t start, vm_pindex_t end);
+void	vn_pages_remove_valid(struct vnode *vp, vm_pindex_t start,
+	    vm_pindex_t end);
 int	vn_pollrecord(struct vnode *vp, struct thread *p, int events);
 int	vn_rdwr(enum uio_rw rw, struct vnode *vp, void *base,
 	    int len, off_t offset, enum uio_seg segflg, int ioflg,
@@ -920,10 +922,14 @@ void	vop_symlink_post(void *a, int rc);
 int	vop_sigdefer(struct vop_vector *vop, struct vop_generic_args *a);
 
 #ifdef DEBUG_VFS_LOCKS
+void	vop_fdatasync_debugpre(void *a);
+void	vop_fdatasync_debugpost(void *a, int rc);
 void	vop_fplookup_vexec_debugpre(void *a);
 void	vop_fplookup_vexec_debugpost(void *a, int rc);
 void	vop_fplookup_symlink_debugpre(void *a);
 void	vop_fplookup_symlink_debugpost(void *a, int rc);
+void	vop_fsync_debugpre(void *a);
+void	vop_fsync_debugpost(void *a, int rc);
 void	vop_strategy_debugpre(void *a);
 void	vop_lock_debugpre(void *a);
 void	vop_lock_debugpost(void *a, int rc);
@@ -932,10 +938,14 @@ void	vop_need_inactive_debugpre(void *a);
 void	vop_need_inactive_debugpost(void *a, int rc);
 void	vop_mkdir_debugpost(void *a, int rc);
 #else
+#define	vop_fdatasync_debugpre(x)		do { } while (0)
+#define	vop_fdatasync_debugpost(x, y)		do { } while (0)
 #define	vop_fplookup_vexec_debugpre(x)		do { } while (0)
 #define	vop_fplookup_vexec_debugpost(x, y)	do { } while (0)
 #define	vop_fplookup_symlink_debugpre(x)	do { } while (0)
 #define	vop_fplookup_symlink_debugpost(x, y)	do { } while (0)
+#define	vop_fsync_debugpre(x)			do { } while (0)
+#define	vop_fsync_debugpost(x, y)		do { } while (0)
 #define	vop_strategy_debugpre(x)		do { } while (0)
 #define	vop_lock_debugpre(x)			do { } while (0)
 #define	vop_lock_debugpost(x, y)		do { } while (0)

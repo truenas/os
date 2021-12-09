@@ -4922,7 +4922,6 @@ pf_test_state_tcp(struct pf_kstate **state, int direction, struct pfi_kkif *kif,
 	int			 copyback = 0;
 	int			 action;
 	struct pf_state_peer	*src, *dst;
-	struct pf_state_key	*sk;
 
 	bzero(&key, sizeof(key));
 	key.af = pd->af;
@@ -4948,8 +4947,6 @@ pf_test_state_tcp(struct pf_kstate **state, int direction, struct pfi_kkif *kif,
 		src = &(*state)->dst;
 		dst = &(*state)->src;
 	}
-
-	sk = (*state)->key[pd->didx];
 
 	if ((action = pf_synproxy(pd, state, reason)) != PF_PASS)
 		return (action);
@@ -5968,17 +5965,11 @@ pf_route(struct mbuf **m, struct pf_krule *r, int dir, struct ifnet *oifp,
 	/* Copied from FreeBSD 10.0-CURRENT ip_output. */
 	m0->m_pkthdr.csum_flags |= CSUM_IP;
 	if (m0->m_pkthdr.csum_flags & CSUM_DELAY_DATA & ~ifp->if_hwassist) {
-		m0 = mb_unmapped_to_ext(m0);
-		if (m0 == NULL)
-			goto done;
 		in_delayed_cksum(m0);
 		m0->m_pkthdr.csum_flags &= ~CSUM_DELAY_DATA;
 	}
 #if defined(SCTP) || defined(SCTP_SUPPORT)
 	if (m0->m_pkthdr.csum_flags & CSUM_SCTP & ~ifp->if_hwassist) {
-		m0 = mb_unmapped_to_ext(m0);
-		if (m0 == NULL)
-			goto done;
 		sctp_delayed_cksum(m0, (uint32_t)(ip->ip_hl << 2));
 		m0->m_pkthdr.csum_flags &= ~CSUM_SCTP;
 	}
@@ -6160,9 +6151,6 @@ pf_route6(struct mbuf **m, struct pf_krule *r, int dir, struct ifnet *oifp,
 	if (m0->m_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6 &
 	    ~ifp->if_hwassist) {
 		uint32_t plen = m0->m_pkthdr.len - sizeof(*ip6);
-		m0 = mb_unmapped_to_ext(m0);
-		if (m0 == NULL)
-			goto done;
 		in6_delayed_cksum(m0, plen, sizeof(struct ip6_hdr));
 		m0->m_pkthdr.csum_flags &= ~CSUM_DELAY_DATA_IPV6;
 	}

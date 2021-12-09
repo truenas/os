@@ -119,7 +119,8 @@ static void nfscl_insertlock(struct nfscllockowner *, struct nfscllock *,
     struct nfscllock *, int);
 static int nfscl_updatelock(struct nfscllockowner *, struct nfscllock **,
     struct nfscllock **, int);
-static void nfscl_delegreturnall(struct nfsclclient *, NFSPROC_T *);
+static void nfscl_delegreturnall(struct nfsclclient *, NFSPROC_T *,
+    struct nfscldeleghead *);
 static u_int32_t nfscl_nextcbident(void);
 static mount_t nfscl_getmnt(int, uint8_t *, u_int32_t, struct nfsclclient **);
 static struct nfsclclient *nfscl_getclnt(u_int32_t);
@@ -1987,7 +1988,7 @@ static int	fake_global;	/* Used to force visibility of MNTK_UNMOUNTF */
  * Called from nfs umount to free up the clientid.
  */
 void
-nfscl_umount(struct nfsmount *nmp, NFSPROC_T *p)
+nfscl_umount(struct nfsmount *nmp, NFSPROC_T *p, struct nfscldeleghead *dhp)
 {
 	struct nfsclclient *clp;
 	struct ucred *cred;
@@ -2049,7 +2050,7 @@ nfscl_umount(struct nfsmount *nmp, NFSPROC_T *p)
 		 * the server throws it away?
 		 */
 		LIST_REMOVE(clp, nfsc_list);
-		nfscl_delegreturnall(clp, p);
+		nfscl_delegreturnall(clp, p, dhp);
 		cred = newnfs_getcred();
 		if (NFSHASNFSV4N(nmp)) {
 			(void)nfsrpc_destroysession(nmp, clp, cred, p);
@@ -3440,7 +3441,8 @@ lookformore:
  * (Must be called with client sleep lock.)
  */
 static void
-nfscl_delegreturnall(struct nfsclclient *clp, NFSPROC_T *p)
+nfscl_delegreturnall(struct nfsclclient *clp, NFSPROC_T *p,
+    struct nfscldeleghead *dhp)
 {
 	struct nfscldeleg *dp, *ndp;
 	struct ucred *cred;
@@ -3449,7 +3451,11 @@ nfscl_delegreturnall(struct nfsclclient *clp, NFSPROC_T *p)
 	TAILQ_FOREACH_SAFE(dp, &clp->nfsc_deleg, nfsdl_list, ndp) {
 		nfscl_cleandeleg(dp);
 		(void) nfscl_trydelegreturn(dp, cred, clp->nfsc_nmp, p);
-		nfscl_freedeleg(&clp->nfsc_deleg, dp, true);
+		if (dhp != NULL) {
+			nfscl_freedeleg(&clp->nfsc_deleg, dp, false);
+			TAILQ_INSERT_HEAD(dhp, dp, nfsdl_list);
+		} else
+			nfscl_freedeleg(&clp->nfsc_deleg, dp, true);
 	}
 	NFSFREECRED(cred);
 }
@@ -4665,6 +4671,7 @@ nfscl_removedeleg(vnode_t vp, NFSPROC_T *p, nfsv4stateid_t *stp)
 	struct nfsclowner *owp;
 	struct nfscllockowner *lp;
 	struct nfsmount *nmp;
+	struct mount *mp;
 	struct ucred *cred;
 	struct nfsnode *np;
 	int igotlock = 0, triedrecall = 0, needsrecall, retcnt = 0, islept;
@@ -4679,6 +4686,7 @@ nfscl_removedeleg(vnode_t vp, NFSPROC_T *p, nfsv4stateid_t *stp)
 	}
 	NFSUNLOCKMNT(nmp);
 	np = VTONFS(vp);
+	mp = nmp->nm_mountp;
 	NFSLOCKCLSTATE();
 	/*
 	 * Loop around waiting for:
@@ -4705,8 +4713,13 @@ nfscl_removedeleg(vnode_t vp, NFSPROC_T *p, nfsv4stateid_t *stp)
 			    igotlock = 0;
 			}
 			dp->nfsdl_rwlock.nfslock_lock |= NFSV4LOCK_WANTED;
-			(void) nfsmsleep(&dp->nfsdl_rwlock,
-			    NFSCLSTATEMUTEXPTR, PZERO, "nfscld", NULL);
+			msleep(&dp->nfsdl_rwlock, NFSCLSTATEMUTEXPTR, PZERO,
+			    "nfscld", hz);
+			if (NFSCL_FORCEDISM(mp)) {
+			    dp->nfsdl_flags &= ~NFSCLDL_DELEGRET;
+			    NFSUNLOCKCLSTATE();
+			    return (0);
+			}
 			continue;
 		    }
 		    needsrecall = 0;
@@ -4729,7 +4742,14 @@ nfscl_removedeleg(vnode_t vp, NFSPROC_T *p, nfsv4stateid_t *stp)
 			islept = 0;
 			while (!igotlock) {
 			    igotlock = nfsv4_lock(&clp->nfsc_lock, 1,
-				&islept, NFSCLSTATEMUTEXPTR, NULL);
+				&islept, NFSCLSTATEMUTEXPTR, mp);
+			    if (NFSCL_FORCEDISM(mp)) {
+				dp->nfsdl_flags &= ~NFSCLDL_DELEGRET;
+				if (igotlock)
+				    nfsv4_unlock(&clp->nfsc_lock, 0);
+				NFSUNLOCKCLSTATE();
+				return (0);
+			    }
 			    if (islept)
 				break;
 			}
@@ -4770,6 +4790,7 @@ nfscl_renamedeleg(vnode_t fvp, nfsv4stateid_t *fstp, int *gotfdp, vnode_t tvp,
 	struct nfsclowner *owp;
 	struct nfscllockowner *lp;
 	struct nfsmount *nmp;
+	struct mount *mp;
 	struct ucred *cred;
 	struct nfsnode *np;
 	int igotlock = 0, triedrecall = 0, needsrecall, retcnt = 0, islept;
@@ -4785,6 +4806,7 @@ nfscl_renamedeleg(vnode_t fvp, nfsv4stateid_t *fstp, int *gotfdp, vnode_t tvp,
 		return (retcnt);
 	}
 	NFSUNLOCKMNT(nmp);
+	mp = nmp->nm_mountp;
 	NFSLOCKCLSTATE();
 	/*
 	 * Loop around waiting for:
@@ -4812,8 +4834,15 @@ nfscl_renamedeleg(vnode_t fvp, nfsv4stateid_t *fstp, int *gotfdp, vnode_t tvp,
 			    igotlock = 0;
 			}
 			dp->nfsdl_rwlock.nfslock_lock |= NFSV4LOCK_WANTED;
-			(void) nfsmsleep(&dp->nfsdl_rwlock,
-			    NFSCLSTATEMUTEXPTR, PZERO, "nfscld", NULL);
+			msleep(&dp->nfsdl_rwlock, NFSCLSTATEMUTEXPTR, PZERO,
+			    "nfscld", hz);
+			if (NFSCL_FORCEDISM(mp)) {
+			    dp->nfsdl_flags &= ~NFSCLDL_DELEGRET;
+			    NFSUNLOCKCLSTATE();
+			    *gotfdp = 0;
+			    *gottdp = 0;
+			    return (0);
+			}
 			continue;
 		    }
 		    needsrecall = 0;
@@ -4836,7 +4865,16 @@ nfscl_renamedeleg(vnode_t fvp, nfsv4stateid_t *fstp, int *gotfdp, vnode_t tvp,
 			islept = 0;
 			while (!igotlock) {
 			    igotlock = nfsv4_lock(&clp->nfsc_lock, 1,
-				&islept, NFSCLSTATEMUTEXPTR, NULL);
+				&islept, NFSCLSTATEMUTEXPTR, mp);
+			    if (NFSCL_FORCEDISM(mp)) {
+				dp->nfsdl_flags &= ~NFSCLDL_DELEGRET;
+				if (igotlock)
+				    nfsv4_unlock(&clp->nfsc_lock, 0);
+				NFSUNLOCKCLSTATE();
+				*gotfdp = 0;
+				*gottdp = 0;
+				return (0);
+			    }
 			    if (islept)
 				break;
 			}
@@ -4873,8 +4911,14 @@ nfscl_renamedeleg(vnode_t fvp, nfsv4stateid_t *fstp, int *gotfdp, vnode_t tvp,
 			 */
 			if (dp->nfsdl_rwlock.nfslock_usecnt > 0) {
 			    dp->nfsdl_rwlock.nfslock_lock |= NFSV4LOCK_WANTED;
-			    (void) nfsmsleep(&dp->nfsdl_rwlock,
-				NFSCLSTATEMUTEXPTR, PZERO, "nfscld", NULL);
+			    msleep(&dp->nfsdl_rwlock, NFSCLSTATEMUTEXPTR, PZERO,
+				"nfscld", hz);
+			    if (NFSCL_FORCEDISM(mp)) {
+				NFSUNLOCKCLSTATE();
+				*gotfdp = 0;
+				*gottdp = 0;
+				return (0);
+			    }
 			    continue;
 			}
 			LIST_FOREACH(owp, &dp->nfsdl_owner, nfsow_list) {
@@ -4909,6 +4953,7 @@ int
 nfscl_getref(struct nfsmount *nmp)
 {
 	struct nfsclclient *clp;
+	int ret;
 
 	NFSLOCKCLSTATE();
 	clp = nfscl_findcl(nmp);
@@ -4916,9 +4961,12 @@ nfscl_getref(struct nfsmount *nmp)
 		NFSUNLOCKCLSTATE();
 		return (0);
 	}
-	nfsv4_getref(&clp->nfsc_lock, NULL, NFSCLSTATEMUTEXPTR, NULL);
+	nfsv4_getref(&clp->nfsc_lock, NULL, NFSCLSTATEMUTEXPTR, nmp->nm_mountp);
+	ret = 1;
+	if (NFSCL_FORCEDISM(nmp->nm_mountp))
+		ret = 0;
 	NFSUNLOCKCLSTATE();
-	return (1);
+	return (ret);
 }
 
 /*
@@ -5166,6 +5214,7 @@ nfscl_layout(struct nfsmount *nmp, vnode_t vp, u_int8_t *fhp, int fhlen,
 			    nfsly_hash);
 			lyp->nfsly_timestamp = NFSD_MONOSEC + 120;
 			nfscl_layoutcnt++;
+			nfsstatsv1.cllayouts++;
 		} else {
 			if (retonclose != 0)
 				lyp->nfsly_flags |= NFSLY_RETONCLOSE;
@@ -5540,6 +5589,7 @@ nfscl_freelayout(struct nfscllayout *layp)
 		free(rp, M_NFSLAYRECALL);
 	}
 	nfscl_layoutcnt--;
+	nfsstatsv1.cllayouts--;
 	free(layp, M_NFSLAYOUT);
 }
 

@@ -199,7 +199,7 @@ MK_SYSTEM_LINKER=	no
 .if defined(CROSS_TOOLCHAIN_PREFIX)
 CROSS_BINUTILS_PREFIX?=${CROSS_TOOLCHAIN_PREFIX}
 .endif
-XBINUTILS=	AS AR LD NM OBJCOPY RANLIB SIZE STRINGS STRIPBIN
+XBINUTILS=	AS AR ELFCTL LD NM OBJCOPY RANLIB SIZE STRINGS STRIPBIN
 .for BINUTIL in ${XBINUTILS}
 .if defined(CROSS_BINUTILS_PREFIX) && \
     exists(${CROSS_BINUTILS_PREFIX}/${${BINUTIL}})
@@ -502,11 +502,13 @@ SVNVERSION_CMD?=${_D}/svnliteversion
 .  endif
 . endfor
 .endif
+.if defined(SVNVERSION_CMD) && !empty(SVNVERSION_CMD)
 _VCS_REVISION?=	$$(eval ${SVNVERSION_CMD} ${SRCDIR})
 . if !empty(_VCS_REVISION)
 VCS_REVISION=	$$(echo r${_VCS_REVISION})
-. endif
 .export VCS_REVISION
+. endif
+.endif
 .endif
 
 .if !defined(GIT_CMD) || empty(GIT_CMD)
@@ -765,6 +767,7 @@ XMAKE=		${BMAKE} \
 		TARGET=${TARGET} TARGET_ARCH=${TARGET_ARCH} \
 		MK_CLANG_IS_CC=${MK_CLANG_BOOTSTRAP} \
 		MK_LLDB=no \
+		MK_LLVM_BINUTILS=no \
 		MK_TESTS=no
 
 # kernel-tools stage
@@ -807,8 +810,8 @@ HMAKE+=		PATH=${TMPPATH} METALOG=${METALOG} -DNO_ROOT
 
 CROSSENV+=	CC="${XCC} ${XCFLAGS}" CXX="${XCXX} ${XCXXFLAGS} ${XCFLAGS}" \
 		CPP="${XCPP} ${XCFLAGS}" \
-		AS="${XAS}" AR="${XAR}" LD="${XLD}" LLVM_LINK="${XLLVM_LINK}" \
-		NM=${XNM} OBJCOPY="${XOBJCOPY}" \
+		AS="${XAS}" AR="${XAR}" ELFCTL="${XELFCTL}" LD="${XLD}" \
+		LLVM_LINK="${XLLVM_LINK}" NM=${XNM} OBJCOPY="${XOBJCOPY}" \
 		RANLIB=${XRANLIB} STRINGS=${XSTRINGS} \
 		SIZE="${XSIZE}" STRIPBIN="${XSTRIPBIN}"
 
@@ -1182,6 +1185,10 @@ _ncpu_cmd=sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo unknown
 buildworld_prologue: .PHONY
 	@echo "--------------------------------------------------------------"
 	@echo ">>> World build started on `LC_ALL=C date`"
+.if ${TARGET:Mmips}
+	@echo "--------------------------------------------------------------"
+	@echo "WARNING: MIPS architecture is gone in FreeBSD 14.0"
+.endif
 	@echo "--------------------------------------------------------------"
 
 buildworld_epilogue: .PHONY
@@ -1191,6 +1198,10 @@ buildworld_epilogue: .PHONY
 	@seconds=$$(($$(date '+%s') - ${_BUILDWORLD_START})); \
 	  echo -n ">>> World built in $$seconds seconds, "; \
 	  echo "ncpu: $$(${_ncpu_cmd})${.MAKE.JOBS:S/^/, make -j/}"
+.if ${TARGET:Mmips}
+	@echo "--------------------------------------------------------------"
+	@echo "WARNING: MIPS architecture is gone in FreeBSD 14.0"
+.endif
 	@echo "--------------------------------------------------------------"
 
 #
@@ -2323,9 +2334,10 @@ _gensnmptree=	usr.sbin/bsnmpd/gensnmptree
 
 # We need to build tblgen when we're building clang or lld, either as
 # bootstrap tools, or as the part of the normal build.
+# llvm-tblgen is also needed for various llvm binutils (e.g. objcopy).
 .if ${MK_CLANG_BOOTSTRAP} != "no" || ${MK_CLANG} != "no" || \
     ${MK_LLD_BOOTSTRAP} != "no" || ${MK_LLD} != "no" || \
-    ${MK_LLDB} != "no"
+    ${MK_LLDB} != "no" || ${MK_LLVM_BINUTILS} != "no"
 _clang_tblgen= \
 	lib/clang/libllvmminimal \
 	usr.bin/clang/llvm-tblgen
@@ -2607,6 +2619,7 @@ _dtrace_tools= cddl/lib/libctf cddl/lib/libspl cddl/usr.bin/ctfconvert \
 .if ${MK_ELFTOOLCHAIN_BOOTSTRAP} != "no"
 _elftctools=	lib/libelftc \
 		lib/libpe \
+		usr.bin/elfctl \
 		usr.bin/objcopy \
 		usr.bin/nm \
 		usr.bin/size \
@@ -2620,6 +2633,7 @@ _elftctools+=	usr.bin/addr2line
 # the target (for at least crunchide).
 _elftctools=	lib/libelftc \
 		lib/libpe \
+		usr.bin/elfctl \
 		usr.bin/objcopy
 .endif
 
@@ -2987,6 +3001,8 @@ _cddl_lib_libavl= cddl/lib/libavl
 _cddl_lib_libuutil= cddl/lib/libuutil
 _cddl_lib_libspl= cddl/lib/libspl
 
+cddl/lib/libavl__L: cddl/lib/libspl__L
+cddl/lib/libnvpair__L: cddl/lib/libspl__L
 cddl/lib/libuutil__L: cddl/lib/libavl__L cddl/lib/libspl__L
 
 .if ${MK_ZFS} != "no"
@@ -3000,9 +3016,9 @@ _cddl_lib_libzfsbootenv= cddl/lib/libzfsbootenv
 
 cddl/lib/libtpool__L: cddl/lib/libspl__L
 
-cddl/lib/libzutil__L: cddl/lib/libavl__L cddl/lib/libtpool__L
+cddl/lib/libzutil__L: cddl/lib/libavl__L lib/libgeom__L lib/msun__L cddl/lib/libtpool__L
 
-cddl/lib/libzfs_core__L: cddl/lib/libnvpair__L
+cddl/lib/libzfs_core__L: cddl/lib/libnvpair__L cddl/lib/libspl__L cddl/lib/libzutil__L
 
 cddl/lib/libzfs__L: cddl/lib/libzfs_core__L lib/msun__L lib/libutil__L
 cddl/lib/libzfs__L: lib/libthr__L lib/libmd__L lib/libz__L cddl/lib/libumem__L

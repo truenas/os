@@ -170,6 +170,7 @@ int nfsrv_copymr(vnode_t, vnode_t, vnode_t, struct nfsdevice *,
 int nfsrv_mdscopymr(char *, char *, char *, char *, int *, char *, NFSPROC_T *,
     struct vnode **, struct vnode **, struct pnfsdsfile **, struct nfsdevice **,
     struct nfsdevice **);
+void nfsrv_marknospc(char *, bool);
 
 /* nfs_nfsdserv.c */
 int nfsrvd_access(struct nfsrv_descript *, int,
@@ -592,7 +593,7 @@ void nfscl_lockrelease(struct nfscllockowner *, int, int);
 void nfscl_fillclid(u_int64_t, char *, u_int8_t *, u_int16_t);
 void nfscl_filllockowner(void *, u_int8_t *, int);
 void nfscl_freeopen(struct nfsclopen *, int, bool);
-void nfscl_umount(struct nfsmount *, NFSPROC_T *);
+void nfscl_umount(struct nfsmount *, NFSPROC_T *, struct nfscldeleghead *);
 void nfscl_renewthread(struct nfsclclient *, NFSPROC_T *);
 void nfscl_initiate_recovery(struct nfsclclient *);
 int nfscl_hasexpired(struct nfsclclient *, u_int32_t, NFSPROC_T *);
@@ -762,6 +763,7 @@ int nfsvno_listxattr(struct vnode *, uint64_t, struct ucred *, struct thread *,
 void nfsm_trimtrailing(struct nfsrv_descript *, struct mbuf *, char *, int,
     int);
 bool nfsrv_checkwrongsec(struct nfsrv_descript *, int, enum vtype);
+void nfsrv_checknospc(void);
 
 /* nfs_commonkrpc.c */
 int newnfs_nmcancelreqs(struct nfsmount *);

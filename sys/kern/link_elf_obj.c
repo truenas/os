@@ -1321,7 +1321,7 @@ findbase(elf_file_t ef, int sec)
 }
 
 static int
-relocate_file(elf_file_t ef)
+relocate_file1(elf_file_t ef, bool ifuncs)
 {
 	const Elf_Rel *rellim;
 	const Elf_Rel *rel;
@@ -1353,6 +1353,9 @@ relocate_file(elf_file_t ef)
 			sym = ef->ddbsymtab + symidx;
 			/* Local relocs are already done */
 			if (ELF_ST_BIND(sym->st_info) == STB_LOCAL)
+				continue;
+			if ((ELF_ST_TYPE(sym->st_info) == STT_GNU_IFUNC ||
+			    elf_is_ifunc_reloc(rel->r_info)) != ifuncs)
 				continue;
 			if (elf_reloc(&ef->lf, base, rel, ELF_RELOC_REL,
 			    elf_obj_lookup)) {
@@ -1386,6 +1389,9 @@ relocate_file(elf_file_t ef)
 			/* Local relocs are already done */
 			if (ELF_ST_BIND(sym->st_info) == STB_LOCAL)
 				continue;
+			if ((ELF_ST_TYPE(sym->st_info) == STT_GNU_IFUNC ||
+			    elf_is_ifunc_reloc(rela->r_info)) != ifuncs)
+				continue;
 			if (elf_reloc(&ef->lf, base, rela, ELF_RELOC_RELA,
 			    elf_obj_lookup)) {
 				symname = symbol_name(ef, rela->r_info);
@@ -1407,6 +1413,17 @@ relocate_file(elf_file_t ef)
 }
 
 static int
+relocate_file(elf_file_t ef)
+{
+	int error;
+
+	error = relocate_file1(ef, false);
+	if (error == 0)
+		error = relocate_file1(ef, true);
+	return (error);
+}
+
+static int
 link_elf_lookup_symbol(linker_file_t lf, const char *name, c_linker_sym_t *sym)
 {
 	elf_file_t ef = (elf_file_t) lf;
@@ -1421,7 +1438,7 @@ link_elf_lookup_symbol(linker_file_t lf, const char *name, c_linker_sym_t *sym)
 			return 0;
 		}
 	}
-	return ENOENT;
+	return (ENOENT);
 }
 
 static int
@@ -1442,17 +1459,17 @@ link_elf_symbol_values(linker_file_t lf, c_linker_sym_t sym,
 			val = ((caddr_t (*)(void))val)();
 		symval->value = val;
 		symval->size = es->st_size;
-		return 0;
+		return (0);
 	}
-	return ENOENT;
+	return (ENOENT);
 }
 
 static int
 link_elf_search_symbol(linker_file_t lf, caddr_t value,
     c_linker_sym_t *sym, long *diffp)
 {
-	elf_file_t ef = (elf_file_t) lf;
-	u_long off = (uintptr_t) (void *) value;
+	elf_file_t ef = (elf_file_t)lf;
+	u_long off = (uintptr_t)(void *)value;
 	u_long diff = off;
 	u_long st_value;
 	const Elf_Sym *es;
@@ -1480,7 +1497,7 @@ link_elf_search_symbol(linker_file_t lf, caddr_t value,
 		*diffp = diff;
 	*sym = (c_linker_sym_t) best;
 
-	return 0;
+	return (0);
 }
 
 /*
@@ -1779,25 +1796,21 @@ link_elf_reloc_local(linker_file_t lf, bool ifuncs)
 static long
 link_elf_symtab_get(linker_file_t lf, const Elf_Sym **symtab)
 {
-    elf_file_t ef = (elf_file_t)lf;
-    
-    *symtab = ef->ddbsymtab;
-    
-    if (*symtab == NULL)
-        return (0);
+	elf_file_t ef = (elf_file_t)lf;
 
-    return (ef->ddbsymcnt);
+	*symtab = ef->ddbsymtab;
+	if (*symtab == NULL)
+		return (0);
+	return (ef->ddbsymcnt);
 }
     
 static long
 link_elf_strtab_get(linker_file_t lf, caddr_t *strtab)
 {
-    elf_file_t ef = (elf_file_t)lf;
+	elf_file_t ef = (elf_file_t)lf;
 
-    *strtab = ef->ddbstrtab;
-
-    if (*strtab == NULL)
-        return (0);
-
-    return (ef->ddbstrcnt);
+	*strtab = ef->ddbstrtab;
+	if (*strtab == NULL)
+		return (0);
+	return (ef->ddbstrcnt);
 }
