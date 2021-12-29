@@ -335,7 +335,9 @@ static int
 nss_configure(void)
 {
 	static time_t	 confmod;
+#ifndef NS_REREAD_CONF
 	static int	 already_initialized = 0;
+#endif
 	struct stat	 statbuf;
 	int		 result, isthreaded;
 	const char	*path;
@@ -354,6 +356,7 @@ nss_configure(void)
 #endif
 		path = _PATH_NS_CONF;
 #ifndef NS_REREAD_CONF
+	canary
 	/*
 	 * Define NS_REREAD_CONF to have nsswitch notice changes
 	 * to nsswitch.conf(5) during runtime.  This involves calling
