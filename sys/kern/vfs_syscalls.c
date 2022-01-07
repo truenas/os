@@ -98,7 +98,7 @@ static int kern_chflagsat(struct thread *td, int fd, const char *path,
 static int setfflags(struct thread *td, struct vnode *, u_long);
 static int getutimes(const struct timeval *, enum uio_seg, struct timespec *);
 static int getutimens(const struct timespec *, enum uio_seg,
-    struct timespec *, int *);
+    struct timespec *, bool, int *);
 static int setutimes(struct thread *td, struct vnode *,
     const struct timespec *, int, int);
 static int vn_access(struct vnode *vp, int user_flags, struct ucred *cred,
@@ -3117,40 +3117,46 @@ getutimes(const struct timeval *usrtvp, enum uio_seg tvpseg,
 #define	UTIMENS_EXIT	0x2
 static int
 getutimens(const struct timespec *usrtsp, enum uio_seg tspseg,
-    struct timespec *tsp, int *retflags)
+    struct timespec *tsp, bool get_btime, int *retflags)
 {
 	struct timespec tsnow;
-	int error;
+	int error, i;
+	int cnt = get_btime ? 3 : 2;
+	int flags = UTIMENS_NULL | UTIMENS_EXIT;
 
 	vfs_timestamp(&tsnow);
 	*retflags = 0;
 	if (usrtsp == NULL) {
-		tsp[0] = tsnow;
-		tsp[1] = tsnow;
+		for (i = 0; i < cnt; i++)
+			tsp[i] = tsnow;
+
 		*retflags |= UTIMENS_NULL;
 		return (0);
 	}
 	if (tspseg == UIO_SYSSPACE) {
-		tsp[0] = usrtsp[0];
-		tsp[1] = usrtsp[1];
-	} else if ((error = copyin(usrtsp, tsp, sizeof(*tsp) * 2)) != 0)
+		for (i = 0; i < cnt; i++)
+			tsp[i] = usrtsp[i];
+	} else if ((error = copyin(usrtsp, tsp, sizeof(*tsp) * cnt)) != 0)
 		return (error);
-	if (tsp[0].tv_nsec == UTIME_OMIT && tsp[1].tv_nsec == UTIME_OMIT)
-		*retflags |= UTIMENS_EXIT;
-	if (tsp[0].tv_nsec == UTIME_NOW && tsp[1].tv_nsec == UTIME_NOW)
-		*retflags |= UTIMENS_NULL;
-	if (tsp[0].tv_nsec == UTIME_OMIT)
-		tsp[0].tv_sec = VNOVAL;
-	else if (tsp[0].tv_nsec == UTIME_NOW)
-		tsp[0] = tsnow;
-	else if (tsp[0].tv_nsec < 0 || tsp[0].tv_nsec >= 1000000000L)
-		return (EINVAL);
-	if (tsp[1].tv_nsec == UTIME_OMIT)
-		tsp[1].tv_sec = VNOVAL;
-	else if (tsp[1].tv_nsec == UTIME_NOW)
-		tsp[1] = tsnow;
-	else if (tsp[1].tv_nsec < 0 || tsp[1].tv_nsec >= 1000000000L)
-		return (EINVAL);
+
+	for (i = 0; i < cnt; i++) {
+		switch(tsp[i].tv_nsec) {
+		case UTIME_OMIT:
+			tsp[i].tv_sec = VNOVAL;
+			flags &= ~UTIMENS_NULL;
+			break;
+		case UTIME_NOW:
+			tsp[i] = tsnow;
+			flags &= ~UTIMENS_EXIT;
+			break;
+		default:
+			if (tsp[i].tv_nsec < 0 || tsp[i].tv_nsec >= 1000000000L)
+				return (EINVAL);
+
+			flags = 0;
+		}
+	}
+	*retflags = flags;
 
 	return (0);
 }
@@ -3346,7 +3352,7 @@ kern_futimens(struct thread *td, int fd, struct timespec *tptr,
 	int error, flags;
 
 	AUDIT_ARG_FD(fd);
-	error = getutimens(tptr, tptrseg, ts, &flags);
+	error = getutimens(tptr, tptrseg, ts, false, &flags);
 	if (error != 0)
 		return (error);
 	if (flags & UTIMENS_EXIT)
@@ -3380,14 +3386,17 @@ kern_utimensat(struct thread *td, int fd, const char *path,
     int flag)
 {
 	struct nameidata nd;
-	struct timespec ts[2];
+	struct timespec ts[3];
 	int error, flags;
+	bool get_btime = flag & AT_UTIMENSAT_BTIME;
+
+	flag &= ~AT_UTIMENSAT_BTIME;
 
 	if ((flag & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH |
 	    AT_EMPTY_PATH)) != 0)
 		return (EINVAL);
 
-	if ((error = getutimens(tptr, tptrseg, ts, &flags)) != 0)
+	if ((error = getutimens(tptr, tptrseg, ts, get_btime, &flags)) != 0)
 		return (error);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, at2cnpflags(flag, AT_SYMLINK_NOFOLLOW |
 	    AT_RESOLVE_BENEATH | AT_EMPTY_PATH) | AUDITVNODE1,
@@ -3402,7 +3411,8 @@ kern_utimensat(struct thread *td, int fd, const char *path,
 	 */
 	NDFREE_NOTHING(&nd);
 	if ((flags & UTIMENS_EXIT) == 0)
-		error = setutimes(td, nd.ni_vp, ts, 2, flags & UTIMENS_NULL);
+		error = setutimes(td, nd.ni_vp, ts, get_btime ? 3 : 2,
+		    flags & UTIMENS_NULL);
 	vrele(nd.ni_vp);
 	return (error);
 }
