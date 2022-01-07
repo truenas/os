@@ -228,6 +228,7 @@ typedef	__pid_t		pid_t;
 #endif	/* __POSIX_VISIBLE >= 200809 */
 #if __BSD_VISIBLE
 /* #define AT_UNUSED1		0x1000 *//* Was AT_BENEATH */
+#define	AT_UTIMENSAT_BTIME	0x1000
 #define	AT_RESOLVE_BENEATH	0x2000	/* Do not allow name resolution
 					   to walk out of dirfd */
 #define	AT_EMPTY_PATH		0x4000	/* Operate on dirfd if path is empty */
