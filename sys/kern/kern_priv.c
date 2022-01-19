@@ -92,6 +92,11 @@ SYSCTL_INT(_security_bsd, OID_AUTO, unprivileged_read_msgbuf,
     CTLFLAG_RW, &unprivileged_read_msgbuf, 0,
     "Unprivileged processes may read the kernel message buffer");
 
+static int	unprivileged_inode_gen;
+SYSCTL_INT(_security_bsd, OID_AUTO, unprivileged_inode_gen,
+    CTLFLAG_RWTUN, &unprivileged_inode_gen, 0,
+    "Unprivileged processes may read inode generation");
+
 SDT_PROVIDER_DEFINE(priv);
 SDT_PROBE_DEFINE1(priv, kernel, priv_check, priv__ok, "int");
 SDT_PROBE_DEFINE1(priv, kernel, priv_check, priv__err, "int");
@@ -338,7 +343,8 @@ priv_check_cred_vfs_generation_slow(struct ucred *cred)
 		goto out;
 	}
 
-	if (cred->cr_uid == 0 && suser_enabled(cred)) {
+	if (unprivileged_inode_gen ||
+	    (cred->cr_uid == 0 && suser_enabled(cred))) {
 		error = 0;
 		goto out;
 	}
@@ -359,7 +365,8 @@ priv_check_cred_vfs_generation(struct ucred *cred)
 		return (priv_check_cred_vfs_generation_slow(cred));
 
 	error = EPERM;
-	if (!jailed(cred) && cred->cr_uid == 0 && suser_enabled(cred))
+	if (!jailed(cred) && (unprivileged_inode_gen ||
+            (cred->cr_uid == 0 && suser_enabled(cred))))
 		error = 0;
 	return (error);
 }
