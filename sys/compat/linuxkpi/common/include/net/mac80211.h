@@ -1,6 +1,6 @@
 /*-
  * Copyright (c) 2020-2021 The FreeBSD Foundation
- * Copyright (c) 2020-2021 Bjoern A. Zeeb
+ * Copyright (c) 2020-2022 Bjoern A. Zeeb
  *
  * This software was developed by Björn Zeeb under sponsorship from
  * the FreeBSD Foundation.
@@ -95,6 +95,7 @@ enum ieee80211_bss_changed {
 	BSS_CHANGED_PS			= BIT(16),
 	BSS_CHANGED_QOS			= BIT(17),
 	BSS_CHANGED_TXPOWER		= BIT(18),
+	BSS_CHANGED_HE_BSS_COLOR	= BIT(19),
 };
 
 /* 802.11 Figure 9-256 Suite selector format. [OUI(3), SUITE TYPE(1)] */
@@ -185,9 +186,9 @@ struct ieee80211_bss_conf {
 	size_t					ssid_len;
 	uint8_t					ssid[IEEE80211_NWID_LEN];
 	uint16_t				aid;
-	uint16_t				beacon_int;
 	uint16_t				ht_operation_mode;
 	int					arp_addr_cnt;
+
 	uint8_t					dtim_period;
 	bool					assoc;
 	bool					idle;
@@ -197,12 +198,16 @@ struct ieee80211_bss_conf {
 	bool					use_cts_prot;
 	bool					use_short_preamble;
 	bool					use_short_slot;
+	uint16_t				beacon_int;
+	uint32_t				sync_device_ts;
+	uint64_t				sync_tsf;
+	uint8_t					sync_dtim_count;
+	int16_t					txpower;
 
-	int		txpower;
 	int		ack_enabled, bssid_index, bssid_indicator, cqm_rssi_hyst, cqm_rssi_thold, ema_ap, frame_time_rts_th, ftm_responder;
 	int		htc_trig_based_pkt_ext;
 	int		multi_sta_back_32bit, nontransmitted;
-	int		profile_periodicity, sync_device_ts, sync_dtim_count, sync_tsf;
+	int		profile_periodicity;
 	int		twt_requester, uora_exists, uora_ocw_range;
 	int		assoc_capability, enable_beacon, hidden_ssid, ibss_joined, mcast_rate, twt_protected;
 	unsigned long	basic_rates;
@@ -445,33 +450,34 @@ enum ieee80211_rx_status_flags {
 
 struct ieee80211_rx_status {
 	/* TODO FIXME, this is too large. Over-reduce types to u8 where possible. */
-	u8	boottime_ns;
-	u8	mactime;
-	u8	device_timestamp;
+	uint64_t			boottime_ns;
+	uint64_t			mactime;
+	uint32_t			device_timestamp;
 	enum ieee80211_rx_status_flags	flag;
-	u16	freq;
-	u8	bw;
+	uint16_t			freq;
+	uint8_t				bw;
 #define	RATE_INFO_BW_20		0x01
 #define	RATE_INFO_BW_40		0x02
 #define	RATE_INFO_BW_80		0x04
 #define	RATE_INFO_BW_160	0x08
 #define	RATE_INFO_BW_HE_RU	0x10
-	u8	encoding;
+	uint8_t				encoding;
+#define	RX_ENC_LEGACY		0x00
 #define	RX_ENC_HE		0x01
 #define	RX_ENC_HT		0x02
 #define	RX_ENC_VHT		0x04
-	u8	ampdu_reference;
-	u8	band;
-	u8	chains;
-	u8	chain_signal[3];
-	u8	signal;
-	u8	enc_flags;
-	u8	he_dcm;
-	u8	he_gi;
-	u8	he_ru;
-	u8	zero_length_psdu_type;
-	uint8_t		nss;
-	uint8_t		rate_idx;
+	uint8_t				ampdu_reference;
+	uint8_t				band;
+	uint8_t				chains;
+	uint8_t				chain_signal[4];
+	uint8_t				signal;
+	uint8_t				enc_flags;
+	uint8_t				he_dcm;
+	uint8_t				he_gi;
+	uint8_t				he_ru;
+	uint8_t				zero_length_psdu_type;
+	uint8_t				nss;
+	uint8_t				rate_idx;
 };
 
 struct ieee80211_scan_ies {
@@ -781,6 +787,8 @@ struct ieee80211_ops {
 	void (*stop_ap)(struct ieee80211_hw *, struct ieee80211_vif *);
 	int  (*join_ibss)(struct ieee80211_hw *, struct ieee80211_vif *);
 	void (*leave_ibss)(struct ieee80211_hw *, struct ieee80211_vif *);
+
+	int (*set_sar_specs)(struct ieee80211_hw *, const struct cfg80211_sar_specs *);
 
 	/* XXX TODO: get_et_sset_count, get_et_stats, get_et_strings */
 };
@@ -1830,6 +1838,13 @@ ieee80211_tx_status_irqsafe(struct ieee80211_hw *hw, struct sk_buff *skb)
 	ieee80211_tx_status(hw, skb);
 }
 
+static __inline void
+ieee80211_tx_status_ni(struct ieee80211_hw *hw, struct sk_buff *skb)
+{
+	IMPROVE();
+	ieee80211_tx_status(hw, skb);
+}
+
 static __inline int
 ieee80211_start_tx_ba_session(struct ieee80211_sta *sta, uint8_t tid, int x)
 {
@@ -1967,6 +1982,12 @@ ieee80211_txq_schedule_end(struct ieee80211_hw *hw, uint32_t ac)
 
 static __inline void
 ieee80211_txq_schedule_start(struct ieee80211_hw *hw, uint32_t ac)
+{
+	TODO();
+}
+
+static __inline void
+ieee80211_schedule_txq(struct ieee80211_hw *hw, struct ieee80211_txq *txq)
 {
 	TODO();
 }

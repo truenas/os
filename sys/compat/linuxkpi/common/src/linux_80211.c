@@ -1,6 +1,6 @@
 /*-
  * Copyright (c) 2020-2021 The FreeBSD Foundation
- * Copyright (c) 2020-2021 Bjoern A. Zeeb
+ * Copyright (c) 2020-2022 Bjoern A. Zeeb
  *
  * This software was developed by Björn Zeeb under sponsorship from
  * the FreeBSD Foundation.
@@ -573,15 +573,39 @@ lkpi_stop_hw_scan(struct lkpi_hw *lhw, struct ieee80211_vif *vif)
 
 	hw = LHW_TO_HW(lhw);
 
+	IEEE80211_UNLOCK(lhw->ic);
+	LKPI_80211_LHW_LOCK(lhw);
 	/* Need to cancel the scan. */
 	lkpi_80211_mo_cancel_hw_scan(hw, vif);
 
 	/* Need to make sure we see ieee80211_scan_completed. */
 	error = msleep(lhw, &lhw->mtx, 0, "lhwscanstop", hz/2);
+	LKPI_80211_LHW_UNLOCK(lhw);
+	IEEE80211_LOCK(lhw->ic);
 
 	if ((lhw->scan_flags & LKPI_SCAN_RUNNING) != 0)
 		ic_printf(lhw->ic, "%s: failed to cancel scan: %d (%p, %p)\n",
 		    __func__, error, lhw, vif);
+}
+
+static void
+lkpi_hw_conf_idle(struct ieee80211_hw *hw, bool new)
+{
+	struct lkpi_hw *lhw;
+	int error;
+	bool old;
+
+	old = hw->conf.flags & IEEE80211_CONF_IDLE;
+	if (old == new)
+		return;
+
+	hw->conf.flags ^= IEEE80211_CONF_IDLE;
+	error = lkpi_80211_mo_config(hw, IEEE80211_CONF_CHANGE_IDLE);
+	if (error != 0 && error != EOPNOTSUPP) {
+		lhw = HW_TO_LHW(hw);
+		ic_printf(lhw->ic, "ERROR: %s: config %#0x returned %d\n",
+		    __func__, IEEE80211_CONF_CHANGE_IDLE, error);
+	}
 }
 
 static void
@@ -604,6 +628,8 @@ lkpi_disassoc(struct ieee80211_sta *sta, struct ieee80211_vif *vif,
 		hw = LHW_TO_HW(lhw);
 		lkpi_80211_mo_bss_info_changed(hw, vif, &vif->bss_conf,
 		    changed);
+
+		lkpi_hw_conf_idle(hw, true);
 	}
 }
 
@@ -753,6 +779,12 @@ lkpi_sta_scan_to_auth(struct ieee80211vap *vap, enum ieee80211_state nstate, int
 	if (vif->bss_conf.beacon_int < 16)
 		vif->bss_conf.beacon_int = 16;
 	bss_changed |= BSS_CHANGED_BEACON_INT;
+	vif->bss_conf.dtim_period = vap->iv_dtim_period;
+	bss_changed |= BSS_CHANGED_BEACON_INFO;
+	vif->bss_conf.sync_dtim_count = vap->iv_dtim_count;
+	vif->bss_conf.sync_tsf = le64toh(ni->ni_tstamp.tsf);
+	/* vif->bss_conf.sync_device_ts = set in linuxkpi_ieee80211_rx. */
+
 	/* Should almost assert it is this. */
 	vif->bss_conf.assoc = false;
 	vif->bss_conf.aid = 0;
@@ -812,14 +844,14 @@ lkpi_sta_scan_to_auth(struct ieee80211vap *vap, enum ieee80211_state nstate, int
 				break;
 #ifdef LINUXKPI_DEBUG_80211
 			if (count > 0)
-				ic_printf(vap->iv_ic, "%s: waiting for %d quuees "
+				ic_printf(vap->iv_ic, "%s: waiting for %d queues "
 				    "to be allocated by driver\n", __func__, count);
 #endif
 			pause("lkpi80211txq", hz/10);
 		}
 #ifdef LINUXKPI_DEBUG_80211
 		if (count > 0)
-			ic_printf(vap->iv_ic, "%s: %d quuees still not "
+			ic_printf(vap->iv_ic, "%s: %d queues still not "
 			    "allocated by driver\n", __func__, count);
 #endif
 	}
@@ -1243,6 +1275,8 @@ lkpi_sta_assoc_to_run(struct ieee80211vap *vap, enum ieee80211_state nstate, int
 		lkpi_80211_mo_mgd_complete_tx(hw, vif, &prep_tx_info);
 		lsta->in_mgd = false;
 	}
+
+	lkpi_hw_conf_idle(hw, false);
 
 	/*
 	 * And then:
@@ -1858,6 +1892,10 @@ lkpi_ic_scan_start(struct ieee80211com *ic)
 
 		lvif = VAP_TO_LVIF(vap);
 		vif = LVIF_TO_VIF(lvif);
+
+		if (vap->iv_state == IEEE80211_S_SCAN)
+			lkpi_hw_conf_idle(hw, false);
+
 		lkpi_80211_mo_sw_scan_start(hw, vif, vif->addr);
 		/* net80211::scan_start() handled PS for us. */
 		IMPROVE();
@@ -1993,6 +2031,9 @@ lkpi_ic_scan_end(struct ieee80211com *ic)
 		lkpi_80211_mo_sw_scan_complete(hw, vif);
 
 		/* Send PS to stop buffering if n80211 does not for us? */
+
+		if (vap->iv_state == IEEE80211_S_SCAN)
+			lkpi_hw_conf_idle(hw, true);
 	}
 }
 
@@ -2056,12 +2097,6 @@ lkpi_ic_set_channel(struct ieee80211com *ic)
 
 		hw = LHW_TO_HW(lhw);
 		hw->conf.chandef = chandef;
-
-		hw->conf.flags &= ~IEEE80211_CONF_IDLE;
-		error = lkpi_80211_mo_config(hw, IEEE80211_CONF_CHANGE_IDLE);
-		if (error != 0 && error != EOPNOTSUPP)
-			ic_printf(ic, "ERROR: %s: config %#0x returned %d\n",
-			    __func__, IEEE80211_CONF_CHANGE_IDLE, error);
 
 		error = lkpi_80211_mo_config(hw, IEEE80211_CONF_CHANGE_CHANNEL);
 		if (error != 0 && error != EOPNOTSUPP) {
@@ -2696,6 +2731,7 @@ linuxkpi_ieee80211_alloc_hw(size_t priv_len, const struct ieee80211_ops *ops)
 	 */
 	hw = LHW_TO_HW(lhw);
 	hw->wiphy = wiphy;
+	hw->conf.flags |= IEEE80211_CONF_IDLE;
 	hw->priv = (void *)(lhw + 1);
 
 	/* BSD Specific. */
@@ -3047,7 +3083,6 @@ linuxkpi_ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb,
 	struct ieee80211_rx_stats rx_stats;
 	struct ieee80211_node *ni;
 	struct ieee80211vap *vap;
-	struct ieee80211_frame_min *wh;
 	struct ieee80211_hdr *hdr;
 	struct lkpi_sta *lsta;
 	int i, offset, ok, type;
@@ -3097,11 +3132,11 @@ linuxkpi_ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb,
 
 	/* Implement a dump_rxcb() !!! */
 	if (debug_80211 & D80211_TRACE_RX)
-		printf("TRACE %s: RXCB: %u %u %u, %#0x, %u, %#0x, %#0x, "
+		printf("TRACE %s: RXCB: %ju %ju %u, %#0x, %u, %#0x, %#0x, "
 		    "%u band %u, %u %u %u %u, %u, %#x %#x %#x %#x %u %u %u\n",
 			__func__,
-			rx_status->boottime_ns,
-			rx_status->mactime,
+			(uintmax_t)rx_status->boottime_ns,
+			(uintmax_t)rx_status->mactime,
 			rx_status->device_timestamp,
 			rx_status->flag,
 			rx_status->freq,
@@ -3156,6 +3191,8 @@ no_trace_beacons:
 		lsta = STA_TO_LSTA(sta);
 		ni = ieee80211_ref_node(lsta->ni);
 	} else {
+		struct ieee80211_frame_min *wh;
+
 		wh = mtod(m, struct ieee80211_frame_min *);
 		ni = ieee80211_find_rxnode(ic, wh);
 		if (ni != NULL)
@@ -3173,6 +3210,31 @@ no_trace_beacons:
 
 	if (debug_80211 & D80211_TRACE_RX)
 		printf("TRACE %s: sta %p lsta %p ni %p vap %p\n", __func__, sta, lsta, ni, vap);
+
+	if (ni != NULL && vap != NULL &&
+	    ieee80211_is_beacon(hdr->frame_control) &&
+	    rx_status->device_timestamp > 0 &&
+	    m->m_pkthdr.len >= sizeof(struct ieee80211_frame)) {
+		struct lkpi_vif *lvif;
+		struct ieee80211_vif *vif;
+		struct ieee80211_frame *wh;
+
+		wh = mtod(m, struct ieee80211_frame *);
+		if (!IEEE80211_ADDR_EQ(wh->i_addr2, ni->ni_bssid))
+			goto skip_device_ts;
+
+		lvif = VAP_TO_LVIF(vap);
+		vif = LVIF_TO_VIF(lvif);
+
+		IMPROVE("TIMING_BEACON_ONLY?");
+		/* mac80211 specific (not net80211) so keep it here. */
+		vif->bss_conf.sync_device_ts = rx_status->device_timestamp;
+		/*
+		 * net80211 should take care of the other information (sync_tsf,
+		 * sync_dtim_count) as otherwise we need to parse the beacon.
+		 */
+	}
+skip_device_ts:
 
 	if (vap != NULL && vap->iv_state > IEEE80211_S_INIT &&
 	    ieee80211_radiotap_active_vap(vap)) {
@@ -3559,11 +3621,11 @@ linuxkpi_ieee80211_connection_loss(struct ieee80211_vif *vif)
 	vap = LVIF_TO_VAP(lvif);
 
 	/*
-	 * Go to scan; otherwise we need to elaborately check state and
+	 * Go to init; otherwise we need to elaborately check state and
 	 * handle accordingly, e.g., if in RUN we could call iv_bmiss.
 	 * Let the statemachine handle all neccessary changes.
 	 */
-	nstate = IEEE80211_S_SCAN;
+	nstate = IEEE80211_S_INIT;
 	arg = 0;
 
 	if (debug_80211 & D80211_TRACE)
