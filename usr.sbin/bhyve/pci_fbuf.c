@@ -259,15 +259,9 @@ pci_fbuf_parse_config(struct pci_fbuf_softc *sc, nvlist_t *nvl)
 	/* Prefer "vncserver" to "rfb" and "tcp". */
 	value = get_config_value_node(nvl, "vncserver");
 	if (value != NULL) {
-		char	*loader;
 		void	*shlib;
 
-		if (loader == NULL) {
-			loader = strdup("/usr/local/lib/libhyverem.so");
-			if (loader == NULL)
-				err(EX_OSERR, "malloc");
-		}
-		shlib = dlopen(loader, RTLD_LAZY);
+		shlib = dlopen("/usr/local/lib/libhyverem.so", RTLD_LAZY);
 		if (!shlib) {
 			sc->vncserver_enabled = 0;
 			fprintf(stderr, "Using RFB bhyve implementation.\n");
@@ -275,7 +269,6 @@ pci_fbuf_parse_config(struct pci_fbuf_softc *sc, nvlist_t *nvl)
 			sc->vncserver_enabled = 1;
 		}
 		dlclose(shlib);
-		free(loader);
 	} else
 		value = get_config_value_node(nvl, "rfb");
 	if (value == NULL)
