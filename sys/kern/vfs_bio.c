@@ -133,6 +133,7 @@ struct bufdomain {
 	int		bd_lim;
 	/* atomics */
 	int		bd_wanted;
+	bool		bd_shutdown;
 	int __aligned(CACHE_LINE_SIZE)	bd_numdirtybuffers;
 	int __aligned(CACHE_LINE_SIZE)	bd_running;
 	long __aligned(CACHE_LINE_SIZE) bd_bufspace;
@@ -341,6 +342,11 @@ static struct mtx_padalign __exclusive_cache_line rbreqlock;
 static struct mtx_padalign __exclusive_cache_line bdirtylock;
 
 /*
+ * bufdaemon shutdown request and sleep channel.
+ */
+static bool bd_shutdown;
+
+/*
  * Wakeup point for bufdaemon, as well as indicator of whether it is already
  * active.  Set to 1 when the bufdaemon is already "on" the queue, 0 when it
  * is idling.
@@ -393,12 +399,6 @@ struct bufqueue __exclusive_cache_line bqempty;
  * per-cpu empty buffer cache.
  */
 uma_zone_t buf_zone;
-
-/*
- * Single global constant for BUF_WMESG, to avoid getting multiple references.
- * buf_wmesg is referred from macros.
- */
-const char *buf_wmesg = BUF_WMESG;
 
 static int
 sysctl_runningspace(SYSCTL_HANDLER_ARGS)
@@ -629,33 +629,6 @@ bufspace_daemon_wakeup(struct bufdomain *bd)
 }
 
 /*
- *	bufspace_daemon_wait:
- *
- *	Sleep until the domain falls below a limit or one second passes.
- */
-static void
-bufspace_daemon_wait(struct bufdomain *bd)
-{
-	/*
-	 * Re-check our limits and sleep.  bd_running must be
-	 * cleared prior to checking the limits to avoid missed
-	 * wakeups.  The waker will adjust one of bufspace or
-	 * freebuffers prior to checking bd_running.
-	 */
-	BD_RUN_LOCK(bd);
-	atomic_store_int(&bd->bd_running, 0);
-	if (bd->bd_bufspace < bd->bd_bufspacethresh &&
-	    bd->bd_freebuffers > bd->bd_lofreebuffers) {
-		msleep(&bd->bd_running, BD_RUN_LOCKPTR(bd), PRIBIO|PDROP,
-		    "-", hz);
-	} else {
-		/* Avoid spurious wakeups while running. */
-		atomic_store_int(&bd->bd_running, 1);
-		BD_RUN_UNLOCK(bd);
-	}
-}
-
-/*
  *	bufspace_adjust:
  *
  *	Adjust the reported bufspace for a KVA managed buffer, possibly
@@ -785,6 +758,22 @@ bufspace_wait(struct bufdomain *bd, struct vnode *vp, int gbflags,
 	BD_UNLOCK(bd);
 }
 
+static void
+bufspace_daemon_shutdown(void *arg, int howto __unused)
+{
+	struct bufdomain *bd = arg;
+	int error;
+
+	BD_RUN_LOCK(bd);
+	bd->bd_shutdown = true;
+	wakeup(&bd->bd_running);
+	error = msleep(&bd->bd_shutdown, BD_RUN_LOCKPTR(bd), 0,
+	    "bufspace_shutdown", 60 * hz);
+	BD_RUN_UNLOCK(bd);
+	if (error != 0)
+		printf("bufspacedaemon wait error: %d\n", error);
+}
+
 /*
  *	bufspace_daemon:
  *
@@ -795,14 +784,14 @@ bufspace_wait(struct bufdomain *bd, struct vnode *vp, int gbflags,
 static void
 bufspace_daemon(void *arg)
 {
-	struct bufdomain *bd;
+	struct bufdomain *bd = arg;
 
-	EVENTHANDLER_REGISTER(shutdown_pre_sync, kthread_shutdown, curthread,
+	EVENTHANDLER_REGISTER(shutdown_pre_sync, bufspace_daemon_shutdown, bd,
 	    SHUTDOWN_PRI_LAST + 100);
 
-	bd = arg;
-	for (;;) {
-		kthread_suspend_check();
+	BD_RUN_LOCK(bd);
+	while (!bd->bd_shutdown) {
+		BD_RUN_UNLOCK(bd);
 
 		/*
 		 * Free buffers from the clean queue until we meet our
@@ -852,8 +841,29 @@ bufspace_daemon(void *arg)
 			}
 			maybe_yield();
 		}
-		bufspace_daemon_wait(bd);
+
+		/*
+		 * Re-check our limits and sleep.  bd_running must be
+		 * cleared prior to checking the limits to avoid missed
+		 * wakeups.  The waker will adjust one of bufspace or
+		 * freebuffers prior to checking bd_running.
+		 */
+		BD_RUN_LOCK(bd);
+		if (bd->bd_shutdown)
+			break;
+		atomic_store_int(&bd->bd_running, 0);
+		if (bd->bd_bufspace < bd->bd_bufspacethresh &&
+		    bd->bd_freebuffers > bd->bd_lofreebuffers) {
+			msleep(&bd->bd_running, BD_RUN_LOCKPTR(bd),
+			    PRIBIO, "-", hz);
+		} else {
+			/* Avoid spurious wakeups while running. */
+			atomic_store_int(&bd->bd_running, 1);
+		}
 	}
+	wakeup(&bd->bd_shutdown);
+	BD_RUN_UNLOCK(bd);
+	kthread_exit();
 }
 
 /*
@@ -1159,6 +1169,12 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 	return (v);
 }
 
+/*
+ * Single global constant for BUF_WMESG, to avoid getting multiple
+ * references.
+ */
+static const char buf_wmesg[] = "bufwait";
+
 /* Initialize the buffer subsystem.  Called before use of any buffers. */
 void
 bufinit(void)
@@ -1189,7 +1205,7 @@ bufinit(void)
 		bp->b_xflags = 0;
 		bp->b_data = bp->b_kvabase = unmapped_buf;
 		LIST_INIT(&bp->b_dep);
-		BUF_LOCKINIT(bp);
+		BUF_LOCKINIT(bp, buf_wmesg);
 		bq_insert(&bqempty, bp, false);
 	}
 
@@ -1693,7 +1709,7 @@ buf_alloc(struct bufdomain *bd)
 	if (freebufs == bd->bd_lofreebuffers)
 		bufspace_daemon_wakeup(bd);
 
-	error = BUF_LOCK(bp, LK_EXCLUSIVE, NULL);
+	error = BUF_LOCK(bp, LK_EXCLUSIVE | LK_NOWAIT, NULL);
 	KASSERT(error == 0, ("%s: BUF_LOCK on free buf %p: %d.", __func__, bp,
 	    error));
 	(void)error;
@@ -3383,6 +3399,21 @@ buf_flush(struct vnode *vp, struct bufdomain *bd, int target)
 }
 
 static void
+buf_daemon_shutdown(void *arg __unused, int howto __unused)
+{
+	int error;
+
+	mtx_lock(&bdlock);
+	bd_shutdown = true;
+	wakeup(&bd_request);
+	error = msleep(&bd_shutdown, &bdlock, 0, "buf_daemon_shutdown",
+	    60 * hz);
+	mtx_unlock(&bdlock);
+	if (error != 0)
+		printf("bufdaemon wait error: %d\n", error);
+}
+
+static void
 buf_daemon()
 {
 	struct bufdomain *bd;
@@ -3393,7 +3424,7 @@ buf_daemon()
 	/*
 	 * This process needs to be suspended prior to shutdown sync.
 	 */
-	EVENTHANDLER_REGISTER(shutdown_pre_sync, kthread_shutdown, curthread,
+	EVENTHANDLER_REGISTER(shutdown_pre_sync, buf_daemon_shutdown, NULL,
 	    SHUTDOWN_PRI_LAST + 100);
 
 	/*
@@ -3413,11 +3444,9 @@ buf_daemon()
 	 */
 	curthread->td_pflags |= TDP_NORUNNINGBUF | TDP_BUFNEED;
 	mtx_lock(&bdlock);
-	for (;;) {
+	while (!bd_shutdown) {
 		bd_request = 0;
 		mtx_unlock(&bdlock);
-
-		kthread_suspend_check();
 
 		/*
 		 * Save speedupreq for this pass and reset to capture new
@@ -3455,7 +3484,9 @@ buf_daemon()
 		 * to avoid endless loops on unlockable buffers.
 		 */
 		mtx_lock(&bdlock);
-		if (!BIT_EMPTY(BUF_DOMAINS, &bdlodirty)) {
+		if (bd_shutdown)
+			break;
+		if (BIT_EMPTY(BUF_DOMAINS, &bdlodirty)) {
 			/*
 			 * We reached our low water mark, reset the
 			 * request and sleep until we are needed again.
@@ -3480,6 +3511,9 @@ buf_daemon()
 			msleep(&bd_request, &bdlock, PVM, "qsleep", hz / 10);
 		}
 	}
+	wakeup(&bd_shutdown);
+	mtx_unlock(&bdlock);
+	kthread_exit();
 }
 
 /*
@@ -3953,7 +3987,10 @@ loop:
 		 * it must be on a queue.
 		 */
 		lockflags = LK_EXCLUSIVE | LK_INTERLOCK |
-		    ((flags & GB_LOCK_NOWAIT) ? LK_NOWAIT : LK_SLEEPFAIL);
+		    ((flags & GB_LOCK_NOWAIT) != 0 ? LK_NOWAIT : LK_SLEEPFAIL);
+#ifdef WITNESS
+		lockflags |= (flags & GB_NOWITNESS) != 0 ? LK_NOWITNESS : 0;
+#endif
 
 		error = BUF_TIMELOCK(bp, lockflags,
 		    BO_LOCKPTR(bo), "getblk", slpflag, slptimeo);

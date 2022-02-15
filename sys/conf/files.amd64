@@ -14,13 +14,13 @@ include 	"conf/files.x86"
 #
 elf-vdso.so.o			standard				\
 	dependency	"$S/amd64/amd64/sigtramp.S assym.inc $S/tools/amd64_vdso.sh" \
-	compile-with	"env AWK='${AWK}' NM='${NM}' LD='${LD}' CC='${CC}' OBJCOPY='${OBJCOPY}' ELFDUMP='${ELFDUMP}' S='${S}' sh $S/tools/amd64_vdso.sh" \
+	compile-with	"env AWK='${AWK}' NM='${NM}' LD='${LD}' CC='${CC}' DEBUG='${DEBUG}' OBJCOPY='${OBJCOPY}' ELFDUMP='${ELFDUMP}' S='${S}' sh $S/tools/amd64_vdso.sh" \
 	no-implicit-rule before-depend	\
 	clean		"elf-vdso.so.o elf-vdso.so.1 vdso_offsets.h sigtramp.pico"
 #
 elf-vdso32.so.o			optional	compat_freebsd32		\
 	dependency	"$S/amd64/ia32/ia32_sigtramp.S ia32_assym.h $S/tools/amd64_ia32_vdso.sh" \
-	compile-with	"env AWK='${AWK}' NM='${NM}' LD='${LD}' CC='${CC}' OBJCOPY='${OBJCOPY}' ELFDUMP='${ELFDUMP}' S='${S}' sh $S/tools/amd64_ia32_vdso.sh" \
+	compile-with	"env AWK='${AWK}' NM='${NM}' LD='${LD}' CC='${CC}' DEBUG='${DEBUG}' OBJCOPY='${OBJCOPY}' ELFDUMP='${ELFDUMP}' S='${S}' sh $S/tools/amd64_ia32_vdso.sh" \
 	no-implicit-rule before-depend	\
 	clean		"elf-vdso32.so.o elf-vdso32.so.1 vdso_ia32_offsets.h ia32_sigtramp.pico"
 #
@@ -490,3 +490,9 @@ contrib/openzfs/module/zfs/vdev_raidz_math_avx512bw.c		optional zfs compile-with
 contrib/openzfs/module/zfs/vdev_raidz_math_avx512f.c		optional zfs compile-with "${ZFS_C}"
 contrib/openzfs/module/zfs/vdev_raidz_math_sse2.c		optional zfs compile-with "${ZFS_C}"
 contrib/openzfs/module/zfs/vdev_raidz_math_ssse3.c		optional zfs compile-with "${ZFS_C}"
+# Clock calibration subroutine; uses floating-point arithmetic
+subr_clockcalib.o		standard				\
+	dependency	"$S/kern/subr_clockcalib.c"			\
+	compile-with	"${CC} -c ${CFLAGS:C/^-O2$/-O3/:N-nostdinc} ${WERROR} -mmmx -msse -msse2 ${.IMPSRC}" \
+	no-implicit-rule						\
+	clean		"subr_clockcalib.o"

@@ -85,6 +85,7 @@ struct config config = {
 	.mailname	= NULL,
 	.masquerade_host = NULL,
 	.masquerade_user = NULL,
+	.fingerprint = NULL,
 };
 
 
@@ -100,15 +101,14 @@ set_from(struct queue *queue, const char *osender)
 	const char *addr;
 	char *sender;
 
-	if (osender) {
+	if (config.masquerade_user) {
+		addr = config.masquerade_user;
+	} else if (osender) {
 		addr = osender;
 	} else if (getenv("EMAIL") != NULL) {
 		addr = getenv("EMAIL");
 	} else {
-		if (config.masquerade_user)
-			addr = config.masquerade_user;
-		else
-			addr = username;
+		addr = username;
 	}
 
 	if (!strchr(addr, '@')) {
@@ -422,10 +422,14 @@ main(int argc, char **argv)
 {
 	struct sigaction act;
 	char *sender = NULL;
+	char *own_name = NULL;
 	struct queue queue;
 	int i, ch;
-	int nodot = 0, showq = 0, queue_only = 0;
+	int nodot = 0, showq = 0, queue_only = 0, newaliases = 0;
 	int recp_from_header = 0;
+
+	if (argc == 0)
+		errx(EX_OSERR, "invalid argc");
 
 	set_username();
 
@@ -458,19 +462,17 @@ main(int argc, char **argv)
 	bzero(&queue, sizeof(queue));
 	LIST_INIT(&queue.queue);
 
-	if (strcmp(basename(argv[0]), "mailq") == 0) {
+	own_name = basename(argv[0]);
+
+	if (strcmp(own_name, "mailq") == 0) {
 		argv++; argc--;
 		showq = 1;
 		if (argc != 0)
 			errx(EX_USAGE, "invalid arguments");
 		goto skipopts;
-	} else if (strcmp(argv[0], "newaliases") == 0) {
-		logident_base = "dma";
-		setlogident("%s", logident_base);
-
-		if (read_aliases() != 0)
-			errx(EX_SOFTWARE, "could not parse aliases file `%s'", config.aliases);
-		exit(EX_OK);
+	} else if (strcmp(own_name, "newaliases") == 0) {
+		newaliases = 1;
+		goto skipopts;
 	}
 
 	opterr = 0;
@@ -481,7 +483,7 @@ main(int argc, char **argv)
 			if (optarg[0] == 'c' || optarg[0] == 'm') {
 				break;
 			}
-			/* else FALLTRHOUGH */
+			/* Else FALLTHROUGH */
 		case 'b':
 			/* -bX is being ignored, except for -bp */
 			if (optarg[0] == 'p') {
@@ -491,7 +493,7 @@ main(int argc, char **argv)
 				queue_only = 1;
 				break;
 			}
-			/* else FALLTRHOUGH */
+			/* Else FALLTHROUGH */
 		case 'D':
 			daemonize = 0;
 			break;
@@ -511,7 +513,7 @@ main(int argc, char **argv)
 			/* -oX is being ignored, except for -oi */
 			if (optarg[0] != 'i')
 				break;
-			/* else FALLTRHOUGH */
+			/* Else FALLTHROUGH */
 		case 'O':
 			break;
 		case 'i':
@@ -545,7 +547,7 @@ main(int argc, char **argv)
 				doqueue = 1;
 				break;
 			}
-			/* FALLTHROUGH */
+			/* Else FALLTHROUGH */
 
 		default:
 			fprintf(stderr, "invalid argument: `-%c'\n", optopt);
@@ -595,6 +597,9 @@ skipopts:
 
 	if (read_aliases() != 0)
 		errlog(EX_SOFTWARE, "could not parse aliases file `%s'", config.aliases);
+
+	if (newaliases)
+		return(0);
 
 	if ((sender = set_from(&queue, sender)) == NULL)
 		errlog(EX_SOFTWARE, "set_from()");
