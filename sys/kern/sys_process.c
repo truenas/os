@@ -1012,8 +1012,10 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 			break;
 		}
 		bzero(addr, sizeof(td2->td_sa.args));
-		bcopy(td2->td_sa.args, addr, td2->td_sa.callp->sy_narg *
-		    sizeof(register_t));
+		/* See the explanation in linux_ptrace_get_syscall_info(). */
+		bcopy(td2->td_sa.args, addr, SV_PROC_ABI(td->td_proc) ==
+		    SV_ABI_LINUX ? sizeof(td2->td_sa.args) :
+		    td2->td_sa.callp->sy_narg * sizeof(register_t));
 		break;
 
 	case PT_GET_SC_RET:
