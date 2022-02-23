@@ -794,7 +794,7 @@ udp_common_ctlinput(int cmd, struct sockaddr *sa, void *vip,
 
 	if (PRC_IS_REDIRECT(cmd)) {
 		/* signal EHOSTDOWN, as it flushes the cached route */
-		in_pcbnotifyall(&V_udbinfo, faddr, EHOSTDOWN, udp_notify);
+		in_pcbnotifyall(pcbinfo, faddr, EHOSTDOWN, udp_notify);
 		return;
 	}
 
@@ -1635,6 +1635,7 @@ udp_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 		 * Preserve compatibility with old programs.
 		 */
 		if (nam->sa_family != AF_UNSPEC ||
+		    nam->sa_len < offsetof(struct sockaddr_in, sin_zero) ||
 		    sinp->sin_addr.s_addr != INADDR_ANY)
 			return (EAFNOSUPPORT);
 		nam->sa_family = AF_INET;
