@@ -62,6 +62,9 @@ __FBSDID("$FreeBSD$");
 #include <dev/usb/controller/xhcireg.h>
 #include "usb_if.h"
 
+#define	PCI_XHCI_VENDORID_AMD		0x1022
+#define	PCI_XHCI_VENDORID_INTEL		0x8086
+
 static device_probe_t xhci_pci_probe;
 static device_detach_t xhci_pci_detach;
 static usb_take_controller_t xhci_pci_take_controller;
@@ -95,12 +98,18 @@ xhci_pci_match(device_t self)
 	switch (device_id) {
 	case 0x145c1022:
 		return ("AMD KERNCZ USB 3.0 controller");
+	case 0x148c1022:
+		return ("AMD Starship USB 3.0 controller");
+	case 0x149c1022:
+		return ("AMD Matisse USB 3.0 controller");
 	case 0x43ba1022:
 		return ("AMD X399 USB 3.0 controller");
 	case 0x43b91022: /* X370 */
 	case 0x43bb1022: /* B350 */
 		return ("AMD 300 Series USB 3.0 controller");
+	case 0x78121022:
 	case 0x78141022:
+	case 0x79141022:
 		return ("AMD FCH USB 3.0 controller");
 
 	case 0x145f1d94:
@@ -120,6 +129,10 @@ xhci_pci_match(device_t self)
 		return ("ASMedia ASM1042 USB 3.0 controller");
 	case 0x11421b21:
 		return ("ASMedia ASM1042A USB 3.0 controller");
+	case 0x13431b21:
+		return ("ASMedia ASM1143 USB 3.1 controller");
+	case 0x32421b21:
+		return ("ASMedia ASM3242 USB 3.2 controller");
 
 	case 0x0b278086:
 		return ("Intel Goshen Ridge Thunderbolt 4 USB controller");
@@ -185,6 +198,9 @@ xhci_pci_match(device_t self)
 
 	case 0xa01b177d:
 		return ("Cavium ThunderX USB 3.0 controller");
+
+	case 0x1ada10de:
+		return ("NVIDIA TU106 USB 3.1 controller");
 
 	default:
 		break;
@@ -358,7 +374,21 @@ xhci_pci_attach(device_t self)
 	}
 	device_set_ivars(sc->sc_bus.bdev, &sc->sc_bus);
 
-	sprintf(sc->sc_vendor, "0x%04x", pci_get_vendor(self));
+	switch (pci_get_vendor(self)) {
+	case PCI_XHCI_VENDORID_AMD:
+		strlcpy(sc->sc_vendor, "AMD", sizeof(sc->sc_vendor));
+		break;
+	case PCI_XHCI_VENDORID_INTEL:
+		strlcpy(sc->sc_vendor, "Intel", sizeof(sc->sc_vendor));
+		break;
+	default:
+		if (bootverbose)
+			device_printf(self, "(New XHCI DeviceId=0x%08x)\n",
+			    pci_get_devid(self));
+		snprintf(sc->sc_vendor, sizeof(sc->sc_vendor),
+		    "(0x%04x)", pci_get_vendor(self));
+		break;
+	}
 
 	if (sc->sc_irq_res != NULL) {
 		err = bus_setup_intr(self, sc->sc_irq_res, INTR_TYPE_BIO | INTR_MPSAFE,

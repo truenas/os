@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2015-2021 Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2022 NVIDIA corporation & affiliates.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -829,7 +830,7 @@ struct mlx5e_iq {
 struct mlx5e_sq_mbuf {
 	bus_dmamap_t dma_map;
 	struct mbuf *mbuf;
-	volatile s32 *p_refcount;	/* in use refcount, if any */
+	struct m_snd_tag *mst;	/* if set, unref this send tag on completion */
 	u32	num_bytes;
 	u32	num_wqebbs;
 };
@@ -1043,7 +1044,7 @@ struct mlx5e_flow_tables {
 };
 
 struct mlx5e_xmit_args {
-	volatile s32 *pref;
+	struct m_snd_tag *mst;
 	u32 tisn;
 	u16 ihs;
 };
@@ -1198,6 +1199,8 @@ int	mlx5e_open_locked(struct ifnet *);
 int	mlx5e_close_locked(struct ifnet *);
 
 void	mlx5e_cq_error_event(struct mlx5_core_cq *mcq, int event);
+void	mlx5e_dump_err_cqe(struct mlx5e_cq *, u32, const struct mlx5_err_cqe *);
+
 mlx5e_cq_comp_t mlx5e_rx_cq_comp;
 mlx5e_cq_comp_t mlx5e_tx_cq_comp;
 struct mlx5_cqe64 *mlx5e_get_cqe(struct mlx5e_cq *cq);

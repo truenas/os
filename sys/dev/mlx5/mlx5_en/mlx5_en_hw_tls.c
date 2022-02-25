@@ -1,5 +1,6 @@
 /*-
- * Copyright (c) 2019 Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2019-2021 Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2022 NVIDIA corporation & affiliates.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -61,45 +62,54 @@ static const char *mlx5e_tls_stats_desc[] = {
 static void mlx5e_tls_work(struct work_struct *);
 
 static int
-mlx5e_tls_tag_zinit(void *mem, int size, int flags)
+mlx5e_tls_tag_import(void *arg, void **store, int cnt, int domain, int flags)
 {
-	struct mlx5e_tls_tag *ptag = mem;
+	struct mlx5e_tls_tag *ptag;
+	int i;
 
-	MPASS(size == sizeof(*ptag));
-
-	memset(ptag, 0, sizeof(*ptag));
-	mtx_init(&ptag->mtx, "mlx5-tls-tag-mtx", NULL, MTX_DEF);
-	INIT_WORK(&ptag->work, mlx5e_tls_work);
-
-	return (0);
+	for (i = 0; i != cnt; i++) {
+		ptag = malloc_domainset(sizeof(*ptag), M_MLX5E_TLS,
+		    mlx5_dev_domainset(arg), flags | M_ZERO);
+		mtx_init(&ptag->mtx, "mlx5-tls-tag-mtx", NULL, MTX_DEF);
+		INIT_WORK(&ptag->work, mlx5e_tls_work);
+		store[i] = ptag;
+	}
+	return (i);
 }
 
 static void
-mlx5e_tls_tag_zfini(void *mem, int size)
+mlx5e_tls_tag_release(void *arg, void **store, int cnt)
 {
-	struct mlx5e_tls_tag *ptag = mem;
+	struct mlx5e_tls_tag *ptag;
 	struct mlx5e_priv *priv;
 	struct mlx5e_tls *ptls;
+	int i;
 
-	ptls = ptag->tls;
-	priv = container_of(ptls, struct mlx5e_priv, tls);
+	for (i = 0; i != cnt; i++) {
+		ptag = store[i];
+		ptls = ptag->tls;
+		priv = container_of(ptls, struct mlx5e_priv, tls);
 
-	flush_work(&ptag->work);
+		flush_work(&ptag->work);
 
-	if (ptag->tisn != 0) {
-		mlx5_tls_close_tis(priv->mdev, ptag->tisn);
-		atomic_add_32(&ptls->num_resources, -1U);
+		if (ptag->tisn != 0) {
+			mlx5_tls_close_tis(priv->mdev, ptag->tisn);
+			atomic_add_32(&ptls->num_resources, -1U);
+		}
+
+		mtx_destroy(&ptag->mtx);
+
+		free(ptag, M_MLX5E_TLS);
 	}
-
-	mtx_destroy(&ptag->mtx);
 }
 
 static void
 mlx5e_tls_tag_zfree(struct mlx5e_tls_tag *ptag)
 {
+	/* make sure any unhandled taskqueue events are ignored */
+	ptag->state = MLX5E_TLS_ST_FREED;
 
 	/* reset some variables */
-	ptag->state = MLX5E_TLS_ST_INIT;
 	ptag->dek_index = 0;
 	ptag->dek_index_ok = 0;
 
@@ -134,8 +144,10 @@ mlx5e_tls_init(struct mlx5e_priv *priv)
 	snprintf(ptls->zname, sizeof(ptls->zname),
 	    "mlx5_%u_tls", device_get_unit(priv->mdev->pdev->dev.bsddev));
 
-	ptls->zone = uma_zcreate(ptls->zname, sizeof(struct mlx5e_tls_tag),
-	    NULL, NULL, mlx5e_tls_tag_zinit, mlx5e_tls_tag_zfini, UMA_ALIGN_CACHE, 0);
+	ptls->zone = uma_zcache_create(ptls->zname,
+	     sizeof(struct mlx5e_tls_tag), NULL, NULL, NULL, NULL,
+	     mlx5e_tls_tag_import, mlx5e_tls_tag_release, priv->mdev,
+	     UMA_ZONE_UNMANAGED);
 
 	/* shared between RX and TX TLS */
 	ptls->max_resources = 1U << (MLX5_CAP_GEN(priv->mdev, log_max_dek) - 1);
@@ -224,11 +236,7 @@ mlx5e_tls_work(struct work_struct *work)
 		MLX5E_TLS_TAG_UNLOCK(ptag);
 		break;
 
-	case MLX5E_TLS_ST_FREED:
-		/* wait for all refs to go away */
-		while (ptag->refs != 0)
-			msleep(1);
-
+	case MLX5E_TLS_ST_RELEASE:
 		/* try to destroy DEK context by ID */
 		if (ptag->dek_index_ok)
 			err = mlx5_encryption_key_destroy(priv->mdev, ptag->dek_index);
@@ -301,7 +309,6 @@ mlx5e_tls_snd_tag_alloc(struct ifnet *ifp,
 		return (ENOMEM);
 
 	/* sanity check default values */
-	MPASS(ptag->state == MLX5E_TLS_ST_INIT);
 	MPASS(ptag->dek_index == 0);
 	MPASS(ptag->dek_index_ok == 0);
 
@@ -407,6 +414,9 @@ mlx5e_tls_snd_tag_alloc(struct ifnet *ifp,
 	m_snd_tag_init(&ptag->tag, ifp, params->hdr.type);
 	*ppmt = &ptag->tag;
 
+	/* reset state */
+	ptag->state = MLX5E_TLS_ST_INIT;
+
 	queue_work(priv->tls.wq, &ptag->work);
 	flush_work(&ptag->work);
 
@@ -473,7 +483,7 @@ mlx5e_tls_snd_tag_free(struct m_snd_tag *pmt)
 	m_snd_tag_rele(ptag->rl_tag);
 
 	MLX5E_TLS_TAG_LOCK(ptag);
-	ptag->state = MLX5E_TLS_ST_FREED;
+	ptag->state = MLX5E_TLS_ST_RELEASE;
 	MLX5E_TLS_TAG_UNLOCK(ptag);
 
 	priv = ptag->tag.ifp->if_softc;
@@ -519,8 +529,8 @@ mlx5e_tls_send_static_parameters(struct mlx5e_sq *sq, struct mlx5e_tls_tag *ptag
 	sq->mbuf[pi].mbuf = NULL;
 	sq->mbuf[pi].num_bytes = 0;
 	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
-	sq->mbuf[pi].p_refcount = &ptag->refs;
-	atomic_add_int(&ptag->refs, 1);
+	sq->mbuf[pi].mst = m_snd_tag_ref(&ptag->tag);
+
 	sq->pc += sq->mbuf[pi].num_wqebbs;
 }
 
@@ -557,8 +567,8 @@ mlx5e_tls_send_progress_parameters(struct mlx5e_sq *sq, struct mlx5e_tls_tag *pt
 	sq->mbuf[pi].mbuf = NULL;
 	sq->mbuf[pi].num_bytes = 0;
 	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
-	sq->mbuf[pi].p_refcount = &ptag->refs;
-	atomic_add_int(&ptag->refs, 1);
+	sq->mbuf[pi].mst = m_snd_tag_ref(&ptag->tag);
+
 	sq->pc += sq->mbuf[pi].num_wqebbs;
 }
 
@@ -587,8 +597,8 @@ mlx5e_tls_send_nop(struct mlx5e_sq *sq, struct mlx5e_tls_tag *ptag)
 	sq->mbuf[pi].mbuf = NULL;
 	sq->mbuf[pi].num_bytes = 0;
 	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
-	sq->mbuf[pi].p_refcount = &ptag->refs;
-	atomic_add_int(&ptag->refs, 1);
+	sq->mbuf[pi].mst = m_snd_tag_ref(&ptag->tag);
+
 	sq->pc += sq->mbuf[pi].num_wqebbs;
 }
 
@@ -768,7 +778,7 @@ mlx5e_sq_tls_xmit(struct mlx5e_sq *sq, struct mlx5e_xmit_args *parg, struct mbuf
 
 		/* setup transmit arguments */
 		parg->tisn = ptls_tag->tisn;
-		parg->pref = &ptls_tag->refs;
+		parg->mst = &ptls_tag->tag;
 
 		/* try to send DUMP data */
 		if (mlx5e_sq_dump_xmit(sq, parg, &r_mb) != 0) {
@@ -787,7 +797,7 @@ mlx5e_sq_tls_xmit(struct mlx5e_sq *sq, struct mlx5e_xmit_args *parg, struct mbuf
 
 	parg->tisn = ptls_tag->tisn;
 	parg->ihs = header_size;
-	parg->pref = &ptls_tag->refs;
+	parg->mst = &ptls_tag->tag;
 	return (MLX5E_TLS_CONTINUE);
 }
 
