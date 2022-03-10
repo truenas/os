@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 #include <sys/socket.h>
+#include <sys/efi.h>
 
 #include <sys/module.h>
 #include <sys/bus.h>
@@ -46,7 +47,10 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_param.h>
 #include <vm/pmap.h>
 #include <machine/md_var.h>
+#if defined(__amd64__) || defined(__i386__)
 #include <machine/pc/bios.h>
+#endif
+#include <dev/smbios/smbios.h>
 
 /*
  * System Management BIOS Reference Specification, v2.4 Final
@@ -62,7 +66,6 @@ struct smbios_softc {
 };
 
 #define	RES2EPS(res)	((struct smbios_eps *)rman_get_virtual(res))
-#define	ADDR2EPS(addr)  ((struct smbios_eps *)BIOS_PADDRTOVADDR(addr))
 
 static devclass_t	smbios_devclass;
 
@@ -77,25 +80,40 @@ static int	smbios_cksum	(struct smbios_eps *);
 static void
 smbios_identify (driver_t *driver, device_t parent)
 {
+#ifdef ARCH_MAY_USE_EFI
+	struct uuid efi_smbios = EFI_TABLE_SMBIOS;
+	void *addr_efi;
+#endif
+	struct smbios_eps *eps;
 	device_t child;
-	u_int32_t addr;
+	vm_paddr_t addr = 0;
 	int length;
 	int rid;
 
 	if (!device_is_alive(parent))
 		return;
 
-	addr = bios_sigsearch(SMBIOS_START, SMBIOS_SIG, SMBIOS_LEN,
-			      SMBIOS_STEP, SMBIOS_OFF);
+#ifdef ARCH_MAY_USE_EFI
+	if (!efi_get_table(&efi_smbios, &addr_efi))
+		addr = (vm_paddr_t)addr_efi;
+#endif
+
+#if defined(__amd64__) || defined(__i386__)
+	if (addr == 0)
+		addr = bios_sigsearch(SMBIOS_START, SMBIOS_SIG, SMBIOS_LEN,
+		    SMBIOS_STEP, SMBIOS_OFF);
+#endif
+
 	if (addr != 0) {
+		eps = pmap_mapbios(addr, 0x1f);
 		rid = 0;
-		length = ADDR2EPS(addr)->length;
+		length = eps->length;
 
 		if (length != 0x1f) {
 			u_int8_t major, minor;
 
-			major = ADDR2EPS(addr)->major_version;
-			minor = ADDR2EPS(addr)->minor_version;
+			major = eps->major_version;
+			minor = eps->minor_version;
 
 			/* SMBIOS v2.1 implementation might use 0x1e. */
 			if (length == 0x1e && major == 2 && minor == 1)
@@ -108,6 +126,7 @@ smbios_identify (driver_t *driver, device_t parent)
 		device_set_driver(child, driver);
 		bus_set_resource(child, SYS_RES_MEMORY, rid, addr, length);
 		device_set_desc(child, "System Management BIOS");
+		pmap_unmapbios((vm_offset_t)eps, 0x1f);
 	}
 
 	return;
@@ -232,6 +251,9 @@ static driver_t smbios_driver = {
 };
 
 DRIVER_MODULE(smbios, nexus, smbios_driver, smbios_devclass, smbios_modevent, 0);
+#ifdef ARCH_MAY_USE_EFI
+MODULE_DEPEND(smbios, efirt, 1, 1, 1);
+#endif
 MODULE_VERSION(smbios, 1);
 
 static int

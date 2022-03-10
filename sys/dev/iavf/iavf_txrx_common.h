@@ -30,36 +30,64 @@
  */
 /*$FreeBSD$*/
 
-#ifndef _ICE_SRIOV_H_
-#define _ICE_SRIOV_H_
-
-#include "ice_type.h"
-#include "ice_controlq.h"
-
-/* Defining the mailbox message threshold as 63 asynchronous
- * pending messages. Normal VF functionality does not require
- * sending more than 63 asynchronous pending message.
+/**
+ * @file iavf_txrx_common.h
+ * @brief Tx/Rx hotpath functions common to legacy and iflib
+ *
+ * Contains implementations for functions used in the hotpath for both the
+ * legacy and iflib driver implementations.
  */
-#define ICE_ASYNC_VF_MSG_THRESHOLD	63
+#ifndef _IAVF_TXRX_COMMON_H_
+#define _IAVF_TXRX_COMMON_H_
 
-enum ice_status
-ice_aq_send_msg_to_pf(struct ice_hw *hw, enum virtchnl_ops v_opcode,
-		      enum ice_status v_retval, u8 *msg, u16 msglen,
-		      struct ice_sq_cd *cd);
-enum ice_status
-ice_aq_send_msg_to_vf(struct ice_hw *hw, u16 vfid, u32 v_opcode, u32 v_retval,
-		      u8 *msg, u16 msglen, struct ice_sq_cd *cd);
+#include "iavf_iflib.h"
 
-u32 ice_conv_link_speed_to_virtchnl(bool adv_link_support, u16 link_speed);
-enum ice_status
-ice_mbx_vf_state_handler(struct ice_hw *hw, struct ice_mbx_data *mbx_data,
-			 u16 vf_id, bool *is_mal_vf);
-enum ice_status
-ice_mbx_clear_malvf(struct ice_mbx_snapshot *snap, ice_bitmap_t *all_malvfs,
-		    u16 bitmap_len, u16 vf_id);
-enum ice_status ice_mbx_init_snapshot(struct ice_hw *hw, u16 vf_count);
-void ice_mbx_deinit_snapshot(struct ice_hw *hw);
-enum ice_status
-ice_mbx_report_malvf(struct ice_hw *hw, ice_bitmap_t *all_malvfs,
-		     u16 bitmap_len, u16 vf_id, bool *report_malvf);
-#endif /* _ICE_SRIOV_H_ */
+static inline int iavf_ptype_to_hash(u8 ptype);
+
+/**
+ * iavf_ptype_to_hash - parse the packet type
+ * @ptype: packet type
+ *
+ * Determine the appropriate hash for a given packet type
+ *
+ * @returns the M_HASHTYPE_* value for the given packet type.
+ */
+static inline int
+iavf_ptype_to_hash(u8 ptype)
+{
+        struct iavf_rx_ptype_decoded decoded;
+
+	decoded = decode_rx_desc_ptype(ptype);
+
+	if (!decoded.known)
+		return M_HASHTYPE_OPAQUE;
+
+	if (decoded.outer_ip == IAVF_RX_PTYPE_OUTER_L2)
+		return M_HASHTYPE_OPAQUE;
+
+	/* Note: anything that gets to this point is IP */
+        if (decoded.outer_ip_ver == IAVF_RX_PTYPE_OUTER_IPV6) {
+		switch (decoded.inner_prot) {
+		case IAVF_RX_PTYPE_INNER_PROT_TCP:
+			return M_HASHTYPE_RSS_TCP_IPV6;
+		case IAVF_RX_PTYPE_INNER_PROT_UDP:
+			return M_HASHTYPE_RSS_UDP_IPV6;
+		default:
+			return M_HASHTYPE_RSS_IPV6;
+		}
+	}
+        if (decoded.outer_ip_ver == IAVF_RX_PTYPE_OUTER_IPV4) {
+		switch (decoded.inner_prot) {
+		case IAVF_RX_PTYPE_INNER_PROT_TCP:
+			return M_HASHTYPE_RSS_TCP_IPV4;
+		case IAVF_RX_PTYPE_INNER_PROT_UDP:
+			return M_HASHTYPE_RSS_UDP_IPV4;
+		default:
+			return M_HASHTYPE_RSS_IPV4;
+		}
+	}
+	/* We should never get here! */
+	return M_HASHTYPE_OPAQUE;
+}
+
+#endif /* _IAVF_TXRX_COMMON_H_ */
