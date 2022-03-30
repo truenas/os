@@ -278,6 +278,11 @@ lkpifill_pci_dev(device_t dev, struct pci_dev *pdev)
 	pdev->class = pci_get_class(dev);
 	pdev->revision = pci_get_revid(dev);
 	pdev->bus = malloc(sizeof(*pdev->bus), M_DEVBUF, M_WAITOK | M_ZERO);
+	/*
+	 * This should be the upstream bridge; pci_upstream_bridge()
+	 * handles that case on demand as otherwise we'll shadow the
+	 * entire PCI hierarchy.
+	 */
 	pdev->bus->self = pdev;
 	pdev->bus->number = pci_get_bus(dev);
 	pdev->bus->domain = pci_get_domain(dev);
@@ -301,6 +306,8 @@ lkpinew_pci_dev_release(struct device *dev)
 	pdev = to_pci_dev(dev);
 	if (pdev->root != NULL)
 		pci_dev_put(pdev->root);
+	if (pdev->bus->self != pdev)
+		pci_dev_put(pdev->bus->self);
 	free(pdev->bus, M_DEVBUF);
 	free(pdev, M_DEVBUF);
 }
@@ -361,7 +368,12 @@ linux_pci_probe(device_t dev)
 	if (device_get_driver(dev) != &pdrv->bsddriver)
 		return (ENXIO);
 	device_set_desc(dev, pdrv->name);
-	return (BUS_PROBE_DEFAULT);
+
+	/* Assume BSS initialized (should never return BUS_PROBE_SPECIFIC). */
+	if (pdrv->bsd_probe_return == 0)
+		return (BUS_PROBE_DEFAULT);
+	else
+		return (pdrv->bsd_probe_return);
 }
 
 static int
@@ -642,7 +654,8 @@ _linux_pci_register_driver(struct pci_driver *pdrv, devclass_t dc)
 	spin_lock(&pci_lock);
 	list_add(&pdrv->node, &pci_drivers);
 	spin_unlock(&pci_lock);
-	pdrv->bsddriver.name = pdrv->name;
+	if (pdrv->bsddriver.name == NULL)
+		pdrv->bsddriver.name = pdrv->name;
 	pdrv->bsddriver.methods = pci_methods;
 	pdrv->bsddriver.size = sizeof(struct pci_dev);
 
