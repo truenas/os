@@ -119,6 +119,12 @@ struct linux_dma_priv {
 #define	DMA_PRIV_LOCK(priv) mtx_lock(&(priv)->lock)
 #define	DMA_PRIV_UNLOCK(priv) mtx_unlock(&(priv)->lock)
 
+static bool
+linux_is_drm(struct pci_driver *pdrv)
+{
+	return (pdrv->name != NULL && strcmp(pdrv->name, "drmn") == 0);
+}
+
 static int
 linux_pdev_dma_uninit(struct pci_dev *pdev)
 {
@@ -405,7 +411,7 @@ linux_pci_attach_device(device_t dev, struct pci_driver *pdrv,
 	linux_set_current(curthread);
 
 	parent = device_get_parent(dev);
-	isdrm = pdrv != NULL && pdrv->isdrm;
+	isdrm = pdrv != NULL && linux_is_drm(pdrv);
 
 	if (isdrm) {
 		struct pci_devinfo *dinfo;
@@ -500,6 +506,22 @@ lkpi_pci_disable_dev(struct device *dev)
 	return (0);
 }
 
+struct pci_devres *
+lkpi_pci_devres_get_alloc(struct pci_dev *pdev)
+{
+	struct pci_devres *dr;
+
+	dr = lkpi_devres_find(&pdev->dev, lkpi_pci_devres_release, NULL, NULL);
+	if (dr == NULL) {
+		dr = lkpi_devres_alloc(lkpi_pci_devres_release, sizeof(*dr),
+		    GFP_KERNEL | __GFP_ZERO);
+		if (dr != NULL)
+			lkpi_devres_add(&pdev->dev, dr);
+	}
+
+	return (dr);
+}
+
 void
 lkpi_pci_devres_release(struct device *dev, void *p)
 {
@@ -526,6 +548,26 @@ lkpi_pci_devres_release(struct device *dev, void *p)
 			continue;
 		pci_release_region(pdev, bar);
 	}
+}
+
+struct pcim_iomap_devres *
+lkpi_pcim_iomap_devres_find(struct pci_dev *pdev)
+{
+	struct pcim_iomap_devres *dr;
+
+	dr = lkpi_devres_find(&pdev->dev, lkpi_pcim_iomap_table_release,
+	    NULL, NULL);
+	if (dr == NULL) {
+		dr = lkpi_devres_alloc(lkpi_pcim_iomap_table_release,
+		    sizeof(*dr), GFP_KERNEL | __GFP_ZERO);
+		if (dr != NULL)
+			lkpi_devres_add(&pdev->dev, dr);
+	}
+
+	if (dr == NULL)
+		device_printf(pdev->dev.bsddev, "%s: NULL\n", __func__);
+
+	return (dr);
 }
 
 void
@@ -674,7 +716,6 @@ linux_pci_register_driver(struct pci_driver *pdrv)
 	dc = devclass_find("pci");
 	if (dc == NULL)
 		return (-ENXIO);
-	pdrv->isdrm = false;
 	return (_linux_pci_register_driver(pdrv, dc));
 }
 
@@ -688,7 +729,7 @@ linux_pci_reserve_bar(struct pci_dev *pdev, struct resource_list *rl,
 	KASSERT(type == SYS_RES_IOPORT || type == SYS_RES_MEMORY,
 	    ("trying to reserve non-BAR type %d", type));
 
-	dev = pdev->pdrv != NULL && pdev->pdrv->isdrm ?
+	dev = pdev->pdrv != NULL && linux_is_drm(pdev->pdrv) ?
 	    device_get_parent(pdev->dev.bsddev) : pdev->dev.bsddev;
 	res = pci_reserve_map(device_get_parent(dev), dev, type, &rid, 0, ~0,
 	    1, 1, 0);
@@ -706,7 +747,7 @@ pci_resource_start(struct pci_dev *pdev, int bar)
 
 	if ((rle = linux_pci_get_bar(pdev, bar, true)) == NULL)
 		return (0);
-	dev = pdev->pdrv != NULL && pdev->pdrv->isdrm ?
+	dev = pdev->pdrv != NULL && linux_is_drm(pdev->pdrv) ?
 	    device_get_parent(pdev->dev.bsddev) : pdev->dev.bsddev;
 	if (BUS_TRANSLATE_RESOURCE(dev, rle->type, rle->start, &newstart)) {
 		device_printf(pdev->dev.bsddev, "translate of %#jx failed\n",
@@ -727,6 +768,90 @@ pci_resource_len(struct pci_dev *pdev, int bar)
 }
 
 int
+pci_request_region(struct pci_dev *pdev, int bar, const char *res_name)
+{
+	struct resource *res;
+	struct pci_devres *dr;
+	struct pci_mmio_region *mmio;
+	int rid;
+	int type;
+
+	type = pci_resource_type(pdev, bar);
+	if (type < 0)
+		return (-ENODEV);
+	rid = PCIR_BAR(bar);
+	res = bus_alloc_resource_any(pdev->dev.bsddev, type, &rid,
+	    RF_ACTIVE|RF_SHAREABLE);
+	if (res == NULL) {
+		device_printf(pdev->dev.bsddev, "%s: failed to alloc "
+		    "bar %d type %d rid %d\n",
+		    __func__, bar, type, PCIR_BAR(bar));
+		return (-ENODEV);
+	}
+
+	/*
+	 * It seems there is an implicit devres tracking on these if the device
+	 * is managed; otherwise the resources are not automatiaclly freed on
+	 * FreeBSD/LinuxKPI tough they should be/are expected to be by Linux
+	 * drivers.
+	 */
+	dr = lkpi_pci_devres_find(pdev);
+	if (dr != NULL) {
+		dr->region_mask |= (1 << bar);
+		dr->region_table[bar] = res;
+	}
+
+	/* Even if the device is not managed we need to track it for iomap. */
+	mmio = malloc(sizeof(*mmio), M_DEVBUF, M_WAITOK | M_ZERO);
+	mmio->rid = PCIR_BAR(bar);
+	mmio->type = type;
+	mmio->res = res;
+	TAILQ_INSERT_TAIL(&pdev->mmio, mmio, next);
+
+	return (0);
+}
+
+struct resource *
+_lkpi_pci_iomap(struct pci_dev *pdev, int bar, int mmio_size __unused)
+{
+	struct pci_mmio_region *mmio, *p;
+	int type;
+
+	type = pci_resource_type(pdev, bar);
+	if (type < 0) {
+		device_printf(pdev->dev.bsddev, "%s: bar %d type %d\n",
+		     __func__, bar, type);
+		return (NULL);
+	}
+
+	/*
+	 * Check for duplicate mappings.
+	 * This can happen if a driver calls pci_request_region() first.
+	 */
+	TAILQ_FOREACH_SAFE(mmio, &pdev->mmio, next, p) {
+		if (mmio->type == type && mmio->rid == PCIR_BAR(bar)) {
+			return (mmio->res);
+		}
+	}
+
+	mmio = malloc(sizeof(*mmio), M_DEVBUF, M_WAITOK | M_ZERO);
+	mmio->rid = PCIR_BAR(bar);
+	mmio->type = type;
+	mmio->res = bus_alloc_resource_any(pdev->dev.bsddev, mmio->type,
+	    &mmio->rid, RF_ACTIVE|RF_SHAREABLE);
+	if (mmio->res == NULL) {
+		device_printf(pdev->dev.bsddev, "%s: failed to alloc "
+		    "bar %d type %d rid %d\n",
+		    __func__, bar, type, PCIR_BAR(bar));
+		free(mmio, M_DEVBUF);
+		return (NULL);
+	}
+	TAILQ_INSERT_TAIL(&pdev->mmio, mmio, next);
+
+	return (mmio->res);
+}
+
+int
 linux_pci_register_drm_driver(struct pci_driver *pdrv)
 {
 	devclass_t dc;
@@ -734,7 +859,6 @@ linux_pci_register_drm_driver(struct pci_driver *pdrv)
 	dc = devclass_create("vgapci");
 	if (dc == NULL)
 		return (-ENXIO);
-	pdrv->isdrm = true;
 	pdrv->name = "drmn";
 	return (_linux_pci_register_driver(pdrv, dc));
 }
@@ -769,6 +893,42 @@ linux_pci_unregister_drm_driver(struct pci_driver *pdrv)
 	if (bus != NULL)
 		devclass_delete_driver(bus, &pdrv->bsddriver);
 	mtx_unlock(&Giant);
+}
+
+int
+pci_alloc_irq_vectors(struct pci_dev *pdev, int minv, int maxv,
+    unsigned int flags)
+{
+	int error;
+
+	if (flags & PCI_IRQ_MSIX) {
+		struct msix_entry *entries;
+		int i;
+
+		entries = kcalloc(maxv, sizeof(*entries), GFP_KERNEL);
+		if (entries == NULL) {
+			error = -ENOMEM;
+			goto out;
+		}
+		for (i = 0; i < maxv; ++i)
+			entries[i].entry = i;
+		error = pci_enable_msix(pdev, entries, maxv);
+out:
+		kfree(entries);
+		if (error == 0 && pdev->msix_enabled)
+			return (pdev->dev.irq_end - pdev->dev.irq_start);
+	}
+	if (flags & PCI_IRQ_MSI) {
+		error = pci_enable_msi(pdev);
+		if (error == 0 && pdev->msi_enabled)
+			return (pdev->dev.irq_end - pdev->dev.irq_start);
+	}
+	if (flags & PCI_IRQ_LEGACY) {
+		if (pdev->irq)
+			return (1);
+	}
+
+	return (-EINVAL);
 }
 
 CTASSERT(sizeof(dma_addr_t) <= sizeof(uint64_t));

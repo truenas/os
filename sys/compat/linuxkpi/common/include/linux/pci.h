@@ -229,14 +229,32 @@ struct pci_driver {
 	devclass_t			bsdclass;
 	struct device_driver		driver;
 	const struct pci_error_handlers       *err_handler;
-	bool				isdrm;
+	int				bsd_probe_return;
 	int  (*bsd_iov_init)(device_t dev, uint16_t num_vfs,
 	    const nvlist_t *pf_config);
 	void  (*bsd_iov_uninit)(device_t dev);
 	int  (*bsd_iov_add_vf)(device_t dev, uint16_t vfnum,
 	    const nvlist_t *vf_config);
-	int				bsd_probe_return;
+       uintptr_t                       _spare[8];
 };
+
+/*
+ * Pseudo-stable KPI. In 13.0 we neglected to include any spare fields to allow
+ * for growth in struct pci_driver. Those were added in 13.1, but can't be used
+ * until 13.1 is the oldest supported release so that packages built in 13.0
+ * will continue to work on stable/13 and 13.1 release. The 13.0 driver was 92
+ * or 182 bytes on 32 or 64 bit systems (respectively). We added 64 or 32 bytes
+ * of padding, hence the math below (which shouldn't be changed as spare fields
+ * are used up).
+ */
+#ifdef __LP64__
+#define __PCI_DRIVER_SIZE (184 + 64)
+#else
+#define __PCI_DRIVER_SIZE (92 + 32)
+#endif
+_Static_assert(sizeof(struct pci_driver) == __PCI_DRIVER_SIZE,
+    "linuxkpi struct pci_driver: Bad size");
+#undef __PCI_DRIVER_SIZE
 
 struct pci_bus {
 	struct pci_dev	*self;
@@ -320,9 +338,16 @@ struct pcim_iomap_devres {
 	struct resource	*res_table[PCIR_MAX_BAR_0 + 1];
 };
 
+int pci_request_region(struct pci_dev *pdev, int bar, const char *res_name);
+int pci_alloc_irq_vectors(struct pci_dev *pdev, int minv, int maxv,
+    unsigned int flags);
+
 /* Internal helper function(s). */
 struct pci_dev *lkpinew_pci_dev(device_t);
+struct pci_devres *lkpi_pci_devres_get_alloc(struct pci_dev *pdev);
 void lkpi_pci_devres_release(struct device *, void *);
+struct resource *_lkpi_pci_iomap(struct pci_dev *pdev, int bar, int mmio_size);
+struct pcim_iomap_devres *lkpi_pcim_iomap_devres_find(struct pci_dev *pdev);
 void lkpi_pcim_iomap_table_release(struct device *, void *);
 
 static inline int
@@ -525,21 +550,6 @@ done:
 }
 
 static inline struct pci_devres *
-lkpi_pci_devres_get_alloc(struct pci_dev *pdev)
-{
-	struct pci_devres *dr;
-
-	dr = lkpi_devres_find(&pdev->dev, lkpi_pci_devres_release, NULL, NULL);
-	if (dr == NULL) {
-		dr = lkpi_devres_alloc(lkpi_pci_devres_release, sizeof(*dr),
-		    GFP_KERNEL | __GFP_ZERO);
-		if (dr != NULL)
-			lkpi_devres_add(&pdev->dev, dr);
-	}
-
-	return (dr);
-}
-static inline struct pci_devres *
 lkpi_pci_devres_find(struct pci_dev *pdev)
 {
 
@@ -547,50 +557,6 @@ lkpi_pci_devres_find(struct pci_dev *pdev)
 		return (NULL);
 
 	return (lkpi_pci_devres_get_alloc(pdev));
-}
-
-static inline int
-pci_request_region(struct pci_dev *pdev, int bar, const char *res_name)
-{
-	struct resource *res;
-	struct pci_devres *dr;
-	struct pci_mmio_region *mmio;
-	int rid;
-	int type;
-
-	type = pci_resource_type(pdev, bar);
-	if (type < 0)
-		return (-ENODEV);
-	rid = PCIR_BAR(bar);
-	res = bus_alloc_resource_any(pdev->dev.bsddev, type, &rid,
-	    RF_ACTIVE|RF_SHAREABLE);
-	if (res == NULL) {
-		device_printf(pdev->dev.bsddev, "%s: failed to alloc "
-		    "bar %d type %d rid %d\n",
-		    __func__, bar, type, PCIR_BAR(bar));
-		return (-ENODEV);
-	}
-
-	/*
-	 * It seems there is an implicit devres tracking on these if the device
-	 * is managed; otherwise the resources are not automatiaclly freed on
-	 * FreeBSD/LinuxKPI tough they should be/are expected to be by Linux
-	 * drivers.
-	 */
-	dr = lkpi_pci_devres_find(pdev);
-	if (dr != NULL) {
-		dr->region_mask |= (1 << bar);
-		dr->region_table[bar] = res;
-	}
-
-	/* Even if the device is not managed we need to track it for iomap. */
-	mmio = malloc(sizeof(*mmio), M_DEVBUF, M_WAITOK | M_ZERO);
-	mmio->rid = PCIR_BAR(bar);
-	mmio->type = type;
-	mmio->res = res;
-	TAILQ_INSERT_TAIL(&pdev->mmio, mmio, next);
-
-	return (0);
 }
 
 static inline void
@@ -920,42 +886,6 @@ pci_enable_msi(struct pci_dev *pdev)
 }
 
 static inline int
-pci_alloc_irq_vectors(struct pci_dev *pdev, int minv, int maxv,
-    unsigned int flags)
-{
-	int error;
-
-	if (flags & PCI_IRQ_MSIX) {
-		struct msix_entry *entries;
-		int i;
-
-		entries = kcalloc(maxv, sizeof(*entries), GFP_KERNEL);
-		if (entries == NULL) {
-			error = -ENOMEM;
-			goto out;
-		}
-		for (i = 0; i < maxv; ++i)
-			entries[i].entry = i;
-		error = pci_enable_msix(pdev, entries, maxv);
-out:
-		kfree(entries);
-		if (error == 0 && pdev->msix_enabled)
-			return (pdev->dev.irq_end - pdev->dev.irq_start);
-	}
-	if (flags & PCI_IRQ_MSI) {
-		error = pci_enable_msi(pdev);
-		if (error == 0 && pdev->msi_enabled)
-			return (pdev->dev.irq_end - pdev->dev.irq_start);
-	}
-	if (flags & PCI_IRQ_LEGACY) {
-		if (pdev->irq)
-			return (1);
-	}
-
-	return (-EINVAL);
-}
-
-static inline int
 pci_channel_offline(struct pci_dev *pdev)
 {
 
@@ -966,48 +896,9 @@ static inline int pci_enable_sriov(struct pci_dev *dev, int nr_virtfn)
 {
 	return -ENODEV;
 }
+
 static inline void pci_disable_sriov(struct pci_dev *dev)
 {
-}
-
-static inline struct resource *
-_lkpi_pci_iomap(struct pci_dev *pdev, int bar, int mmio_size __unused)
-{
-	struct pci_mmio_region *mmio, *p;
-	int type;
-
-	type = pci_resource_type(pdev, bar);
-	if (type < 0) {
-		device_printf(pdev->dev.bsddev, "%s: bar %d type %d\n",
-		     __func__, bar, type);
-		return (NULL);
-	}
-
-	/*
-	 * Check for duplicate mappings.
-	 * This can happen if a driver calls pci_request_region() first.
-	 */
-	TAILQ_FOREACH_SAFE(mmio, &pdev->mmio, next, p) {
-		if (mmio->type == type && mmio->rid == PCIR_BAR(bar)) {
-			return (mmio->res);
-		}
-	}
-
-	mmio = malloc(sizeof(*mmio), M_DEVBUF, M_WAITOK | M_ZERO);
-	mmio->rid = PCIR_BAR(bar);
-	mmio->type = type;
-	mmio->res = bus_alloc_resource_any(pdev->dev.bsddev, mmio->type,
-	    &mmio->rid, RF_ACTIVE|RF_SHAREABLE);
-	if (mmio->res == NULL) {
-		device_printf(pdev->dev.bsddev, "%s: failed to alloc "
-		    "bar %d type %d rid %d\n",
-		    __func__, bar, type, PCIR_BAR(bar));
-		free(mmio, M_DEVBUF);
-		return (NULL);
-	}
-	TAILQ_INSERT_TAIL(&pdev->mmio, mmio, next);
-
-	return (mmio->res);
 }
 
 static inline void *
@@ -1539,26 +1430,6 @@ pcim_enable_device(struct pci_dev *pdev)
 	pdev->managed = true;
 
 	return (error);
-}
-
-static inline struct pcim_iomap_devres *
-lkpi_pcim_iomap_devres_find(struct pci_dev *pdev)
-{
-	struct pcim_iomap_devres *dr;
-
-	dr = lkpi_devres_find(&pdev->dev, lkpi_pcim_iomap_table_release,
-	    NULL, NULL);
-	if (dr == NULL) {
-		dr = lkpi_devres_alloc(lkpi_pcim_iomap_table_release,
-		    sizeof(*dr), GFP_KERNEL | __GFP_ZERO);
-		if (dr != NULL)
-			lkpi_devres_add(&pdev->dev, dr);
-	}
-
-	if (dr == NULL)
-		device_printf(pdev->dev.bsddev, "%s: NULL\n", __func__);
-
-	return (dr);
 }
 
 static inline void __iomem **
