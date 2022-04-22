@@ -652,8 +652,10 @@ pmem_attach(device_t dev)
 
 	/* Get NUMA domain of the NVDIMM. */
 	if (bus_get_domain(dev, &sc->domain) != 0)
-#if (__FreeBSD_version >= 1200000)
+#if __FreeBSD_version >= 1300130
 		sc->domain = vm_phys_domain(sc->paddr);
+#elif __FreeBSD_version >= 1200000
+		sc->domain = _vm_phys_domain(sc->paddr);
 #else
 		sc->domain = 0;
 #endif
@@ -929,15 +931,12 @@ static int
 nvdimm_mdsm_sysctl_dump_i2c(SYSCTL_HANDLER_ARGS)
 {
 	device_t dev = arg1;
-	struct nvdimm_child *ivar;
 	int error, page, off, val, snp, vsp, vnp;
 	struct sbuf sb;
 
 	error = priv_check(req->td, PRIV_SYSCTL_DEBUG);
 	if (error)
 		return (error);
-
-	ivar = (struct nvdimm_child *)device_get_ivars(dev);
 
 	snp = nvdimm_read_i2c(dev, 0, 1);
 	if (snp < 0)
