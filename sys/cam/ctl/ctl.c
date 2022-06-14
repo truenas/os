@@ -1446,7 +1446,7 @@ ctl_isc_mode_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 	if (len < offsetof(struct ctl_ha_msg_mode, data[i])) {
 		printf("%s: Received truncated message data %d < %zu\n",
 		    __func__, len, offsetof(struct ctl_ha_msg_mode, data[i]));
-		ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
+//		ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
 		return;
 	}
 
