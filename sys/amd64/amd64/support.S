@@ -429,8 +429,8 @@ END(memcmp)
 	 */
         ALIGN_TEXT
 2:
-	cmpq	$256,%rcx
-	ja	2256f
+	cmpq	$680,%rcx
+	ja	2680f
 
 	leaq	-8(%rdi,%rcx),%rdi
 	leaq	-8(%rsi,%rcx),%rsi
@@ -505,15 +505,8 @@ END(memcmp)
 	\end
 	ret
 	ALIGN_TEXT
-2256:
+2680:
 	std
-.if \erms == 1
-	leaq	-1(%rdi,%rcx),%rdi
-	leaq	-1(%rsi,%rcx),%rsi
-	rep
-	movsb
-	cld
-.else
 	leaq	-8(%rdi,%rcx),%rdi
 	leaq	-8(%rsi,%rcx),%rsi
 	shrq	$3,%rcx
@@ -523,7 +516,6 @@ END(memcmp)
 	movq	%rdx,%rcx
 	andb	$7,%cl
 	jne	2004b
-.endif
 	\end
 	ret
 .endif
