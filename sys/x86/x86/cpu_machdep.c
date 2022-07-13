@@ -502,8 +502,6 @@ cpu_reset(void)
 				/* NOTREACHED */
 			}
 		}
-
-		DELAY(1000000);
 	}
 #endif
 	cpu_reset_real();
