@@ -3245,13 +3245,24 @@ vn_generic_copy_file_range(struct vnode *invp, off_t *inoffp,
 			len = savlen = rounddown(len - rem, blksize) + rem;
 	}
 
-	if (blksize <= 1)
+	/*
+	 * _PC_MIN_HOLE_SIZE is expressing the alignment guarantees of the
+	 * holes, not necessarily what we should use as a block size.
+	 * If the result to too small (512 bytes or less), use the
+	 * filesystems preferred block size instead.
+	 * We enforce a lower bound of 4096 bytes to avoid copying in
+	 * microscopic chunks, and an upper bound of maxphys to limit
+	 * the size of the memory allocation for the temporary buffer
+	 * in a way that can scale up for large machines, but remain
+	 * reasonable on smaller 32bit platforms.
+	 */
+	if (blksize <= 512)
 		blksize = MAX(invp->v_mount->mnt_stat.f_iosize,
 		    outvp->v_mount->mnt_stat.f_iosize);
 	if (blksize < 4096)
 		blksize = 4096;
-	else if (blksize > 1024 * 1024)
-		blksize = 1024 * 1024;
+	else if (blksize > maxphys)
+		blksize = maxphys;
 	dat = malloc(blksize, M_TEMP, M_WAITOK);
 
 	/*
