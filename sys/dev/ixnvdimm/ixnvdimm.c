@@ -1163,7 +1163,7 @@ static int
 nvdimm_probe(device_t dev)
 {
 	struct nvdimm_child *ivar;
-	char buf[32];
+	char buf[40];
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
 	ACPI_FUNCTION_TRACE((char *)(uintptr_t) __func__);
