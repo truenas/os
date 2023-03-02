@@ -155,6 +155,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	LOCKSHARED	0x0100	/* Shared lock leaf */
 #define	NOFOLLOW	0x0000	/* do not follow symbolic links (pseudo) */
 #define	RBENEATH	0x100000000ULL /* No escape, even tmp, from start dir */
+#define	RNOSYMLINK	0x200000000ULL /* Do not follow any symbolic links */
 #define	MODMASK		0xf000001ffULL	/* mask of operational modifiers */
 
 /*
