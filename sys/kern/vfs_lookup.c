@@ -1192,6 +1192,11 @@ good:
 			error = ENOENT;
 			goto bad2;
 		}
+		if (cnp->cn_flags & RNOSYMLINK) {
+			/* Linux openat2() behavior for RESOLVE_NO_SYMLINKS */
+			error = ELOOP;
+			goto bad2;
+		}
 		if (dp->v_mount->mnt_flag & MNT_NOSYMFOLLOW) {
 			error = EACCES;
 			goto bad2;
