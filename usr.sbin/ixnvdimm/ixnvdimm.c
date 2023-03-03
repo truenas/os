@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
- * Copyright (c) 2020 Alexander Motin <mav@FreeBSD.org>
+ * Copyright (c) 2020-2023 Alexander Motin <mav@FreeBSD.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,11 +34,15 @@
 #include <string.h>
 #include <sysexits.h>
 #include <unistd.h>
-#include <uuid.h>
-#include <sys/endian.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#ifdef __linux__
+#include <linux/ndctl.h>
+#else
+#include <uuid.h>
+#include <sys/endian.h>
 #include <dev/ixnvdimm/ixnvdimm.h>
+#endif
 
 /* Page 0 */
 #define	NVDIMM_MGT_CMD0		0x40
@@ -56,8 +60,197 @@
 
 #define	BLOCK_SIZE		32
 
+#ifdef __linux__
+typedef	u_int8_t	uint8_t;
+typedef	u_int16_t	uint16_t;
+typedef	u_int32_t	uint32_t;
+typedef	u_int64_t	uint64_t;
+
+static __inline uint16_t
+be16dec(const void *pp)
+{
+        uint8_t const *p = (uint8_t const *)pp;
+
+        return ((p[0] << 8) | p[1]);
+}
+
+static __inline uint32_t
+be32dec(const void *pp)
+{
+        uint8_t const *p = (uint8_t const *)pp;
+
+        return (((unsigned)p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]);
+}
+
+static __inline uint16_t
+le16dec(const void *pp)
+{
+        uint8_t const *p = (uint8_t const *)pp;
+
+        return ((p[1] << 8) | p[0]);
+}
+
+static __inline uint32_t
+le32dec(const void *pp)
+{
+        uint8_t const *p = (uint8_t const *)pp;
+
+        return (((unsigned)p[3] << 24) | (p[2] << 16) | (p[1] << 8) | p[0]);
+}
+
+static __inline void
+le16enc(void *pp, uint16_t u)
+{
+        uint8_t *p = (uint8_t *)pp;
+
+        p[0] = u & 0xff;
+        p[1] = (u >> 8) & 0xff;
+}
+
+static __inline void
+le32enc(void *pp, uint32_t u)
+{
+        uint8_t *p = (uint8_t *)pp;
+
+        p[0] = u & 0xff;
+        p[1] = (u >> 8) & 0xff;
+        p[2] = (u >> 16) & 0xff;
+        p[3] = (u >> 24) & 0xff;
+}
+
+struct ixnvdimm_info {
+        uint16_t        VendorId;
+        uint16_t        DeviceId;
+        uint16_t        RevisionId;
+        uint16_t        SubsystemVendorId;
+        uint16_t        SubsystemDeviceId;
+        uint16_t        SubsystemRevisionId;
+        uint32_t        SerialNumber;
+};
+
+const char *nmem;
+
+static void
+init(const char *devname)
+{
+
+	if ((nmem = strrchr(devname, '/')) != NULL)
+		nmem++;
+	else
+		nmem = devname;
+}
+
+static uint32_t
+readsysfs(const char *attr)
+{
+	char path[256];
+	char buf[16];
+	int fd, n;
+
+	snprintf(path, sizeof(path), "/sys/bus/nd/devices/%s/nfit/%s",
+	    nmem, attr);
+	fd = open(path, O_RDONLY|O_CLOEXEC);
+	if (fd < 0)
+		err(EX_NOINPUT, "Can't open %s", path);
+	n = read(fd, buf, sizeof(buf));
+	close(fd);
+	if (n < 0 || n >= sizeof(buf))
+		err(EX_NOINPUT, "failed to read %s\n", path);
+	buf[n] = 0;
+	if (n && buf[n - 1] == '\n')
+		buf[n - 1] = 0;
+        return (strtoul(buf, NULL, 0));
+}
+
+static int
+getinfo(int fd, struct ixnvdimm_info *info)
+{
+	uint16_t t16;
+
+	/*
+	 * Linux converts all the values from big-endian.
+	 * I am not sure what is right, just stay consistent.
+	 */
+	t16 = readsysfs("vendor");
+	info->VendorId = be16dec(&t16);
+	t16 = readsysfs("device");
+	info->DeviceId = be16dec(&t16);
+	t16 = readsysfs("rev_id");
+	info->RevisionId = be16dec(&t16);
+	t16 = readsysfs("subsystem_vendor");
+	info->SubsystemVendorId = be16dec(&t16);
+	t16 = readsysfs("subsystem_device");
+	info->SubsystemDeviceId = be16dec(&t16);
+	t16 = readsysfs("subsystem_rev_id");
+	info->SubsystemRevisionId = be16dec(&t16);
+	info->SerialNumber = readsysfs("serial");
+	return (0);
+}
+
+static ssize_t
+calldsm(int fd, int func, void *in_buf, size_t in_size, void *out_buf,
+    size_t out_size)
+{
+	struct nd_cmd_pkg *pkg;
+	uint32_t fw_size;
+
+	pkg = calloc(1, sizeof(*pkg) + in_size + out_size);
+	pkg->nd_family = NVDIMM_FAMILY_MSFT;
+	pkg->nd_command = func;
+	pkg->nd_size_in = in_size;
+	pkg->nd_size_out = out_size;
+	pkg->nd_fw_size = 0;
+	if (in_size)
+		memcpy(&pkg->nd_payload[0], in_buf, in_size);
+	if (ioctl(fd, ND_IOCTL_CALL, pkg) != 0)
+		return (-1);
+	fw_size = pkg->nd_fw_size;
+	if (out_size)
+		memcpy(out_buf, &pkg->nd_payload[in_size], out_size);
+	free(pkg);
+	return (fw_size);
+}
+
+#else
+
 #define MGUID "1EE68B36-D4BD-4a1a-9A16-4F8E53D46E05"
 static struct uuid mguid;
+
+static void
+init(const char *devname __unused)
+{
+	uint32_t status;
+
+	uuid_from_string(MGUID, &mguid, &status);
+	assert(status == uuid_s_ok);
+}
+
+static int
+getinfo(int fd, struct ixnvdimm_info *info)
+{
+
+	return (ioctl(fd, IXNVDIMM_INFO, info));
+}
+
+static ssize_t
+calldsm(int fd, int func, void *in_buf, size_t in_size, void *out_buf,
+    size_t out_size)
+{
+	struct ixnvdimm_dsm dsm;
+
+	bzero(&dsm, sizeof(dsm));
+	dsm.guid = mguid;
+	dsm.rev = 1;
+	dsm.func = func;
+	dsm.in_size = in_size;
+	dsm.out_size = out_size;
+	dsm.in_buf = in_buf;
+	dsm.out_buf = out_buf;
+	if (ioctl(fd, IXNVDIMM_DSM, &dsm) != 0)
+		return (-1);
+	return (dsm.out_size);
+}
+#endif
 
 static int
 Crc16(char *ptr, int count)
@@ -81,21 +274,12 @@ Crc16(char *ptr, int count)
 static uint8_t
 i2c_read(int fd, uint8_t page, uint8_t off)
 {
-	struct ixnvdimm_dsm d;
 	uint8_t in_buf[2], out_buf[5];
 	uint32_t status;
 
-	bzero(&d, sizeof(d));
-	d.guid = mguid;
-	d.rev = 1;
-	d.func = 27;
 	in_buf[0] = page;
 	in_buf[1] = off;
-	d.in_size = sizeof(in_buf);
-	d.in_buf = in_buf;
-	d.out_size = sizeof(out_buf);
-	d.out_buf = out_buf;
-	if (ioctl(fd, IXNVDIMM_DSM, &d) || d.out_size < 5)
+	if (calldsm(fd, 27, in_buf, sizeof(in_buf), out_buf, sizeof(out_buf)) < 5)
 		err(EX_IOERR, "Can't read i2c (%0x, %0x)", page, off);
 	status = le32dec(&out_buf[0]);
 	if (status != 0)
@@ -106,22 +290,13 @@ i2c_read(int fd, uint8_t page, uint8_t off)
 static void
 i2c_write(int fd, uint8_t page, uint8_t off, uint8_t val)
 {
-	struct ixnvdimm_dsm d;
 	uint8_t in_buf[3], out_buf[4];
 	uint32_t status;
 
-	bzero(&d, sizeof(d));
-	d.guid = mguid;
-	d.rev = 1;
-	d.func = 28;
 	in_buf[0] = page;
 	in_buf[1] = off;
 	in_buf[2] = val;
-	d.in_size = sizeof(in_buf);
-	d.in_buf = in_buf;
-	d.out_size = sizeof(out_buf);
-	d.out_buf = out_buf;
-	if (ioctl(fd, IXNVDIMM_DSM, &d) || d.out_size < 4)
+	if (calldsm(fd, 28, in_buf, sizeof(in_buf), out_buf, sizeof(out_buf)) < 4)
 		err(EX_IOERR, "Can't write i2c (%0x, %0x)", page, off);
 	status = le32dec(&out_buf[0]);
 	if (status != 0)
@@ -147,19 +322,12 @@ i2c_write16(int fd, uint8_t page, uint8_t off, uint16_t val)
 static void
 factory_default(int fd)
 {
-	struct ixnvdimm_dsm dsm;
 	uint8_t status[4];
 
 	/* Factory default via DSM. */
 	i2c_write(fd, 0, NVDIMM_MGT_CMD1, 1 << 1);
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 21;	/* Reset to Factory Defaults */
 	memset(&status, 0xff, sizeof(status));
-	dsm.out_size = sizeof(status);
-	dsm.out_buf = status;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) || dsm.out_size != 4)
+	if (calldsm(fd, 21, NULL, 0, status, sizeof(status)) != 4)
 		err(EX_NOINPUT, "Can't call Reset to Factory Defaults DSM");
 	if (le32dec(&status[0]) != 0)
 		errx(EX_NOINPUT, "Reset to Factory Defaults DSM failed: %x",
@@ -171,8 +339,7 @@ factory_default(int fd)
 static void
 firmware_update(int fd, struct ixnvdimm_info *info, const char *f, int I)
 {
-	struct ixnvdimm_dsm dsm;
-	int b, error = 0, ffd, r, rbs, regions, t, timeout, atimeout, try;
+	int b, ffd, r, rbs, regions, t, timeout, atimeout, try;
 	struct stat sb;
 	off_t size;
 	uint8_t *image, status[4], buf[7 + BLOCK_SIZE];
@@ -245,17 +412,9 @@ firmware_update(int fd, struct ixnvdimm_info *info, const char *f, int I)
 
 	/* Start firmware update via DSM. */
 	i2c_write(fd, 0, NVDIMM_MGT_CMD1, 1 << 1);
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 22;	/* Start Firmware Update */
 	buf[0] = 1;	/* Firmware Slot */
-	dsm.in_size = 1;
-	dsm.in_buf = buf;
 	memset(&status, 0xff, sizeof(status));
-	dsm.out_size = sizeof(status);
-	dsm.out_buf = status;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) || dsm.out_size != 4)
+	if (calldsm(fd, 22, buf, 1, status, sizeof(status)) != 4)
 		err(EX_NOINPUT, "Can't call Start Firmware Update DSM");
 	if (le32dec(&status[0]) != 0)
 		errx(EX_NOINPUT, "Start Firmware Update DSM failed: %x",
@@ -308,20 +467,12 @@ firmware_update(int fd, struct ixnvdimm_info *info, const char *f, int I)
 retry:
 		/* Send region blocks via Send Firmware Update Data DSM. */
 		for (b = 0; b < rbs; b++) {
-			bzero(&dsm, sizeof(dsm));
-			dsm.guid = mguid;
-			dsm.rev = 1;
-			dsm.func = 23;	/* Send Firmware Update Data */
 			le32enc(&buf[0], BLOCK_SIZE);
 			le16enc(&buf[4], r);
 			buf[6] = b;
 			memcpy(&buf[7], &image[(r * rbs + b) * BLOCK_SIZE], BLOCK_SIZE);
-			dsm.in_size = sizeof(buf);
-			dsm.in_buf = buf;
 			memset(&status, 0xff, sizeof(status));
-			dsm.out_size = sizeof(status);
-			dsm.out_buf = status;
-			if (ioctl(fd, IXNVDIMM_DSM, &dsm) || dsm.out_size != 4) {
+			if (calldsm(fd, 23, buf, sizeof(buf), status, sizeof(status)) != 4) {
 				warn("Can't call Send Firmware Update Data DSM");
 				goto error2;
 			}
@@ -439,7 +590,6 @@ error2:
 			warnx("Firmware update mode disable error: %02x",
 			    i2c_read(fd, 0, FIRMWARE_OPS_STATUS));
 error:
-		error = EX_PROTOCOL;
 		goto done;
 	}
 	printf("\rValidate Firmware Image succeeded\n");
@@ -447,14 +597,8 @@ error:
 
 	/* Finish firmware update via DSM. */
 	i2c_write(fd, 0, NVDIMM_MGT_CMD1, 1 << 1);
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 24;	/* Finish Firmware Update */
 	memset(&status, 0xff, sizeof(status));
-	dsm.out_size = sizeof(status);
-	dsm.out_buf = status;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) || dsm.out_size != 4)
+	if (calldsm(fd, 24, NULL, 0, status, sizeof(status)) != 4)
 		err(EX_NOINPUT, "Can't call Finish Firmware Update DSM");
 	if (le32dec(&status[0]) != 0)
 		errx(EX_NOINPUT, "Finish Firmware Update DSM status: %x",
@@ -464,17 +608,9 @@ error:
 
 	/* Select firmware image slot 1 */
 	i2c_write(fd, 0, NVDIMM_MGT_CMD1, 1 << 1);
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 25;
 	buf[0] = 1;	/* Firmware Slot 1 */
-	dsm.in_size = 1;
-	dsm.in_buf = buf;
 	memset(&status, 0xff, sizeof(status));
-	dsm.out_size = sizeof(status);
-	dsm.out_buf = status;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) || dsm.out_size != 4)
+	if (calldsm(fd, 25, buf, 1, status, sizeof(status)) != 4)
 		err(EX_NOINPUT, "Can't call Select Firmware Image Slot DSM");
 	if (le32dec(&status[0]) != 0)
 		errx(EX_NOINPUT, "Select Firmware Image Slot DSM failed: %x",
@@ -489,9 +625,8 @@ done:
 static void
 health(int fd, struct ixnvdimm_info *info)
 {
-	struct ixnvdimm_dsm dsm;
 	int val;
-	char buf[16];
+	char buf[32];
 
 	printf("Module:\n");
 	printf("vendor: %04x device: %04x revision: %02x\n",
@@ -509,14 +644,8 @@ health(int fd, struct ixnvdimm_info *info)
 	val = i2c_read(fd, 0x03, FW_SLOT_INFO);
 	printf("selected: %u running: %u\n", val & 0x0f, val >> 4);
 
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 10;
 	bzero(&buf, sizeof(buf));
-	dsm.out_size = sizeof(buf);
-	dsm.out_buf = buf;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) == 0 && dsm.out_size >= 5) {
+	if (calldsm(fd, 10, NULL, 0, buf, sizeof(buf)) >= 5) {
 		val = buf[4];
 		printf("\nCritical Health Info: 0x%02x <%s%s%s%s%s%s>\n",
 		    val,
@@ -528,14 +657,8 @@ health(int fd, struct ixnvdimm_info *info)
 		    val & 0x20 ? "EVENT_N_LOW":"");
 	}
 
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 11;
 	bzero(&buf, sizeof(buf));
-	dsm.out_size = sizeof(buf);
-	dsm.out_buf = buf;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) == 0 && dsm.out_size >= 13) {
+	if (calldsm(fd, 11, NULL, 0, buf, sizeof(buf)) >= 13) {
 		val = le16dec(&buf[4]);
 		printf("\nModule Health: 0x%04x <%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s>\n",
 		    val,
@@ -633,14 +756,8 @@ health(int fd, struct ixnvdimm_info *info)
 		    val & 0x20 ? "ABORT_ERROR":"");
 	}
 
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 12;
 	bzero(&buf, sizeof(buf));
-	dsm.out_size = sizeof(buf);
-	dsm.out_buf = buf;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) == 0 && dsm.out_size >= 11) {
+	if (calldsm(fd, 12, NULL, 0, buf, sizeof(buf)) >= 11) {
 		printf("\nES Lifetime Percentage: %d%%\n", buf[4]);
 		val = le16dec(&buf[5]);
 		/* Workaround wrong units reported by Micron NVDIMMs. */
@@ -650,6 +767,27 @@ health(int fd, struct ixnvdimm_info *info)
 			val = (val & 0x0fff) / 16;
 		printf("ES Current Temperature: %d C\n", val);
 		printf("Total Runtime: %d\n", le32dec(&buf[7]));
+	}
+
+	bzero(&buf, sizeof(buf));
+	if (calldsm(fd, 13, NULL, 0, buf, sizeof(buf)) >= 11) {
+		val = le16dec(&buf[4]);
+		printf("\nDuration of Last Save Operation: %d%s\n",
+		    val & 0x7fff, val & 0x8000 ? "s" : "ms");
+		val = le16dec(&buf[8]);
+		printf("Duration of Last Restore Operation: %d%s\n",
+		    val & 0x7fff, val & 0x8000 ? "s" : "ms");
+		val = le16dec(&buf[12]);
+		printf("Duration of Last Erase Operation: %d%s\n",
+		    val & 0x7fff, val & 0x8000 ? "s" : "ms");
+		printf("Number of Save Operations Completed: %d\n",
+		    le16dec(&buf[16]));
+		printf("Number of Restore Operations Completed: %d\n",
+		    le16dec(&buf[20]));
+		printf("Number of Erase Operations Completed: %d\n",
+		    le16dec(&buf[24]));
+		printf("Number of Module Power Cycles: %d\n",
+		    le16dec(&buf[28]));
 	}
 }
 
@@ -852,15 +990,12 @@ main(int argc, char *argv[])
 	struct ixnvdimm_info info;
 	const char *progname, *devname, *f = NULL;
 	char *e;
-	struct ixnvdimm_dsm dsm;
 	int F = 0, I = 0, b, c, d = 0, i, fd, h = 0, r = 0, w = 0;
 	int page = -1, off = -1, size = 1;
-	uint32_t status, funcs, val;
+	uint32_t funcs, val;
 	uint8_t	buf[4];
 
 	progname = argv[0];
-	uuid_from_string(MGUID, &mguid, &status);
-	assert(status == uuid_s_ok);
 
 	while ((c = getopt(argc, argv, "FIdf:hrw")) != -1) {
 		switch (c) {
@@ -900,22 +1035,22 @@ main(int argc, char *argv[])
 	devname = argv[0];
 	argc--;
 	argv++;
-	if ((fd = open(devname, O_RDONLY)) < 0)
+	if ((fd = open(devname, O_RDWR)) < 0)
 		err(EX_NOINPUT, "Can't open %s", devname);
+	init(devname);
 
-	if (ioctl(fd, IXNVDIMM_INFO, &info))
+	if (getinfo(fd, &info))
 		err(EX_NOINPUT, "Can't get info from %s", devname);
 
-	bzero(&dsm, sizeof(dsm));
-	dsm.guid = mguid;
-	dsm.rev = 1;
-	dsm.func = 0;
+#ifdef __linux__
+	funcs = readsysfs("dsm_mask");
+	funcs |= 1;
+#else
 	bzero(&buf, sizeof(buf));
-	dsm.out_size = sizeof(buf);
-	dsm.out_buf = buf;
-	if (ioctl(fd, IXNVDIMM_DSM, &dsm) || dsm.out_size != 4)
+	if (calldsm(fd, 0, NULL, 0, buf, sizeof(buf)) != 4)
 		err(EX_NOINPUT, "Can't call DSM on %s", devname);
 	funcs = le32dec(&buf[0]);
+#endif
 	if (~funcs & 0x18000001) {
 		errx(EX_UNAVAILABLE, "Required Microsoft DSM functions "
 		    "are not supported: 0x%08x\n", funcs);
