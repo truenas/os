@@ -217,6 +217,12 @@ CaseFile::PurgeAll()
 
 }
 
+int
+CaseFile::IsSpare()
+{
+	return (m_is_spare);
+}
+
 //- CaseFile Public Methods ----------------------------------------------------
 bool
 CaseFile::RefreshVdevState()
@@ -240,6 +246,7 @@ CaseFile::ReEvaluate(const string &devPath, const string &physPath, Vdev *vdev)
 {
 	ZpoolList zpl(ZpoolList::ZpoolByGUID, &m_poolGUID);
 	zpool_handle_t *pool(zpl.empty() ? NULL : zpl.front());
+	int flags = ZFS_ONLINE_CHECKREMOVE | ZFS_ONLINE_UNSPARE;
 
 	if (pool == NULL || !RefreshVdevState()) {
 		/*
@@ -279,10 +286,11 @@ CaseFile::ReEvaluate(const string &devPath, const string &physPath, Vdev *vdev)
 	 && ( vdev->PoolGUID() == m_poolGUID
 	   || vdev->PoolGUID() == Guid::InvalidGuid())
 	 && vdev->GUID() == m_vdevGUID) {
+		if (IsSpare())
+			flags |= ZFS_ONLINE_SPARE;
 
 		if (zpool_vdev_online(pool, vdev->GUIDString().c_str(),
-		    ZFS_ONLINE_CHECKREMOVE | ZFS_ONLINE_UNSPARE,
-		    &m_vdevState) != 0) {
+		    flags, &m_vdevState) != 0) {
 			syslog(LOG_ERR,
 			    "Failed to online vdev(%s/%s:%s): %s: %s\n",
 			    zpool_get_name(pool), vdev->GUIDString().c_str(),
@@ -791,7 +799,8 @@ CaseFile::CaseFile(const Vdev &vdev)
  : m_poolGUID(vdev.PoolGUID()),
    m_vdevGUID(vdev.GUID()),
    m_vdevState(vdev.State()),
-   m_vdevPhysPath(vdev.PhysicalPath())
+   m_vdevPhysPath(vdev.PhysicalPath()),
+   m_is_spare(vdev.IsSpare())
 {
 	stringstream guidString;
 

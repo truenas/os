@@ -3051,7 +3051,7 @@ zpool_vdev_online(zpool_handle_t *zhp, const char *path, int flags,
 
 	verify(nvlist_lookup_uint64(tgt, ZPOOL_CONFIG_GUID, &zc.zc_guid) == 0);
 
-	if (avail_spare)
+	if (!(flags & ZFS_ONLINE_SPARE) && avail_spare)
 		return (zfs_error(hdl, EZFS_ISSPARE, msg));
 
 	if ((flags & ZFS_ONLINE_EXPAND ||

@@ -219,6 +219,11 @@ public:
 	 */
 	bool ShouldFault() const;
 
+	/**
+	 * \brief If this vdev is spare
+	 */
+	int IsSpare();
+
 protected:
 	enum {
 		/**
@@ -384,6 +389,7 @@ protected:
 	string		   m_poolGUIDString;
 	string		   m_vdevGUIDString;
 	string		   m_vdevPhysPath;
+	int		   m_is_spare;
 
 	/**
 	 * \brief Callout activated when a grace period
