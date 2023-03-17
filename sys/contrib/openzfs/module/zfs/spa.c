@@ -5319,6 +5319,12 @@ spa_add_spares(spa_t *spa, nvlist_t *config)
 				    (uint64_t **)&vs, &vsc) == 0);
 				vs->vs_state = VDEV_STATE_CANT_OPEN;
 				vs->vs_aux = VDEV_AUX_SPARED;
+			} else {
+				VERIFY(nvlist_lookup_uint64_array(
+				    spares[i], ZPOOL_CONFIG_VDEV_STATS,
+				    (uint64_t **)&vs, &vsc) == 0);
+				vs->vs_state =
+				    spa->spa_spares.sav_vdevs[i]->vdev_state;
 			}
 		}
 	}

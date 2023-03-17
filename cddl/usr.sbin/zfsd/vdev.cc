@@ -117,6 +117,10 @@ Vdev::Vdev(nvlist_t *poolConfig, nvlist_t *config)
  : m_poolConfig(poolConfig),
    m_config(config)
 {
+	/*
+	 * Ignore Pool GUID if this is a spare.
+	 */
+	(void) VdevLookupPoolGuid();
 	if (!VdevLookupPoolGuid())
 		throw ZfsdException("Can't extract pool GUID from config.");
 	VdevLookupGuid();
