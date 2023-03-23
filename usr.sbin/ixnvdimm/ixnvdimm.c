@@ -751,7 +751,7 @@ health(int fd, struct ixnvdimm_info *info)
 		    val & 0x01 ? "SUCCESS,":"",
 		    val & 0x02 ? "ERROR,":"",
 		    val & 0x04 ? "SAVE_N_ARMED,":"",
-		    val & 0x04 ? "RESET_N_ARMED,":"",
+		    val & 0x08 ? "RESET_N_ARMED,":"",
 		    val & 0x10 ? "ABORT_SUCCESS,":"",
 		    val & 0x20 ? "ABORT_ERROR":"");
 	}
