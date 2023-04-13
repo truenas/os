@@ -1087,6 +1087,35 @@ nvdimm_mdsm_sysctl(SYSCTL_HANDLER_ARGS)
 	return (EINVAL);
 }
 
+static int
+nvdimm_flags_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	device_t dev = arg1;
+	struct nvdimm_child *ivar;
+	struct sbuf sb;
+	int error;
+
+	error = priv_check(req->td, PRIV_SYSCTL_DEBUG);
+	if (error)
+		return (error);
+
+	ivar = (struct nvdimm_child *)device_get_ivars(dev);
+
+	sbuf_new_for_sysctl(&sb, NULL, 32, req);
+	sbuf_printf(&sb, "0x%b",
+	    ivar->mm.Flags, "\020"
+	    "\001SAVE_FAILED\002RESTORE_FAILED"
+	    "\003FLUSH_FAILED\004NOT_ARMED"
+	    "\005HEALTH_OBSERVED\006HEALTH_ENABLED"
+	    "\007MAP_FAILED");
+	error = sbuf_finish(&sb);
+	sbuf_delete(&sb);
+
+	if (error || !req->newptr)
+		return (error);
+	return (EINVAL);
+}
+
 int
 nvdimm_ioctl(struct cdev *cdev, u_long cmd, caddr_t data,
     int flags, struct thread *td)
@@ -1194,6 +1223,18 @@ nvdimm_attach(device_t dev)
 
 	ivar = (struct nvdimm_child *)device_get_ivars(dev);
 	ivar->arg3 = UINT64_MAX;
+
+	if (ivar->mm.Flags & ~ACPI_NFIT_MEM_HEALTH_ENABLED) {
+		device_printf(dev, "Flags: 0x%b\n",
+		    ivar->mm.Flags, "\020"
+		    "\001SAVE_FAILED\002RESTORE_FAILED"
+		    "\003FLUSH_FAILED\004NOT_ARMED"
+		    "\005HEALTH_OBSERVED\006HEALTH_ENABLED"
+		    "\007MAP_FAILED");
+	}
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+	    "flags", CTLFLAG_RD | CTLTYPE_STRING | CTLFLAG_MPSAFE,
+	    dev, 0, nvdimm_flags_sysctl, "A", "NFIT flags");
 
 	status = AcpiInstallNotifyHandler(ivar->handle, ACPI_DEVICE_NOTIFY,
 	    nvdimm_notify, dev);
@@ -1450,14 +1491,6 @@ nvdimm_root_walk_dev(ACPI_HANDLE handle, UINT32 level, void *ctx, void **st)
 	child = device_add_child(dev, "nvdimm", mm->RegionId);
 	if (child) {
 		device_set_ivars(child, ivar);
-		if (mm->Flags & ~ACPI_NFIT_MEM_HEALTH_ENABLED) {
-			device_printf(child, "Flags: 0x%b\n",
-			    mm->Flags, "\020"
-			    "\001SAVE_FAILED\002RESTORE_FAILED"
-			    "\003FLUSH_FAILED\004NOT_ARMED"
-			    "\005HEALTH_OBSERVED\006HEALTH_ENABLED"
-			    "\007MAP_FAILED");
-		}
 	} else {
 		device_printf(dev, "Adding nvdimm%u failed\n",
 		    mm->RegionId);
