@@ -372,3 +372,12 @@ priv_check_cred_vfs_generation(struct ucred *cred)
 		error = 0;
 	return (error);
 }
+
+int
+priv_check_cred_vfs_getfhat(struct ucred *cred)
+{
+	if (!jailed(cred) && unprivileged_inode_gen)
+		return (0);
+
+	return priv_check_cred(cred, PRIV_VFS_GETFH);
+}
