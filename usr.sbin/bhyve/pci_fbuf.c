@@ -1,6 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
+ * Copyright (c) 2017 Marcelo Araujo <araujo@FreeBSD.org>.
  * Copyright (c) 2015 Nahanni Systems, Inc.
  * All rights reserved.
  *
@@ -37,8 +38,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 
+#include <dlfcn.h>
 #include <errno.h>
+#include <err.h>
 #include <unistd.h>
 
 #include "bhyvegc.h"
@@ -99,6 +103,9 @@ struct pci_fbuf_softc {
 	int       rfb_wait;
 	int       vga_enabled;
 	int	  vga_full;
+
+	int       vncserver_enabled;
+	int       vncserver_web;
 
 	uint32_t  fbaddr;
 	char      *fb_base;
@@ -243,9 +250,23 @@ pci_fbuf_parse_config(struct pci_fbuf_softc *sc, nvlist_t *nvl)
 	char *cp;
 
 	sc->rfb_wait = get_config_bool_node_default(nvl, "wait", false);
+	sc->vncserver_web = get_config_bool_node_default(nvl, "vncweb", false);
 
-	/* Prefer "rfb" to "tcp". */
-	value = get_config_value_node(nvl, "rfb");
+	/* Prefer "vncserver" to "rfb" and "tcp". */
+	value = get_config_value_node(nvl, "vncserver");
+	if (value != NULL) {
+		void	*shlib;
+
+		shlib = dlopen("/usr/local/lib/libhyverem.so", RTLD_LAZY);
+		if (!shlib) {
+			sc->vncserver_enabled = 0;
+			fprintf(stderr, "Using RFB bhyve implementation.\n");
+		} else {
+			sc->vncserver_enabled = 1;
+		}
+		dlclose(shlib);
+	} else
+		value = get_config_value_node(nvl, "rfb");
 	if (value == NULL)
 		value = get_config_value_node(nvl, "tcp");
 	if (value != NULL) {
@@ -368,7 +389,7 @@ pci_fbuf_render(struct bhyvegc *gc, void *arg)
 static int
 pci_fbuf_init(struct pci_devinst *pi, nvlist_t *nvl)
 {
-	int error;
+	int error, waitfd;
 	struct pci_fbuf_softc *sc;
 
 	if (fbuf_sc != NULL) {
@@ -436,7 +457,14 @@ pci_fbuf_init(struct pci_devinst *pi, nvlist_t *nvl)
 
 	memset((void *)sc->fb_base, 0, FB_SIZE);
 
-	error = rfb_init(sc->rfb_host, sc->rfb_port, sc->rfb_wait, sc->rfb_password);
+	waitfd = sc->rfb_wait ? vm_get_device_fd(pi->pi_vmctx) : -1;
+
+	if (sc->vncserver_enabled)
+		error = vncserver_init(sc->rfb_host, sc->rfb_port,
+		    waitfd, sc->rfb_password, sc->vncserver_web);
+	else
+		error = rfb_init(sc->rfb_host, sc->rfb_port, waitfd,
+		    sc->rfb_password);
 done:
 	if (error)
 		free(sc);

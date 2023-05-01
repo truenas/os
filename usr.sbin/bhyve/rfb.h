@@ -33,5 +33,7 @@
 
 int	rfb_init(const char *hostname, int port, int wait,
 	    const char *password);
+int	vncserver_init(char *hostname, int port, int wait,
+	    char *password, int webserver);
 
 #endif /* _RFB_H_ */
