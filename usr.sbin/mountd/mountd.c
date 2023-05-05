@@ -3835,7 +3835,7 @@ check_dirpath(char *dirp, char **err)
 	char *cp;
 
 	cp = dirp + 1;
-	while (*cp && ret) {
+	while (*cp) {
 		if (*cp == '/') {
 			*cp = '\0';
 
