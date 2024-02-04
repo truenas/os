@@ -4425,14 +4425,18 @@ kern_getfhat(struct thread *td, int flags, int fd, const char *path,
 	struct vnode *vp;
 	int error;
 
-	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH)) != 0)
+	if ((flags &
+	     ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH | AT_EMPTY_PATH)) != 0)
 		return (EINVAL);
-	error = priv_check(td, PRIV_VFS_GETFH);
-	if (error != 0)
+
+	error = priv_check_cred_vfs_getfhat(td->td_ucred);
+	if (error != 0) {
 		return (error);
+	}
+
 	NDINIT_AT(&nd, LOOKUP, at2cnpflags(flags, AT_SYMLINK_NOFOLLOW |
-	    AT_RESOLVE_BENEATH) | LOCKLEAF | AUDITVNODE1, pathseg, path,
-	    fd, td);
+	    AT_RESOLVE_BENEATH | AT_EMPTY_PATH) | LOCKLEAF | AUDITVNODE1,
+	    pathseg, path, fd, td);
 	error = namei(&nd);
 	if (error != 0)
 		return (error);
