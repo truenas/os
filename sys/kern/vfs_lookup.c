@@ -74,6 +74,9 @@ __FBSDID("$FreeBSD$");
 #define	NAMEI_DIAGNOSTIC 1
 #undef NAMEI_DIAGNOSTIC
 
+FEATURE(rnosymlink, "supports RESOLVE_NO_SYMLINK");
+FEATURE(rbeneath, "supports RESOLVE_BENEATH");
+
 SDT_PROVIDER_DEFINE(vfs);
 SDT_PROBE_DEFINE4(vfs, namei, lookup, entry, "struct vnode *", "char *",
     "unsigned long", "bool");
@@ -1190,6 +1193,11 @@ good:
 			 * NOSYMFOLLOW, so we can't follow safely.
 			 */
 			error = ENOENT;
+			goto bad2;
+		}
+		if (cnp->cn_flags & RNOSYMLINK) {
+			/* Linux openat2() behavior for RESOLVE_NO_SYMLINKS */
+			error = ELOOP;
 			goto bad2;
 		}
 		if (dp->v_mount->mnt_flag & MNT_NOSYMFOLLOW) {
