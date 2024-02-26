@@ -27,14 +27,11 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/event.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <netinet/in.h>
@@ -52,8 +49,9 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <sysexits.h>
 #include <unistd.h>
+#include <machine/cpufunc.h>
+#include <machine/specialreg.h>
 
-#include <cpuid.h>
 #include <zlib.h>
 
 #include "bhyvegc.h"
@@ -366,13 +364,15 @@ out:
 }
 
 static int
-sse42_supported()
+sse42_supported(void)
 {
-	unsigned int eax, ebx, ecx, edx;
- 
-	__get_cpuid(1, &eax, &ebx, &ecx, &edx);
- 
-	return ((ecx & bit_SSE42) != 0);
+	u_int cpu_registers[4], ecx;
+
+	do_cpuid(1, cpu_registers);
+
+	ecx = cpu_registers[2];
+
+	return ((ecx & CPUID2_SSE42) != 0);
 }
 
 int
