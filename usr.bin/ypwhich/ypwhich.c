@@ -99,6 +99,7 @@ bind_host(char *dom, struct sockaddr_in *sin)
 	client = clntudp_create(sin, YPBINDPROG, YPBINDVERS, tv, &sock);
 
 	if (client == NULL) {
+		clnt_pcreateerror("ypwhich_bind_host");
 		warnx("host is not bound to a ypmaster");
 		return (YPERR_YPBIND);
 	}
